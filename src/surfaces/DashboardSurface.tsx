@@ -273,8 +273,12 @@ export default function DashboardSurface() {
       });
     }
 
-    // Sort: events by time first, then tasks at end
+    // Sort: all-day events first, then timed events by time, then tasks at end
     items.sort((a, b) => {
+      const aAllDay = a.time === 'All day';
+      const bAllDay = b.time === 'All day';
+      if (aAllDay && !bAllDay) return -1;
+      if (!aAllDay && bAllDay) return 1;
       if (a.type === 'event' && b.type === 'task') return -1;
       if (a.type === 'task' && b.type === 'event') return 1;
       return a.time.localeCompare(b.time);
