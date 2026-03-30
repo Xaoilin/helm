@@ -394,6 +394,36 @@ CREATE POLICY "Allow all for anon"
           </div>
         </div>
 
+        {/* Voice Assistant (Lina) */}
+        <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Voice Assistant (Lina)</h3>
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>Enable voice assistant</div>
+              <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 2 }}>
+                Click the floating "L" button to talk to Lina. She can navigate, check your schedule, and more.
+              </div>
+            </div>
+            <label className="toggle">
+              <input type="checkbox" checked={settings.assistantEnabled !== false} onChange={e => app.updateSettings({ assistantEnabled: e.target.checked })} aria-label="Toggle voice assistant" />
+              <span className="slider" />
+            </label>
+          </div>
+          <div className="form-group">
+            <label htmlFor="settings-11labs-key">ElevenLabs API Key</label>
+            <input id="settings-11labs-key" className="form-input" type="password" value={settings.elevenLabsApiKey || ''} onChange={e => app.updateSettings({ elevenLabsApiKey: e.target.value || undefined })} placeholder="xi-xxxxxxxxxxxxxxxx" />
+          </div>
+          <div className="form-group">
+            <label htmlFor="settings-11labs-voice">ElevenLabs Voice ID</label>
+            <input id="settings-11labs-voice" className="form-input" value={settings.elevenLabsVoiceId || ''} onChange={e => app.updateSettings({ elevenLabsVoiceId: e.target.value || undefined })} placeholder="Voice ID from ElevenLabs dashboard" />
+          </div>
+          <div style={{ fontSize: 11, color: '#6b6f85', lineHeight: 1.5 }}>
+            <strong>Setup:</strong> Go to <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer" style={{ color: '#4f5bff' }}>elevenlabs.io</a> &rarr;
+            clone Lina's voice from a recording &rarr; copy your API key and Voice ID &rarr; paste above.
+            <br />Without ElevenLabs, Lina will use the browser's built-in voice (less natural).
+          </div>
+        </div>
+
         {/* Reset Gamification */}
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Gamification Reset</h3>
         <div className="card">

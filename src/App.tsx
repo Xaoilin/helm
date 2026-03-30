@@ -10,6 +10,7 @@ import CredentialsSurface from './surfaces/CredentialsSurface';
 import WorkspacesSurface from './surfaces/WorkspacesSurface';
 import IntegrationsSurface from './surfaces/IntegrationsSurface';
 import SettingsSurface from './surfaces/SettingsSurface';
+import VoiceAssistant from './components/VoiceAssistant';
 import type { Surface } from './types/domain';
 
 const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
@@ -68,6 +69,7 @@ function AppInner() {
       <main className="main-content" aria-label={`${app.surface} surface`}>
         {renderSurface()}
       </main>
+      <VoiceAssistant />
     </div>
   );
 }

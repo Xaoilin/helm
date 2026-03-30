@@ -196,6 +196,9 @@ export interface Settings {
   prayerEnabled?: boolean;
   prayerCity?: string;
   prayerCountry?: string;
+  assistantEnabled?: boolean;
+  elevenLabsApiKey?: string;
+  elevenLabsVoiceId?: string;
 }
 
 // ── Navigation ──
