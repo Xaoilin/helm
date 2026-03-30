@@ -200,7 +200,13 @@ export default function TasksSurface() {
     // Gamification: award XP on completion
     if (completing) {
       const completionsToday = app.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
-      const extCtx = buildCompletionContext(app.tasks, app.settings.goalTags, todayStr, app.gamification);
+      const extCtx = buildCompletionContext(app.tasks, app.settings.goalTags, todayStr, app.gamification, {
+        knowledgeEntries: app.knowledgeEntries.length,
+        knowledgeTopics: app.knowledgeTopics.length,
+        lifestyleHaramMastered: app.lifestyleItems.filter(i => i.type === 'haram' && i.status === 'mastered').length,
+        lifestyleHalalConsistent: app.lifestyleItems.filter(i => i.type === 'halal' && i.status === 'consistent').length,
+        lifestyleTotal: app.lifestyleItems.length,
+      });
       const result = processTaskCompletion(app.gamification, task, completionsToday, nowDate, extCtx);
       app.updateGamification(result.updatedProfile);
 

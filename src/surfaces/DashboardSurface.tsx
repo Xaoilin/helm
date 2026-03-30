@@ -265,7 +265,13 @@ export default function DashboardSurface() {
     });
 
     const completionsToday = app.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
-    const extCtx = buildCompletionContext(app.tasks, app.settings.goalTags, todayStr, gam);
+    const extCtx = buildCompletionContext(app.tasks, app.settings.goalTags, todayStr, gam, {
+      knowledgeEntries: app.knowledgeEntries.length,
+      knowledgeTopics: app.knowledgeTopics.length,
+      lifestyleHaramMastered: app.lifestyleItems.filter(i => i.type === 'haram' && i.status === 'mastered').length,
+      lifestyleHalalConsistent: app.lifestyleItems.filter(i => i.type === 'halal' && i.status === 'consistent').length,
+      lifestyleTotal: app.lifestyleItems.length,
+    });
     const result = processTaskCompletion(gam, task, completionsToday, nowDate, extCtx);
     app.updateGamification(result.updatedProfile);
 

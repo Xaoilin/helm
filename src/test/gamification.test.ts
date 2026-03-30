@@ -170,6 +170,12 @@ describe('Badges', () => {
     goalCategories: 0,
     daysSinceFirstUse: 0,
     hadPriorStreak: false,
+    knowledgeEntries: 0,
+    knowledgeTopics: 0,
+    lifestyleHaramMastered: 0,
+    lifestyleHalalConsistent: 0,
+    lifestyleTotal: 0,
+    prayerHabitsCompleted: 0,
   };
 
   it('should award first-blood on first completion', () => {
@@ -249,24 +255,29 @@ describe('Badges', () => {
     expect(badges30).toContain('streak-30');
   });
 
-  it('should have 100 badge definitions', () => {
-    expect(BADGES.length).toBe(100);
+  it('should have 125 badge definitions', () => {
+    expect(BADGES.length).toBe(125);
     expect(BADGES.every(b => b.id && b.name && b.emoji && b.rarity)).toBe(true);
     // All IDs must be unique
     const ids = BADGES.map(b => b.id);
-    expect(new Set(ids).size).toBe(100);
+    expect(new Set(ids).size).toBe(125);
   });
 
   it('should have badges across all rarities', () => {
     const byRarity = { common: 0, rare: 0, epic: 0, legendary: 0 };
     for (const b of BADGES) byRarity[b.rarity]++;
-    // All four tiers must be represented
     expect(byRarity.common).toBeGreaterThanOrEqual(20);
     expect(byRarity.rare).toBeGreaterThanOrEqual(20);
     expect(byRarity.epic).toBeGreaterThanOrEqual(15);
     expect(byRarity.legendary).toBeGreaterThanOrEqual(10);
-    // Total must equal 100
-    expect(byRarity.common + byRarity.rare + byRarity.epic + byRarity.legendary).toBe(100);
+    expect(byRarity.common + byRarity.rare + byRarity.epic + byRarity.legendary).toBe(125);
+  });
+
+  it('should include Islamic badges', () => {
+    const islamicIds = ['first-note', 'notes-5', 'first-topic', 'five-prayers', 'haram-avoid-1', 'halal-consist-1', 'notes-100', 'notes-500', 'haram-avoid-5', 'topics-20'];
+    for (const id of islamicIds) {
+      expect(BADGES.some(b => b.id === id)).toBe(true);
+    }
   });
 });
 

@@ -316,6 +316,43 @@ export const BADGES: BadgeDef[] = [
   { id: 'perfect-quarter', name: 'Perfect Quarter', emoji: '\u{1F48E}', description: 'Complete all habits every day for 90 days', rarity: 'legendary' },
   { id: 'streak-500', name: 'Eternal Flame', emoji: '\u{1F30B}', description: '500-day streak', rarity: 'legendary' },
   { id: 'xp-50000', name: 'XP Overlord', emoji: '\u{1F4A0}', description: 'Earn 50,000 XP total', rarity: 'legendary' },
+
+  // ══════════════════════════════════════════
+  // ISLAMIC — Knowledge & spiritual growth
+  // ══════════════════════════════════════════
+
+  // Knowledge base (early)
+  { id: 'first-note', name: 'Seeker', emoji: '\u{1F4D6}', description: 'Add your first knowledge entry', rarity: 'common' },
+  { id: 'notes-5', name: 'Student of Knowledge', emoji: '\u{1F4DA}', description: 'Add 5 knowledge entries', rarity: 'common' },
+  { id: 'first-topic', name: 'Topic Opener', emoji: '\u{1F4C2}', description: 'Create your first knowledge topic', rarity: 'common' },
+  { id: 'topics-3', name: 'Curious Mind', emoji: '\u{1F9E0}', description: 'Create 3 knowledge topics', rarity: 'common' },
+  { id: 'first-prayer-habit', name: 'First Salah', emoji: '\u{1F54C}', description: 'Complete a prayer-related habit', rarity: 'common' },
+
+  // Knowledge base (mid)
+  { id: 'notes-10', name: 'Knowledge Builder', emoji: '\u{1F3D7}', description: 'Add 10 knowledge entries', rarity: 'rare' },
+  { id: 'notes-25', name: 'Dedicated Learner', emoji: '\u{1F393}', description: 'Add 25 knowledge entries', rarity: 'rare' },
+  { id: 'topics-5', name: 'Five Pillars Scholar', emoji: '\u{1F54B}', description: 'Create 5 knowledge topics', rarity: 'rare' },
+  { id: 'notes-50', name: 'Hafiz of Notes', emoji: '\u{1F4DC}', description: 'Add 50 knowledge entries', rarity: 'rare' },
+  { id: 'five-prayers', name: 'Five Daily', emoji: '\u{1F64F}', description: 'Complete 5 prayer habits in one day', rarity: 'rare' },
+
+  // Lifestyle tracker
+  { id: 'lifestyle-first', name: 'Self Reflection', emoji: '\u{1F6A9}', description: 'Add your first lifestyle item', rarity: 'common' },
+  { id: 'haram-avoid-1', name: 'First Step', emoji: '\u{1F6D1}', description: 'Master avoiding one haram thing', rarity: 'rare' },
+  { id: 'haram-avoid-3', name: 'Purifying', emoji: '\u{1F31F}', description: 'Master avoiding 3 haram things', rarity: 'epic' },
+  { id: 'haram-avoid-5', name: 'Taqwa', emoji: '\u{2728}', description: 'Master avoiding 5 haram things', rarity: 'epic' },
+  { id: 'haram-avoid-10', name: 'God-Conscious', emoji: '\u{1F54C}', description: 'Master avoiding 10 haram things', rarity: 'legendary' },
+  { id: 'halal-consist-1', name: 'Good Start', emoji: '\u2705', description: 'Become consistent in one halal practice', rarity: 'rare' },
+  { id: 'halal-consist-3', name: 'Righteous Path', emoji: '\u{1F31F}', description: 'Become consistent in 3 halal practices', rarity: 'epic' },
+  { id: 'halal-consist-5', name: 'Ihsan', emoji: '\u{1F48E}', description: 'Become consistent in 5 halal practices', rarity: 'epic' },
+  { id: 'halal-consist-10', name: 'Walking the Siraat', emoji: '\u{1F319}', description: 'Become consistent in 10 halal practices', rarity: 'legendary' },
+  { id: 'lifestyle-10', name: 'Lifestyle Auditor', emoji: '\u{1F4CB}', description: 'Track 10 lifestyle items total', rarity: 'rare' },
+
+  // Deep knowledge (late)
+  { id: 'notes-100', name: 'Scholar', emoji: '\u{1F9D1}\u200D\u{1F393}', description: 'Add 100 knowledge entries', rarity: 'epic' },
+  { id: 'topics-10', name: 'Encyclopaedist', emoji: '\u{1F4DA}', description: 'Create 10 knowledge topics', rarity: 'epic' },
+  { id: 'notes-250', name: 'Walking Library', emoji: '\u{1F3DB}', description: 'Add 250 knowledge entries', rarity: 'legendary' },
+  { id: 'notes-500', name: 'Alim', emoji: '\u{1F4D6}', description: 'Add 500 knowledge entries', rarity: 'legendary' },
+  { id: 'topics-20', name: 'Mufassir', emoji: '\u{1F30D}', description: 'Create 20 knowledge topics', rarity: 'legendary' },
 ];
 
 export function getBadgeDef(id: string): BadgeDef | undefined {
@@ -340,6 +377,13 @@ export interface BadgeCheckContext {
   goalCategories: number; // distinct goal tag count
   daysSinceFirstUse: number;
   hadPriorStreak: boolean; // true if they broke a streak before this one
+  // Islamic context
+  knowledgeEntries: number;
+  knowledgeTopics: number;
+  lifestyleHaramMastered: number;
+  lifestyleHalalConsistent: number;
+  lifestyleTotal: number;
+  prayerHabitsCompleted: number; // prayer-related habits done today
 }
 
 export function checkNewBadges(ctx: BadgeCheckContext): string[] {
@@ -463,6 +507,38 @@ export function checkNewBadges(ctx: BadgeCheckContext): string[] {
   check('streak-500', s >= 500);
   check('xp-50000', xp >= 50000);
 
+  // ── ISLAMIC ──
+  // Knowledge
+  check('first-note', ctx.knowledgeEntries >= 1);
+  check('notes-5', ctx.knowledgeEntries >= 5);
+  check('notes-10', ctx.knowledgeEntries >= 10);
+  check('notes-25', ctx.knowledgeEntries >= 25);
+  check('notes-50', ctx.knowledgeEntries >= 50);
+  check('notes-100', ctx.knowledgeEntries >= 100);
+  check('notes-250', ctx.knowledgeEntries >= 250);
+  check('notes-500', ctx.knowledgeEntries >= 500);
+  check('first-topic', ctx.knowledgeTopics >= 1);
+  check('topics-3', ctx.knowledgeTopics >= 3);
+  check('topics-5', ctx.knowledgeTopics >= 5);
+  check('topics-10', ctx.knowledgeTopics >= 10);
+  check('topics-20', ctx.knowledgeTopics >= 20);
+
+  // Prayer
+  check('first-prayer-habit', ctx.prayerHabitsCompleted >= 1);
+  check('five-prayers', ctx.prayerHabitsCompleted >= 5);
+
+  // Lifestyle
+  check('lifestyle-first', ctx.lifestyleTotal >= 1);
+  check('lifestyle-10', ctx.lifestyleTotal >= 10);
+  check('haram-avoid-1', ctx.lifestyleHaramMastered >= 1);
+  check('haram-avoid-3', ctx.lifestyleHaramMastered >= 3);
+  check('haram-avoid-5', ctx.lifestyleHaramMastered >= 5);
+  check('haram-avoid-10', ctx.lifestyleHaramMastered >= 10);
+  check('halal-consist-1', ctx.lifestyleHalalConsistent >= 1);
+  check('halal-consist-3', ctx.lifestyleHalalConsistent >= 3);
+  check('halal-consist-5', ctx.lifestyleHalalConsistent >= 5);
+  check('halal-consist-10', ctx.lifestyleHalalConsistent >= 10);
+
   return newBadges;
 }
 
@@ -470,10 +546,11 @@ export function checkNewBadges(ctx: BadgeCheckContext): string[] {
 
 /** Build extended context from task list for badge checking. */
 export function buildCompletionContext(
-  tasks: Pick<Task, 'category' | 'completed' | 'completedAt' | 'priority' | 'goalTag' | 'createdAt'>[],
+  tasks: Pick<Task, 'category' | 'completed' | 'completedAt' | 'priority' | 'goalTag' | 'createdAt' | 'title'>[],
   _goalTags: string[] | undefined,
   todayStr: string,
   profile: GamificationProfile,
+  islamic?: { knowledgeEntries: number; knowledgeTopics: number; lifestyleHaramMastered: number; lifestyleHalalConsistent: number; lifestyleTotal: number },
 ): CompletionContext {
   const dailyHabits = tasks.filter(t => t.category === 'daily');
   const allHabitsDone = dailyHabits.length > 0 && dailyHabits.every(t => t.completed);
@@ -483,6 +560,12 @@ export function buildCompletionContext(
   const daysSince = first ? Math.max(0, Math.ceil((Date.now() - new Date(first).getTime()) / 86400000)) : 0;
 
   const uniqueGoalTags = new Set(tasks.filter(t => t.category === 'goal' && t.goalTag).map(t => t.goalTag));
+
+  // Count prayer-related habits completed today
+  const prayerKeywords = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'salah', 'prayer', 'pray', 'namaz'];
+  const prayerHabitsCompleted = completedToday.filter(t =>
+    t.category === 'daily' && prayerKeywords.some(kw => t.title.toLowerCase().includes(kw))
+  ).length;
 
   return {
     totalHabits: dailyHabits.length,
@@ -496,6 +579,12 @@ export function buildCompletionContext(
     goalCategories: uniqueGoalTags.size,
     daysSinceFirstUse: daysSince,
     hadPriorStreak: profile.longestStreak > 0 && profile.currentStreak <= 1,
+    knowledgeEntries: islamic?.knowledgeEntries ?? 0,
+    knowledgeTopics: islamic?.knowledgeTopics ?? 0,
+    lifestyleHaramMastered: islamic?.lifestyleHaramMastered ?? 0,
+    lifestyleHalalConsistent: islamic?.lifestyleHalalConsistent ?? 0,
+    lifestyleTotal: islamic?.lifestyleTotal ?? 0,
+    prayerHabitsCompleted,
   };
 }
 
@@ -533,6 +622,13 @@ export interface CompletionContext {
   goalCategories: number;
   daysSinceFirstUse: number;
   hadPriorStreak: boolean;
+  // Islamic
+  knowledgeEntries: number;
+  knowledgeTopics: number;
+  lifestyleHaramMastered: number;
+  lifestyleHalalConsistent: number;
+  lifestyleTotal: number;
+  prayerHabitsCompleted: number;
 }
 
 export function processTaskCompletion(
@@ -580,6 +676,12 @@ export function processTaskCompletion(
     goalCategories: extCtx?.goalCategories ?? 0,
     daysSinceFirstUse: extCtx?.daysSinceFirstUse ?? 0,
     hadPriorStreak: extCtx?.hadPriorStreak ?? (profile.longestStreak > 0 && profile.currentStreak <= 1),
+    knowledgeEntries: extCtx?.knowledgeEntries ?? 0,
+    knowledgeTopics: extCtx?.knowledgeTopics ?? 0,
+    lifestyleHaramMastered: extCtx?.lifestyleHaramMastered ?? 0,
+    lifestyleHalalConsistent: extCtx?.lifestyleHalalConsistent ?? 0,
+    lifestyleTotal: extCtx?.lifestyleTotal ?? 0,
+    prayerHabitsCompleted: extCtx?.prayerHabitsCompleted ?? 0,
   });
 
   updatedProfile.badges = [...profile.badges, ...newBadgeIds];
