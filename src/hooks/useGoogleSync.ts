@@ -44,11 +44,15 @@ export function useGoogleSync(): GoogleSyncResult {
         googleCalendars = await fetchCalendarList(accessToken);
       } catch (fetchErr) {
         if (fetchErr instanceof GoogleApiError && fetchErr.isAuthError) {
-          // Token expired — try silent refresh before giving up
+          // Token expired — try silent refresh with timeout (no popup)
           try {
             const { loadGisScript, refreshAccessToken, saveGoogleTokens } = await import('../services/googleAuth');
             await loadGisScript();
-            const newTokens = await refreshAccessToken(clientId);
+            // Race against a 3s timeout — if GIS would open a popup, it takes longer
+            const newTokens = await Promise.race([
+              refreshAccessToken(clientId),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+            ]);
             saveGoogleTokens(accountId, newTokens);
             accessToken = newTokens.accessToken;
             googleCalendars = await fetchCalendarList(accessToken);
@@ -217,10 +221,18 @@ export function useGoogleSync(): GoogleSyncResult {
     syncingRef.current = false;
   }, [googleAccounts, clientId, syncAccount, accountSyncStates]);
 
-  // Auto-sync on mount
+  // Auto-sync on mount — but only if last sync was >15 min ago
+  // This prevents the Google login popup from appearing on every Calendar tab switch
   useEffect(() => {
     if (googleAccounts.length > 0 && clientId) {
-      triggerSync();
+      const lastSync = googleAccounts.reduce<number>((latest, acc) => {
+        if (!acc.lastSyncTime) return latest;
+        return Math.max(latest, new Date(acc.lastSyncTime).getTime());
+      }, 0);
+      const fifteenMinAgo = Date.now() - 15 * 60 * 1000;
+      if (lastSync < fifteenMinAgo) {
+        triggerSync();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleAccounts.length]);
