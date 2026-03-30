@@ -5,6 +5,7 @@ import App from '../App';
 import ChatSurface from '../surfaces/ChatSurface';
 import DashboardSurface from '../surfaces/DashboardSurface';
 import TasksSurface from '../surfaces/TasksSurface';
+import KnowledgeSurface from '../surfaces/KnowledgeSurface';
 import ProfileSurface from '../surfaces/ProfileSurface';
 import CredentialsSurface from '../surfaces/CredentialsSurface';
 import WorkspacesSurface from '../surfaces/WorkspacesSurface';
@@ -24,6 +25,7 @@ describe('App shell', () => {
     expect(screen.getByText('Chat')).toBeInTheDocument();
     expect(screen.getByText('Calendar')).toBeInTheDocument();
     expect(screen.getByText('Tasks')).toBeInTheDocument();
+    expect(screen.getByText('Knowledge')).toBeInTheDocument();
     expect(screen.getByText('Profile')).toBeInTheDocument();
     expect(screen.getByText('Credentials')).toBeInTheDocument();
     expect(screen.getByText('Workspaces')).toBeInTheDocument();
@@ -213,5 +215,22 @@ describe('DashboardSurface', () => {
     await act(async () => { renderWithProvider(<DashboardSurface />); });
     expect(screen.getByText(/Lv\.1/)).toBeInTheDocument();
     expect(screen.getByText('0 XP')).toBeInTheDocument();
+  });
+});
+
+describe('KnowledgeSurface', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('should render empty state with tabs', async () => {
+    await act(async () => { renderWithProvider(<KnowledgeSurface />); });
+    expect(screen.getByText('Start Your Knowledge Base')).toBeInTheDocument();
+    expect(screen.getByText('Browse')).toBeInTheDocument();
+    expect(screen.getByText('Add Entry')).toBeInTheDocument();
+    expect(screen.getByText('Search')).toBeInTheDocument();
+  });
+
+  it('should have create topic button', async () => {
+    await act(async () => { renderWithProvider(<KnowledgeSurface />); });
+    expect(screen.getByText('+ Create First Topic')).toBeInTheDocument();
   });
 });

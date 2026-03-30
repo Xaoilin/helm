@@ -232,3 +232,57 @@ describe('AppContext - Chat', () => {
     expect(r.api!.activeConversationId).toBeNull();
   });
 });
+
+describe('AppContext - Knowledge', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('should add, update, and remove topics', async () => {
+    const r = await renderWithApp();
+    let topicId = '';
+    act(() => { topicId = r.api!.addKnowledgeTopic({ name: 'Pillars', description: 'Five pillars', icon: '\u{1F54C}', color: '#3b82f6', sortOrder: 0 }); });
+    expect(r.api!.knowledgeTopics).toHaveLength(1);
+    expect(r.api!.knowledgeTopics[0].name).toBe('Pillars');
+
+    act(() => { r.api!.updateKnowledgeTopic(topicId, { name: 'Five Pillars' }); });
+    expect(r.api!.knowledgeTopics[0].name).toBe('Five Pillars');
+
+    act(() => { r.api!.removeKnowledgeTopic(topicId); });
+    expect(r.api!.knowledgeTopics).toHaveLength(0);
+  });
+
+  it('should add, update, and remove entries', async () => {
+    const r = await renderWithApp();
+    let topicId = '';
+    act(() => { topicId = r.api!.addKnowledgeTopic({ name: 'Test', description: '', icon: '\u{1F4D6}', color: '#3b82f6', sortOrder: 0 }); });
+
+    let entryId = '';
+    act(() => {
+      entryId = r.api!.addKnowledgeEntry({
+        topicId, title: 'Shahada', content: 'The declaration of faith',
+        sources: [{ type: 'quran', surah: 3, ayahStart: 18 }], tags: ['pillar', 'faith'],
+      });
+    });
+    expect(r.api!.knowledgeEntries).toHaveLength(1);
+    expect(r.api!.knowledgeEntries[0].title).toBe('Shahada');
+    expect(r.api!.knowledgeEntries[0].sources[0].type).toBe('quran');
+
+    act(() => { r.api!.updateKnowledgeEntry(entryId, { content: 'Updated content' }); });
+    expect(r.api!.knowledgeEntries[0].content).toBe('Updated content');
+
+    act(() => { r.api!.removeKnowledgeEntry(entryId); });
+    expect(r.api!.knowledgeEntries).toHaveLength(0);
+  });
+
+  it('should cascade delete entries when topic is removed', async () => {
+    const r = await renderWithApp();
+    let topicId = '';
+    act(() => { topicId = r.api!.addKnowledgeTopic({ name: 'Topic', description: '', icon: '\u{1F4D6}', color: '#3b82f6', sortOrder: 0 }); });
+    act(() => { r.api!.addKnowledgeEntry({ topicId, title: 'E1', content: '', sources: [], tags: [] }); });
+    act(() => { r.api!.addKnowledgeEntry({ topicId, title: 'E2', content: '', sources: [], tags: [] }); });
+    expect(r.api!.knowledgeEntries).toHaveLength(2);
+
+    act(() => { r.api!.removeKnowledgeTopic(topicId); });
+    expect(r.api!.knowledgeTopics).toHaveLength(0);
+    expect(r.api!.knowledgeEntries).toHaveLength(0);
+  });
+});

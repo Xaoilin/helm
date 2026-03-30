@@ -1714,3 +1714,108 @@ textarea.form-input {
   color: #e1e4ea;
   margin-bottom: 2px;
 }
+
+/* ── Knowledge Base ── */
+.kb-topic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.kb-topic-card {
+  background: #181b27;
+  border: 1px solid #242740;
+  border-left: 4px solid #4f5bff;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.2s;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 4px 12px;
+  align-items: center;
+  position: relative;
+}
+.kb-topic-card:hover { transform: translateY(-2px); }
+.kb-topic-card.kb-add-topic {
+  border-left-color: #242740;
+  border-style: dashed;
+  opacity: 0.6;
+}
+.kb-topic-card.kb-add-topic:hover { opacity: 1; }
+
+.kb-topic-icon { font-size: 28px; grid-row: 1 / 3; }
+.kb-topic-name { font-size: 14px; font-weight: 600; color: #e1e4ea; }
+.kb-topic-count { font-size: 11px; color: #6b6f85; }
+.kb-topic-info { min-width: 0; }
+
+.kb-composition-bar {
+  grid-column: 1 / -1;
+  height: 3px;
+  display: flex;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.kb-comp-quran { background: #22c55e; }
+.kb-comp-hadith { background: #f59e0b; }
+.kb-comp-other { background: #6b6f85; }
+
+/* Source badges */
+.kb-src-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.kb-src-quran { background: #1a3a1f; color: #3ab553; }
+.kb-src-hadith { background: #3a2f1a; color: #f59e0b; }
+.kb-src-scholarly { background: #1a1e3a; color: #7c8aff; }
+.kb-src-other { background: #1e2030; color: #9499b0; }
+
+/* Entry cards */
+.kb-entry-card {
+  background: #181b27;
+  border: 1px solid #242740;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.kb-entry-card:hover { background: #1a1d2e; }
+.kb-entry-card.expanded { background: #1a1d2e; cursor: default; }
+
+.kb-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.kb-entry-title { font-size: 14px; font-weight: 600; color: #e1e4ea; flex: 1; }
+.kb-entry-sources { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 3px; }
+.kb-entry-preview { font-size: 12px; color: #6b6f85; margin-top: 6px; line-height: 1.4; }
+.kb-entry-topic-crumb { font-size: 11px; color: #4f5bff; margin-top: 4px; }
+
+.kb-entry-body { margin-top: 10px; padding-top: 10px; border-top: 1px solid #242740; }
+.kb-entry-content { font-size: 13px; color: #c4c8db; line-height: 1.6; white-space: pre-wrap; }
+.kb-entry-tags { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+.kb-entry-meta { margin-top: 8px; font-size: 11px; color: #4a4e62; }
+
+/* Source input row */
+.kb-source-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.kb-source-row .form-input,
+.kb-source-row .form-select {
+  font-size: 12px;
+  padding: 5px 8px;
+}

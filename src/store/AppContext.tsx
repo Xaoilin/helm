@@ -5,6 +5,7 @@ import type {
   CalendarAccount, CalendarSource, CalendarEvent,
   Credential, Workspace, Integration, Settings,
   Task, GamificationProfile,
+  KnowledgeTopic, KnowledgeEntry,
 } from '../types/domain';
 import { loadStore, saveStore } from './persistence';
 import { DEFAULT_PROFILE } from '../services/gamification';
@@ -38,6 +39,8 @@ interface AppState {
   credentials: Credential[];
   workspaces: Workspace[];
   tasks: Task[];
+  knowledgeTopics: KnowledgeTopic[];
+  knowledgeEntries: KnowledgeEntry[];
   integrations: Integration[];
   gamification: GamificationProfile;
   settings: Settings;
@@ -88,6 +91,14 @@ interface AppContextAPI extends AppState {
   updateTask: (id: string, updates: Partial<Task>) => void;
   removeTask: (id: string) => void;
 
+  // Knowledge
+  addKnowledgeTopic: (topic: Omit<KnowledgeTopic, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateKnowledgeTopic: (id: string, updates: Partial<KnowledgeTopic>) => void;
+  removeKnowledgeTopic: (id: string) => void;
+  addKnowledgeEntry: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateKnowledgeEntry: (id: string, updates: Partial<KnowledgeEntry>) => void;
+  removeKnowledgeEntry: (id: string) => void;
+
   // Gamification
   updateGamification: (profile: GamificationProfile) => void;
 
@@ -118,6 +129,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     credentials: [],
     workspaces: [],
     tasks: [],
+    knowledgeTopics: [],
+    knowledgeEntries: [],
     integrations: defaultIntegrations,
     gamification: DEFAULT_PROFILE,
     settings: defaultSettings,
@@ -127,7 +140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Load persisted state on mount
   useEffect(() => {
     (async () => {
-      const [conversations, calendarAccounts, calendarSources, calendarEvents, credentials, workspaces, tasks, integrations, gamification, settings] = await Promise.all([
+      const [conversations, calendarAccounts, calendarSources, calendarEvents, credentials, workspaces, tasks, knowledgeTopics, knowledgeEntries, integrations, gamification, settings] = await Promise.all([
         loadStore<ChatConversation[]>('conversations'),
         loadStore<CalendarAccount[]>('calendarAccounts'),
         loadStore<CalendarSource[]>('calendarSources'),
@@ -135,6 +148,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadStore<Credential[]>('credentials'),
         loadStore<Workspace[]>('workspaces'),
         loadStore<Task[]>('tasks'),
+        loadStore<KnowledgeTopic[]>('knowledgeTopics'),
+        loadStore<KnowledgeEntry[]>('knowledgeEntries'),
         loadStore<Integration[]>('integrations'),
         loadStore<GamificationProfile>('gamification'),
         loadStore<Settings>('settings'),
@@ -148,6 +163,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         credentials: credentials ?? [],
         workspaces: workspaces ?? [],
         tasks: tasks ?? [],
+        knowledgeTopics: knowledgeTopics ?? [],
+        knowledgeEntries: knowledgeEntries ?? [],
         integrations: integrations ?? defaultIntegrations,
         gamification: gamification ?? DEFAULT_PROFILE,
         settings: settings ?? defaultSettings,
@@ -167,6 +184,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (state.loaded) saveStore('credentials', state.credentials); }, [state.credentials, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('workspaces', state.workspaces); }, [state.workspaces, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('tasks', state.tasks); }, [state.tasks, state.loaded]);
+  useEffect(() => { if (state.loaded) saveStore('knowledgeTopics', state.knowledgeTopics); }, [state.knowledgeTopics, state.loaded]);
+  useEffect(() => { if (state.loaded) saveStore('knowledgeEntries', state.knowledgeEntries); }, [state.knowledgeEntries, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('gamification', state.gamification); }, [state.gamification, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('integrations', state.integrations); }, [state.integrations, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('settings', state.settings); }, [state.settings, state.loaded]);
@@ -436,6 +455,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, tasks: s.tasks.filter(t => t.id !== id) }));
   }, []);
 
+  // ── Knowledge ──
+  const addKnowledgeTopic = useCallback((topic: Omit<KnowledgeTopic, 'id' | 'createdAt' | 'updatedAt'>): string => {
+    const id = uuid();
+    const now = new Date().toISOString();
+    setState(s => ({ ...s, knowledgeTopics: [...s.knowledgeTopics, { ...topic, id, createdAt: now, updatedAt: now }] }));
+    return id;
+  }, []);
+
+  const updateKnowledgeTopic = useCallback((id: string, updates: Partial<KnowledgeTopic>) => {
+    setState(s => ({
+      ...s,
+      knowledgeTopics: s.knowledgeTopics.map(t => t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t),
+    }));
+  }, []);
+
+  const removeKnowledgeTopic = useCallback((id: string) => {
+    setState(s => ({
+      ...s,
+      knowledgeTopics: s.knowledgeTopics.filter(t => t.id !== id),
+      knowledgeEntries: s.knowledgeEntries.filter(e => e.topicId !== id),
+    }));
+  }, []);
+
+  const addKnowledgeEntry = useCallback((entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>): string => {
+    const id = uuid();
+    const now = new Date().toISOString();
+    setState(s => ({ ...s, knowledgeEntries: [...s.knowledgeEntries, { ...entry, id, createdAt: now, updatedAt: now }] }));
+    return id;
+  }, []);
+
+  const updateKnowledgeEntry = useCallback((id: string, updates: Partial<KnowledgeEntry>) => {
+    setState(s => ({
+      ...s,
+      knowledgeEntries: s.knowledgeEntries.map(e => e.id === id ? { ...e, ...updates, updatedAt: new Date().toISOString() } : e),
+    }));
+  }, []);
+
+  const removeKnowledgeEntry = useCallback((id: string) => {
+    setState(s => ({ ...s, knowledgeEntries: s.knowledgeEntries.filter(e => e.id !== id) }));
+  }, []);
+
   // ── Gamification ──
   const updateGamification = useCallback((profile: GamificationProfile) => {
     setState(s => ({ ...s, gamification: profile }));
@@ -474,6 +534,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addCredential, updateCredential, removeCredential,
     addWorkspace, updateWorkspace, removeWorkspace, setPrimaryWorkspace,
     addTask, updateTask, removeTask,
+    addKnowledgeTopic, updateKnowledgeTopic, removeKnowledgeTopic,
+    addKnowledgeEntry, updateKnowledgeEntry, removeKnowledgeEntry,
     updateGamification,
     updateIntegration,
     updateSettings,

@@ -116,6 +116,41 @@ export interface Task {
   updatedAt: string;
 }
 
+// ── Knowledge Base ──
+export interface KnowledgeSource {
+  type: 'quran' | 'hadith' | 'scholarly' | 'other';
+  surah?: number;
+  ayahStart?: number;
+  ayahEnd?: number;
+  collection?: string;
+  hadithNumber?: string;
+  author?: string;
+  title?: string;
+  url?: string;
+}
+
+export interface KnowledgeEntry {
+  id: string;
+  topicId: string;
+  title: string;
+  content: string;
+  sources: KnowledgeSource[];
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KnowledgeTopic {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Gamification ──
 export interface GamificationProfile {
   totalXp: number;
@@ -148,6 +183,7 @@ export type Surface =
   | 'credentials'
   | 'workspaces'
   | 'tasks'
+  | 'knowledge'
   | 'profile'
   | 'integrations'
   | 'settings';

@@ -4,6 +4,7 @@ import DashboardSurface from './surfaces/DashboardSurface';
 import ChatSurface from './surfaces/ChatSurface';
 import CalendarSurface from './surfaces/CalendarSurface';
 import TasksSurface from './surfaces/TasksSurface';
+import KnowledgeSurface from './surfaces/KnowledgeSurface';
 import ProfileSurface from './surfaces/ProfileSurface';
 import CredentialsSurface from './surfaces/CredentialsSurface';
 import WorkspacesSurface from './surfaces/WorkspacesSurface';
@@ -16,6 +17,7 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'chat', label: 'Chat', icon: '\u{1F4AC}' },
   { surface: 'calendar', label: 'Calendar', icon: '\u{1F4C5}' },
   { surface: 'tasks', label: 'Tasks', icon: '\u2705' },
+  { surface: 'knowledge', label: 'Knowledge', icon: '\u{1F4DA}' },
   { surface: 'profile', label: 'Profile', icon: '\u{1F3C6}' },
   { surface: 'credentials', label: 'Credentials', icon: '\u{1F511}' },
   { surface: 'workspaces', label: 'Workspaces', icon: '\u{1F4C1}' },
@@ -32,6 +34,7 @@ function AppInner() {
       case 'chat': return <ChatSurface />;
       case 'calendar': return <CalendarSurface />;
       case 'tasks': return <TasksSurface />;
+      case 'knowledge': return <KnowledgeSurface />;
       case 'profile': return <ProfileSurface />;
       case 'credentials': return <CredentialsSurface />;
       case 'workspaces': return <WorkspacesSurface />;
