@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
+import HabitCards from '../components/HabitCards';
 import {
   xpToNextLevel,
   titleForLevel,
@@ -314,28 +315,10 @@ export default function DashboardSurface() {
                 <button className="btn btn-secondary btn-sm" onClick={() => app.navigate('tasks')}>+ Add a daily habit</button>
               </div>
             ) : (
-              <>
-                <div className="progress-bar" style={{ marginBottom: 10 }}>
-                  <div className="progress-fill" style={{ width: `${habitsTotal > 0 ? (habitsDone / habitsTotal) * 100 : 0}%` }} />
-                </div>
-                <div className="dash-habits-list">
-                  {dailyHabits.map(h => (
-                    <div key={h.id} className={`dash-habit-item ${h.completed ? 'done' : ''}`}>
-                      <input
-                        type="checkbox"
-                        className="task-checkbox"
-                        checked={h.completed}
-                        onChange={() => {
-                          if (!h.completed) completeTask(h);
-                          else app.updateTask(h.id, { completed: false, completedAt: undefined });
-                        }}
-                        aria-label={`${h.completed ? 'Uncheck' : 'Complete'} ${h.title}`}
-                      />
-                      <span className={h.completed ? 'task-title-done' : ''}>{h.title}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
+              <HabitCards
+                habits={dailyHabits}
+                onToggle={h => { if (!h.completed) completeTask(h); else app.updateTask(h.id, { completed: false, completedAt: undefined }); }}
+              />
             )}
           </div>
         </div>

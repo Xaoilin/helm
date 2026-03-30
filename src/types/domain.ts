@@ -111,6 +111,7 @@ export interface Task {
   dueDate?: string;
   recurring?: TaskRecurrence;
   goalTag?: string;
+  emoji?: string;
   createdAt: string;
   updatedAt: string;
 }

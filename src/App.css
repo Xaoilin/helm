@@ -1500,7 +1500,183 @@ textarea.form-input {
   text-overflow: ellipsis;
 }
 
-/* Habits list */
+/* ── Habit Cards ── */
+.habit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.habit-card {
+  background: #181b27;
+  border: 1px solid #242740;
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.3s, box-shadow 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+.habit-card:hover { transform: translateY(-2px); border-color: #3a3d52; }
+.habit-card.done {
+  border-color: #22c55e;
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.15);
+  animation: habitGlow 2s ease infinite;
+}
+
+.habit-card-emoji {
+  font-size: 32px;
+  margin-bottom: 6px;
+  transition: transform 0.3s;
+}
+.habit-card.done .habit-card-emoji {
+  animation: habitBounce 0.4s ease;
+}
+
+.habit-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e1e4ea;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.habit-card.done .habit-card-name {
+  color: #22c55e;
+}
+
+.habit-card-freq {
+  font-size: 10px;
+  color: #6b6f85;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.habit-card-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #3a3d52;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: transparent;
+  transition: all 0.3s;
+  background: transparent;
+}
+.habit-card.done .habit-card-check {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #fff;
+  animation: habitBounce 0.4s ease;
+}
+
+.habit-card-xp {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #4f5bff;
+  opacity: 0;
+}
+.habit-card.done .habit-card-xp {
+  animation: xpFloat 1.5s ease forwards;
+}
+
+/* Progress ring */
+.habit-ring-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.habit-ring {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+.habit-ring-track {
+  fill: none;
+  stroke: #242740;
+  stroke-width: 5;
+}
+.habit-ring-fill {
+  fill: none;
+  stroke: url(#habitGradient);
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+.habit-ring-fill.complete {
+  stroke: #22c55e;
+  animation: ringPulse 1s ease;
+}
+.habit-ring-text {
+  font-size: 14px;
+  font-weight: 700;
+  fill: #e1e4ea;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.habit-ring-info {
+  flex: 1;
+}
+.habit-ring-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e1e4ea;
+}
+.habit-ring-sub {
+  font-size: 12px;
+  color: #6b6f85;
+  margin-top: 2px;
+}
+
+/* Animations */
+@keyframes habitBounce {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.2); }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes habitGlow {
+  0%, 100% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.1); }
+  50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.25); }
+}
+
+@keyframes xpFloat {
+  0% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; transform: translateY(-14px); }
+  100% { opacity: 0; transform: translateY(-20px); }
+}
+
+@keyframes ringPulse {
+  0% { stroke-width: 5; }
+  50% { stroke-width: 7; }
+  100% { stroke-width: 5; }
+}
+
+/* All done celebration */
+.habit-complete-msg {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #22c55e;
+  margin-top: 8px;
+  animation: habitBounce 0.5s ease;
+}
+
+/* Legacy compat */
 .dash-habits-list { display: flex; flex-direction: column; gap: 4px; }
 .dash-habit-item {
   display: flex;

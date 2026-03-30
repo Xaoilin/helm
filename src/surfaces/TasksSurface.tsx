@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
+import HabitCards from '../components/HabitCards';
+import { EMOJI_PALETTE, getHabitEmoji } from '../services/habitEmoji';
 import type { Task, TaskCategory, TaskPriority } from '../types/domain';
 import {
   processTaskCompletion,
@@ -41,6 +43,7 @@ export default function TasksSurface() {
   const [dueDate, setDueDate] = useState('');
   const [recurringFreq, setRecurringFreq] = useState<'daily' | 'weekdays' | 'weekly'>('daily');
   const [goalTag, setGoalTag] = useState('');
+  const [habitEmoji, setHabitEmoji] = useState('');
 
   // Filters
   const [filterGoalTag, setFilterGoalTag] = useState<string>('all');
@@ -147,6 +150,7 @@ export default function TasksSurface() {
     setDueDate(tab === 'today' ? todayStr : '');
     setRecurringFreq('daily');
     setGoalTag(filterGoalTag !== 'all' ? filterGoalTag : '');
+    setHabitEmoji('');
     setEditing(null); setShowForm(true);
   };
 
@@ -156,6 +160,7 @@ export default function TasksSurface() {
     setDueDate(task.dueDate || '');
     setRecurringFreq(task.recurring?.frequency || 'daily');
     setGoalTag(task.goalTag || '');
+    setHabitEmoji(task.emoji || '');
     setEditing(task); setShowForm(true);
   };
 
@@ -171,6 +176,7 @@ export default function TasksSurface() {
       dueDate: category === 'daily' ? undefined : (dueDate || undefined),
       recurring: category === 'daily' ? { frequency: recurringFreq, lastReset: editing?.recurring?.lastReset } : undefined,
       goalTag: category === 'goal' && goalTag ? goalTag : undefined,
+      emoji: category === 'daily' && habitEmoji ? habitEmoji : undefined,
     };
     if (editing) {
       app.updateTask(editing.id, data);
@@ -364,7 +370,7 @@ export default function TasksSurface() {
                 {dailyHabits.length > 0 && (
                   <>
                     <div className="section-heading">Daily Habits</div>
-                    {dailyHabits.map(renderTaskRow)}
+                    <HabitCards habits={dailyHabits} onToggle={toggleComplete} />
                   </>
                 )}
                 {dueTodayTasks.length > 0 && (
@@ -551,14 +557,38 @@ export default function TasksSurface() {
               </div>
             )}
             {category === 'daily' && (
-              <div className="form-group">
-                <label htmlFor="task-freq">Repeats</label>
-                <select id="task-freq" className="form-select" value={recurringFreq} onChange={e => setRecurringFreq(e.target.value as typeof recurringFreq)}>
-                  <option value="daily">Every day</option>
-                  <option value="weekdays">Weekdays only</option>
-                  <option value="weekly">Weekly</option>
-                </select>
-              </div>
+              <>
+                <div className="form-group">
+                  <label htmlFor="task-freq">Repeats</label>
+                  <select id="task-freq" className="form-select" value={recurringFreq} onChange={e => setRecurringFreq(e.target.value as typeof recurringFreq)}>
+                    <option value="daily">Every day</option>
+                    <option value="weekdays">Weekdays only</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Icon</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 28 }}>{getHabitEmoji(title, habitEmoji)}</span>
+                    <span style={{ fontSize: 11, color: '#6b6f85' }}>{habitEmoji ? 'Custom' : 'Auto-detected'}</span>
+                    {habitEmoji && <button className="btn btn-secondary btn-sm" style={{ fontSize: 10 }} onClick={() => setHabitEmoji('')}>Reset</button>}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {EMOJI_PALETTE.map(em => (
+                      <button
+                        key={em}
+                        type="button"
+                        onClick={() => setHabitEmoji(em)}
+                        style={{
+                          fontSize: 18, padding: '4px 6px', background: habitEmoji === em ? '#1e2140' : 'transparent',
+                          border: habitEmoji === em ? '1px solid #4f5bff' : '1px solid transparent',
+                          borderRadius: 6, cursor: 'pointer',
+                        }}
+                      >{em}</button>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
             {category === 'goal' && goalTags.length > 0 && (
               <div className="form-group">
