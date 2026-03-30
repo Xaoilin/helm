@@ -2003,59 +2003,87 @@ textarea.form-input {
   background: #f59e0b;
 }
 
-/* ── Adhan Notification Banner ── */
+/* ── Adhan Notification — Full Screen Overlay ── */
 .adhan-banner {
   position: fixed;
-  top: 0;
-  left: 220px;
-  right: 0;
-  z-index: 300;
-  background: linear-gradient(135deg, #0a2f1a 0%, #1a3328 40%, #0f2a20 100%);
-  border-bottom: 2px solid #22c55e;
-  padding: 20px 32px;
+  inset: 0;
+  z-index: 500;
+  background: radial-gradient(ellipse at center, #0f3d25 0%, #0a2a1a 40%, #050f0a 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  animation: adhanSlideDown 0.5s ease;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+  animation: adhanFadeIn 0.6s ease;
 }
 .adhan-content {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
+  text-align: center;
 }
 .adhan-mosque {
-  font-size: 48px;
+  font-size: 80px;
   animation: adhanPulse 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 30px rgba(34, 197, 94, 0.4));
 }
-.adhan-text { flex: 1; }
+.adhan-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
 .adhan-title {
-  font-size: 28px;
+  font-size: 52px;
   font-weight: 700;
   color: #22c55e;
   font-family: 'Segoe UI', serif;
-  letter-spacing: 2px;
+  letter-spacing: 4px;
+  text-shadow: 0 0 40px rgba(34, 197, 94, 0.5);
+  animation: adhanGlow 2s ease-in-out infinite;
 }
 .adhan-subtitle {
-  font-size: 15px;
+  font-size: 22px;
   color: #c4c8db;
   margin-top: 4px;
 }
 .adhan-time {
-  font-size: 13px;
+  font-size: 16px;
   color: #6b6f85;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 .adhan-dismiss {
-  text-align: center;
-  font-size: 11px;
+  font-size: 13px;
   color: #4a4e62;
-  margin-top: 8px;
+  margin-top: 32px;
 }
 
-@keyframes adhanSlideDown {
-  from { transform: translateY(-100%); }
-  to { transform: translateY(0); }
+/* Decorative ring behind mosque */
+.adhan-ring {
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  border: 2px solid rgba(34, 197, 94, 0.15);
+  animation: adhanRingExpand 3s ease-in-out infinite;
+}
+.adhan-ring:nth-child(2) { animation-delay: 1s; }
+.adhan-ring:nth-child(3) { animation-delay: 2s; }
+
+@keyframes adhanFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes adhanPulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); }
+  50% { transform: scale(1.1); }
+}
+@keyframes adhanGlow {
+  0%, 100% { text-shadow: 0 0 30px rgba(34, 197, 94, 0.3); }
+  50% { text-shadow: 0 0 60px rgba(34, 197, 94, 0.6), 0 0 100px rgba(34, 197, 94, 0.2); }
+}
+@keyframes adhanRingExpand {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(1.5); opacity: 0; }
 }

@@ -241,18 +241,22 @@ CREATE POLICY "Allow all for anon"
           </div>
         </div>
 
-        {/* Test Adhan Banner */}
+        {/* Test Adhan — Full Screen Overlay */}
         {testAdhan && (
-          <div className="adhan-banner" onClick={() => setTestAdhan(null)} style={{ position: 'relative', left: 0, marginTop: 12, borderRadius: 10 }}>
+          <div className="adhan-banner" onClick={() => setTestAdhan(null)}>
+            <div className="adhan-ring" />
+            <div className="adhan-ring" />
+            <div className="adhan-ring" />
             <div className="adhan-content">
               <div className="adhan-mosque">{'\u{1F54C}'}</div>
               <div className="adhan-text">
                 <div className="adhan-title">{'\u0627\u0644\u0644\u0647 \u0623\u0643\u0628\u0631'}</div>
-                <div className="adhan-subtitle">Allahu Akbar &mdash; It's time for <strong>{testAdhan}</strong></div>
+                <div className="adhan-subtitle">Allahu Akbar</div>
+                <div className="adhan-subtitle">It's time for <strong>{testAdhan}</strong></div>
                 <div className="adhan-time">Test notification</div>
               </div>
             </div>
-            <div className="adhan-dismiss">Click to dismiss</div>
+            <div className="adhan-dismiss">Click anywhere to dismiss</div>
           </div>
         )}
 
