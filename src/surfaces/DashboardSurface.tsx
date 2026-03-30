@@ -249,11 +249,11 @@ export default function DashboardSurface() {
   const agenda = useMemo((): AgendaItem[] => {
     const items: AgendaItem[] = [];
 
-    // Calendar events today
-    for (const e of todayEvents.filter(e => !e.allDay)) {
+    // Calendar events today (all-day first, then timed)
+    for (const e of todayEvents) {
       items.push({
         id: `ev-${e.id}`,
-        time: new Date(e.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: e.allDay ? 'All day' : new Date(e.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         title: e.title,
         type: 'event',
         meta: e.location,
