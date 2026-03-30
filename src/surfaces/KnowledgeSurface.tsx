@@ -18,10 +18,26 @@ const HALAL_STATUSES: { value: LifestyleStatus; label: string; color: string; em
   { value: 'consistent', label: 'Consistent', color: '#22c55e', emoji: '\u{1F7E2}' },
 ];
 
+const AVOID_STATUSES = HARAM_STATUSES; // major/minor sins use same statuses as haram
+
 function getStatusInfo(type: LifestyleType, status: LifestyleStatus) {
-  const list = type === 'haram' ? HARAM_STATUSES : HALAL_STATUSES;
+  const list = type === 'halal' ? HALAL_STATUSES : AVOID_STATUSES;
   return list.find(s => s.value === status) || list[0];
 }
+
+interface ColumnConfig {
+  type: LifestyleType;
+  title: string;
+  emoji: string;
+  color: string;
+}
+
+const LIFESTYLE_COLUMNS: ColumnConfig[] = [
+  { type: 'haram', title: 'Most Haram', emoji: '\u{1F6D1}', color: '#ff6b6b' },
+  { type: 'major-sin', title: 'Major Sins', emoji: '\u{26A0}\uFE0F', color: '#f59e0b' },
+  { type: 'minor-sin', title: 'Minor Sins', emoji: '\u{1F7E1}', color: '#a855f7' },
+  { type: 'halal', title: 'Halal Practices', emoji: '\u2705', color: '#22c55e' },
+];
 type SourceFilter = 'all' | 'quran' | 'hadith' | 'scholarly' | 'other';
 
 const HADITH_COLLECTIONS = ['Bukhari', 'Muslim', 'Tirmidhi', 'Abu Dawud', 'An-Nasai', 'Ibn Majah', 'Muwatta', 'Ahmad', 'Other'];
@@ -168,8 +184,16 @@ export default function KnowledgeSurface() {
   }, [app.knowledgeEntries]);
 
   // Lifestyle derived
-  const haramItems = useMemo(() => app.lifestyleItems.filter(i => i.type === 'haram').sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)), [app.lifestyleItems]);
-  const halalItems = useMemo(() => app.lifestyleItems.filter(i => i.type === 'halal').sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)), [app.lifestyleItems]);
+  const itemsByType = useMemo(() => {
+    const map: Record<LifestyleType, typeof app.lifestyleItems> = { haram: [], 'major-sin': [], 'minor-sin': [], halal: [] };
+    for (const item of app.lifestyleItems) {
+      (map[item.type] || map.haram).push(item);
+    }
+    for (const key of Object.keys(map) as LifestyleType[]) {
+      map[key].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    }
+    return map;
+  }, [app.lifestyleItems]);
   const [dragId, setDragId] = useState<string | null>(null);
 
   const openAddLifestyle = (type: LifestyleType) => {
@@ -198,7 +222,7 @@ export default function KnowledgeSurface() {
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
   const handleDrop = (targetId: string, type: LifestyleType) => {
     if (!dragId || dragId === targetId) { setDragId(null); return; }
-    const items = type === 'haram' ? haramItems : halalItems;
+    const items = itemsByType[type];
     const ids = items.map(i => i.id);
     const fromIdx = ids.indexOf(dragId);
     const toIdx = ids.indexOf(targetId);
@@ -599,123 +623,72 @@ export default function KnowledgeSurface() {
         {/* ══ Lifestyle Tab ══ */}
         {tab === 'lifestyle' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-              {/* Haram Column */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: 15, color: '#ff6b6b' }}>{'\u{1F6D1}'} Things to Avoid (Haram)</h3>
-                  <button className="btn btn-secondary btn-sm" onClick={() => openAddLifestyle('haram')}>+ Add</button>
-                </div>
-                {haramItems.length === 0 ? (
-                  <div className="empty-state" role="status" style={{ padding: '30px 16px' }}>
-                    <div className="empty-icon" style={{ fontSize: 28 }}>{'\u{1F6D1}'}</div>
-                    <h3 style={{ fontSize: 13 }}>No items yet</h3>
-                    <p style={{ fontSize: 12 }}>Track haram things you want to stop doing.</p>
-                    <button className="btn btn-secondary btn-sm" onClick={() => openAddLifestyle('haram')}>+ Add Item</button>
-                  </div>
-                ) : (
-                  haramItems.map(item => {
-                    const info = getStatusInfo(item.type, item.status);
-                    return (
-                      <div key={item.id} className={`ls-item ${dragId === item.id ? 'dragging' : ''}`} style={{ borderLeftColor: info.color }}
-                        draggable onDragStart={() => handleDragStart(item.id)} onDragOver={handleDragOver} onDrop={() => handleDrop(item.id, 'haram')}>
-                        <button className="ls-status-btn" onClick={() => cycleStatus(item)} title={`Status: ${info.label}. Click to change.`} style={{ color: info.color }}>
-                          {info.emoji}
-                        </button>
-                        <div className="ls-item-content">
-                          <div className="ls-item-title">{item.title}</div>
-                          <div className="ls-item-status" style={{ color: info.color }}>{info.label}</div>
-                          {item.notes && <div className="ls-item-notes">{item.notes}</div>}
-                          {item.sources && item.sources.length > 0 && (
-                            <div className="ls-item-source">{item.sources.map((s, i) => <span key={i}>{i > 0 && ' · '}{renderSourceLink(s)}</span>)}</div>
-                          )}
-                        </div>
-                        <div className="ls-item-actions">
-                          <button className="btn-icon btn-sm" onClick={() => openEditLifestyle(item)} style={{ fontSize: 11 }}>Edit</button>
-                          {deletingLifestyleId === item.id ? (
-                            <div className="confirm-bar" role="alert" style={{ margin: 0, padding: '3px 6px', fontSize: 10 }}>
-                              <button className="btn btn-danger btn-sm" onClick={() => { app.removeLifestyleItem(item.id); setDeletingLifestyleId(null); }}>Yes</button>
-                              <button className="btn btn-secondary btn-sm" onClick={() => setDeletingLifestyleId(null)}>No</button>
-                            </div>
-                          ) : (
-                            <button className="btn-icon btn-sm" onClick={() => setDeletingLifestyleId(item.id)} style={{ fontSize: 11, color: '#ff6b6b' }}>&times;</button>
-                          )}
-                        </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              {LIFESTYLE_COLUMNS.map(col => {
+                const items = itemsByType[col.type];
+                const isAvoid = col.type !== 'halal';
+                const statuses = isAvoid ? AVOID_STATUSES : HALAL_STATUSES;
+                return (
+                  <div key={col.type}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <h3 style={{ margin: 0, fontSize: 13, color: col.color }}>{col.emoji} {col.title}</h3>
+                      <button className="btn btn-secondary btn-sm" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => openAddLifestyle(col.type)}>+</button>
+                    </div>
+                    {items.length === 0 ? (
+                      <div className="empty-state" role="status" style={{ padding: '20px 8px' }}>
+                        <div className="empty-icon" style={{ fontSize: 22 }}>{col.emoji}</div>
+                        <h3 style={{ fontSize: 11 }}>No items</h3>
+                        <button className="btn btn-secondary btn-sm" style={{ fontSize: 10 }} onClick={() => openAddLifestyle(col.type)}>+ Add</button>
                       </div>
-                    );
-                  })
-                )}
-                {haramItems.length > 0 && (
-                  <div className="ls-summary" style={{ borderColor: '#2d1515' }}>
-                    <span>{'\u{1F7E2}'} Mastered: {haramItems.filter(i => i.status === 'mastered').length}</span>
-                    <span>{'\u{1F535}'} Avoiding: {haramItems.filter(i => i.status === 'avoiding').length}</span>
-                    <span>{'\u{1F7E1}'} Working on: {haramItems.filter(i => i.status === 'working-on-it').length}</span>
-                    <span>{'\u{1F534}'} Struggling: {haramItems.filter(i => i.status === 'struggling').length}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Halal Column */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: 15, color: '#22c55e' }}>{'\u2705'} Things to Practice (Halal)</h3>
-                  <button className="btn btn-secondary btn-sm" onClick={() => openAddLifestyle('halal')}>+ Add</button>
-                </div>
-                {halalItems.length === 0 ? (
-                  <div className="empty-state" role="status" style={{ padding: '30px 16px' }}>
-                    <div className="empty-icon" style={{ fontSize: 28 }}>{'\u2705'}</div>
-                    <h3 style={{ fontSize: 13 }}>No items yet</h3>
-                    <p style={{ fontSize: 12 }}>Track halal practices you want to build into your life.</p>
-                    <button className="btn btn-secondary btn-sm" onClick={() => openAddLifestyle('halal')}>+ Add Item</button>
-                  </div>
-                ) : (
-                  halalItems.map(item => {
-                    const info = getStatusInfo(item.type, item.status);
-                    return (
-                      <div key={item.id} className={`ls-item ${dragId === item.id ? 'dragging' : ''}`} style={{ borderLeftColor: info.color }}
-                        draggable onDragStart={() => handleDragStart(item.id)} onDragOver={handleDragOver} onDrop={() => handleDrop(item.id, 'halal')}>
-                        <button className="ls-status-btn" onClick={() => cycleStatus(item)} title={`Status: ${info.label}. Click to change.`} style={{ color: info.color }}>
-                          {info.emoji}
-                        </button>
-                        <div className="ls-item-content">
-                          <div className="ls-item-title">{item.title}</div>
-                          <div className="ls-item-status" style={{ color: info.color }}>{info.label}</div>
-                          {item.notes && <div className="ls-item-notes">{item.notes}</div>}
-                          {item.sources && item.sources.length > 0 && (
-                            <div className="ls-item-source">{item.sources.map((s, i) => <span key={i}>{i > 0 && ' · '}{renderSourceLink(s)}</span>)}</div>
-                          )}
-                        </div>
-                        <div className="ls-item-actions">
-                          <button className="btn-icon btn-sm" onClick={() => openEditLifestyle(item)} style={{ fontSize: 11 }}>Edit</button>
-                          {deletingLifestyleId === item.id ? (
-                            <div className="confirm-bar" role="alert" style={{ margin: 0, padding: '3px 6px', fontSize: 10 }}>
-                              <button className="btn btn-danger btn-sm" onClick={() => { app.removeLifestyleItem(item.id); setDeletingLifestyleId(null); }}>Yes</button>
-                              <button className="btn btn-secondary btn-sm" onClick={() => setDeletingLifestyleId(null)}>No</button>
+                    ) : (
+                      items.map(item => {
+                        const info = getStatusInfo(item.type, item.status);
+                        return (
+                          <div key={item.id} className={`ls-item ${dragId === item.id ? 'dragging' : ''}`} style={{ borderLeftColor: info.color }}
+                            draggable onDragStart={() => handleDragStart(item.id)} onDragOver={handleDragOver} onDrop={() => handleDrop(item.id, col.type)}>
+                            <button className="ls-status-btn" onClick={() => cycleStatus(item)} title={`Status: ${info.label}. Click to change.`} style={{ color: info.color }}>
+                              {info.emoji}
+                            </button>
+                            <div className="ls-item-content">
+                              <div className="ls-item-title">{item.title}</div>
+                              <div className="ls-item-status" style={{ color: info.color }}>{info.label}</div>
+                              {item.notes && <div className="ls-item-notes">{item.notes}</div>}
+                              {item.sources && item.sources.length > 0 && (
+                                <div className="ls-item-source">{item.sources.map((s, i) => <span key={i}>{i > 0 && ' · '}{renderSourceLink(s)}</span>)}</div>
+                              )}
                             </div>
-                          ) : (
-                            <button className="btn-icon btn-sm" onClick={() => setDeletingLifestyleId(item.id)} style={{ fontSize: 11, color: '#ff6b6b' }}>&times;</button>
-                          )}
-                        </div>
+                            <div className="ls-item-actions">
+                              <button className="btn-icon btn-sm" onClick={() => openEditLifestyle(item)} style={{ fontSize: 10 }}>Edit</button>
+                              {deletingLifestyleId === item.id ? (
+                                <div className="confirm-bar" role="alert" style={{ margin: 0, padding: '2px 4px', fontSize: 9 }}>
+                                  <button className="btn btn-danger btn-sm" style={{ fontSize: 9, padding: '1px 4px' }} onClick={() => { app.removeLifestyleItem(item.id); setDeletingLifestyleId(null); }}>Yes</button>
+                                  <button className="btn btn-secondary btn-sm" style={{ fontSize: 9, padding: '1px 4px' }} onClick={() => setDeletingLifestyleId(null)}>No</button>
+                                </div>
+                              ) : (
+                                <button className="btn-icon btn-sm" onClick={() => setDeletingLifestyleId(item.id)} style={{ fontSize: 10, color: '#ff6b6b' }}>&times;</button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                    {items.length > 0 && (
+                      <div className="ls-summary" style={{ flexDirection: 'column', gap: 2 }}>
+                        {statuses.map(s => (
+                          <span key={s.value}>{s.emoji} {s.label}: {items.filter(i => i.status === s.value).length}</span>
+                        ))}
                       </div>
-                    );
-                  })
-                )}
-                {halalItems.length > 0 && (
-                  <div className="ls-summary" style={{ borderColor: '#152d1a' }}>
-                    <span>{'\u{1F7E2}'} Consistent: {halalItems.filter(i => i.status === 'consistent').length}</span>
-                    <span>{'\u{1F535}'} Practicing: {halalItems.filter(i => i.status === 'practicing').length}</span>
-                    <span>{'\u{1F7E1}'} Sometimes: {halalItems.filter(i => i.status === 'sometimes').length}</span>
-                    <span>{'\u26AA'} Want to start: {halalItems.filter(i => i.status === 'want-to-start').length}</span>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })}
             </div>
 
             {/* Lifestyle Add/Edit Modal */}
             {showLifestyleForm && (
               <div className="modal-overlay" onClick={() => setShowLifestyleForm(false)}>
                 <div className="modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={editingLifestyle ? 'Edit Item' : 'Add Item'}>
-                  <h2>{editingLifestyle ? 'Edit' : 'Add'} {lsType === 'haram' ? 'Haram' : 'Halal'} Item</h2>
+                  <h2>{editingLifestyle ? 'Edit' : 'Add'} {LIFESTYLE_COLUMNS.find(c => c.type === lsType)?.title || 'Item'}</h2>
                   <div className="form-group">
                     <label htmlFor="ls-title">What is it?</label>
                     <input id="ls-title" className="form-input" value={lsTitle} onChange={e => setLsTitle(e.target.value)} placeholder={lsType === 'haram' ? 'e.g., Backbiting, Riba...' : 'e.g., Daily Salah, Charity...'} autoFocus />
@@ -723,7 +696,7 @@ export default function KnowledgeSurface() {
                   <div className="form-group">
                     <label htmlFor="ls-status">Current status</label>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {(lsType === 'haram' ? HARAM_STATUSES : HALAL_STATUSES).map(s => (
+                      {(lsType === 'halal' ? HALAL_STATUSES : AVOID_STATUSES).map(s => (
                         <button
                           key={s.value}
                           className={`btn btn-sm ${lsStatus === s.value ? 'btn-primary' : 'btn-secondary'}`}

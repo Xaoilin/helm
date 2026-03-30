@@ -117,7 +117,7 @@ export interface Task {
 }
 
 // ── Lifestyle Tracker (Haram/Halal) ──
-export type LifestyleType = 'haram' | 'halal';
+export type LifestyleType = 'haram' | 'major-sin' | 'minor-sin' | 'halal';
 export type LifestyleStatus = 'struggling' | 'working-on-it' | 'avoiding' | 'mastered'    // haram statuses
                             | 'want-to-start' | 'sometimes' | 'practicing' | 'consistent'; // halal statuses
 
