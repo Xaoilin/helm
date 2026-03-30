@@ -20,8 +20,10 @@ const HALAL_STATUSES: { value: LifestyleStatus; label: string; color: string; em
 
 const AVOID_STATUSES = HARAM_STATUSES; // major/minor sins use same statuses as haram
 
+const PRACTICE_TYPES: LifestyleType[] = ['halal', 'wajib-women', 'wajib-men'];
+
 function getStatusInfo(type: LifestyleType, status: LifestyleStatus) {
-  const list = type === 'halal' ? HALAL_STATUSES : AVOID_STATUSES;
+  const list = PRACTICE_TYPES.includes(type) ? HALAL_STATUSES : AVOID_STATUSES;
   return list.find(s => s.value === status) || list[0];
 }
 
@@ -35,7 +37,8 @@ interface ColumnConfig {
 const LIFESTYLE_COLUMNS: ColumnConfig[] = [
   { type: 'haram', title: 'Most Haram', emoji: '\u{1F6D1}', color: '#ff6b6b' },
   { type: 'major-sin', title: 'Major Sins', emoji: '\u{26A0}\uFE0F', color: '#f59e0b' },
-  { type: 'minor-sin', title: 'Minor Sins', emoji: '\u{1F7E1}', color: '#a855f7' },
+  { type: 'wajib-women', title: 'Wajib (Women)', emoji: '\u{1F9D5}', color: '#ec4899' },
+  { type: 'wajib-men', title: 'Wajib (Men)', emoji: '\u{1F9D4}', color: '#3b82f6' },
   { type: 'halal', title: 'Halal Practices', emoji: '\u2705', color: '#22c55e' },
 ];
 type SourceFilter = 'all' | 'quran' | 'hadith' | 'scholarly' | 'other';
@@ -185,7 +188,7 @@ export default function KnowledgeSurface() {
 
   // Lifestyle derived
   const itemsByType = useMemo(() => {
-    const map: Record<LifestyleType, typeof app.lifestyleItems> = { haram: [], 'major-sin': [], 'minor-sin': [], halal: [] };
+    const map: Record<LifestyleType, typeof app.lifestyleItems> = { haram: [], 'major-sin': [], 'wajib-women': [], 'wajib-men': [], halal: [] };
     for (const item of app.lifestyleItems) {
       (map[item.type] || map.haram).push(item);
     }
@@ -198,7 +201,7 @@ export default function KnowledgeSurface() {
 
   const openAddLifestyle = (type: LifestyleType) => {
     setLsType(type); setLsTitle(''); setLsNotes(''); setLsSources([]); setLsNewSource('');
-    setLsStatus(type === 'haram' ? 'struggling' : 'want-to-start');
+    setLsStatus(PRACTICE_TYPES.includes(type) ? 'want-to-start' : 'struggling');
     setEditingLifestyle(null); setShowLifestyleForm(true);
   };
   const openEditLifestyle = (item: LifestyleItem) => {
@@ -231,9 +234,13 @@ export default function KnowledgeSurface() {
 
     if (movingBetweenColumns) {
       // Change type + reset status if moving between halal and avoid columns
-      const newStatus = targetType === 'halal'
-        ? 'want-to-start' as LifestyleStatus
-        : (draggedItem.type === 'halal' ? 'struggling' as LifestyleStatus : draggedItem.status);
+      const targetIsPractice = PRACTICE_TYPES.includes(targetType);
+      const sourceIsPractice = PRACTICE_TYPES.includes(draggedItem.type);
+      const newStatus = targetIsPractice === sourceIsPractice
+        ? draggedItem.status  // same category family, keep status
+        : targetIsPractice
+          ? 'want-to-start' as LifestyleStatus
+          : 'struggling' as LifestyleStatus;
       const targetItems = itemsByType[targetType];
       const toIdx = targetItems.findIndex(i => i.id === targetId);
       app.updateLifestyleItem(dragId, { type: targetType, status: newStatus, sortOrder: toIdx >= 0 ? toIdx : targetItems.length });
@@ -263,9 +270,13 @@ export default function KnowledgeSurface() {
     if (!draggedItem) { setDragId(null); return; }
 
     if (draggedItem.type !== targetType) {
-      const newStatus = targetType === 'halal'
-        ? 'want-to-start' as LifestyleStatus
-        : (draggedItem.type === 'halal' ? 'struggling' as LifestyleStatus : draggedItem.status);
+      const targetIsPractice = PRACTICE_TYPES.includes(targetType);
+      const sourceIsPractice = PRACTICE_TYPES.includes(draggedItem.type);
+      const newStatus = targetIsPractice === sourceIsPractice
+        ? draggedItem.status  // same category family, keep status
+        : targetIsPractice
+          ? 'want-to-start' as LifestyleStatus
+          : 'struggling' as LifestyleStatus;
       app.updateLifestyleItem(dragId, { type: targetType, status: newStatus, sortOrder: itemsByType[targetType].length });
     }
     setDragId(null);
@@ -661,11 +672,11 @@ export default function KnowledgeSurface() {
         {/* ══ Lifestyle Tab ══ */}
         {tab === 'lifestyle' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
               {LIFESTYLE_COLUMNS.map(col => {
                 const items = itemsByType[col.type];
-                const isAvoid = col.type !== 'halal';
-                const statuses = isAvoid ? AVOID_STATUSES : HALAL_STATUSES;
+                const isPractice = PRACTICE_TYPES.includes(col.type);
+                const statuses = isPractice ? HALAL_STATUSES : AVOID_STATUSES;
                 return (
                   <div key={col.type} onDragOver={handleDragOver} onDrop={e => handleColumnDrop(col.type, e)} style={{ minHeight: 100 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -734,7 +745,7 @@ export default function KnowledgeSurface() {
                   <div className="form-group">
                     <label htmlFor="ls-status">Current status</label>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {(lsType === 'halal' ? HALAL_STATUSES : AVOID_STATUSES).map(s => (
+                      {(PRACTICE_TYPES.includes(lsType) ? HALAL_STATUSES : AVOID_STATUSES).map(s => (
                         <button
                           key={s.value}
                           className={`btn btn-sm ${lsStatus === s.value ? 'btn-primary' : 'btn-secondary'}`}
