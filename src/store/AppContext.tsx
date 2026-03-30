@@ -6,6 +6,7 @@ import type {
   Credential, Workspace, Integration, Settings,
   Task, GamificationProfile,
   KnowledgeTopic, KnowledgeEntry,
+  LifestyleItem,
 } from '../types/domain';
 import { loadStore, saveStore } from './persistence';
 import { DEFAULT_PROFILE } from '../services/gamification';
@@ -41,6 +42,7 @@ interface AppState {
   tasks: Task[];
   knowledgeTopics: KnowledgeTopic[];
   knowledgeEntries: KnowledgeEntry[];
+  lifestyleItems: LifestyleItem[];
   integrations: Integration[];
   gamification: GamificationProfile;
   settings: Settings;
@@ -99,6 +101,11 @@ interface AppContextAPI extends AppState {
   updateKnowledgeEntry: (id: string, updates: Partial<KnowledgeEntry>) => void;
   removeKnowledgeEntry: (id: string) => void;
 
+  // Lifestyle
+  addLifestyleItem: (item: Omit<LifestyleItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateLifestyleItem: (id: string, updates: Partial<LifestyleItem>) => void;
+  removeLifestyleItem: (id: string) => void;
+
   // Gamification
   updateGamification: (profile: GamificationProfile) => void;
 
@@ -131,6 +138,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tasks: [],
     knowledgeTopics: [],
     knowledgeEntries: [],
+    lifestyleItems: [],
     integrations: defaultIntegrations,
     gamification: DEFAULT_PROFILE,
     settings: defaultSettings,
@@ -140,7 +148,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Load persisted state on mount
   useEffect(() => {
     (async () => {
-      const [conversations, calendarAccounts, calendarSources, calendarEvents, credentials, workspaces, tasks, knowledgeTopics, knowledgeEntries, integrations, gamification, settings] = await Promise.all([
+      const [conversations, calendarAccounts, calendarSources, calendarEvents, credentials, workspaces, tasks, knowledgeTopics, knowledgeEntries, lifestyleItems, integrations, gamification, settings] = await Promise.all([
         loadStore<ChatConversation[]>('conversations'),
         loadStore<CalendarAccount[]>('calendarAccounts'),
         loadStore<CalendarSource[]>('calendarSources'),
@@ -150,6 +158,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadStore<Task[]>('tasks'),
         loadStore<KnowledgeTopic[]>('knowledgeTopics'),
         loadStore<KnowledgeEntry[]>('knowledgeEntries'),
+        loadStore<LifestyleItem[]>('lifestyleItems'),
         loadStore<Integration[]>('integrations'),
         loadStore<GamificationProfile>('gamification'),
         loadStore<Settings>('settings'),
@@ -165,6 +174,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         tasks: tasks ?? [],
         knowledgeTopics: knowledgeTopics ?? [],
         knowledgeEntries: knowledgeEntries ?? [],
+        lifestyleItems: lifestyleItems ?? [],
         integrations: integrations ?? defaultIntegrations,
         gamification: gamification ?? DEFAULT_PROFILE,
         settings: settings ?? defaultSettings,
@@ -186,6 +196,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (state.loaded) saveStore('tasks', state.tasks); }, [state.tasks, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('knowledgeTopics', state.knowledgeTopics); }, [state.knowledgeTopics, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('knowledgeEntries', state.knowledgeEntries); }, [state.knowledgeEntries, state.loaded]);
+  useEffect(() => { if (state.loaded) saveStore('lifestyleItems', state.lifestyleItems); }, [state.lifestyleItems, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('gamification', state.gamification); }, [state.gamification, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('integrations', state.integrations); }, [state.integrations, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('settings', state.settings); }, [state.settings, state.loaded]);
@@ -496,6 +507,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, knowledgeEntries: s.knowledgeEntries.filter(e => e.id !== id) }));
   }, []);
 
+  // ── Lifestyle ──
+  const addLifestyleItem = useCallback((item: Omit<LifestyleItem, 'id' | 'createdAt' | 'updatedAt'>): string => {
+    const id = uuid();
+    const now = new Date().toISOString();
+    setState(s => ({ ...s, lifestyleItems: [...s.lifestyleItems, { ...item, id, createdAt: now, updatedAt: now }] }));
+    return id;
+  }, []);
+
+  const updateLifestyleItem = useCallback((id: string, updates: Partial<LifestyleItem>) => {
+    setState(s => ({
+      ...s,
+      lifestyleItems: s.lifestyleItems.map(i => i.id === id ? { ...i, ...updates, updatedAt: new Date().toISOString() } : i),
+    }));
+  }, []);
+
+  const removeLifestyleItem = useCallback((id: string) => {
+    setState(s => ({ ...s, lifestyleItems: s.lifestyleItems.filter(i => i.id !== id) }));
+  }, []);
+
   // ── Gamification ──
   const updateGamification = useCallback((profile: GamificationProfile) => {
     setState(s => ({ ...s, gamification: profile }));
@@ -536,6 +566,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addTask, updateTask, removeTask,
     addKnowledgeTopic, updateKnowledgeTopic, removeKnowledgeTopic,
     addKnowledgeEntry, updateKnowledgeEntry, removeKnowledgeEntry,
+    addLifestyleItem, updateLifestyleItem, removeLifestyleItem,
     updateGamification,
     updateIntegration,
     updateSettings,

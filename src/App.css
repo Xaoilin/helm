@@ -1819,3 +1819,58 @@ textarea.form-input {
   font-size: 12px;
   padding: 5px 8px;
 }
+
+/* ── Lifestyle Tracker ── */
+.ls-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #181b27;
+  border: 1px solid #242740;
+  border-left: 3px solid #4f5bff;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  transition: background 0.15s;
+}
+.ls-item:hover { background: #1a1d2e; }
+
+.ls-status-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+.ls-status-btn:hover { transform: scale(1.2); }
+.ls-status-btn:active { transform: scale(0.9); }
+
+.ls-item-content { flex: 1; min-width: 0; }
+.ls-item-title { font-size: 13px; font-weight: 600; color: #e1e4ea; }
+.ls-item-status { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
+.ls-item-notes { font-size: 11px; color: #9499b0; margin-top: 3px; line-height: 1.4; }
+.ls-item-source { font-size: 10px; color: #6b6f85; margin-top: 2px; font-style: italic; }
+
+.ls-item-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.ls-item:hover .ls-item-actions { opacity: 1; }
+
+.ls-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: #13151c;
+  border: 1px solid #242740;
+  border-radius: 6px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: #9499b0;
+}

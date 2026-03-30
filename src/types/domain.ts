@@ -116,6 +116,22 @@ export interface Task {
   updatedAt: string;
 }
 
+// ── Lifestyle Tracker (Haram/Halal) ──
+export type LifestyleType = 'haram' | 'halal';
+export type LifestyleStatus = 'struggling' | 'working-on-it' | 'avoiding' | 'mastered'    // haram statuses
+                            | 'want-to-start' | 'sometimes' | 'practicing' | 'consistent'; // halal statuses
+
+export interface LifestyleItem {
+  id: string;
+  type: LifestyleType;
+  title: string;
+  notes: string;
+  status: LifestyleStatus;
+  source?: string; // optional Quran/Hadith reference
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Knowledge Base ──
 export interface KnowledgeSource {
   type: 'quran' | 'hadith' | 'scholarly' | 'other';
