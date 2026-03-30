@@ -11,6 +11,7 @@ export default function SettingsSurface() {
   const [clientIdSaved, setClientIdSaved] = useState(false);
 
   const [confirmReset, setConfirmReset] = useState(false);
+  const [testAdhan, setTestAdhan] = useState<string | null>(null);
 
   // Goal tags
   const [newTag, setNewTag] = useState('');
@@ -211,7 +212,49 @@ CREATE POLICY "Allow all for anon"
             Method: Shia Ithna-Ashari (Jafari), Leva Institute, Qum.{' '}
             <a href="https://aladhan.com/calculation-methods" target="_blank" rel="noopener noreferrer" style={{ color: '#4f5bff' }}>Learn more</a>
           </div>
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #1e2030' }}>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}>Test Notification</div>
+            <div className="actions-row" style={{ gap: 6 }}>
+              {['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map(name => (
+                <button
+                  key={name}
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setTestAdhan(name);
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                      new Notification(`\u0627\u0644\u0644\u0647 \u0623\u0643\u0628\u0631 - ${name}`, { body: `It's time for ${name} prayer` });
+                    } else if ('Notification' in window && Notification.permission === 'default') {
+                      Notification.requestPermission().then(p => {
+                        if (p === 'granted') new Notification(`\u0627\u0644\u0644\u0647 \u0623\u0643\u0628\u0631 - ${name}`, { body: `It's time for ${name} prayer` });
+                      });
+                    }
+                    setTimeout(() => setTestAdhan(null), 10000);
+                  }}
+                >
+                  Test {name}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
+              Click to preview the Adhan banner + browser notification. Banner dismisses after 10 seconds.
+            </div>
+          </div>
         </div>
+
+        {/* Test Adhan Banner */}
+        {testAdhan && (
+          <div className="adhan-banner" onClick={() => setTestAdhan(null)} style={{ position: 'relative', left: 0, marginTop: 12, borderRadius: 10 }}>
+            <div className="adhan-content">
+              <div className="adhan-mosque">{'\u{1F54C}'}</div>
+              <div className="adhan-text">
+                <div className="adhan-title">{'\u0627\u0644\u0644\u0647 \u0623\u0643\u0628\u0631'}</div>
+                <div className="adhan-subtitle">Allahu Akbar &mdash; It's time for <strong>{testAdhan}</strong></div>
+                <div className="adhan-time">Test notification</div>
+              </div>
+            </div>
+            <div className="adhan-dismiss">Click to dismiss</div>
+          </div>
+        )}
 
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Goal Categories</h3>
         <div className="card">
