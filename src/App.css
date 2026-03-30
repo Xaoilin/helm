@@ -1740,6 +1740,78 @@ textarea.form-input {
   margin-bottom: 2px;
 }
 
+/* Recent Achievements */
+.dash-achievements-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dash-achievement {
+  background: #13151c;
+  border: 1px solid #242740;
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+  min-width: 80px;
+  cursor: default;
+  transition: transform 0.15s, border-color 0.2s;
+  position: relative;
+}
+.dash-achievement:hover {
+  transform: translateY(-2px);
+  border-color: #3a3d52;
+}
+.dash-achievement.rare { border-color: #1a2744; }
+.dash-achievement.rare:hover { border-color: #2a3a5a; }
+.dash-achievement.epic { border-color: #1f3d2a; }
+.dash-achievement.epic:hover { border-color: #2a5a3a; }
+.dash-achievement.legendary { border-color: #3d2a1f; }
+.dash-achievement.legendary:hover { border-color: #5a4a2a; box-shadow: 0 0 12px rgba(245, 158, 11, 0.15); }
+
+.dash-achievement-emoji { font-size: 22px; margin-bottom: 4px; }
+.dash-achievement-name { font-size: 10px; font-weight: 600; color: #e1e4ea; line-height: 1.2; }
+.dash-achievement-rarity {
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 3px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.dash-achievement-rarity.common { background: #2a2d42; color: #8b8fa3; }
+.dash-achievement-rarity.rare { background: #1a2744; color: #93bbfc; }
+.dash-achievement-rarity.epic { background: #1f3d2a; color: #86efac; }
+.dash-achievement-rarity.legendary { background: #3d2a1f; color: #fcd34d; }
+
+/* Tooltip on hover (native title attr handles this, but add visual polish) */
+.dash-achievement::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #181b27;
+  border: 1px solid #3a3d52;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #e1e4ea;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 10;
+  max-width: 250px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+}
+.dash-achievement:hover::after {
+  opacity: 1;
+}
+
 /* ── Knowledge Base ── */
 .kb-topic-grid {
   display: grid;

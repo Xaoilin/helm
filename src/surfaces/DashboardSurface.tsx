@@ -485,6 +485,30 @@ export default function DashboardSurface() {
           </div>
         </div>
 
+        {/* ── Recent Achievements ── */}
+        {gam.badges.length > 0 && (
+          <div className="dash-card" style={{ marginBottom: 16 }}>
+            <div className="dash-card-header">
+              <span>{'\u{1F3C6}'} Recent Achievements</span>
+              <span style={{ fontSize: 11, color: '#6b6f85' }}>{gam.badges.length} earned</span>
+            </div>
+            <div className="dash-achievements-row">
+              {gam.badges.slice(-8).reverse().map(id => {
+                const b = BADGES.find(bg => bg.id === id);
+                if (!b) return null;
+                return (
+                  <div key={id} className={`dash-achievement ${b.rarity}`} title={`${b.name}: ${b.description}`}>
+                    <div className="dash-achievement-emoji">{b.emoji}</div>
+                    <div className="dash-achievement-name">{b.name}</div>
+                    <div className={`dash-achievement-rarity ${b.rarity}`}>{b.rarity}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <button className="dash-card-link" onClick={() => app.navigate('profile')}>View all badges &rarr;</button>
+          </div>
+        )}
+
         {/* ── Prayer Stats ── */}
         {(() => {
           const prayerStats = calculatePrayerStats(gam, app.tasks);
