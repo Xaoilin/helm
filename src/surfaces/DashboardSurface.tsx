@@ -98,6 +98,31 @@ export default function DashboardSurface() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
   }, []);
 
+  // ── Account color palette (same as CalendarSurface) ──
+  const ACCOUNT_PALETTES = [
+    { bg: '#1a2744', border: '#3b82f6' },
+    { bg: '#2a1f3d', border: '#a855f7' },
+    { bg: '#1a3328', border: '#22c55e' },
+    { bg: '#3d2a1a', border: '#f59e0b' },
+    { bg: '#3d1a2a', border: '#ec4899' },
+    { bg: '#1a3a3d', border: '#14b8a6' },
+    { bg: '#3d2d1a', border: '#f97316' },
+    { bg: '#2d1a1a', border: '#ef4444' },
+  ];
+
+  const getEventPalette = useMemo(() => {
+    const map = new Map<string, typeof ACCOUNT_PALETTES[number]>();
+    app.calendarAccounts.forEach((acc, i) => {
+      const idx = acc.paletteIndex ?? i;
+      map.set(acc.id, ACCOUNT_PALETTES[idx % ACCOUNT_PALETTES.length]);
+    });
+    return (sourceId: string) => {
+      const source = app.calendarSources.find(s => s.id === sourceId);
+      if (!source) return null;
+      return map.get(source.accountId) || null;
+    };
+  }, [app.calendarAccounts, app.calendarSources]);
+
   // ── Derived data ──
 
   // Visible calendar events
@@ -220,7 +245,7 @@ export default function DashboardSurface() {
   }, [gam, currentStreak, xp]);
 
   // ── Agenda timeline (max 8 items) ──
-  type AgendaItem = { id: string; time: string; title: string; type: 'event' | 'task'; meta?: string; task?: Task };
+  type AgendaItem = { id: string; time: string; title: string; type: 'event' | 'task'; meta?: string; task?: Task; sourceId?: string };
   const agenda = useMemo((): AgendaItem[] => {
     const items: AgendaItem[] = [];
 
@@ -232,6 +257,7 @@ export default function DashboardSurface() {
         title: e.title,
         type: 'event',
         meta: e.location,
+        sourceId: e.sourceId,
       });
     }
 
@@ -359,8 +385,10 @@ export default function DashboardSurface() {
               <div style={{ padding: '16px 0', color: '#6b6f85', fontSize: 13, textAlign: 'center' }}>No events or tasks today</div>
             ) : (
               <div className="dash-agenda">
-                {agenda.map(item => (
-                  <div key={item.id} className={`dash-agenda-item ${item.type}`}>
+                {agenda.map(item => {
+                  const pal = item.sourceId ? getEventPalette(item.sourceId) : null;
+                  return (
+                  <div key={item.id} className={`dash-agenda-item ${item.type}`} style={pal ? { borderLeft: `3px solid ${pal.border}`, background: pal.bg, borderRadius: 4, paddingLeft: 10 } : {}}>
                     <div className="dash-agenda-time">{item.time}</div>
                     <div className="dash-agenda-content">
                       <div className="dash-agenda-title">{item.title}</div>
@@ -370,7 +398,8 @@ export default function DashboardSurface() {
                       <button className="btn btn-primary btn-sm" onClick={() => completeTask(item.task!)}>Done</button>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <button className="dash-card-link" onClick={() => app.navigate('calendar')}>See full calendar &rarr;</button>
