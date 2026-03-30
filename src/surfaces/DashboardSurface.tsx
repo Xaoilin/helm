@@ -74,8 +74,7 @@ export default function DashboardSurface() {
         } else if ('Notification' in window && Notification.permission === 'default') {
           Notification.requestPermission();
         }
-        // Auto-dismiss after 30s
-        setTimeout(() => setAdhanPrayer(null), 30000);
+        // No auto-dismiss — stays until user clicks
       }
     };
     check();
@@ -568,7 +567,7 @@ export default function DashboardSurface() {
               <div className="adhan-time">{adhanPrayer.time}</div>
             </div>
           </div>
-          <div className="adhan-dismiss">Click anywhere to dismiss</div>
+          <div className="adhan-dismiss">Tap anywhere when you're ready to dismiss</div>
         </div>
       )}
 
