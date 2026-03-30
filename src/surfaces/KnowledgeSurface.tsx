@@ -28,6 +28,30 @@ const HADITH_COLLECTIONS = ['Bukhari', 'Muslim', 'Tirmidhi', 'Abu Dawud', 'An-Na
 const TOPIC_ICONS = ['\u{1F4D6}', '\u{1F54C}', '\u{1F4DC}', '\u2696\uFE0F', '\u{1F525}', '\u2B50', '\u{1F319}', '\u{1F64F}', '\u{1F3DB}', '\u{1F4DA}', '\u{1F30D}', '\u2764\uFE0F', '\u{1F9ED}', '\u{1F6E1}', '\u{1F3AF}', '\u{2728}'];
 const TOPIC_COLORS = ['#3b82f6', '#a855f7', '#22c55e', '#f59e0b', '#ec4899', '#14b8a6', '#f97316', '#ef4444'];
 
+/** Render a source string as a clickable link where possible. */
+function renderSourceLink(source: string) {
+  // Direct URL
+  if (/^https?:\/\//i.test(source)) {
+    return <a href={source} target="_blank" rel="noopener noreferrer" style={{ color: '#4f5bff' }}>{source}</a>;
+  }
+  // Quran reference: "Quran 2:255" or "2:255"
+  const quranMatch = source.match(/(?:quran\s*)?(\d{1,3}):(\d{1,3})(?:-(\d{1,3}))?/i);
+  if (quranMatch) {
+    const [, surah, ayah] = quranMatch;
+    const url = `https://quran.com/${surah}/${ayah}`;
+    return <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#3ab553' }}>{source}</a>;
+  }
+  // Hadith reference: "Bukhari 1234", "Muslim 5678"
+  const hadithMatch = source.match(/(bukhari|muslim|tirmidhi|abu dawud|nasai|ibn majah|muwatta|ahmad)\s*(\d+)/i);
+  if (hadithMatch) {
+    const [, collection, number] = hadithMatch;
+    const url = `https://sunnah.com/search?q=${encodeURIComponent(collection + ' ' + number)}`;
+    return <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#f59e0b' }}>{source}</a>;
+  }
+  // Plain text
+  return <>{source}</>;
+}
+
 function formatSource(src: KnowledgeSource): string {
   if (src.type === 'quran') {
     const ayah = src.ayahEnd && src.ayahEnd !== src.ayahStart ? `${src.ayahStart}-${src.ayahEnd}` : `${src.ayahStart}`;
@@ -579,7 +603,7 @@ export default function KnowledgeSurface() {
                           <div className="ls-item-title">{item.title}</div>
                           <div className="ls-item-status" style={{ color: info.color }}>{info.label}</div>
                           {item.notes && <div className="ls-item-notes">{item.notes}</div>}
-                          {item.source && <div className="ls-item-source">{item.source}</div>}
+                          {item.source && <div className="ls-item-source">{renderSourceLink(item.source)}</div>}
                         </div>
                         <div className="ls-item-actions">
                           <button className="btn-icon btn-sm" onClick={() => openEditLifestyle(item)} style={{ fontSize: 11 }}>Edit</button>
@@ -631,7 +655,7 @@ export default function KnowledgeSurface() {
                           <div className="ls-item-title">{item.title}</div>
                           <div className="ls-item-status" style={{ color: info.color }}>{info.label}</div>
                           {item.notes && <div className="ls-item-notes">{item.notes}</div>}
-                          {item.source && <div className="ls-item-source">{item.source}</div>}
+                          {item.source && <div className="ls-item-source">{renderSourceLink(item.source)}</div>}
                         </div>
                         <div className="ls-item-actions">
                           <button className="btn-icon btn-sm" onClick={() => openEditLifestyle(item)} style={{ fontSize: 11 }}>Edit</button>
