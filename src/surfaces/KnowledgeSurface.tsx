@@ -184,12 +184,12 @@ export default function KnowledgeSurface() {
   const saveLifestyle = () => {
     if (!lsTitle.trim()) return;
     const allSources = lsNewSource.trim() ? [...lsSources, lsNewSource.trim()] : lsSources;
-    const data = { type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined, sortOrder: 0 };
-    if (editingLifestyle) app.updateLifestyleItem(editingLifestyle.id, data);
+    if (editingLifestyle) {
+      app.updateLifestyleItem(editingLifestyle.id, { type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined });
+    }
     else {
       const existing = app.lifestyleItems.filter(i => i.type === lsType);
-      data.sortOrder = existing.length;
-      app.addLifestyleItem(data);
+      app.addLifestyleItem({ type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined, sortOrder: existing.length });
     }
     setShowLifestyleForm(false);
   };
