@@ -1141,9 +1141,9 @@ textarea.form-input {
 }
 .gam-badge:hover { transform: scale(1.15); }
 .gam-badge.common { background: #2a2d42; }
-.gam-badge.rare { background: #1a2744; }
-.gam-badge.epic { background: #1f3d2a; }
-.gam-badge.legendary { background: #3d2a1f; border-color: #5a4a2a; }
+.gam-badge.rare { background: #1e2a4a; }
+.gam-badge.epic { background: #1a3a28; }
+.gam-badge.legendary { background: #3a2a14; border-color: #5a4020; }
 
 /* Toast notifications */
 .gam-toast-container {
@@ -1337,10 +1337,10 @@ textarea.form-input {
 .profile-badge-card:hover { transform: translateY(-2px); }
 .profile-badge-card.earned { border-color: #3a3d52; }
 .profile-badge-card.locked { opacity: 0.45; }
-.profile-badge-card.earned.common { background: #1e2030; border-color: #2a2d42; }
-.profile-badge-card.earned.rare { background: #131a2e; border-color: #2a3a5a; }
-.profile-badge-card.earned.epic { background: #0f2418; border-color: #2a5a3a; }
-.profile-badge-card.earned.legendary { background: #241a0f; border-color: #5a4a2a; box-shadow: 0 0 12px rgba(245, 158, 11, 0.15); }
+.profile-badge-card.earned.common { background: #2a2d42; border-color: #3a3d52; }
+.profile-badge-card.earned.rare { background: #1e2a4a; border-color: #2a4070; }
+.profile-badge-card.earned.epic { background: #1a3a28; border-color: #2a5a3a; }
+.profile-badge-card.earned.legendary { background: #3a2a14; border-color: #5a4020; box-shadow: 0 0 16px rgba(245, 158, 11, 0.3); }
 
 .profile-badge-emoji {
   font-size: 28px;
@@ -1762,13 +1762,13 @@ textarea.form-input {
   transform: translateY(-2px);
   border-color: #3a3d52;
 }
-.dash-achievement.common { background: #1e2030; border-color: #2a2d42; }
-.dash-achievement.rare { background: #131a2e; border-color: #1a2744; }
-.dash-achievement.rare:hover { border-color: #2a3a5a; }
-.dash-achievement.epic { background: #0f2418; border-color: #1f3d2a; }
-.dash-achievement.epic:hover { border-color: #2a5a3a; }
-.dash-achievement.legendary { background: #241a0f; border-color: #3d2a1f; }
-.dash-achievement.legendary:hover { border-color: #5a4a2a; box-shadow: 0 0 12px rgba(245, 158, 11, 0.15); }
+.dash-achievement.common { background: #2a2d42; border-color: #3a3d52; }
+.dash-achievement.rare { background: #1e2a4a; border-color: #2a4070; }
+.dash-achievement.rare:hover { border-color: #3b5a90; }
+.dash-achievement.epic { background: #1a3a28; border-color: #2a5a3a; }
+.dash-achievement.epic:hover { border-color: #3a7a4a; }
+.dash-achievement.legendary { background: #3a2a14; border-color: #5a4020; }
+.dash-achievement.legendary:hover { border-color: #7a5a2a; box-shadow: 0 0 16px rgba(245, 158, 11, 0.3); }
 
 .dash-achievement-emoji { font-size: 22px; margin-bottom: 4px; }
 .dash-achievement-name { font-size: 10px; font-weight: 600; color: #e1e4ea; line-height: 1.2; }

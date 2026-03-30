@@ -125,6 +125,12 @@ src-tauri/
 ### Design system
 - **Dark theme**: Background `#0f1117`, text `#e1e4ea`, accent `#4f5bff`
 - **Color palette**: 8 account colors (blue, purple, green, amber, pink, teal, orange, red)
+- **Badge/card rarity backgrounds**: Must be lighter than the page background so they're visible on dark theme. Use mid-tone saturated colors, NOT dark/near-black shades:
+  - Common: `#2a2d42` (light gray-blue)
+  - Rare: `#1e2a4a` (visible blue)
+  - Epic: `#1a3a28` (visible green)
+  - Legendary: `#3a2a14` (visible amber/gold) + gold glow shadow
+- **Rule**: On a dark theme, element backgrounds must contrast with the page background. Dark-on-dark is invisible. When in doubt, bump the lightness up.
 - **Components**: `.btn`, `.card`, `.form-input`, `.form-select`, `.modal`, `.tag`, `.toggle`
 - **Typography**: System font stack, 13-14px body, 18px headers
 
