@@ -37,17 +37,27 @@ export function useGoogleSync(): GoogleSyncResult {
     setAccountSyncStates(prev => ({ ...prev, [accountId]: { state: 'syncing', lastSync: prev[accountId]?.lastSync || null, error: null } }));
 
     try {
-      const accessToken = await getValidAccessToken(accountId, clientId);
+      let accessToken = await getValidAccessToken(accountId, clientId);
 
       let googleCalendars;
       try {
         googleCalendars = await fetchCalendarList(accessToken);
       } catch (fetchErr) {
         if (fetchErr instanceof GoogleApiError && fetchErr.isAuthError) {
-          // Token truly expired — mark account, don't open popup
-          throw new Error('Token expired. Reconnect this account in Integrations.');
+          // Token expired — try silent refresh before giving up
+          try {
+            const { loadGisScript, refreshAccessToken, saveGoogleTokens } = await import('../services/googleAuth');
+            await loadGisScript();
+            const newTokens = await refreshAccessToken(clientId);
+            saveGoogleTokens(accountId, newTokens);
+            accessToken = newTokens.accessToken;
+            googleCalendars = await fetchCalendarList(accessToken);
+          } catch {
+            throw new Error('Token expired. Reconnect this account in Integrations.');
+          }
+        } else {
+          throw fetchErr;
         }
-        throw fetchErr;
       }
 
       // Reconcile calendar sources
