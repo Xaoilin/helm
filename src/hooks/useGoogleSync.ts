@@ -128,6 +128,12 @@ export function useGoogleSync(): GoogleSyncResult {
         s => s.accountId === accountId && s.googleCalendarId
       );
 
+      // Global set of all googleEventIds already stored (across ALL accounts/sources)
+      // to prevent the same event appearing under multiple sources
+      const globalEventIds = new Set(
+        app.calendarEvents.filter(e => e.googleEventId).map(e => e.googleEventId!)
+      );
+
       for (const source of updatedSources) {
         if (!source.googleCalendarId) continue;
         try {
@@ -146,11 +152,14 @@ export function useGoogleSync(): GoogleSyncResult {
             seenGoogleEventIds.add(me.googleEventId);
             const existing = existingByGoogleEventId.get(me.googleEventId);
             if (existing) {
+              // Update if changed
               if (existing.title !== me.title || existing.start !== me.start || existing.end !== me.end || existing.description !== me.description) {
                 eventsToUpsert.push({ ...me, id: existing.id });
               }
-            } else {
+            } else if (!globalEventIds.has(me.googleEventId)) {
+              // Only add if this event doesn't already exist under another source
               eventsToUpsert.push(me);
+              globalEventIds.add(me.googleEventId);
             }
           }
 
@@ -192,9 +201,9 @@ export function useGoogleSync(): GoogleSyncResult {
     setSyncState('syncing');
     setSyncError(null);
 
-    // Pre-sync cleanup: remove duplicate sources that share a googleCalendarId across accounts.
-    // Keep the source belonging to the earliest account (by array order). Re-attribute orphaned events.
+    // Pre-sync cleanup: remove duplicate sources and duplicate events
     cleanupDuplicateSources(app);
+    cleanupDuplicateEvents(app);
 
     let hasError = false;
     for (const acc of googleAccounts) {
@@ -273,6 +282,25 @@ export function cleanupDuplicateSources(app: {
         }
       }
       app.removeCalendarSource(dup.id);
+    }
+  }
+}
+
+/**
+ * Remove duplicate events that share the same googleEventId.
+ * Keeps the first occurrence (by insertion order) and removes the rest.
+ */
+export function cleanupDuplicateEvents(app: {
+  calendarEvents: { id: string; googleEventId?: string }[];
+  removeCalendarEvent: (id: string) => void;
+}) {
+  const seen = new Set<string>();
+  for (const evt of app.calendarEvents) {
+    if (!evt.googleEventId) continue;
+    if (seen.has(evt.googleEventId)) {
+      app.removeCalendarEvent(evt.id);
+    } else {
+      seen.add(evt.googleEventId);
     }
   }
 }
