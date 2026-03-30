@@ -40,7 +40,7 @@ export default function DashboardSurface() {
 
   // Tick every 30 seconds to update countdown timers
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 30000);
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 

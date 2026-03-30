@@ -121,7 +121,7 @@ export function getNextPrayer(prayers: PrayerTime[]): { prayer: PrayerTime; minu
     const prayerDate = parseTimeToDate(prayer.time);
     const diff = (prayerDate.getTime() - now.getTime()) / 60000;
     if (diff > -1) { // allow 1 min grace
-      return { prayer, minutesUntil: Math.max(0, Math.round(diff)) };
+      return { prayer, minutesUntil: Math.max(0, diff) };
     }
   }
 
@@ -156,9 +156,9 @@ export function isAdhanTime(prayers: PrayerTime[]): PrayerTime | null {
 /** Format minutes until prayer as human-readable. */
 export function formatTimeUntil(minutes: number): string {
   if (minutes < 1) return 'now';
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60) return `${Math.floor(minutes)}m ${Math.round((minutes % 1) * 60)}s`;
   const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
+  const m = Math.floor(minutes % 60);
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
