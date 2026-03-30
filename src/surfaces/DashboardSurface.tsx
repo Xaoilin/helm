@@ -206,7 +206,7 @@ export default function DashboardSurface() {
         type: 'event',
         item: nextEvent,
         label: nextEvent.title,
-        sublabel: `At ${new Date(nextEvent.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${nextEvent.location ? ` \u00b7 ${nextEvent.location}` : ''}`,
+        sublabel: `At ${new Date(nextEvent.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} – ${new Date(nextEvent.end).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}${nextEvent.location ? ` \u00b7 ${nextEvent.location}` : ''}`,
       };
     }
     return { type: 'clear', label: "You're all caught up", sublabel: 'No urgent tasks or upcoming meetings. Nice work!' };
@@ -252,7 +252,7 @@ export default function DashboardSurface() {
     for (const e of todayEvents) {
       items.push({
         id: `ev-${e.id}`,
-        time: e.allDay ? 'All day' : new Date(e.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: e.allDay ? 'All day' : `${new Date(e.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} – ${new Date(e.end).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}`,
         title: e.title,
         type: 'event',
         meta: e.location,

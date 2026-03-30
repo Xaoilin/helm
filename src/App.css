@@ -1487,10 +1487,11 @@ textarea.form-input {
 }
 .dash-agenda-item:last-child { border-bottom: none; }
 .dash-agenda-time {
-  width: 50px;
+  min-width: 120px;
   font-size: 11px;
   color: #9499b0;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 .dash-agenda-content { flex: 1; min-width: 0; }
 .dash-agenda-title {
