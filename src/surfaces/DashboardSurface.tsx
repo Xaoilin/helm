@@ -31,11 +31,18 @@ interface Toast { id: string; type: 'xp' | 'levelup' | 'badge' | 'streak'; text:
 export default function DashboardSurface() {
   const app = useApp();
   const gam = app.gamification;
-  const now = new Date();
+  const [tick, setTick] = useState(0);
+  const now = useMemo(() => new Date(), [tick]);
   const todayStr = toLocalDateStr(now);
   const hour = now.getHours();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showLevelFlash, setShowLevelFlash] = useState(false);
+
+  // Tick every 30 seconds to update countdown timers
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Prayer times
   const [prayerData, setPrayerData] = useState<PrayerTimesData | null>(null);
@@ -74,7 +81,7 @@ export default function DashboardSurface() {
     return () => clearInterval(interval);
   }, [prayerEnabled, prayerData]);
 
-  const nextPrayer = useMemo(() => prayerData ? getNextPrayer(prayerData.prayers) : null, [prayerData]);
+  const nextPrayer = useMemo(() => prayerData ? getNextPrayer(prayerData.prayers) : null, [prayerData, tick]);
 
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const xp = xpToNextLevel(gam.totalXp);
