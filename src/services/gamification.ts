@@ -578,7 +578,7 @@ export function buildCompletionContext(
     allHabitsDoneToday: allHabitsDone,
     goalCategories: uniqueGoalTags.size,
     daysSinceFirstUse: daysSince,
-    hadPriorStreak: profile.longestStreak > 0 && profile.currentStreak <= 1,
+    hadPriorStreak: profile.longestStreak > profile.currentStreak,
     knowledgeEntries: islamic?.knowledgeEntries ?? 0,
     knowledgeTopics: islamic?.knowledgeTopics ?? 0,
     lifestyleHaramMastered: islamic?.lifestyleHaramMastered ?? 0,
