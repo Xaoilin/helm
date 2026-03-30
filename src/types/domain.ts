@@ -176,6 +176,10 @@ export interface GamificationProfile {
   lastCompletionDate?: string;
   totalTasksCompleted: number;
   badges: string[];
+  /** Tally of completions per habit (keyed by task ID). */
+  habitTallies?: Record<string, number>;
+  /** Daily completion log: "YYYY-MM-DD" → list of completed habit task IDs. */
+  dailyLog?: Record<string, string[]>;
 }
 
 // ── Settings ──

@@ -18,6 +18,8 @@ import {
   STREAK_MILESTONES,
   processTaskCompletion,
   buildCompletionContext,
+  recordHabitCompletion,
+  calculatePrayerStats,
   checkStreakBroken,
 } from '../services/gamification';
 import type { Task, CalendarEvent } from '../types/domain';
@@ -273,7 +275,11 @@ export default function DashboardSurface() {
       lifestyleTotal: app.lifestyleItems.length,
     });
     const result = processTaskCompletion(gam, task, completionsToday, nowDate, extCtx);
-    app.updateGamification(result.updatedProfile);
+    let profile = result.updatedProfile;
+    if (task.category === 'daily') {
+      profile = recordHabitCompletion(profile, task.id, todayStr);
+    }
+    app.updateGamification(profile);
 
     addToast({ type: 'xp', text: `+${result.xpEarned} XP`, emoji: '\u2728' });
     if (result.leveledUp) {
@@ -439,6 +445,36 @@ export default function DashboardSurface() {
             <button className="dash-card-link" onClick={() => app.navigate('profile')}>View full profile &rarr;</button>
           </div>
         </div>
+
+        {/* ── Prayer Stats ── */}
+        {(() => {
+          const prayerStats = calculatePrayerStats(gam, app.tasks);
+          if (prayerStats.perPrayer.length === 0) return null;
+          return (
+            <div className="dash-card" style={{ marginBottom: 16 }}>
+              <div className="dash-card-header">
+                <span>{'\u{1F64F}'} Prayer Rate</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: prayerStats.overall.percentage >= 80 ? '#22c55e' : prayerStats.overall.percentage >= 50 ? '#f59e0b' : '#ff6b6b' }}>
+                  {prayerStats.overall.percentage}%
+                </span>
+              </div>
+              <div className="prayer-stats-grid">
+                {prayerStats.perPrayer.map(p => (
+                  <div key={p.name} className="prayer-stat-item">
+                    <div className="prayer-stat-name">{p.name}</div>
+                    <div className="prayer-stat-bar">
+                      <div className="prayer-stat-fill" style={{ width: `${p.percentage}%`, background: p.percentage >= 80 ? '#22c55e' : p.percentage >= 50 ? '#f59e0b' : '#ff6b6b' }} />
+                    </div>
+                    <div className="prayer-stat-pct">{p.percentage}%</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 8 }}>
+                Based on {Object.keys(gam.dailyLog || {}).length} days of tracking
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Prayer Times ── */}
         {prayerEnabled && prayerData && (

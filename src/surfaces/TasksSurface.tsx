@@ -6,6 +6,7 @@ import type { Task, TaskCategory, TaskPriority } from '../types/domain';
 import {
   processTaskCompletion,
   buildCompletionContext,
+  recordHabitCompletion,
   checkStreakBroken,
   xpToNextLevel,
   titleForLevel,
@@ -208,7 +209,11 @@ export default function TasksSurface() {
         lifestyleTotal: app.lifestyleItems.length,
       });
       const result = processTaskCompletion(app.gamification, task, completionsToday, nowDate, extCtx);
-      app.updateGamification(result.updatedProfile);
+      let profile = result.updatedProfile;
+      if (task.category === 'daily') {
+        profile = recordHabitCompletion(profile, task.id, todayStr);
+      }
+      app.updateGamification(profile);
 
       // XP toast
       addToast({ type: 'xp', text: `+${result.xpEarned} XP`, emoji: '\u2728' });

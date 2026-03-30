@@ -595,7 +595,87 @@ export const DEFAULT_PROFILE: GamificationProfile = {
   longestStreak: 0,
   totalTasksCompleted: 0,
   badges: [],
+  habitTallies: {},
+  dailyLog: {},
 };
+
+/** Record a habit completion in the profile tallies. */
+export function recordHabitCompletion(
+  profile: GamificationProfile,
+  taskId: string,
+  dateStr: string,
+): GamificationProfile {
+  const tallies = { ...(profile.habitTallies || {}) };
+  tallies[taskId] = (tallies[taskId] || 0) + 1;
+
+  const log = { ...(profile.dailyLog || {}) };
+  const dayLog = log[dateStr] || [];
+  if (!dayLog.includes(taskId)) {
+    log[dateStr] = [...dayLog, taskId];
+  }
+
+  return { ...profile, habitTallies: tallies, dailyLog: log };
+}
+
+/** Calculate prayer completion stats from daily log. */
+export function calculatePrayerStats(
+  profile: GamificationProfile,
+  tasks: { id: string; title: string; category: string }[],
+): {
+  overall: { completed: number; total: number; percentage: number };
+  perPrayer: { name: string; completed: number; total: number; percentage: number }[];
+  last30Days: { date: string; count: number }[];
+} {
+  const prayerKeywords = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+  const prayerHabits = tasks.filter(t =>
+    t.category === 'daily' && prayerKeywords.some(kw => t.title.toLowerCase().includes(kw))
+  );
+
+  if (prayerHabits.length === 0) {
+    return { overall: { completed: 0, total: 0, percentage: 0 }, perPrayer: [], last30Days: [] };
+  }
+
+  const log = profile.dailyLog || {};
+  const dates = Object.keys(log).sort();
+  const totalDays = dates.length || 1;
+
+  // Per prayer stats
+  const perPrayer = prayerHabits.map(habit => {
+    const prayerName = prayerKeywords.find(kw => habit.title.toLowerCase().includes(kw)) || habit.title;
+    const completed = dates.filter(d => log[d]?.includes(habit.id)).length;
+    return {
+      name: prayerName.charAt(0).toUpperCase() + prayerName.slice(1),
+      completed,
+      total: totalDays,
+      percentage: Math.round((completed / totalDays) * 100),
+    };
+  });
+
+  // Overall
+  const totalPossible = prayerHabits.length * totalDays;
+  const totalCompleted = perPrayer.reduce((sum, p) => sum + p.completed, 0);
+
+  // Last 30 days
+  const last30Days: { date: string; count: number }[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const dayEntries = log[dateStr] || [];
+    const count = prayerHabits.filter(h => dayEntries.includes(h.id)).length;
+    last30Days.push({ date: dateStr, count });
+  }
+
+  return {
+    overall: {
+      completed: totalCompleted,
+      total: totalPossible,
+      percentage: totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0,
+    },
+    perPrayer,
+    last30Days,
+  };
+}
 
 // ── Process a task completion ──
 

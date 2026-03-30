@@ -5,6 +5,7 @@ import {
   titleForLevel,
   BADGES,
   STREAK_MILESTONES,
+  calculatePrayerStats,
 } from '../services/gamification';
 
 function toLocalDateStr(d: Date): string {
@@ -182,6 +183,84 @@ export default function ProfileSurface() {
             </div>
           </div>
         </div>
+
+        {/* ── Habit Tallies ── */}
+        {(() => {
+          const dailyHabits = app.tasks.filter(t => t.category === 'daily');
+          const tallies = gam.habitTallies || {};
+          if (dailyHabits.length === 0) return null;
+          return (
+            <div className="profile-section">
+              <h3 className="profile-section-title">Habit Completions</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {dailyHabits.map(h => {
+                  const count = tallies[h.id] || 0;
+                  return (
+                    <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: '#e1e4ea', minWidth: 140 }}>{h.title}</span>
+                      <div style={{ flex: 1, height: 6, background: '#242740', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min(100, count)}%`, background: '#4f5bff', borderRadius: 3, transition: 'width 0.3s' }} />
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#9499b0', minWidth: 40, textAlign: 'right' }}>{count}x</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Prayer Rate ── */}
+        {(() => {
+          const prayerStats = calculatePrayerStats(gam, app.tasks);
+          if (prayerStats.perPrayer.length === 0) return null;
+          return (
+            <div className="profile-section">
+              <h3 className="profile-section-title">
+                Prayer Rate
+                <span style={{ fontWeight: 400, color: prayerStats.overall.percentage >= 80 ? '#22c55e' : prayerStats.overall.percentage >= 50 ? '#f59e0b' : '#ff6b6b', marginLeft: 8 }}>
+                  {prayerStats.overall.percentage}% overall
+                </span>
+              </h3>
+              <div className="prayer-stats-grid" style={{ marginBottom: 16 }}>
+                {prayerStats.perPrayer.map(p => (
+                  <div key={p.name} className="prayer-stat-item">
+                    <div className="prayer-stat-name">{p.name}</div>
+                    <div className="prayer-stat-bar">
+                      <div className="prayer-stat-fill" style={{ width: `${p.percentage}%`, background: p.percentage >= 80 ? '#22c55e' : p.percentage >= 50 ? '#f59e0b' : '#ff6b6b' }} />
+                    </div>
+                    <div className="prayer-stat-pct">{p.percentage}%</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: '#6b6f85' }}>
+                {prayerStats.overall.completed} / {prayerStats.overall.total} total prayers tracked over {Object.keys(gam.dailyLog || {}).length} days
+              </div>
+              {/* 30-day heatmap for prayers */}
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 11, color: '#6b6f85', marginBottom: 4 }}>Last 30 days</div>
+                <div className="profile-heatmap" aria-label="Prayer completion last 30 days">
+                  {prayerStats.last30Days.map(day => (
+                    <div
+                      key={day.date}
+                      className={`profile-heatmap-cell ${day.count >= prayerStats.perPrayer.length ? 'active' : day.count > 0 ? 'partial' : ''}`}
+                      title={`${day.date}: ${day.count}/${prayerStats.perPrayer.length} prayers`}
+                      style={day.count > 0 && day.count < prayerStats.perPrayer.length ? { background: '#f59e0b' } : undefined}
+                    />
+                  ))}
+                </div>
+                <div className="profile-heatmap-legend">
+                  <span>30 days ago</span>
+                  <div style={{ display: 'flex', gap: 8, fontSize: 10, color: '#6b6f85' }}>
+                    <span><span style={{ display: 'inline-block', width: 8, height: 8, background: '#1e2030', borderRadius: 2, marginRight: 3 }} />Missed</span>
+                    <span><span style={{ display: 'inline-block', width: 8, height: 8, background: '#f59e0b', borderRadius: 2, marginRight: 3 }} />Partial</span>
+                    <span><span style={{ display: 'inline-block', width: 8, height: 8, background: '#22c55e', borderRadius: 2, marginRight: 3 }} />All 5</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </>
   );

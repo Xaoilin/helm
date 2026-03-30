@@ -1937,6 +1937,47 @@ textarea.form-input {
 }
 .prayer-sources a:hover { text-decoration: underline; }
 
+/* Prayer stats */
+.prayer-stats-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.prayer-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.prayer-stat-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #e1e4ea;
+  min-width: 70px;
+}
+.prayer-stat-bar {
+  flex: 1;
+  height: 8px;
+  background: #242740;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.prayer-stat-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+.prayer-stat-pct {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9499b0;
+  min-width: 35px;
+  text-align: right;
+}
+
+.profile-heatmap-cell.partial {
+  background: #f59e0b;
+}
+
 /* ── Adhan Notification Banner ── */
 .adhan-banner {
   position: fixed;
