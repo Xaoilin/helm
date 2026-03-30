@@ -110,7 +110,8 @@ export default function KnowledgeSurface() {
   const [lsTitle, setLsTitle] = useState('');
   const [lsNotes, setLsNotes] = useState('');
   const [lsStatus, setLsStatus] = useState<LifestyleStatus>('struggling');
-  const [lsSource, setLsSource] = useState('');
+  const [lsSources, setLsSources] = useState<string[]>([]);
+  const [lsNewSource, setLsNewSource] = useState('');
   const [deletingLifestyleId, setDeletingLifestyleId] = useState<string | null>(null);
 
   // ── Derived data ──
@@ -171,17 +172,18 @@ export default function KnowledgeSurface() {
   const halalItems = useMemo(() => app.lifestyleItems.filter(i => i.type === 'halal'), [app.lifestyleItems]);
 
   const openAddLifestyle = (type: LifestyleType) => {
-    setLsType(type); setLsTitle(''); setLsNotes(''); setLsSource('');
+    setLsType(type); setLsTitle(''); setLsNotes(''); setLsSources([]); setLsNewSource('');
     setLsStatus(type === 'haram' ? 'struggling' : 'want-to-start');
     setEditingLifestyle(null); setShowLifestyleForm(true);
   };
   const openEditLifestyle = (item: LifestyleItem) => {
-    setLsType(item.type); setLsTitle(item.title); setLsNotes(item.notes); setLsSource(item.source || '');
+    setLsType(item.type); setLsTitle(item.title); setLsNotes(item.notes); setLsSources(item.sources || []);
     setLsStatus(item.status); setEditingLifestyle(item); setShowLifestyleForm(true);
   };
   const saveLifestyle = () => {
     if (!lsTitle.trim()) return;
-    const data = { type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, source: lsSource.trim() || undefined };
+    const allSources = lsNewSource.trim() ? [...lsSources, lsNewSource.trim()] : lsSources;
+    const data = { type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined };
     if (editingLifestyle) app.updateLifestyleItem(editingLifestyle.id, data);
     else app.addLifestyleItem(data);
     setShowLifestyleForm(false);
@@ -603,7 +605,9 @@ export default function KnowledgeSurface() {
                           <div className="ls-item-title">{item.title}</div>
                           <div className="ls-item-status" style={{ color: info.color }}>{info.label}</div>
                           {item.notes && <div className="ls-item-notes">{item.notes}</div>}
-                          {item.source && <div className="ls-item-source">{renderSourceLink(item.source)}</div>}
+                          {item.sources && item.sources.length > 0 && (
+                            <div className="ls-item-source">{item.sources.map((s, i) => <span key={i}>{i > 0 && ' · '}{renderSourceLink(s)}</span>)}</div>
+                          )}
                         </div>
                         <div className="ls-item-actions">
                           <button className="btn-icon btn-sm" onClick={() => openEditLifestyle(item)} style={{ fontSize: 11 }}>Edit</button>
@@ -655,7 +659,9 @@ export default function KnowledgeSurface() {
                           <div className="ls-item-title">{item.title}</div>
                           <div className="ls-item-status" style={{ color: info.color }}>{info.label}</div>
                           {item.notes && <div className="ls-item-notes">{item.notes}</div>}
-                          {item.source && <div className="ls-item-source">{renderSourceLink(item.source)}</div>}
+                          {item.sources && item.sources.length > 0 && (
+                            <div className="ls-item-source">{item.sources.map((s, i) => <span key={i}>{i > 0 && ' · '}{renderSourceLink(s)}</span>)}</div>
+                          )}
                         </div>
                         <div className="ls-item-actions">
                           <button className="btn-icon btn-sm" onClick={() => openEditLifestyle(item)} style={{ fontSize: 11 }}>Edit</button>
@@ -712,8 +718,23 @@ export default function KnowledgeSurface() {
                     <textarea id="ls-notes" className="form-input" value={lsNotes} onChange={e => setLsNotes(e.target.value)} placeholder="Why is this important to you? Any context..." />
                   </div>
                   <div className="form-group">
-                    <label htmlFor="ls-source">Source / Reference (optional)</label>
-                    <input id="ls-source" className="form-input" value={lsSource} onChange={e => setLsSource(e.target.value)} placeholder="e.g., Quran 2:275, Bukhari 1234" />
+                    <label>Sources / References (optional)</label>
+                    {lsSources.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                        {lsSources.map((s, i) => (
+                          <span key={i} className="tag tag-daily" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px' }}>
+                            {s}
+                            <button style={{ background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer', padding: 0, fontSize: 12 }} onClick={() => setLsSources(prev => prev.filter((_, idx) => idx !== i))}>&times;</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input id="ls-source" className="form-input" value={lsNewSource} onChange={e => setLsNewSource(e.target.value)} placeholder="e.g., Quran 2:275, Bukhari 1234"
+                        onKeyDown={e => { if (e.key === 'Enter' && lsNewSource.trim()) { e.preventDefault(); setLsSources(prev => [...prev, lsNewSource.trim()]); setLsNewSource(''); } }}
+                      />
+                      <button className="btn btn-secondary btn-sm" disabled={!lsNewSource.trim()} onClick={() => { setLsSources(prev => [...prev, lsNewSource.trim()]); setLsNewSource(''); }}>Add</button>
+                    </div>
                   </div>
                   <div className="modal-actions">
                     <button className="btn btn-secondary" onClick={() => setShowLifestyleForm(false)}>Cancel</button>

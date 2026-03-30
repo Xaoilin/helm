@@ -127,7 +127,7 @@ export interface LifestyleItem {
   title: string;
   notes: string;
   status: LifestyleStatus;
-  source?: string; // optional Quran/Hadith reference
+  sources?: string[]; // optional Quran/Hadith references
   createdAt: string;
   updatedAt: string;
 }
