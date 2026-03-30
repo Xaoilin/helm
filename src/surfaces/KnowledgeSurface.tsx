@@ -220,16 +220,54 @@ export default function KnowledgeSurface() {
 
   const handleDragStart = (id: string) => { setDragId(id); };
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
-  const handleDrop = (targetId: string, type: LifestyleType) => {
+
+  // Drop onto a specific item (reorder within column or move between columns)
+  const handleDrop = (targetId: string, targetType: LifestyleType) => {
     if (!dragId || dragId === targetId) { setDragId(null); return; }
-    const items = itemsByType[type];
-    const ids = items.map(i => i.id);
-    const fromIdx = ids.indexOf(dragId);
-    const toIdx = ids.indexOf(targetId);
-    if (fromIdx < 0 || toIdx < 0) { setDragId(null); return; }
-    ids.splice(fromIdx, 1);
-    ids.splice(toIdx, 0, dragId);
-    app.reorderLifestyleItems(ids);
+    const draggedItem = app.lifestyleItems.find(i => i.id === dragId);
+    if (!draggedItem) { setDragId(null); return; }
+
+    const movingBetweenColumns = draggedItem.type !== targetType;
+
+    if (movingBetweenColumns) {
+      // Change type + reset status if moving between halal and avoid columns
+      const newStatus = targetType === 'halal'
+        ? 'want-to-start' as LifestyleStatus
+        : (draggedItem.type === 'halal' ? 'struggling' as LifestyleStatus : draggedItem.status);
+      const targetItems = itemsByType[targetType];
+      const toIdx = targetItems.findIndex(i => i.id === targetId);
+      app.updateLifestyleItem(dragId, { type: targetType, status: newStatus, sortOrder: toIdx >= 0 ? toIdx : targetItems.length });
+      // Re-sort the target column
+      const newIds = targetItems.map(i => i.id);
+      newIds.splice(toIdx >= 0 ? toIdx : newIds.length, 0, dragId);
+      app.reorderLifestyleItems(newIds);
+    } else {
+      // Same column reorder
+      const items = itemsByType[targetType];
+      const ids = items.map(i => i.id);
+      const fromIdx = ids.indexOf(dragId);
+      const toIdx = ids.indexOf(targetId);
+      if (fromIdx < 0 || toIdx < 0) { setDragId(null); return; }
+      ids.splice(fromIdx, 1);
+      ids.splice(toIdx, 0, dragId);
+      app.reorderLifestyleItems(ids);
+    }
+    setDragId(null);
+  };
+
+  // Drop onto column itself (empty area) — moves item to end of that column
+  const handleColumnDrop = (targetType: LifestyleType, e: React.DragEvent) => {
+    e.preventDefault();
+    if (!dragId) return;
+    const draggedItem = app.lifestyleItems.find(i => i.id === dragId);
+    if (!draggedItem) { setDragId(null); return; }
+
+    if (draggedItem.type !== targetType) {
+      const newStatus = targetType === 'halal'
+        ? 'want-to-start' as LifestyleStatus
+        : (draggedItem.type === 'halal' ? 'struggling' as LifestyleStatus : draggedItem.status);
+      app.updateLifestyleItem(dragId, { type: targetType, status: newStatus, sortOrder: itemsByType[targetType].length });
+    }
     setDragId(null);
   };
 
@@ -629,7 +667,7 @@ export default function KnowledgeSurface() {
                 const isAvoid = col.type !== 'halal';
                 const statuses = isAvoid ? AVOID_STATUSES : HALAL_STATUSES;
                 return (
-                  <div key={col.type}>
+                  <div key={col.type} onDragOver={handleDragOver} onDrop={e => handleColumnDrop(col.type, e)} style={{ minHeight: 100 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <h3 style={{ margin: 0, fontSize: 13, color: col.color }}>{col.emoji} {col.title}</h3>
                       <button className="btn btn-secondary btn-sm" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => openAddLifestyle(col.type)}>+</button>
