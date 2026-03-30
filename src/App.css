@@ -1940,6 +1940,9 @@ textarea.form-input {
   transition: background 0.15s;
 }
 .ls-item:hover { background: #1a1d2e; }
+.ls-item[draggable] { cursor: grab; }
+.ls-item[draggable]:active { cursor: grabbing; }
+.ls-item.dragging { opacity: 0.3; border-style: dashed; }
 
 .ls-status-btn {
   background: none;

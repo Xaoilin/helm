@@ -168,8 +168,9 @@ export default function KnowledgeSurface() {
   }, [app.knowledgeEntries]);
 
   // Lifestyle derived
-  const haramItems = useMemo(() => app.lifestyleItems.filter(i => i.type === 'haram'), [app.lifestyleItems]);
-  const halalItems = useMemo(() => app.lifestyleItems.filter(i => i.type === 'halal'), [app.lifestyleItems]);
+  const haramItems = useMemo(() => app.lifestyleItems.filter(i => i.type === 'haram').sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)), [app.lifestyleItems]);
+  const halalItems = useMemo(() => app.lifestyleItems.filter(i => i.type === 'halal').sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)), [app.lifestyleItems]);
+  const [dragId, setDragId] = useState<string | null>(null);
 
   const openAddLifestyle = (type: LifestyleType) => {
     setLsType(type); setLsTitle(''); setLsNotes(''); setLsSources([]); setLsNewSource('');
@@ -183,10 +184,29 @@ export default function KnowledgeSurface() {
   const saveLifestyle = () => {
     if (!lsTitle.trim()) return;
     const allSources = lsNewSource.trim() ? [...lsSources, lsNewSource.trim()] : lsSources;
-    const data = { type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined };
+    const data = { type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined, sortOrder: 0 };
     if (editingLifestyle) app.updateLifestyleItem(editingLifestyle.id, data);
-    else app.addLifestyleItem(data);
+    else {
+      const existing = app.lifestyleItems.filter(i => i.type === lsType);
+      data.sortOrder = existing.length;
+      app.addLifestyleItem(data);
+    }
     setShowLifestyleForm(false);
+  };
+
+  const handleDragStart = (id: string) => { setDragId(id); };
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
+  const handleDrop = (targetId: string, type: LifestyleType) => {
+    if (!dragId || dragId === targetId) { setDragId(null); return; }
+    const items = type === 'haram' ? haramItems : halalItems;
+    const ids = items.map(i => i.id);
+    const fromIdx = ids.indexOf(dragId);
+    const toIdx = ids.indexOf(targetId);
+    if (fromIdx < 0 || toIdx < 0) { setDragId(null); return; }
+    ids.splice(fromIdx, 1);
+    ids.splice(toIdx, 0, dragId);
+    app.reorderLifestyleItems(ids);
+    setDragId(null);
   };
 
   const cycleStatus = (item: LifestyleItem) => {
@@ -597,7 +617,8 @@ export default function KnowledgeSurface() {
                   haramItems.map(item => {
                     const info = getStatusInfo(item.type, item.status);
                     return (
-                      <div key={item.id} className="ls-item" style={{ borderLeftColor: info.color }}>
+                      <div key={item.id} className={`ls-item ${dragId === item.id ? 'dragging' : ''}`} style={{ borderLeftColor: info.color }}
+                        draggable onDragStart={() => handleDragStart(item.id)} onDragOver={handleDragOver} onDrop={() => handleDrop(item.id, 'haram')}>
                         <button className="ls-status-btn" onClick={() => cycleStatus(item)} title={`Status: ${info.label}. Click to change.`} style={{ color: info.color }}>
                           {info.emoji}
                         </button>
@@ -651,7 +672,8 @@ export default function KnowledgeSurface() {
                   halalItems.map(item => {
                     const info = getStatusInfo(item.type, item.status);
                     return (
-                      <div key={item.id} className="ls-item" style={{ borderLeftColor: info.color }}>
+                      <div key={item.id} className={`ls-item ${dragId === item.id ? 'dragging' : ''}`} style={{ borderLeftColor: info.color }}
+                        draggable onDragStart={() => handleDragStart(item.id)} onDragOver={handleDragOver} onDrop={() => handleDrop(item.id, 'halal')}>
                         <button className="ls-status-btn" onClick={() => cycleStatus(item)} title={`Status: ${info.label}. Click to change.`} style={{ color: info.color }}>
                           {info.emoji}
                         </button>

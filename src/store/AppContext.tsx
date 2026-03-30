@@ -105,6 +105,7 @@ interface AppContextAPI extends AppState {
   addLifestyleItem: (item: Omit<LifestyleItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateLifestyleItem: (id: string, updates: Partial<LifestyleItem>) => void;
   removeLifestyleItem: (id: string) => void;
+  reorderLifestyleItems: (reorderedIds: string[]) => void;
 
   // Gamification
   updateGamification: (profile: GamificationProfile) => void;
@@ -526,6 +527,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, lifestyleItems: s.lifestyleItems.filter(i => i.id !== id) }));
   }, []);
 
+  const reorderLifestyleItems = useCallback((reorderedIds: string[]) => {
+    setState(s => ({
+      ...s,
+      lifestyleItems: s.lifestyleItems.map(item => {
+        const newOrder = reorderedIds.indexOf(item.id);
+        return newOrder >= 0 ? { ...item, sortOrder: newOrder } : item;
+      }),
+    }));
+  }, []);
+
   // ── Gamification ──
   const updateGamification = useCallback((profile: GamificationProfile) => {
     setState(s => ({ ...s, gamification: profile }));
@@ -566,7 +577,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addTask, updateTask, removeTask,
     addKnowledgeTopic, updateKnowledgeTopic, removeKnowledgeTopic,
     addKnowledgeEntry, updateKnowledgeEntry, removeKnowledgeEntry,
-    addLifestyleItem, updateLifestyleItem, removeLifestyleItem,
+    addLifestyleItem, updateLifestyleItem, removeLifestyleItem, reorderLifestyleItems,
     updateGamification,
     updateIntegration,
     updateSettings,
