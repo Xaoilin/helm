@@ -1,0 +1,192 @@
+import { useState, useRef, useEffect } from 'react';
+import { useApp } from '../store/AppContext';
+
+export default function ChatSurface() {
+  const app = useApp();
+  const [input, setInput] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const activeConv = app.conversations.find(c => c.id === app.activeConversationId);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeConv?.messages.length]);
+
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text) return;
+    let convId = app.activeConversationId;
+    if (!convId) {
+      convId = app.createConversation();
+    }
+    app.sendMessage(convId, text);
+    setInput('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const quickPrompts = [
+    'What can you help me with?',
+    'What workspaces do I have?',
+    'What meetings do I have today?',
+    'Help me draft a deployment plan',
+  ];
+
+  return (
+    <div className="chat-layout">
+      {/* Conversation sidebar */}
+      <div className="chat-sidebar">
+        <div className="chat-sidebar-header">
+          <h3>Conversations</h3>
+          <button className="btn-icon" onClick={() => { app.createConversation(); }} title="New conversation" aria-label="New conversation">+</button>
+        </div>
+        <div className="chat-list">
+          {app.conversations.length === 0 && (
+            <div style={{ padding: '20px 16px', color: '#4a4e62', fontSize: '12px' }} role="status">
+              No conversations yet
+            </div>
+          )}
+          {app.conversations.map(conv => (
+            <div key={conv.id}>
+              <button
+                className={`chat-list-item ${conv.id === app.activeConversationId ? 'active' : ''}`}
+                onClick={() => app.setActiveConversation(conv.id)}
+              >
+                <span className="title">
+                  {editingId === conv.id ? (
+                    <input
+                      className="form-input"
+                      style={{ padding: '2px 6px', fontSize: '12px' }}
+                      value={editTitle}
+                      onChange={e => setEditTitle(e.target.value)}
+                      onBlur={() => {
+                        if (editTitle.trim()) app.renameConversation(conv.id, editTitle.trim());
+                        setEditingId(null);
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          if (editTitle.trim()) app.renameConversation(conv.id, editTitle.trim());
+                          setEditingId(null);
+                        }
+                        if (e.key === 'Escape') setEditingId(null);
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      autoFocus
+                    />
+                  ) : conv.title}
+                </span>
+                {editingId !== conv.id && (
+                  <span className="actions-row" style={{ marginLeft: 4, flexShrink: 0 }}>
+                    <button
+                      className="btn-icon btn-sm"
+                      style={{ border: 'none', padding: '2px 4px', fontSize: '11px' }}
+                      onClick={e => { e.stopPropagation(); setEditingId(conv.id); setEditTitle(conv.title); }}
+                      title="Rename"
+                      aria-label="Rename conversation"
+                    >
+                      &#9998;
+                    </button>
+                    <button
+                      className="btn-icon btn-sm"
+                      style={{ border: 'none', padding: '2px 4px', fontSize: '11px', color: '#ff6b6b' }}
+                      onClick={e => { e.stopPropagation(); setDeletingId(conv.id); }}
+                      title="Delete"
+                      aria-label="Delete conversation"
+                    >
+                      &times;
+                    </button>
+                  </span>
+                )}
+              </button>
+              {deletingId === conv.id && (
+                <div className="confirm-bar" style={{ margin: '4px 8px' }} role="alert">
+                  Delete this conversation?
+                  <button className="btn btn-danger btn-sm" onClick={() => { app.deleteConversation(conv.id); setDeletingId(null); }}>Delete</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setDeletingId(null)}>Cancel</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '8px 16px', borderTop: '1px solid #1e2030' }}>
+          <span className="mocked-indicator" role="status">Mocked AI responses</span>
+        </div>
+      </div>
+
+      {/* Chat main area */}
+      <div className="chat-main">
+        {activeConv ? (
+          <>
+            <div className="chat-messages">
+              {activeConv.messages.length === 0 && (
+                <div className="empty-state" role="status">
+                  <div className="empty-icon">&#128172;</div>
+                  <h3>Start a conversation</h3>
+                  <p>Ask HELM anything about your engineering work, or try a quick prompt below.</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                    {quickPrompts.map(p => (
+                      <button
+                        key={p}
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => { app.sendMessage(activeConv.id, p); }}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {activeConv.messages.map(msg => (
+                <div key={msg.id} className={`chat-message ${msg.role}`}>
+                  {msg.content}
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+            <div className="chat-input-bar">
+              <input
+                className="form-input"
+                placeholder="Type a message..."
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+              />
+              <button className="btn btn-primary" onClick={handleSend}>Send</button>
+            </div>
+          </>
+        ) : (
+          <div className="empty-state" style={{ flex: 1 }} role="status">
+            <div className="empty-icon">&#128172;</div>
+            <h3>HELM Assistant</h3>
+            <p>Your local-first engineering assistant. Create a new conversation or select one from the sidebar to get started.</p>
+            <button className="btn btn-primary" onClick={() => app.createConversation()}>New conversation</button>
+            {app.conversations.length === 0 && (
+              <div style={{ marginTop: 24, display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                {quickPrompts.map(p => (
+                  <button
+                    key={p}
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      const id = app.createConversation();
+                      app.sendMessage(id, p);
+                    }}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
