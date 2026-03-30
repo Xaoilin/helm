@@ -192,14 +192,23 @@ export default function TasksSurface() {
     const now = nowDate.toISOString();
     const completing = !task.completed;
 
+    // Daily habits cannot be unchecked once completed
+    if (task.category === 'daily' && !completing) return;
+
     app.updateTask(task.id, {
       completed: completing,
       completedAt: completing ? now : undefined,
       ...(task.recurring && completing ? { recurring: { ...task.recurring, lastReset: todayStr } } : {}),
     });
 
-    // Gamification: award XP on completion
+    // Gamification: award XP on completion (once per habit per day)
     if (completing) {
+      // Check if this habit already got XP today (prevent farming)
+      const todayLog = app.gamification.dailyLog?.[todayStr] || [];
+      const alreadyRewarded = task.category === 'daily' && todayLog.includes(task.id);
+
+      if (alreadyRewarded) return; // no duplicate XP
+
       const completionsToday = app.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
       const extCtx = buildCompletionContext(app.tasks, app.settings.goalTags, todayStr, app.gamification, {
         knowledgeEntries: app.knowledgeEntries.length,
@@ -381,7 +390,7 @@ export default function TasksSurface() {
                 {dailyHabits.length > 0 && (
                   <>
                     <div className="section-heading">Daily Habits</div>
-                    <HabitCards habits={dailyHabits} onToggle={toggleComplete} />
+                    <HabitCards habits={dailyHabits} onComplete={toggleComplete} />
                   </>
                 )}
                 {dueTodayTasks.length > 0 && (

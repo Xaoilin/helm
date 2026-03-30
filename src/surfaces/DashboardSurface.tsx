@@ -259,12 +259,19 @@ export default function DashboardSurface() {
 
   // ── Task completion with gamification ──
   const completeTask = (task: Task) => {
+    // Already completed — do nothing (locked)
+    if (task.completed) return;
+
     const nowDate = new Date();
     app.updateTask(task.id, {
       completed: true,
       completedAt: nowDate.toISOString(),
       ...(task.recurring ? { recurring: { ...task.recurring, lastReset: todayStr } } : {}),
     });
+
+    // Check if this habit already got XP today
+    const todayLog = gam.dailyLog?.[todayStr] || [];
+    if (task.category === 'daily' && todayLog.includes(task.id)) return;
 
     const completionsToday = app.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
     const extCtx = buildCompletionContext(app.tasks, app.settings.goalTags, todayStr, gam, {
@@ -384,7 +391,7 @@ export default function DashboardSurface() {
             ) : (
               <HabitCards
                 habits={dailyHabits}
-                onToggle={h => { if (!h.completed) completeTask(h); else app.updateTask(h.id, { completed: false, completedAt: undefined }); }}
+                onComplete={completeTask}
               />
             )}
           </div>

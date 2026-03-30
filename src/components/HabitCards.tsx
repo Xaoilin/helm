@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import type { Task } from '../types/domain';
 import { getHabitEmoji } from '../services/habitEmoji';
 
 interface HabitCardsProps {
   habits: Task[];
-  onToggle: (task: Task) => void;
+  onComplete: (task: Task) => void; // called only once, when confirmed
   xpPerHabit?: number;
 }
 
@@ -47,11 +48,24 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
   );
 }
 
-export default function HabitCards({ habits, onToggle, xpPerHabit = 15 }: HabitCardsProps) {
+export default function HabitCards({ habits, onComplete, xpPerHabit = 15 }: HabitCardsProps) {
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const done = habits.filter(h => h.completed).length;
   const total = habits.length;
 
   if (total === 0) return null;
+
+  const handleClick = (h: Task) => {
+    // If already completed today, do nothing (locked)
+    if (h.completed) return;
+    // Show confirmation
+    setConfirmingId(h.id);
+  };
+
+  const handleConfirm = (h: Task) => {
+    setConfirmingId(null);
+    onComplete(h);
+  };
 
   return (
     <>
@@ -59,26 +73,42 @@ export default function HabitCards({ habits, onToggle, xpPerHabit = 15 }: HabitC
       <div className="habit-grid">
         {habits.map(h => {
           const emoji = getHabitEmoji(h.title, h.emoji);
+          const isConfirming = confirmingId === h.id;
           return (
             <div
               key={h.id}
-              className={`habit-card ${h.completed ? 'done' : ''}`}
-              onClick={() => onToggle(h)}
+              className={`habit-card ${h.completed ? 'done locked' : ''} ${isConfirming ? 'confirming' : ''}`}
+              onClick={() => !isConfirming && handleClick(h)}
               role="button"
               tabIndex={0}
-              aria-label={`${h.completed ? 'Uncheck' : 'Complete'} ${h.title}`}
-              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(h); } }}
+              aria-label={h.completed ? `${h.title} \u2014 completed` : `Complete ${h.title}`}
+              onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !isConfirming) { e.preventDefault(); handleClick(h); } }}
             >
               <div className="habit-card-check">{h.completed ? '\u2713' : ''}</div>
               <div className="habit-card-emoji">{emoji}</div>
               <div className="habit-card-name">{h.title}</div>
-              <div className="habit-card-freq">{h.recurring?.frequency || 'daily'}</div>
+              {!isConfirming && (
+                <div className="habit-card-freq">
+                  {h.completed ? 'Done \u2713' : (h.recurring?.frequency || 'daily')}
+                </div>
+              )}
               {h.completed && <div className="habit-card-xp">+{xpPerHabit} XP</div>}
+
+              {/* Confirmation overlay */}
+              {isConfirming && (
+                <div className="habit-confirm-overlay" onClick={e => e.stopPropagation()}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Did you complete this?</div>
+                  <div className="actions-row" style={{ justifyContent: 'center', gap: 6 }}>
+                    <button className="btn btn-success btn-sm" onClick={e => { e.stopPropagation(); handleConfirm(h); }}>Yes</button>
+                    <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setConfirmingId(null); }}>No</button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
-      {done === total && (
+      {done === total && total > 0 && (
         <div className="habit-complete-msg">
           All habits complete! Keep the momentum going.
         </div>

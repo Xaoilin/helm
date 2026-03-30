@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../store/AppContext';
 import { isSupabaseReady, syncNamespace } from '../store/supabase';
+import { DEFAULT_PROFILE } from '../services/gamification';
 import { getAllLocalTimestamps } from '../store/persistence';
 
 export default function SettingsSurface() {
@@ -8,6 +9,8 @@ export default function SettingsSurface() {
   const { settings } = app;
   const [clientIdInput, setClientIdInput] = useState(settings.googleOAuthClientId || '');
   const [clientIdSaved, setClientIdSaved] = useState(false);
+
+  const [confirmReset, setConfirmReset] = useState(false);
 
   // Goal tags
   const [newTag, setNewTag] = useState('');
@@ -342,6 +345,23 @@ CREATE POLICY "Allow all for anon"
               </div>
             )}
           </div>
+        </div>
+
+        {/* Reset Gamification */}
+        <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Gamification Reset</h3>
+        <div className="card">
+          <div style={{ fontSize: 12, color: '#9499b0', marginBottom: 10 }}>
+            Reset all XP, levels, badges, streaks, habit tallies, and prayer stats back to zero. This cannot be undone.
+          </div>
+          {confirmReset ? (
+            <div className="confirm-bar" role="alert">
+              Are you sure? This will permanently reset ALL gamification progress.
+              <button className="btn btn-danger btn-sm" onClick={() => { app.updateGamification({ ...DEFAULT_PROFILE }); setConfirmReset(false); }}>Yes, Reset Everything</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setConfirmReset(false)}>Cancel</button>
+            </div>
+          ) : (
+            <button className="btn btn-danger btn-sm" onClick={() => setConfirmReset(true)}>Reset All Progress</button>
+          )}
         </div>
 
         {/* About */}

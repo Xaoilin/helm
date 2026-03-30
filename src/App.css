@@ -1590,6 +1590,31 @@ textarea.form-input {
   animation: xpFloat 1.5s ease forwards;
 }
 
+.habit-card.locked {
+  cursor: default;
+  pointer-events: none;
+}
+.habit-card.locked:hover { transform: none; }
+
+.habit-card.confirming {
+  border-color: #f59e0b;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.2);
+}
+
+.habit-confirm-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 17, 23, 0.92);
+  border-radius: 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #e1e4ea;
+  pointer-events: auto;
+  z-index: 2;
+}
+
 /* Progress ring */
 .habit-ring-container {
   display: flex;
