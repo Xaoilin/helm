@@ -244,7 +244,7 @@ export default function DashboardSurface() {
   }, [gam, currentStreak, xp]);
 
   // ── Agenda timeline (max 8 items) ──
-  type AgendaItem = { id: string; time: string; title: string; type: 'event' | 'task'; meta?: string; task?: Task; sourceId?: string };
+  type AgendaItem = { id: string; time: string; title: string; type: 'event' | 'task'; meta?: string; task?: Task; sourceId?: string; passed?: boolean };
   const agenda = useMemo((): AgendaItem[] => {
     const items: AgendaItem[] = [];
 
@@ -257,6 +257,7 @@ export default function DashboardSurface() {
         type: 'event',
         meta: e.location,
         sourceId: e.sourceId,
+        passed: !e.allDay && new Date(e.end) < now,
       });
     }
 
@@ -391,7 +392,7 @@ export default function DashboardSurface() {
                 {agenda.map(item => {
                   const pal = item.sourceId ? getEventPalette(item.sourceId) : null;
                   return (
-                  <div key={item.id} className={`dash-agenda-item ${item.type}`} style={pal ? { borderLeft: `3px solid ${pal.border}`, background: pal.bg, borderRadius: 4, paddingLeft: 10 } : {}}>
+                  <div key={item.id} className={`dash-agenda-item ${item.type} ${item.passed ? 'passed' : ''}`} style={pal ? { borderLeft: `3px solid ${item.passed ? '#2a2d42' : pal.border}`, background: item.passed ? undefined : pal.bg, borderRadius: 4, paddingLeft: 10 } : {}}>
                     <div className="dash-agenda-time">{item.time}</div>
                     <div className="dash-agenda-content">
                       <div className="dash-agenda-title">{item.title}</div>

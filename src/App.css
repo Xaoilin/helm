@@ -1486,6 +1486,12 @@ textarea.form-input {
   border-bottom: 1px solid #1e2030;
 }
 .dash-agenda-item:last-child { border-bottom: none; }
+.dash-agenda-item.passed {
+  opacity: 0.35;
+}
+.dash-agenda-item.passed .dash-agenda-title {
+  text-decoration: line-through;
+}
 .dash-agenda-time {
   min-width: 120px;
   font-size: 11px;
