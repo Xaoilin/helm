@@ -133,19 +133,31 @@ export default function ProfileSurface() {
           <h3 className="profile-section-title">
             Badges <span style={{ fontWeight: 400, color: '#6b6f85' }}>({gam.badges.length} / {BADGES.length})</span>
           </h3>
-          <div className="profile-badges-grid">
-            {BADGES.map(badge => {
-              const earned = earnedSet.has(badge.id);
-              return (
-                <div key={badge.id} className={`profile-badge-card ${badge.rarity} ${earned ? 'earned' : 'locked'}`}>
-                  <div className="profile-badge-emoji">{earned ? badge.emoji : '?'}</div>
-                  <div className="profile-badge-name">{badge.name}</div>
-                  <div className="profile-badge-desc">{badge.description}</div>
-                  <div className={`profile-badge-rarity ${badge.rarity}`}>{badge.rarity}</div>
+          {(['common', 'rare', 'epic', 'legendary'] as const).map(rarity => {
+            const group = BADGES.filter(b => b.rarity === rarity);
+            const earnedCount = group.filter(b => earnedSet.has(b.id)).length;
+            const labels = { common: 'Early Game', rare: 'Mid Game', epic: 'Late Game', legendary: 'Endgame' };
+            return (
+              <div key={rarity} style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#6b6f85', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {labels[rarity]} <span style={{ fontWeight: 400 }}>({earnedCount}/{group.length})</span>
                 </div>
-              );
-            })}
-          </div>
+                <div className="profile-badges-grid">
+                  {group.map(badge => {
+                    const earned = earnedSet.has(badge.id);
+                    return (
+                      <div key={badge.id} className={`profile-badge-card ${badge.rarity} ${earned ? 'earned' : 'locked'}`}>
+                        <div className="profile-badge-emoji">{earned ? badge.emoji : '?'}</div>
+                        <div className="profile-badge-name">{badge.name}</div>
+                        <div className="profile-badge-desc">{badge.description}</div>
+                        <div className={`profile-badge-rarity ${badge.rarity}`}>{badge.rarity}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* ── Stats ── */}

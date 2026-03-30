@@ -3,6 +3,7 @@ import { useApp } from '../store/AppContext';
 import type { Task, TaskCategory, TaskPriority } from '../types/domain';
 import {
   processTaskCompletion,
+  buildCompletionContext,
   checkStreakBroken,
   xpToNextLevel,
   titleForLevel,
@@ -190,10 +191,11 @@ export default function TasksSurface() {
       ...(task.recurring && completing ? { recurring: { ...task.recurring, lastReset: todayStr } } : {}),
     });
 
-    // Gamification: award XP on completion, remove on uncompletion
+    // Gamification: award XP on completion
     if (completing) {
       const completionsToday = app.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
-      const result = processTaskCompletion(app.gamification, task, completionsToday, nowDate);
+      const extCtx = buildCompletionContext(app.tasks, app.settings.goalTags, todayStr, app.gamification);
+      const result = processTaskCompletion(app.gamification, task, completionsToday, nowDate, extCtx);
       app.updateGamification(result.updatedProfile);
 
       // XP toast

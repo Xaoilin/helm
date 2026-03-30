@@ -7,6 +7,7 @@ import {
   BADGES,
   STREAK_MILESTONES,
   processTaskCompletion,
+  buildCompletionContext,
   checkStreakBroken,
 } from '../services/gamification';
 import type { Task, CalendarEvent } from '../types/domain';
@@ -208,7 +209,8 @@ export default function DashboardSurface() {
     });
 
     const completionsToday = app.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
-    const result = processTaskCompletion(gam, task, completionsToday, nowDate);
+    const extCtx = buildCompletionContext(app.tasks, app.settings.goalTags, todayStr, gam);
+    const result = processTaskCompletion(gam, task, completionsToday, nowDate, extCtx);
     app.updateGamification(result.updatedProfile);
 
     addToast({ type: 'xp', text: `+${result.xpEarned} XP`, emoji: '\u2728' });

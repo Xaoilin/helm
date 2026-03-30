@@ -156,10 +156,27 @@ describe('Streaks', () => {
 });
 
 describe('Badges', () => {
+  // Default extended context for badge tests
+  const extDefaults = {
+    dayOfWeek: 3, // Wednesday
+    totalHabits: 0,
+    totalGoalsCreated: 0,
+    totalGoalsCompleted: 0,
+    totalHighPriorityCompleted: 0,
+    completedHabitToday: false,
+    completedTaskToday: true,
+    completedGoalToday: false,
+    allHabitsDoneToday: false,
+    goalCategories: 0,
+    daysSinceFirstUse: 0,
+    hadPriorStreak: false,
+  };
+
   it('should award first-blood on first completion', () => {
     const badges = checkNewBadges({
+      ...extDefaults,
       profile: { ...DEFAULT_PROFILE, totalTasksCompleted: 1 },
-      task: { category: 'task' },
+      task: { category: 'task', priority: 'medium' },
       completionsToday: 1,
       hourOfDay: 12,
     });
@@ -168,8 +185,9 @@ describe('Badges', () => {
 
   it('should award hat-trick on 3 completions in a day', () => {
     const badges = checkNewBadges({
+      ...extDefaults,
       profile: { ...DEFAULT_PROFILE, totalTasksCompleted: 3 },
-      task: { category: 'task' },
+      task: { category: 'task', priority: 'medium' },
       completionsToday: 3,
       hourOfDay: 14,
     });
@@ -178,8 +196,9 @@ describe('Badges', () => {
 
   it('should award early-bird before 9am', () => {
     const badges = checkNewBadges({
+      ...extDefaults,
       profile: { ...DEFAULT_PROFILE, totalTasksCompleted: 1 },
-      task: { category: 'task' },
+      task: { category: 'task', priority: 'medium' },
       completionsToday: 1,
       hourOfDay: 7,
     });
@@ -188,18 +207,22 @@ describe('Badges', () => {
 
   it('should award goal-getter on goal completion', () => {
     const badges = checkNewBadges({
+      ...extDefaults,
       profile: { ...DEFAULT_PROFILE, totalTasksCompleted: 1 },
-      task: { category: 'goal' },
+      task: { category: 'goal', priority: 'medium' },
       completionsToday: 1,
       hourOfDay: 12,
+      totalGoalsCompleted: 1,
+      completedGoalToday: true,
     });
     expect(badges).toContain('goal-getter');
   });
 
   it('should not re-award earned badges', () => {
     const badges = checkNewBadges({
+      ...extDefaults,
       profile: { ...DEFAULT_PROFILE, totalTasksCompleted: 1, badges: ['first-blood'] },
-      task: { category: 'task' },
+      task: { category: 'task', priority: 'medium' },
       completionsToday: 1,
       hourOfDay: 12,
     });
@@ -208,25 +231,42 @@ describe('Badges', () => {
 
   it('should award streak badges at milestones', () => {
     const badges7 = checkNewBadges({
+      ...extDefaults,
       profile: { ...DEFAULT_PROFILE, currentStreak: 7, totalTasksCompleted: 1 },
-      task: { category: 'task' },
+      task: { category: 'task', priority: 'medium' },
       completionsToday: 1,
       hourOfDay: 12,
     });
     expect(badges7).toContain('streak-7');
 
     const badges30 = checkNewBadges({
+      ...extDefaults,
       profile: { ...DEFAULT_PROFILE, currentStreak: 30, totalTasksCompleted: 1 },
-      task: { category: 'task' },
+      task: { category: 'task', priority: 'medium' },
       completionsToday: 1,
       hourOfDay: 12,
     });
     expect(badges30).toContain('streak-30');
   });
 
-  it('should have correct badge definitions', () => {
-    expect(BADGES.length).toBe(9);
+  it('should have 100 badge definitions', () => {
+    expect(BADGES.length).toBe(100);
     expect(BADGES.every(b => b.id && b.name && b.emoji && b.rarity)).toBe(true);
+    // All IDs must be unique
+    const ids = BADGES.map(b => b.id);
+    expect(new Set(ids).size).toBe(100);
+  });
+
+  it('should have badges across all rarities', () => {
+    const byRarity = { common: 0, rare: 0, epic: 0, legendary: 0 };
+    for (const b of BADGES) byRarity[b.rarity]++;
+    // All four tiers must be represented
+    expect(byRarity.common).toBeGreaterThanOrEqual(20);
+    expect(byRarity.rare).toBeGreaterThanOrEqual(20);
+    expect(byRarity.epic).toBeGreaterThanOrEqual(15);
+    expect(byRarity.legendary).toBeGreaterThanOrEqual(10);
+    // Total must equal 100
+    expect(byRarity.common + byRarity.rare + byRarity.epic + byRarity.legendary).toBe(100);
   });
 });
 
