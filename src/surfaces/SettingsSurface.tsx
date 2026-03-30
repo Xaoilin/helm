@@ -179,6 +179,37 @@ CREATE POLICY "Allow all for anon"
         </div>
 
         {/* Goal categories */}
+        {/* Prayer Times */}
+        <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Prayer Times (Adhan)</h3>
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>Enable prayer time notifications</div>
+              <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 2 }}>
+                Show prayer times on Dashboard with Adhan notification when each prayer arrives.
+              </div>
+            </div>
+            <label className="toggle">
+              <input type="checkbox" checked={settings.prayerEnabled !== false} onChange={e => app.updateSettings({ prayerEnabled: e.target.checked })} aria-label="Toggle prayer notifications" />
+              <span className="slider" />
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+              <label htmlFor="settings-prayer-city">City</label>
+              <input id="settings-prayer-city" className="form-input" value={settings.prayerCity || 'Bedford'} onChange={e => app.updateSettings({ prayerCity: e.target.value })} />
+            </div>
+            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+              <label htmlFor="settings-prayer-country">Country</label>
+              <input id="settings-prayer-country" className="form-input" value={settings.prayerCountry || 'United Kingdom'} onChange={e => app.updateSettings({ prayerCountry: e.target.value })} />
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 8 }}>
+            Method: Shia Ithna-Ashari (Jafari), Leva Institute, Qum.{' '}
+            <a href="https://aladhan.com/calculation-methods" target="_blank" rel="noopener noreferrer" style={{ color: '#4f5bff' }}>Learn more</a>
+          </div>
+        </div>
+
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Goal Categories</h3>
         <div className="card">
           <div style={{ fontSize: 12, color: '#9499b0', marginBottom: 10 }}>

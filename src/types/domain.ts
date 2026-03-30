@@ -189,6 +189,9 @@ export interface Settings {
   supabaseUrl?: string;
   supabaseAnonKey?: string;
   goalTags?: string[];
+  prayerEnabled?: boolean;
+  prayerCity?: string;
+  prayerCountry?: string;
 }
 
 // ── Navigation ──

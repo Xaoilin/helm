@@ -1,6 +1,15 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import HabitCards from '../components/HabitCards';
+import {
+  getPrayerTimes,
+  getNextPrayer,
+  isAdhanTime,
+  formatTimeUntil,
+  PRAYER_SOURCES,
+  type PrayerTimesData,
+  type PrayerTime as PrayerTimeType,
+} from '../services/prayerTimes';
 import {
   xpToNextLevel,
   titleForLevel,
@@ -27,6 +36,45 @@ export default function DashboardSurface() {
   const hour = now.getHours();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showLevelFlash, setShowLevelFlash] = useState(false);
+
+  // Prayer times
+  const [prayerData, setPrayerData] = useState<PrayerTimesData | null>(null);
+  const [adhanPrayer, setAdhanPrayer] = useState<PrayerTimeType | null>(null);
+  const adhanShownRef = useRef<Set<string>>(new Set());
+  const prayerEnabled = app.settings.prayerEnabled !== false;
+  const prayerCity = app.settings.prayerCity || 'Bedford';
+  const prayerCountry = app.settings.prayerCountry || 'United Kingdom';
+
+  // Fetch prayer times on mount
+  useEffect(() => {
+    if (!prayerEnabled) return;
+    getPrayerTimes(prayerCity, prayerCountry).then(setPrayerData).catch(err => console.warn('Prayer times fetch failed:', err));
+  }, [prayerEnabled, prayerCity, prayerCountry]);
+
+  // Poll for Adhan every 30 seconds
+  useEffect(() => {
+    if (!prayerEnabled || !prayerData) return;
+    const check = () => {
+      const adhan = isAdhanTime(prayerData.prayers);
+      if (adhan && !adhanShownRef.current.has(adhan.name)) {
+        setAdhanPrayer(adhan);
+        adhanShownRef.current.add(adhan.name);
+        // Browser notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(`${adhan.nameArabic} - ${adhan.name}`, { body: `It's time for ${adhan.name} prayer`, icon: '\u{1F54C}' });
+        } else if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+        // Auto-dismiss after 30s
+        setTimeout(() => setAdhanPrayer(null), 30000);
+      }
+    };
+    check();
+    const interval = setInterval(check, 30000);
+    return () => clearInterval(interval);
+  }, [prayerEnabled, prayerData]);
+
+  const nextPrayer = useMemo(() => prayerData ? getNextPrayer(prayerData.prayers) : null, [prayerData]);
 
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const xp = xpToNextLevel(gam.totalXp);
@@ -378,7 +426,58 @@ export default function DashboardSurface() {
             <button className="dash-card-link" onClick={() => app.navigate('profile')}>View full profile &rarr;</button>
           </div>
         </div>
+
+        {/* ── Prayer Times ── */}
+        {prayerEnabled && prayerData && (
+          <div className="dash-card" style={{ marginBottom: 16 }}>
+            <div className="dash-card-header">
+              <span>{'\u{1F54C}'} Prayer Times &mdash; {prayerCity}</span>
+              <span style={{ fontSize: 11, color: '#6b6f85' }}>{prayerData.hijriDate}</span>
+            </div>
+            <div className="prayer-grid">
+              {prayerData.prayers.map(p => {
+                const isNext = nextPrayer?.prayer.name === p.name;
+                const isPrayer = p.type === 'prayer';
+                return (
+                  <div key={p.name} className={`prayer-row ${isNext ? 'next' : ''} ${isPrayer ? 'wajib' : 'event'}`}>
+                    <div className="prayer-name">
+                      {p.name}
+                      <span className="prayer-arabic">{p.nameArabic}</span>
+                    </div>
+                    <div className="prayer-time">{p.time}</div>
+                    {isNext && (
+                      <div className="prayer-countdown">in {formatTimeUntil(nextPrayer!.minutesUntil)}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="prayer-sources">
+              <span style={{ fontSize: 10, color: '#4a4e62' }}>Sources:</span>
+              <a href={PRAYER_SOURCES.api.url} target="_blank" rel="noopener noreferrer">{PRAYER_SOURCES.api.name}</a>
+              <span style={{ color: '#2a2d42' }}>|</span>
+              <a href={PRAYER_SOURCES.method.url} target="_blank" rel="noopener noreferrer">{PRAYER_SOURCES.method.name}</a>
+              <span style={{ color: '#2a2d42' }}>|</span>
+              <a href={PRAYER_SOURCES.verification.url} target="_blank" rel="noopener noreferrer">Verify times</a>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Adhan Notification Banner */}
+      {adhanPrayer && (
+        <div className="adhan-banner" onClick={() => setAdhanPrayer(null)}>
+          <div className="adhan-content">
+            <div className="adhan-mosque">{'\u{1F54C}'}</div>
+            <div className="adhan-text">
+              <div className="adhan-title">{'\u0627\u0644\u0644\u0647 \u0623\u0643\u0628\u0631'}</div>
+              <div className="adhan-subtitle">Allahu Akbar &mdash; It's time for <strong>{adhanPrayer.name}</strong> ({adhanPrayer.nameArabic})</div>
+              <div className="adhan-time">{adhanPrayer.time}</div>
+            </div>
+          </div>
+          <div className="adhan-dismiss">Click to dismiss</div>
+        </div>
+      )}
 
       {/* Toasts */}
       {toasts.length > 0 && (

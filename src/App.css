@@ -1874,3 +1874,122 @@ textarea.form-input {
   font-size: 11px;
   color: #9499b0;
 }
+
+/* ── Prayer Times ── */
+.prayer-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.prayer-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.prayer-row.event { opacity: 0.6; }
+.prayer-row.next {
+  background: #1a2744;
+  border: 1px solid #2a3a5a;
+}
+.prayer-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: #e1e4ea;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.prayer-arabic {
+  font-size: 12px;
+  color: #6b6f85;
+  font-family: 'Segoe UI', serif;
+}
+.prayer-time {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e1e4ea;
+  min-width: 50px;
+  text-align: right;
+}
+.prayer-row.next .prayer-time { color: #7c8aff; }
+.prayer-countdown {
+  font-size: 11px;
+  color: #4f5bff;
+  margin-left: 10px;
+  font-weight: 600;
+}
+.prayer-sources {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #1e2030;
+  font-size: 10px;
+  flex-wrap: wrap;
+}
+.prayer-sources a {
+  color: #4f5bff;
+  text-decoration: none;
+}
+.prayer-sources a:hover { text-decoration: underline; }
+
+/* ── Adhan Notification Banner ── */
+.adhan-banner {
+  position: fixed;
+  top: 0;
+  left: 220px;
+  right: 0;
+  z-index: 300;
+  background: linear-gradient(135deg, #0a2f1a 0%, #1a3328 40%, #0f2a20 100%);
+  border-bottom: 2px solid #22c55e;
+  padding: 20px 32px;
+  cursor: pointer;
+  animation: adhanSlideDown 0.5s ease;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+.adhan-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.adhan-mosque {
+  font-size: 48px;
+  animation: adhanPulse 2s ease-in-out infinite;
+}
+.adhan-text { flex: 1; }
+.adhan-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #22c55e;
+  font-family: 'Segoe UI', serif;
+  letter-spacing: 2px;
+}
+.adhan-subtitle {
+  font-size: 15px;
+  color: #c4c8db;
+  margin-top: 4px;
+}
+.adhan-time {
+  font-size: 13px;
+  color: #6b6f85;
+  margin-top: 2px;
+}
+.adhan-dismiss {
+  text-align: center;
+  font-size: 11px;
+  color: #4a4e62;
+  margin-top: 8px;
+}
+
+@keyframes adhanSlideDown {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+@keyframes adhanPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
