@@ -10,11 +10,15 @@ import {
   syncNamespace,
 } from '../store/supabase';
 
-// Mock the Supabase client
+// Mock the Supabase client — chain .eq() calls flexibly
 const mockSingle = vi.fn();
-const mockSelect = vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ single: mockSingle })) })) }));
+const makeEqChain = (): any => {
+  const chain: any = { eq: () => chain, single: mockSingle, select: () => chain };
+  return chain;
+};
+const mockSelect = vi.fn(() => makeEqChain());
 const mockUpsert = vi.fn(() => ({ error: null }));
-const mockDelete = vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ error: null })) })) }));
+const mockDelete = vi.fn(() => makeEqChain());
 const mockFrom = vi.fn(() => ({
   select: mockSelect,
   upsert: mockUpsert,

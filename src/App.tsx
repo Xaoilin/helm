@@ -1,4 +1,5 @@
 import './App.css';
+import { useState, useEffect } from 'react';
 import { useApp } from './store/AppContext';
 import DashboardSurface from './surfaces/DashboardSurface';
 import ChatSurface from './surfaces/ChatSurface';
@@ -11,7 +12,15 @@ import WorkspacesSurface from './surfaces/WorkspacesSurface';
 import IntegrationsSurface from './surfaces/IntegrationsSurface';
 import SettingsSurface from './surfaces/SettingsSurface';
 import VoiceAssistant from './components/VoiceAssistant';
+import {
+  isSupabaseReady,
+  getSessionUser,
+  signInWithGoogle,
+  signOut,
+  onAuthStateChange,
+} from './store/supabase';
 import type { Surface } from './types/domain';
+import type { User } from '@supabase/supabase-js';
 
 const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'dashboard', label: 'Dashboard', icon: '\u{1F3E0}' },
@@ -28,6 +37,36 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
 
 function AppInner() {
   const app = useApp();
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // Check session on mount + listen for auth changes
+  useEffect(() => {
+    if (!isSupabaseReady()) { setAuthLoading(false); return; }
+
+    getSessionUser().then(user => {
+      setAuthUser(user);
+      setAuthLoading(false);
+    });
+
+    const unsub = onAuthStateChange(user => {
+      setAuthUser(user);
+    });
+    return unsub;
+  }, []);
+
+  const handleSignIn = async () => {
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      console.error('Sign in failed:', err);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setAuthUser(null);
+  };
 
   const renderSurface = () => {
     switch (app.surface) {
@@ -63,7 +102,23 @@ function AppInner() {
           ))}
         </div>
         <div className="sidebar-footer" role="contentinfo">
-          HELM v0.1.0 &middot; Local-first
+          {isSupabaseReady() && !authLoading ? (
+            authUser ? (
+              <div className="sidebar-auth">
+                <div className="sidebar-auth-user">
+                  <span className="sidebar-auth-avatar">{authUser.user_metadata?.full_name?.charAt(0) || authUser.email?.charAt(0) || '?'}</span>
+                  <span className="sidebar-auth-email" title={authUser.email || ''}>{authUser.email?.split('@')[0] || 'Signed in'}</span>
+                </div>
+                <button className="btn-icon btn-sm" onClick={handleSignOut} aria-label="Sign out" style={{ fontSize: 10, color: '#6b6f85' }}>Sign out</button>
+              </div>
+            ) : (
+              <button className="sidebar-auth-login" onClick={handleSignIn}>
+                <span style={{ fontSize: 14 }}>G</span> Sign in with Google
+              </button>
+            )
+          ) : (
+            <span>HELM v0.1.0 &middot; Local-first</span>
+          )}
         </div>
       </nav>
       <main className="main-content" aria-label={`${app.surface} surface`}>

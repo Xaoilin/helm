@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../store/AppContext';
-import { isSupabaseReady, syncNamespace } from '../store/supabase';
+import { isSupabaseReady, syncNamespace, isAuthenticated, getCurrentUserId } from '../store/supabase';
 import { DEFAULT_PROFILE } from '../services/gamification';
 import { getAllLocalTimestamps } from '../store/persistence';
 
@@ -212,7 +212,7 @@ export default function SettingsSurface() {
               Force Push Local
             </button>
             <span style={{ fontSize: 11, color: isSupabaseReady() ? '#3ab553' : '#6b6f85' }}>
-              {isSupabaseReady() ? 'Connected' : 'Not connected'}
+              {isSupabaseReady() ? (isAuthenticated() ? `Signed in (${getCurrentUserId()?.slice(0, 8)}...)` : 'Connected (anonymous)') : 'Not connected'}
             </span>
           </div>
           {sbSyncResult && (
@@ -260,19 +260,23 @@ export default function SettingsSurface() {
             </div>
           )}
           <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 8, lineHeight: 1.5 }}>
-            <strong>Setup:</strong> Create a free Supabase project at supabase.com. Then run this SQL in the SQL Editor:
+            <strong>Setup:</strong> Create a free Supabase project at supabase.com. Enable Google Auth in Authentication &rarr; Providers &rarr; Google. Then run this SQL:
             <pre style={{ background: '#0f1117', padding: 8, borderRadius: 4, fontSize: 11, marginTop: 4, overflow: 'auto' }}>
 {`CREATE TABLE kv_store (
+  user_id TEXT NOT NULL,
   namespace TEXT NOT NULL,
   key TEXT NOT NULL,
   value JSONB NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (namespace, key)
+  PRIMARY KEY (user_id, namespace, key)
 );
 ALTER TABLE kv_store ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all for anon"
-  ON kv_store FOR ALL USING (true);`}
+CREATE POLICY "User isolation" ON kv_store
+  FOR ALL USING (auth.uid()::text = user_id);`}
             </pre>
+            <div style={{ marginTop: 6 }}>
+              <strong>Sign in:</strong> Use the "Sign in with Google" button in the sidebar to authenticate. Your data is scoped to your Google account — sign in on any device to access it.
+            </div>
           </div>
         </div>
 
