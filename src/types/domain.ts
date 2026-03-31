@@ -168,6 +168,74 @@ export interface KnowledgeTopic {
   updatedAt: string;
 }
 
+// ── Finance ──
+export type TransactionType = 'income' | 'expense' | 'transfer';
+
+export type ExpenseCategory =
+  | 'rent-mortgage' | 'groceries' | 'transport' | 'bills-utilities'
+  | 'eating-out' | 'subscriptions' | 'entertainment' | 'clothing'
+  | 'health' | 'education' | 'gifts' | 'personal-care'
+  | 'home' | 'insurance' | 'charity' | 'other-expense';
+
+export type IncomeCategory =
+  | 'salary' | 'freelance' | 'dividends' | 'interest'
+  | 'refund' | 'gift-received' | 'other-income';
+
+export type TransactionCategory = ExpenseCategory | IncomeCategory | 'transfer';
+
+export type FinanceAccountType =
+  | 'current' | 'savings' | 'credit-card' | 'isa' | 'pension' | 'loan-mortgage';
+
+export interface FinanceAccount {
+  id: string;
+  name: string;
+  type: FinanceAccountType;
+  balance: number; // pence (integer)
+  currency: string;
+  color: string;
+  icon: string;
+  includeInNetWorth: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Transaction {
+  id: string;
+  type: TransactionType;
+  amount: number; // pence (always positive)
+  category: TransactionCategory;
+  accountId: string;
+  toAccountId?: string;
+  description: string;
+  date: string; // YYYY-MM-DD
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FinanceBudget {
+  id: string;
+  category: ExpenseCategory;
+  monthlyLimit: number; // pence
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  targetAmount: number; // pence
+  currentAmount: number; // pence
+  linkedAccountId?: string;
+  icon: string;
+  deadline?: string;
+  completed: boolean;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Gamification ──
 export interface GamificationProfile {
   totalXp: number;
@@ -210,6 +278,7 @@ export type Surface =
   | 'credentials'
   | 'workspaces'
   | 'tasks'
+  | 'finance'
   | 'knowledge'
   | 'profile'
   | 'integrations'

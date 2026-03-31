@@ -2325,3 +2325,74 @@ textarea.form-input {
   from { transform: translateY(10px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* ── Finance ── */
+.finance-quick-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #181b27;
+  border: 1px solid #242740;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+.finance-type-toggle { display: flex; gap: 2px; }
+.finance-type-toggle .btn { font-size: 11px; padding: 4px 10px; border-radius: 4px; background: #1e2030; border: 1px solid #2a2d42; color: #6b6f85; }
+.finance-type-toggle .btn.active.expense { background: #2d1515; border-color: #ff6b6b; color: #ff6b6b; }
+.finance-type-toggle .btn.active.income { background: #152d1a; border-color: #22c55e; color: #22c55e; }
+
+.finance-amount-wrap {
+  display: flex;
+  align-items: center;
+  background: #0f1117;
+  border: 1px solid #2a2d42;
+  border-radius: 6px;
+  padding: 0 8px;
+}
+.finance-pound { color: #6b6f85; font-size: 14px; font-weight: 600; }
+.finance-amount-input {
+  background: none;
+  border: none;
+  color: #e1e4ea;
+  font-size: 15px;
+  font-weight: 600;
+  width: 80px;
+  padding: 6px 4px;
+  outline: none;
+}
+.finance-amount-input::placeholder { color: #3a3d52; }
+
+.finance-tx-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #1e2030;
+}
+.finance-tx-row:last-child { border-bottom: none; }
+.finance-tx-icon { font-size: 18px; flex-shrink: 0; }
+.finance-tx-info { flex: 1; min-width: 0; }
+.finance-tx-desc { font-size: 13px; font-weight: 500; color: #e1e4ea; }
+.finance-tx-meta { font-size: 10px; color: #6b6f85; }
+.finance-tx-amount { font-size: 14px; font-weight: 600; min-width: 80px; text-align: right; }
+.finance-tx-amount.income { color: #22c55e; }
+.finance-tx-amount.expense { color: #ff6b6b; }
+.finance-tx-amount.transfer { color: #4f5bff; }
+
+.finance-net-worth {
+  font-size: 28px;
+  font-weight: 700;
+  color: #e1e4ea;
+  margin-bottom: 4px;
+}
+
+.finance-budget-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+.finance-budget-label { font-size: 12px; color: #e1e4ea; min-width: 120px; }
+.finance-budget-bar-wrap { flex: 1; }
+.finance-budget-values { font-size: 11px; color: #9499b0; min-width: 120px; text-align: right; white-space: nowrap; }

@@ -25,6 +25,7 @@ describe('App shell', () => {
     expect(screen.getByText('Chat')).toBeInTheDocument();
     expect(screen.getByText('Calendar')).toBeInTheDocument();
     expect(screen.getByText('Tasks')).toBeInTheDocument();
+    expect(screen.getByText('Finance')).toBeInTheDocument();
     expect(screen.getByText('Knowledge')).toBeInTheDocument();
     expect(screen.getByText('Profile')).toBeInTheDocument();
     expect(screen.getByText('Credentials')).toBeInTheDocument();

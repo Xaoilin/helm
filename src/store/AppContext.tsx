@@ -7,6 +7,7 @@ import type {
   Task, GamificationProfile,
   KnowledgeTopic, KnowledgeEntry,
   LifestyleItem,
+  FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
 } from '../types/domain';
 import { loadStore, saveStore } from './persistence';
 import { DEFAULT_PROFILE } from '../services/gamification';
@@ -43,6 +44,10 @@ interface AppState {
   knowledgeTopics: KnowledgeTopic[];
   knowledgeEntries: KnowledgeEntry[];
   lifestyleItems: LifestyleItem[];
+  financeAccounts: FinanceAccount[];
+  transactions: Transaction[];
+  financeBudgets: FinanceBudget[];
+  savingsGoals: SavingsGoal[];
   integrations: Integration[];
   gamification: GamificationProfile;
   settings: Settings;
@@ -107,6 +112,20 @@ interface AppContextAPI extends AppState {
   removeLifestyleItem: (id: string) => void;
   reorderLifestyleItems: (reorderedIds: string[]) => void;
 
+  // Finance
+  addFinanceAccount: (acc: Omit<FinanceAccount, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateFinanceAccount: (id: string, updates: Partial<FinanceAccount>) => void;
+  removeFinanceAccount: (id: string) => void;
+  addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateTransaction: (id: string, updates: Partial<Transaction>) => void;
+  removeTransaction: (id: string) => void;
+  addFinanceBudget: (budget: Omit<FinanceBudget, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateFinanceBudget: (id: string, updates: Partial<FinanceBudget>) => void;
+  removeFinanceBudget: (id: string) => void;
+  addSavingsGoal: (goal: Omit<SavingsGoal, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateSavingsGoal: (id: string, updates: Partial<SavingsGoal>) => void;
+  removeSavingsGoal: (id: string) => void;
+
   // Gamification
   updateGamification: (profile: GamificationProfile) => void;
 
@@ -140,6 +159,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     knowledgeTopics: [],
     knowledgeEntries: [],
     lifestyleItems: [],
+    financeAccounts: [],
+    transactions: [],
+    financeBudgets: [],
+    savingsGoals: [],
     integrations: defaultIntegrations,
     gamification: DEFAULT_PROFILE,
     settings: defaultSettings,
@@ -149,7 +172,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Load persisted state on mount
   useEffect(() => {
     (async () => {
-      const [conversations, calendarAccounts, calendarSources, calendarEvents, credentials, workspaces, tasks, knowledgeTopics, knowledgeEntries, lifestyleItems, integrations, gamification, settings] = await Promise.all([
+      const [conversations, calendarAccounts, calendarSources, calendarEvents, credentials, workspaces, tasks, knowledgeTopics, knowledgeEntries, lifestyleItems, financeAccounts, transactions, financeBudgets, savingsGoals, integrations, gamification, settings] = await Promise.all([
         loadStore<ChatConversation[]>('conversations'),
         loadStore<CalendarAccount[]>('calendarAccounts'),
         loadStore<CalendarSource[]>('calendarSources'),
@@ -160,6 +183,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadStore<KnowledgeTopic[]>('knowledgeTopics'),
         loadStore<KnowledgeEntry[]>('knowledgeEntries'),
         loadStore<LifestyleItem[]>('lifestyleItems'),
+        loadStore<FinanceAccount[]>('financeAccounts'),
+        loadStore<Transaction[]>('transactions'),
+        loadStore<FinanceBudget[]>('financeBudgets'),
+        loadStore<SavingsGoal[]>('savingsGoals'),
         loadStore<Integration[]>('integrations'),
         loadStore<GamificationProfile>('gamification'),
         loadStore<Settings>('settings'),
@@ -176,6 +203,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         knowledgeTopics: knowledgeTopics ?? [],
         knowledgeEntries: knowledgeEntries ?? [],
         lifestyleItems: lifestyleItems ?? [],
+        financeAccounts: financeAccounts ?? [],
+        transactions: transactions ?? [],
+        financeBudgets: financeBudgets ?? [],
+        savingsGoals: savingsGoals ?? [],
         integrations: integrations ?? defaultIntegrations,
         gamification: gamification ?? DEFAULT_PROFILE,
         settings: settings ?? defaultSettings,
@@ -198,6 +229,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (state.loaded) saveStore('knowledgeTopics', state.knowledgeTopics); }, [state.knowledgeTopics, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('knowledgeEntries', state.knowledgeEntries); }, [state.knowledgeEntries, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('lifestyleItems', state.lifestyleItems); }, [state.lifestyleItems, state.loaded]);
+  useEffect(() => { if (state.loaded) saveStore('financeAccounts', state.financeAccounts); }, [state.financeAccounts, state.loaded]);
+  useEffect(() => { if (state.loaded) saveStore('transactions', state.transactions); }, [state.transactions, state.loaded]);
+  useEffect(() => { if (state.loaded) saveStore('financeBudgets', state.financeBudgets); }, [state.financeBudgets, state.loaded]);
+  useEffect(() => { if (state.loaded) saveStore('savingsGoals', state.savingsGoals); }, [state.savingsGoals, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('gamification', state.gamification); }, [state.gamification, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('integrations', state.integrations); }, [state.integrations, state.loaded]);
   useEffect(() => { if (state.loaded) saveStore('settings', state.settings); }, [state.settings, state.loaded]);
@@ -537,6 +572,90 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  // ── Finance ──
+  const addFinanceAccount = useCallback((acc: Omit<FinanceAccount, 'id' | 'createdAt' | 'updatedAt'>): string => {
+    const id = uuid(); const now = new Date().toISOString();
+    setState(s => ({ ...s, financeAccounts: [...s.financeAccounts, { ...acc, id, createdAt: now, updatedAt: now }] }));
+    return id;
+  }, []);
+  const updateFinanceAccount = useCallback((id: string, updates: Partial<FinanceAccount>) => {
+    setState(s => ({ ...s, financeAccounts: s.financeAccounts.map(a => a.id === id ? { ...a, ...updates, updatedAt: new Date().toISOString() } : a) }));
+  }, []);
+  const removeFinanceAccount = useCallback((id: string) => {
+    setState(s => ({
+      ...s,
+      financeAccounts: s.financeAccounts.filter(a => a.id !== id),
+      transactions: s.transactions.filter(t => t.accountId !== id && t.toAccountId !== id),
+    }));
+  }, []);
+
+  const addTransaction = useCallback((tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>): string => {
+    const id = uuid(); const now = new Date().toISOString();
+    setState(s => {
+      const newTx = { ...tx, id, createdAt: now, updatedAt: now };
+      // Auto-update account balance
+      const accounts = s.financeAccounts.map(a => {
+        if (a.id === tx.accountId) {
+          const delta = tx.type === 'income' ? tx.amount : tx.type === 'expense' ? -tx.amount : -tx.amount;
+          return { ...a, balance: a.balance + delta, updatedAt: now };
+        }
+        if (tx.toAccountId && a.id === tx.toAccountId && tx.type === 'transfer') {
+          return { ...a, balance: a.balance + tx.amount, updatedAt: now };
+        }
+        return a;
+      });
+      return { ...s, transactions: [newTx, ...s.transactions], financeAccounts: accounts };
+    });
+    return id;
+  }, []);
+  const updateTransaction = useCallback((id: string, updates: Partial<Transaction>) => {
+    setState(s => ({ ...s, transactions: s.transactions.map(t => t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t) }));
+  }, []);
+  const removeTransaction = useCallback((id: string) => {
+    setState(s => {
+      const tx = s.transactions.find(t => t.id === id);
+      let accounts = s.financeAccounts;
+      if (tx) {
+        // Reverse the balance effect
+        accounts = accounts.map(a => {
+          if (a.id === tx.accountId) {
+            const delta = tx.type === 'income' ? -tx.amount : tx.type === 'expense' ? tx.amount : tx.amount;
+            return { ...a, balance: a.balance + delta, updatedAt: new Date().toISOString() };
+          }
+          if (tx.toAccountId && a.id === tx.toAccountId && tx.type === 'transfer') {
+            return { ...a, balance: a.balance - tx.amount, updatedAt: new Date().toISOString() };
+          }
+          return a;
+        });
+      }
+      return { ...s, transactions: s.transactions.filter(t => t.id !== id), financeAccounts: accounts };
+    });
+  }, []);
+
+  const addFinanceBudget = useCallback((budget: Omit<FinanceBudget, 'id' | 'createdAt' | 'updatedAt'>): string => {
+    const id = uuid(); const now = new Date().toISOString();
+    setState(s => ({ ...s, financeBudgets: [...s.financeBudgets, { ...budget, id, createdAt: now, updatedAt: now }] }));
+    return id;
+  }, []);
+  const updateFinanceBudget = useCallback((id: string, updates: Partial<FinanceBudget>) => {
+    setState(s => ({ ...s, financeBudgets: s.financeBudgets.map(b => b.id === id ? { ...b, ...updates, updatedAt: new Date().toISOString() } : b) }));
+  }, []);
+  const removeFinanceBudget = useCallback((id: string) => {
+    setState(s => ({ ...s, financeBudgets: s.financeBudgets.filter(b => b.id !== id) }));
+  }, []);
+
+  const addSavingsGoal = useCallback((goal: Omit<SavingsGoal, 'id' | 'createdAt' | 'updatedAt'>): string => {
+    const id = uuid(); const now = new Date().toISOString();
+    setState(s => ({ ...s, savingsGoals: [...s.savingsGoals, { ...goal, id, createdAt: now, updatedAt: now }] }));
+    return id;
+  }, []);
+  const updateSavingsGoal = useCallback((id: string, updates: Partial<SavingsGoal>) => {
+    setState(s => ({ ...s, savingsGoals: s.savingsGoals.map(g => g.id === id ? { ...g, ...updates, updatedAt: new Date().toISOString() } : g) }));
+  }, []);
+  const removeSavingsGoal = useCallback((id: string) => {
+    setState(s => ({ ...s, savingsGoals: s.savingsGoals.filter(g => g.id !== id) }));
+  }, []);
+
   // ── Gamification ──
   const updateGamification = useCallback((profile: GamificationProfile) => {
     setState(s => ({ ...s, gamification: profile }));
@@ -578,6 +697,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addKnowledgeTopic, updateKnowledgeTopic, removeKnowledgeTopic,
     addKnowledgeEntry, updateKnowledgeEntry, removeKnowledgeEntry,
     addLifestyleItem, updateLifestyleItem, removeLifestyleItem, reorderLifestyleItems,
+    addFinanceAccount, updateFinanceAccount, removeFinanceAccount,
+    addTransaction, updateTransaction, removeTransaction,
+    addFinanceBudget, updateFinanceBudget, removeFinanceBudget,
+    addSavingsGoal, updateSavingsGoal, removeSavingsGoal,
     updateGamification,
     updateIntegration,
     updateSettings,
