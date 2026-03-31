@@ -17,7 +17,7 @@ export interface GoogleSyncResult {
   syncState: SyncState;
   lastSyncTime: string | null;
   syncError: string | null;
-  triggerSync: () => Promise<void>;
+  triggerSync: (manual?: boolean) => Promise<void>;
   accountSyncStates: Record<string, { state: SyncState; lastSync: string | null; error: string | null }>;
 }
 
@@ -32,7 +32,7 @@ export function useGoogleSync(): GoogleSyncResult {
   const googleAccounts = app.calendarAccounts.filter(a => a.provider === 'google' && a.connected && !a.mocked);
   const clientId = GOOGLE_OAUTH_CLIENT_ID;
 
-  const syncAccount = useCallback(async (accountId: string) => {
+  const syncAccount = useCallback(async (accountId: string, allowRefresh = false) => {
     if (!clientId) return;
 
     setAccountSyncStates(prev => ({ ...prev, [accountId]: { state: 'syncing', lastSync: prev[accountId]?.lastSync || null, error: null } }));
@@ -45,15 +45,15 @@ export function useGoogleSync(): GoogleSyncResult {
         googleCalendars = await fetchCalendarList(accessToken);
       } catch (fetchErr) {
         if (fetchErr instanceof GoogleApiError && fetchErr.isAuthError) {
-          // Token expired — try silent refresh with timeout (no popup)
+          if (!allowRefresh) {
+            // Auto-sync: don't open popup, just fail silently
+            throw new Error('Token expired. Click Sync to reconnect.');
+          }
+          // Manual sync: try refresh (may open popup, which is OK since user clicked)
           try {
             const { loadGisScript, refreshAccessToken, saveGoogleTokens } = await import('../services/googleAuth');
             await loadGisScript();
-            // Race against a 3s timeout — if GIS would open a popup, it takes longer
-            const newTokens = await Promise.race([
-              refreshAccessToken(clientId),
-              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
-            ]);
+            const newTokens = await refreshAccessToken(clientId);
             saveGoogleTokens(accountId, newTokens);
             accessToken = newTokens.accessToken;
             googleCalendars = await fetchCalendarList(accessToken);
@@ -200,7 +200,8 @@ export function useGoogleSync(): GoogleSyncResult {
     }
   }, [clientId, app]);
 
-  const triggerSync = useCallback(async () => {
+  /** @param manual - true when user clicked Sync button (allows popup). false for auto-sync (no popup ever). */
+  const triggerSync = useCallback(async (manual = false) => {
     if (syncingRef.current || googleAccounts.length === 0 || !clientId) return;
     syncingRef.current = true;
     setSyncState('syncing');
@@ -212,7 +213,7 @@ export function useGoogleSync(): GoogleSyncResult {
 
     let hasError = false;
     for (const acc of googleAccounts) {
-      await syncAccount(acc.id);
+      await syncAccount(acc.id, manual);
       const accState = accountSyncStates[acc.id];
       if (accState?.state === 'error') hasError = true;
     }

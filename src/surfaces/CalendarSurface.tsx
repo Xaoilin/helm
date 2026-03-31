@@ -330,7 +330,7 @@ export default function CalendarSurface() {
         </div>
         <div className="actions-row">
           {hasGoogleAccounts && (
-            <button className="btn btn-secondary btn-sm" onClick={triggerSync} disabled={syncState === 'syncing'} title="Sync all Google accounts">
+            <button className="btn btn-secondary btn-sm" onClick={() => triggerSync(true)} disabled={syncState === 'syncing'} title="Sync all Google accounts">
               {syncState === 'syncing' ? <><span className="spinner" /> Syncing</> : '\u{21BB} Sync'}
             </button>
           )}
@@ -499,7 +499,7 @@ export default function CalendarSurface() {
                 <h3>No upcoming events</h3>
                 <p>Your agenda will show upcoming events from visible calendars.{hasGoogleAccounts ? ' Try syncing to pull latest.' : ''}</p>
                 {hasGoogleAccounts && (
-                  <button className="btn btn-secondary" onClick={triggerSync} disabled={syncState === 'syncing'}>
+                  <button className="btn btn-secondary" onClick={() => triggerSync(true)} disabled={syncState === 'syncing'}>
                     {syncState === 'syncing' ? 'Syncing...' : 'Sync Now'}
                   </button>
                 )}
