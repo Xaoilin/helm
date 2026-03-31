@@ -52,6 +52,9 @@ src-tauri/
 2. `./node_modules/.bin/vitest run` -- all tests must pass
 3. If UI changed, verify via Chrome MCP screenshot -- actually look at the result
 4. If claiming a fix, show proof (screenshot, data dump, or test output)
+5. `git add -A && git commit` -- commit all changes with a descriptive message
+6. `git push` -- push to GitHub (auto-deploys to https://xaoilin.github.io/helm/ via GitHub Actions)
+7. **Every code change must be committed, pushed, and deployed.** Never leave uncommitted work.
 
 ### When fixing bugs:
 1. **Reproduce first** -- read localStorage or DOM to understand the actual data state
