@@ -123,6 +123,8 @@ export default function FinanceSurface() {
   };
 
   // ── Monzo sync ──
+  const MONZO_COLORS = ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6'];
+  let monzoAccountIndex = 0;
   const handleMonzoSync = async () => {
     if (!MONZO_ACCESS_TOKEN) { setMonzoStatus('No Monzo token configured. Add VITE_MONZO_ACCESS_TOKEN to .env'); return; }
     setMonzoSyncing(true); setMonzoStatus(null);
@@ -135,14 +137,19 @@ export default function FinanceSurface() {
 
       let totalImported = 0;
       for (const mAcc of monzoAccounts) {
-        // Find or create HELM account for this Monzo account
-        let helmAcc = app.financeAccounts.find(a => a.name.toLowerCase().includes('monzo'));
+        // Find HELM account by Monzo account ID tag, or create one
+        const monzoTag = `monzo:${mAcc.id}`;
+        let helmAcc = app.financeAccounts.find(a =>
+          app.transactions.some(t => t.accountId === a.id && t.tags?.includes(monzoTag))
+        ) || app.financeAccounts.find(a => a.name === `Monzo ${mAcc.description || 'Account'}`);
         let helmAccId: string;
         if (!helmAcc) {
           helmAccId = app.addFinanceAccount({
-            name: `Monzo ${mAcc.description || 'Current'}`,
-            type: 'current', balance: 0, currency: 'GBP',
-            color: '#e74c3c', icon: '\u{1F3E6}',
+            name: `Monzo ${mAcc.description || 'Account'}`,
+            type: mAcc.type?.includes('savings') ? 'savings' : 'current',
+            balance: 0, currency: 'GBP',
+            color: MONZO_COLORS[monzoAccountIndex++ % MONZO_COLORS.length],
+            icon: '\u{1F3E6}',
             includeInNetWorth: true, sortOrder: app.financeAccounts.length,
           });
         } else {

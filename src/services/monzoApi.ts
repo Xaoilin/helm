@@ -88,10 +88,14 @@ export async function verifyToken(token: string): Promise<boolean> {
   }
 }
 
-/** List Monzo accounts. */
+/** List all Monzo accounts (current, joint, savings, etc). */
 export async function fetchMonzoAccounts(token: string): Promise<MonzoAccount[]> {
-  const data = await monzoFetch<{ accounts: MonzoAccount[] }>('/accounts?account_type=uk_retail', token);
-  return data.accounts || [];
+  // Fetch both retail and joint accounts
+  const [retail, joint] = await Promise.all([
+    monzoFetch<{ accounts: MonzoAccount[] }>('/accounts?account_type=uk_retail', token).catch(() => ({ accounts: [] })),
+    monzoFetch<{ accounts: MonzoAccount[] }>('/accounts?account_type=uk_retail_joint', token).catch(() => ({ accounts: [] })),
+  ]);
+  return [...(retail.accounts || []), ...(joint.accounts || [])];
 }
 
 /** Fetch transactions for an account (last 90 days by default). */
