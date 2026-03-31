@@ -136,6 +136,8 @@ export default function FinanceSurface() {
       if (monzoAccounts.length === 0) { setMonzoStatus('No Monzo accounts found.'); setMonzoSyncing(false); return; }
 
       let totalImported = 0;
+      let accountsSynced = 0;
+      const accountsSkipped: string[] = [];
       for (const mAcc of monzoAccounts) {
         // Find HELM account by Monzo account ID tag, or create one
         const monzoTag = `monzo:${mAcc.id}`;
@@ -156,18 +158,32 @@ export default function FinanceSurface() {
           helmAccId = helmAcc.id;
         }
 
-        // Fetch and import transactions
-        const monzoTxs = await fetchMonzoTransactions(MONZO_ACCESS_TOKEN, mAcc.id);
-        for (const mTx of monzoTxs) {
-          if (!isAlreadyImported(mTx.id, app.transactions)) {
-            const mapped = mapMonzoTransaction(mTx, helmAccId);
-            app.addTransaction(mapped);
-            totalImported++;
+        // Fetch and import transactions — handle 403 (SCA required) per account
+        try {
+          const monzoTxs = await fetchMonzoTransactions(MONZO_ACCESS_TOKEN, mAcc.id);
+          for (const mTx of monzoTxs) {
+            if (!isAlreadyImported(mTx.id, app.transactions)) {
+              const mapped = mapMonzoTransaction(mTx, helmAccId);
+              app.addTransaction(mapped);
+              totalImported++;
+            }
+          }
+          accountsSynced++;
+        } catch (accErr) {
+          const msg = accErr instanceof Error ? accErr.message : '';
+          if (msg.includes('403')) {
+            accountsSkipped.push(mAcc.description || mAcc.id);
+          } else {
+            accountsSkipped.push(`${mAcc.description || mAcc.id} (${msg.slice(0, 50)})`);
           }
         }
       }
 
-      setMonzoStatus(`Synced! ${totalImported} new transaction${totalImported !== 1 ? 's' : ''} imported from ${monzoAccounts.length} account${monzoAccounts.length !== 1 ? 's' : ''}.`);
+      let statusMsg = `Synced ${accountsSynced} account${accountsSynced !== 1 ? 's' : ''}, ${totalImported} new transaction${totalImported !== 1 ? 's' : ''}.`;
+      if (accountsSkipped.length > 0) {
+        statusMsg += ` Skipped ${accountsSkipped.length} (need approval in Monzo app): ${accountsSkipped.join(', ')}`;
+      }
+      setMonzoStatus(statusMsg);
     } catch (err) {
       setMonzoStatus(`Sync failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {

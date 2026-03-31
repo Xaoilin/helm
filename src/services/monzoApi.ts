@@ -88,14 +88,16 @@ export async function verifyToken(token: string): Promise<boolean> {
   }
 }
 
-/** List all Monzo accounts (current, joint, savings, etc). */
+/** List all Monzo accounts (all types, excludes closed). */
 export async function fetchMonzoAccounts(token: string): Promise<MonzoAccount[]> {
-  // Fetch both retail and joint accounts
-  const [retail, joint] = await Promise.all([
-    monzoFetch<{ accounts: MonzoAccount[] }>('/accounts?account_type=uk_retail', token).catch(() => ({ accounts: [] })),
-    monzoFetch<{ accounts: MonzoAccount[] }>('/accounts?account_type=uk_retail_joint', token).catch(() => ({ accounts: [] })),
-  ]);
-  return [...(retail.accounts || []), ...(joint.accounts || [])];
+  // Fetch all account types
+  const types = ['uk_retail', 'uk_retail_joint', 'uk_business', 'uk_monzo_flex'];
+  const results = await Promise.all(
+    types.map(t => monzoFetch<{ accounts: MonzoAccount[] }>(`/accounts?account_type=${t}`, token).catch(() => ({ accounts: [] })))
+  );
+  const all = results.flatMap(r => r.accounts || []);
+  // Filter out closed accounts
+  return all.filter(a => !(a as any).closed);
 }
 
 /** Fetch transactions for an account (last 90 days by default). */
