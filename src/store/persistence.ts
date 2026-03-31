@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { isSupabaseReady, queueRemoteWrite, loadRemote } from './supabase';
+import { isSupabaseReady, isAuthenticated, queueRemoteWrite, loadRemote } from './supabase';
 
 const NAMESPACE = 'helm';
 
@@ -16,7 +16,7 @@ async function isTauri(): Promise<boolean> {
   return tauriAvailable;
 }
 
-// Track local write timestamps for sync conflict resolution
+// Track local write timestamps (kept for sync preview backward compat)
 const localTimestamps = new Map<string, string>();
 
 export function getLocalTimestamp(key: string): string {
@@ -36,7 +36,37 @@ export function getAllLocalTimestamps(): Map<string, { value: unknown; updatedAt
   return result;
 }
 
+/**
+ * Load data. When authenticated with Supabase, the database is the
+ * source of truth. localStorage is just a fast cache.
+ *
+ * Priority:
+ *   Authenticated: Supabase (primary) → localStorage (cache fallback)
+ *   Not authenticated: Tauri → localStorage → Supabase (if empty)
+ */
 export async function loadStore<T>(key: string): Promise<T | null> {
+  // When signed in, Supabase is the source of truth
+  if (isSupabaseReady() && isAuthenticated()) {
+    try {
+      const remote = await loadRemote<T>(NAMESPACE, key);
+      if (remote) {
+        // Cache in localStorage for speed on next load
+        localStorage.setItem(`helm:${key}`, JSON.stringify(remote.value));
+        localTimestamps.set(key, remote.updatedAt);
+        return remote.value;
+      }
+    } catch { /* fall through to local cache */ }
+
+    // If Supabase fetch failed, use localStorage as fallback cache
+    const raw = localStorage.getItem(`helm:${key}`);
+    if (raw) {
+      try { return JSON.parse(raw) as T; } catch { /* fall through */ }
+    }
+    return null;
+  }
+
+  // Not authenticated — local-first mode
+
   // 1. Try Tauri file store
   try {
     if (await isTauri()) {
@@ -52,22 +82,13 @@ export async function loadStore<T>(key: string): Promise<T | null> {
     try { return JSON.parse(raw) as T; } catch { /* fall through */ }
   }
 
-  // 3. Try Supabase ONLY if local is completely empty (safe — never overwrites existing data)
-  if (isSupabaseReady()) {
-    try {
-      const remote = await loadRemote<T>(NAMESPACE, key);
-      if (remote) {
-        // Hydrate localStorage from remote
-        localStorage.setItem(`helm:${key}`, JSON.stringify(remote.value));
-        localTimestamps.set(key, remote.updatedAt);
-        return remote.value;
-      }
-    } catch { /* fall through */ }
-  }
-
   return null;
 }
 
+/**
+ * Save data. Always writes to localStorage (fast cache).
+ * When authenticated, also writes to Supabase (source of truth).
+ */
 export async function saveStore<T>(key: string, value: T): Promise<void> {
   const json = JSON.stringify(value);
   const now = new Date().toISOString();
@@ -80,11 +101,11 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
     }
   } catch { /* fall through */ }
 
-  // 2. Always write to localStorage (fast, synchronous)
+  // 2. Always write to localStorage (fast cache)
   localStorage.setItem(`helm:${key}`, json);
 
-  // 3. Queue Supabase write (debounced, background)
-  if (isSupabaseReady()) {
+  // 3. Write to Supabase (debounced, background) — this is the real save
+  if (isSupabaseReady() && isAuthenticated()) {
     queueRemoteWrite(NAMESPACE, key, value);
   }
 }

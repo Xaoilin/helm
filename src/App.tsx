@@ -50,6 +50,10 @@ function AppInner() {
     });
 
     const unsub = onAuthStateChange(user => {
+      if ((user && !authUser) || (!user && authUser)) {
+        // Auth state changed (sign in or sign out) — reload to fetch correct data
+        window.location.reload();
+      }
       setAuthUser(user);
     });
     return unsub;
