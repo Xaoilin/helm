@@ -20,7 +20,7 @@ const HALAL_STATUSES: { value: LifestyleStatus; label: string; color: string; em
 
 const AVOID_STATUSES = HARAM_STATUSES; // major/minor sins use same statuses as haram
 
-const PRACTICE_TYPES: LifestyleType[] = ['halal', 'wajib-women', 'wajib-men'];
+const PRACTICE_TYPES: LifestyleType[] = ['halal', 'wajib-both', 'wajib-women', 'wajib-men'];
 
 function getStatusInfo(type: LifestyleType, status: LifestyleStatus) {
   const list = PRACTICE_TYPES.includes(type) ? HALAL_STATUSES : AVOID_STATUSES;
@@ -37,6 +37,7 @@ interface ColumnConfig {
 const LIFESTYLE_COLUMNS: ColumnConfig[] = [
   { type: 'haram', title: 'Most Haram', emoji: '\u{1F6D1}', color: '#ff6b6b' },
   { type: 'major-sin', title: 'Major Sins', emoji: '\u{26A0}\uFE0F', color: '#f59e0b' },
+  { type: 'wajib-both', title: 'Wajib (Both)', emoji: '\u{1F54C}', color: '#14b8a6' },
   { type: 'wajib-women', title: 'Wajib (Women)', emoji: '\u{1F9D5}', color: '#ec4899' },
   { type: 'wajib-men', title: 'Wajib (Men)', emoji: '\u{1F9D4}', color: '#3b82f6' },
   { type: 'halal', title: 'Halal Practices', emoji: '\u2705', color: '#22c55e' },
@@ -188,7 +189,7 @@ export default function KnowledgeSurface() {
 
   // Lifestyle derived
   const itemsByType = useMemo(() => {
-    const map: Record<LifestyleType, typeof app.lifestyleItems> = { haram: [], 'major-sin': [], 'wajib-women': [], 'wajib-men': [], halal: [] };
+    const map: Record<LifestyleType, typeof app.lifestyleItems> = { haram: [], 'major-sin': [], 'wajib-both': [], 'wajib-women': [], 'wajib-men': [], halal: [] };
     for (const item of app.lifestyleItems) {
       (map[item.type] || map.haram).push(item);
     }
@@ -672,7 +673,7 @@ export default function KnowledgeSurface() {
         {/* ══ Lifestyle Tab ══ */}
         {tab === 'lifestyle' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
               {LIFESTYLE_COLUMNS.map(col => {
                 const items = itemsByType[col.type];
                 const isPractice = PRACTICE_TYPES.includes(col.type);
