@@ -43,18 +43,23 @@ function AppInner() {
   // Check session on mount + listen for auth changes
   useEffect(() => {
     if (!isSupabaseReady()) { setAuthLoading(false); return; }
+    let initialLoad = true;
 
     getSessionUser().then(user => {
       setAuthUser(user);
       setAuthLoading(false);
+      // Mark initial load complete after a tick
+      setTimeout(() => { initialLoad = false; }, 500);
     });
 
     const unsub = onAuthStateChange(user => {
-      if ((user && !authUser) || (!user && authUser)) {
-        // Auth state changed (sign in or sign out) — reload to fetch correct data
-        window.location.reload();
+      if (initialLoad) {
+        // Skip the initial auth event (session restore on page load)
+        setAuthUser(user);
+        return;
       }
-      setAuthUser(user);
+      // Real auth transition (user clicked sign in/out) — reload to fetch correct data
+      window.location.reload();
     });
     return unsub;
   }, []);
