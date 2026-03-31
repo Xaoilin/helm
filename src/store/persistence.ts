@@ -52,7 +52,7 @@ export async function loadStore<T>(key: string): Promise<T | null> {
     try { return JSON.parse(raw) as T; } catch { /* fall through */ }
   }
 
-  // 3. Try Supabase (if local is empty but remote has data)
+  // 3. Try Supabase ONLY if local is completely empty (safe — never overwrites existing data)
   if (isSupabaseReady()) {
     try {
       const remote = await loadRemote<T>(NAMESPACE, key);

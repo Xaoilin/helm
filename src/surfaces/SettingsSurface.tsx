@@ -13,6 +13,11 @@ export default function SettingsSurface() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [testAdhan, setTestAdhan] = useState<string | null>(null);
 
+  // Sync preview
+  interface SyncConflict { key: string; localCount: number; remoteCount: number; localUpdated: string; remoteUpdated: string; }
+  const [syncPreview, setSyncPreview] = useState<SyncConflict[] | null>(null);
+  const [syncDirection, setSyncDirection] = useState<Record<string, 'local' | 'remote'>>({});
+
   // Goal tags
   const [newTag, setNewTag] = useState('');
 
@@ -38,25 +43,120 @@ export default function SettingsSurface() {
     setTimeout(() => setSbSaved(false), 2000);
   };
 
-  const triggerSync = async () => {
+  // Step 1: Preview what would change
+  const previewSync = async () => {
     if (!isSupabaseReady()) {
       setSbSyncResult('Not connected. Save your Supabase credentials first.');
       return;
     }
     setSbSyncing(true);
     setSbSyncResult(null);
+    setSyncPreview(null);
     try {
+      const { loadAllRemote } = await import('../store/supabase');
+      const remoteRows = await loadAllRemote('helm');
       const localData = getAllLocalTimestamps();
-      const result = await syncNamespace('helm', localData, (key, value) => {
-        localStorage.setItem(`helm:${key}`, JSON.stringify(value));
-      });
-      setSbSyncResult(`Synced: ${result.pulled} pulled, ${result.pushed} pushed${result.errors.length > 0 ? `, ${result.errors.length} errors` : ''}`);
-      if (result.pulled > 0) {
-        // Reload to pick up remote changes
-        window.location.reload();
+      const conflicts: SyncConflict[] = [];
+      const directions: Record<string, 'local' | 'remote'> = {};
+
+      // Check each key for differences
+      const allKeys = new Set([...localData.keys(), ...remoteRows.map(r => r.key)]);
+      for (const key of allKeys) {
+        const local = localData.get(key);
+        const remote = remoteRows.find(r => r.key === key);
+        const localVal = local ? JSON.stringify(local.value) : null;
+        const remoteVal = remote ? JSON.stringify(remote.value) : null;
+
+        if (localVal === remoteVal) continue; // identical, skip
+
+        const localCount = local ? (Array.isArray(local.value) ? local.value.length : 1) : 0;
+        const remoteCount = remote ? (Array.isArray(remote.value) ? (remote.value as unknown[]).length : 1) : 0;
+
+        conflicts.push({
+          key,
+          localCount,
+          remoteCount,
+          localUpdated: local?.updatedAt || 'n/a',
+          remoteUpdated: remote?.updated_at || 'n/a',
+        });
+        // Default: keep local (your current data is truth)
+        directions[key] = 'local';
+      }
+
+      if (conflicts.length === 0) {
+        // No conflicts — just push local to remote
+        const localDataMap = getAllLocalTimestamps();
+        await syncNamespace('helm', localDataMap, () => {});
+        setSbSyncResult('All in sync! Local data pushed to Supabase. No conflicts.');
+      } else {
+        setSyncPreview(conflicts);
+        setSyncDirection(directions);
+        setSbSyncResult(`${conflicts.length} difference${conflicts.length !== 1 ? 's' : ''} found. Choose what to keep for each.`);
+      }
+    } catch (err) {
+      setSbSyncResult(`Preview failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSbSyncing(false);
+    }
+  };
+
+  // Step 2: Apply chosen directions
+  const applySync = async () => {
+    if (!syncPreview) return;
+    setSbSyncing(true);
+    try {
+      const { loadAllRemote, saveRemote } = await import('../store/supabase');
+      const remoteRows = await loadAllRemote('helm');
+      let pulled = 0;
+      let pushed = 0;
+
+      for (const conflict of syncPreview) {
+        const direction = syncDirection[conflict.key] || 'local';
+        if (direction === 'remote') {
+          // Overwrite local with remote
+          const remote = remoteRows.find(r => r.key === conflict.key);
+          if (remote) {
+            localStorage.setItem(`helm:${conflict.key}`, JSON.stringify(remote.value));
+            pulled++;
+          }
+        } else {
+          // Push local to remote
+          const raw = localStorage.getItem(`helm:${conflict.key}`);
+          if (raw) {
+            await saveRemote('helm', conflict.key, JSON.parse(raw));
+            pushed++;
+          }
+        }
+      }
+
+      setSyncPreview(null);
+      setSbSyncResult(`Done! Kept local for ${pushed} key${pushed !== 1 ? 's' : ''}, pulled remote for ${pulled} key${pulled !== 1 ? 's' : ''}.`);
+      if (pulled > 0) {
+        setTimeout(() => window.location.reload(), 1500);
       }
     } catch (err) {
       setSbSyncResult(`Sync failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSbSyncing(false);
+    }
+  };
+
+  // Quick action: force push all local to remote (no questions)
+  const forcePushLocal = async () => {
+    if (!isSupabaseReady()) return;
+    setSbSyncing(true);
+    setSbSyncResult(null);
+    try {
+      const localData = getAllLocalTimestamps();
+      const { saveRemote } = await import('../store/supabase');
+      let pushed = 0;
+      for (const [key, { value }] of localData) {
+        await saveRemote('helm', key, value);
+        pushed++;
+      }
+      setSbSyncResult(`Pushed ${pushed} key${pushed !== 1 ? 's' : ''} to Supabase. Remote now matches local.`);
+    } catch (err) {
+      setSbSyncResult(`Push failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setSbSyncing(false);
     }
@@ -105,8 +205,11 @@ export default function SettingsSurface() {
             <button className="btn btn-primary btn-sm" onClick={saveSupabase} style={{ whiteSpace: 'nowrap' }}>
               {sbSaved ? 'Saved' : 'Save'}
             </button>
-            <button className="btn btn-secondary btn-sm" onClick={triggerSync} disabled={sbSyncing || !isSupabaseReady()}>
-              {sbSyncing ? 'Syncing...' : 'Sync Now'}
+            <button className="btn btn-secondary btn-sm" onClick={previewSync} disabled={sbSyncing || !isSupabaseReady()}>
+              {sbSyncing ? 'Checking...' : 'Sync Preview'}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={forcePushLocal} disabled={sbSyncing || !isSupabaseReady()} title="Push all local data to Supabase without pulling anything">
+              Force Push Local
             </button>
             <span style={{ fontSize: 11, color: isSupabaseReady() ? '#3ab553' : '#6b6f85' }}>
               {isSupabaseReady() ? 'Connected' : 'Not connected'}
@@ -115,6 +218,45 @@ export default function SettingsSurface() {
           {sbSyncResult && (
             <div className="info-box" style={{ marginTop: 8 }}>
               {sbSyncResult}
+            </div>
+          )}
+          {/* Sync conflict preview */}
+          {syncPreview && syncPreview.length > 0 && (
+            <div style={{ marginTop: 12, background: '#13151c', border: '1px solid #242740', borderRadius: 8, padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#e1e4ea', marginBottom: 8 }}>Choose what to keep for each data collection:</div>
+              <div style={{ fontSize: 11, color: '#f0c040', marginBottom: 12 }}>
+                Default: Keep Local (your current data). Switch to "Remote" only if you want to overwrite with Supabase data.
+              </div>
+              {syncPreview.map(c => (
+                <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid #1e2030' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#e1e4ea' }}>{c.key}</div>
+                    <div style={{ fontSize: 10, color: '#6b6f85' }}>
+                      Local: {c.localCount} item{c.localCount !== 1 ? 's' : ''} &middot; Remote: {c.remoteCount} item{c.remoteCount !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      className={`btn btn-sm ${syncDirection[c.key] === 'local' ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setSyncDirection(prev => ({ ...prev, [c.key]: 'local' }))}
+                      style={{ fontSize: 10, padding: '2px 8px' }}
+                    >
+                      Keep Local ({c.localCount})
+                    </button>
+                    <button
+                      className={`btn btn-sm ${syncDirection[c.key] === 'remote' ? 'btn-danger' : 'btn-secondary'}`}
+                      onClick={() => setSyncDirection(prev => ({ ...prev, [c.key]: 'remote' }))}
+                      style={{ fontSize: 10, padding: '2px 8px' }}
+                    >
+                      Use Remote ({c.remoteCount})
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <div className="actions-row" style={{ marginTop: 12, gap: 8 }}>
+                <button className="btn btn-primary btn-sm" onClick={applySync} disabled={sbSyncing}>Apply Choices</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setSyncPreview(null)}>Cancel</button>
+              </div>
             </div>
           )}
           <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 8, lineHeight: 1.5 }}>
