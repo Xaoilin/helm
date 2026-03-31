@@ -3,6 +3,7 @@ import { useApp } from '../store/AppContext';
 import type { IntegrationStatus } from '../types/domain';
 import { loadGisScript, initiateOAuthFlow, saveGoogleTokens, revokeAccess, loadGoogleTokens, clearGoogleTokens } from '../services/googleAuth';
 import { fetchCalendarList } from '../services/googleCalendarApi';
+import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
 
 const PROVIDER_INFO: Record<string, { setupHint: string; mockable: boolean }> = {
   google: { setupHint: 'Requires a Google Cloud OAuth Client ID. Set it in Settings first.', mockable: false },
@@ -22,7 +23,7 @@ export default function IntegrationsSurface() {
 
   const getInfo = (provider: string) => PROVIDER_INFO[provider] || { setupHint: 'No setup instructions available.', mockable: false };
   const googleAccounts = app.calendarAccounts.filter(a => a.provider === 'google' && a.connected && !a.mocked);
-  const clientId = app.settings.googleOAuthClientId;
+  const clientId = GOOGLE_OAUTH_CLIENT_ID;
 
   const handleGoogleConnect = async () => {
     if (!clientId?.trim()) {

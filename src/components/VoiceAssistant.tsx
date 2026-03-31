@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { parseIntent, speakWithElevenLabs, speakWithBrowserTTS } from '../services/voiceAssistant';
+import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID } from '../config';
 import type { PrayerTimesData } from '../services/prayerTimes';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -22,7 +23,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const enabled = app.settings.assistantEnabled !== false;
-  const hasElevenLabs = !!(app.settings.elevenLabsApiKey && app.settings.elevenLabsVoiceId);
+  const hasElevenLabs = !!(ELEVENLABS_API_KEY && ELEVENLABS_VOICE_ID);
 
   // Check browser support
   const speechSupported = typeof window !== 'undefined' && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
@@ -34,7 +35,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
     if (hasElevenLabs) {
       try {
-        const audio = await speakWithElevenLabs(text, app.settings.elevenLabsApiKey!, app.settings.elevenLabsVoiceId!);
+        const audio = await speakWithElevenLabs(text, ELEVENLABS_API_KEY!, ELEVENLABS_VOICE_ID!);
         audioRef.current = audio;
         audio.onended = () => { setState('idle'); setTimeout(() => setShowBubble(false), 3000); };
         audio.onerror = () => { speakWithBrowserTTS(text); setState('idle'); setTimeout(() => setShowBubble(false), 3000); };
@@ -49,7 +50,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
       setState('idle');
       setTimeout(() => setShowBubble(false), 4000);
     }
-  }, [hasElevenLabs, app.settings.elevenLabsApiKey, app.settings.elevenLabsVoiceId]);
+  }, [hasElevenLabs]);
 
   const processTranscript = useCallback((text: string) => {
     setState('processing');

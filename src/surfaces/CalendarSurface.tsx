@@ -9,6 +9,7 @@ import {
   localEventToGooglePayload,
 } from '../services/googleCalendarApi';
 import type { CalendarAccount, CalendarEvent } from '../types/domain';
+import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -210,7 +211,7 @@ export default function CalendarSurface() {
     const isGoogle = isGoogleSource(evtSourceId);
     const googleCalId = getGoogleCalendarId(evtSourceId);
     const account = getAccountForSource(evtSourceId);
-    const cId = app.settings.googleOAuthClientId;
+    const cId = GOOGLE_OAUTH_CLIENT_ID;
 
     if (isGoogle && googleCalId && account && cId) {
       setSavingToGoogle(true);
@@ -250,7 +251,7 @@ export default function CalendarSurface() {
     const isGoogle = isGoogleSource(editingEvent.sourceId);
     const googleCalId = getGoogleCalendarId(editingEvent.sourceId);
     const account = getAccountForSource(editingEvent.sourceId);
-    const cId = app.settings.googleOAuthClientId;
+    const cId = GOOGLE_OAUTH_CLIENT_ID;
 
     if (isGoogle && googleCalId && editingEvent.googleEventId && account && cId) {
       try {

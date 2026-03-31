@@ -3,6 +3,7 @@ import { useApp } from '../store/AppContext';
 import {
   getValidAccessToken,
 } from '../services/googleAuth';
+import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
 import {
   fetchCalendarList,
   fetchEvents,
@@ -29,7 +30,7 @@ export function useGoogleSync(): GoogleSyncResult {
   const syncingRef = useRef(false);
 
   const googleAccounts = app.calendarAccounts.filter(a => a.provider === 'google' && a.connected && !a.mocked);
-  const clientId = app.settings.googleOAuthClientId;
+  const clientId = GOOGLE_OAUTH_CLIENT_ID;
 
   const syncAccount = useCallback(async (accountId: string) => {
     if (!clientId) return;

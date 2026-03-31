@@ -121,7 +121,7 @@ describe('SettingsSurface', () => {
 
   it('should render all settings sections', async () => {
     await act(async () => { renderWithProvider(<SettingsSurface />); });
-    expect(screen.getByText('Google Calendar')).toBeInTheDocument();
+    expect(screen.getByText('Calendar')).toBeInTheDocument();
     expect(screen.getByText('Credential Source')).toBeInTheDocument();
     expect(screen.getByText('Privacy')).toBeInTheDocument();
     expect(screen.getByText('Appearance')).toBeInTheDocument();

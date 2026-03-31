@@ -1,15 +1,13 @@
 import { useState } from 'react';
 import { useApp } from '../store/AppContext';
 import { isSupabaseReady, syncNamespace, isAuthenticated, getCurrentUserId } from '../store/supabase';
+import { ELEVENLABS_API_KEY } from '../config';
 import { DEFAULT_PROFILE } from '../services/gamification';
 import { getAllLocalTimestamps } from '../store/persistence';
 
 export default function SettingsSurface() {
   const app = useApp();
   const { settings } = app;
-  const [clientIdInput, setClientIdInput] = useState(settings.googleOAuthClientId || '');
-  const [clientIdSaved, setClientIdSaved] = useState(false);
-
   const [confirmReset, setConfirmReset] = useState(false);
   const [testAdhan, setTestAdhan] = useState<string | null>(null);
 
@@ -21,27 +19,9 @@ export default function SettingsSurface() {
   // Goal tags
   const [newTag, setNewTag] = useState('');
 
-  // Supabase settings
-  const [sbUrl, setSbUrl] = useState(settings.supabaseUrl || '');
-  const [sbKey, setSbKey] = useState(settings.supabaseAnonKey || '');
-  const [sbSaved, setSbSaved] = useState(false);
+  // Sync state
   const [sbSyncing, setSbSyncing] = useState(false);
   const [sbSyncResult, setSbSyncResult] = useState<string | null>(null);
-
-  const saveClientId = () => {
-    app.updateSettings({ googleOAuthClientId: clientIdInput.trim() || undefined });
-    setClientIdSaved(true);
-    setTimeout(() => setClientIdSaved(false), 2000);
-  };
-
-  const saveSupabase = () => {
-    app.updateSettings({
-      supabaseUrl: sbUrl.trim() || undefined,
-      supabaseAnonKey: sbKey.trim() || undefined,
-    });
-    setSbSaved(true);
-    setTimeout(() => setSbSaved(false), 2000);
-  };
 
   // Step 1: Preview what would change
   const previewSync = async () => {
@@ -172,39 +152,12 @@ export default function SettingsSurface() {
       </div>
       <div className="surface-body">
         {/* Online Persistence (Supabase) */}
-        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Online Persistence</h3>
+        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Data Sync</h3>
         <div className="card">
           <div className="info-box">
-            Connect to Supabase to back up and sync your data online. Data is always saved locally first — Supabase syncs in the background.
-            This is a reusable service: all your projects can share the same Supabase database using different namespaces.
-          </div>
-          <div className="form-group">
-            <label htmlFor="settings-sb-url">Supabase Project URL</label>
-            <input
-              id="settings-sb-url"
-              className="form-input"
-              style={{ fontFamily: 'monospace', fontSize: 12 }}
-              value={sbUrl}
-              onChange={e => { setSbUrl(e.target.value); setSbSaved(false); }}
-              placeholder="https://xxxxx.supabase.co"
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="settings-sb-key">Supabase Anon Key</label>
-            <input
-              id="settings-sb-key"
-              className="form-input"
-              style={{ fontFamily: 'monospace', fontSize: 12 }}
-              type="password"
-              value={sbKey}
-              onChange={e => { setSbKey(e.target.value); setSbSaved(false); }}
-              placeholder="eyJhbGciOiJIUzI1NiIs..."
-            />
+            Your data syncs online via Supabase. Sign in with Google in the sidebar to access your data on any device.
           </div>
           <div className="actions-row" style={{ marginTop: 4 }}>
-            <button className="btn btn-primary btn-sm" onClick={saveSupabase} style={{ whiteSpace: 'nowrap' }}>
-              {sbSaved ? 'Saved' : 'Save'}
-            </button>
             <button className="btn btn-secondary btn-sm" onClick={previewSync} disabled={sbSyncing || !isSupabaseReady()}>
               {sbSyncing ? 'Checking...' : 'Sync Preview'}
             </button>
@@ -259,56 +212,11 @@ export default function SettingsSurface() {
               </div>
             </div>
           )}
-          <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 8, lineHeight: 1.5 }}>
-            <strong>Setup:</strong> Create a free Supabase project at supabase.com. Enable Google Auth in Authentication &rarr; Providers &rarr; Google. Then run this SQL:
-            <pre style={{ background: '#0f1117', padding: 8, borderRadius: 4, fontSize: 11, marginTop: 4, overflow: 'auto' }}>
-{`CREATE TABLE kv_store (
-  user_id TEXT NOT NULL,
-  namespace TEXT NOT NULL,
-  key TEXT NOT NULL,
-  value JSONB NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, namespace, key)
-);
-ALTER TABLE kv_store ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "User isolation" ON kv_store
-  FOR ALL USING (auth.uid()::text = user_id);`}
-            </pre>
-            <div style={{ marginTop: 6 }}>
-              <strong>Sign in:</strong> Use the "Sign in with Google" button in the sidebar to authenticate. Your data is scoped to your Google account — sign in on any device to access it.
-            </div>
-          </div>
         </div>
 
         {/* Google Calendar */}
-        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Google Calendar</h3>
+        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Calendar</h3>
         <div className="card">
-          <div className="form-group">
-            <label htmlFor="settings-google-client-id">Google OAuth Client ID</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                id="settings-google-client-id"
-                className="form-input"
-                style={{ fontFamily: 'monospace', fontSize: 12 }}
-                value={clientIdInput}
-                onChange={e => { setClientIdInput(e.target.value); setClientIdSaved(false); }}
-                placeholder="xxxxxxxxxxxx.apps.googleusercontent.com"
-              />
-              <button className="btn btn-primary btn-sm" onClick={saveClientId} style={{ whiteSpace: 'nowrap' }}>
-                {clientIdSaved ? 'Saved' : 'Save'}
-              </button>
-            </div>
-            <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 6, lineHeight: 1.5 }}>
-              Required for Google Calendar integration. Create one in{' '}
-              <strong>Google Cloud Console</strong> &rarr; APIs &amp; Services &rarr; Credentials &rarr; OAuth 2.0 Client ID (Web application).
-              <br />
-              Add <code style={{ fontSize: 11, background: '#0f1117', padding: '1px 4px', borderRadius: 3 }}>http://localhost:5174</code> as an Authorized JavaScript Origin.
-              Enable the <strong>Google Calendar API</strong> in your project.
-            </div>
-          </div>
-          <div className="info-box warning" style={{ marginTop: 4 }}>
-            OAuth tokens are stored in localStorage. This is acceptable for local development but not recommended for production deployments.
-          </div>
           <div className="form-group" style={{ marginTop: 12, marginBottom: 0 }}>
             <label htmlFor="settings-default-cal-view">Default calendar view</label>
             <select
@@ -555,18 +463,8 @@ CREATE POLICY "User isolation" ON kv_store
               <span className="slider" />
             </label>
           </div>
-          <div className="form-group">
-            <label htmlFor="settings-11labs-key">ElevenLabs API Key</label>
-            <input id="settings-11labs-key" className="form-input" type="password" value={settings.elevenLabsApiKey || ''} onChange={e => app.updateSettings({ elevenLabsApiKey: e.target.value || undefined })} placeholder="xi-xxxxxxxxxxxxxxxx" />
-          </div>
-          <div className="form-group">
-            <label htmlFor="settings-11labs-voice">ElevenLabs Voice ID</label>
-            <input id="settings-11labs-voice" className="form-input" value={settings.elevenLabsVoiceId || ''} onChange={e => app.updateSettings({ elevenLabsVoiceId: e.target.value || undefined })} placeholder="Voice ID from ElevenLabs dashboard" />
-          </div>
-          <div style={{ fontSize: 11, color: '#6b6f85', lineHeight: 1.5 }}>
-            <strong>Setup:</strong> Go to <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer" style={{ color: '#4f5bff' }}>elevenlabs.io</a> &rarr;
-            clone Lina's voice from a recording &rarr; copy your API key and Voice ID &rarr; paste above.
-            <br />Without ElevenLabs, Lina will use the browser's built-in voice (less natural).
+          <div style={{ fontSize: 11, color: '#6b6f85' }}>
+            {ELEVENLABS_API_KEY ? 'ElevenLabs voice configured \u2713' : 'Using browser voice (configure ElevenLabs in .env for cloned voice)'}
           </div>
         </div>
 
