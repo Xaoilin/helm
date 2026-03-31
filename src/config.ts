@@ -33,3 +33,6 @@ export const ELEVENLABS_API_KEY = getEnv('VITE_ELEVENLABS_API_KEY') || getSettin
 
 /** ElevenLabs Voice ID for cloned voice. */
 export const ELEVENLABS_VOICE_ID = getEnv('VITE_ELEVENLABS_VOICE_ID') || getSettingsValue('elevenLabsVoiceId');
+
+/** Monzo personal access token. */
+export const MONZO_ACCESS_TOKEN = getEnv('VITE_MONZO_ACCESS_TOKEN') || getSettingsValue('monzoAccessToken');
