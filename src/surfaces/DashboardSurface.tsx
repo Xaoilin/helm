@@ -46,6 +46,25 @@ export default function DashboardSurface() {
     return () => clearInterval(interval);
   }, []);
 
+  // Reset daily habits if date changed (so Dashboard shows fresh state without visiting Tasks)
+  useEffect(() => {
+    const isWeekday = () => { const d = new Date().getDay(); return d >= 1 && d <= 5; };
+    const habitsToReset = app.tasks.filter(t => {
+      if (t.category !== 'daily' || !t.recurring || !t.completed) return false;
+      if (t.recurring.lastReset === todayStr) return false;
+      if (t.recurring.frequency === 'weekdays' && !isWeekday()) return false;
+      return true;
+    });
+    for (const t of habitsToReset) {
+      app.updateTask(t.id, {
+        completed: false,
+        completedAt: undefined,
+        recurring: { ...t.recurring!, lastReset: todayStr },
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayStr]);
+
   // Prayer times
   const [prayerData, setPrayerData] = useState<PrayerTimesData | null>(null);
   const [adhanPrayer, setAdhanPrayer] = useState<PrayerTimeType | null>(null);
@@ -533,9 +552,15 @@ export default function DashboardSurface() {
                   </div>
                 ))}
               </div>
-              <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 8 }}>
-                Based on {Object.keys(gam.dailyLog || {}).length} days of tracking
-              </div>
+              {(() => {
+                const logDates = Object.keys(gam.dailyLog || {}).sort();
+                const startDate = logDates.length > 0 ? logDates[0] : null;
+                return (
+                  <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 8 }}>
+                    Based on {logDates.length} days of tracking{startDate && ` \u00b7 Since ${new Date(startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}
