@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { isSupabaseReady, syncNamespace, isAuthenticated, getCurrentUserId } from '../store/supabase';
 import { ELEVENLABS_API_KEY } from '../config';
@@ -22,6 +22,17 @@ export default function SettingsSurface() {
   // Sync state
   const [sbSyncing, setSbSyncing] = useState(false);
   const [sbSyncResult, setSbSyncResult] = useState<string | null>(null);
+
+  // Microphone devices
+  const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
+  useEffect(() => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    // Need to request mic permission first to get labels
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(() => navigator.mediaDevices.enumerateDevices())
+      .then(devices => setMicrophones(devices.filter(d => d.kind === 'audioinput')))
+      .catch(() => {}); // Permission denied — no mic list
+  }, []);
 
   // Step 1: Preview what would change
   const previewSync = async () => {
@@ -463,9 +474,30 @@ export default function SettingsSurface() {
               <span className="slider" />
             </label>
           </div>
-          <div style={{ fontSize: 11, color: '#6b6f85' }}>
+          <div style={{ fontSize: 11, color: '#6b6f85', marginBottom: 10 }}>
             {ELEVENLABS_API_KEY ? 'ElevenLabs voice configured \u2713' : 'Using browser voice (configure ElevenLabs in .env for cloned voice)'}
           </div>
+          {microphones.length > 0 && (
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label htmlFor="settings-mic">Microphone</label>
+              <select
+                id="settings-mic"
+                className="form-select"
+                value={settings.microphoneDeviceId || ''}
+                onChange={e => app.updateSettings({ microphoneDeviceId: e.target.value || undefined })}
+              >
+                <option value="">Default microphone</option>
+                {microphones.map(mic => (
+                  <option key={mic.deviceId} value={mic.deviceId}>
+                    {mic.label || `Microphone ${mic.deviceId.slice(0, 8)}...`}
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
+                Used for "Hey Lina" wake word and voice commands.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Reset Gamification */}

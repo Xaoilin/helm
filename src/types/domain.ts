@@ -268,6 +268,7 @@ export interface Settings {
   assistantEnabled?: boolean;
   elevenLabsApiKey?: string;
   elevenLabsVoiceId?: string;
+  microphoneDeviceId?: string;
 }
 
 // ── Navigation ──

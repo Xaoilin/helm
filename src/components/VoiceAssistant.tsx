@@ -29,6 +29,19 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const enabled = app.settings.assistantEnabled !== false;
   const hasElevenLabs = !!(ELEVENLABS_API_KEY && ELEVENLABS_VOICE_ID);
   const speechSupported = typeof window !== 'undefined' && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+  const micDeviceId = app.settings.microphoneDeviceId;
+
+  // Activate selected mic (Chrome SpeechRecognition uses the active getUserMedia stream's device)
+  const activateMic = useCallback(async () => {
+    if (!micDeviceId) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: { exact: micDeviceId } }
+      });
+      // Keep stream alive briefly so Chrome picks it as active input
+      setTimeout(() => stream.getTracks().forEach(t => t.stop()), 100);
+    } catch { /* fallback to default */ }
+  }, [micDeviceId]);
 
   // ── Speech output ──
   const speak = useCallback(async (text: string) => {
@@ -125,8 +138,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
     setResponse('');
     setError('');
     setShowBubble(true);
-    recognition.start();
-  }, [speechSupported, processTranscript]);
+    activateMic().then(() => recognition.start());
+  }, [speechSupported, processTranscript, activateMic]);
 
   // ── Wake word listener (continuous background) ──
   const restartWakeWordListener = useCallback(() => {
@@ -187,8 +200,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
     wakeRecognitionRef.current = recognition;
     setWakeWordActive(true);
     setState('wake-listening');
-    try { recognition.start(); } catch { /* already started */ }
-  }, [speechSupported, enabled, state, startCommandListening, processTranscript]);
+    activateMic().then(() => { try { recognition.start(); } catch { /* already started */ } });
+  }, [speechSupported, enabled, state, startCommandListening, processTranscript, activateMic]);
 
   // Start wake word listener on mount
   useEffect(() => {
