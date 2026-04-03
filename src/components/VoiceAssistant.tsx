@@ -114,6 +114,14 @@ export default function VoiceAssistant({ prayerData }: Props) {
     rec.onerror = (event: any) => {
       if (event.error === 'no-speech' || event.error === 'aborted') {
         setState('idle');
+      } else if (event.error === 'network') {
+        setError('Speech recognition needs internet (Chrome sends audio to Google). Check your connection and try again.');
+        setState('error');
+        setTimeout(() => setState('idle'), 5000);
+      } else if (event.error === 'not-allowed') {
+        setError('Microphone blocked. Click the mic icon in Chrome\'s address bar and allow access.');
+        setState('error');
+        setTimeout(() => setState('idle'), 5000);
       } else {
         setError(`Mic error: ${event.error}`);
         setState('error');
