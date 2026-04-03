@@ -21,26 +21,22 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const [response, setResponse] = useState('');
   const [showBubble, setShowBubble] = useState(false);
   const [error, setError] = useState('');
-  const [wakeWordActive, setWakeWordActive] = useState(false);
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const wakeRecognitionRef = useRef<any>(null);
+  const shouldListenRef = useRef(true); // controls wake word restart
 
   const enabled = app.settings.assistantEnabled !== false;
   const hasElevenLabs = !!(ELEVENLABS_API_KEY && ELEVENLABS_VOICE_ID);
   const speechSupported = typeof window !== 'undefined' && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
   const micDeviceId = app.settings.microphoneDeviceId;
 
-  // Activate selected mic (Chrome SpeechRecognition uses the active getUserMedia stream's device)
   const activateMic = useCallback(async () => {
     if (!micDeviceId) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: { exact: micDeviceId } }
-      });
-      // Keep stream alive briefly so Chrome picks it as active input
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: micDeviceId } } });
       setTimeout(() => stream.getTracks().forEach(t => t.stop()), 100);
-    } catch { /* fallback to default */ }
+    } catch { /* fallback */ }
   }, [micDeviceId]);
 
   // ── Speech output ──
@@ -49,22 +45,26 @@ export default function VoiceAssistant({ prayerData }: Props) {
     setResponse(text);
     setShowBubble(true);
 
+    const done = () => {
+      setState('idle');
+      setTimeout(() => setShowBubble(false), 3000);
+      shouldListenRef.current = true; // resume wake word after speaking
+    };
+
     if (hasElevenLabs) {
       try {
         const audio = await speakWithElevenLabs(text, ELEVENLABS_API_KEY!, ELEVENLABS_VOICE_ID!);
         audioRef.current = audio;
-        audio.onended = () => { setState('idle'); setTimeout(() => { setShowBubble(false); restartWakeWordListener(); }, 3000); };
-        audio.onerror = () => { speakWithBrowserTTS(text); setState('idle'); setTimeout(() => { setShowBubble(false); restartWakeWordListener(); }, 3000); };
+        audio.onended = done;
+        audio.onerror = () => { speakWithBrowserTTS(text); done(); };
         await audio.play();
       } catch {
         speakWithBrowserTTS(text);
-        setState('idle');
-        setTimeout(() => { setShowBubble(false); restartWakeWordListener(); }, 3000);
+        done();
       }
     } else {
       speakWithBrowserTTS(text);
-      setState('idle');
-      setTimeout(() => { setShowBubble(false); restartWakeWordListener(); }, 4000);
+      setTimeout(done, 3000);
     }
   }, [hasElevenLabs]);
 
@@ -88,176 +88,149 @@ export default function VoiceAssistant({ prayerData }: Props) {
     speak(intent.response);
   }, [app, prayerData, speak]);
 
-  // ── Command listening (after wake word detected) ──
+  // ── Command listening (after wake word or click) ──
   const startCommandListening = useCallback(() => {
     if (!speechSupported) return;
+    shouldListenRef.current = false; // stop wake word while in command mode
 
-    // Stop wake word listener
-    if (wakeRecognitionRef.current) {
-      try { wakeRecognitionRef.current.abort(); } catch {}
-      wakeRecognitionRef.current = null;
-    }
-
+    // Stop wake listener
+    if (wakeRecognitionRef.current) { try { wakeRecognitionRef.current.abort(); } catch {} wakeRecognitionRef.current = null; }
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     speechSynthesis?.cancel();
 
-    const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognitionClass) return;
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
 
-    const recognition = new SpeechRecognitionClass();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-GB';
+    const rec = new SR();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = 'en-GB';
 
-    recognition.onresult = (event: any) => {
+    rec.onresult = (event: any) => {
       const result = event.results[0];
-      if (result && result.isFinal) {
-        const text = result[0].transcript;
-        processTranscript(text);
-      }
+      if (result?.isFinal) processTranscript(result[0].transcript);
     };
 
-    recognition.onerror = (event: any) => {
+    rec.onerror = (event: any) => {
       if (event.error === 'no-speech' || event.error === 'aborted') {
         setState('idle');
-        restartWakeWordListener();
       } else {
         setError(`Mic error: ${event.error}`);
         setState('error');
-        setTimeout(() => { setState('idle'); restartWakeWordListener(); }, 3000);
+        setTimeout(() => setState('idle'), 3000);
       }
+      shouldListenRef.current = true;
     };
 
-    recognition.onend = () => {
-      recognitionRef.current = null;
-    };
+    rec.onend = () => { recognitionRef.current = null; };
 
-    recognitionRef.current = recognition;
+    recognitionRef.current = rec;
     setState('listening');
-    setTranscript('');
-    setResponse('');
-    setError('');
+    setTranscript(''); setResponse(''); setError('');
     setShowBubble(true);
-    activateMic().then(() => recognition.start());
+    activateMic().then(() => rec.start());
   }, [speechSupported, processTranscript, activateMic]);
 
-  // ── Wake word listener (continuous background) ──
-  const restartWakeWordListener = useCallback(() => {
-    if (!speechSupported || !enabled) return;
-
-    // Clean up existing
-    if (wakeRecognitionRef.current) {
-      try { wakeRecognitionRef.current.abort(); } catch {}
-    }
-
-    const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognitionClass) return;
-
-    const recognition = new SpeechRecognitionClass();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-GB';
-
-    recognition.onresult = (event: any) => {
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const text = event.results[i][0].transcript.toLowerCase().trim();
-        if (WAKE_WORDS.some(w => text.includes(w))) {
-          // Wake word detected!
-          try { recognition.abort(); } catch {}
-          wakeRecognitionRef.current = null;
-
-          // Check if there's a command after the wake word
-          const afterWake = text.replace(/.*(?:hey lina|hey leena|hey lena|hey liner|a lina|eileen a)\s*/i, '').trim();
-          if (afterWake.length > 3 && event.results[i].isFinal) {
-            // Command included with wake word: "Hey Lina show me calendar"
-            setState('processing');
-            setTranscript(afterWake);
-            setShowBubble(true);
-            processTranscript(afterWake);
-          } else {
-            // Just wake word — start command listening
-            startCommandListening();
-          }
-          return;
-        }
-      }
-    };
-
-    recognition.onerror = () => {
-      // Silently restart on error
-      wakeRecognitionRef.current = null;
-      setTimeout(restartWakeWordListener, 1000);
-    };
-
-    recognition.onend = () => {
-      // Auto-restart continuous listening
-      wakeRecognitionRef.current = null;
-      if (enabled && state === 'idle' || state === 'wake-listening') {
-        setTimeout(restartWakeWordListener, 500);
-      }
-    };
-
-    wakeRecognitionRef.current = recognition;
-    setWakeWordActive(true);
-    setState('wake-listening');
-    activateMic().then(() => { try { recognition.start(); } catch { /* already started */ } });
-  }, [speechSupported, enabled, state, startCommandListening, processTranscript, activateMic]);
-
-  // Start wake word listener on mount
+  // ── Wake word listener ──
   useEffect(() => {
-    if (enabled && speechSupported) {
-      restartWakeWordListener();
-    }
+    if (!enabled || !speechSupported) return;
+
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+
+    let stopped = false;
+
+    const startWakeListener = () => {
+      if (stopped || !shouldListenRef.current) return;
+
+      const rec = new SR();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = 'en-GB';
+
+      rec.onresult = (event: any) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const text = event.results[i][0].transcript.toLowerCase().trim();
+          if (WAKE_WORDS.some(w => text.includes(w))) {
+            try { rec.abort(); } catch {}
+            wakeRecognitionRef.current = null;
+
+            // Check for command after wake word
+            const afterWake = text.replace(/.*(?:hey lina|hey leena|hey lena|hey liner|a lina|eileen a)\s*/i, '').trim();
+            if (afterWake.length > 3 && event.results[i].isFinal) {
+              setState('processing');
+              setTranscript(afterWake);
+              setShowBubble(true);
+              processTranscript(afterWake);
+            } else {
+              startCommandListening();
+            }
+            return;
+          }
+        }
+      };
+
+      rec.onerror = () => {
+        wakeRecognitionRef.current = null;
+        if (!stopped) setTimeout(startWakeListener, 2000);
+      };
+
+      rec.onend = () => {
+        wakeRecognitionRef.current = null;
+        if (!stopped && shouldListenRef.current) setTimeout(startWakeListener, 1000);
+      };
+
+      wakeRecognitionRef.current = rec;
+      setState(prev => prev === 'idle' || prev === 'wake-listening' ? 'wake-listening' : prev);
+      activateMic().then(() => { try { rec.start(); } catch {} });
+    };
+
+    // Start after a short delay to avoid immediate mic permission prompt
+    const timer = setTimeout(startWakeListener, 1000);
+
     return () => {
+      stopped = true;
+      clearTimeout(timer);
       if (wakeRecognitionRef.current) { try { wakeRecognitionRef.current.abort(); } catch {} }
       if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch {} }
       if (audioRef.current) audioRef.current.pause();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
+  }, [enabled, speechSupported, activateMic, processTranscript, startCommandListening]);
 
-  // ── Manual click handler (fallback) ──
+  // ── Manual click ──
   const handleClick = () => {
     if (state === 'listening') {
       if (recognitionRef.current) { recognitionRef.current.abort(); recognitionRef.current = null; }
-      setState('idle');
-      setShowBubble(false);
-      restartWakeWordListener();
+      setState('idle'); setShowBubble(false);
+      shouldListenRef.current = true;
     } else if (state === 'speaking') {
       if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
       speechSynthesis?.cancel();
-      setState('idle');
-      setShowBubble(false);
-      restartWakeWordListener();
+      setState('idle'); setShowBubble(false);
+      shouldListenRef.current = true;
     } else {
-      // Manual activation (also works)
       startCommandListening();
     }
   };
 
   if (!enabled) return null;
 
+  const isWake = state === 'wake-listening';
+
   return (
     <>
-      {/* Floating avatar button */}
       <button
-        className={`va-button ${state === 'wake-listening' ? 'idle' : state}`}
+        className={`va-button ${isWake ? 'idle' : state}`}
         onClick={handleClick}
         aria-label={state === 'listening' ? 'Stop listening' : 'Talk to Lina'}
-        title={
-          state === 'listening' ? 'Listening... click to cancel'
-          : state === 'wake-listening' ? 'Say "Hey Lina" or click to talk'
-          : 'Talk to Lina'
-        }
+        title={isWake ? 'Say "Hey Lina" or click to talk' : state === 'listening' ? 'Listening... click to cancel' : 'Talk to Lina'}
       >
         <span className="va-avatar">L</span>
-        {state === 'wake-listening' && wakeWordActive && <span className="va-ring wake" />}
-        {state === 'listening' && <span className="va-ring" />}
-        {state === 'listening' && <span className="va-ring delay" />}
+        {isWake && <span className="va-ring wake" />}
+        {state === 'listening' && <><span className="va-ring" /><span className="va-ring delay" /></>}
         {state === 'speaking' && <span className="va-ring speaking" />}
       </button>
 
-      {/* Speech bubble */}
       {showBubble && (
         <div className="va-bubble">
           {state === 'listening' && (
@@ -272,15 +245,13 @@ export default function VoiceAssistant({ prayerData }: Props) {
               <div className="va-thinking">Thinking...</div>
             </div>
           )}
-          {(state === 'speaking' || (state === 'idle' && response) || (state === 'wake-listening' && response)) && (
+          {(state === 'speaking' || ((state === 'idle' || isWake) && response)) && (
             <div className="va-bubble-text response">
               {transcript && <div className="va-you">You: {transcript}</div>}
               <div className="va-lina">Lina: {response}</div>
             </div>
           )}
-          {state === 'error' && (
-            <div className="va-bubble-text error">{error}</div>
-          )}
+          {state === 'error' && <div className="va-bubble-text error">{error}</div>}
         </div>
       )}
     </>
