@@ -27,6 +27,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const shouldListenRef = useRef(true); // controls wake word restart
 
   const enabled = app.settings.assistantEnabled !== false;
+  const wakeWordEnabled = app.settings.wakeWordEnabled === true; // off by default — opt-in
   const hasElevenLabs = !!(ELEVENLABS_API_KEY && ELEVENLABS_VOICE_ID);
   const speechSupported = typeof window !== 'undefined' && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
   const micDeviceId = app.settings.microphoneDeviceId;
@@ -139,9 +140,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
     activateMic().then(() => rec.start());
   }, [speechSupported, processTranscript, activateMic]);
 
-  // ── Wake word listener ──
+  // ── Wake word listener (opt-in — uses continuous mic which can exhaust Chrome's speech service) ──
   useEffect(() => {
-    if (!enabled || !speechSupported) return;
+    if (!enabled || !speechSupported || !wakeWordEnabled) return;
 
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
@@ -180,12 +181,12 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
       rec.onerror = () => {
         wakeRecognitionRef.current = null;
-        if (!stopped) setTimeout(startWakeListener, 2000);
+        if (!stopped) setTimeout(startWakeListener, 5000); // longer delay to avoid rate limiting
       };
 
       rec.onend = () => {
         wakeRecognitionRef.current = null;
-        if (!stopped && shouldListenRef.current) setTimeout(startWakeListener, 1000);
+        if (!stopped && shouldListenRef.current) setTimeout(startWakeListener, 3000); // longer delay
       };
 
       wakeRecognitionRef.current = rec;
@@ -203,7 +204,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
       if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch {} }
       if (audioRef.current) audioRef.current.pause();
     };
-  }, [enabled, speechSupported, activateMic, processTranscript, startCommandListening]);
+  }, [enabled, wakeWordEnabled, speechSupported, activateMic, processTranscript, startCommandListening]);
 
   // ── Manual click ──
   const handleClick = () => {
@@ -231,7 +232,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
         className={`va-button ${isWake ? 'idle' : state}`}
         onClick={handleClick}
         aria-label={state === 'listening' ? 'Stop listening' : 'Talk to Lina'}
-        title={isWake ? 'Say "Hey Lina" or click to talk' : state === 'listening' ? 'Listening... click to cancel' : 'Talk to Lina'}
+        title={isWake ? 'Say "Hey Lina" or click to talk' : state === 'listening' ? 'Listening... click to cancel' : wakeWordEnabled ? 'Say "Hey Lina" or click' : 'Click to talk to Lina'}
       >
         <span className="va-avatar">L</span>
         {isWake && <span className="va-ring wake" />}

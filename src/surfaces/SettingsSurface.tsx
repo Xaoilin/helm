@@ -474,6 +474,18 @@ export default function SettingsSurface() {
               <span className="slider" />
             </label>
           </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>Wake word ("Hey Lina")</div>
+              <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 2 }}>
+                Continuously listens for "Hey Lina" in the background. Uses more battery and bandwidth. Click-to-talk always works regardless.
+              </div>
+            </div>
+            <label className="toggle">
+              <input type="checkbox" checked={settings.wakeWordEnabled === true} onChange={e => app.updateSettings({ wakeWordEnabled: e.target.checked })} aria-label="Toggle wake word" />
+              <span className="slider" />
+            </label>
+          </div>
           <div style={{ fontSize: 11, color: '#6b6f85', marginBottom: 10 }}>
             {ELEVENLABS_API_KEY ? 'ElevenLabs voice configured \u2713' : 'Using browser voice (configure ElevenLabs in .env for cloned voice)'}
           </div>

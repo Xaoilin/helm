@@ -269,6 +269,7 @@ export interface Settings {
   elevenLabsApiKey?: string;
   elevenLabsVoiceId?: string;
   microphoneDeviceId?: string;
+  wakeWordEnabled?: boolean;
 }
 
 // ── Navigation ──
