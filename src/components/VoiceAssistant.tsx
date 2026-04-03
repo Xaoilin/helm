@@ -21,6 +21,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const [response, setResponse] = useState('');
   const [showBubble, setShowBubble] = useState(false);
   const [error, setError] = useState('');
+  const [textInput, setTextInput] = useState('');
+  const [showInput, setShowInput] = useState(false);
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const wakeRecognitionRef = useRef<any>(null);
@@ -206,6 +208,14 @@ export default function VoiceAssistant({ prayerData }: Props) {
     };
   }, [enabled, wakeWordEnabled, speechSupported, activateMic, processTranscript, startCommandListening]);
 
+  // ── Text input submit ──
+  const handleTextSubmit = () => {
+    if (!textInput.trim()) return;
+    processTranscript(textInput.trim());
+    setTextInput('');
+    setShowInput(false);
+  };
+
   // ── Manual click ──
   const handleClick = () => {
     if (state === 'listening') {
@@ -218,6 +228,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
       setState('idle'); setShowBubble(false);
       shouldListenRef.current = true;
     } else {
+      // Show text input + try voice
+      setShowInput(true);
+      setShowBubble(true);
       startCommandListening();
     }
   };
@@ -261,6 +274,21 @@ export default function VoiceAssistant({ prayerData }: Props) {
             </div>
           )}
           {state === 'error' && <div className="va-bubble-text error">{error}</div>}
+          {/* Text input fallback — always available when bubble is open */}
+          {(showInput || state === 'error') && state !== 'speaking' && state !== 'processing' && (
+            <div style={{ marginTop: 8, display: 'flex', gap: 4 }}>
+              <input
+                className="form-input"
+                style={{ fontSize: 12, padding: '5px 8px', flex: 1 }}
+                placeholder="Type a command..."
+                value={textInput}
+                onChange={e => setTextInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleTextSubmit(); if (e.key === 'Escape') { setShowInput(false); setShowBubble(false); } }}
+                autoFocus
+              />
+              <button className="btn btn-primary btn-sm" onClick={handleTextSubmit} disabled={!textInput.trim()} style={{ fontSize: 11 }}>Go</button>
+            </div>
+          )}
         </div>
       )}
     </>

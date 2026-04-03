@@ -56,6 +56,13 @@ src-tauri/
 6. `git push` -- push to GitHub (auto-deploys to https://xaoilin.github.io/helm/ via GitHub Actions)
 7. **Every code change must be committed, pushed, and deployed.** Never leave uncommitted work.
 
+### Features that CANNOT be tested via automation:
+- **Voice assistant (SpeechRecognition)** — requires real microphone audio + live connection to Google's speech servers. Chrome MCP cannot simulate this. If voice features break, provide a text-input fallback and tell the user to test manually.
+- **ElevenLabs voice output** — requires API key + real audio playback.
+- **Monzo bank sync** — requires real Monzo access token + Monzo app approval.
+- **Google OAuth popups** — happen in separate windows that automation can't control.
+- **Adhan notifications** — time-dependent, can only test via the Settings test buttons.
+
 ### When fixing bugs:
 1. **Reproduce first** -- read localStorage or DOM to understand the actual data state
 2. **Identify root cause** -- trace the data flow, don't patch symptoms
