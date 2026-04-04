@@ -131,8 +131,33 @@ export default function VoiceAssistant({ prayerData }: Props) {
         { role: 'assistant' as const, content: llmIntent.response },
       ].slice(-10); // Keep last 5 exchanges
 
-      if (llmIntent.type === 'navigate' && llmIntent.surface) {
-        app.navigate(llmIntent.surface);
+      // Execute action from LLM
+      if (llmIntent.action) {
+        const a = llmIntent.action;
+        if (a.type === 'navigate' && a.surface) {
+          app.navigate(a.surface);
+        } else if (a.type === 'add_task' && a.taskTitle) {
+          const pri = ['low', 'medium', 'high'].includes(a.taskPriority || '') ? a.taskPriority as 'low' | 'medium' | 'high' : 'medium';
+          const cat = ['daily', 'task', 'goal'].includes(a.taskCategory || '') ? a.taskCategory as 'daily' | 'task' | 'goal' : 'task';
+          app.addTask({
+            title: a.taskTitle,
+            description: '',
+            completed: false,
+            priority: pri,
+            category: cat,
+          });
+        } else if (a.type === 'complete_task' && a.taskTitle) {
+          const match = app.tasks.find(t =>
+            !t.completed && t.title.toLowerCase().includes(a.taskTitle!.toLowerCase())
+          );
+          if (match) app.updateTask(match.id, { completed: true, completedAt: new Date().toISOString() });
+        } else if (a.type === 'complete_habit' && a.taskTitle) {
+          const match = app.tasks.find(t =>
+            t.category === 'daily' && !t.completed &&
+            t.title.toLowerCase().includes(a.taskTitle!.toLowerCase())
+          );
+          if (match) app.updateTask(match.id, { completed: true, completedAt: new Date().toISOString() });
+        }
       }
       speak(llmIntent.response);
     } else {

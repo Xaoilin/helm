@@ -13,11 +13,20 @@ import { chatWithOllama, buildSystemPrompt, testOllamaConnection, type OllamaMes
 
 export type AssistantLang = 'en' | 'ar';
 
+export interface LLMAction {
+  type: 'navigate' | 'add_task' | 'complete_task' | 'complete_habit';
+  surface?: Surface;
+  taskTitle?: string;
+  taskPriority?: string;
+  taskCategory?: string;
+}
+
 export interface Intent {
   type: 'navigate' | 'query' | 'unknown';
   surface?: Surface;
   query?: string;
   response: string;
+  action?: LLMAction;
 }
 
 const NAV_KEYWORDS: [string[], Surface][] = [
@@ -293,15 +302,47 @@ export async function processWithLLM(
   try {
     const response = await chatWithOllama(messages, endpoint, model);
 
-    // Parse [NAV:surface] tag from response
+    // Parse action tags from response
+    const cleanResponse = response
+      .replace(/\[NAV:\w+\]/g, '')
+      .replace(/\[ADD_TASK:[^\]]+\]/g, '')
+      .replace(/\[COMPLETE_TASK:[^\]]+\]/g, '')
+      .replace(/\[COMPLETE_HABIT:[^\]]+\]/g, '')
+      .trim();
+
+    // Check for actions
+    let action: LLMAction | undefined;
+
     const navMatch = response.match(/\[NAV:(\w+)\]/);
-    const cleanResponse = response.replace(/\[NAV:\w+\]/g, '').trim();
-    const surface = navMatch?.[1] as Surface | undefined;
+    if (navMatch) {
+      action = { type: 'navigate', surface: navMatch[1] as Surface };
+    }
+
+    const addTaskMatch = response.match(/\[ADD_TASK:([^|]+)\|([^|]+)\|([^\]]+)\]/);
+    if (addTaskMatch) {
+      action = {
+        type: 'add_task',
+        taskTitle: addTaskMatch[1].trim(),
+        taskPriority: addTaskMatch[2].trim(),
+        taskCategory: addTaskMatch[3].trim(),
+      };
+    }
+
+    const completeTaskMatch = response.match(/\[COMPLETE_TASK:([^\]]+)\]/);
+    if (completeTaskMatch) {
+      action = { type: 'complete_task', taskTitle: completeTaskMatch[1].trim() };
+    }
+
+    const completeHabitMatch = response.match(/\[COMPLETE_HABIT:([^\]]+)\]/);
+    if (completeHabitMatch) {
+      action = { type: 'complete_habit', taskTitle: completeHabitMatch[1].trim() };
+    }
 
     return {
-      type: surface ? 'navigate' : 'query',
-      surface,
+      type: action?.type === 'navigate' ? 'navigate' : 'query',
+      surface: action?.surface,
       response: cleanResponse,
+      action,
     };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';

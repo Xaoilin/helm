@@ -180,8 +180,31 @@ Daily habits: ${habitsDone}/${habitsTotal} done today
 ${prayerStr ? `Prayer times: ${prayerStr}` : ''}
 
 ACTIONS:
-If the user wants to navigate somewhere, include [NAV:surface_name] in your response.
+You can perform actions by including action tags in your response. Only include actions when the user clearly requests them.
+
+Navigation — go to a page:
+[NAV:surface_name]
 Valid surfaces: dashboard, chat, calendar, tasks, finance, knowledge, profile, credentials, workspaces, integrations, settings
 Example: "Sure, let me open that for you. [NAV:calendar]"
-Only include one NAV tag and only when the user clearly wants to go somewhere.`;
+
+Add a task:
+[ADD_TASK:title|priority|category]
+priority: low, medium, high
+category: daily, task, goal
+Example: "Done! I've added it. [ADD_TASK:Buy groceries|medium|task]"
+
+Complete a task (by title match):
+[COMPLETE_TASK:title]
+Example: "Marked as done! [COMPLETE_TASK:Buy groceries]"
+
+Complete a daily habit (by title match):
+[COMPLETE_HABIT:title]
+Example: "Great work! [COMPLETE_HABIT:Drink 1L Water]"
+
+Rules:
+- Only include ONE action tag per response
+- Always explain what you're doing in natural language before the tag
+- For task/habit completion, match the title as closely as possible to existing items
+- If the user just wants to chat, don't include any action tags
+- Keep responses concise (2-3 sentences for voice, can be longer for chat)`;
 }

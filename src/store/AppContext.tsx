@@ -305,8 +305,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ];
 
         replyContent = await chatWithOllama(messages, endpoint, model);
-        // Strip any NAV tags from chat responses
-        replyContent = replyContent.replace(/\[NAV:\w+\]/g, '').trim();
+        // Parse and execute action tags, then strip them from visible response
+        const addTaskMatch = replyContent.match(/\[ADD_TASK:([^|]+)\|([^|]+)\|([^\]]+)\]/);
+        if (addTaskMatch) {
+          const priRaw = addTaskMatch[2].trim();
+          const catRaw = addTaskMatch[3].trim();
+          const newTask: Task = {
+            id: uuid(),
+            title: addTaskMatch[1].trim(),
+            description: '',
+            completed: false,
+            priority: (['low', 'medium', 'high'].includes(priRaw) ? priRaw : 'medium') as Task['priority'],
+            category: (['daily', 'task', 'goal'].includes(catRaw) ? catRaw : 'task') as Task['category'],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          setState(s => ({ ...s, tasks: [...s.tasks, newTask] }));
+        }
+
+        const completeTaskMatch = replyContent.match(/\[COMPLETE_TASK:([^\]]+)\]/);
+        if (completeTaskMatch) {
+          const title = completeTaskMatch[1].trim().toLowerCase();
+          setState(s => ({
+            ...s,
+            tasks: s.tasks.map(t =>
+              !t.completed && t.title.toLowerCase().includes(title)
+                ? { ...t, completed: true, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+                : t
+            ),
+          }));
+        }
+
+        const completeHabitMatch = replyContent.match(/\[COMPLETE_HABIT:([^\]]+)\]/);
+        if (completeHabitMatch) {
+          const title = completeHabitMatch[1].trim().toLowerCase();
+          setState(s => ({
+            ...s,
+            tasks: s.tasks.map(t =>
+              t.category === 'daily' && !t.completed && t.title.toLowerCase().includes(title)
+                ? { ...t, completed: true, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+                : t
+            ),
+          }));
+        }
+
+        // Strip all action tags from visible response
+        replyContent = replyContent
+          .replace(/\[NAV:\w+\]/g, '')
+          .replace(/\[ADD_TASK:[^\]]+\]/g, '')
+          .replace(/\[COMPLETE_TASK:[^\]]+\]/g, '')
+          .replace(/\[COMPLETE_HABIT:[^\]]+\]/g, '')
+          .trim();
       } else {
         replyContent = generateMockReply(content);
       }
