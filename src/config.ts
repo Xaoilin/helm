@@ -34,5 +34,8 @@ export const ELEVENLABS_API_KEY = getEnv('VITE_ELEVENLABS_API_KEY') || getSettin
 /** ElevenLabs Voice ID for cloned voice. */
 export const ELEVENLABS_VOICE_ID = getEnv('VITE_ELEVENLABS_VOICE_ID') || getSettingsValue('elevenLabsVoiceId');
 
+/** Deepgram API key for speech-to-text (replaces Chrome SpeechRecognition). */
+export const DEEPGRAM_API_KEY = getEnv('VITE_DEEPGRAM_API_KEY') || getSettingsValue('deepgramApiKey');
+
 /** Monzo personal access token. */
 export const MONZO_ACCESS_TOKEN = getEnv('VITE_MONZO_ACCESS_TOKEN') || getSettingsValue('monzoAccessToken');

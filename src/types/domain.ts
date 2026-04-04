@@ -270,6 +270,7 @@ export interface Settings {
   elevenLabsVoiceId?: string;
   microphoneDeviceId?: string;
   wakeWordEnabled?: boolean;
+  deepgramApiKey?: string;
 }
 
 // ── Navigation ──

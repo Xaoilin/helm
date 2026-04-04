@@ -486,8 +486,24 @@ export default function SettingsSurface() {
               <span className="slider" />
             </label>
           </div>
+          {/* Deepgram API Key — for speech-to-text */}
+          <div className="form-group" style={{ marginTop: 12, marginBottom: 12 }}>
+            <label htmlFor="settings-deepgram">Deepgram API Key (for voice input)</label>
+            <input
+              id="settings-deepgram"
+              className="form-input"
+              type="password"
+              placeholder="Paste your Deepgram API key..."
+              value={settings.deepgramApiKey || ''}
+              onChange={e => app.updateSettings({ deepgramApiKey: e.target.value || undefined })}
+            />
+            <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
+              Free at <a href="https://console.deepgram.com" target="_blank" rel="noreferrer" style={{ color: '#7c8aff' }}>console.deepgram.com</a> — comes with $200 credit.
+              Enables reliable voice commands (bypasses Chrome&apos;s broken speech service).
+            </div>
+          </div>
           <div style={{ fontSize: 11, color: '#6b6f85', marginBottom: 10 }}>
-            {ELEVENLABS_API_KEY ? 'ElevenLabs voice configured \u2713' : 'Using browser voice (configure ElevenLabs in .env for cloned voice)'}
+            {ELEVENLABS_API_KEY ? 'ElevenLabs voice output configured ✓' : 'Using browser voice output (configure ElevenLabs in .env for cloned voice)'}
           </div>
           {microphones.length > 0 && (
             <div className="form-group" style={{ marginBottom: 0 }}>
