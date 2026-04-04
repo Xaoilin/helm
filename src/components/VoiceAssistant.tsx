@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
-import { parseIntent, speakWithElevenLabs, speakWithBrowserTTS, type AssistantLang } from '../services/voiceAssistant';
-import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY } from '../config';
+import { parseIntent, processWithLLM, isOllamaAvailable, speakWithElevenLabs, speakWithBrowserTTS, type AssistantLang } from '../services/voiceAssistant';
+import type { OllamaMessage } from '../services/ollamaApi';
+import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY, OLLAMA_ENDPOINT } from '../config';
 import { createRecorder, transcribeWithDeepgram, testChromeSpeechRecognition } from '../services/deepgramSTT';
 import type { PrayerTimesData } from '../services/prayerTimes';
 
@@ -31,6 +32,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const wakeRecognitionRef = useRef<any>(null);
   const shouldListenRef = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatHistoryRef = useRef<OllamaMessage[]>([]);
 
   const enabled = app.settings.assistantEnabled !== false;
   const wakeWordEnabled = app.settings.wakeWordEnabled === true;
@@ -40,6 +42,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const lang: AssistantLang = app.settings.assistantLanguage || 'en';
   const isArabic = lang === 'ar';
   const sttLang = isArabic ? 'ar' : 'en-GB';
+  const ollamaEndpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
+  const ollamaModel = app.settings.ollamaModel || undefined;
 
   // ── Detect best voice backend on mount ──
   useEffect(() => {
@@ -86,25 +90,56 @@ export default function VoiceAssistant({ prayerData }: Props) {
   }, [hasElevenLabs]);
 
   // ── Process command ──
-  const processTranscript = useCallback((text: string) => {
+  const processTranscript = useCallback(async (text: string) => {
     setState('processing');
     setTranscript(text);
     setError('');
 
     const prayerTimes = prayerData?.prayers.map(p => ({ name: p.name, time: p.time }));
-    const intent = parseIntent(text, {
+    const context = {
       calendarEvents: app.calendarEvents,
       tasks: app.tasks,
       gamification: app.gamification,
       prayerTimes,
-    }, lang);
+    };
 
-    if (intent.type === 'navigate' && intent.surface) {
-      app.navigate(intent.surface);
+    // Try fast keyword matching first
+    const intent = parseIntent(text, context, lang);
+
+    if (intent.type !== 'unknown') {
+      // Keyword match — respond instantly
+      if (intent.type === 'navigate' && intent.surface) {
+        app.navigate(intent.surface);
+      }
+      speak(intent.response);
+      return;
     }
 
-    speak(intent.response);
-  }, [app, prayerData, speak]);
+    // Unknown intent — try Ollama LLM if available
+    const ollamaUp = await isOllamaAvailable(ollamaEndpoint);
+    if (ollamaUp) {
+      const llmIntent = await processWithLLM(
+        text, context, lang,
+        chatHistoryRef.current,
+        ollamaEndpoint, ollamaModel,
+      );
+
+      // Update conversation history
+      chatHistoryRef.current = [
+        ...chatHistoryRef.current,
+        { role: 'user' as const, content: text },
+        { role: 'assistant' as const, content: llmIntent.response },
+      ].slice(-10); // Keep last 5 exchanges
+
+      if (llmIntent.type === 'navigate' && llmIntent.surface) {
+        app.navigate(llmIntent.surface);
+      }
+      speak(llmIntent.response);
+    } else {
+      // No LLM — use the keyword-match fallback response
+      speak(intent.response);
+    }
+  }, [app, prayerData, speak, lang, ollamaEndpoint, ollamaModel]);
 
   // ── Deepgram voice listening ──
   const startDeepgramListening = useCallback(async () => {

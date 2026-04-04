@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
+import { testOllamaConnection } from '../services/ollamaApi';
+import { OLLAMA_ENDPOINT } from '../config';
 
 export default function ChatSurface() {
   const app = useApp();
@@ -7,23 +9,33 @@ export default function ChatSurface() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeConv = app.conversations.find(c => c.id === app.activeConversationId);
 
+  // Check Ollama connection on mount
+  useEffect(() => {
+    const endpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
+    testOllamaConnection(endpoint).then(setOllamaConnected);
+  }, [app.settings.ollamaEndpoint]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeConv?.messages.length]);
+  }, [activeConv?.messages.length, isTyping]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || isTyping) return;
     let convId = app.activeConversationId;
     if (!convId) {
       convId = app.createConversation();
     }
-    app.sendMessage(convId, text);
     setInput('');
+    setIsTyping(true);
+    await app.sendMessage(convId, text);
+    setIsTyping(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -34,10 +46,10 @@ export default function ChatSurface() {
   };
 
   const quickPrompts = [
-    'What can you help me with?',
-    'What workspaces do I have?',
-    'What meetings do I have today?',
-    'Help me draft a deployment plan',
+    'What should I focus on today?',
+    'What meetings do I have coming up?',
+    'How am I doing with my habits?',
+    'Help me plan my week',
   ];
 
   return (
@@ -117,7 +129,10 @@ export default function ChatSurface() {
           ))}
         </div>
         <div style={{ padding: '8px 16px', borderTop: '1px solid #1e2030' }}>
-          <span className="mocked-indicator" role="status">Mocked AI responses</span>
+          <span className="mocked-indicator" role="status">
+            {ollamaConnected === null ? 'Checking...' :
+             ollamaConnected ? '🟢 Ollama connected' : '🔴 Ollama offline — using mocked replies'}
+          </span>
         </div>
       </div>
 
@@ -130,13 +145,17 @@ export default function ChatSurface() {
                 <div className="empty-state" role="status">
                   <div className="empty-icon">&#128172;</div>
                   <h3>Start a conversation</h3>
-                  <p>Ask HELM anything about your engineering work, or try a quick prompt below.</p>
+                  <p>
+                    {ollamaConnected
+                      ? 'Lina is powered by your local Ollama LLM. Ask anything about your schedule, tasks, or goals.'
+                      : 'Start Ollama locally to get real AI responses. Try a quick prompt below.'}
+                  </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
                     {quickPrompts.map(p => (
                       <button
                         key={p}
                         className="btn btn-secondary btn-sm"
-                        onClick={() => { app.sendMessage(activeConv.id, p); }}
+                        onClick={() => { handleSendQuick(p); }}
                       >
                         {p}
                       </button>
@@ -149,24 +168,39 @@ export default function ChatSurface() {
                   {msg.content}
                 </div>
               ))}
+              {isTyping && (
+                <div className="chat-message assistant" style={{ opacity: 0.6 }}>
+                  <span className="va-dots" style={{ display: 'inline-flex', gap: 3 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#c4a0f7', animation: 'vaDotBounce 1.2s ease-in-out infinite' }} />
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#c4a0f7', animation: 'vaDotBounce 1.2s ease-in-out infinite', animationDelay: '0.2s' }} />
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#c4a0f7', animation: 'vaDotBounce 1.2s ease-in-out infinite', animationDelay: '0.4s' }} />
+                  </span>
+                  {' '}Lina is thinking...
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
             <div className="chat-input-bar">
               <input
                 className="form-input"
-                placeholder="Type a message..."
+                placeholder={isTyping ? 'Lina is thinking...' : 'Type a message...'}
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
+                disabled={isTyping}
               />
-              <button className="btn btn-primary" onClick={handleSend}>Send</button>
+              <button className="btn btn-primary" onClick={handleSend} disabled={isTyping || !input.trim()}>Send</button>
             </div>
           </>
         ) : (
           <div className="empty-state" style={{ flex: 1 }} role="status">
             <div className="empty-icon">&#128172;</div>
-            <h3>HELM Assistant</h3>
-            <p>Your local-first engineering assistant. Create a new conversation or select one from the sidebar to get started.</p>
+            <h3>Lina Assistant</h3>
+            <p>
+              {ollamaConnected
+                ? 'Your local AI assistant powered by Ollama. Create a conversation to get started.'
+                : 'Start Ollama locally for real AI conversations. Create a conversation or select one from the sidebar.'}
+            </p>
             <button className="btn btn-primary" onClick={() => app.createConversation()}>New conversation</button>
             {app.conversations.length === 0 && (
               <div style={{ marginTop: 24, display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
@@ -189,4 +223,13 @@ export default function ChatSurface() {
       </div>
     </div>
   );
+
+  // Helper for quick prompts inside active conversation
+  async function handleSendQuick(text: string) {
+    if (isTyping) return;
+    const convId = activeConv?.id || app.createConversation();
+    setIsTyping(true);
+    await app.sendMessage(convId, text);
+    setIsTyping(false);
+  }
 }

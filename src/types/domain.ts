@@ -272,6 +272,8 @@ export interface Settings {
   wakeWordEnabled?: boolean;
   deepgramApiKey?: string;
   assistantLanguage?: 'en' | 'ar';
+  ollamaEndpoint?: string;
+  ollamaModel?: string;
 }
 
 // ── Navigation ──

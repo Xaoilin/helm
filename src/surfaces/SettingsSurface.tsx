@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { isSupabaseReady, syncNamespace, isAuthenticated, getCurrentUserId } from '../store/supabase';
-import { ELEVENLABS_API_KEY } from '../config';
+import { ELEVENLABS_API_KEY, OLLAMA_ENDPOINT } from '../config';
 import { DEFAULT_PROFILE } from '../services/gamification';
+import { testOllamaConnection, listOllamaModels } from '../services/ollamaApi';
 import { getAllLocalTimestamps } from '../store/persistence';
 
 export default function SettingsSurface() {
@@ -544,6 +545,29 @@ export default function SettingsSurface() {
           )}
         </div>
 
+        {/* Ollama LLM */}
+        <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Local AI (Ollama)</h3>
+        <div className="card">
+          <div style={{ fontSize: 12, color: '#9499b0', marginBottom: 10 }}>
+            Connect to a local Ollama instance for real AI conversations. Install from <a href="https://ollama.com" target="_blank" rel="noreferrer" style={{ color: '#7c8aff' }}>ollama.com</a>, then run <code style={{ background: '#1a1d2e', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>ollama pull llama3.2</code>
+          </div>
+          <div className="form-group" style={{ marginBottom: 12 }}>
+            <label htmlFor="settings-ollama-endpoint">Ollama endpoint</label>
+            <input
+              id="settings-ollama-endpoint"
+              className="form-input"
+              placeholder="http://localhost:11434"
+              value={settings.ollamaEndpoint || ''}
+              onChange={e => app.updateSettings({ ollamaEndpoint: e.target.value || undefined })}
+            />
+          </div>
+          <OllamaModelSelector
+            endpoint={settings.ollamaEndpoint || OLLAMA_ENDPOINT}
+            currentModel={settings.ollamaModel}
+            onModelChange={(model) => app.updateSettings({ ollamaModel: model || undefined })}
+          />
+        </div>
+
         {/* Reset Gamification */}
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Gamification Reset</h3>
         <div className="card">
@@ -582,6 +606,73 @@ export default function SettingsSurface() {
           </div>
         </div>
       </div>
+    </>
+  );
+}
+
+// ── Ollama Model Selector sub-component ──
+
+function OllamaModelSelector({ endpoint, currentModel, onModelChange }: {
+  endpoint: string;
+  currentModel?: string;
+  onModelChange: (model: string) => void;
+}) {
+  const [models, setModels] = useState<string[]>([]);
+  const [status, setStatus] = useState<'checking' | 'connected' | 'offline'>('checking');
+
+  useEffect(() => {
+    setStatus('checking');
+    testOllamaConnection(endpoint).then(ok => {
+      if (ok) {
+        setStatus('connected');
+        listOllamaModels(endpoint).then(setModels);
+      } else {
+        setStatus('offline');
+        setModels([]);
+      }
+    });
+  }, [endpoint]);
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 500 }}>Status:</span>
+        <span style={{ fontSize: 12, color: status === 'connected' ? '#22c55e' : status === 'offline' ? '#ff6b6b' : '#6b6f85' }}>
+          {status === 'checking' ? '⏳ Checking...' :
+           status === 'connected' ? '🟢 Connected' :
+           '🔴 Offline — start Ollama to enable AI'}
+        </span>
+        <button
+          className="btn btn-secondary btn-sm"
+          style={{ fontSize: 10, padding: '3px 8px' }}
+          onClick={() => {
+            setStatus('checking');
+            testOllamaConnection(endpoint).then(ok => {
+              setStatus(ok ? 'connected' : 'offline');
+              if (ok) listOllamaModels(endpoint).then(setModels);
+            });
+          }}
+        >
+          Test
+        </button>
+      </div>
+      {status === 'connected' && models.length > 0 && (
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label htmlFor="settings-ollama-model">Model</label>
+          <select
+            id="settings-ollama-model"
+            className="form-select"
+            value={currentModel || ''}
+            onChange={e => onModelChange(e.target.value)}
+          >
+            <option value="">Default (llama3.2)</option>
+            {models.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
+            Smaller models are faster. llama3.2 (3B) is recommended for quick responses.
+          </div>
+        </div>
+      )}
     </>
   );
 }

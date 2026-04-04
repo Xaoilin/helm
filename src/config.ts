@@ -37,5 +37,8 @@ export const ELEVENLABS_VOICE_ID = getEnv('VITE_ELEVENLABS_VOICE_ID') || getSett
 /** Deepgram API key for speech-to-text (replaces Chrome SpeechRecognition). */
 export const DEEPGRAM_API_KEY = getEnv('VITE_DEEPGRAM_API_KEY') || getSettingsValue('deepgramApiKey');
 
+/** Ollama local LLM endpoint. */
+export const OLLAMA_ENDPOINT = getEnv('VITE_OLLAMA_ENDPOINT') || getSettingsValue('ollamaEndpoint') || 'http://localhost:11434';
+
 /** Monzo personal access token. */
 export const MONZO_ACCESS_TOKEN = getEnv('VITE_MONZO_ACCESS_TOKEN') || getSettingsValue('monzoAccessToken');

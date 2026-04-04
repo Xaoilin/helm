@@ -206,7 +206,7 @@ describe('AppContext - Chat', () => {
     expect(r.api!.conversations).toHaveLength(1);
     expect(r.api!.activeConversationId).toBe(convId);
 
-    act(() => { r.api!.sendMessage(convId, 'Hello'); });
+    await act(async () => { await r.api!.sendMessage(convId, 'Hello'); });
     const conv = r.api!.conversations.find(c => c.id === convId);
     expect(conv!.messages).toHaveLength(2);
     expect(conv!.messages[0].role).toBe('user');
@@ -216,7 +216,7 @@ describe('AppContext - Chat', () => {
 
   it('should handle sendMessage for non-existent conversation', async () => {
     const r = await renderWithApp();
-    act(() => { r.api!.sendMessage('new-conv-id', 'Test message'); });
+    await act(async () => { await r.api!.sendMessage('new-conv-id', 'Test message'); });
     expect(r.api!.conversations).toHaveLength(1);
     expect(r.api!.conversations[0].id).toBe('new-conv-id');
     expect(r.api!.activeConversationId).toBe('new-conv-id');

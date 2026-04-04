@@ -61,19 +61,21 @@ describe('ChatSurface', () => {
 
   it('should render empty state with welcome message', async () => {
     await act(async () => { renderWithProvider(<ChatSurface />); });
-    expect(screen.getByText('HELM Assistant')).toBeInTheDocument();
+    expect(screen.getByText('Lina Assistant')).toBeInTheDocument();
     expect(screen.getByText('New conversation')).toBeInTheDocument();
   });
 
   it('should render quick prompts', async () => {
     await act(async () => { renderWithProvider(<ChatSurface />); });
-    expect(screen.getByText('What can you help me with?')).toBeInTheDocument();
-    expect(screen.getByText('What meetings do I have today?')).toBeInTheDocument();
+    expect(screen.getByText('What should I focus on today?')).toBeInTheDocument();
+    expect(screen.getByText('What meetings do I have coming up?')).toBeInTheDocument();
   });
 
-  it('should show mocked AI indicator', async () => {
+  it('should show Ollama status indicator', async () => {
     await act(async () => { renderWithProvider(<ChatSurface />); });
-    expect(screen.getByText('Mocked AI responses')).toBeInTheDocument();
+    // In test env, Ollama check starts as "Checking..." then resolves to offline
+    const matches = screen.getAllByText(/Checking|Ollama/);
+    expect(matches.length).toBeGreaterThan(0);
   });
 
   it('should show no conversations yet text', async () => {

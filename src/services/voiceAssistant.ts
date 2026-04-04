@@ -7,6 +7,7 @@
  */
 
 import type { Surface, CalendarEvent, Task, GamificationProfile } from '../types/domain';
+import { chatWithOllama, buildSystemPrompt, testOllamaConnection, type OllamaMessage } from './ollamaApi';
 
 // ── Intent Parsing ──
 
@@ -242,4 +243,76 @@ export function speakWithBrowserTTS(text: string, lang: AssistantLang = 'en'): v
     if (femaleVoice) utterance.voice = femaleVoice;
   }
   speechSynthesis.speak(utterance);
+}
+
+// ── Ollama LLM Processing ──
+
+let _ollamaAvailable: boolean | null = null;
+
+/**
+ * Check if Ollama is available (cached after first check, refreshes every 60s).
+ */
+export async function isOllamaAvailable(endpoint?: string): Promise<boolean> {
+  if (_ollamaAvailable !== null) return _ollamaAvailable;
+  _ollamaAvailable = await testOllamaConnection(endpoint);
+  // Refresh cache after 60s
+  setTimeout(() => { _ollamaAvailable = null; }, 60_000);
+  return _ollamaAvailable;
+}
+
+/** Reset cached Ollama availability (call when settings change). */
+export function resetOllamaCache(): void {
+  _ollamaAvailable = null;
+}
+
+/**
+ * Process a user message through the local Ollama LLM.
+ * Returns an Intent with the LLM's response and any navigation action.
+ */
+export async function processWithLLM(
+  transcript: string,
+  context: {
+    calendarEvents: CalendarEvent[];
+    tasks: Task[];
+    gamification: GamificationProfile;
+    prayerTimes?: { name: string; time: string }[];
+  },
+  lang: AssistantLang = 'en',
+  conversationHistory: OllamaMessage[] = [],
+  endpoint?: string,
+  model?: string,
+): Promise<Intent> {
+  const systemPrompt = buildSystemPrompt(context, lang);
+
+  const messages: OllamaMessage[] = [
+    { role: 'system', content: systemPrompt },
+    ...conversationHistory.slice(-10), // Last 5 exchanges (10 messages)
+    { role: 'user', content: transcript },
+  ];
+
+  try {
+    const response = await chatWithOllama(messages, endpoint, model);
+
+    // Parse [NAV:surface] tag from response
+    const navMatch = response.match(/\[NAV:(\w+)\]/);
+    const cleanResponse = response.replace(/\[NAV:\w+\]/g, '').trim();
+    const surface = navMatch?.[1] as Surface | undefined;
+
+    return {
+      type: surface ? 'navigate' : 'query',
+      surface,
+      response: cleanResponse,
+    };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    // Ollama failed — mark as unavailable and return error
+    _ollamaAvailable = false;
+    setTimeout(() => { _ollamaAvailable = null; }, 30_000);
+    return {
+      type: 'unknown',
+      response: lang === 'ar'
+        ? `لم أتمكن من الاتصال بـ Ollama: ${msg}`
+        : `Couldn't reach Ollama: ${msg}`,
+    };
+  }
 }

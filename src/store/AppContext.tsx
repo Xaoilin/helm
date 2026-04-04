@@ -12,6 +12,8 @@ import type {
 import { loadStore, saveStore } from './persistence';
 import { DEFAULT_PROFILE } from '../services/gamification';
 import { clearGoogleTokens } from '../services/googleAuth';
+import { chatWithOllama, buildSystemPrompt, testOllamaConnection, type OllamaMessage } from '../services/ollamaApi';
+import { OLLAMA_ENDPOINT } from '../config';
 
 // ── Default Settings ──
 const defaultSettings: Settings = {
@@ -61,7 +63,7 @@ interface AppContextAPI extends AppState {
   // Chat
   createConversation: () => string;
   setActiveConversation: (id: string | null) => void;
-  sendMessage: (conversationId: string, content: string) => void;
+  sendMessage: (conversationId: string, content: string) => Promise<void>;
   deleteConversation: (id: string) => void;
   renameConversation: (id: string, title: string) => void;
 
@@ -253,39 +255,80 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, activeConversationId: id }));
   }, []);
 
-  const sendMessage = useCallback((conversationId: string, content: string) => {
+  const sendMessage = useCallback(async (conversationId: string, content: string) => {
     const now = new Date().toISOString();
     const userMsg: ChatMessage = { id: uuid(), role: 'user', content, timestamp: now };
 
-    // Generate a mock assistant reply
-    const assistantMsg: ChatMessage = {
-      id: uuid(), role: 'assistant',
-      content: generateMockReply(content),
-      timestamp: new Date(Date.now() + 500).toISOString(),
-    };
-
+    // Add user message immediately (assistant reply added after LLM responds)
     setState(s => {
       const exists = s.conversations.some(c => c.id === conversationId);
       let convs = s.conversations;
       if (!exists) {
-        // Auto-create conversation if it doesn't exist yet (handles race with createConversation)
-        const newConv: ChatConversation = { id: conversationId, title: content.slice(0, 50), messages: [userMsg, assistantMsg], createdAt: now, updatedAt: now };
+        const newConv: ChatConversation = { id: conversationId, title: content.slice(0, 50), messages: [userMsg], createdAt: now, updatedAt: now };
         convs = [newConv, ...convs];
       } else {
         convs = convs.map(c =>
           c.id === conversationId
-            ? {
-                ...c,
-                messages: [...c.messages, userMsg, assistantMsg],
-                title: c.messages.length === 0 ? content.slice(0, 50) : c.title,
-                updatedAt: now,
-              }
+            ? { ...c, messages: [...c.messages, userMsg], title: c.messages.length === 0 ? content.slice(0, 50) : c.title, updatedAt: now }
             : c
         );
       }
       return { ...s, conversations: convs, activeConversationId: conversationId };
     });
-  }, []);
+
+    // Try Ollama LLM, fall back to mock
+    let replyContent: string;
+    try {
+      const endpoint = state.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
+      const model = state.settings.ollamaModel || undefined;
+      const ollamaUp = await testOllamaConnection(endpoint);
+
+      if (ollamaUp) {
+        // Build messages from conversation history
+        const conv = state.conversations.find(c => c.id === conversationId);
+        const history: OllamaMessage[] = (conv?.messages || []).slice(-10).map(m => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        }));
+
+        const lang = (state.settings.assistantLanguage || 'en') as 'en' | 'ar';
+        const systemPrompt = buildSystemPrompt({
+          calendarEvents: state.calendarEvents,
+          tasks: state.tasks,
+          gamification: state.gamification,
+        }, lang);
+
+        const messages: OllamaMessage[] = [
+          { role: 'system', content: systemPrompt },
+          ...history,
+          { role: 'user', content },
+        ];
+
+        replyContent = await chatWithOllama(messages, endpoint, model);
+        // Strip any NAV tags from chat responses
+        replyContent = replyContent.replace(/\[NAV:\w+\]/g, '').trim();
+      } else {
+        replyContent = generateMockReply(content);
+      }
+    } catch {
+      replyContent = generateMockReply(content);
+    }
+
+    const assistantMsg: ChatMessage = {
+      id: uuid(), role: 'assistant',
+      content: replyContent,
+      timestamp: new Date().toISOString(),
+    };
+
+    setState(s => ({
+      ...s,
+      conversations: s.conversations.map(c =>
+        c.id === conversationId
+          ? { ...c, messages: [...c.messages, assistantMsg], updatedAt: new Date().toISOString() }
+          : c
+      ),
+    }));
+  }, [state.settings, state.conversations, state.calendarEvents, state.tasks, state.gamification]);
 
   const deleteConversation = useCallback((id: string) => {
     setState(s => ({
