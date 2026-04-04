@@ -665,11 +665,11 @@ function OllamaModelSelector({ endpoint, currentModel, onModelChange }: {
             value={currentModel || ''}
             onChange={e => onModelChange(e.target.value)}
           >
-            <option value="">Default (llama3.2)</option>
+            <option value="">Default (qwen3)</option>
             {models.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
           <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
-            Smaller models are faster. llama3.2 (3B) is recommended for quick responses.
+            qwen3 (8B) recommended for English + Arabic. Smaller models like gemma3 or phi4-mini are faster.
           </div>
         </div>
       )}

@@ -12,7 +12,7 @@ import type { CalendarEvent, Task, GamificationProfile } from '../types/domain';
 import type { AssistantLang } from './voiceAssistant';
 
 const DEFAULT_ENDPOINT = 'http://localhost:11434';
-const DEFAULT_MODEL = 'llama3.2';
+const DEFAULT_MODEL = 'qwen3';
 
 export interface OllamaMessage {
   role: 'system' | 'user' | 'assistant';
@@ -41,9 +41,10 @@ export async function chatWithOllama(
       model,
       messages,
       stream: false,
+      think: false, // Disable extended thinking (qwen3) for faster responses
       options: {
         temperature: 0.7,
-        num_predict: 200, // Keep responses concise
+        num_predict: 300, // Keep responses concise
       },
     }),
   });
