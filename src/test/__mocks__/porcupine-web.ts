@@ -1,0 +1,16 @@
+export enum BuiltInKeyword {
+  Alexa = 'Alexa',
+  Americano = 'Americano',
+  Blueberry = 'Blueberry',
+  Bumblebee = 'Bumblebee',
+  Computer = 'Computer',
+  Grapefruit = 'Grapefruit',
+  Grasshopper = 'Grasshopper',
+  HeyGoogle = 'Hey Google',
+  HeySiri = 'Hey Siri',
+  Jarvis = 'Jarvis',
+  OkayGoogle = 'Okay Google',
+  Picovoice = 'Picovoice',
+  Porcupine = 'Porcupine',
+  Terminator = 'Terminator',
+}

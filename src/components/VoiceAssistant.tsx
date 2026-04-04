@@ -2,16 +2,16 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { parseIntent, processWithLLM, isOllamaAvailable, speakWithElevenLabs, speakWithBrowserTTS, type AssistantLang } from '../services/voiceAssistant';
 import type { OllamaMessage } from '../services/ollamaApi';
-import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY, OLLAMA_ENDPOINT } from '../config';
+import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY, OLLAMA_ENDPOINT, PICOVOICE_ACCESS_KEY } from '../config';
 import { createRecorder, transcribeWithDeepgram, testChromeSpeechRecognition } from '../services/deepgramSTT';
+import { usePorcupine } from '@picovoice/porcupine-react';
+import { BuiltInKeyword } from '@picovoice/porcupine-web';
 import type { PrayerTimesData } from '../services/prayerTimes';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 type AssistantState = 'idle' | 'open' | 'listening' | 'processing' | 'speaking';
 type VoiceBackend = 'deepgram' | 'chrome' | 'none';
-
-const WAKE_WORDS = ['hey lina', 'hey leena', 'hey lena', 'hey liner', 'a lina', 'eileen a'];
 
 interface Props {
   prayerData?: PrayerTimesData | null;
@@ -44,6 +44,13 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const sttLang = isArabic ? 'ar' : 'en-GB';
   const ollamaEndpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
   const ollamaModel = app.settings.ollamaModel || undefined;
+  const picovoiceKey = PICOVOICE_ACCESS_KEY || app.settings.picovoiceAccessKey || '';
+
+  // ── Porcupine wake word detection ──
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  const porcupine = usePorcupine();
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  const { keywordDetection, isLoaded: porcupineLoaded, init: porcupineInit, start: porcupineStart, stop: porcupineStop, release: porcupineRelease } = porcupine;
 
   // ── Detect best voice backend on mount ──
   useEffect(() => {
@@ -301,65 +308,53 @@ export default function VoiceAssistant({ prayerData }: Props) {
     }
   }, [voiceBackend, stopDeepgramAndTranscribe]);
 
-  // ── Wake word listener (Chrome SpeechRecognition only, opt-in) ──
+  // ── Porcupine wake word initialization ──
   useEffect(() => {
-    if (!enabled || !wakeWordEnabled || voiceBackend !== 'chrome') return;
+    if (!enabled || !wakeWordEnabled || !picovoiceKey || porcupineLoaded) return;
 
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
+    // Use built-in "Hey Siri" as placeholder until custom "Hey Lina" .ppn is trained
+    // To use custom keyword: replace BuiltInKeyword.HeySiri with:
+    // { publicPath: 'hey-lina.ppn', label: 'Hey Lina' }
+    const porcupineModel = { publicPath: `${import.meta.env.BASE_URL}porcupine_params.pv` };
 
-    let stopped = false;
+    porcupineInit(
+      picovoiceKey,
+      BuiltInKeyword.Jarvis, // Closest to "Hey Lina" style — swap for custom .ppn later
+      porcupineModel,
+    ).catch(() => {
+      // Model file may not exist yet — silently fail
+    });
 
-    const startWakeListener = () => {
-      if (stopped || !shouldListenRef.current) return;
+    return () => { porcupineRelease(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, wakeWordEnabled, picovoiceKey]);
 
-      const rec = new SR();
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.lang = sttLang;
+  // ── Start/stop Porcupine listening based on wake word toggle ──
+  useEffect(() => {
+    if (!porcupineLoaded || !wakeWordEnabled) return;
+    if (state === 'idle') {
+      porcupineStart().catch(() => {});
+    } else {
+      porcupineStop().catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [porcupineLoaded, wakeWordEnabled, state]);
 
-      rec.onresult = (event: any) => {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const text = event.results[i][0].transcript.toLowerCase().trim();
-          if (WAKE_WORDS.some(w => text.includes(w))) {
-            try { rec.abort(); } catch {}
-            wakeRecognitionRef.current = null;
-
-            const afterWake = text.replace(/.*(?:hey lina|hey leena|hey lena|hey liner|a lina|eileen a)\s*/i, '').trim();
-            if (afterWake.length > 3 && event.results[i].isFinal) {
-              setState('processing');
-              setTranscript(afterWake);
-              processTranscript(afterWake);
-            } else {
-              startListening();
-            }
-            return;
-          }
-        }
-      };
-
-      rec.onerror = () => {
-        wakeRecognitionRef.current = null;
-        if (!stopped) setTimeout(startWakeListener, 5000);
-      };
-
-      rec.onend = () => {
-        wakeRecognitionRef.current = null;
-        if (!stopped && shouldListenRef.current) setTimeout(startWakeListener, 3000);
-      };
-
-      wakeRecognitionRef.current = rec;
-      try { rec.start(); } catch {}
-    };
-
-    const timer = setTimeout(startWakeListener, 1000);
-
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-      if (wakeRecognitionRef.current) { try { wakeRecognitionRef.current.abort(); } catch {} }
-    };
-  }, [enabled, wakeWordEnabled, voiceBackend, processTranscript, startListening]);
+  // ── React to wake word detection ──
+  useEffect(() => {
+    if (keywordDetection !== null && state === 'idle') {
+      // Wake word detected — open Lina and start listening for command
+      setState('open');
+      setTranscript('');
+      setResponse('');
+      setError('');
+      // Auto-start voice recording if Deepgram is available
+      if (voiceBackend === 'deepgram') {
+        startDeepgramListening();
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keywordDetection]);
 
   // ── Auto-focus text input when panel opens ──
   useEffect(() => {

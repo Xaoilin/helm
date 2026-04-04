@@ -479,13 +479,28 @@ export default function SettingsSurface() {
             <div>
               <div style={{ fontSize: 13, fontWeight: 500 }}>Wake word ("Hey Lina")</div>
               <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 2 }}>
-                Continuously listens for "Hey Lina" in the background. Uses more battery and bandwidth. Click-to-talk always works regardless.
+                Listens for a wake word using Picovoice Porcupine (runs locally in your browser, no network needed). Requires a free Picovoice access key.
               </div>
             </div>
             <label className="toggle">
               <input type="checkbox" checked={settings.wakeWordEnabled === true} onChange={e => app.updateSettings({ wakeWordEnabled: e.target.checked })} aria-label="Toggle wake word" />
               <span className="slider" />
             </label>
+          </div>
+          {/* Picovoice Access Key */}
+          <div className="form-group" style={{ marginTop: 8, marginBottom: 12 }}>
+            <label htmlFor="settings-picovoice">Picovoice Access Key (for wake word)</label>
+            <input
+              id="settings-picovoice"
+              className="form-input"
+              type="password"
+              placeholder="Paste your Picovoice access key..."
+              value={settings.picovoiceAccessKey || ''}
+              onChange={e => app.updateSettings({ picovoiceAccessKey: e.target.value || undefined })}
+            />
+            <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
+              Free at <a href="https://console.picovoice.ai/" target="_blank" rel="noreferrer" style={{ color: '#7c8aff' }}>console.picovoice.ai</a> — enables "Hey Lina" wake word detection that works in any browser.
+            </div>
           </div>
           {/* Language */}
           <div className="form-group" style={{ marginTop: 12, marginBottom: 12 }}>

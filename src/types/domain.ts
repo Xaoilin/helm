@@ -274,6 +274,7 @@ export interface Settings {
   assistantLanguage?: 'en' | 'ar';
   ollamaEndpoint?: string;
   ollamaModel?: string;
+  picovoiceAccessKey?: string;
 }
 
 // ── Navigation ──
