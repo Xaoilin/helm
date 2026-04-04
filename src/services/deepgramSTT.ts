@@ -92,7 +92,9 @@ export async function transcribeWithDeepgram(
   apiKey: string,
   language: string = 'en-GB',
 ): Promise<DeepgramResult> {
-  const resp = await fetch(`https://api.deepgram.com/v1/listen?model=nova-2&language=${encodeURIComponent(language)}&smart_format=true`, {
+  // Nova-2 doesn't support Arabic; use nova-3 for ar, nova-2 for others
+  const model = language.startsWith('ar') ? 'nova-3' : 'nova-2';
+  const resp = await fetch(`https://api.deepgram.com/v1/listen?model=${model}&language=${encodeURIComponent(language)}&smart_format=true`, {
     method: 'POST',
     headers: {
       'Authorization': `Token ${apiKey}`,
