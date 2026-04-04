@@ -399,9 +399,31 @@ export default function VoiceAssistant({ prayerData }: Props) {
     }
   };
 
-  // ── Close on Escape ──
+  // ── Keyboard shortcuts: Ctrl+Shift+L to open, Escape to close ──
   useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
+    const handleKey = (e: KeyboardEvent) => {
+      // Ctrl+Shift+L — toggle Lina open/closed
+      if (e.ctrlKey && e.shiftKey && e.key === 'L') {
+        e.preventDefault();
+        if (state === 'idle') {
+          setState('open');
+          setTranscript('');
+          setResponse('');
+          setError('');
+        } else {
+          if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch {} recognitionRef.current = null; }
+          if (recorderRef.current?.isRecording()) { recorderRef.current.stop(); }
+          if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+          speechSynthesis?.cancel();
+          setState('idle');
+          setTranscript('');
+          setResponse('');
+          setError('');
+          shouldListenRef.current = true;
+        }
+        return;
+      }
+      // Escape — close if open
       if (e.key === 'Escape' && state !== 'idle') {
         if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch {} recognitionRef.current = null; }
         if (recorderRef.current?.isRecording()) { recorderRef.current.stop(); }
@@ -414,8 +436,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
         shouldListenRef.current = true;
       }
     };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
   }, [state]);
 
   if (!enabled) return null;
@@ -429,7 +451,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
         className={`va-button ${state === 'listening' ? 'listening' : state === 'speaking' ? 'speaking' : ''}`}
         onClick={handleClick}
         aria-label={isOpen ? 'Close Lina' : 'Talk to Lina'}
-        title={isOpen ? 'Close (Esc)' : 'Ask Lina anything'}
+        title={isOpen ? 'Close (Esc)' : 'Ask Lina anything (Ctrl+Shift+L)'}
       >
         <span className="va-avatar">{isOpen ? '×' : 'L'}</span>
         {state === 'listening' && <><span className="va-ring" /><span className="va-ring delay" /></>}
