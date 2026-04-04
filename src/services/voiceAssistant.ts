@@ -1,13 +1,16 @@
 /**
  * Voice Assistant Service — Intent parsing + ElevenLabs TTS
  *
- * Voice input: Web Speech API (browser-native)
+ * Voice input: Deepgram API (primary) or Web Speech API (fallback)
  * Voice output: ElevenLabs API (cloned voice) with browser TTS fallback
+ * Languages: English (en) and Arabic (ar)
  */
 
 import type { Surface, CalendarEvent, Task, GamificationProfile } from '../types/domain';
 
 // ── Intent Parsing ──
+
+export type AssistantLang = 'en' | 'ar';
 
 export interface Intent {
   type: 'navigate' | 'query' | 'unknown';
@@ -17,17 +20,92 @@ export interface Intent {
 }
 
 const NAV_KEYWORDS: [string[], Surface][] = [
-  [['dashboard', 'home', 'main'], 'dashboard'],
-  [['chat', 'conversation', 'message'], 'chat'],
-  [['calendar', 'schedule', 'meetings', 'events'], 'calendar'],
-  [['task', 'tasks', 'todo', 'to do', 'habits'], 'tasks'],
-  [['knowledge', 'islam', 'quran', 'learn'], 'knowledge'],
-  [['profile', 'stats', 'achievements', 'badges', 'level'], 'profile'],
-  [['credential', 'credentials', 'password', 'passwords', 'vault'], 'credentials'],
-  [['workspace', 'workspaces', 'project', 'projects'], 'workspaces'],
-  [['integration', 'integrations', 'connect'], 'integrations'],
-  [['setting', 'settings', 'preferences', 'config'], 'settings'],
+  [['dashboard', 'home', 'main', 'لوحة', 'الرئيسية'], 'dashboard'],
+  [['chat', 'conversation', 'message', 'محادثة', 'رسالة'], 'chat'],
+  [['calendar', 'schedule', 'meetings', 'events', 'تقويم', 'اجتماع', 'مواعيد'], 'calendar'],
+  [['task', 'tasks', 'todo', 'to do', 'habits', 'مهام', 'مهمة', 'عادات'], 'tasks'],
+  [['knowledge', 'islam', 'quran', 'learn', 'معرفة', 'إسلام', 'قرآن'], 'knowledge'],
+  [['profile', 'stats', 'achievements', 'badges', 'level', 'ملف', 'إنجازات', 'مستوى'], 'profile'],
+  [['credential', 'credentials', 'password', 'passwords', 'vault', 'كلمة سر', 'كلمات سر'], 'credentials'],
+  [['workspace', 'workspaces', 'project', 'projects', 'مشاريع', 'مشروع'], 'workspaces'],
+  [['integration', 'integrations', 'connect', 'ربط', 'تكامل'], 'integrations'],
+  [['setting', 'settings', 'preferences', 'config', 'إعدادات', 'تفضيلات'], 'settings'],
+  [['finance', 'money', 'budget', 'مالية', 'ميزانية', 'فلوس'], 'finance'],
 ];
+
+const SURFACE_LABELS: Record<string, Record<AssistantLang, string>> = {
+  dashboard: { en: 'Dashboard', ar: 'لوحة التحكم' },
+  chat: { en: 'Chat', ar: 'المحادثة' },
+  calendar: { en: 'Calendar', ar: 'التقويم' },
+  tasks: { en: 'Tasks', ar: 'المهام' },
+  knowledge: { en: 'Knowledge', ar: 'المعرفة' },
+  profile: { en: 'Profile', ar: 'الملف الشخصي' },
+  credentials: { en: 'Credentials', ar: 'كلمات السر' },
+  workspaces: { en: 'Workspaces', ar: 'المشاريع' },
+  integrations: { en: 'Integrations', ar: 'التكاملات' },
+  settings: { en: 'Settings', ar: 'الإعدادات' },
+  finance: { en: 'Finance', ar: 'المالية' },
+};
+
+// ── Bilingual response templates ──
+
+const RESPONSES = {
+  opening: {
+    en: (label: string) => `Opening ${label} for you.`,
+    ar: (label: string) => `جاري فتح ${label}.`,
+  },
+  noMeetings: {
+    en: 'You have no upcoming meetings.',
+    ar: 'ليس لديك اجتماعات قادمة.',
+  },
+  nextMeeting: {
+    en: (title: string, time: string, location?: string) =>
+      `Your next meeting is ${title} at ${time}${location ? `, at ${location}` : ''}.`,
+    ar: (title: string, time: string, location?: string) =>
+      `اجتماعك القادم هو ${title} الساعة ${time}${location ? `، في ${location}` : ''}.`,
+  },
+  tasksRemaining: {
+    en: (count: number) => `You have ${count} task${count !== 1 ? 's' : ''} remaining.`,
+    ar: (count: number) => count === 0 ? 'ليس لديك مهام متبقية.' :
+      count === 1 ? 'لديك مهمة واحدة متبقية.' :
+      count === 2 ? 'لديك مهمتان متبقيتان.' :
+      `لديك ${count} مهام متبقية.`,
+  },
+  noStreak: {
+    en: "You don't have an active streak right now. Complete a task to start one!",
+    ar: 'ليس لديك سلسلة نشطة حالياً. أكمل مهمة لتبدأ واحدة!',
+  },
+  streak: {
+    en: (s: number) => `You're on a ${s} day streak. Keep it going!`,
+    ar: (s: number) => `أنت في سلسلة ${s} يوم. استمر!`,
+  },
+  level: {
+    en: (lv: number, xp: number) => `You're level ${lv} with ${xp} XP.`,
+    ar: (lv: number, xp: number) => `أنت في المستوى ${lv} مع ${xp} نقطة خبرة.`,
+  },
+  prayerTime: {
+    en: (name: string, time: string) => `${name} is at ${time}.`,
+    ar: (name: string, time: string) => `${name} الساعة ${time}.`,
+  },
+  noPrayerData: {
+    en: "I don't have prayer times loaded right now.",
+    ar: 'لا تتوفر لدي أوقات الصلاة حالياً.',
+  },
+  allPrayerTimes: {
+    en: (list: string) => `Today's prayer times are: ${list}.`,
+    ar: (list: string) => `أوقات الصلاة اليوم: ${list}.`,
+  },
+  prayerNotLoaded: {
+    en: "Prayer times aren't loaded yet.",
+    ar: 'لم يتم تحميل أوقات الصلاة بعد.',
+  },
+  unknown: {
+    en: (transcript: string) =>
+      `I heard "${transcript}" but I'm not sure what to do. Try saying "show me calendar" or "what's my next meeting".`,
+    ar: (transcript: string) =>
+      `سمعت "${transcript}" لكن لم أفهم المطلوب. جرب قول "افتح التقويم" أو "ما هو اجتماعي القادم".`,
+  },
+};
 
 export function parseIntent(
   transcript: string,
@@ -37,72 +115,79 @@ export function parseIntent(
     gamification: GamificationProfile;
     prayerTimes?: { name: string; time: string }[];
   },
+  lang: AssistantLang = 'en',
 ): Intent {
   const lower = transcript.toLowerCase().trim();
 
-  // Navigation: "show me X", "go to X", "open X"
+  // Navigation: "show me X", "go to X", "open X", "افتح X"
   for (const [keywords, surface] of NAV_KEYWORDS) {
     for (const kw of keywords) {
       if (lower.includes(kw)) {
-        const label = surface.charAt(0).toUpperCase() + surface.slice(1);
-        return { type: 'navigate', surface, response: `Opening ${label} for you.` };
+        const label = SURFACE_LABELS[surface]?.[lang] || surface;
+        return { type: 'navigate', surface, response: RESPONSES.opening[lang](label) };
       }
     }
   }
 
-  // Query: "what's my next meeting"
-  if (lower.includes('next meeting') || lower.includes('next event') || lower.includes('upcoming')) {
+  // Query: "what's my next meeting" / "ما هو اجتماعي القادم"
+  if (lower.includes('next meeting') || lower.includes('next event') || lower.includes('upcoming') ||
+      lower.includes('اجتماع') || lower.includes('القادم') || lower.includes('الاجتماع')) {
     const now = new Date();
     const upcoming = context.calendarEvents
       .filter(e => new Date(e.start) > now && !e.allDay)
       .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
     if (upcoming.length === 0) {
-      return { type: 'query', response: 'You have no upcoming meetings.' };
+      return { type: 'query', response: RESPONSES.noMeetings[lang] };
     }
     const next = upcoming[0];
     const time = new Date(next.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return { type: 'query', response: `Your next meeting is ${next.title} at ${time}${next.location ? `, at ${next.location}` : ''}.` };
+    return { type: 'query', response: RESPONSES.nextMeeting[lang](next.title, time, next.location) };
   }
 
-  // Query: "how many tasks"
-  if (lower.includes('how many task') || lower.includes('tasks left') || lower.includes('pending task')) {
+  // Query: "how many tasks" / "كم مهمة"
+  if (lower.includes('how many task') || lower.includes('tasks left') || lower.includes('pending task') ||
+      lower.includes('كم مهمة') || lower.includes('مهام') || lower.includes('المتبقية')) {
     const incomplete = context.tasks.filter(t => !t.completed && t.category !== 'goal').length;
-    return { type: 'query', response: `You have ${incomplete} task${incomplete !== 1 ? 's' : ''} remaining.` };
+    return { type: 'query', response: RESPONSES.tasksRemaining[lang](incomplete) };
   }
 
-  // Query: "what's my streak"
-  if (lower.includes('streak')) {
+  // Query: "what's my streak" / "سلسلة"
+  if (lower.includes('streak') || lower.includes('سلسلة')) {
     const s = context.gamification.currentStreak;
-    if (s === 0) return { type: 'query', response: `You don't have an active streak right now. Complete a task to start one!` };
-    return { type: 'query', response: `You're on a ${s} day streak. Keep it going!` };
+    if (s === 0) return { type: 'query', response: RESPONSES.noStreak[lang] };
+    return { type: 'query', response: RESPONSES.streak[lang](s) };
   }
 
-  // Query: "what level"
-  if (lower.includes('level') || lower.includes('what am i')) {
+  // Query: "what level" / "مستوى"
+  if (lower.includes('level') || lower.includes('what am i') || lower.includes('مستوى')) {
     const lv = context.gamification.level;
-    return { type: 'query', response: `You're level ${lv} with ${context.gamification.totalXp} XP.` };
+    return { type: 'query', response: RESPONSES.level[lang](lv, context.gamification.totalXp) };
   }
 
   // Query: prayer times
-  const prayerNames = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+  const prayerNames = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'فجر', 'ظهر', 'عصر', 'مغرب', 'عشاء'];
+  const prayerMap: Record<string, string> = {
+    'فجر': 'fajr', 'ظهر': 'dhuhr', 'عصر': 'asr', 'مغرب': 'maghrib', 'عشاء': 'isha',
+  };
   for (const pn of prayerNames) {
     if (lower.includes(pn)) {
-      const pt = context.prayerTimes?.find(p => p.name.toLowerCase() === pn);
-      if (pt) return { type: 'query', response: `${pt.name} is at ${pt.time}.` };
-      return { type: 'query', response: `I don't have prayer times loaded right now.` };
+      const normalised = prayerMap[pn] || pn;
+      const pt = context.prayerTimes?.find(p => p.name.toLowerCase() === normalised);
+      if (pt) return { type: 'query', response: RESPONSES.prayerTime[lang](pt.name, pt.time) };
+      return { type: 'query', response: RESPONSES.noPrayerData[lang] };
     }
   }
-  if (lower.includes('prayer') && lower.includes('time')) {
+  if (lower.includes('prayer') && lower.includes('time') || lower.includes('صلاة') || lower.includes('أوقات')) {
     if (context.prayerTimes && context.prayerTimes.length > 0) {
       const times = context.prayerTimes.filter(p => ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].includes(p.name));
-      const list = times.map(p => `${p.name} at ${p.time}`).join(', ');
-      return { type: 'query', response: `Today's prayer times are: ${list}.` };
+      const list = times.map(p => `${p.name} ${lang === 'ar' ? 'الساعة' : 'at'} ${p.time}`).join(', ');
+      return { type: 'query', response: RESPONSES.allPrayerTimes[lang](list) };
     }
-    return { type: 'query', response: `Prayer times aren't loaded yet.` };
+    return { type: 'query', response: RESPONSES.prayerNotLoaded[lang] };
   }
 
   // Unknown
-  return { type: 'unknown', response: `I heard "${transcript}" but I'm not sure what to do. Try saying "show me calendar" or "what's my next meeting".` };
+  return { type: 'unknown', response: RESPONSES.unknown[lang](transcript) };
 }
 
 // ── ElevenLabs TTS ──
@@ -141,15 +226,20 @@ export async function speakWithElevenLabs(
 
 // ── Browser TTS Fallback ──
 
-export function speakWithBrowserTTS(text: string): void {
+export function speakWithBrowserTTS(text: string, lang: AssistantLang = 'en'): void {
   if (!('speechSynthesis' in window)) return;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = 1.0;
   utterance.pitch = 1.1;
-  utterance.lang = 'en-GB';
-  // Try to find a female voice
+  utterance.lang = lang === 'ar' ? 'ar-SA' : 'en-GB';
+
   const voices = speechSynthesis.getVoices();
-  const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Zira') || v.name.includes('Hazel'));
-  if (femaleVoice) utterance.voice = femaleVoice;
+  if (lang === 'ar') {
+    const arabicVoice = voices.find(v => v.lang.startsWith('ar'));
+    if (arabicVoice) utterance.voice = arabicVoice;
+  } else {
+    const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Zira') || v.name.includes('Hazel'));
+    if (femaleVoice) utterance.voice = femaleVoice;
+  }
   speechSynthesis.speak(utterance);
 }

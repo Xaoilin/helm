@@ -90,8 +90,9 @@ export function createRecorder(deviceId?: string): {
 export async function transcribeWithDeepgram(
   audioBlob: Blob,
   apiKey: string,
+  language: string = 'en-GB',
 ): Promise<DeepgramResult> {
-  const resp = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&language=en-GB&smart_format=true', {
+  const resp = await fetch(`https://api.deepgram.com/v1/listen?model=nova-2&language=${encodeURIComponent(language)}&smart_format=true`, {
     method: 'POST',
     headers: {
       'Authorization': `Token ${apiKey}`,

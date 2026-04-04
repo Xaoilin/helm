@@ -271,6 +271,7 @@ export interface Settings {
   microphoneDeviceId?: string;
   wakeWordEnabled?: boolean;
   deepgramApiKey?: string;
+  assistantLanguage?: 'en' | 'ar';
 }
 
 // ── Navigation ──

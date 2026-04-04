@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
-import { parseIntent, speakWithElevenLabs, speakWithBrowserTTS } from '../services/voiceAssistant';
+import { parseIntent, speakWithElevenLabs, speakWithBrowserTTS, type AssistantLang } from '../services/voiceAssistant';
 import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY } from '../config';
 import { createRecorder, transcribeWithDeepgram, testChromeSpeechRecognition } from '../services/deepgramSTT';
 import type { PrayerTimesData } from '../services/prayerTimes';
@@ -37,6 +37,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const hasElevenLabs = !!(ELEVENLABS_API_KEY && ELEVENLABS_VOICE_ID);
   const deepgramKey = DEEPGRAM_API_KEY || app.settings.deepgramApiKey || '';
   const micDeviceId = app.settings.microphoneDeviceId;
+  const lang: AssistantLang = app.settings.assistantLanguage || 'en';
+  const isArabic = lang === 'ar';
+  const sttLang = isArabic ? 'ar' : 'en-GB';
 
   // ── Detect best voice backend on mount ──
   useEffect(() => {
@@ -70,14 +73,14 @@ export default function VoiceAssistant({ prayerData }: Props) {
         const audio = await speakWithElevenLabs(text, ELEVENLABS_API_KEY!, ELEVENLABS_VOICE_ID!);
         audioRef.current = audio;
         audio.onended = done;
-        audio.onerror = () => { speakWithBrowserTTS(text); done(); };
+        audio.onerror = () => { speakWithBrowserTTS(text, lang); done(); };
         await audio.play();
       } catch {
-        speakWithBrowserTTS(text);
+        speakWithBrowserTTS(text, lang);
         done();
       }
     } else {
-      speakWithBrowserTTS(text);
+      speakWithBrowserTTS(text, lang);
       setTimeout(done, 3000);
     }
   }, [hasElevenLabs]);
@@ -94,7 +97,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
       tasks: app.tasks,
       gamification: app.gamification,
       prayerTimes,
-    });
+    }, lang);
 
     if (intent.type === 'navigate' && intent.surface) {
       app.navigate(intent.surface);
@@ -149,7 +152,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
         return;
       }
 
-      const result = await transcribeWithDeepgram(blob, deepgramKey);
+      const result = await transcribeWithDeepgram(blob, deepgramKey, sttLang);
 
       if (!result.transcript || result.transcript.trim() === '') {
         setError('Couldn\'t make out what you said. Try again or type your command.');
@@ -180,7 +183,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     const rec = new SR();
     rec.continuous = false;
     rec.interimResults = false;
-    rec.lang = 'en-GB';
+    rec.lang = sttLang;
 
     rec.onresult = (event: any) => {
       const result = event.results[0];
@@ -253,7 +256,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
       const rec = new SR();
       rec.continuous = true;
       rec.interimResults = true;
-      rec.lang = 'en-GB';
+      rec.lang = sttLang;
 
       rec.onresult = (event: any) => {
         for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -376,23 +379,25 @@ export default function VoiceAssistant({ prayerData }: Props) {
       {isOpen && (
         <div className="va-bubble">
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 16, fontWeight: 600, color: '#c4a0f7' }}>Lina</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, direction: isArabic ? 'rtl' : 'ltr' }}>
+            <span style={{ fontSize: 16, fontWeight: 600, color: '#c4a0f7' }}>لينا{!isArabic && ' Lina'}</span>
             <span style={{ fontSize: 11, color: '#6b6f85' }}>
               {state === 'listening'
-                ? voiceBackend === 'deepgram' ? '🎙️ Recording... click stop when done' : '🎙️ Listening...'
-                : state === 'processing' ? '🤔 Thinking...'
-                : state === 'speaking' ? '🔊 Speaking...'
-                : 'Ask me anything'}
+                ? voiceBackend === 'deepgram'
+                  ? isArabic ? '🎙️ جاري التسجيل... اضغط إيقاف' : '🎙️ Recording... click stop when done'
+                  : isArabic ? '🎙️ جاري الاستماع...' : '🎙️ Listening...'
+                : state === 'processing' ? isArabic ? '🤔 جاري التفكير...' : '🤔 Thinking...'
+                : state === 'speaking' ? isArabic ? '🔊 جاري التحدث...' : '🔊 Speaking...'
+                : isArabic ? 'اسألني أي شيء' : 'Ask me anything'}
             </span>
           </div>
 
           {/* Conversation area */}
           {transcript && (
-            <div className="va-you" style={{ marginBottom: 6 }}>You: {transcript}</div>
+            <div className="va-you" style={{ marginBottom: 6, direction: isArabic ? 'rtl' : 'ltr' }}>{isArabic ? 'أنت' : 'You'}: {transcript}</div>
           )}
           {response && (
-            <div className="va-lina" style={{ marginBottom: 10 }}>{response}</div>
+            <div className="va-lina" style={{ marginBottom: 10, direction: isArabic ? 'rtl' : 'ltr' }}>{response}</div>
           )}
           {error && (
             <div style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 8, lineHeight: 1.4 }}>{error}</div>
@@ -406,7 +411,10 @@ export default function VoiceAssistant({ prayerData }: Props) {
                   ref={inputRef}
                   className="form-input"
                   style={{ fontSize: 13, padding: '8px 10px', flex: 1, background: '#0f1117', border: '1px solid #2a2d40', borderRadius: 8, color: '#e1e4ea' }}
-                  placeholder={canVoice ? 'Type or click 🎙️ to speak...' : 'Type a command...'}
+                  dir={isArabic ? 'rtl' : 'ltr'}
+                  placeholder={isArabic
+                    ? canVoice ? 'اكتب أو اضغط 🎙️ للتحدث...' : 'اكتب أمراً...'
+                    : canVoice ? 'Type or click 🎙️ to speak...' : 'Type a command...'}
                   value={textInput}
                   onChange={e => setTextInput(e.target.value)}
                   onKeyDown={e => {
@@ -419,7 +427,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: 8 }}>
                   <span className="va-dots"><span /><span /><span /></span>
                   <span style={{ fontSize: 12, color: '#22c55e' }}>
-                    {voiceBackend === 'deepgram' ? 'Recording... speak then click ⏹️' : 'Listening...'}
+                    {voiceBackend === 'deepgram'
+                      ? isArabic ? 'جاري التسجيل... تحدث ثم اضغط ⏹️' : 'Recording... speak then click ⏹️'
+                      : isArabic ? 'جاري الاستماع...' : 'Listening...'}
                   </span>
                 </div>
               )}
@@ -483,8 +493,11 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
           {/* Quick command hints */}
           {!transcript && !response && state === 'open' && (
-            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {['next meeting', 'tasks left', 'prayer times', 'open calendar', 'my streak'].map(cmd => (
+            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 4, direction: isArabic ? 'rtl' : 'ltr' }}>
+              {(isArabic
+                ? ['الاجتماع القادم', 'كم مهمة', 'أوقات الصلاة', 'افتح التقويم', 'سلسلة']
+                : ['next meeting', 'tasks left', 'prayer times', 'open calendar', 'my streak']
+              ).map(cmd => (
                 <button
                   key={cmd}
                   onClick={() => { setTextInput(''); processTranscript(cmd); }}

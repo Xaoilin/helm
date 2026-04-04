@@ -486,6 +486,22 @@ export default function SettingsSurface() {
               <span className="slider" />
             </label>
           </div>
+          {/* Language */}
+          <div className="form-group" style={{ marginTop: 12, marginBottom: 12 }}>
+            <label htmlFor="settings-assistant-lang">Response language</label>
+            <select
+              id="settings-assistant-lang"
+              className="form-select"
+              value={settings.assistantLanguage || 'en'}
+              onChange={e => app.updateSettings({ assistantLanguage: e.target.value as 'en' | 'ar' })}
+            >
+              <option value="en">English</option>
+              <option value="ar">العربية (Arabic)</option>
+            </select>
+            <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
+              Lina will respond and listen in the selected language. Voice recognition also switches language.
+            </div>
+          </div>
           {/* Deepgram API Key — for speech-to-text */}
           <div className="form-group" style={{ marginTop: 12, marginBottom: 12 }}>
             <label htmlFor="settings-deepgram">Deepgram API Key (for voice input)</label>
