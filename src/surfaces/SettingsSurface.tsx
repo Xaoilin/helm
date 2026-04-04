@@ -479,7 +479,7 @@ export default function SettingsSurface() {
             <div>
               <div style={{ fontSize: 13, fontWeight: 500 }}>Wake word ("Hey Lina")</div>
               <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 2 }}>
-                Listens for "Hey Jarvis" using OpenWakeWord (runs locally in your browser via WASM — no network, no API key, completely free). Say the wake word and Lina opens automatically.
+                Listens for "Hey Lina" using OpenWakeWord (runs locally in your browser via WASM — no network, no API key, completely free). Say the wake word and Lina opens automatically.
               </div>
             </div>
             <label className="toggle">

@@ -311,7 +311,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     const engine = new WakeWordEngine({
       // To use custom "Hey Lina": train model, put .onnx in public/openwakeword/models/,
       // add to keywords array as filename without extension
-      keywords: ['hey_jarvis'],
+      keywords: ['hey_lina'],
       baseAssetUrl: `${import.meta.env.BASE_URL}openwakeword/models`,
       detectionThreshold: 0.5,
       cooldownMs: 2000,
