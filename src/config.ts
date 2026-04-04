@@ -37,9 +37,6 @@ export const ELEVENLABS_VOICE_ID = getEnv('VITE_ELEVENLABS_VOICE_ID') || getSett
 /** Deepgram API key for speech-to-text (replaces Chrome SpeechRecognition). */
 export const DEEPGRAM_API_KEY = getEnv('VITE_DEEPGRAM_API_KEY') || getSettingsValue('deepgramApiKey');
 
-/** Picovoice access key for Porcupine wake word detection. */
-export const PICOVOICE_ACCESS_KEY = getEnv('VITE_PICOVOICE_ACCESS_KEY') || getSettingsValue('picovoiceAccessKey');
-
 /** Ollama local LLM endpoint. */
 export const OLLAMA_ENDPOINT = getEnv('VITE_OLLAMA_ENDPOINT') || getSettingsValue('ollamaEndpoint') || 'http://localhost:11434';
 

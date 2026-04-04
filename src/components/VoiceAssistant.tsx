@@ -2,10 +2,9 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { parseIntent, processWithLLM, isOllamaAvailable, speakWithElevenLabs, speakWithBrowserTTS, type AssistantLang } from '../services/voiceAssistant';
 import type { OllamaMessage } from '../services/ollamaApi';
-import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY, OLLAMA_ENDPOINT, PICOVOICE_ACCESS_KEY } from '../config';
+import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY, OLLAMA_ENDPOINT } from '../config';
 import { createRecorder, transcribeWithDeepgram, testChromeSpeechRecognition } from '../services/deepgramSTT';
-import { usePorcupine } from '@picovoice/porcupine-react';
-import { BuiltInKeyword } from '@picovoice/porcupine-web';
+import WakeWordEngine from 'openwakeword-wasm-browser';
 import type { PrayerTimesData } from '../services/prayerTimes';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -44,13 +43,10 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const sttLang = isArabic ? 'ar' : 'en-GB';
   const ollamaEndpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
   const ollamaModel = app.settings.ollamaModel || undefined;
-  const picovoiceKey = PICOVOICE_ACCESS_KEY || app.settings.picovoiceAccessKey || '';
 
-  // ── Porcupine wake word detection ──
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  const porcupine = usePorcupine();
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  const { keywordDetection, isLoaded: porcupineLoaded, init: porcupineInit, start: porcupineStart, stop: porcupineStop, release: porcupineRelease } = porcupine;
+  // ── OpenWakeWord engine ref ──
+  const wakeEngineRef = useRef<any>(null);
+  const [wakeWordReady, setWakeWordReady] = useState(false);
 
   // ── Detect best voice backend on mount ──
   useEffect(() => {
@@ -308,53 +304,63 @@ export default function VoiceAssistant({ prayerData }: Props) {
     }
   }, [voiceBackend, stopDeepgramAndTranscribe]);
 
-  // ── Porcupine wake word initialization ──
+  // ── OpenWakeWord initialization ──
   useEffect(() => {
-    if (!enabled || !wakeWordEnabled || !picovoiceKey || porcupineLoaded) return;
+    if (!enabled || !wakeWordEnabled || wakeEngineRef.current) return;
 
-    // Use built-in "Hey Siri" as placeholder until custom "Hey Lina" .ppn is trained
-    // To use custom keyword: replace BuiltInKeyword.HeySiri with:
-    // { publicPath: 'hey-lina.ppn', label: 'Hey Lina' }
-    const porcupineModel = { publicPath: `${import.meta.env.BASE_URL}porcupine_params.pv` };
-
-    porcupineInit(
-      picovoiceKey,
-      BuiltInKeyword.Jarvis, // Closest to "Hey Lina" style — swap for custom .ppn later
-      porcupineModel,
-    ).catch(() => {
-      // Model file may not exist yet — silently fail
+    const engine = new WakeWordEngine({
+      // To use custom "Hey Lina": train model, put .onnx in public/openwakeword/models/,
+      // add to keywords array as filename without extension
+      keywords: ['hey_jarvis'],
+      baseAssetUrl: `${import.meta.env.BASE_URL}openwakeword/models`,
+      detectionThreshold: 0.5,
+      cooldownMs: 2000,
     });
 
-    return () => { porcupineRelease(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, wakeWordEnabled, picovoiceKey]);
-
-  // ── Start/stop Porcupine listening based on wake word toggle ──
-  useEffect(() => {
-    if (!porcupineLoaded || !wakeWordEnabled) return;
-    if (state === 'idle') {
-      porcupineStart().catch(() => {});
-    } else {
-      porcupineStop().catch(() => {});
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [porcupineLoaded, wakeWordEnabled, state]);
-
-  // ── React to wake word detection ──
-  useEffect(() => {
-    if (keywordDetection !== null && state === 'idle') {
-      // Wake word detected — open Lina and start listening for command
-      setState('open');
-      setTranscript('');
-      setResponse('');
-      setError('');
-      // Auto-start voice recording if Deepgram is available
-      if (voiceBackend === 'deepgram') {
-        startDeepgramListening();
+    engine.on('detect', ({ keyword }: { keyword: string; score: number }) => {
+      if (keyword) {
+        // Wake word detected — open Lina and start recording
+        setState('open');
+        setTranscript('');
+        setResponse('');
+        setError('');
+        if (voiceBackend === 'deepgram') {
+          startDeepgramListening();
+        }
       }
-    }
+    });
+
+    engine.load()
+      .then(() => engine.start())
+      .then(() => {
+        wakeEngineRef.current = engine;
+        setWakeWordReady(true);
+      })
+      .catch(() => {
+        // Models may not be available — silently fail
+      });
+
+    return () => {
+      if (wakeEngineRef.current) {
+        wakeEngineRef.current.stop().catch(() => {});
+        wakeEngineRef.current = null;
+        setWakeWordReady(false);
+      }
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keywordDetection]);
+  }, [enabled, wakeWordEnabled]);
+
+  // ── Pause/resume wake word when Lina panel is open ──
+  useEffect(() => {
+    const engine = wakeEngineRef.current;
+    if (!engine || !wakeWordReady) return;
+
+    if (state === 'idle') {
+      engine.start().catch(() => {});
+    } else {
+      engine.stop().catch(() => {});
+    }
+  }, [state, wakeWordReady]);
 
   // ── Auto-focus text input when panel opens ──
   useEffect(() => {

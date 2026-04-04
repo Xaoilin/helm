@@ -20,8 +20,7 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     css: true,
     alias: {
-      '@picovoice/porcupine-react': path.resolve(__dirname, 'src/test/__mocks__/porcupine-react.ts'),
-      '@picovoice/porcupine-web': path.resolve(__dirname, 'src/test/__mocks__/porcupine-web.ts'),
+      'openwakeword-wasm-browser': path.resolve(__dirname, 'src/test/__mocks__/openwakeword.ts'),
     },
   },
 })
