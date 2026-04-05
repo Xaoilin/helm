@@ -1,241 +1,270 @@
 # HELM - Project Guidelines
 
 ## Overview
-HELM is a Windows-first, local-first personal assistant desktop app for a solo software engineer and entrepreneur. Built with Tauri (Rust backend) + React 19 + TypeScript 5.9 + Vite 8. Google Calendar integration is live with real OAuth; other integrations are mocked.
+HELM is a Windows-first, local-first personal assistant desktop app for a solo software engineer and entrepreneur. Built with Tauri (Rust backend) + React 19 + TypeScript 5.9 + Vite 8. Features: Google Calendar (live OAuth), gamified task management (125 badges), Islamic knowledge base, Shia prayer times with Adhan, personal finance with Monzo, AI assistant "Lina" (Ollama LLM + ElevenLabs voice + Deepgram STT + OpenWakeWord wake word).
 
 ## Architecture
 
 ```
 src/
   types/domain.ts          Domain interfaces (source of truth for all data shapes)
+  types/openwakeword.d.ts  Type declarations for OpenWakeWord WASM module
   store/
     AppContext.tsx          Central state (React context + useCallback). All CRUD lives here.
-    persistence.ts         Tauri file store with localStorage fallback
+    persistence.ts         Auto-sync: localStorage (cache) + Supabase (source of truth when signed in)
+    supabase.ts            Supabase client, Google Auth, CRUD operations, debounced write queue
   services/
+    gamification.ts        XP, levels, streaks, 125 badges, prayer stats, habit tallies
     googleAuth.ts          Google Identity Services OAuth (GIS token model)
     googleCalendarApi.ts   Google Calendar REST v3 client (native fetch, no SDK)
+    prayerTimes.ts         AlAdhan API client (Shia Ithna-Ashari method)
+    voiceAssistant.ts      Intent parsing (keyword + LLM), ElevenLabs TTS, browser TTS
+    ollamaApi.ts           Ollama REST client, system prompt builder with live user data
+    deepgramSTT.ts         MediaRecorder + Deepgram REST API for speech-to-text
+    monzoApi.ts            Monzo bank API client, transaction mapper
+    financeHelpers.ts      Currency formatting, category configs, calculations
+    habitEmoji.ts          Auto-detect emoji from habit title keywords
   hooks/
     useGoogleSync.ts       Multi-account sync orchestrator + duplicate cleanup
+  components/
+    VoiceAssistant.tsx     Lina floating panel: text input, voice, wake word, LLM fallback
+    HabitCards.tsx          Reusable habit card grid with confirmation, progress ring, XP
   surfaces/
-    ChatSurface.tsx        Text-first assistant (mocked AI responses)
-    CalendarSurface.tsx    Month/Week/Agenda views, multi-account, source reassignment
-    CredentialsSurface.tsx 1Password-first credential management with local vault fallback
-    WorkspacesSurface.tsx  Local project directory management
-    IntegrationsSurface.tsx Google Calendar OAuth + mocked service connections
-    SettingsSurface.tsx    Preferences, credential source, Google client ID
-  test/                    Vitest test suite (see Testing section)
-src-tauri/
-  src/commands.rs          Key-value file store (read_store, write_store)
-  src/lib.rs               Tauri app setup with command registration
+    DashboardSurface.tsx   Landing page: agenda, habits, goals, prayer times/stats, achievements
+    ChatSurface.tsx        Full chat with Ollama LLM (typing indicator, conversation history)
+    CalendarSurface.tsx    Month/Week/Agenda/Accounts views, multi-account, source reassignment
+    TasksSurface.tsx       Today/All Tasks/Goals tabs, habit management, gamification
+    FinanceSurface.tsx     Overview/Transactions/Accounts/Budgets, Monzo sync
+    KnowledgeSurface.tsx   Browse/Add/Search/Lifestyle (Haram/Halal tracker with drag-and-drop)
+    ProfileSurface.tsx     Level/XP, streak heatmap, 125 badges, prayer rate breakdown
+    SettingsSurface.tsx    Preferences, voice config, Ollama, prayer settings
+  test/                    Vitest test suite (194+ tests, 14 files)
+  config.ts                Environment variables with Settings fallback
 ```
 
 ### Data flow
-- State: `AppContext` holds all domain data, exposes CRUD via React context
-- Persistence: Each collection auto-saves to Tauri file store (or localStorage fallback) via `useEffect` watchers
-- Google Calendar: Account -> Sources (calendars) -> Events. Synced via `useGoogleSync` hook.
-- Palette colors: Assigned per-account (not per-source). Index in `calendarAccounts` array determines color.
-- Source reassignment: Users can move a calendar source to a different account to control its color.
-- Deduplication: Shared calendars across accounts are deduplicated by `googleCalendarId` during sync.
+- **State:** `AppContext` holds all domain data, exposes CRUD via React context
+- **Persistence:** Auto-sync — every state change writes to localStorage (instant) + Supabase (debounced 1s). On login, loads from Supabase as source of truth. Invisible to user.
+- **Google Calendar:** Account -> Sources (calendars) -> Events. Synced via `useGoogleSync` hook.
+- **Voice pipeline:** OpenWakeWord (wake word) -> Deepgram (STT) -> Ollama (LLM intent) -> ElevenLabs (TTS)
+- **LLM actions:** Ollama can emit action tags `[ADD_TASK:...]`, `[COMPLETE_TASK:...]`, `[NAV:...]` which are parsed and executed
 
 ### Key patterns
-- `toLocalDateStr(date)` for date comparisons. Never use `toISOString().split('T')[0]` (shifts timezone).
+- `toLocalDateStr(date)` for date comparisons. **Never** use `toISOString().split('T')[0]` (shifts timezone).
 - `getEventPalette(sourceId)` traces source -> account -> palette index for event coloring.
 - Cascade deletes: removing an account cascades to its sources and events. Primary promotion is automatic.
-- `cleanupDuplicateSources()` runs before each sync to remove stale duplicate sources from localStorage.
+- Keyword-first, LLM-second: Navigation commands resolve instantly, only unknown intents go to Ollama.
 
 ---
 
 ## Development Process (SDLC)
 
-### Git branching strategy:
+### Git branching strategy
 - **Every feature or fix gets its own branch.** Never commit directly to `master`.
-- Branch naming: `feature/<short-description>` (e.g., `feature/prayer-log-editor`, `feature/ollama-integration`, `fix/calendar-timezone-bug`)
-- Workflow for each task:
-  1. `git checkout master && git pull` — start from latest master
-  2. `git checkout -b feature/<name>` — create feature branch
-  3. Do all work, commits, and pushes on the feature branch
-  4. When complete: `git checkout master && git merge feature/<name> --no-ff` — merge to master with a merge commit
-  5. `git push origin master` — push master (auto-deploys to GitHub Pages)
-  6. `git push origin feature/<name>` — keep the feature branch on remote for rollback reference
-- **Why:** If a big regression happens, the user can `git revert` the merge commit or reset master to before the merge. Each feature is an isolated, revertable unit.
-- **Do NOT delete feature branches** after merging — they serve as rollback points.
+- Branch naming: `feature/<short-description>` or `fix/<short-description>`
+- Workflow:
+  1. `git checkout master && git pull`
+  2. `git checkout -b feature/<name>`
+  3. All work on the feature branch
+  4. `git checkout master && git merge feature/<name> --no-ff`
+  5. `git push origin master` (auto-deploys via GitHub Actions)
+  6. `git push origin feature/<name>` (keep for rollback)
+- **Do NOT delete feature branches** — they serve as rollback points.
 
 ### Before every response that changes code:
-1. `./node_modules/.bin/tsc -b` -- must compile with zero errors
-2. `./node_modules/.bin/vitest run` -- all tests must pass
-3. If UI changed, verify via Chrome MCP screenshot -- actually look at the result
-4. If claiming a fix, show proof (screenshot, data dump, or test output)
-5. `git add -A && git commit` -- commit all changes with a descriptive message
-6. `git push` -- push to GitHub (feature branch first, then merge to master which auto-deploys)
-7. **Every code change must be committed, pushed, and deployed.** Never leave uncommitted work.
-
-### Features that CANNOT be tested via automation:
-- **Voice assistant (SpeechRecognition)** — requires real microphone audio + live connection to Google's speech servers. Chrome MCP cannot simulate this. If voice features break, provide a text-input fallback and tell the user to test manually.
-- **ElevenLabs voice output** — requires API key + real audio playback.
-- **Monzo bank sync** — requires real Monzo access token + Monzo app approval.
-- **Google OAuth popups** — happen in separate windows that automation can't control.
-- **Adhan notifications** — time-dependent, can only test via the Settings test buttons.
+1. `./node_modules/.bin/tsc -b` — must compile with zero errors
+2. `./node_modules/.bin/vitest run` — all tests must pass
+3. If UI changed, verify via screenshot — actually look at the result
+4. If claiming a fix, show proof (screenshot, test output, data dump)
+5. Commit on feature branch, merge to master, push both
+6. **Every code change must be committed, pushed, and deployed.** Never leave uncommitted work.
 
 ### When fixing bugs:
-1. **Reproduce first** -- read localStorage or DOM to understand the actual data state
-2. **Identify root cause** -- trace the data flow, don't patch symptoms
-3. **Write a regression test** -- every bug fix gets a test that would have caught it
-4. **Verify the fix is live** -- if data is stale in localStorage, handle migration/cleanup in the fix itself
-5. **Never claim "fixed" without proof** -- show the user a screenshot or test result
-
-### When building features:
-1. Write the feature code
-2. Write tests (unit tests at minimum, component tests for UI changes)
-3. Compile clean (`tsc -b`)
-4. All tests pass (`vitest run`)
-5. Verify visually if UI changed
-6. Only then report to user
-
-### When removing features:
-1. Remove the surface/component file
-2. Remove from App.tsx navigation and router
-3. Remove domain types from `types/domain.ts`
-4. Remove state, CRUD, and persistence from `AppContext.tsx`
-5. Remove all references in other surfaces (grep for the feature name)
-6. Remove related tests
-7. Compile + test + verify
+1. **Reproduce first** — read localStorage or DOM to understand actual data state
+2. **Identify root cause** — trace the data flow, don't patch symptoms
+3. **Write a regression test** — every bug fix gets a test that would have caught it
+4. **Verify the fix is live** — if data is stale in localStorage, handle migration/cleanup
+5. **Never claim "fixed" without proof** — show the user a screenshot or test result
 
 ---
 
-## Testing Standards
+## Engineering Standards
 
-### Run tests
-```bash
-./node_modules/.bin/vitest run       # single run (115+ tests, 11 files)
-./node_modules/.bin/vitest           # watch mode
-```
+### SOLID Principles
 
-### Test files
-| File | Coverage |
-|------|----------|
-| `setup.ts` | Mocks for Tauri API and localStorage |
-| `appState.test.ts` | All CRUD operations, cascade deletes, primary promotion, bulk ops |
-| `googleAuth.test.ts` | Token storage, validation, account isolation |
-| `googleCalendarApi.test.ts` | Event conversion (timed, all-day, missing data), error classification |
-| `googleApi.test.ts` | API calls with fetch mocking: calendar list, events, pagination, CRUD, errors |
-| `syncDeduplication.test.ts` | Dedup logic, color mapping, source reassignment, event-to-account tracing |
-| `calendarDateMapping.test.ts` | Timezone regression: toLocalDateStr, month/week date agreement |
-| `duplicateCleanup.test.ts` | Pre-sync duplicate cleanup, event re-attribution, idempotency |
-| `accountLegend.test.ts` | Palette assignment, stability, cycling, multi-account |
-| `calendarCrud.test.ts` | View consistency, source reassignment palette changes, cascade deletes |
-| `persistence.test.ts` | localStorage round-trip, null handling, invalid JSON |
-| `surfaces.test.tsx` | Component render tests: all 6 surfaces, empty states, nav, key elements |
+**Single Responsibility (SRP):**
+- Each service handles one concern: `googleAuth.ts` (tokens), `deepgramSTT.ts` (audio capture), `ollamaApi.ts` (LLM calls)
+- Surfaces focus on one domain area each
+- **Known violation:** `AppContext.tsx` is a God object (832 lines, 15+ responsibilities). Future refactor: split into `CalendarContext`, `TaskContext`, `ChatContext`, etc.
+- **Known violation:** `VoiceAssistant.tsx` mixes audio input, wake word, voice output, and state machine. Future refactor: extract `useVoiceInput()`, `useWakeWord()`, `useVoiceOutput()` hooks.
+- **Known violation:** Large surfaces (DashboardSurface 721 lines, CalendarSurface 778 lines). Future refactor: extract sub-components like `<PrayerWidget />`, `<CalendarWeekView />`.
 
-### Testing requirements
+**Open/Closed (OCP):**
+- Voice backend uses strategy-like pattern (Deepgram/Chrome/none)
+- New wake word models can be added by dropping `.onnx` files
+- **Improvement needed:** Navigation keywords are hardcoded arrays. Should support plugin/config extension.
+
+**Interface Segregation (ISP):**
+- Domain types in `types/domain.ts` are focused and minimal
+- No fat interfaces — each type has only its relevant fields
+
+**Dependency Inversion (DIP):**
+- Services take API keys and endpoints as parameters (not importing globals)
+- Config loaded from env vars with Settings fallback
+- **Improvement needed:** AppContext directly calls `saveStore()` in 16 useEffect blocks. Should use a persistence middleware.
+
+### Error Handling Standards
+
+**Current state:** 13 swallowed errors (`catch {}` or `catch { /* fall through */ }`). This is the biggest gap.
+
+**Rules going forward:**
+- **Never swallow errors silently.** At minimum, `console.warn('[service]', error)`.
+- **Create error boundaries** around each surface to prevent one broken surface from crashing the app.
+- **User-visible errors** must show a toast or inline message — never fail silently from the user's perspective.
+- **API errors** must be typed and classified (auth error vs network error vs rate limit).
+- **Log format:** `[ServiceName] action failed: message` — consistent across all services.
+
+**Existing good patterns:**
+- `GoogleApiError` with `.isAuthError`, `.isForbidden`, `.isRateLimit` classification
+- Deepgram checks for 401/403 specifically
+- Ollama marks itself as unavailable on failure, retries after 30s
+
+### Resilience Patterns
+
+**Circuit Breaker** (the ship hull / bulkhead pattern):
+- Currently: ❌ Not implemented
+- **Rule:** External API calls (Deepgram, Ollama, Google, Monzo, ElevenLabs) should use a circuit breaker. After 3 consecutive failures, stop calling for 60 seconds (fast-fail). Auto-retry after cooldown.
+- Ollama has a partial implementation (`_ollamaAvailable` cache with 60s TTL). Extend this pattern to all services.
+
+**Bulkhead Pattern** (isolate failures):
+- Currently: ❌ Not implemented
+- **Rule:** One failing service must not take down others. If Deepgram is down, text input still works. If Ollama is down, keyword matching still works. If ElevenLabs is down, browser TTS still works.
+- **Existing good examples:** Voice backend fallback chain (Deepgram → Chrome → text-only), Chat LLM fallback (Ollama → mock replies)
+
+**Retry with Backoff:**
+- Currently: ❌ Not implemented
+- **Rule:** Transient failures (network timeout, 503) should retry with exponential backoff: 1s → 2s → 4s, max 3 retries.
+- **Do NOT retry:** Auth errors (401/403), bad request (400), not found (404).
+
+**Timeouts:**
+- Currently: Partial (Ollama connection test has 3s timeout, but `chatWithOllama` has none)
+- **Rule:** Every external API call must have a timeout. Defaults: STT 15s, LLM 30s, TTS 10s, Calendar API 10s.
+
+### Testing Standards
+
+**Current:** 194 tests, 14 files. Excellent coverage for state management and services.
+
+**Test requirements:**
 - **Every bug fix** must include a regression test
 - **Every new feature** must include unit tests for its logic
 - **Every surface** must render without crashing and show correct empty states
-- **State management** tests must cover: create, read, update, delete, cascade delete, primary promotion
-- **API tests** must mock `fetch` and verify headers, URLs, pagination, and error handling
-- **Calendar tests** must verify month/week/agenda views agree on event dates
+- **State management** tests must cover: create, read, update, delete, cascade delete
+- **API tests** must mock `fetch` and verify headers, URLs, error handling
 
-### Test coverage targets
-- State management (AppContext): 100% of CRUD operations
-- Services (googleAuth, googleCalendarApi): All public functions
-- Sync logic: Dedup, cleanup, event reconciliation
-- Surfaces: Render tests, empty states, key interactive elements
-- Persistence: Round-trip, fallback, edge cases
+**Test gaps to address:**
+- ❌ No E2E tests (voice, OAuth popups require manual testing)
+- ❌ No integration tests between surfaces
+- ❌ No performance tests (re-render counts, memoization effectiveness)
+- ❌ No accessibility tests via test runner (axe-core)
+
+**Features that CANNOT be tested via automation:**
+- Voice assistant (SpeechRecognition, ElevenLabs, Deepgram — require real mic/network)
+- Monzo bank sync (requires real token + Monzo app approval)
+- Google OAuth popups (separate windows)
+- Adhan notifications (time-dependent, use Settings test buttons)
+- Wake word detection (OpenWakeWord WASM — use mock in tests)
+
+### Code Quality Rules
+
+**Magic numbers:**
+- Extract all timing/threshold values to named constants
+- Use `src/config/` for shared values (timing, thresholds, defaults)
+- Examples of violations: `3000` (TTS timeout), `8000` (recording max), `500` (min blob), `2000` (wake word cooldown)
+
+**TypeScript:**
+- Strict mode enabled (`strict: true`, `noUnusedLocals`, `noUnusedParameters`)
+- All domain shapes defined in `types/domain.ts`
+- No `any` types unless absolutely necessary (mark with `eslint-disable` comment)
+- Zero type errors at all times
+
+**React patterns:**
+- Functional components only
+- `useCallback` for all state mutation functions
+- `useMemo` for derived state
+- State lifted to AppContext, surfaces are consumers only
+
+**Naming conventions:**
+- Surfaces: `*Surface.tsx`
+- Services: `camelCase.ts`
+- Tests: `*.test.ts` or `*.test.tsx`
+- Types: PascalCase interfaces
+- Constants: UPPER_SNAKE_CASE
+- Feature branches: `feature/<kebab-case>` or `fix/<kebab-case>`
+
+### Security Standards
+
+**API keys:**
+- Loaded from `VITE_*` env vars (baked into build) with Settings localStorage fallback
+- **Risk:** Keys visible in JS bundle and network requests. Acceptable for personal-use app.
+- **If ever multi-user:** Proxy API calls through a backend. Never expose keys in client-side code.
+
+**Input handling:**
+- React escapes all JSX content (XSS protection by default)
+- No `dangerouslySetInnerHTML` used anywhere
+- All form inputs use controlled components (`value=` binding)
+
+### Performance Standards
+
+**Memoization:**
+- `useMemo` for expensive derived state (visible events, calendar grids, palette maps)
+- `useCallback` for all AppContext CRUD functions
+- **Improvement needed:** No code splitting for optional features (OpenWakeWord, Supabase). Use dynamic `import()` for features gated behind settings.
+
+**Re-renders:**
+- Dashboard tick interval (1s for prayer countdown) causes frequent re-renders — acceptable for countdown accuracy
+- **Improvement needed:** Split AppContext into domain-specific contexts to prevent cross-domain re-renders
+
+### Accessibility (WCAG 2.1)
+
+**Implemented:**
+- All icon-only buttons have `aria-label`
+- Form labels linked to inputs with `htmlFor`/`id`
+- Modals have `role="dialog"`, `aria-modal="true"`, `aria-label`
+- Confirmation bars have `role="alert"`, empty states have `role="status"`
+- Toggle switches have `aria-label`, icons have `aria-hidden="true"`
+- Keyboard navigation: Escape to close, Enter to submit, Ctrl+Shift+L for Lina
+- RTL support for Arabic (direction: rtl throughout Lina panel)
+
+**Gaps:**
+- No focus management when modals open
+- No skip-to-content link
+- Color-only indicators should add text labels
 
 ---
 
 ## UI/UX Standards
 
 ### Design system
-- **Dark theme**: Background `#0f1117`, text `#e1e4ea`, accent `#4f5bff`
-- **Color palette**: 8 account colors (blue, purple, green, amber, pink, teal, orange, red)
-- **Badge/card rarity backgrounds**: Must be lighter than the page background so they're visible on dark theme. Use mid-tone saturated colors, NOT dark/near-black shades:
-  - Common: `#2a2d42` (light gray-blue)
-  - Rare: `#1e2a4a` (visible blue)
-  - Epic: `#1a3a28` (visible green)
-  - Legendary: `#3a2a14` (visible amber/gold) + gold glow shadow
-- **Rule**: On a dark theme, element backgrounds must contrast with the page background. Dark-on-dark is invisible. When in doubt, bump the lightness up.
+- **Dark theme**: Background `#0f1117`, cards `#181b27`, text `#e1e4ea`, accent `#4f5bff`
+- **Badge rarity backgrounds**: Must be lighter than page background (dark-on-dark is invisible)
 - **Components**: `.btn`, `.card`, `.form-input`, `.form-select`, `.modal`, `.tag`, `.toggle`
-- **Typography**: System font stack, 13-14px body, 18px headers
-
-### Accessibility (WCAG 2.1)
-- All icon-only buttons have `aria-label`
-- Nav items have `aria-current="page"` when active
-- Form labels linked to inputs with `htmlFor`/`id`
-- Modals have `role="dialog"`, `aria-modal="true"`, `aria-label`
-- Confirmation bars have `role="alert"`
-- Empty states and status indicators have `role="status"`
-- Toggle switches have `aria-label`
-- Icons have `aria-hidden="true"`
-- Semantic HTML: `<nav>`, `<main>`, `role="navigation"`, `role="banner"`, `role="contentinfo"`
+- **Rule**: On dark theme, element backgrounds must contrast with the page background.
 
 ### Empty states
-Every surface must show a clear empty state with:
-- An icon
-- A heading explaining what goes here
-- A description of what action to take
-- A call-to-action button
+Every surface must show: icon, heading, description, call-to-action button.
 
 ### Destructive actions
-- Delete/remove always requires a confirmation step (confirm-bar with explicit Delete + Cancel)
-- Cascade effects are explained to the user ("Delete account and all its events?")
-- Primary promotion is automatic when the primary item is removed
-
-### Mocked features
-If something is mocked, it must say so clearly in the UI:
-- "Mocked AI responses" indicator in Chat
-- "Local data -- not synced" when no Google accounts connected
-- Integration status shows "mocked" tag for simulated connections
+- Delete always requires confirmation (confirm-bar with Delete + Cancel)
+- Cascade effects explained to user
 
 ---
 
-## Code Standards
-
-### TypeScript
-- Strict mode enabled (`strict: true`, `noUnusedLocals`, `noUnusedParameters`)
-- All domain shapes defined in `types/domain.ts`
-- State management in `AppContext.tsx` with typed context API
-- No `any` types unless absolutely necessary
-
-### React patterns
-- Functional components only
-- `useCallback` for all state mutation functions (prevents unnecessary re-renders)
-- `useMemo` for derived state (visible events, calendar grids, palette maps)
-- State lifted to AppContext, surfaces are consumers only
-
-### Naming conventions
-- Surfaces: `*Surface.tsx` (e.g., `CalendarSurface.tsx`)
-- Services: `camelCase.ts` (e.g., `googleAuth.ts`)
-- Tests: `*.test.ts` or `*.test.tsx`
-- Types: PascalCase interfaces (e.g., `CalendarEvent`, `Workspace`)
-
----
-
-## Known Limitations (v0.1.0)
-
-### Mocked
-- AI/LLM chat responses (returns canned replies based on keyword matching)
-- Integration OAuth flows for GitHub, Slack, Linear (simulated connections)
-- 1Password CLI integration (local vault fallback active)
-
-### Working (live)
-- Google Calendar OAuth with multi-account support
-- Real calendar sync (pull events, push create/update/delete)
-- Calendar source reassignment between accounts
-- Duplicate calendar deduplication across accounts
-- All CRUD operations (credentials, workspaces, calendar accounts/sources/events)
-- Persistent storage (localStorage, Tauri file store when available)
-
-### Not implemented
-- Voice, mobile sync, browser autofill, multi-user
-- Light theme (placeholder in settings)
-- Tauri desktop build (requires MSVC linker on Windows -- Rust backend compiles on systems with proper MSVC setup)
-
----
-
-## Mistakes to avoid
-- **Don't use `toISOString().split('T')[0]`** for local date display -- it converts to UTC and shifts days
-- **Don't claim a bug is fixed without verifying** -- code change != user-visible fix
-- **Don't forget localStorage persists stale data** -- migrations/cleanup must handle existing data
-- **Don't assume sync ran** -- dedup cleanup only happens during sync
-- **Test the actual user scenario**, not just the happy path
-- **Don't add features without tests** -- the test suite is the proof that things work
+## Mistakes to Avoid
+- **Don't use `toISOString().split('T')[0]`** — it converts to UTC and shifts days
+- **Don't claim a bug is fixed without verifying** — code change != user-visible fix
+- **Don't forget localStorage persists stale data** — migrations must handle existing data
+- **Don't swallow errors** — at minimum log them, ideally surface to user
+- **Don't add features without tests** — the test suite is the proof things work
+- **Don't commit directly to master** — use feature branches
+- **Don't add magic numbers** — extract to named constants
+- **Don't couple services to global state** — pass dependencies as parameters
