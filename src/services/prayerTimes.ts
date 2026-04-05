@@ -15,6 +15,8 @@
  */
 
 import { API_TIMEOUT } from '../config/constants';
+import { prayerTimesBreaker } from './serviceBreakers';
+import { withRetry } from './retry';
 
 const API_BASE = 'https://api.aladhan.com/v1';
 const CACHE_KEY = 'helm:prayer-times-cache';
@@ -56,7 +58,9 @@ function toLocalDateStr(d: Date): string {
 /** Fetch prayer times from AlAdhan API. */
 export async function fetchPrayerTimes(city: string, country: string): Promise<PrayerTimesData> {
   const url = `${API_BASE}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=0`;
-  const resp = await fetch(url, { signal: AbortSignal.timeout(API_TIMEOUT.PRAYER_TIMES) });
+  const resp = await prayerTimesBreaker.call(() => withRetry(async () => {
+    return fetch(url, { signal: AbortSignal.timeout(API_TIMEOUT.PRAYER_TIMES) });
+  }, { name: 'PrayerTimes', maxRetries: 2, initialDelayMs: 2000 }));
   if (!resp.ok) throw new Error(`Prayer times API error: ${resp.status}`);
   const json = await resp.json();
   const data = json.data;

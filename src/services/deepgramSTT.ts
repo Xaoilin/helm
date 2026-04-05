@@ -10,6 +10,7 @@
 
 import { logWarn } from './logger';
 import { API_TIMEOUT, TIMING } from '../config/constants';
+import { deepgramBreaker } from './serviceBreakers';
 
 export interface DeepgramResult {
   transcript: string;
@@ -97,31 +98,33 @@ export async function transcribeWithDeepgram(
 ): Promise<DeepgramResult> {
   // Nova-2 doesn't support Arabic; use nova-3 for ar, nova-2 for others
   const model = language.startsWith('ar') ? 'nova-3' : 'nova-2';
-  const resp = await fetch(`https://api.deepgram.com/v1/listen?model=${model}&language=${encodeURIComponent(language)}&smart_format=true`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(API_TIMEOUT.DEEPGRAM_STT),
-    headers: {
-      'Authorization': `Token ${apiKey}`,
-      'Content-Type': audioBlob.type || 'audio/webm',
-    },
-    body: audioBlob,
-  });
+  return deepgramBreaker.call(async () => {
+    const resp = await fetch(`https://api.deepgram.com/v1/listen?model=${model}&language=${encodeURIComponent(language)}&smart_format=true`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(API_TIMEOUT.DEEPGRAM_STT),
+      headers: {
+        'Authorization': `Token ${apiKey}`,
+        'Content-Type': audioBlob.type || 'audio/webm',
+      },
+      body: audioBlob,
+    });
 
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    if (resp.status === 401 || resp.status === 403) {
-      throw new Error('Invalid Deepgram API key. Check Settings → Voice Assistant.');
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      if (resp.status === 401 || resp.status === 403) {
+        throw new Error('Invalid Deepgram API key. Check Settings → Voice Assistant.');
+      }
+      throw new Error(`Deepgram API error: ${resp.status} ${text}`);
     }
-    throw new Error(`Deepgram API error: ${resp.status} ${text}`);
-  }
 
-  const data = await resp.json();
-  const alt = data?.results?.channels?.[0]?.alternatives?.[0];
+    const data = await resp.json();
+    const alt = data?.results?.channels?.[0]?.alternatives?.[0];
 
-  return {
-    transcript: alt?.transcript || '',
-    confidence: alt?.confidence || 0,
-  };
+    return {
+      transcript: alt?.transcript || '',
+      confidence: alt?.confidence || 0,
+    };
+  });
 }
 
 /**

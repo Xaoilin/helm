@@ -11,6 +11,7 @@
 import type { CalendarEvent, Task, GamificationProfile } from '../types/domain';
 import type { AssistantLang } from './voiceAssistant';
 import { API_TIMEOUT, LIMITS, TIMING } from '../config/constants';
+import { ollamaBreaker } from './serviceBreakers';
 
 const DEFAULT_ENDPOINT = 'http://localhost:11434';
 const DEFAULT_MODEL = 'qwen3';
@@ -35,29 +36,31 @@ export async function chatWithOllama(
   endpoint: string = DEFAULT_ENDPOINT,
   model: string = DEFAULT_MODEL,
 ): Promise<string> {
-  const resp = await fetch(`${endpoint}/api/chat`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(API_TIMEOUT.OLLAMA_CHAT),
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: false,
-      think: false, // Disable extended thinking (qwen3) for faster responses
-      options: {
-        temperature: LIMITS.LLM_TEMPERATURE,
-        num_predict: LIMITS.LLM_MAX_TOKENS, // Keep responses concise
-      },
-    }),
+  return ollamaBreaker.call(async () => {
+    const resp = await fetch(`${endpoint}/api/chat`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(API_TIMEOUT.OLLAMA_CHAT),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        think: false, // Disable extended thinking (qwen3) for faster responses
+        options: {
+          temperature: LIMITS.LLM_TEMPERATURE,
+          num_predict: LIMITS.LLM_MAX_TOKENS, // Keep responses concise
+        },
+      }),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      throw new Error(`Ollama error ${resp.status}: ${text}`);
+    }
+
+    const data: OllamaChatResponse = await resp.json();
+    return data.message?.content || '';
   });
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Ollama error ${resp.status}: ${text}`);
-  }
-
-  const data: OllamaChatResponse = await resp.json();
-  return data.message?.content || '';
 }
 
 /**
