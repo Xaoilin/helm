@@ -47,13 +47,26 @@ src-tauri/
 
 ## Development Process (SDLC)
 
+### Git branching strategy:
+- **Every feature or fix gets its own branch.** Never commit directly to `master`.
+- Branch naming: `feature/<short-description>` (e.g., `feature/prayer-log-editor`, `feature/ollama-integration`, `fix/calendar-timezone-bug`)
+- Workflow for each task:
+  1. `git checkout master && git pull` — start from latest master
+  2. `git checkout -b feature/<name>` — create feature branch
+  3. Do all work, commits, and pushes on the feature branch
+  4. When complete: `git checkout master && git merge feature/<name> --no-ff` — merge to master with a merge commit
+  5. `git push origin master` — push master (auto-deploys to GitHub Pages)
+  6. `git push origin feature/<name>` — keep the feature branch on remote for rollback reference
+- **Why:** If a big regression happens, the user can `git revert` the merge commit or reset master to before the merge. Each feature is an isolated, revertable unit.
+- **Do NOT delete feature branches** after merging — they serve as rollback points.
+
 ### Before every response that changes code:
 1. `./node_modules/.bin/tsc -b` -- must compile with zero errors
 2. `./node_modules/.bin/vitest run` -- all tests must pass
 3. If UI changed, verify via Chrome MCP screenshot -- actually look at the result
 4. If claiming a fix, show proof (screenshot, data dump, or test output)
 5. `git add -A && git commit` -- commit all changes with a descriptive message
-6. `git push` -- push to GitHub (auto-deploys to https://xaoilin.github.io/helm/ via GitHub Actions)
+6. `git push` -- push to GitHub (feature branch first, then merge to master which auto-deploys)
 7. **Every code change must be committed, pushed, and deployed.** Never leave uncommitted work.
 
 ### Features that CANNOT be tested via automation:
