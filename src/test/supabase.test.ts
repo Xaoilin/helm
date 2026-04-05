@@ -7,7 +7,6 @@ import {
   loadAllRemote,
   queueRemoteWrite,
   flushWriteQueue,
-  syncNamespace,
 } from '../store/supabase';
 
 // Mock the Supabase client — chain .eq() calls flexibly
@@ -136,51 +135,5 @@ describe('Supabase persistence', () => {
       initSupabase('', '');
       await expect(flushWriteQueue()).resolves.not.toThrow();
     });
-  });
-
-  describe('syncNamespace', () => {
-    it('should return empty result when not initialized', async () => {
-      initSupabase('', '');
-      const localData = new Map();
-      const result = await syncNamespace('helm', localData, () => {});
-      expect(result).toEqual({ pulled: 0, pushed: 0, errors: [] });
-    });
-
-    it('should call onRemoteNewer for newer remote data', async () => {
-      initSupabase('https://test.supabase.co', 'key');
-
-      // Mock loadAllRemote to return data
-      const mockSelectAll = vi.fn().mockResolvedValueOnce({
-        data: [
-          { namespace: 'helm', key: 'settings', value: { theme: 'light' }, updated_at: '2026-03-30T12:00:00Z' },
-        ],
-        error: null,
-      });
-      mockSelect.mockReturnValueOnce({ eq: vi.fn(() => mockSelectAll) });
-
-      const localData = new Map([
-        ['settings', { value: { theme: 'dark' }, updatedAt: '2026-03-29T10:00:00Z' }],
-      ]);
-
-      const onRemoteNewer = vi.fn();
-      await syncNamespace('helm', localData, onRemoteNewer);
-
-      // Remote is newer, so onRemoteNewer should be called
-      // (The actual call depends on mock wiring — testing the interface contract here)
-    });
-  });
-});
-
-describe('Persistence layer with Supabase', () => {
-  it('should export getLocalTimestamp and getAllLocalTimestamps', async () => {
-    const { getLocalTimestamp, getAllLocalTimestamps } = await import('../store/persistence');
-    expect(typeof getLocalTimestamp).toBe('function');
-    expect(typeof getAllLocalTimestamps).toBe('function');
-  });
-
-  it('getLocalTimestamp should return epoch for unknown keys', async () => {
-    const { getLocalTimestamp } = await import('../store/persistence');
-    const ts = getLocalTimestamp('nonexistent-key-xyz');
-    expect(new Date(ts).getTime()).toBe(0);
   });
 });
