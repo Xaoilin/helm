@@ -40,6 +40,9 @@ export function useWakeWord({
 
     const engine = new WakeWordEngine({
       keywords: ['hey_lina'],
+      modelFiles: {
+        hey_lina: 'hey_lina.onnx',
+      },
       baseAssetUrl: `${import.meta.env.BASE_URL}openwakeword/models`,
       detectionThreshold: 0.5,
       cooldownMs: TIMING.WAKE_WORD_COOLDOWN,
