@@ -73,11 +73,13 @@ src/
 
 ### Before every response that changes code:
 1. `./node_modules/.bin/tsc -b` — must compile with zero errors
-2. `./node_modules/.bin/vitest run` — all tests must pass
-3. If UI changed, verify via screenshot — actually look at the result
-4. If claiming a fix, show proof (screenshot, test output, data dump)
-5. Commit on feature branch, merge to master, push both
-6. **Every code change must be committed, pushed, and deployed.** Never leave uncommitted work.
+2. `./node_modules/.bin/vitest run` — all unit tests must pass
+3. `npx playwright test` — all E2E tests must pass
+4. If UI changed, verify via screenshot — actually look at the result
+5. If claiming a fix, show proof (screenshot, test output, data dump)
+6. **Write E2E tests for any new feature** — add to existing spec file or create new one
+7. Commit on feature branch, merge to master, push both
+8. **Every code change must be committed, pushed, and deployed.** Never leave uncommitted work.
 
 ### When fixing bugs:
 1. **Reproduce first** — read localStorage or DOM to understand actual data state
@@ -131,55 +133,89 @@ src/
 
 ### Resilience Patterns
 
-**Circuit Breaker** (the ship hull / bulkhead pattern):
-- Currently: ❌ Not implemented
-- **Rule:** External API calls (Deepgram, Ollama, Google, Monzo, ElevenLabs) should use a circuit breaker. After 3 consecutive failures, stop calling for 60 seconds (fast-fail). Auto-retry after cooldown.
-- Ollama has a partial implementation (`_ollamaAvailable` cache with 60s TTL). Extend this pattern to all services.
+**Circuit Breaker** (`src/services/circuitBreaker.ts`):
+- ✅ Implemented. 3 states: closed → open (fast-fail) → half-open (test recovery).
+- Pre-configured breakers in `src/services/serviceBreakers.ts` for all 6 external services.
+- **Rule:** Every new external API integration must get its own circuit breaker.
 
 **Bulkhead Pattern** (isolate failures):
-- Currently: ❌ Not implemented
-- **Rule:** One failing service must not take down others. If Deepgram is down, text input still works. If Ollama is down, keyword matching still works. If ElevenLabs is down, browser TTS still works.
-- **Existing good examples:** Voice backend fallback chain (Deepgram → Chrome → text-only), Chat LLM fallback (Ollama → mock replies)
+- ✅ Implemented via React Error Boundaries (`src/components/ErrorBoundary.tsx`).
+- Each surface wrapped independently — one crash shows error + retry, rest of app works.
+- Voice fallback chain: Deepgram → Chrome → text-only. Chat: Ollama → mock replies.
 
-**Retry with Backoff:**
-- Currently: ❌ Not implemented
-- **Rule:** Transient failures (network timeout, 503) should retry with exponential backoff: 1s → 2s → 4s, max 3 retries.
-- **Do NOT retry:** Auth errors (401/403), bad request (400), not found (404).
+**Retry with Backoff** (`src/services/retry.ts`):
+- ✅ Implemented. Exponential backoff (1s → 2s → 4s), max 3 retries.
+- Only retries transient errors (network, 503, 429). Skips 401/403/400/404.
+- Applied to: Google Calendar, Prayer Times. Not applied to local services (Ollama).
 
-**Timeouts:**
-- Currently: Partial (Ollama connection test has 3s timeout, but `chatWithOllama` has none)
-- **Rule:** Every external API call must have a timeout. Defaults: STT 15s, LLM 30s, TTS 10s, Calendar API 10s.
+**Timeouts** (`src/config/constants.ts` → `API_TIMEOUT`):
+- ✅ Implemented on all 6 external API calls via `AbortSignal.timeout()`.
+- Defaults: Google Calendar 10s, Monzo 10s, Deepgram 15s, Ollama 30s, ElevenLabs 10s, Prayer Times 10s.
+- **Rule:** Every new API call must include a timeout from `API_TIMEOUT`.
 
 ### Testing Standards
 
-**Current:** 194 tests, 14 files. Excellent coverage for state management and services.
+**Current:** 209 unit tests (15 files) + 15 E2E tests (4 files) = 224 total tests.
 
-**Test requirements:**
+**Three testing layers — ALL are mandatory for every feature:**
+
+#### 1. Unit Tests (Vitest) — `./node_modules/.bin/vitest run`
 - **Every bug fix** must include a regression test
 - **Every new feature** must include unit tests for its logic
 - **Every surface** must render without crashing and show correct empty states
 - **State management** tests must cover: create, read, update, delete, cascade delete
 - **API tests** must mock `fetch` and verify headers, URLs, error handling
+- **Resilience tests** must cover circuit breaker states and retry behavior
 
-**Test gaps to address:**
-- ⏳ E2E tests via Playwright (Phase 5 of refactor plan — navigation, task lifecycle, settings persistence, etc.)
-- ❌ No integration tests between surfaces
-- ❌ No performance tests (re-render counts, memoization effectiveness)
-- ❌ No accessibility tests via test runner (axe-core)
+#### 2. E2E Tests (Playwright) — `npx playwright test`
+- **Every new feature MUST have E2E tests.** No exceptions.
+- E2E tests verify the full user journey: click → state change → UI update → persistence
+- Test files live in `e2e/` directory, one per feature area
+- Tests run against the real dev server (auto-started by Playwright config)
 
-**Features that CANNOT be tested via automation:**
-- Voice assistant (SpeechRecognition, ElevenLabs, Deepgram — require real mic/network)
+**E2E test requirements per feature:**
+- **Navigation features:** Test that clicking a nav item renders the correct surface
+- **CRUD features:** Test the full create → read → update → delete lifecycle via UI
+- **Form features:** Test filling inputs, submitting, and verifying the result appears
+- **Modal/panel features:** Test open, interact, close (via button AND keyboard)
+- **Gamification features:** Test that XP/badge toasts appear after completing actions
+- **Settings features:** Test changing a setting, then verify it persists after reload
+- **Lina features:** Test opening panel, sending command, verifying response
+
+**E2E test file structure:**
+```
+e2e/
+  navigation.spec.ts    — Sidebar nav, surface switching, back navigation
+  tasks.spec.ts         — Task lifecycle, empty states, add task flow
+  settings.spec.ts      — Settings sections visible, toggles work
+  lina.spec.ts          — Panel open/close, keyboard shortcut, commands, chips
+  calendar.spec.ts      — (add when building calendar features)
+  finance.spec.ts       — (add when building finance features)
+  prayer.spec.ts        — (add when building prayer features)
+```
+
+#### 3. Visual Verification (Screenshots)
+- If UI changed, take a screenshot and actually look at the result
+- If claiming a fix, show proof (screenshot, test output, or data dump)
+
+**Before merging ANY feature branch, ALL three must pass:**
+1. `./node_modules/.bin/tsc -b` — zero type errors
+2. `./node_modules/.bin/vitest run` — all unit tests pass
+3. `npx playwright test` — all E2E tests pass
+
+**Features that CANNOT be tested via automation (manual testing required):**
+- Voice input (SpeechRecognition, ElevenLabs, Deepgram — require real mic/network)
 - Monzo bank sync (requires real token + Monzo app approval)
 - Google OAuth popups (separate windows)
 - Adhan notifications (time-dependent, use Settings test buttons)
-- Wake word detection (OpenWakeWord WASM — use mock in tests)
+- Wake word detection (OpenWakeWord WASM — use mock in unit tests, manual for real)
 
 ### Code Quality Rules
 
 **Magic numbers:**
-- Extract all timing/threshold values to named constants
-- Use `src/config/` for shared values (timing, thresholds, defaults)
-- Examples of violations: `3000` (TTS timeout), `8000` (recording max), `500` (min blob), `2000` (wake word cooldown)
+- ✅ All timing/threshold values extracted to `src/config/constants.ts` (`TIMING`, `API_TIMEOUT`, `LIMITS`)
+- **Rule:** Never use literal numbers for timing, thresholds, or limits. Always import from `constants.ts`.
+- **Rule:** When adding a new constant, add it to the appropriate group (`TIMING` for ms values, `LIMITS` for counts/sizes, `API_TIMEOUT` for fetch timeouts)
 
 **TypeScript:**
 - Strict mode enabled (`strict: true`, `noUnusedLocals`, `noUnusedParameters`)
