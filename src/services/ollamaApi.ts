@@ -10,6 +10,7 @@
 
 import type { CalendarEvent, Task, GamificationProfile } from '../types/domain';
 import type { AssistantLang } from './voiceAssistant';
+import { API_TIMEOUT, LIMITS, TIMING } from '../config/constants';
 
 const DEFAULT_ENDPOINT = 'http://localhost:11434';
 const DEFAULT_MODEL = 'qwen3';
@@ -36,6 +37,7 @@ export async function chatWithOllama(
 ): Promise<string> {
   const resp = await fetch(`${endpoint}/api/chat`, {
     method: 'POST',
+    signal: AbortSignal.timeout(API_TIMEOUT.OLLAMA_CHAT),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model,
@@ -43,8 +45,8 @@ export async function chatWithOllama(
       stream: false,
       think: false, // Disable extended thinking (qwen3) for faster responses
       options: {
-        temperature: 0.7,
-        num_predict: 300, // Keep responses concise
+        temperature: LIMITS.LLM_TEMPERATURE,
+        num_predict: LIMITS.LLM_MAX_TOKENS, // Keep responses concise
       },
     }),
   });
@@ -64,7 +66,7 @@ export async function chatWithOllama(
 export async function testOllamaConnection(endpoint: string = DEFAULT_ENDPOINT): Promise<boolean> {
   try {
     const resp = await fetch(`${endpoint}/api/tags`, {
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(TIMING.OLLAMA_CONNECTION_TIMEOUT),
     });
     return resp.ok;
   } catch {
@@ -78,7 +80,7 @@ export async function testOllamaConnection(endpoint: string = DEFAULT_ENDPOINT):
 export async function listOllamaModels(endpoint: string = DEFAULT_ENDPOINT): Promise<string[]> {
   try {
     const resp = await fetch(`${endpoint}/api/tags`, {
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(TIMING.OLLAMA_MODEL_LIST_TIMEOUT),
     });
     if (!resp.ok) return [];
     const data = await resp.json();

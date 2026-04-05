@@ -1,6 +1,8 @@
 // Google Calendar REST API v3 wrapper
 // No SDK dependency — uses native fetch
 
+import { API_TIMEOUT } from '../config/constants';
+
 const BASE_URL = 'https://www.googleapis.com/calendar/v3';
 
 export class GoogleApiError extends Error {
@@ -20,6 +22,7 @@ export class GoogleApiError extends Error {
 async function apiCall<T>(accessToken: string, url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     ...options,
+    signal: AbortSignal.timeout(API_TIMEOUT.GOOGLE_CALENDAR),
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',

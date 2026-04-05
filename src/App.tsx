@@ -13,6 +13,7 @@ import WorkspacesSurface from './surfaces/WorkspacesSurface';
 import IntegrationsSurface from './surfaces/IntegrationsSurface';
 import SettingsSurface from './surfaces/SettingsSurface';
 import VoiceAssistant from './components/VoiceAssistant';
+import ErrorBoundary from './components/ErrorBoundary';
 import {
   isSupabaseReady,
   getSessionUser,
@@ -22,6 +23,7 @@ import {
 } from './store/supabase';
 import type { Surface } from './types/domain';
 import type { User } from '@supabase/supabase-js';
+import { TIMING } from './config/constants';
 
 const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'dashboard', label: 'Dashboard', icon: '\u{1F3E0}' },
@@ -51,7 +53,7 @@ function AppInner() {
       setAuthUser(user);
       setAuthLoading(false);
       // Mark initial load complete after a tick
-      setTimeout(() => { initialLoad = false; }, 500);
+      setTimeout(() => { initialLoad = false; }, TIMING.AUTH_LOAD_DEBOUNCE);
     });
 
     const unsub = onAuthStateChange(user => {
@@ -80,19 +82,22 @@ function AppInner() {
   };
 
   const renderSurface = () => {
-    switch (app.surface) {
-      case 'dashboard': return <DashboardSurface />;
-      case 'chat': return <ChatSurface />;
-      case 'calendar': return <CalendarSurface />;
-      case 'tasks': return <TasksSurface />;
-      case 'finance': return <FinanceSurface />;
-      case 'knowledge': return <KnowledgeSurface />;
-      case 'profile': return <ProfileSurface />;
-      case 'credentials': return <CredentialsSurface />;
-      case 'workspaces': return <WorkspacesSurface />;
-      case 'integrations': return <IntegrationsSurface />;
-      case 'settings': return <SettingsSurface />;
-    }
+    const surface = (() => {
+      switch (app.surface) {
+        case 'dashboard': return <DashboardSurface />;
+        case 'chat': return <ChatSurface />;
+        case 'calendar': return <CalendarSurface />;
+        case 'tasks': return <TasksSurface />;
+        case 'finance': return <FinanceSurface />;
+        case 'knowledge': return <KnowledgeSurface />;
+        case 'profile': return <ProfileSurface />;
+        case 'credentials': return <CredentialsSurface />;
+        case 'workspaces': return <WorkspacesSurface />;
+        case 'integrations': return <IntegrationsSurface />;
+        case 'settings': return <SettingsSurface />;
+      }
+    })();
+    return <ErrorBoundary name={app.surface} key={app.surface}>{surface}</ErrorBoundary>;
   };
 
   return (
