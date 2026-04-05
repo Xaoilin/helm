@@ -617,6 +617,39 @@ export function recordHabitCompletion(
   return { ...profile, habitTallies: tallies, dailyLog: log };
 }
 
+/**
+ * Backfill or correct a prayer entry in the daily log for a past date.
+ * Does NOT award XP, streak, or badges — purely a log correction for accurate stats.
+ */
+export function backfillPrayerLog(
+  profile: GamificationProfile,
+  taskId: string,
+  dateStr: string,
+  completed: boolean,
+): GamificationProfile {
+  const log = { ...(profile.dailyLog || {}) };
+  const dayLog = [...(log[dateStr] || [])];
+
+  if (completed) {
+    if (!dayLog.includes(taskId)) {
+      dayLog.push(taskId);
+    }
+  } else {
+    const idx = dayLog.indexOf(taskId);
+    if (idx !== -1) {
+      dayLog.splice(idx, 1);
+    }
+  }
+
+  if (dayLog.length > 0) {
+    log[dateStr] = dayLog;
+  } else {
+    delete log[dateStr];
+  }
+
+  return { ...profile, dailyLog: log };
+}
+
 /** Calculate prayer completion stats from daily log. */
 export function calculatePrayerStats(
   profile: GamificationProfile,

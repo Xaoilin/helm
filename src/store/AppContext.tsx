@@ -10,7 +10,7 @@ import type {
   FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
 } from '../types/domain';
 import { loadStore, saveStore } from './persistence';
-import { DEFAULT_PROFILE } from '../services/gamification';
+import { DEFAULT_PROFILE, backfillPrayerLog as backfillPrayerLogFn } from '../services/gamification';
 import { clearGoogleTokens } from '../services/googleAuth';
 import { chatWithOllama, buildSystemPrompt, testOllamaConnection, type OllamaMessage } from '../services/ollamaApi';
 import { OLLAMA_ENDPOINT } from '../config';
@@ -130,6 +130,7 @@ interface AppContextAPI extends AppState {
 
   // Gamification
   updateGamification: (profile: GamificationProfile) => void;
+  backfillPrayerLog: (taskId: string, dateStr: string, completed: boolean) => void;
 
   // Integrations
   updateIntegration: (id: string, updates: Partial<Integration>) => void;
@@ -753,6 +754,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, gamification: profile }));
   }, []);
 
+  const backfillPrayerLog = useCallback((taskId: string, dateStr: string, completed: boolean) => {
+    setState(s => ({
+      ...s,
+      gamification: backfillPrayerLogFn(s.gamification, taskId, dateStr, completed),
+    }));
+  }, []);
+
   // ── Integrations ──
   const updateIntegration = useCallback((id: string, updates: Partial<Integration>) => {
     setState(s => ({
@@ -793,7 +801,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addTransaction, updateTransaction, removeTransaction,
     addFinanceBudget, updateFinanceBudget, removeFinanceBudget,
     addSavingsGoal, updateSavingsGoal, removeSavingsGoal,
-    updateGamification,
+    updateGamification, backfillPrayerLog,
     updateIntegration,
     updateSettings,
   };
