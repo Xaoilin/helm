@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { isSupabaseReady, isAuthenticated, queueRemoteWrite, loadRemote } from './supabase';
+import { logWarn } from '../services/logger';
 
 const NAMESPACE = 'helm';
 
@@ -10,7 +11,8 @@ async function isTauri(): Promise<boolean> {
   try {
     await invoke('get_app_data_dir');
     tauriAvailable = true;
-  } catch {
+  } catch (e) {
+    logWarn('Persistence', 'Tauri detection failed');
     tauriAvailable = false;
   }
   return tauriAvailable;
@@ -34,12 +36,12 @@ export async function loadStore<T>(key: string): Promise<T | null> {
         localStorage.setItem(`helm:${key}`, JSON.stringify(remote.value));
         return remote.value;
       }
-    } catch { /* fall through to local cache */ }
+    } catch (e) { logWarn('Persistence', 'Supabase load failed, using local cache'); }
 
     // If Supabase fetch failed, use localStorage as fallback cache
     const raw = localStorage.getItem(`helm:${key}`);
     if (raw) {
-      try { return JSON.parse(raw) as T; } catch { /* fall through */ }
+      try { return JSON.parse(raw) as T; } catch (e) { logWarn('Persistence', 'Local cache JSON parse failed'); }
     }
     return null;
   }
@@ -53,12 +55,12 @@ export async function loadStore<T>(key: string): Promise<T | null> {
       const parsed = JSON.parse(raw);
       return parsed as T;
     }
-  } catch { /* fall through */ }
+  } catch (e) { logWarn('Persistence', 'Tauri read failed'); }
 
   // 2. Try localStorage
   const raw = localStorage.getItem(`helm:${key}`);
   if (raw) {
-    try { return JSON.parse(raw) as T; } catch { /* fall through */ }
+    try { return JSON.parse(raw) as T; } catch (e) { logWarn('Persistence', 'localStorage JSON parse failed'); }
   }
 
   return null;
@@ -76,7 +78,7 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
     if (await isTauri()) {
       await invoke('write_store', { key, value: json });
     }
-  } catch { /* fall through */ }
+  } catch (e) { logWarn('Persistence', 'Tauri write failed'); }
 
   // 2. Always write to localStorage (fast cache)
   localStorage.setItem(`helm:${key}`, json);

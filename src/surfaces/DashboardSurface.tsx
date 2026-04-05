@@ -23,6 +23,7 @@ import {
   checkStreakBroken,
 } from '../services/gamification';
 import type { Task, CalendarEvent } from '../types/domain';
+import { TIMING } from '../config/constants';
 
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -43,7 +44,7 @@ export default function DashboardSurface() {
 
   // Tick every 30 seconds to update countdown timers
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    const interval = setInterval(() => setTick(t => t + 1), TIMING.DASHBOARD_TICK);
     return () => clearInterval(interval);
   }, []);
 
@@ -114,7 +115,7 @@ export default function DashboardSurface() {
   const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
     const id = Math.random().toString(36).slice(2);
     setToasts(prev => [...prev, { ...toast, id }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), TIMING.TOAST_LIFETIME);
   }, []);
 
   // ── Account color palette (same as CalendarSurface) ──
@@ -342,7 +343,7 @@ export default function DashboardSurface() {
     if (result.leveledUp) {
       addToast({ type: 'levelup', text: `Level ${result.newLevel}! ${result.newTitle}`, emoji: '\u{1F31F}' });
       setShowLevelFlash(true);
-      setTimeout(() => setShowLevelFlash(false), 1000);
+      setTimeout(() => setShowLevelFlash(false), TIMING.LEVEL_FLASH_DURATION);
     }
     if (result.isStreakMilestone) {
       addToast({ type: 'streak', text: `${result.streakUpdate.currentStreak}-day streak!`, emoji: '\u{1F525}' });

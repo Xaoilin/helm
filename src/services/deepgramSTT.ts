@@ -8,6 +8,9 @@
  * Get a free API key at https://console.deepgram.com (comes with $200 credit).
  */
 
+import { logWarn } from './logger';
+import { API_TIMEOUT, TIMING } from '../config/constants';
+
 export interface DeepgramResult {
   transcript: string;
   confidence: number;
@@ -58,7 +61,7 @@ export function createRecorder(deviceId?: string): {
         stream = null;
       };
 
-      mediaRecorder.start(250); // collect chunks every 250ms
+      mediaRecorder.start(TIMING.CHUNK_INTERVAL); // collect chunks at interval
     },
 
     stop() {
@@ -96,6 +99,7 @@ export async function transcribeWithDeepgram(
   const model = language.startsWith('ar') ? 'nova-3' : 'nova-2';
   const resp = await fetch(`https://api.deepgram.com/v1/listen?model=${model}&language=${encodeURIComponent(language)}&smart_format=true`, {
     method: 'POST',
+    signal: AbortSignal.timeout(API_TIMEOUT.DEEPGRAM_STT),
     headers: {
       'Authorization': `Token ${apiKey}`,
       'Content-Type': audioBlob.type || 'audio/webm',
@@ -137,7 +141,8 @@ export async function testDeepgramKey(apiKey: string): Promise<boolean> {
     });
     // 200 or 400 (bad audio) both mean key works. 401/403 means bad key.
     return resp.status !== 401 && resp.status !== 403;
-  } catch {
+  } catch (e) {
+    logWarn('Deepgram', 'Key test failed');
     return false;
   }
 }
@@ -160,7 +165,7 @@ export function testChromeSpeechRecognition(): Promise<boolean> {
     const timer = setTimeout(() => {
       try { rec.abort(); } catch {}
       resolve(false); // Timeout = probably broken
-    }, 5000);
+    }, TIMING.CHROME_STT_TIMEOUT);
 
     rec.onstart = () => {
       clearTimeout(timer);
@@ -168,7 +173,7 @@ export function testChromeSpeechRecognition(): Promise<boolean> {
       setTimeout(() => {
         try { rec.abort(); } catch {}
         resolve(true);
-      }, 1500);
+      }, TIMING.CHROME_STT_ABORT_DELAY);
     };
 
     rec.onerror = (e: any) => {

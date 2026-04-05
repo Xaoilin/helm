@@ -16,6 +16,8 @@
  */
 
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
+import { logError, logWarn } from '../services/logger';
+import { TIMING } from '../config/constants';
 
 let client: SupabaseClient | null = null;
 let currentUserId: string | null = null;
@@ -70,7 +72,7 @@ export function initFromSettings(): void {
     if (settings?.supabaseUrl && settings?.supabaseAnonKey) {
       initSupabase(settings.supabaseUrl, settings.supabaseAnonKey);
     }
-  } catch { /* ignore */ }
+  } catch (e) { logWarn('Supabase', 'Init from settings failed'); }
 }
 
 // ── Auth ──
@@ -106,7 +108,7 @@ export async function getSessionUser(): Promise<User | null> {
       currentUserId = session.user.id;
       return session.user;
     }
-  } catch { /* ignore */ }
+  } catch (e) { logWarn('Supabase', 'Get session user failed'); }
   currentUserId = null;
   return null;
 }
@@ -150,7 +152,8 @@ export async function loadRemote<T>(namespace: string, key: string): Promise<{ v
       .single();
     if (error || !data) return null;
     return { value: data.value as T, updatedAt: data.updated_at };
-  } catch {
+  } catch (e) {
+    logError('Supabase', e);
     return null;
   }
 }
@@ -169,7 +172,8 @@ export async function saveRemote<T>(namespace: string, key: string, value: T): P
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,namespace,key' });
     return !error;
-  } catch {
+  } catch (e) {
+    logError('Supabase', e);
     return false;
   }
 }
@@ -185,7 +189,8 @@ export async function loadAllRemote(namespace: string): Promise<KvRow[]> {
       .eq('namespace', namespace);
     if (error || !data) return [];
     return data as KvRow[];
-  } catch {
+  } catch (e) {
+    logError('Supabase', e);
     return [];
   }
 }
@@ -201,7 +206,8 @@ export async function deleteRemote(namespace: string, key: string): Promise<bool
       .eq('namespace', namespace)
       .eq('key', key);
     return !error;
-  } catch {
+  } catch (e) {
+    logError('Supabase', e);
     return false;
   }
 }
@@ -210,12 +216,11 @@ export async function deleteRemote(namespace: string, key: string): Promise<bool
 
 const writeQueue = new Map<string, { namespace: string; key: string; value: unknown }>();
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
-const DEBOUNCE_MS = 1000;
 
 export function queueRemoteWrite<T>(namespace: string, key: string, value: T): void {
   writeQueue.set(`${namespace}:${key}`, { namespace, key, value });
   if (writeTimer) clearTimeout(writeTimer);
-  writeTimer = setTimeout(flushWriteQueue, DEBOUNCE_MS);
+  writeTimer = setTimeout(flushWriteQueue, TIMING.SUPABASE_DEBOUNCE);
 }
 
 export async function flushWriteQueue(): Promise<void> {

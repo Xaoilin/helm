@@ -10,6 +10,7 @@ import {
   googleEventToLocal,
   GoogleApiError,
 } from '../services/googleCalendarApi';
+import { TIMING, LIMITS } from '../config/constants';
 
 export type SyncState = 'idle' | 'syncing' | 'error';
 
@@ -126,8 +127,8 @@ export function useGoogleSync(): GoogleSyncResult {
       }
 
       // Fetch events
-      const timeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const timeMax = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+      const timeMin = new Date(Date.now() - LIMITS.CALENDAR_PAST_DAYS * 86400000).toISOString();
+      const timeMax = new Date(Date.now() + LIMITS.CALENDAR_FUTURE_DAYS * 86400000).toISOString();
 
       const updatedSources = app.calendarSources.filter(
         s => s.accountId === accountId && s.googleCalendarId
@@ -231,7 +232,7 @@ export function useGoogleSync(): GoogleSyncResult {
         if (!acc.lastSyncTime) return latest;
         return Math.max(latest, new Date(acc.lastSyncTime).getTime());
       }, 0);
-      const fifteenMinAgo = Date.now() - 15 * 60 * 1000;
+      const fifteenMinAgo = Date.now() - TIMING.SYNC_THROTTLE;
       if (lastSync < fifteenMinAgo) {
         triggerSync();
       }

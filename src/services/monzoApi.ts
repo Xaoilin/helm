@@ -10,6 +10,7 @@
 
 import type { Transaction, TransactionCategory } from '../types/domain';
 import { toLocalDateStr } from './financeHelpers';
+import { API_TIMEOUT } from '../config/constants';
 
 const MONZO_API = 'https://api.monzo.com';
 
@@ -69,6 +70,7 @@ interface MonzoTransaction {
 
 async function monzoFetch<T>(endpoint: string, token: string): Promise<T> {
   const resp = await fetch(`${MONZO_API}${endpoint}`, {
+    signal: AbortSignal.timeout(API_TIMEOUT.MONZO),
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!resp.ok) {

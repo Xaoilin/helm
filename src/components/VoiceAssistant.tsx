@@ -3,6 +3,7 @@ import { useApp } from '../store/AppContext';
 import { parseIntent, processWithLLM, isOllamaAvailable, speakWithElevenLabs, speakWithBrowserTTS, type AssistantLang } from '../services/voiceAssistant';
 import type { OllamaMessage } from '../services/ollamaApi';
 import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY, OLLAMA_ENDPOINT } from '../config';
+import { TIMING, LIMITS } from '../config/constants';
 import { createRecorder, transcribeWithDeepgram, testChromeSpeechRecognition } from '../services/deepgramSTT';
 import WakeWordEngine from 'openwakeword-wasm-browser';
 import type { PrayerTimesData } from '../services/prayerTimes';
@@ -88,7 +89,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
       }
     } else {
       speakWithBrowserTTS(text, lang);
-      setTimeout(done, 3000);
+      setTimeout(done, TIMING.TTS_FALLBACK_TIMEOUT);
     }
   }, [hasElevenLabs]);
 
@@ -132,7 +133,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
         ...chatHistoryRef.current,
         { role: 'user' as const, content: text },
         { role: 'assistant' as const, content: llmIntent.response },
-      ].slice(-10); // Keep last 5 exchanges
+      ].slice(-LIMITS.LLM_HISTORY_MESSAGES); // Keep last 5 exchanges
 
       // Execute action from LLM
       if (llmIntent.action) {
@@ -181,12 +182,12 @@ export default function VoiceAssistant({ prayerData }: Props) {
       recorderRef.current = recorder;
       await recorder.start();
 
-      // Auto-stop after 8 seconds
+      // Auto-stop after max recording duration
       setTimeout(() => {
         if (recorder.isRecording()) {
           recorder.stop();
         }
-      }, 8000);
+      }, TIMING.RECORDING_MAX_DURATION);
     } catch (e: any) {
       setError(e.message?.includes('Permission') || e.message?.includes('NotAllowed')
         ? 'Microphone blocked. Click 🔒 in Chrome\'s address bar to allow.'
@@ -208,7 +209,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
     try {
       const blob = await recorder.getBlob();
-      if (blob.size < 500) {
+      if (blob.size < LIMITS.MIN_AUDIO_BLOB_SIZE) {
         setError('No speech detected. Try again or type your command.');
         setState('open');
         setTranscript('');
@@ -314,7 +315,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
       keywords: ['hey_lina'],
       baseAssetUrl: `${import.meta.env.BASE_URL}openwakeword/models`,
       detectionThreshold: 0.5,
-      cooldownMs: 2000,
+      cooldownMs: TIMING.WAKE_WORD_COOLDOWN,
     });
 
     engine.on('detect', ({ keyword }: { keyword: string; score: number }) => {
@@ -365,7 +366,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
   // ── Auto-focus text input when panel opens ──
   useEffect(() => {
     if (state === 'open' && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => inputRef.current?.focus(), TIMING.INPUT_FOCUS_DELAY);
     }
   }, [state]);
 

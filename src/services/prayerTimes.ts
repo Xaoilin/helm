@@ -14,6 +14,8 @@
  *   Shia method details: Leva Institute, Qum, Iran
  */
 
+import { API_TIMEOUT } from '../config/constants';
+
 const API_BASE = 'https://api.aladhan.com/v1';
 const CACHE_KEY = 'helm:prayer-times-cache';
 
@@ -54,7 +56,7 @@ function toLocalDateStr(d: Date): string {
 /** Fetch prayer times from AlAdhan API. */
 export async function fetchPrayerTimes(city: string, country: string): Promise<PrayerTimesData> {
   const url = `${API_BASE}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=0`;
-  const resp = await fetch(url);
+  const resp = await fetch(url, { signal: AbortSignal.timeout(API_TIMEOUT.PRAYER_TIMES) });
   if (!resp.ok) throw new Error(`Prayer times API error: ${resp.status}`);
   const json = await resp.json();
   const data = json.data;

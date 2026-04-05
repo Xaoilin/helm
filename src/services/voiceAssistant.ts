@@ -8,6 +8,7 @@
 
 import type { Surface, CalendarEvent, Task, GamificationProfile } from '../types/domain';
 import { chatWithOllama, buildSystemPrompt, testOllamaConnection, type OllamaMessage } from './ollamaApi';
+import { API_TIMEOUT, TIMING, LIMITS } from '../config/constants';
 
 // ── Intent Parsing ──
 
@@ -209,6 +210,7 @@ export async function speakWithElevenLabs(
 ): Promise<HTMLAudioElement> {
   const resp = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
     method: 'POST',
+    signal: AbortSignal.timeout(API_TIMEOUT.ELEVENLABS_TTS),
     headers: {
       'xi-api-key': apiKey,
       'Content-Type': 'application/json',
@@ -264,8 +266,8 @@ let _ollamaAvailable: boolean | null = null;
 export async function isOllamaAvailable(endpoint?: string): Promise<boolean> {
   if (_ollamaAvailable !== null) return _ollamaAvailable;
   _ollamaAvailable = await testOllamaConnection(endpoint);
-  // Refresh cache after 60s
-  setTimeout(() => { _ollamaAvailable = null; }, 60_000);
+  // Refresh cache after expiry
+  setTimeout(() => { _ollamaAvailable = null; }, TIMING.OLLAMA_CACHE_EXPIRY);
   return _ollamaAvailable;
 }
 
@@ -295,7 +297,7 @@ export async function processWithLLM(
 
   const messages: OllamaMessage[] = [
     { role: 'system', content: systemPrompt },
-    ...conversationHistory.slice(-10), // Last 5 exchanges (10 messages)
+    ...conversationHistory.slice(-LIMITS.LLM_HISTORY_MESSAGES), // Last 5 exchanges
     { role: 'user', content: transcript },
   ];
 
@@ -348,7 +350,7 @@ export async function processWithLLM(
     const msg = e instanceof Error ? e.message : 'Unknown error';
     // Ollama failed — mark as unavailable and return error
     _ollamaAvailable = false;
-    setTimeout(() => { _ollamaAvailable = null; }, 30_000);
+    setTimeout(() => { _ollamaAvailable = null; }, TIMING.OLLAMA_UNAVAILABLE_COOLDOWN);
     return {
       type: 'unknown',
       response: lang === 'ar'

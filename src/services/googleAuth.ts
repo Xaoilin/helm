@@ -1,6 +1,8 @@
 // Google Identity Services OAuth2 integration
 // Uses the GIS token model (implicit grant) for browser-based auth
 
+import { logWarn } from './logger';
+
 const GIS_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
 const SCOPES = 'https://www.googleapis.com/auth/calendar';
 const TOKEN_KEY_PREFIX = 'helm:google-tokens:';
@@ -114,8 +116,8 @@ export async function revokeAccess(accessToken: string): Promise<void> {
     if (window.google?.accounts?.oauth2) {
       window.google.accounts.oauth2.revoke(accessToken, () => {});
     }
-  } catch {
-    // Best-effort revocation
+  } catch (e) {
+    logWarn('GoogleAuth', 'Token revocation failed (best-effort)');
   }
 }
 
