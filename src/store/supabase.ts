@@ -82,6 +82,9 @@ export async function signInWithGoogle(): Promise<void> {
     provider: 'google',
     options: {
       redirectTo: window.location.origin + (window.location.pathname.includes('/helm') ? '/helm/' : '/'),
+      queryParams: {
+        prompt: 'select_account',
+      },
     },
   });
   if (error) throw error;
