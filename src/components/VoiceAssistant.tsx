@@ -1,17 +1,15 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
-import { parseIntent, processWithLLM, isOllamaAvailable, speakWithElevenLabs, speakWithBrowserTTS, type AssistantLang } from '../services/voiceAssistant';
+import { parseIntent, processWithLLM, isOllamaAvailable, type AssistantLang } from '../services/voiceAssistant';
 import type { OllamaMessage } from '../services/ollamaApi';
 import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY, OLLAMA_ENDPOINT } from '../config';
-import { TIMING, LIMITS } from '../config/constants';
-import { createRecorder, transcribeWithDeepgram, testChromeSpeechRecognition } from '../services/deepgramSTT';
-import WakeWordEngine from 'openwakeword-wasm-browser';
+import { LIMITS, TIMING } from '../config/constants';
+import { useVoiceOutput } from '../hooks/useVoiceOutput';
+import { useWakeWord } from '../hooks/useWakeWord';
+import { useVoiceInput } from '../hooks/useVoiceInput';
 import type { PrayerTimesData } from '../services/prayerTimes';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 type AssistantState = 'idle' | 'open' | 'listening' | 'processing' | 'speaking';
-type VoiceBackend = 'deepgram' | 'chrome' | 'none';
 
 interface Props {
   prayerData?: PrayerTimesData | null;
@@ -24,15 +22,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const [response, setResponse] = useState('');
   const [error, setError] = useState('');
   const [textInput, setTextInput] = useState('');
-  const [voiceBackend, setVoiceBackend] = useState<VoiceBackend>('none');
-  const [backendChecked, setBackendChecked] = useState(false);
-  const recorderRef = useRef<ReturnType<typeof createRecorder> | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const wakeRecognitionRef = useRef<any>(null);
-  const shouldListenRef = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const chatHistoryRef = useRef<OllamaMessage[]>([]);
+  const shouldListenRef = useRef(true);
 
   const enabled = app.settings.assistantEnabled !== false;
   const wakeWordEnabled = app.settings.wakeWordEnabled === true;
@@ -45,55 +37,30 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const ollamaEndpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
   const ollamaModel = app.settings.ollamaModel || undefined;
 
-  // ── OpenWakeWord engine ref ──
-  const wakeEngineRef = useRef<any>(null);
-  const [wakeWordReady, setWakeWordReady] = useState(false);
+  // ── Voice output hook ──
+  const { speak: speakRaw, stopSpeaking, isSpeaking } = useVoiceOutput({
+    hasElevenLabs,
+    lang,
+    elevenLabsApiKey: ELEVENLABS_API_KEY,
+    elevenLabsVoiceId: ELEVENLABS_VOICE_ID,
+  });
 
-  // ── Detect best voice backend on mount ──
-  useEffect(() => {
-    if (!enabled || backendChecked) return;
-
-    if (deepgramKey) {
-      setVoiceBackend('deepgram');
-      setBackendChecked(true);
-      return;
-    }
-
-    // Test Chrome's SpeechRecognition
-    testChromeSpeechRecognition().then(works => {
-      setVoiceBackend(works ? 'chrome' : 'none');
-      setBackendChecked(true);
-    });
-  }, [enabled, deepgramKey, backendChecked]);
-
-  // ── Speech output ──
+  // Wrap speak to integrate with component state machine
   const speak = useCallback(async (text: string) => {
     setState('speaking');
     setResponse(text);
+    await speakRaw(text);
+  }, [speakRaw]);
 
-    const done = () => {
+  // When speaking finishes, transition back to open
+  useEffect(() => {
+    if (!isSpeaking && state === 'speaking') {
       setState('open');
       shouldListenRef.current = true;
-    };
-
-    if (hasElevenLabs) {
-      try {
-        const audio = await speakWithElevenLabs(text, ELEVENLABS_API_KEY!, ELEVENLABS_VOICE_ID!);
-        audioRef.current = audio;
-        audio.onended = done;
-        audio.onerror = () => { speakWithBrowserTTS(text, lang); done(); };
-        await audio.play();
-      } catch {
-        speakWithBrowserTTS(text, lang);
-        done();
-      }
-    } else {
-      speakWithBrowserTTS(text, lang);
-      setTimeout(done, TIMING.TTS_FALLBACK_TIMEOUT);
     }
-  }, [hasElevenLabs]);
+  }, [isSpeaking, state]);
 
-  // ── Process command ──
+  // ── Process command (keyword-first, LLM-second) ──
   const processTranscript = useCallback(async (text: string) => {
     setState('processing');
     setTranscript(text);
@@ -107,11 +74,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
       prayerTimes,
     };
 
-    // Try fast keyword matching first
     const intent = parseIntent(text, context, lang);
 
     if (intent.type !== 'unknown') {
-      // Keyword match — respond instantly
       if (intent.type === 'navigate' && intent.surface) {
         app.navigate(intent.surface);
       }
@@ -119,7 +84,6 @@ export default function VoiceAssistant({ prayerData }: Props) {
       return;
     }
 
-    // Unknown intent — try Ollama LLM if available
     const ollamaUp = await isOllamaAvailable(ollamaEndpoint);
     if (ollamaUp) {
       const llmIntent = await processWithLLM(
@@ -128,14 +92,12 @@ export default function VoiceAssistant({ prayerData }: Props) {
         ollamaEndpoint, ollamaModel,
       );
 
-      // Update conversation history
       chatHistoryRef.current = [
         ...chatHistoryRef.current,
         { role: 'user' as const, content: text },
         { role: 'assistant' as const, content: llmIntent.response },
-      ].slice(-LIMITS.LLM_HISTORY_MESSAGES); // Keep last 5 exchanges
+      ].slice(-LIMITS.LLM_HISTORY_MESSAGES);
 
-      // Execute action from LLM
       if (llmIntent.action) {
         const a = llmIntent.action;
         if (a.type === 'navigate' && a.surface) {
@@ -143,17 +105,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
         } else if (a.type === 'add_task' && a.taskTitle) {
           const pri = ['low', 'medium', 'high'].includes(a.taskPriority || '') ? a.taskPriority as 'low' | 'medium' | 'high' : 'medium';
           const cat = ['daily', 'task', 'goal'].includes(a.taskCategory || '') ? a.taskCategory as 'daily' | 'task' | 'goal' : 'task';
-          app.addTask({
-            title: a.taskTitle,
-            description: '',
-            completed: false,
-            priority: pri,
-            category: cat,
-          });
+          app.addTask({ title: a.taskTitle, description: '', completed: false, priority: pri, category: cat });
         } else if (a.type === 'complete_task' && a.taskTitle) {
-          const match = app.tasks.find(t =>
-            !t.completed && t.title.toLowerCase().includes(a.taskTitle!.toLowerCase())
-          );
+          const match = app.tasks.find(t => !t.completed && t.title.toLowerCase().includes(a.taskTitle!.toLowerCase()));
           if (match) app.updateTask(match.id, { completed: true, completedAt: new Date().toISOString() });
         } else if (a.type === 'complete_habit' && a.taskTitle) {
           const match = app.tasks.find(t =>
@@ -165,203 +119,60 @@ export default function VoiceAssistant({ prayerData }: Props) {
       }
       speak(llmIntent.response);
     } else {
-      // No LLM — use the keyword-match fallback response
       speak(intent.response);
     }
   }, [app, prayerData, speak, lang, ollamaEndpoint, ollamaModel]);
 
-  // ── Deepgram voice listening ──
-  const startDeepgramListening = useCallback(async () => {
-    setState('listening');
-    setTranscript('');
-    setResponse('');
-    setError('');
-
-    try {
-      const recorder = createRecorder(micDeviceId);
-      recorderRef.current = recorder;
-      await recorder.start();
-
-      // Auto-stop after max recording duration
-      setTimeout(() => {
-        if (recorder.isRecording()) {
-          recorder.stop();
-        }
-      }, TIMING.RECORDING_MAX_DURATION);
-    } catch (e: any) {
-      setError(e.message?.includes('Permission') || e.message?.includes('NotAllowed')
-        ? 'Microphone blocked. Click 🔒 in Chrome\'s address bar to allow.'
-        : `Mic error: ${e.message}`);
+  // ── Voice input hook ──
+  const { startListening, stopListening, isListening, voiceBackend } = useVoiceInput({
+    enabled,
+    deepgramKey,
+    micDeviceId,
+    sttLang,
+    onTranscript: processTranscript,
+    onListeningStart: useCallback(() => {
+      setState('listening');
+      setTranscript('');
+      setResponse('');
+      setError('');
+      shouldListenRef.current = false;
+    }, []),
+    onError: useCallback((msg: string) => {
+      setError(msg);
+    }, []),
+    onListeningEnd: useCallback(() => {
       setState('open');
-    }
-  }, [micDeviceId]);
+      shouldListenRef.current = true;
+    }, []),
+    onProcessingStart: useCallback(() => {
+      setState('processing');
+      setTranscript('Processing audio...');
+    }, []),
+  });
 
-  const stopDeepgramAndTranscribe = useCallback(async () => {
-    const recorder = recorderRef.current;
-    if (!recorder) return;
-
-    if (recorder.isRecording()) {
-      recorder.stop();
-    }
-
-    setState('processing');
-    setTranscript('Processing audio...');
-
-    try {
-      const blob = await recorder.getBlob();
-      if (blob.size < LIMITS.MIN_AUDIO_BLOB_SIZE) {
-        setError('No speech detected. Try again or type your command.');
-        setState('open');
-        setTranscript('');
-        return;
-      }
-
-      const result = await transcribeWithDeepgram(blob, deepgramKey, sttLang);
-
-      if (!result.transcript || result.transcript.trim() === '') {
-        setError('Couldn\'t make out what you said. Try again or type your command.');
-        setState('open');
-        setTranscript('');
-        return;
-      }
-
-      processTranscript(result.transcript);
-    } catch (e: any) {
-      setError(e.message || 'Transcription failed');
+  // ── Wake word hook ──
+  useWakeWord({
+    enabled,
+    wakeWordEnabled,
+    assistantIdle: state === 'idle',
+    onWakeWordDetected: useCallback(() => {
       setState('open');
       setTranscript('');
-    }
-    recorderRef.current = null;
-  }, [deepgramKey, processTranscript]);
-
-  // ── Chrome SpeechRecognition voice listening (fallback) ──
-  const startChromeListening = useCallback(() => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-
-    shouldListenRef.current = false;
-    if (wakeRecognitionRef.current) { try { wakeRecognitionRef.current.abort(); } catch {} wakeRecognitionRef.current = null; }
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    speechSynthesis?.cancel();
-
-    const rec = new SR();
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.lang = sttLang;
-
-    rec.onresult = (event: any) => {
-      const result = event.results[0];
-      if (result?.isFinal) processTranscript(result[0].transcript);
-    };
-
-    rec.onerror = (event: any) => {
-      recognitionRef.current = null;
-      shouldListenRef.current = true;
-
-      if (event.error === 'no-speech' || event.error === 'aborted') {
-        setState('open');
-      } else if (event.error === 'network') {
-        setVoiceBackend('none');
-        setError('Chrome voice unavailable — get a free Deepgram API key at deepgram.com and paste it in Settings → Voice Assistant.');
-        setState('open');
-      } else if (event.error === 'not-allowed') {
-        setError('Microphone blocked. Click 🔒 in Chrome\'s address bar to allow.');
-        setState('open');
-      } else {
-        setError(`Mic error: ${event.error}`);
-        setState('open');
+      setResponse('');
+      setError('');
+      if (deepgramKey) {
+        // Will start Deepgram listening via the startListening path
+        startListening();
       }
-    };
+    }, [deepgramKey, startListening]),
+  });
 
-    rec.onend = () => { recognitionRef.current = null; };
-
-    recognitionRef.current = rec;
-    setState('listening');
-    setTranscript(''); setResponse(''); setError('');
-    rec.start();
-  }, [processTranscript]);
-
-  // ── Unified start listening ──
-  const startListening = useCallback(() => {
-    if (voiceBackend === 'deepgram') {
-      startDeepgramListening();
-    } else if (voiceBackend === 'chrome') {
-      startChromeListening();
-    } else {
-      setError('Voice not available. Add a Deepgram API key in Settings → Voice Assistant to enable voice input.');
-      setState('open');
-    }
-  }, [voiceBackend, startDeepgramListening, startChromeListening]);
-
-  // ── Unified stop listening ──
-  const stopListening = useCallback(() => {
-    if (voiceBackend === 'deepgram' && recorderRef.current) {
-      stopDeepgramAndTranscribe();
-    } else if (recognitionRef.current) {
-      recognitionRef.current.abort();
-      recognitionRef.current = null;
-      setState('open');
-      shouldListenRef.current = true;
-    }
-  }, [voiceBackend, stopDeepgramAndTranscribe]);
-
-  // ── OpenWakeWord initialization ──
+  // Sync isListening state from hook to component state machine
   useEffect(() => {
-    if (!enabled || !wakeWordEnabled || wakeEngineRef.current) return;
-
-    const engine = new WakeWordEngine({
-      // To use custom "Hey Lina": train model, put .onnx in public/openwakeword/models/,
-      // add to keywords array as filename without extension
-      keywords: ['hey_lina'],
-      baseAssetUrl: `${import.meta.env.BASE_URL}openwakeword/models`,
-      detectionThreshold: 0.5,
-      cooldownMs: TIMING.WAKE_WORD_COOLDOWN,
-    });
-
-    engine.on('detect', ({ keyword }: { keyword: string; score: number }) => {
-      if (keyword) {
-        // Wake word detected — open Lina and start recording
-        setState('open');
-        setTranscript('');
-        setResponse('');
-        setError('');
-        if (voiceBackend === 'deepgram') {
-          startDeepgramListening();
-        }
-      }
-    });
-
-    engine.load()
-      .then(() => engine.start())
-      .then(() => {
-        wakeEngineRef.current = engine;
-        setWakeWordReady(true);
-      })
-      .catch(() => {
-        // Models may not be available — silently fail
-      });
-
-    return () => {
-      if (wakeEngineRef.current) {
-        wakeEngineRef.current.stop().catch(() => {});
-        wakeEngineRef.current = null;
-        setWakeWordReady(false);
-      }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, wakeWordEnabled]);
-
-  // ── Pause/resume wake word when Lina panel is open ──
-  useEffect(() => {
-    const engine = wakeEngineRef.current;
-    if (!engine || !wakeWordReady) return;
-
-    if (state === 'idle') {
-      engine.start().catch(() => {});
-    } else {
-      engine.stop().catch(() => {});
+    if (isListening && state !== 'listening') {
+      setState('listening');
     }
-  }, [state, wakeWordReady]);
+  }, [isListening, state]);
 
   // ── Auto-focus text input when panel opens ──
   useEffect(() => {
@@ -387,8 +198,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     } else if (state === 'listening') {
       stopListening();
     } else if (state === 'speaking') {
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-      speechSynthesis?.cancel();
+      stopSpeaking();
       setState('open');
       shouldListenRef.current = true;
     } else if (state === 'open' && !transcript && !response) {
@@ -404,7 +214,6 @@ export default function VoiceAssistant({ prayerData }: Props) {
   // ── Keyboard shortcuts: Ctrl+Shift+L to open, Escape to close ──
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      // Ctrl+Shift+L — toggle Lina open/closed
       if (e.ctrlKey && e.shiftKey && e.key === 'L') {
         e.preventDefault();
         if (state === 'idle') {
@@ -413,10 +222,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
           setResponse('');
           setError('');
         } else {
-          if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch {} recognitionRef.current = null; }
-          if (recorderRef.current?.isRecording()) { recorderRef.current.stop(); }
-          if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-          speechSynthesis?.cancel();
+          stopListening();
+          stopSpeaking();
           setState('idle');
           setTranscript('');
           setResponse('');
@@ -425,12 +232,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
         }
         return;
       }
-      // Escape — close if open
       if (e.key === 'Escape' && state !== 'idle') {
-        if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch {} recognitionRef.current = null; }
-        if (recorderRef.current?.isRecording()) { recorderRef.current.stop(); }
-        if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-        speechSynthesis?.cancel();
+        stopListening();
+        stopSpeaking();
         setState('idle');
         setTranscript('');
         setResponse('');
@@ -440,7 +244,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [state]);
+  }, [state, stopListening, stopSpeaking]);
 
   if (!enabled) return null;
 
@@ -455,7 +259,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
         aria-label={isOpen ? 'Close Lina' : 'Talk to Lina'}
         title={isOpen ? 'Close (Esc)' : 'Ask Lina anything (Ctrl+Shift+L)'}
       >
-        <span className="va-avatar">{isOpen ? '×' : 'L'}</span>
+        <span className="va-avatar">{isOpen ? '\u00d7' : 'L'}</span>
         {state === 'listening' && <><span className="va-ring" /><span className="va-ring delay" /></>}
         {state === 'speaking' && <span className="va-ring speaking" />}
       </button>
@@ -464,21 +268,21 @@ export default function VoiceAssistant({ prayerData }: Props) {
         <div className="va-bubble">
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, direction: isArabic ? 'rtl' : 'ltr' }}>
-            <span style={{ fontSize: 16, fontWeight: 600, color: '#c4a0f7' }}>لينا{!isArabic && ' Lina'}</span>
+            <span style={{ fontSize: 16, fontWeight: 600, color: '#c4a0f7' }}>{'\u0644\u064a\u0646\u0627'}{!isArabic && ' Lina'}</span>
             <span style={{ fontSize: 11, color: '#6b6f85' }}>
               {state === 'listening'
                 ? voiceBackend === 'deepgram'
-                  ? isArabic ? '🎙️ جاري التسجيل... اضغط إيقاف' : '🎙️ Recording... click stop when done'
-                  : isArabic ? '🎙️ جاري الاستماع...' : '🎙️ Listening...'
-                : state === 'processing' ? isArabic ? '🤔 جاري التفكير...' : '🤔 Thinking...'
-                : state === 'speaking' ? isArabic ? '🔊 جاري التحدث...' : '🔊 Speaking...'
-                : isArabic ? 'اسألني أي شيء' : 'Ask me anything'}
+                  ? isArabic ? '\uD83C\uDF99\uFE0F \u062C\u0627\u0631\u064A \u0627\u0644\u062A\u0633\u062C\u064A\u0644... \u0627\u0636\u063A\u0637 \u0625\u064A\u0642\u0627\u0641' : '\uD83C\uDF99\uFE0F Recording... click stop when done'
+                  : isArabic ? '\uD83C\uDF99\uFE0F \u062C\u0627\u0631\u064A \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639...' : '\uD83C\uDF99\uFE0F Listening...'
+                : state === 'processing' ? isArabic ? '\uD83E\uDD14 \u062C\u0627\u0631\u064A \u0627\u0644\u062A\u0641\u0643\u064A\u0631...' : '\uD83E\uDD14 Thinking...'
+                : state === 'speaking' ? isArabic ? '\uD83D\uDD0A \u062C\u0627\u0631\u064A \u0627\u0644\u062A\u062D\u062F\u062B...' : '\uD83D\uDD0A Speaking...'
+                : isArabic ? '\u0627\u0633\u0623\u0644\u0646\u064A \u0623\u064A \u0634\u064A\u0621' : 'Ask me anything'}
             </span>
           </div>
 
           {/* Conversation area */}
           {transcript && (
-            <div className="va-you" style={{ marginBottom: 6, direction: isArabic ? 'rtl' : 'ltr' }}>{isArabic ? 'أنت' : 'You'}: {transcript}</div>
+            <div className="va-you" style={{ marginBottom: 6, direction: isArabic ? 'rtl' : 'ltr' }}>{isArabic ? '\u0623\u0646\u062A' : 'You'}: {transcript}</div>
           )}
           {response && (
             <div className="va-lina" style={{ marginBottom: 10, direction: isArabic ? 'rtl' : 'ltr' }}>{response}</div>
@@ -487,7 +291,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
             <div style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 8, lineHeight: 1.4 }}>{error}</div>
           )}
 
-          {/* Text input — always visible when panel is open and not busy */}
+          {/* Text input -- always visible when panel is open and not busy */}
           {state !== 'processing' && state !== 'speaking' && (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {state !== 'listening' && (
@@ -497,8 +301,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
                   style={{ fontSize: 13, padding: '8px 10px', flex: 1, background: '#0f1117', border: '1px solid #2a2d40', borderRadius: 8, color: '#e1e4ea' }}
                   dir={isArabic ? 'rtl' : 'ltr'}
                   placeholder={isArabic
-                    ? canVoice ? 'اكتب أو اضغط 🎙️ للتحدث...' : 'اكتب أمراً...'
-                    : canVoice ? 'Type or click 🎙️ to speak...' : 'Type a command...'}
+                    ? canVoice ? '\u0627\u0643\u062A\u0628 \u0623\u0648 \u0627\u0636\u063A\u0637 \uD83C\uDF99\uFE0F \u0644\u0644\u062A\u062D\u062F\u062B...' : '\u0627\u0643\u062A\u0628 \u0623\u0645\u0631\u0627\u064B...'
+                    : canVoice ? 'Type or click \uD83C\uDF99\uFE0F to speak...' : 'Type a command...'}
                   value={textInput}
                   onChange={e => setTextInput(e.target.value)}
                   onKeyDown={e => {
@@ -512,8 +316,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
                   <span className="va-dots"><span /><span /><span /></span>
                   <span style={{ fontSize: 12, color: '#22c55e' }}>
                     {voiceBackend === 'deepgram'
-                      ? isArabic ? 'جاري التسجيل... تحدث ثم اضغط ⏹️' : 'Recording... speak then click ⏹️'
-                      : isArabic ? 'جاري الاستماع...' : 'Listening...'}
+                      ? isArabic ? '\u062C\u0627\u0631\u064A \u0627\u0644\u062A\u0633\u062C\u064A\u0644... \u062A\u062D\u062F\u062B \u062B\u0645 \u0627\u0636\u063A\u0637 \u23F9\uFE0F' : 'Recording... speak then click \u23F9\uFE0F'
+                      : isArabic ? '\u062C\u0627\u0631\u064A \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639...' : 'Listening...'}
                   </span>
                 </div>
               )}
@@ -533,7 +337,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
                   aria-label="Use voice input"
                   title={voiceBackend === 'deepgram' ? 'Record voice (Deepgram)' : 'Speak your command'}
                 >
-                  🎙️
+                  {'\uD83C\uDF99\uFE0F'}
                 </button>
               )}
               {state === 'listening' && (
@@ -549,7 +353,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
                   aria-label="Stop recording"
                   title="Stop and transcribe"
                 >
-                  ⏹️
+                  {'\u23F9\uFE0F'}
                 </button>
               )}
               {state !== 'listening' && (
@@ -569,7 +373,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
                   aria-label="Send command"
                   title="Send"
                 >
-                  →
+                  {'\u2192'}
                 </button>
               )}
             </div>
@@ -579,7 +383,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
           {!transcript && !response && state === 'open' && (
             <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 4, direction: isArabic ? 'rtl' : 'ltr' }}>
               {(isArabic
-                ? ['الاجتماع القادم', 'كم مهمة', 'أوقات الصلاة', 'افتح التقويم', 'سلسلة']
+                ? ['\u0627\u0644\u0627\u062C\u062A\u0645\u0627\u0639 \u0627\u0644\u0642\u0627\u062F\u0645', '\u0643\u0645 \u0645\u0647\u0645\u0629', '\u0623\u0648\u0642\u0627\u062A \u0627\u0644\u0635\u0644\u0627\u0629', '\u0627\u0641\u062A\u062D \u0627\u0644\u062A\u0642\u0648\u064A\u0645', '\u0633\u0644\u0633\u0644\u0629']
                 : ['next meeting', 'tasks left', 'prayer times', 'open calendar', 'my streak']
               ).map(cmd => (
                 <button
@@ -603,9 +407,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
           {/* Voice backend indicator */}
           {state === 'open' && !transcript && !response && (
             <div style={{ marginTop: 8, fontSize: 10, color: '#4a4e63' }}>
-              {voiceBackend === 'deepgram' ? '🟢 Voice: Deepgram' :
-               voiceBackend === 'chrome' ? '🟡 Voice: Chrome (may be unreliable)' :
-               '🔴 Voice off — add Deepgram key in Settings'}
+              {voiceBackend === 'deepgram' ? '\uD83D\uDFE2 Voice: Deepgram' :
+               voiceBackend === 'chrome' ? '\uD83D\uDFE1 Voice: Chrome (may be unreliable)' :
+               '\uD83D\uDD34 Voice off \u2014 add Deepgram key in Settings'}
             </div>
           )}
         </div>

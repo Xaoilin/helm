@@ -5,8 +5,6 @@ import {
   getPrayerTimes,
   getNextPrayer,
   isAdhanTime,
-  formatTimeUntil,
-  PRAYER_SOURCES,
   type PrayerTimesData,
   type PrayerTime as PrayerTimeType,
 } from '../services/prayerTimes';
@@ -24,6 +22,11 @@ import {
 } from '../services/gamification';
 import type { Task, CalendarEvent } from '../types/domain';
 import { TIMING } from '../config/constants';
+import PrayerStatsCard from '../components/dashboard/PrayerStatsCard';
+import PrayerTimesCard from '../components/dashboard/PrayerTimesCard';
+import AdhanBanner from '../components/dashboard/AdhanBanner';
+import AgendaList from '../components/dashboard/AgendaList';
+import type { AgendaItem } from '../components/dashboard/AgendaList';
 
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -265,7 +268,6 @@ export default function DashboardSurface() {
   }, [gam, currentStreak, xp]);
 
   // ── Agenda timeline (max 8 items) ──
-  type AgendaItem = { id: string; time: string; title: string; type: 'event' | 'task'; meta?: string; task?: Task; sourceId?: string; passed?: boolean };
   const agenda = useMemo((): AgendaItem[] => {
     const items: AgendaItem[] = [];
 
@@ -401,34 +403,14 @@ export default function DashboardSurface() {
 
         <div className="dash-grid">
           {/* ── Today's Agenda ── */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <span>Today's Agenda</span>
-              <span style={{ fontSize: 11, color: '#6b6f85' }}>{todayEvents.length} event{todayEvents.length !== 1 ? 's' : ''}</span>
-            </div>
-            {agenda.length === 0 ? (
-              <div style={{ padding: '16px 0', color: '#6b6f85', fontSize: 13, textAlign: 'center' }}>No events or tasks today</div>
-            ) : (
-              <div className="dash-agenda">
-                {agenda.map(item => {
-                  const pal = item.sourceId ? getEventPalette(item.sourceId) : null;
-                  return (
-                  <div key={item.id} className={`dash-agenda-item ${item.type} ${item.passed ? 'passed' : ''}`} style={pal ? { borderLeft: `3px solid ${item.passed ? '#2a2d42' : pal.border}`, background: item.passed ? undefined : pal.bg, borderRadius: 4, paddingLeft: 10 } : {}}>
-                    <div className="dash-agenda-time">{item.time}</div>
-                    <div className="dash-agenda-content">
-                      <div className="dash-agenda-title">{item.title}</div>
-                      {item.meta && <span className={`tag ${item.type === 'task' ? `tag-${item.meta}` : ''}`} style={item.type === 'event' ? { background: '#1e2030', color: '#9499b0', fontSize: 10, padding: '1px 6px' } : {}}>{item.meta}</span>}
-                    </div>
-                    {item.task && !item.task.completed && (
-                      <button className="btn btn-primary btn-sm" onClick={() => completeTask(item.task!)}>Done</button>
-                    )}
-                  </div>
-                  );
-                })}
-              </div>
-            )}
-            <button className="dash-card-link" onClick={() => app.navigate('calendar')}>See full calendar &rarr;</button>
-          </div>
+          <AgendaList
+            agenda={agenda}
+            todayEvents={todayEvents}
+            todayStr={todayStr}
+            getEventPalette={getEventPalette}
+            onNavigate={app.navigate}
+            onCompleteTask={completeTask}
+          />
 
           {/* ── Habits Progress ── */}
           <div className="dash-card">
@@ -538,171 +520,33 @@ export default function DashboardSurface() {
             t.category === 'daily' && prayerKeywords.some(kw => t.title.toLowerCase().includes(kw))
           );
           const prayerStats = calculatePrayerStats(gam, app.tasks);
-          if (prayerStats.perPrayer.length === 0) return null;
-
-          // Build last 7 days for the prayer log editor
-          const last7Days: { dateStr: string; label: string }[] = [];
-          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          for (let i = 6; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            const ds = toLocalDateStr(d);
-            const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday' : dayNames[d.getDay()];
-            last7Days.push({ dateStr: ds, label });
-          }
-
           return (
-            <div className="dash-card" style={{ marginBottom: 16 }}>
-              <div className="dash-card-header">
-                <span>{'\u{1F64F}'} Prayer Rate</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    style={{ fontSize: 10, padding: '3px 8px' }}
-                    onClick={() => setShowPrayerLog(!showPrayerLog)}
-                  >
-                    {showPrayerLog ? 'Close' : 'Edit Log'}
-                  </button>
-                  <span style={{ fontSize: 18, fontWeight: 700, color: prayerStats.overall.percentage >= 80 ? '#22c55e' : prayerStats.overall.percentage >= 50 ? '#f59e0b' : '#ff6b6b' }}>
-                    {prayerStats.overall.percentage}%
-                  </span>
-                </div>
-              </div>
-
-              {/* Prayer Log Editor */}
-              {showPrayerLog && (
-                <div style={{ marginBottom: 14, padding: 12, background: '#13151c', borderRadius: 8, border: '1px solid #1e2030' }}>
-                  <div style={{ fontSize: 11, color: '#6b6f85', marginBottom: 8 }}>
-                    Check off prayers you completed but forgot to log. No XP awarded — this only corrects your stats.
-                  </div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign: 'left', padding: '4px 8px', color: '#6b6f85', fontWeight: 500 }}>Day</th>
-                          {prayerHabits.map(h => {
-                            const name = prayerKeywords.find(kw => h.title.toLowerCase().includes(kw)) || '';
-                            return (
-                              <th key={h.id} style={{ textAlign: 'center', padding: '4px 6px', color: '#8b8fa3', fontWeight: 500, fontSize: 11 }}>
-                                {name.charAt(0).toUpperCase() + name.slice(1)}
-                              </th>
-                            );
-                          })}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {last7Days.map(({ dateStr, label }) => {
-                          const isToday = dateStr === todayStr;
-                          const dayLog = gam.dailyLog?.[dateStr] || [];
-                          return (
-                            <tr key={dateStr} style={{ borderTop: '1px solid #1e2030' }}>
-                              <td style={{ padding: '6px 8px', color: isToday ? '#7c8aff' : '#e1e4ea', fontWeight: isToday ? 600 : 400, fontSize: 12 }}>
-                                {label}
-                                <span style={{ fontSize: 10, color: '#4a4e62', marginLeft: 6 }}>{dateStr.slice(5)}</span>
-                              </td>
-                              {prayerHabits.map(h => {
-                                const checked = dayLog.includes(h.id);
-                                return (
-                                  <td key={h.id} style={{ textAlign: 'center', padding: '6px 6px' }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      disabled={isToday}
-                                      onChange={e => app.backfillPrayerLog(h.id, dateStr, e.target.checked)}
-                                      title={isToday ? 'Use the habit cards above for today' : `${label}: ${h.title}`}
-                                      style={{ cursor: isToday ? 'default' : 'pointer', width: 16, height: 16, accentColor: '#22c55e' }}
-                                      aria-label={`${h.title} on ${label}`}
-                                    />
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              <div className="prayer-stats-grid">
-                {prayerStats.perPrayer.map(p => (
-                  <div key={p.name} className="prayer-stat-item">
-                    <div className="prayer-stat-name">{p.name}</div>
-                    <div className="prayer-stat-bar">
-                      <div className="prayer-stat-fill" style={{ width: `${p.percentage}%`, background: p.percentage >= 80 ? '#22c55e' : p.percentage >= 50 ? '#f59e0b' : '#ff6b6b' }} />
-                    </div>
-                    <div className="prayer-stat-pct">{p.percentage}%</div>
-                  </div>
-                ))}
-              </div>
-              {(() => {
-                const logDates = Object.keys(gam.dailyLog || {}).sort();
-                const startDate = logDates.length > 0 ? logDates[0] : null;
-                return (
-                  <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 8 }}>
-                    Based on {logDates.length} days of tracking{startDate && ` \u00b7 Since ${new Date(startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`}
-                  </div>
-                );
-              })()}
-            </div>
+            <PrayerStatsCard
+              prayerStats={prayerStats}
+              prayerHabits={prayerHabits}
+              gam={gam}
+              todayStr={todayStr}
+              showPrayerLog={showPrayerLog}
+              onTogglePrayerLog={() => setShowPrayerLog(!showPrayerLog)}
+              onBackfillPrayerLog={app.backfillPrayerLog}
+            />
           );
         })()}
 
         {/* ── Prayer Times ── */}
         {prayerEnabled && prayerData && (
-          <div className="dash-card" style={{ marginBottom: 16 }}>
-            <div className="dash-card-header">
-              <span>{'\u{1F54C}'} Prayer Times &mdash; {prayerCity}</span>
-              <span style={{ fontSize: 11, color: '#6b6f85' }}>{prayerData.hijriDate}</span>
-            </div>
-            <div className="prayer-grid">
-              {prayerData.prayers.map(p => {
-                const isNext = nextPrayer?.prayer.name === p.name;
-                const isPrayer = p.type === 'prayer';
-                return (
-                  <div key={p.name} className={`prayer-row ${isNext ? 'next' : ''} ${isPrayer ? 'wajib' : 'event'}`}>
-                    <div className="prayer-name">
-                      {p.name}
-                      <span className="prayer-arabic">{p.nameArabic}</span>
-                    </div>
-                    <div className="prayer-time">{p.time}</div>
-                    {isNext && (
-                      <div className="prayer-countdown">in {formatTimeUntil(nextPrayer!.minutesUntil)}</div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="prayer-sources">
-              <span style={{ fontSize: 10, color: '#4a4e62' }}>Sources:</span>
-              <a href={PRAYER_SOURCES.api.url} target="_blank" rel="noopener noreferrer">{PRAYER_SOURCES.api.name}</a>
-              <span style={{ color: '#2a2d42' }}>|</span>
-              <a href={PRAYER_SOURCES.method.url} target="_blank" rel="noopener noreferrer">{PRAYER_SOURCES.method.name}</a>
-              <span style={{ color: '#2a2d42' }}>|</span>
-              <a href={PRAYER_SOURCES.verification.url} target="_blank" rel="noopener noreferrer">Verify times</a>
-            </div>
-          </div>
+          <PrayerTimesCard
+            prayerData={prayerData}
+            nextPrayer={nextPrayer}
+            city={prayerCity}
+            tick={tick}
+          />
         )}
       </div>
 
       {/* Adhan Notification — Full Screen */}
       {adhanPrayer && (
-        <div className="adhan-banner" onClick={() => setAdhanPrayer(null)}>
-          <div className="adhan-ring" />
-          <div className="adhan-ring" />
-          <div className="adhan-ring" />
-          <div className="adhan-content">
-            <div className="adhan-mosque">{'\u{1F54C}'}</div>
-            <div className="adhan-text">
-              <div className="adhan-title">{'\u0627\u0644\u0644\u0647 \u0623\u0643\u0628\u0631'}</div>
-              <div className="adhan-subtitle">Allahu Akbar</div>
-              <div className="adhan-subtitle">It's time for <strong>{adhanPrayer.name}</strong> ({adhanPrayer.nameArabic})</div>
-              <div className="adhan-time">{adhanPrayer.time}</div>
-            </div>
-          </div>
-          <div className="adhan-dismiss">Tap anywhere when you're ready to dismiss</div>
-        </div>
+        <AdhanBanner adhanPrayer={adhanPrayer} onDismiss={() => setAdhanPrayer(null)} />
       )}
 
       {/* Toasts */}
