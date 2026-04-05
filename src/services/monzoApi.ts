@@ -11,6 +11,7 @@
 import type { Transaction, TransactionCategory } from '../types/domain';
 import { toLocalDateStr } from './financeHelpers';
 import { API_TIMEOUT } from '../config/constants';
+import { monzoBreaker } from './serviceBreakers';
 
 const MONZO_API = 'https://api.monzo.com';
 
@@ -69,15 +70,17 @@ interface MonzoTransaction {
 // ── API calls ──
 
 async function monzoFetch<T>(endpoint: string, token: string): Promise<T> {
-  const resp = await fetch(`${MONZO_API}${endpoint}`, {
-    signal: AbortSignal.timeout(API_TIMEOUT.MONZO),
-    headers: { Authorization: `Bearer ${token}` },
+  return monzoBreaker.call(async () => {
+    const resp = await fetch(`${MONZO_API}${endpoint}`, {
+      signal: AbortSignal.timeout(API_TIMEOUT.MONZO),
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`Monzo API ${resp.status}: ${body}`);
+    }
+    return resp.json();
   });
-  if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`Monzo API ${resp.status}: ${body}`);
-  }
-  return resp.json();
 }
 
 /** Verify token is valid. */

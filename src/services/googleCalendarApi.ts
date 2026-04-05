@@ -2,6 +2,8 @@
 // No SDK dependency — uses native fetch
 
 import { API_TIMEOUT } from '../config/constants';
+import { googleCalendarBreaker } from './serviceBreakers';
+import { withRetry } from './retry';
 
 const BASE_URL = 'https://www.googleapis.com/calendar/v3';
 
@@ -20,27 +22,29 @@ export class GoogleApiError extends Error {
 }
 
 async function apiCall<T>(accessToken: string, url: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, {
-    ...options,
-    signal: AbortSignal.timeout(API_TIMEOUT.GOOGLE_CALENDAR),
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  return googleCalendarBreaker.call(() => withRetry(async () => {
+    const response = await fetch(url, {
+      ...options,
+      signal: AbortSignal.timeout(API_TIMEOUT.GOOGLE_CALENDAR),
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new GoogleApiError(
-      response.status,
-      body,
-      `Google API ${response.status}: ${response.statusText}`,
-    );
-  }
+    if (!response.ok) {
+      const body = await response.text();
+      throw new GoogleApiError(
+        response.status,
+        body,
+        `Google API ${response.status}: ${response.statusText}`,
+      );
+    }
 
-  if (response.status === 204) return undefined as T;
-  return response.json();
+    if (response.status === 204) return undefined as T;
+    return response.json();
+  }, { name: 'GoogleCalendar', maxRetries: 2, initialDelayMs: 1000 }));
 }
 
 // ── Calendar List ──
