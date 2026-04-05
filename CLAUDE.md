@@ -162,7 +162,7 @@ src/
 - **API tests** must mock `fetch` and verify headers, URLs, error handling
 
 **Test gaps to address:**
-- ❌ No E2E tests (voice, OAuth popups require manual testing)
+- ⏳ E2E tests via Playwright (Phase 5 of refactor plan — navigation, task lifecycle, settings persistence, etc.)
 - ❌ No integration tests between surfaces
 - ❌ No performance tests (re-render counts, memoization effectiveness)
 - ❌ No accessibility tests via test runner (axe-core)
