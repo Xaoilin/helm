@@ -1,6 +1,7 @@
 declare module 'openwakeword-wasm-browser' {
   interface WakeWordEngineConfig {
     keywords?: string[];
+    modelFiles?: Record<string, string>;
     baseAssetUrl?: string;
     ortWasmPath?: string;
     detectionThreshold?: number;
