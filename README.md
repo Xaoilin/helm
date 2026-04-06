@@ -1,73 +1,66 @@
-# React + TypeScript + Vite
+# HELM
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+HELM is a local-first desktop assistant app called Lina. It combines calendar, tasks and habits, finance tracking, knowledge management, prayer times, voice input, and chat into one Tauri + React application for a single-user workflow.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Tauri 2
+- React 19
+- TypeScript 5
+- Vite 8
+- Supabase for optional sign-in and sync
+- Ollama, Deepgram, ElevenLabs, and OpenWakeWord for assistant features
 
-## React Compiler
+## Quick Start
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open the app in the browser for web development, or run the Tauri shell separately when working on desktop-specific behavior.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Core Commands
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run lint
+npm run typecheck
+npm run test
+npm run test:e2e
+npm run build
+npm run check
 ```
+
+`npm run check` is the full local validation gate and runs lint, typecheck, unit tests, E2E, and build in sequence.
+
+## Project Map
+
+- [AGENTS.md](C:/Users/alisa/Documents/Claude/pa-test/helm/AGENTS.md): short operational instructions for Codex
+- [docs/project-architecture.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/project-architecture.md): app structure, provider graph, persistence, and integration boundaries
+- [docs/engineering-guide.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/engineering-guide.md): workflow, Definition of Done, testing, resilience, and documentation rules
+- [docs/feature-status.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/feature-status.md): truthful feature matrix
+- [docs/assistant-command-architecture.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/assistant-command-architecture.md): long-term assistant design direction
+
+## Current Product Reality
+
+- Google Calendar OAuth and sync are real.
+- Supabase auth and sync are real when configured.
+- Ollama-powered assistant responses are real when Ollama is running locally.
+- Voice input degrades when Deepgram is unavailable and can fall back to browser speech APIs where supported.
+- Several integrations remain placeholder or simulated.
+- Credentials stored in the local vault are not encrypted at rest in this MVP.
+
+Use [docs/feature-status.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/feature-status.md) for the authoritative feature-by-feature status instead of inferring from UI copy.
+
+## Working Rules
+
+- Keep the app local-first.
+- Do not describe placeholder features as real.
+- Update code, docs, and user-facing copy together when behavior changes.
+- Keep assistant behavior shared across chat and voice.
+
+## Deployment And CI
+
+- Pull requests should satisfy `lint`, `typecheck`, `unit`, `e2e`, and `build`.
+- GitHub Pages deploys only after the CI workflow succeeds on `master`.
+- `master` is protected to require pull requests plus the `lint`, `typecheck`, `unit`, `e2e`, and `build` checks before merge.

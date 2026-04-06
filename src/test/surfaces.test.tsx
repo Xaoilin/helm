@@ -1,15 +1,18 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { AppProvider } from '../store/AppContext';
 import App from '../App';
+import CalendarSurface from '../surfaces/CalendarSurface';
 import ChatSurface from '../surfaces/ChatSurface';
 import DashboardSurface from '../surfaces/DashboardSurface';
 import TasksSurface from '../surfaces/TasksSurface';
 import KnowledgeSurface from '../surfaces/KnowledgeSurface';
 import ProfileSurface from '../surfaces/ProfileSurface';
 import CredentialsSurface from '../surfaces/CredentialsSurface';
+import IntegrationsSurface from '../surfaces/IntegrationsSurface';
 import WorkspacesSurface from '../surfaces/WorkspacesSurface';
 import SettingsSurface from '../surfaces/SettingsSurface';
+import { defaultIntegrations } from '../store/contexts/SettingsContext';
 
 function renderWithProvider(ui: React.ReactElement) {
   return render(<AppProvider>{ui}</AppProvider>);
@@ -97,6 +100,11 @@ describe('CredentialsSurface', () => {
     expect(screen.getByText(/1Password is the preferred credential source/)).toBeInTheDocument();
   });
 
+  it('should explain the local vault security limits truthfully', async () => {
+    await act(async () => { renderWithProvider(<CredentialsSurface />); });
+    expect(screen.getByText(/not encrypted at rest in this MVP/i)).toBeInTheDocument();
+  });
+
   it('should have add credential button', async () => {
     await act(async () => { renderWithProvider(<CredentialsSurface />); });
     const buttons = screen.getAllByText('+ Add Credential');
@@ -144,6 +152,32 @@ describe('SettingsSurface', () => {
   it('should have credential source selector', async () => {
     await act(async () => { renderWithProvider(<SettingsSurface />); });
     expect(screen.getByText('Primary credential source')).toBeInTheDocument();
+  });
+});
+
+describe('CalendarSurface', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('should label local-only calendar state truthfully', async () => {
+    await act(async () => { renderWithProvider(<CalendarSurface />); });
+    expect(screen.getByText('Local-only data – not synced')).toBeInTheDocument();
+  });
+});
+
+describe('IntegrationsSurface', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('should explain simulated provider connections', async () => {
+    localStorage.setItem('helm:integrations', JSON.stringify(
+      defaultIntegrations.map(integration =>
+        integration.id === 'int-github'
+          ? { ...integration, status: 'mocked', configuredAt: '2026-04-06T10:00:00.000Z' }
+          : integration
+      )
+    ));
+
+    await act(async () => { renderWithProvider(<IntegrationsSurface />); });
+    expect(screen.getByText('This connection is simulated. No real data is being exchanged with GitHub.')).toBeInTheDocument();
   });
 });
 

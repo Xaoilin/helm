@@ -5,7 +5,7 @@
  * assistant state, and fires a callback when the wake word is detected.
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useEffectEvent } from 'react';
 import WakeWordEngine from 'openwakeword-wasm-browser';
 import { TIMING } from '../config/constants';
 import { logError } from '../services/logger';
@@ -33,9 +33,7 @@ export function useWakeWord({
 }: UseWakeWordOptions): UseWakeWordReturn {
   const wakeEngineRef = useRef<InstanceType<typeof WakeWordEngine> | null>(null);
   const [wakeWordReady, setWakeWordReady] = useState(false);
-  // Store callback in ref to avoid re-initializing engine when callback changes
-  const callbackRef = useRef(onWakeWordDetected);
-  callbackRef.current = onWakeWordDetected;
+  const handleWakeWordDetected = useEffectEvent(() => onWakeWordDetected());
 
   // ── Initialize / tear down OpenWakeWord engine ──
   useEffect(() => {
@@ -53,7 +51,7 @@ export function useWakeWord({
 
     engine.on('detect', ({ keyword }: { keyword: string; score: number }) => {
       if (keyword) {
-        callbackRef.current();
+        handleWakeWordDetected();
       }
     });
 
@@ -74,7 +72,6 @@ export function useWakeWord({
         setWakeWordReady(false);
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, wakeWordEnabled, loaded]);
 
   // ── Pause / resume wake word when assistant panel is open ──

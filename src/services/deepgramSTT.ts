@@ -144,7 +144,7 @@ export async function testDeepgramKey(apiKey: string): Promise<boolean> {
     });
     // 200 or 400 (bad audio) both mean key works. 401/403 means bad key.
     return resp.status !== 401 && resp.status !== 403;
-  } catch (e) {
+  } catch {
     logWarn('Deepgram', 'Key test failed');
     return false;
   }
@@ -166,7 +166,11 @@ export function testChromeSpeechRecognition(): Promise<boolean> {
     rec.lang = 'en-GB';
 
     const timer = setTimeout(() => {
-      try { rec.abort(); } catch {}
+      try {
+        rec.abort();
+      } catch (error) {
+        logWarn('Deepgram', `SpeechRecognition abort failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+      }
       resolve(false); // Timeout = probably broken
     }, TIMING.CHROME_STT_TIMEOUT);
 
@@ -174,7 +178,11 @@ export function testChromeSpeechRecognition(): Promise<boolean> {
       clearTimeout(timer);
       // It started successfully — give it a moment to see if network error follows
       setTimeout(() => {
-        try { rec.abort(); } catch {}
+        try {
+          rec.abort();
+        } catch (error) {
+          logWarn('Deepgram', `SpeechRecognition abort failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
         resolve(true);
       }, TIMING.CHROME_STT_ABORT_DELAY);
     };

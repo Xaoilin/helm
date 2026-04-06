@@ -11,7 +11,7 @@ async function isTauri(): Promise<boolean> {
   try {
     await invoke('get_app_data_dir');
     tauriAvailable = true;
-  } catch (e) {
+  } catch {
     logWarn('Persistence', 'Tauri detection failed');
     tauriAvailable = false;
   }
@@ -36,12 +36,12 @@ export async function loadStore<T>(key: string): Promise<T | null> {
         localStorage.setItem(`helm:${key}`, JSON.stringify(remote.value));
         return remote.value;
       }
-    } catch (e) { logWarn('Persistence', 'Supabase load failed, using local cache'); }
+    } catch { logWarn('Persistence', 'Supabase load failed, using local cache'); }
 
     // If Supabase fetch failed, use localStorage as fallback cache
     const raw = localStorage.getItem(`helm:${key}`);
     if (raw) {
-      try { return JSON.parse(raw) as T; } catch (e) { logWarn('Persistence', 'Local cache JSON parse failed'); }
+      try { return JSON.parse(raw) as T; } catch { logWarn('Persistence', 'Local cache JSON parse failed'); }
     }
     return null;
   }
@@ -55,12 +55,12 @@ export async function loadStore<T>(key: string): Promise<T | null> {
       const parsed = JSON.parse(raw);
       return parsed as T;
     }
-  } catch (e) { logWarn('Persistence', 'Tauri read failed'); }
+  } catch { logWarn('Persistence', 'Tauri read failed'); }
 
   // 2. Try localStorage
   const raw = localStorage.getItem(`helm:${key}`);
   if (raw) {
-    try { return JSON.parse(raw) as T; } catch (e) { logWarn('Persistence', 'localStorage JSON parse failed'); }
+    try { return JSON.parse(raw) as T; } catch { logWarn('Persistence', 'localStorage JSON parse failed'); }
   }
 
   return null;
@@ -78,7 +78,7 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
     if (await isTauri()) {
       await invoke('write_store', { key, value: json });
     }
-  } catch (e) { logWarn('Persistence', 'Tauri write failed'); }
+  } catch { logWarn('Persistence', 'Tauri write failed'); }
 
   // 2. Always write to localStorage (fast cache)
   localStorage.setItem(`helm:${key}`, json);

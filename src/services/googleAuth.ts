@@ -116,7 +116,7 @@ export async function revokeAccess(accessToken: string): Promise<void> {
     if (window.google?.accounts?.oauth2) {
       window.google.accounts.oauth2.revoke(accessToken, () => {});
     }
-  } catch (e) {
+  } catch {
     logWarn('GoogleAuth', 'Token revocation failed (best-effort)');
   }
 }

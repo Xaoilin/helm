@@ -1,29 +1,21 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, act, waitFor } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { AppProvider, useApp } from '../store/AppContext';
-import { createElement, useEffect, useRef } from 'react';
-
-type AppAPI = ReturnType<typeof useApp>;
+import { createElement, type ReactNode } from 'react';
 
 async function renderWithApp() {
-  const results: { api: AppAPI | null } = { api: null };
-
-  function TestComponent() {
-    const api = useApp();
-    results.api = api;
-    return null;
-  }
-
-  await act(async () => {
-    render(createElement(AppProvider, null, createElement(TestComponent)));
-  });
+  const wrapper = ({ children }: { children: ReactNode }) => createElement(AppProvider, null, children);
+  const hook = renderHook(() => useApp(), { wrapper });
 
   await waitFor(() => {
-    expect(results.api).not.toBeNull();
-    expect(results.api!.loaded).toBe(true);
+    expect(hook.result.current.loaded).toBe(true);
   });
 
-  return results;
+  return {
+    get api() {
+      return hook.result.current;
+    },
+  };
 }
 
 describe('AppContext - Calendar Accounts', () => {
@@ -147,12 +139,12 @@ describe('AppContext - Bulk Operations', () => {
 
   it('should bulk remove calendar events', async () => {
     const r = await renderWithApp();
-    let ev1 = '', ev2 = '', ev3 = '';
+    let ev1 = '', ev3 = '';
     act(() => {
       const accId = r.api!.addCalendarAccount({ name: 'T', email: 't@t.com', provider: 'local', isPrimary: false, connected: false, mocked: true });
       const srcId = r.api!.addCalendarSource({ accountId: accId, name: 'Cal', color: '#f00', visible: true });
       ev1 = r.api!.addCalendarEvent({ sourceId: srcId, title: 'E1', description: '', start: '2026-03-30T10:00:00Z', end: '2026-03-30T11:00:00Z', allDay: false });
-      ev2 = r.api!.addCalendarEvent({ sourceId: srcId, title: 'E2', description: '', start: '2026-03-31T10:00:00Z', end: '2026-03-31T11:00:00Z', allDay: false });
+      r.api!.addCalendarEvent({ sourceId: srcId, title: 'E2', description: '', start: '2026-03-31T10:00:00Z', end: '2026-03-31T11:00:00Z', allDay: false });
       ev3 = r.api!.addCalendarEvent({ sourceId: srcId, title: 'E3', description: '', start: '2026-04-01T10:00:00Z', end: '2026-04-01T11:00:00Z', allDay: false });
     });
     act(() => { r.api!.bulkRemoveCalendarEvents([ev1, ev3]); });
@@ -206,7 +198,7 @@ describe('AppContext - Chat', () => {
     expect(r.api!.conversations).toHaveLength(1);
     expect(r.api!.activeConversationId).toBe(convId);
 
-    await act(async () => { await r.api!.sendMessage(convId, 'Hello'); });
+    await act(async () => { await r.api!.sendMessage(convId, 'open calendar'); });
     const conv = r.api!.conversations.find(c => c.id === convId);
     expect(conv!.messages).toHaveLength(2);
     expect(conv!.messages[0].role).toBe('user');
@@ -216,7 +208,7 @@ describe('AppContext - Chat', () => {
 
   it('should handle sendMessage for non-existent conversation', async () => {
     const r = await renderWithApp();
-    await act(async () => { await r.api!.sendMessage('new-conv-id', 'Test message'); });
+    await act(async () => { await r.api!.sendMessage('new-conv-id', 'add task test message'); });
     expect(r.api!.conversations).toHaveLength(1);
     expect(r.api!.conversations[0].id).toBe('new-conv-id');
     expect(r.api!.activeConversationId).toBe('new-conv-id');

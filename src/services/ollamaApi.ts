@@ -9,7 +9,7 @@
  */
 
 import type { CalendarEvent, Task, GamificationProfile } from '../types/domain';
-import type { AssistantLang } from './voiceAssistant';
+import type { AssistantLang } from './assistantTypes';
 import { API_TIMEOUT, LIMITS, TIMING } from '../config/constants';
 import { ollamaBreaker } from './serviceBreakers';
 
@@ -35,6 +35,7 @@ export async function chatWithOllama(
   messages: OllamaMessage[],
   endpoint: string = DEFAULT_ENDPOINT,
   model: string = DEFAULT_MODEL,
+  format?: unknown,
 ): Promise<string> {
   return ollamaBreaker.call(async () => {
     const resp = await fetch(`${endpoint}/api/chat`, {
@@ -46,6 +47,7 @@ export async function chatWithOllama(
         messages,
         stream: false,
         think: false, // Disable extended thinking (qwen3) for faster responses
+        ...(format ? { format } : {}),
         options: {
           temperature: LIMITS.LLM_TEMPERATURE,
           num_predict: LIMITS.LLM_MAX_TOKENS, // Keep responses concise
@@ -185,32 +187,5 @@ ${goalsStr ? `\nGoals:\n${goalsStr}` : ''}
 Daily habits: ${habitsDone}/${habitsTotal} done today
 ${prayerStr ? `Prayer times: ${prayerStr}` : ''}
 
-ACTIONS:
-You can perform actions by including action tags in your response. Only include actions when the user clearly requests them.
-
-Navigation — go to a page:
-[NAV:surface_name]
-Valid surfaces: dashboard, chat, calendar, tasks, finance, knowledge, profile, credentials, workspaces, integrations, settings
-Example: "Sure, let me open that for you. [NAV:calendar]"
-
-Add a task:
-[ADD_TASK:title|priority|category]
-priority: low, medium, high
-category: daily, task, goal
-Example: "Done! I've added it. [ADD_TASK:Buy groceries|medium|task]"
-
-Complete a task (by title match):
-[COMPLETE_TASK:title]
-Example: "Marked as done! [COMPLETE_TASK:Buy groceries]"
-
-Complete a daily habit (by title match):
-[COMPLETE_HABIT:title]
-Example: "Great work! [COMPLETE_HABIT:Drink 1L Water]"
-
-Rules:
-- Only include ONE action tag per response
-- Always explain what you're doing in natural language before the tag
-- For task/habit completion, match the title as closely as possible to existing items
-- If the user just wants to chat, don't include any action tags
-- Keep responses concise (2-3 sentences for voice, can be longer for chat)`;
+Use the live data above when answering. Stay grounded in the app state and do not invent tasks, meetings, or other objects that are not present in the context.`;
 }

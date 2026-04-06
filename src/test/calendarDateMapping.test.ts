@@ -34,7 +34,6 @@ describe('toLocalDateStr', () => {
     // This is the bug we fixed: midnight local can be previous day in UTC
     const midnight = new Date(2026, 2, 30, 0, 0, 0); // March 30 midnight local
     const localDate = toLocalDateStr(midnight);
-    const utcDate = midnight.toISOString().split('T')[0];
 
     // In UTC+X timezones, these will differ. In UTC they'll be same.
     // The key point: localDate is always 2026-03-30 regardless of timezone

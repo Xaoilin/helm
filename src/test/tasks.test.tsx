@@ -1,26 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, act, waitFor } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { AppProvider, useApp } from '../store/AppContext';
-import { createElement } from 'react';
-import type { Task, TaskPriority } from '../types/domain';
-
-type AppAPI = ReturnType<typeof useApp>;
+import { createElement, type ReactNode } from 'react';
+import type { Task } from '../types/domain';
 
 async function renderWithApp() {
-  const results: { api: AppAPI | null } = { api: null };
-  function TestComponent() {
-    const api = useApp();
-    results.api = api;
-    return null;
-  }
-  await act(async () => {
-    render(createElement(AppProvider, null, createElement(TestComponent)));
-  });
+  const wrapper = ({ children }: { children: ReactNode }) => createElement(AppProvider, null, children);
+  const hook = renderHook(() => useApp(), { wrapper });
   await waitFor(() => {
-    expect(results.api).not.toBeNull();
-    expect(results.api!.loaded).toBe(true);
+    expect(hook.result.current.loaded).toBe(true);
   });
-  return results;
+  return {
+    get api() {
+      return hook.result.current;
+    },
+  };
 }
 
 describe('Tasks CRUD', () => {

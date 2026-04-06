@@ -1,0 +1,33 @@
+# Feature Status
+
+Use this matrix when updating docs or UI copy. The allowed states are:
+
+- `real`
+- `local-only/degraded`
+- `placeholder/simulated`
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Supabase sign-in and sync | `real` | Optional cloud sync when Supabase is configured and the user signs in. |
+| Local persistence | `real` | Tauri file storage is preferred when available, with `localStorage` as fallback/cache. |
+| Google Calendar OAuth | `real` | GIS OAuth flow is implemented and supports multiple accounts. |
+| Google Calendar sync | `real` | Events and calendars sync through the Google Calendar API, with retry/circuit-breaker behavior. |
+| Local calendar accounts | `real` | Local accounts and sources work without cloud sync. |
+| Chat assistant with Ollama | `real` | Real when Ollama is reachable locally. |
+| Chat assistant without Ollama | `local-only/degraded` | Uses a grounded local capability runtime for navigation, tasks, calendar actions, finance logging, and knowledge notes, but open-ended planning still depends on Ollama. |
+| Voice assistant | `local-only/degraded` | Shares the grounded capability runtime with chat, but STT/TTS coverage and open-ended reasoning still degrade when Deepgram or Ollama are unavailable. |
+| Wake word | `real` | OpenWakeWord runs locally in-browser via WASM. |
+| Deepgram speech-to-text | `real` | Requires a configured API key. |
+| Browser speech fallback | `local-only/degraded` | Usable where supported, less reliable than Deepgram. |
+| ElevenLabs speech output | `real` | Requires env configuration. |
+| Browser speech output | `local-only/degraded` | Used when ElevenLabs is unavailable. |
+| Prayer times and adhan notifications | `real` | Backed by AlAdhan plus browser notifications. |
+| Finance accounts, budgets, and savings goals | `real` | Local-first app data is implemented. |
+| Monzo import | `real` | Live API path exists when configured. |
+| Knowledge base and lifestyle tracker | `real` | Local-first CRUD is implemented. |
+| Workspaces | `local-only/degraded` | Metadata exists, but product depth is still limited. |
+| 1Password integration | `placeholder/simulated` | UI and preference model exist, but live CLI-backed integration is not implemented. |
+| GitHub integration | `placeholder/simulated` | Simulated connection flow only. |
+| Slack integration | `placeholder/simulated` | Simulated connection flow only. |
+| Linear integration | `placeholder/simulated` | Simulated connection flow only. |
+| Local credential vault | `local-only/degraded` | Works locally, but credentials are not encrypted at rest in this MVP. |

@@ -120,7 +120,11 @@ export default function WakeWordDebug() {
 
     // Stop any existing engine
     if (engineRef.current) {
-      try { await engineRef.current.stop(); } catch {}
+      try {
+        await engineRef.current.stop();
+      } catch (error) {
+        console.debug('WakeWordDebug stop before reinit failed', error);
+      }
       engineRef.current = null;
     }
 
@@ -224,7 +228,11 @@ export default function WakeWordDebug() {
     analyserRef.current = null;
 
     if (engineRef.current) {
-      try { await engineRef.current.stop(); } catch {}
+      try {
+        await engineRef.current.stop();
+      } catch (error) {
+        console.debug('WakeWordDebug stop failed', error);
+      }
       engineRef.current = null;
     }
     setEngineState('idle');

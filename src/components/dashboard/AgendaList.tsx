@@ -14,7 +14,6 @@ export interface AgendaItem {
 interface AgendaListProps {
   agenda: AgendaItem[];
   todayEvents: CalendarEvent[];
-  todayStr: string;
   getEventPalette: (sourceId: string) => { bg: string; border: string } | null;
   onNavigate: (surface: Surface) => void;
   onCompleteTask: (task: Task) => void;
@@ -23,7 +22,6 @@ interface AgendaListProps {
 export default function AgendaList({
   agenda,
   todayEvents,
-  todayStr: _todayStr,
   getEventPalette,
   onNavigate,
   onCompleteTask,

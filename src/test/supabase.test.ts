@@ -11,8 +11,14 @@ import {
 
 // Mock the Supabase client — chain .eq() calls flexibly
 const mockSingle = vi.fn();
-const makeEqChain = (): any => {
-  const chain: any = { eq: () => chain, single: mockSingle, select: () => chain };
+interface EqChain {
+  eq: (column: string, value: unknown) => EqChain;
+  single: typeof mockSingle;
+  select: () => EqChain;
+}
+
+const makeEqChain = (): EqChain => {
+  const chain: EqChain = { eq: () => chain, single: mockSingle, select: () => chain };
   return chain;
 };
 const mockSelect = vi.fn(() => makeEqChain());

@@ -10,6 +10,7 @@ import type {
   FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
 } from '../types/domain';
 import { loadStore, saveStore } from './persistence';
+import { subscribeAssistantNavigation } from '../services/assistantNavigation';
 
 // ── Domain Contexts ──
 import { CalendarProvider, useCalendar } from './contexts/CalendarContext';
@@ -170,6 +171,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
 
   // Navigation
   const navigate = useCallback((surface: Surface) => setState(s => ({ ...s, surface })), []);
+  useEffect(() => subscribeAssistantNavigation(navigate), [navigate]);
 
   // Credentials
   const addCredential = useCallback((cred: Omit<Credential, 'id' | 'createdAt' | 'updatedAt'>): string => {
@@ -366,14 +368,48 @@ function ChatBridge({ children }: { children: ReactNode }) {
   const taskCtx = useTaskContext();
   const gamificationCtx = useGamificationContext();
   const settingsCtx = useSettingsContext();
+  const knowledge = useKnowledgeContext();
+  const finance = useFinanceContext();
 
   const crossDomain: ChatCrossDomainData = useMemo(() => ({
+    calendarAccounts: calendar.calendarAccounts,
+    calendarSources: calendar.calendarSources,
     calendarEvents: calendar.calendarEvents,
     tasks: taskCtx.tasks,
+    financeAccounts: finance.financeAccounts,
+    transactions: finance.transactions,
+    knowledgeEntries: knowledge.knowledgeEntries,
+    knowledgeTopics: knowledge.knowledgeTopics,
+    lifestyleItems: knowledge.lifestyleItems,
     gamification: gamificationCtx.gamification,
     settings: settingsCtx.settings,
-    setTasks: taskCtx.setTasks,
-  }), [calendar.calendarEvents, taskCtx.tasks, taskCtx.setTasks, gamificationCtx.gamification, settingsCtx.settings]);
+    addTask: taskCtx.addTask,
+    updateTask: taskCtx.updateTask,
+    addCalendarEvent: calendar.addCalendarEvent,
+    updateCalendarEvent: calendar.updateCalendarEvent,
+    addTransaction: finance.addTransaction,
+    addKnowledgeEntry: knowledge.addKnowledgeEntry,
+    updateGamification: gamificationCtx.updateGamification,
+  }), [
+    calendar.calendarAccounts,
+    calendar.calendarSources,
+    calendar.calendarEvents,
+    calendar.addCalendarEvent,
+    calendar.updateCalendarEvent,
+    taskCtx.tasks,
+    taskCtx.addTask,
+    taskCtx.updateTask,
+    finance.financeAccounts,
+    finance.transactions,
+    finance.addTransaction,
+    knowledge.knowledgeEntries,
+    knowledge.knowledgeTopics,
+    knowledge.lifestyleItems,
+    knowledge.addKnowledgeEntry,
+    gamificationCtx.gamification,
+    gamificationCtx.updateGamification,
+    settingsCtx.settings,
+  ]);
 
   return <ChatProvider crossDomain={crossDomain}>{children}</ChatProvider>;
 }

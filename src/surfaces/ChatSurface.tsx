@@ -131,7 +131,7 @@ export default function ChatSurface() {
         <div style={{ padding: '8px 16px', borderTop: '1px solid #1e2030' }}>
           <span className="mocked-indicator" role="status">
             {ollamaConnected === null ? 'Checking...' :
-             ollamaConnected ? '🟢 Ollama connected' : '🔴 Ollama offline — using mocked replies'}
+             ollamaConnected ? '🟢 Ollama connected' : '🔴 Ollama offline — built-in commands only'}
           </span>
         </div>
       </div>
@@ -148,7 +148,7 @@ export default function ChatSurface() {
                   <p>
                     {ollamaConnected
                       ? 'Lina is powered by your local Ollama LLM. Ask anything about your schedule, tasks, or goals.'
-                      : 'Start Ollama locally to get real AI responses. Try a quick prompt below.'}
+                      : 'Start Ollama locally for open-ended AI replies. Without it, Lina can still handle built-in commands like navigation and task updates.'}
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
                     {quickPrompts.map(p => (
@@ -199,7 +199,7 @@ export default function ChatSurface() {
             <p>
               {ollamaConnected
                 ? 'Your local AI assistant powered by Ollama. Create a conversation to get started.'
-                : 'Start Ollama locally for real AI conversations. Create a conversation or select one from the sidebar.'}
+                : 'Start Ollama locally for open-ended AI conversations. Without it, Lina stays available for built-in commands and status-aware responses.'}
             </p>
             <button className="btn btn-primary" onClick={() => app.createConversation()}>New conversation</button>
             {app.conversations.length === 0 && (

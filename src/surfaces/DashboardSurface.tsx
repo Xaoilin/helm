@@ -34,11 +34,21 @@ function toLocalDateStr(d: Date): string {
 
 interface Toast { id: string; type: 'xp' | 'levelup' | 'badge' | 'streak'; text: string; emoji?: string; }
 
+const ACCOUNT_PALETTES = [
+  { bg: '#1a2744', border: '#3b82f6' },
+  { bg: '#2a1f3d', border: '#a855f7' },
+  { bg: '#1a3328', border: '#22c55e' },
+  { bg: '#3d2a1a', border: '#f59e0b' },
+  { bg: '#3d1a2a', border: '#ec4899' },
+  { bg: '#1a3a3d', border: '#14b8a6' },
+  { bg: '#3d2d1a', border: '#f97316' },
+  { bg: '#2d1a1a', border: '#ef4444' },
+] as const;
+
 export default function DashboardSurface() {
   const app = useApp();
   const gam = app.gamification;
-  const [tick, setTick] = useState(0);
-  const now = useMemo(() => new Date(), [tick]);
+  const [now, setNow] = useState(() => new Date());
   const todayStr = toLocalDateStr(now);
   const hour = now.getHours();
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -47,7 +57,7 @@ export default function DashboardSurface() {
 
   // Tick every 30 seconds to update countdown timers
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), TIMING.DASHBOARD_TICK);
+    const interval = setInterval(() => setNow(new Date()), TIMING.DASHBOARD_TICK);
     return () => clearInterval(interval);
   }, []);
 
@@ -106,7 +116,7 @@ export default function DashboardSurface() {
     return () => clearInterval(interval);
   }, [prayerEnabled, prayerData]);
 
-  const nextPrayer = useMemo(() => prayerData ? getNextPrayer(prayerData.prayers) : null, [prayerData, tick]);
+  const nextPrayer = prayerData ? getNextPrayer(prayerData.prayers) : null;
 
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const xp = xpToNextLevel(gam.totalXp);
@@ -120,18 +130,6 @@ export default function DashboardSurface() {
     setToasts(prev => [...prev, { ...toast, id }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), TIMING.TOAST_LIFETIME);
   }, []);
-
-  // ── Account color palette (same as CalendarSurface) ──
-  const ACCOUNT_PALETTES = [
-    { bg: '#1a2744', border: '#3b82f6' },
-    { bg: '#2a1f3d', border: '#a855f7' },
-    { bg: '#1a3328', border: '#22c55e' },
-    { bg: '#3d2a1a', border: '#f59e0b' },
-    { bg: '#3d1a2a', border: '#ec4899' },
-    { bg: '#1a3a3d', border: '#14b8a6' },
-    { bg: '#3d2d1a', border: '#f97316' },
-    { bg: '#2d1a1a', border: '#ef4444' },
-  ];
 
   const getEventPalette = useMemo(() => {
     const map = new Map<string, typeof ACCOUNT_PALETTES[number]>();
@@ -308,7 +306,7 @@ export default function DashboardSurface() {
     });
 
     return items.slice(0, 8);
-  }, [todayEvents, dueTasks]);
+  }, [todayEvents, dueTasks, now]);
 
   // ── Task completion with gamification ──
   const completeTask = (task: Task) => {
@@ -406,7 +404,6 @@ export default function DashboardSurface() {
           <AgendaList
             agenda={agenda}
             todayEvents={todayEvents}
-            todayStr={todayStr}
             getEventPalette={getEventPalette}
             onNavigate={app.navigate}
             onCompleteTask={completeTask}
@@ -535,12 +532,11 @@ export default function DashboardSurface() {
 
         {/* ── Prayer Times ── */}
         {prayerEnabled && prayerData && (
-          <PrayerTimesCard
-            prayerData={prayerData}
-            nextPrayer={nextPrayer}
-            city={prayerCity}
-            tick={tick}
-          />
+            <PrayerTimesCard
+              prayerData={prayerData}
+              nextPrayer={nextPrayer}
+              city={prayerCity}
+            />
         )}
       </div>
 

@@ -46,6 +46,7 @@ interface MonzoAccount {
   description: string;
   created: string;
   type: string;
+  closed?: boolean;
 }
 
 interface MonzoMerchant {
@@ -102,7 +103,7 @@ export async function fetchMonzoAccounts(token: string): Promise<MonzoAccount[]>
   );
   const all = results.flatMap(r => r.accounts || []);
   // Filter out closed accounts
-  return all.filter(a => !(a as any).closed);
+  return all.filter(account => !account.closed);
 }
 
 /** Fetch transactions for an account (last 90 days by default). */

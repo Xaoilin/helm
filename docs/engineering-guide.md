@@ -1,0 +1,116 @@
+# Engineering Guide
+
+## Workflow
+
+- Use a dedicated branch for each task. `codex/<short-description>` is the default.
+- Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
+- Add a regression test for every bug fix that changes logic.
+- Keep changes scoped. If a task spans multiple domains, prefer small coherent commits over one broad sweep.
+
+## Definition Of Done
+
+A change is not done until all of the following are true:
+
+- code behavior is complete
+- relevant checks are green
+- docs are updated in the same change
+- user-facing copy matches the actual behavior
+- `docs/feature-status.md` is updated if feature status changed
+
+## Verification Commands
+
+Use the repo scripts or local binaries directly:
+
+- `npm run lint`
+- `npm run typecheck`
+- `.\node_modules\.bin\tsc.cmd -b`
+- `npm run test`
+- `npm run test:e2e`
+- `npm run build`
+- `npm run check`
+
+For small changes, run the most relevant checks first. Before landing broader code changes, run the full set above unless a dependency or environment blocker prevents it.
+
+## CI And Branch Protection
+
+- The CI workflow job names are part of the contract with GitHub branch protection. Keep them as `lint`, `typecheck`, `unit`, `e2e`, and `build`.
+- `master` should stay protected with pull requests required and those five checks required before merge.
+- Deploy should continue to trigger only from a successful CI run on `master`, not from arbitrary pushes or partial workflows.
+
+## Testing Expectations
+
+### Unit tests
+
+- Add or update Vitest coverage for new business logic.
+- Store and state changes should be exercised at the CRUD level where practical.
+- Service tests should mock network calls and assert error handling, not only happy paths.
+
+### E2E tests
+
+- User-facing features should have Playwright coverage when they change visible flows.
+- Navigation, CRUD flows, settings persistence, and assistant interactions are strong E2E candidates.
+- If an existing spec covers the journey, extend it instead of creating duplicate coverage.
+
+### Manual testing
+
+Some features still require manual verification:
+
+- microphone input and speech output
+- wake-word detection
+- OAuth popup flows
+- Monzo live sync
+- time-dependent prayer and notification behavior
+
+If a change touches any of these, say clearly what you verified and what still needs a manual pass.
+
+## Error Handling And Resilience
+
+- Do not swallow errors silently. Use the shared logger helpers and keep the message source obvious.
+- User-visible failures should surface in the UI through an error state, inline message, or retry path.
+- New remote integrations should use the existing resilience utilities where they fit:
+  - `src/services/circuitBreaker.ts`
+  - `src/services/retry.ts`
+  - `src/services/serviceBreakers.ts`
+- Network calls should use established timeout constants rather than ad hoc values.
+
+## Code Quality Rules
+
+- Keep domain types in `src/types/domain.ts`.
+- Prefer extending the domain contexts under `src/store/contexts/` over growing the compatibility shell in `src/store/AppContext.tsx`.
+- Keep assistant logic shared across voice and chat instead of duplicating parsers, prompt rules, or mutation paths.
+- Extract timing, size, and threshold literals into `src/config/constants.ts`.
+- Favor explicit, typed interfaces over loose objects and stringly typed state.
+- When a component becomes hard to read, extract subcomponents or hooks instead of stacking more branches into one file.
+- Keep lint green. If a lint rule is noisy, scope or tune it narrowly instead of weakening broader correctness rules.
+
+## Data And Domain Invariants
+
+- Use local-date-safe helpers for day-based logic. Avoid UTC string slicing for local calendar or task behavior.
+- Preserve the account -> source -> event relationship in calendar code.
+- Do not break the signed-in Supabase precedence rules in persistence.
+- Keep multi-account Google Calendar behavior intact.
+- Treat workspaces and credentials as first-class stored records even though their current product depth is lighter than other domains.
+
+## Security Notes
+
+- API keys are currently client-side configuration for a single-user MVP. Do not describe this as production-grade secret handling.
+- Credentials are stored locally and are not encrypted vault storage.
+- Avoid `dangerouslySetInnerHTML` and preserve React's default escaping protections.
+- If the product ever moves beyond single-user local-first usage, secrets and privileged API calls need a server-side redesign.
+
+## UI And UX Rules
+
+- Preserve the established dark theme and current component language unless a deliberate redesign is in scope.
+- Empty states should explain what the feature is for and give the user a clear next step.
+- Destructive actions must require clear confirmation.
+- Accessibility matters: keep labels, roles, keyboard interactions, and focus behavior in mind when editing UI.
+- If a visual change is significant, inspect the rendered result instead of trusting code review alone.
+- Surface degraded states explicitly. Prefer "Ollama offline", "local-only", or "simulated connection" over vague fallback language.
+
+## Documentation Rules
+
+- `AGENTS.md` should stay short and operational.
+- Long-form architecture and process material belongs under `docs/`.
+- When behavior changes materially, update the relevant doc in the same change instead of letting instructions drift.
+- `README.md`, `AGENTS.md`, `docs/project-architecture.md`, `docs/engineering-guide.md`, and `docs/feature-status.md` are the active source-of-truth docs.
+- Status language is limited to `real`, `local-only/degraded`, and `placeholder/simulated`.

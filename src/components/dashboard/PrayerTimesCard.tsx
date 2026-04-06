@@ -9,11 +9,9 @@ interface PrayerTimesCardProps {
   prayerData: PrayerTimesData;
   nextPrayer: { prayer: PrayerTimeType; minutesUntil: number } | null;
   city: string;
-  /** Forces re-render for countdown updates. */
-  tick: number;
 }
 
-export default function PrayerTimesCard({ prayerData, nextPrayer, city, tick: _tick }: PrayerTimesCardProps) {
+export default function PrayerTimesCard({ prayerData, nextPrayer, city }: PrayerTimesCardProps) {
   return (
     <div className="dash-card" style={{ marginBottom: 16 }}>
       <div className="dash-card-header">
