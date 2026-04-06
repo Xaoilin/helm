@@ -154,6 +154,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
   useWakeWord({
     enabled,
     wakeWordEnabled,
+    loaded: app.loaded,
     assistantIdle: state === 'idle',
     onWakeWordDetected: useCallback(() => {
       setState('open');
