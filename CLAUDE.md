@@ -1,7 +1,7 @@
 # HELM - Project Guidelines
 
 ## Overview
-HELM is a Windows-first, local-first personal assistant desktop app for a solo software engineer and entrepreneur. Built with Tauri (Rust backend) + React 19 + TypeScript 5.9 + Vite 8. Features: Google Calendar (live OAuth), gamified task management (125 badges), Islamic knowledge base, Shia prayer times with Adhan, personal finance with Monzo, AI assistant "Lina" (Ollama LLM + ElevenLabs voice + Deepgram STT + OpenWakeWord wake word).
+HELM is a Windows-first, local-first personal assistant desktop app for a solo software engineer and entrepreneur. The personal assistant is called **Lina**. Built with Tauri (Rust backend) + React 19 + TypeScript 5.9 + Vite 8. Features: Google Calendar (live OAuth), gamified task management (125 badges), Islamic knowledge base, Shia prayer times with Adhan, personal finance with Monzo, AI assistant "Lina" (Ollama LLM + ElevenLabs voice + Deepgram STT + OpenWakeWord wake word).
 
 ## Architecture
 

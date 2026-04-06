@@ -118,6 +118,23 @@ const RESPONSES = {
   },
 };
 
+// Action verbs that signal "do something" — should go to LLM, not navigate
+const ACTION_VERBS = [
+  'add', 'create', 'make', 'new', 'schedule', 'set up', 'put',
+  'complete', 'finish', 'mark', 'done', 'check off', 'tick',
+  'delete', 'remove', 'cancel',
+  'remind', 'update', 'change', 'edit', 'modify',
+  // Arabic
+  'أضف', 'أنشئ', 'جدول', 'أكمل', 'احذف', 'غير', 'عدل',
+];
+
+// Navigation verbs that signal "go to a page"
+const NAV_VERBS = [
+  'open', 'go to', 'show me the', 'navigate', 'switch to', 'take me to',
+  // Arabic
+  'افتح', 'اذهب',
+];
+
 export function parseIntent(
   transcript: string,
   context: {
@@ -130,7 +147,22 @@ export function parseIntent(
 ): Intent {
   const lower = transcript.toLowerCase().trim();
 
-  // Navigation: "show me X", "go to X", "open X", "افتح X"
+  const hasActionVerb = ACTION_VERBS.some(v => lower.includes(v));
+  const hasNavVerb = NAV_VERBS.some(v => lower.includes(v));
+
+  // If user has an action verb (add, create, complete, etc.) and no explicit
+  // navigation verb (open, go to), skip keyword matching → let LLM handle it
+  if (hasActionVerb && !hasNavVerb) {
+    // Still handle simple data queries locally (faster than LLM)
+    // These are read-only queries that don't need the LLM
+    const queryResult = parseLocalQueries(lower, context, lang);
+    if (queryResult) return queryResult;
+
+    // Everything else with an action verb → LLM will handle via action tags
+    return { type: 'unknown', response: '' };
+  }
+
+  // Navigation: "open X", "go to X", "show me the X"
   for (const [keywords, surface] of NAV_KEYWORDS) {
     for (const kw of keywords) {
       if (lower.includes(kw)) {
@@ -140,7 +172,29 @@ export function parseIntent(
     }
   }
 
-  // Query: "what's my next meeting" / "ما هو اجتماعي القادم"
+  // Try local queries (faster than LLM)
+  const queryResult = parseLocalQueries(lower, context, lang);
+  if (queryResult) return queryResult;
+
+  // Unknown — will fall through to LLM if available
+  return { type: 'unknown', response: RESPONSES.unknown[lang](transcript) };
+}
+
+/**
+ * Handle read-only data queries locally (no LLM needed).
+ * Returns null if the query doesn't match any local handler.
+ */
+function parseLocalQueries(
+  lower: string,
+  context: {
+    calendarEvents: CalendarEvent[];
+    tasks: Task[];
+    gamification: GamificationProfile;
+    prayerTimes?: { name: string; time: string }[];
+  },
+  lang: AssistantLang,
+): Intent | null {
+  // "what's my next meeting"
   if (lower.includes('next meeting') || lower.includes('next event') || lower.includes('upcoming') ||
       lower.includes('اجتماع') || lower.includes('القادم') || lower.includes('الاجتماع')) {
     const now = new Date();
@@ -155,27 +209,27 @@ export function parseIntent(
     return { type: 'query', response: RESPONSES.nextMeeting[lang](next.title, time, next.location) };
   }
 
-  // Query: "how many tasks" / "كم مهمة"
+  // "how many tasks"
   if (lower.includes('how many task') || lower.includes('tasks left') || lower.includes('pending task') ||
       lower.includes('كم مهمة') || lower.includes('مهام') || lower.includes('المتبقية')) {
     const incomplete = context.tasks.filter(t => !t.completed && t.category !== 'goal').length;
     return { type: 'query', response: RESPONSES.tasksRemaining[lang](incomplete) };
   }
 
-  // Query: "what's my streak" / "سلسلة"
+  // "what's my streak"
   if (lower.includes('streak') || lower.includes('سلسلة')) {
     const s = context.gamification.currentStreak;
     if (s === 0) return { type: 'query', response: RESPONSES.noStreak[lang] };
     return { type: 'query', response: RESPONSES.streak[lang](s) };
   }
 
-  // Query: "what level" / "مستوى"
+  // "what level"
   if (lower.includes('level') || lower.includes('what am i') || lower.includes('مستوى')) {
     const lv = context.gamification.level;
     return { type: 'query', response: RESPONSES.level[lang](lv, context.gamification.totalXp) };
   }
 
-  // Query: prayer times
+  // Prayer times
   const prayerNames = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'فجر', 'ظهر', 'عصر', 'مغرب', 'عشاء'];
   const prayerMap: Record<string, string> = {
     'فجر': 'fajr', 'ظهر': 'dhuhr', 'عصر': 'asr', 'مغرب': 'maghrib', 'عشاء': 'isha',
@@ -197,8 +251,7 @@ export function parseIntent(
     return { type: 'query', response: RESPONSES.prayerNotLoaded[lang] };
   }
 
-  // Unknown
-  return { type: 'unknown', response: RESPONSES.unknown[lang](transcript) };
+  return null; // No local handler matched
 }
 
 // ── ElevenLabs TTS ──

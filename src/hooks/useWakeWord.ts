@@ -13,6 +13,8 @@ import { logError } from '../services/logger';
 interface UseWakeWordOptions {
   enabled: boolean;
   wakeWordEnabled: boolean;
+  /** Wait for app data to be loaded before initializing. */
+  loaded: boolean;
   /** Current assistant state — engine pauses when panel is open. */
   assistantIdle: boolean;
   onWakeWordDetected: () => void;
@@ -25,6 +27,7 @@ interface UseWakeWordReturn {
 export function useWakeWord({
   enabled,
   wakeWordEnabled,
+  loaded,
   assistantIdle,
   onWakeWordDetected,
 }: UseWakeWordOptions): UseWakeWordReturn {
@@ -36,7 +39,7 @@ export function useWakeWord({
 
   // ── Initialize / tear down OpenWakeWord engine ──
   useEffect(() => {
-    if (!enabled || !wakeWordEnabled || wakeEngineRef.current) return;
+    if (!enabled || !wakeWordEnabled || !loaded || wakeEngineRef.current) return;
 
     const engine = new WakeWordEngine({
       keywords: ['hey_lina'],
@@ -72,7 +75,7 @@ export function useWakeWord({
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, wakeWordEnabled]);
+  }, [enabled, wakeWordEnabled, loaded]);
 
   // ── Pause / resume wake word when assistant panel is open ──
   useEffect(() => {
