@@ -33,7 +33,7 @@ export function useGoogleSync(): GoogleSyncResult {
   const googleAccounts = app.calendarAccounts.filter(a => a.provider === 'google' && a.connected && !a.mocked);
   const clientId = GOOGLE_OAUTH_CLIENT_ID;
 
-  const syncAccount = useCallback(async (accountId: string, allowRefresh = false) => {
+  const syncAccount = useCallback(async (accountId: string) => {
     if (!clientId) return;
 
     setAccountSyncStates(prev => ({ ...prev, [accountId]: { state: 'syncing', lastSync: prev[accountId]?.lastSync || null, error: null } }));
@@ -46,11 +46,7 @@ export function useGoogleSync(): GoogleSyncResult {
         googleCalendars = await fetchCalendarList(accessToken);
       } catch (fetchErr) {
         if (fetchErr instanceof GoogleApiError && fetchErr.isAuthError) {
-          if (!allowRefresh) {
-            // Auto-sync: don't open popup, just fail silently
-            throw new Error('Token expired. Click Sync to reconnect.');
-          }
-          // Manual sync: try refresh (may open popup, which is OK since user clicked)
+          // Token expired — attempt silent refresh (works for both auto and manual sync)
           try {
             const { loadGisScript, refreshAccessToken, saveGoogleTokens } = await import('../services/googleAuth');
             await loadGisScript();
@@ -59,6 +55,7 @@ export function useGoogleSync(): GoogleSyncResult {
             accessToken = newTokens.accessToken;
             googleCalendars = await fetchCalendarList(accessToken);
           } catch {
+            // Silent refresh failed — need user re-auth
             throw new Error('Token expired. Reconnect this account in Integrations.');
           }
         } else {
@@ -201,8 +198,7 @@ export function useGoogleSync(): GoogleSyncResult {
     }
   }, [clientId, app]);
 
-  /** @param manual - true when user clicked Sync button (allows popup). false for auto-sync (no popup ever). */
-  const triggerSync = useCallback(async (manual = false) => {
+  const triggerSync = useCallback(async () => {
     if (syncingRef.current || googleAccounts.length === 0 || !clientId) return;
     syncingRef.current = true;
     setSyncState('syncing');
@@ -214,7 +210,7 @@ export function useGoogleSync(): GoogleSyncResult {
 
     let hasError = false;
     for (const acc of googleAccounts) {
-      await syncAccount(acc.id, manual);
+      await syncAccount(acc.id);
       const accState = accountSyncStates[acc.id];
       if (accState?.state === 'error') hasError = true;
     }
@@ -239,6 +235,30 @@ export function useGoogleSync(): GoogleSyncResult {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleAccounts.length]);
+
+  // ── Proactive token refresh (every 50 minutes) ──
+  // GIS access tokens expire after 1 hour. Refreshing at 50 min keeps them alive
+  // without waiting for a 401 failure.
+  useEffect(() => {
+    if (!clientId || googleAccounts.length === 0) return;
+
+    const REFRESH_INTERVAL = 50 * 60 * 1000; // 50 minutes
+
+    const refreshAllTokens = async () => {
+      for (const account of googleAccounts) {
+        try {
+          // getValidAccessToken now auto-refreshes if expired
+          await getValidAccessToken(account.id, clientId);
+        } catch {
+          // Silently skip — next sync will handle it
+        }
+      }
+    };
+
+    const timer = setInterval(refreshAllTokens, REFRESH_INTERVAL);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, googleAccounts.length]);
 
   // Most recent sync time across all accounts
   const lastSyncTime = googleAccounts.reduce<string | null>((latest, acc) => {

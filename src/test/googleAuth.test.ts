@@ -88,7 +88,7 @@ describe('googleAuth token management', () => {
   });
 
   describe('getValidAccessToken (no-popup regression)', () => {
-    it('should return stored token even if expired (no popup)', async () => {
+    it('should return stored token even if expired when no GIS available', async () => {
       const expiredTokens: GoogleTokens = {
         accessToken: 'ya29.expired-but-stored',
         expiresAt: Date.now() - 3600000, // 1 hour ago
@@ -96,8 +96,8 @@ describe('googleAuth token management', () => {
       };
       saveGoogleTokens('acc-expired', expiredTokens);
 
-      // Should NOT throw, should NOT try to refresh — just return the token
-      const token = await getValidAccessToken('acc-expired', 'client-id');
+      // With empty clientId, skips refresh attempt and returns expired token as fallback
+      const token = await getValidAccessToken('acc-expired', '');
       expect(token).toBe('ya29.expired-but-stored');
     });
 
