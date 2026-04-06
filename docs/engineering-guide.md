@@ -3,6 +3,8 @@
 ## Workflow
 
 - Use a dedicated branch for each task. `codex/<short-description>` is the default.
+- When meaningful work is complete and relevant checks are green, prefer a short branch -> PR -> merge cycle instead of leaving finished work only in a local checkout.
+- If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
 - Add a regression test for every bug fix that changes logic.
 - Keep changes scoped. If a task spans multiple domains, prefer small coherent commits over one broad sweep.
@@ -35,6 +37,7 @@ For small changes, run the most relevant checks first. Before landing broader co
 
 - The CI workflow job names are part of the contract with GitHub branch protection. Keep them as `lint`, `typecheck`, `unit`, `e2e`, and `build`.
 - `master` should stay protected with pull requests required and those five checks required before merge.
+- The normal landing path is therefore a small branch and PR into `master`, not direct commits to `master` or long-lived finished changes sitting only locally.
 - Deploy should continue to trigger only from a successful CI run on `master`, not from arbitrary pushes or partial workflows.
 
 ## Testing Expectations
