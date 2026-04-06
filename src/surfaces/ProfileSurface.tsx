@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useApp } from '../store/AppContext';
 import {
   xpToNextLevel,
@@ -18,6 +18,7 @@ export default function ProfileSurface() {
   const xp = xpToNextLevel(gam.totalXp);
   const title = titleForLevel(gam.level);
   const todayStr = toLocalDateStr(new Date());
+  const [referenceTime] = useState(() => Date.now());
 
   // Stats
   const tasksToday = app.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
@@ -31,8 +32,8 @@ export default function ProfileSurface() {
       return t.createdAt < earliest ? t.createdAt : earliest;
     }, null);
     if (!first) return 1;
-    return Math.max(1, Math.ceil((Date.now() - new Date(first).getTime()) / 86400000));
-  }, [app.tasks, gam.totalTasksCompleted]);
+    return Math.max(1, Math.ceil((referenceTime - new Date(first).getTime()) / 86400000));
+  }, [app.tasks, gam.totalTasksCompleted, referenceTime]);
 
   const avgPerDay = gam.totalTasksCompleted > 0 ? (gam.totalTasksCompleted / daysSinceFirst).toFixed(1) : '0';
 

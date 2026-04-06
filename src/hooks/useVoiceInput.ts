@@ -49,38 +49,38 @@ export function useVoiceInput({
   onProcessingStart,
 }: UseVoiceInputOptions): UseVoiceInputReturn {
   const [isListening, setIsListening] = useState(false);
-  const [voiceBackend, setVoiceBackend] = useState<VoiceBackend>('none');
-  const [backendChecked, setBackendChecked] = useState(false);
+  const [fallbackBackend, setFallbackBackend] = useState<VoiceBackend>('none');
+  const [fallbackChecked, setFallbackChecked] = useState(false);
   const recorderRef = useRef<ReturnType<typeof createRecorder> | null>(null);
   const recognitionRef = useRef<any>(null);
-
-  // Store callbacks in refs to avoid re-creating listeners
   const onTranscriptRef = useRef(onTranscript);
-  onTranscriptRef.current = onTranscript;
   const onErrorRef = useRef(onError);
-  onErrorRef.current = onError;
   const onListeningEndRef = useRef(onListeningEnd);
-  onListeningEndRef.current = onListeningEnd;
   const onListeningStartRef = useRef(onListeningStart);
-  onListeningStartRef.current = onListeningStart;
   const onProcessingStartRef = useRef(onProcessingStart);
-  onProcessingStartRef.current = onProcessingStart;
+  const voiceBackend: VoiceBackend = !enabled ? 'none' : deepgramKey ? 'deepgram' : fallbackBackend;
+
+  useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+  useEffect(() => { onListeningEndRef.current = onListeningEnd; }, [onListeningEnd]);
+  useEffect(() => { onListeningStartRef.current = onListeningStart; }, [onListeningStart]);
+  useEffect(() => { onProcessingStartRef.current = onProcessingStart; }, [onProcessingStart]);
 
   // ── Detect best voice backend on mount ──
   useEffect(() => {
-    if (!enabled || backendChecked) return;
-
-    if (deepgramKey) {
-      setVoiceBackend('deepgram');
-      setBackendChecked(true);
-      return;
-    }
+    if (!enabled || deepgramKey || fallbackChecked) return;
+    let cancelled = false;
 
     testChromeSpeechRecognition().then(works => {
-      setVoiceBackend(works ? 'chrome' : 'none');
-      setBackendChecked(true);
+      if (cancelled) return;
+      setFallbackBackend(works ? 'chrome' : 'none');
+      setFallbackChecked(true);
     });
-  }, [enabled, deepgramKey, backendChecked]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, deepgramKey, fallbackChecked]);
 
   // ── Deepgram recording ──
   const startDeepgramListening = useCallback(async () => {
@@ -166,7 +166,7 @@ export function useVoiceInput({
       if (event.error === 'no-speech' || event.error === 'aborted') {
         onListeningEndRef.current?.();
       } else if (event.error === 'network') {
-        setVoiceBackend('none');
+        setFallbackBackend('none');
         onErrorRef.current?.('Chrome voice unavailable \u2014 get a free Deepgram API key at deepgram.com and paste it in Settings \u2192 Voice Assistant.');
         onListeningEndRef.current?.();
       } else if (event.error === 'not-allowed') {
@@ -196,7 +196,7 @@ export function useVoiceInput({
       onErrorRef.current?.('Voice not available. Add a Deepgram API key in Settings \u2192 Voice Assistant to enable voice input.');
       onListeningEndRef.current?.();
     }
-  }, [voiceBackend, startDeepgramListening, startChromeListening]);
+  }, [startChromeListening, startDeepgramListening, voiceBackend]);
 
   const stopListening = useCallback(() => {
     if (voiceBackend === 'deepgram' && recorderRef.current) {
@@ -207,25 +207,7 @@ export function useVoiceInput({
       setIsListening(false);
       onListeningEndRef.current?.();
     }
-  }, [voiceBackend, stopDeepgramAndTranscribe]);
-
-  /** Abort any active recording/recognition — used by parent for cleanup. */
-  const abortAll = useCallback(() => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch { /* already stopped */ }
-      recognitionRef.current = null;
-    }
-    if (recorderRef.current?.isRecording()) {
-      recorderRef.current.stop();
-    }
-    recorderRef.current = null;
-    setIsListening(false);
-  }, []);
-
-  // Expose abortAll on the return as well — attach to ref pattern
-  // We expose it via a stable ref the parent can call
-  const abortRef = useRef(abortAll);
-  abortRef.current = abortAll;
+  }, [stopDeepgramAndTranscribe, voiceBackend]);
 
   return {
     startListening,

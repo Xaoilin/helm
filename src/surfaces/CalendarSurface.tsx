@@ -13,6 +13,16 @@ import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const ACCOUNT_PALETTES = [
+  { bg: '#1a2744', border: '#3b82f6', text: '#93bbfc' },
+  { bg: '#2a1f3d', border: '#a855f7', text: '#c4a0f7' },
+  { bg: '#1a3328', border: '#22c55e', text: '#86efac' },
+  { bg: '#3d2a1a', border: '#f59e0b', text: '#fcd34d' },
+  { bg: '#3d1a2a', border: '#ec4899', text: '#f9a8d4' },
+  { bg: '#1a3a3d', border: '#14b8a6', text: '#5eead4' },
+  { bg: '#3d2d1a', border: '#f97316', text: '#fdba74' },
+  { bg: '#2d1a1a', border: '#ef4444', text: '#fca5a5' },
+] as const;
 
 type Tab = 'month' | 'week' | 'agenda' | 'accounts';
 
@@ -83,18 +93,6 @@ export default function CalendarSurface() {
   const getSourceColor = (sourceId: string) => {
     return app.calendarSources.find(s => s.id === sourceId)?.color || '#4f5bff';
   };
-
-  // Strong distinct colors per account for week/agenda views
-  const ACCOUNT_PALETTES = [
-    { bg: '#1a2744', border: '#3b82f6', text: '#93bbfc' },  // blue
-    { bg: '#2a1f3d', border: '#a855f7', text: '#c4a0f7' },  // purple
-    { bg: '#1a3328', border: '#22c55e', text: '#86efac' },  // green
-    { bg: '#3d2a1a', border: '#f59e0b', text: '#fcd34d' },  // amber
-    { bg: '#3d1a2a', border: '#ec4899', text: '#f9a8d4' },  // pink
-    { bg: '#1a3a3d', border: '#14b8a6', text: '#5eead4' },  // teal
-    { bg: '#3d2d1a', border: '#f97316', text: '#fdba74' },  // orange
-    { bg: '#2d1a1a', border: '#ef4444', text: '#fca5a5' },  // red
-  ];
 
   const accountPaletteMap = useMemo(() => {
     const map = new Map<string, typeof ACCOUNT_PALETTES[number]>();
@@ -324,8 +322,8 @@ export default function CalendarSurface() {
             {hasGoogleAccounts ? (
               <span style={{ marginLeft: 8 }}>{syncStatusText()}</span>
             ) : (
-              <span className="mocked-indicator" style={{ marginLeft: 8 }} role="status">Local data &ndash; not synced</span>
-            )}
+               <span className="mocked-indicator" style={{ marginLeft: 8 }} role="status">Local-only data &ndash; not synced</span>
+             )}
           </div>
         </div>
         <div className="actions-row">

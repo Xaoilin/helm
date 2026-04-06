@@ -1,0 +1,28 @@
+name = "HELM"
+
+[setup]
+script = "npm install"
+
+[[actions]]
+name = "Dev server"
+command = "npm run dev"
+
+[[actions]]
+name = "Typecheck"
+command = "npm run typecheck"
+
+[[actions]]
+name = "Build"
+command = "npm run build"
+
+[[actions]]
+name = "Unit tests"
+command = "./node_modules/.bin/vitest run"
+
+[[actions]]
+name = "E2E"
+command = "npx playwright test"
+
+[[actions]]
+name = "Validate"
+command = "npm run check"

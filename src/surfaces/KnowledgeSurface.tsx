@@ -133,13 +133,17 @@ export default function KnowledgeSurface() {
   const [lsSources, setLsSources] = useState<string[]>([]);
   const [lsNewSource, setLsNewSource] = useState('');
   const [deletingLifestyleId, setDeletingLifestyleId] = useState<string | null>(null);
+  const [weekAgoIso] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    return date.toISOString();
+  });
 
   // ── Derived data ──
   const totalEntries = app.knowledgeEntries.length;
   const thisWeekEntries = useMemo(() => {
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-    return app.knowledgeEntries.filter(e => e.createdAt >= weekAgo).length;
-  }, [app.knowledgeEntries]);
+    return app.knowledgeEntries.filter(e => e.createdAt >= weekAgoIso).length;
+  }, [app.knowledgeEntries, weekAgoIso]);
 
   const selectedTopic = app.knowledgeTopics.find(t => t.id === selectedTopicId);
 
@@ -189,7 +193,7 @@ export default function KnowledgeSurface() {
 
   // Lifestyle derived
   const itemsByType = useMemo(() => {
-    const map: Record<LifestyleType, typeof app.lifestyleItems> = { haram: [], 'major-sin': [], 'wajib-both': [], 'wajib-women': [], 'wajib-men': [], halal: [] };
+    const map: Record<LifestyleType, LifestyleItem[]> = { haram: [], 'major-sin': [], 'wajib-both': [], 'wajib-women': [], 'wajib-men': [], halal: [] };
     for (const item of app.lifestyleItems) {
       (map[item.type] || map.haram).push(item);
     }

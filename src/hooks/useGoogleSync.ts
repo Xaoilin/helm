@@ -33,8 +33,8 @@ export function useGoogleSync(): GoogleSyncResult {
   const googleAccounts = app.calendarAccounts.filter(a => a.provider === 'google' && a.connected && !a.mocked);
   const clientId = GOOGLE_OAUTH_CLIENT_ID;
 
-  const syncAccount = useCallback(async (accountId: string) => {
-    if (!clientId) return;
+  const syncAccount = useCallback(async (accountId: string): Promise<boolean> => {
+    if (!clientId) return false;
 
     setAccountSyncStates(prev => ({ ...prev, [accountId]: { state: 'syncing', lastSync: prev[accountId]?.lastSync || null, error: null } }));
 
@@ -180,6 +180,7 @@ export function useGoogleSync(): GoogleSyncResult {
       const now = new Date().toISOString();
       app.updateCalendarAccount(accountId, { lastSyncTime: now, syncError: undefined });
       setAccountSyncStates(prev => ({ ...prev, [accountId]: { state: 'idle', lastSync: now, error: null } }));
+      return true;
     } catch (err) {
       const message = err instanceof GoogleApiError
         ? (err.isAuthError ? 'Authentication expired. Please reconnect.'
@@ -195,6 +196,8 @@ export function useGoogleSync(): GoogleSyncResult {
         const integration = app.integrations.find(i => i.provider === 'google');
         if (integration) app.updateIntegration(integration.id, { status: 'error', lastError: message });
       }
+
+      return false;
     }
   }, [clientId, app]);
 
@@ -210,15 +213,14 @@ export function useGoogleSync(): GoogleSyncResult {
 
     let hasError = false;
     for (const acc of googleAccounts) {
-      await syncAccount(acc.id);
-      const accState = accountSyncStates[acc.id];
-      if (accState?.state === 'error') hasError = true;
+      const synced = await syncAccount(acc.id);
+      if (!synced) hasError = true;
     }
 
     setSyncState(hasError ? 'error' : 'idle');
     if (hasError) setSyncError('Some accounts had sync errors');
     syncingRef.current = false;
-  }, [googleAccounts, clientId, syncAccount, accountSyncStates]);
+  }, [app, clientId, googleAccounts, syncAccount]);
 
   // Auto-sync on mount — but only if last sync was >15 min ago
   // This prevents the Google login popup from appearing on every Calendar tab switch

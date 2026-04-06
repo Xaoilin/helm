@@ -72,7 +72,7 @@ export function initFromSettings(): void {
     if (settings?.supabaseUrl && settings?.supabaseAnonKey) {
       initSupabase(settings.supabaseUrl, settings.supabaseAnonKey);
     }
-  } catch (e) { logWarn('Supabase', 'Init from settings failed'); }
+  } catch { logWarn('Supabase', 'Init from settings failed'); }
 }
 
 // ── Auth ──
@@ -108,7 +108,7 @@ export async function getSessionUser(): Promise<User | null> {
       currentUserId = session.user.id;
       return session.user;
     }
-  } catch (e) { logWarn('Supabase', 'Get session user failed'); }
+  } catch { logWarn('Supabase', 'Get session user failed'); }
   currentUserId = null;
   return null;
 }

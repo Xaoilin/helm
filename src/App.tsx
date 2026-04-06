@@ -43,12 +43,13 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
 
 function AppInner() {
   const app = useApp();
+  const supabaseReady = isSupabaseReady();
   const [authUser, setAuthUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(supabaseReady);
 
   // Check session on mount + listen for auth changes
   useEffect(() => {
-    if (!isSupabaseReady()) { setAuthLoading(false); return; }
+    if (!supabaseReady) return;
     let initialLoad = true;
 
     getSessionUser().then(user => {
@@ -68,7 +69,7 @@ function AppInner() {
       window.location.reload();
     });
     return unsub;
-  }, []);
+  }, [supabaseReady]);
 
   const handleSignIn = async () => {
     try {
@@ -122,7 +123,7 @@ function AppInner() {
           ))}
         </div>
         <div className="sidebar-footer" role="contentinfo">
-          {isSupabaseReady() && !authLoading ? (
+          {supabaseReady && !authLoading ? (
             authUser ? (
               <div className="sidebar-auth">
                 <div className="sidebar-auth-user">

@@ -141,7 +141,7 @@ export default function FinanceSurface() {
       for (const mAcc of monzoAccounts) {
         // Find HELM account by Monzo account ID tag, or create one
         const monzoTag = `monzo:${mAcc.id}`;
-        let helmAcc = app.financeAccounts.find(a =>
+        const helmAcc = app.financeAccounts.find(a =>
           app.transactions.some(t => t.accountId === a.id && t.tags?.includes(monzoTag))
         ) || app.financeAccounts.find(a => a.name === `Monzo ${mAcc.description || 'Account'}`);
         let helmAccId: string;

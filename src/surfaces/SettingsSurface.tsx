@@ -391,6 +391,7 @@ export default function SettingsSurface() {
             />
           </div>
           <OllamaModelSelector
+            key={settings.ollamaEndpoint || OLLAMA_ENDPOINT}
             endpoint={settings.ollamaEndpoint || OLLAMA_ENDPOINT}
             currentModel={settings.ollamaModel}
             onModelChange={(model) => app.updateSettings({ ollamaModel: model || undefined })}
@@ -425,13 +426,9 @@ export default function SettingsSurface() {
             </span>
           </div>
           <div className="info-box" style={{ marginTop: 12 }}>
-            <strong>What's mocked in this version:</strong>
-            <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-              <li>AI/LLM chat responses (returns canned replies)</li>
-              <li>Integration OAuth flows (simulated connections)</li>
-              <li>Calendar sync (local events only, no live sync)</li>
-              <li>1Password CLI integration (local vault fallback active)</li>
-            </ul>
+            Runtime status is reported where the feature actually lives:
+            <br />
+            Chat shows Ollama online/offline state, Calendar labels local-only calendars, Integrations marks simulated providers, and Credentials explains the local vault security limits.
           </div>
         </div>
       </div>
@@ -619,16 +616,24 @@ function OllamaModelSelector({ endpoint, currentModel, onModelChange }: {
   const [status, setStatus] = useState<'checking' | 'connected' | 'offline'>('checking');
 
   useEffect(() => {
-    setStatus('checking');
+    let cancelled = false;
+
     testOllamaConnection(endpoint).then(ok => {
+      if (cancelled) return;
       if (ok) {
         setStatus('connected');
-        listOllamaModels(endpoint).then(setModels);
+        listOllamaModels(endpoint).then(foundModels => {
+          if (!cancelled) setModels(foundModels);
+        });
       } else {
         setStatus('offline');
         setModels([]);
       }
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [endpoint]);
 
   return (
