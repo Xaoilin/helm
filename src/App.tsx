@@ -12,6 +12,7 @@ import CredentialsSurface from './surfaces/CredentialsSurface';
 import WorkspacesSurface from './surfaces/WorkspacesSurface';
 import IntegrationsSurface from './surfaces/IntegrationsSurface';
 import SettingsSurface from './surfaces/SettingsSurface';
+import DebugSurface from './surfaces/DebugSurface';
 import VoiceAssistant from './components/VoiceAssistant';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
@@ -37,6 +38,7 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'workspaces', label: 'Workspaces', icon: '\u{1F4C1}' },
   { surface: 'integrations', label: 'Integrations', icon: '\u{1F50C}' },
   { surface: 'settings', label: 'Settings', icon: '\u2699\uFE0F' },
+  { surface: 'debug', label: 'Debug', icon: '\u{1F41E}' },
 ];
 
 function AppInner() {
@@ -95,6 +97,7 @@ function AppInner() {
         case 'workspaces': return <WorkspacesSurface />;
         case 'integrations': return <IntegrationsSurface />;
         case 'settings': return <SettingsSurface />;
+        case 'debug': return <DebugSurface />;
       }
     })();
     return <ErrorBoundary name={app.surface} key={app.surface}>{surface}</ErrorBoundary>;

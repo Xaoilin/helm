@@ -288,4 +288,5 @@ export type Surface =
   | 'knowledge'
   | 'profile'
   | 'integrations'
-  | 'settings';
+  | 'settings'
+  | 'debug';
