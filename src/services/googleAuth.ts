@@ -146,22 +146,43 @@ export function isTokenValid(tokens: GoogleTokens | null): boolean {
 /**
  * Get an access token for the given account.
  *
- * Strategy: return the stored token even if it looks expired.
- * Google tokens often work slightly past their stated expiry.
- * The caller should handle 401 errors from the API — that's the
- * real signal that re-auth is needed, not the local expiry clock.
+ * Strategy:
+ * 1. If token is still valid (not expired), return it immediately.
+ * 2. If token is expired, attempt a silent refresh via GIS (prompt: '').
+ *    This works if the user's Google session cookie is still active.
+ * 3. If silent refresh fails, return the expired token anyway (Google
+ *    tokens often work slightly past their stated expiry).
+ * 4. If no token exists at all, throw.
  *
- * This avoids opening a Google sign-in popup every time the user
- * visits the Calendar page after the 1-hour token window.
- * GIS token model does NOT support true silent refresh — requestAccessToken()
- * with prompt:'' still opens a popup if the session is stale.
- *
- * Throws only if no tokens exist at all.
+ * The caller should still handle 401 errors as the ultimate signal
+ * that re-auth is needed.
  */
-export async function getValidAccessToken(accountId: string, _clientId: string): Promise<string> {
+export async function getValidAccessToken(accountId: string, clientId: string): Promise<string> {
   const tokens = loadGoogleTokens(accountId);
-  if (tokens?.accessToken) return tokens.accessToken;
-  throw new Error('No stored tokens. Please reconnect this account.');
+  if (!tokens?.accessToken) {
+    throw new Error('No stored tokens. Please reconnect this account.');
+  }
+
+  // Token still valid — return immediately
+  if (isTokenValid(tokens)) {
+    return tokens.accessToken;
+  }
+
+  // Token expired — attempt silent refresh
+  if (clientId) {
+    try {
+      await loadGisScript();
+      const newTokens = await refreshAccessToken(clientId);
+      saveGoogleTokens(accountId, newTokens);
+      return newTokens.accessToken;
+    } catch {
+      // Silent refresh failed (stale Google session) — return expired token
+      // as a last resort. Google sometimes accepts tokens past their expiry.
+      logWarn('GoogleAuth', `Silent refresh failed for ${accountId}, using expired token`);
+    }
+  }
+
+  return tokens.accessToken;
 }
 
 // ── GIS type declarations ──
