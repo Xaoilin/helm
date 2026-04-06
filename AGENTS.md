@@ -45,8 +45,7 @@ Also do manual validation when a change touches UI, voice, OAuth, wake-word, or 
 ## Working Rules
 
 - Use a dedicated branch per task. `codex/<short-description>` is the default branch style.
-- When a meaningful task is complete and validation is green, default to creating a versioned checkpoint by staging, committing, pushing, and merging the branch unless the user explicitly wants to keep the work unmerged.
-- The reason for the default merge flow is to keep the app versioned between feature-development steps instead of letting large amounts of finished work sit only in a local branch.
+- When meaningful work is complete and validation is green, prefer landing it through a small branch/PR flow unless the user explicitly wants it kept local or unmerged.
 - Reproduce bugs before fixing them, then add a regression test.
 - Do not swallow errors silently. Log failures consistently and surface user-facing failures in the UI where appropriate.
 - Prefer domain-context changes over growing the compatibility shell in `AppContext.tsx`.
