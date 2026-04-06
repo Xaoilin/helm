@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { isSupabaseReady, isAuthenticated, getCurrentUserId } from '../store/supabase';
 import { ELEVENLABS_API_KEY, OLLAMA_ENDPOINT } from '../config';
@@ -369,6 +369,7 @@ export default function SettingsSurface() {
               <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
                 Used for "Hey Lina" wake word and voice commands.
               </div>
+              <MicTester deviceId={settings.microphoneDeviceId} />
             </div>
           )}
         </div>
@@ -435,6 +436,175 @@ export default function SettingsSurface() {
         </div>
       </div>
     </>
+  );
+}
+
+// ── Ollama Model Selector sub-component ──
+
+// ── Microphone Tester sub-component ──
+
+function MicTester({ deviceId }: { deviceId?: string }) {
+  const [micState, setMicState] = useState<'idle' | 'recording' | 'playing'>('idle');
+  const [level, setLevel] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const animFrameRef = useRef<number>(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const startRecording = async () => {
+    setError(null);
+    setPlaybackUrl(null);
+    chunksRef.current = [];
+
+    try {
+      const constraints: MediaStreamConstraints = {
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+
+      // Set up analyser for live level meter
+      const audioCtx = new AudioContext();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      // Animate level meter
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const updateLevel = () => {
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((sum, v) => sum + v, 0) / dataArray.length;
+        setLevel(Math.min(100, Math.round((avg / 128) * 100)));
+        animFrameRef.current = requestAnimationFrame(updateLevel);
+      };
+      updateLevel();
+
+      // Record audio
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus' : 'audio/webm';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        setPlaybackUrl(url);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start(100);
+      setMicState('recording');
+
+      // Auto-stop after 5 seconds
+      setTimeout(() => { if (mediaRecorderRef.current?.state === 'recording') stopRecording(); }, 5000);
+    } catch (e) {
+      setError(e instanceof Error && e.message.includes('NotAllowed')
+        ? 'Microphone blocked. Click the lock icon in your browser address bar to allow.'
+        : `Mic error: ${e instanceof Error ? e.message : 'unknown'}`);
+    }
+  };
+
+  const stopRecording = () => {
+    cancelAnimationFrame(animFrameRef.current);
+    setLevel(0);
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    analyserRef.current = null;
+    mediaRecorderRef.current = null;
+    setMicState('idle');
+  };
+
+  const playRecording = () => {
+    if (!playbackUrl) return;
+    const audio = new Audio(playbackUrl);
+    audioRef.current = audio;
+    setMicState('playing');
+    audio.onended = () => { setMicState('idle'); audioRef.current = null; };
+    audio.onerror = () => { setMicState('idle'); audioRef.current = null; };
+    audio.play();
+  };
+
+  const stopPlayback = () => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    setMicState('idle');
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cancelAnimationFrame(animFrameRef.current);
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      if (audioRef.current) audioRef.current.pause();
+      if (playbackUrl) URL.revokeObjectURL(playbackUrl);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div style={{ marginTop: 10, padding: 10, background: '#13151c', borderRadius: 8, border: '1px solid #1e2030' }}>
+      <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8 }}>Microphone Test</div>
+
+      {/* Level meter */}
+      {micState === 'recording' && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, color: '#22c55e', minWidth: 70 }}>🔴 Recording...</span>
+            <div style={{ flex: 1, height: 8, background: '#1a1d2e', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{
+                width: `${level}%`, height: '100%', borderRadius: 4,
+                background: level > 60 ? '#22c55e' : level > 20 ? '#f59e0b' : '#4a4e63',
+                transition: 'width 0.1s',
+              }} />
+            </div>
+            <span style={{ fontSize: 10, color: '#6b6f85', minWidth: 30 }}>{level}%</span>
+          </div>
+        </div>
+      )}
+
+      {/* Buttons */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        {micState === 'idle' && (
+          <>
+            <button className="btn btn-secondary btn-sm" style={{ fontSize: 11 }} onClick={startRecording}>
+              🎙️ Record Test
+            </button>
+            {playbackUrl && (
+              <button className="btn btn-secondary btn-sm" style={{ fontSize: 11 }} onClick={playRecording}>
+                🔊 Play Back
+              </button>
+            )}
+          </>
+        )}
+        {micState === 'recording' && (
+          <button className="btn btn-danger btn-sm" style={{ fontSize: 11 }} onClick={stopRecording}>
+            ⏹️ Stop Recording
+          </button>
+        )}
+        {micState === 'playing' && (
+          <button className="btn btn-secondary btn-sm" style={{ fontSize: 11 }} onClick={stopPlayback}>
+            ⏹️ Stop Playback
+          </button>
+        )}
+        {playbackUrl && micState === 'idle' && (
+          <span style={{ fontSize: 10, color: '#22c55e' }}>✓ Recording ready — click Play Back to listen</span>
+        )}
+      </div>
+
+      {error && (
+        <div style={{ fontSize: 11, color: '#ff6b6b', marginTop: 6 }}>{error}</div>
+      )}
+
+      <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 6 }}>
+        Record up to 5 seconds, then play back to verify your mic is working. The level meter shows live input volume.
+      </div>
+    </div>
   );
 }
 
