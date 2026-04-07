@@ -32,12 +32,13 @@ Run the relevant checks before closing out meaningful code changes:
 - `npm run build`
 - `npm run check`
 
-Also do manual validation when a change touches UI, voice, OAuth, wake-word, or external integrations.
+Also do manual QA before reporting back on any delivered feature. Changes that touch UI, voice, OAuth, wake-word, or external integrations always require a direct manual validation pass, and user-facing changes should include screenshot evidence when practical.
 
 ## Definition Of Done
 
 - Code changes are complete.
 - Relevant checks are green.
+- Manual QA has been completed for the delivered feature before reporting back, with screenshot evidence for user-facing changes when practical, and the result is called out in the handoff.
 - Documentation is updated in the same change.
 - User-facing copy reflects the real runtime state.
 - `docs/feature-status.md` is updated when a feature moves between `real`, `local-only/degraded`, or `placeholder/simulated`.
@@ -45,7 +46,7 @@ Also do manual validation when a change touches UI, voice, OAuth, wake-word, or 
 ## Working Rules
 
 - Use a dedicated branch per task. `codex/<short-description>` is the default branch style.
-- When meaningful work is complete and validation is green, prefer landing it through a small branch/PR flow unless the user explicitly wants it kept local or unmerged.
+- When meaningful work is complete and validation is green, land it through the normal branch -> commit -> merge -> deploy-verification flow unless the user explicitly wants it kept local or unmerged.
 - Reproduce bugs before fixing them, then add a regression test.
 - Do not swallow errors silently. Log failures consistently and surface user-facing failures in the UI where appropriate.
 - Prefer domain-context changes over growing the compatibility shell in `AppContext.tsx`.

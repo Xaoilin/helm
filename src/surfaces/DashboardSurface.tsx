@@ -32,6 +32,10 @@ function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function compareEventStarts(a: CalendarEvent, b: CalendarEvent): number {
+  return new Date(a.start).getTime() - new Date(b.start).getTime();
+}
+
 interface Toast { id: string; type: 'xp' | 'levelup' | 'badge' | 'streak'; text: string; emoji?: string; }
 
 const ACCOUNT_PALETTES = [
@@ -156,7 +160,7 @@ export default function DashboardSurface() {
   const todayEvents = useMemo(() => {
     return app.calendarEvents
       .filter(e => visibleSourceIds.has(e.sourceId) && toLocalDateStr(new Date(e.start)) === todayStr)
-      .sort((a, b) => a.start.localeCompare(b.start));
+      .sort(compareEventStarts);
   }, [app.calendarEvents, visibleSourceIds, todayStr]);
 
   // Next upcoming event (within 2 hours)
@@ -267,11 +271,9 @@ export default function DashboardSurface() {
 
   // ── Agenda timeline (max 8 items) ──
   const agenda = useMemo((): AgendaItem[] => {
-    const items: AgendaItem[] = [];
-
-    // Calendar events today (all-day first, then timed)
-    for (const e of todayEvents) {
-      items.push({
+    const allDayItems = todayEvents
+      .filter(e => e.allDay)
+      .map((e): AgendaItem => ({
         id: `ev-${e.id}`,
         time: e.allDay ? 'All day' : `${new Date(e.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} – ${new Date(e.end).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}`,
         title: e.title,
@@ -279,33 +281,31 @@ export default function DashboardSurface() {
         meta: e.location,
         sourceId: e.sourceId,
         passed: !e.allDay && new Date(e.end) < now,
-      });
-    }
+      }));
 
-    // Tasks due today
-    for (const t of dueTasks) {
-      items.push({
+    const timedItems = todayEvents
+      .filter(e => !e.allDay)
+      .sort(compareEventStarts)
+      .map((e): AgendaItem => ({
+        id: `ev-${e.id}`,
+        time: `${new Date(e.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} – ${new Date(e.end).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}`,
+        title: e.title,
+        type: 'event',
+        meta: e.location,
+        sourceId: e.sourceId,
+        passed: new Date(e.end) < now,
+      }));
+
+    const taskItems = dueTasks.map((t): AgendaItem => ({
         id: `task-${t.id}`,
         time: 'To do',
         title: t.title,
         type: 'task',
         meta: t.priority !== 'low' ? t.priority : undefined,
         task: t,
-      });
-    }
+      }));
 
-    // Sort: all-day events first, then timed events by time, then tasks at end
-    items.sort((a, b) => {
-      const aAllDay = a.time === 'All day';
-      const bAllDay = b.time === 'All day';
-      if (aAllDay && !bAllDay) return -1;
-      if (!aAllDay && bAllDay) return 1;
-      if (a.type === 'event' && b.type === 'task') return -1;
-      if (a.type === 'task' && b.type === 'event') return 1;
-      return a.time.localeCompare(b.time);
-    });
-
-    return items.slice(0, 8);
+    return [...allDayItems, ...timedItems, ...taskItems].slice(0, 8);
   }, [todayEvents, dueTasks, now]);
 
   // ── Task completion with gamification ──
