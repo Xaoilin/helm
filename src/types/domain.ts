@@ -15,6 +15,9 @@ export interface ChatConversation {
 }
 
 // ── Calendar ──
+export type CalendarAuthProvider = 'profile-google' | 'calendar-oauth';
+export type CalendarAuthStatus = 'connected' | 'needs_reconnect' | 'revoked' | 'error';
+
 export interface CalendarAccount {
   id: string;
   name: string;
@@ -26,6 +29,12 @@ export interface CalendarAccount {
   lastSyncTime?: string;
   syncError?: string;
   paletteIndex?: number;
+  authProvider?: CalendarAuthProvider;
+  authStatus?: CalendarAuthStatus;
+  authEmail?: string;
+  authExpiresAt?: string;
+  lastAuthError?: string;
+  lastAuthCheckAt?: string;
 }
 
 export interface CalendarSource {

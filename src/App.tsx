@@ -25,6 +25,10 @@ import {
 import type { Surface } from './types/domain';
 import type { User } from '@supabase/supabase-js';
 import { TIMING } from './config/constants';
+import {
+  getGoogleCalendarAuthPatch,
+  isGoogleCalendarAccount,
+} from './services/googleCalendarAuthManager';
 
 const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'dashboard', label: 'Dashboard', icon: '\u{1F3E0}' },
@@ -46,6 +50,45 @@ function AppInner() {
   const supabaseReady = isSupabaseReady();
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(supabaseReady);
+
+  useEffect(() => {
+    for (const account of app.calendarAccounts) {
+      if (!isGoogleCalendarAccount(account)) continue;
+
+      const patch = getGoogleCalendarAuthPatch(account);
+      const hasChanges = Object.entries(patch).some(([key, value]) => account[key as keyof typeof account] !== value);
+      if (hasChanges) {
+        app.updateCalendarAccount(account.id, patch);
+      }
+    }
+  }, [app, app.calendarAccounts, authUser?.email]);
+
+  useEffect(() => {
+    const googleIntegration = app.integrations.find(integration => integration.provider === 'google');
+    if (!googleIntegration) return;
+
+    const googleAccounts = app.calendarAccounts.filter(isGoogleCalendarAccount);
+    const problemAccount = googleAccounts.find(account =>
+      account.authStatus === 'needs_reconnect'
+      || account.authStatus === 'revoked'
+      || account.authStatus === 'error',
+    );
+
+    const nextStatus = googleAccounts.length === 0
+      ? 'disconnected'
+      : problemAccount ? 'error' : 'connected';
+    const nextError = problemAccount?.lastAuthError || problemAccount?.syncError;
+
+    if (googleIntegration.status !== nextStatus || googleIntegration.lastError !== nextError) {
+      app.updateIntegration(googleIntegration.id, {
+        status: nextStatus,
+        lastError: nextError,
+        configuredAt: nextStatus === 'connected'
+          ? (googleIntegration.configuredAt || new Date().toISOString())
+          : googleIntegration.configuredAt,
+      });
+    }
+  }, [app, app.calendarAccounts, app.integrations]);
 
   // Check session on mount + listen for auth changes
   useEffect(() => {

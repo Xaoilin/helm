@@ -2,7 +2,11 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { v4 as uuid } from 'uuid';
 import type { CalendarAccount, CalendarSource, CalendarEvent } from '../../types/domain';
 import { loadStore, saveStore } from '../persistence';
-import { clearGoogleTokens } from '../../services/googleAuth';
+import {
+  clearGoogleCalendarAuth,
+  getGoogleCalendarAuthPatch,
+  isGoogleCalendarAccount,
+} from '../../services/googleCalendarAuthManager';
 
 export interface CalendarContextValue {
   calendarAccounts: CalendarAccount[];
@@ -26,6 +30,14 @@ export interface CalendarContextValue {
 
 const CalendarCtx = createContext<CalendarContextValue | null>(null);
 
+function normalizeCalendarAccounts(accounts: CalendarAccount[]): CalendarAccount[] {
+  return accounts.map(account => (
+    isGoogleCalendarAccount(account)
+      ? { ...account, ...getGoogleCalendarAuthPatch(account) }
+      : account
+  ));
+}
+
 export function useCalendar(): CalendarContextValue {
   const ctx = useContext(CalendarCtx);
   if (!ctx) throw new Error('useCalendar must be used within CalendarProvider');
@@ -46,7 +58,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
         loadStore<CalendarSource[]>('calendarSources'),
         loadStore<CalendarEvent[]>('calendarEvents'),
       ]);
-      setCalendarAccounts(accounts ?? []);
+      setCalendarAccounts(normalizeCalendarAccounts(accounts ?? []));
       setCalendarSources(sources ?? []);
       setCalendarEvents(events ?? []);
       setLoaded(true);
@@ -64,17 +76,24 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     setCalendarAccounts(prev => {
       const isPrimary = prev.length === 0 ? true : account.isPrimary;
       const existing = isPrimary ? prev.map(a => ({ ...a, isPrimary: false })) : prev;
-      return [...existing, { ...account, id, isPrimary }];
+      const nextAccount: CalendarAccount = { ...account, id, isPrimary };
+      return [...existing, isGoogleCalendarAccount(nextAccount) ? { ...nextAccount, ...getGoogleCalendarAuthPatch(nextAccount) } : nextAccount];
     });
     return id;
   }, []);
 
   const updateCalendarAccount = useCallback((id: string, updates: Partial<CalendarAccount>) => {
-    setCalendarAccounts(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+    setCalendarAccounts(prev => prev.map(account => {
+      if (account.id !== id) return account;
+      const nextAccount = { ...account, ...updates };
+      return isGoogleCalendarAccount(nextAccount)
+        ? { ...nextAccount, ...getGoogleCalendarAuthPatch(nextAccount) }
+        : nextAccount;
+    }));
   }, []);
 
   const removeCalendarAccount = useCallback((id: string) => {
-    clearGoogleTokens(id);
+    clearGoogleCalendarAuth(id);
     setCalendarAccounts(prev => {
       const remaining = prev.filter(a => a.id !== id);
       if (remaining.length > 0 && !remaining.some(a => a.isPrimary)) {

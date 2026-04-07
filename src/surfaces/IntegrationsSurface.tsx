@@ -1,9 +1,18 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useApp } from '../store/AppContext';
-import type { IntegrationStatus } from '../types/domain';
-import { loadGisScript, initiateOAuthFlow, saveGoogleTokens, revokeAccess, loadGoogleTokens, clearGoogleTokens } from '../services/googleAuth';
-import { fetchCalendarList } from '../services/googleCalendarApi';
+import type { CalendarAccount, IntegrationStatus } from '../types/domain';
+import { loadGoogleTokens, revokeAccess } from '../services/googleAuth';
 import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
+import { getAuthSessionSnapshot } from '../store/supabase';
+import {
+  connectGoogleCalendarOAuthAccount,
+  connectProfileGoogleCalendar,
+  getGoogleCalendarAuthPatch,
+  getGoogleCalendarStatusLabel,
+  isGoogleCalendarAccount,
+  reconnectGoogleCalendarOAuthAccount,
+  triggerProfileGoogleReconnect,
+} from '../services/googleCalendarAuthManager';
 
 const PROVIDER_INFO: Record<string, { setupHint: string; mockable: boolean }> = {
   google: { setupHint: 'Requires a Google Cloud OAuth Client ID. Set it in Settings first.', mockable: false },
@@ -13,62 +22,107 @@ const PROVIDER_INFO: Record<string, { setupHint: string; mockable: boolean }> = 
   linear: { setupHint: 'Requires a Linear API key or OAuth flow.', mockable: true },
 };
 
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function getStatusTone(account: CalendarAccount): string {
+  switch (account.authStatus) {
+    case 'needs_reconnect':
+      return 'needs-reconnect';
+    case 'revoked':
+      return 'revoked';
+    case 'error':
+      return 'error';
+    default:
+      return account.connected ? 'connected' : 'disconnected';
+  }
+}
+
 export default function IntegrationsSurface() {
   const app = useApp();
   const [configuring, setConfiguring] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
-  const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const [googleBusyAction, setGoogleBusyAction] = useState<'profile' | 'oauth' | `reconnect:${string}` | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
-  const [disconnectingAccountId, setDisconnectingAccountId] = useState<string | null>(null);
 
   const getInfo = (provider: string) => PROVIDER_INFO[provider] || { setupHint: 'No setup instructions available.', mockable: false };
-  const googleAccounts = app.calendarAccounts.filter(a => a.provider === 'google' && a.connected && !a.mocked);
+  const googleAccounts = app.calendarAccounts.filter(isGoogleCalendarAccount);
   const clientId = GOOGLE_OAUTH_CLIENT_ID;
+  const authSnapshot = getAuthSessionSnapshot();
 
-  const handleGoogleConnect = async () => {
-    if (!clientId?.trim()) {
-      setGoogleError('Please set your Google OAuth Client ID in Settings first.');
-      return;
+  const profileEmail = authSnapshot?.email ?? null;
+  const linkedProfileAccount = useMemo(() => (
+    profileEmail
+      ? googleAccounts.find(account => normalizeEmail(account.email) === normalizeEmail(profileEmail))
+      : undefined
+  ), [googleAccounts, profileEmail]);
+  const canLinkSignedInGoogle = Boolean(profileEmail && authSnapshot?.provider === 'google' && !linkedProfileAccount);
+  const needsProfileReconnect = Boolean(profileEmail && authSnapshot?.provider === 'google' && !authSnapshot?.providerToken);
+
+  const addSourcesIfMissing = (accountId: string, calendars: Awaited<ReturnType<typeof connectProfileGoogleCalendar>>['calendars']) => {
+    const existingGoogleIds = new Set(
+      app.calendarSources
+        .filter(source => source.accountId === accountId && source.googleCalendarId)
+        .map(source => source.googleCalendarId!),
+    );
+    const foreignGoogleIds = new Set(
+      app.calendarSources
+        .filter(source => source.accountId !== accountId && source.googleCalendarId)
+        .map(source => source.googleCalendarId!),
+    );
+
+    for (const calendar of calendars) {
+      if (existingGoogleIds.has(calendar.id) || foreignGoogleIds.has(calendar.id)) continue;
+      app.addCalendarSource({
+        accountId,
+        name: calendar.summary,
+        color: calendar.backgroundColor || '#4f5bff',
+        visible: true,
+        googleCalendarId: calendar.id,
+        accessRole: calendar.accessRole,
+      });
     }
+  };
 
-    setConnectingGoogle(true);
+  const handleProfileGoogleConnect = async () => {
+    setGoogleBusyAction('profile');
     setGoogleError(null);
 
     try {
-      await loadGisScript();
-      const tokens = await initiateOAuthFlow(clientId.trim());
-      const calendars = await fetchCalendarList(tokens.accessToken);
-      const primaryCal = calendars.find(c => c.primary);
-      const email = primaryCal?.id || 'google-user';
-      const accountName = primaryCal?.summary || 'Google Calendar';
-
-      // Check if this email is already connected
-      const existing = googleAccounts.find(a => a.email === email);
-      if (existing) {
-        setGoogleError(`Account ${email} is already connected. Sign in with a different Google account to add another.`);
+      if (needsProfileReconnect) {
+        await triggerProfileGoogleReconnect();
         return;
       }
 
-      const accountId = app.addCalendarAccount({
-        name: accountName,
-        email,
-        provider: 'google',
-        isPrimary: app.calendarAccounts.length === 0,
-        connected: true,
-        mocked: false,
-      });
+      const result = await connectProfileGoogleCalendar();
+      const existing = googleAccounts.find(account => normalizeEmail(account.email) === normalizeEmail(result.email));
 
-      saveGoogleTokens(accountId, tokens);
-
-      for (const cal of calendars) {
-        app.addCalendarSource({
-          accountId,
-          name: cal.summary,
-          color: cal.backgroundColor || '#4f5bff',
-          visible: true,
-          googleCalendarId: cal.id,
-          accessRole: cal.accessRole,
+      if (existing) {
+        app.updateCalendarAccount(existing.id, {
+          name: result.accountName,
+          connected: true,
+          mocked: false,
+          ...getGoogleCalendarAuthPatch({ ...existing, name: result.accountName, connected: true, mocked: false }),
         });
+        addSourcesIfMissing(existing.id, result.calendars);
+      } else {
+        const accountId = app.addCalendarAccount({
+          name: result.accountName,
+          email: result.email,
+          provider: 'google',
+          isPrimary: app.calendarAccounts.length === 0,
+          connected: true,
+          mocked: false,
+          authProvider: result.authProvider,
+          authStatus: 'connected',
+          authEmail: result.email,
+          authExpiresAt: result.authExpiresAt,
+          lastAuthError: undefined,
+          lastAuthCheckAt: new Date().toISOString(),
+          syncError: undefined,
+        });
+        addSourcesIfMissing(accountId, result.calendars);
       }
 
       app.updateIntegration('int-google', {
@@ -76,13 +130,98 @@ export default function IntegrationsSurface() {
         configuredAt: new Date().toISOString(),
         lastError: undefined,
       });
-
       setConfiguring(null);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Connection failed';
-      setGoogleError(message);
+    } catch (error) {
+      setGoogleError(error instanceof Error ? error.message : 'Connection failed');
     } finally {
-      setConnectingGoogle(false);
+      setGoogleBusyAction(null);
+    }
+  };
+
+  const handleGoogleConnect = async () => {
+    if (!clientId?.trim()) {
+      setGoogleError('Please set your Google OAuth Client ID in Settings first.');
+      return;
+    }
+
+    setGoogleBusyAction('oauth');
+    setGoogleError(null);
+
+    try {
+      const result = await connectGoogleCalendarOAuthAccount(clientId.trim());
+      const existing = googleAccounts.find(account => normalizeEmail(account.email) === normalizeEmail(result.email));
+      if (existing) {
+        setGoogleError(`Account ${result.email} is already connected. Reconnect it from the account row below or sign in with a different Google account.`);
+        return;
+      }
+
+      const accountId = app.addCalendarAccount({
+        name: result.accountName,
+        email: result.email,
+        provider: 'google',
+        isPrimary: app.calendarAccounts.length === 0,
+        connected: true,
+        mocked: false,
+        authProvider: result.authProvider,
+        authStatus: 'connected',
+        authEmail: result.email,
+        authExpiresAt: result.authExpiresAt,
+        lastAuthError: undefined,
+        lastAuthCheckAt: new Date().toISOString(),
+        syncError: undefined,
+      });
+
+      addSourcesIfMissing(accountId, result.calendars);
+      app.updateIntegration('int-google', {
+        status: 'connected',
+        configuredAt: new Date().toISOString(),
+        lastError: undefined,
+      });
+      setConfiguring(null);
+    } catch (error) {
+      setGoogleError(error instanceof Error ? error.message : 'Connection failed');
+    } finally {
+      setGoogleBusyAction(null);
+    }
+  };
+
+  const handleGoogleReconnect = async (account: CalendarAccount) => {
+    const reconnectKey = `reconnect:${account.id}` as const;
+    setGoogleBusyAction(reconnectKey);
+    setGoogleError(null);
+
+    try {
+      if (account.authProvider === 'profile-google') {
+        await triggerProfileGoogleReconnect();
+        return;
+      }
+
+      if (!clientId?.trim()) {
+        setGoogleError('Please set your Google OAuth Client ID in Settings first.');
+        return;
+      }
+
+      const result = await reconnectGoogleCalendarOAuthAccount(account, clientId.trim());
+      app.updateCalendarAccount(account.id, {
+        name: result.accountName,
+        authProvider: result.authProvider,
+        authStatus: 'connected',
+        authEmail: result.email,
+        authExpiresAt: result.authExpiresAt,
+        lastAuthError: undefined,
+        lastAuthCheckAt: new Date().toISOString(),
+        syncError: undefined,
+      });
+      addSourcesIfMissing(account.id, result.calendars);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Reconnect failed';
+      setGoogleError(message);
+      app.updateCalendarAccount(account.id, {
+        authStatus: account.authProvider === 'profile-google' ? 'needs_reconnect' : account.authStatus,
+        lastAuthError: message,
+      });
+    } finally {
+      setGoogleBusyAction(null);
     }
   };
 
@@ -91,11 +230,10 @@ export default function IntegrationsSurface() {
     if (tokens) {
       await revokeAccess(tokens.accessToken);
     }
-    clearGoogleTokens(accountId);
+
     app.removeCalendarAccount(accountId);
 
-    // If no more Google accounts, set integration to disconnected
-    const remaining = googleAccounts.filter(a => a.id !== accountId);
+    const remaining = googleAccounts.filter(account => account.id !== accountId);
     if (remaining.length === 0) {
       app.updateIntegration('int-google', {
         status: 'disconnected',
@@ -104,7 +242,6 @@ export default function IntegrationsSurface() {
       });
     }
 
-    setDisconnectingAccountId(null);
     setConfirmDisconnect(null);
   };
 
@@ -150,33 +287,64 @@ export default function IntegrationsSurface() {
                 </div>
               </div>
 
-              {/* Show connected Google accounts */}
               {isGoogle && googleAccounts.length > 0 && (
                 <div style={{ marginTop: 8 }}>
-                  {googleAccounts.map(acc => (
-                    <div key={acc.id} className="info-box" style={{ marginBottom: 6, background: '#152d1a', borderColor: '#1e4d28', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <strong>{acc.email}</strong>
-                        {acc.lastSyncTime && (
-                          <span style={{ color: '#6b6f85', marginLeft: 8, fontSize: 11 }}>
-                            Synced: {new Date(acc.lastSyncTime).toLocaleString()}
+                  {googleAccounts.map(account => (
+                    <div
+                      key={account.id}
+                      className="info-box"
+                      style={{
+                        marginBottom: 8,
+                        background: account.authStatus === 'connected' ? '#152d1a' : '#1a1d2e',
+                        borderColor: account.authStatus === 'connected' ? '#1e4d28' : '#30364d',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <strong>{account.email}</strong>
+                          <span className={`tag tag-${getStatusTone(account)}`} role="status">
+                            {getGoogleCalendarStatusLabel(account)}
                           </span>
-                        )}
-                        {acc.syncError && (
-                          <span style={{ color: '#ff6b6b', marginLeft: 8, fontSize: 11 }}>
-                            Error: {acc.syncError}
-                          </span>
+                          {account.authProvider === 'profile-google' && (
+                            <span style={{ fontSize: 11, color: '#8b90a8' }}>Linked to your HELM Google sign-in</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 4 }}>
+                          {account.lastSyncTime
+                            ? `Synced ${new Date(account.lastSyncTime).toLocaleString()}`
+                            : 'Not yet synced'}
+                          {account.authExpiresAt && ` · Access checked ${new Date(account.authExpiresAt).toLocaleString()}`}
+                        </div>
+                        {(account.lastAuthError || account.syncError) && (
+                          <div style={{ color: account.authStatus === 'error' ? '#f0c040' : '#ff6b6b', marginTop: 4, fontSize: 11 }}>
+                            {account.lastAuthError || account.syncError}
+                          </div>
                         )}
                       </div>
-                      {disconnectingAccountId === acc.id ? (
-                        <div className="actions-row">
-                          <span style={{ fontSize: 11, color: '#ff6b6b' }}>Remove this account?</span>
-                          <button className="btn btn-danger btn-sm" onClick={() => handleGoogleDisconnect(acc.id)}>Yes</button>
-                          <button className="btn btn-secondary btn-sm" onClick={() => setDisconnectingAccountId(null)}>No</button>
-                        </div>
-                      ) : (
-                        <button className="btn btn-danger btn-sm" onClick={() => setDisconnectingAccountId(acc.id)}>Disconnect</button>
-                      )}
+                      <div className="actions-row" style={{ flexShrink: 0 }}>
+                        {(account.authStatus === 'needs_reconnect' || account.authStatus === 'revoked') && (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => handleGoogleReconnect(account)}
+                            disabled={googleBusyAction === `reconnect:${account.id}`}
+                          >
+                            {googleBusyAction === `reconnect:${account.id}` ? <><span className="spinner" /> Reconnecting...</> : 'Reconnect'}
+                          </button>
+                        )}
+                        {confirmDisconnect === account.id ? (
+                          <>
+                            <span style={{ fontSize: 11, color: '#ff6b6b' }}>Remove this account?</span>
+                            <button className="btn btn-danger btn-sm" onClick={() => handleGoogleDisconnect(account.id)}>Yes</button>
+                            <button className="btn btn-secondary btn-sm" onClick={() => setConfirmDisconnect(null)}>No</button>
+                          </>
+                        ) : (
+                          <button className="btn btn-danger btn-sm" onClick={() => setConfirmDisconnect(account.id)}>Disconnect</button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -188,7 +356,7 @@ export default function IntegrationsSurface() {
                 </div>
               )}
 
-              {integration.status === 'error' && (
+              {integration.status === 'error' && !isGoogle && (
                 <div className="info-box warning" style={{ marginTop: 8 }}>
                   Error: {integration.lastError || 'Connection error'}
                 </div>
@@ -196,63 +364,68 @@ export default function IntegrationsSurface() {
 
               <div className="actions-row" style={{ marginTop: 10 }}>
                 {isGoogle ? (
-                  /* Google: always show Add Account option when client ID exists */
                   <>
                     {configuring === integration.id ? (
                       <div style={{ flex: 1 }}>
-                        {!clientId?.trim() ? (
-                          <>
-                            <div className="info-box warning" style={{ marginBottom: 8 }}>
-                              You need to set a Google OAuth Client ID in Settings before connecting.
-                              <br /><br />
-                              <strong>Setup steps:</strong>
-                              <ol style={{ margin: '6px 0 0', paddingLeft: 18, lineHeight: 1.6 }}>
-                                <li>Go to <strong>Google Cloud Console</strong> &rarr; APIs &amp; Services &rarr; Credentials</li>
-                                <li>Create an OAuth 2.0 Client ID (Web application type)</li>
-                                <li>Add <code>http://localhost:5174</code> as an Authorized JavaScript Origin</li>
-                                <li>Enable the <strong>Google Calendar API</strong> in your project</li>
-                                <li>Copy the Client ID and paste it in HELM Settings</li>
-                              </ol>
-                            </div>
-                            <div className="actions-row">
-                              <button className="btn btn-primary btn-sm" onClick={() => app.navigate('settings')}>Go to Settings</button>
-                              <button className="btn btn-secondary btn-sm" onClick={() => setConfiguring(null)}>Cancel</button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="info-box" style={{ marginBottom: 8 }}>
-                              {googleAccounts.length > 0
-                                ? 'Sign in with a different Google account to add it.'
-                                : 'Clicking Connect will open a Google sign-in popup.'}
-                            </div>
-                            {googleError && (
-                              <div className="info-box warning" style={{ marginBottom: 8 }}>
-                                {googleError}
-                              </div>
-                            )}
-                            <div className="actions-row">
-                              <button
-                                className="btn btn-primary btn-sm"
-                                onClick={handleGoogleConnect}
-                                disabled={connectingGoogle}
-                              >
-                                {connectingGoogle ? (
-                                  <><span className="spinner" /> Connecting...</>
-                                ) : googleAccounts.length > 0 ? (
-                                  'Add Another Google Account'
-                                ) : (
-                                  'Connect Google Calendar'
-                                )}
-                              </button>
-                              <button className="btn btn-secondary btn-sm" onClick={() => { setConfiguring(null); setGoogleError(null); }}>Cancel</button>
-                            </div>
-                          </>
+                        {googleError && (
+                          <div className="info-box warning" style={{ marginBottom: 8 }}>
+                            {googleError}
+                          </div>
                         )}
+
+                        {canLinkSignedInGoogle && (
+                          <div className="info-box" style={{ marginBottom: 8 }}>
+                            {needsProfileReconnect
+                              ? `You are signed into HELM as ${profileEmail}. Reconnect that Google sign-in once to grant Calendar access.`
+                              : `Link your signed-in Google profile (${profileEmail}) without adding a duplicate account.`}
+                          </div>
+                        )}
+
+                        {!clientId?.trim() && (
+                          <div className="info-box warning" style={{ marginBottom: 8 }}>
+                            You need to set a Google OAuth Client ID in Settings before adding extra Google Calendar accounts.
+                            <br /><br />
+                            <strong>Setup steps:</strong>
+                            <ol style={{ margin: '6px 0 0', paddingLeft: 18, lineHeight: 1.6 }}>
+                              <li>Go to <strong>Google Cloud Console</strong> &rarr; APIs &amp; Services &rarr; Credentials</li>
+                              <li>Create an OAuth 2.0 Client ID (Web application type)</li>
+                              <li>Add <code>http://localhost:5174</code> as an Authorized JavaScript Origin</li>
+                              <li>Enable the <strong>Google Calendar API</strong> in your project</li>
+                              <li>Copy the Client ID and paste it in HELM Settings</li>
+                            </ol>
+                          </div>
+                        )}
+
+                        <div className="actions-row" style={{ flexWrap: 'wrap' }}>
+                          {canLinkSignedInGoogle && (
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={handleProfileGoogleConnect}
+                              disabled={googleBusyAction === 'profile'}
+                            >
+                              {googleBusyAction === 'profile'
+                                ? <><span className="spinner" /> Working...</>
+                                : needsProfileReconnect ? 'Reconnect Signed-In Google Account' : 'Link Signed-In Google Account'}
+                            </button>
+                          )}
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={handleGoogleConnect}
+                            disabled={!clientId?.trim() || googleBusyAction === 'oauth'}
+                          >
+                            {googleBusyAction === 'oauth'
+                              ? <><span className="spinner" /> Connecting...</>
+                              : googleAccounts.length > 0 ? 'Add Another Google Account' : 'Connect Google Calendar'}
+                          </button>
+                          {!clientId?.trim() && (
+                            <button className="btn btn-secondary btn-sm" onClick={() => app.navigate('settings')}>Go to Settings</button>
+                          )}
+                          <button className="btn btn-secondary btn-sm" onClick={() => { setConfiguring(null); setGoogleError(null); }}>Cancel</button>
+                        </div>
                       </div>
                     ) : (
                       <button className="btn btn-primary btn-sm" onClick={() => { setConfiguring(integration.id); setGoogleError(null); }}>
-                        {googleAccounts.length > 0 ? '+ Add Account' : 'Configure'}
+                        {googleAccounts.length > 0 || canLinkSignedInGoogle ? '+ Add Account' : 'Configure'}
                       </button>
                     )}
                   </>

@@ -19,6 +19,33 @@ export class GoogleApiError extends Error {
   get isAuthError(): boolean { return this.status === 401; }
   get isForbidden(): boolean { return this.status === 403; }
   get isRateLimit(): boolean { return this.status === 429; }
+  get isTransientServiceError(): boolean { return this.status >= 500 || this.status === 429; }
+}
+
+export function shouldGoogleCalendarBreakerRecordFailure(error: unknown): boolean {
+  if (error instanceof GoogleApiError) {
+    return error.isTransientServiceError;
+  }
+
+  if (error instanceof TypeError) {
+    return true;
+  }
+
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return false;
+  }
+
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    return message.includes('network')
+      || message.includes('failed to fetch')
+      || message.includes('503')
+      || message.includes('502')
+      || message.includes('504')
+      || message.includes('429');
+  }
+
+  return false;
 }
 
 async function apiCall<T>(accessToken: string, url: string, options: RequestInit = {}): Promise<T> {
@@ -44,7 +71,9 @@ async function apiCall<T>(accessToken: string, url: string, options: RequestInit
 
     if (response.status === 204) return undefined as T;
     return response.json();
-  }, { name: 'GoogleCalendar', maxRetries: 2, initialDelayMs: 1000 }));
+  }, { name: 'GoogleCalendar', maxRetries: 2, initialDelayMs: 1000 }), {
+    shouldRecordFailure: shouldGoogleCalendarBreakerRecordFailure,
+  });
 }
 
 // ── Calendar List ──

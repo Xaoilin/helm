@@ -15,12 +15,29 @@
  *     FOR ALL USING (auth.uid()::text = user_id);
  */
 
-import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
+import { createClient, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { logError, logWarn } from '../services/logger';
 import { TIMING } from '../config/constants';
 
 let client: SupabaseClient | null = null;
 let currentUserId: string | null = null;
+let currentSession: Session | null = null;
+
+const GOOGLE_SIGN_IN_SCOPES = [
+  'openid',
+  'email',
+  'profile',
+  'https://www.googleapis.com/auth/calendar',
+].join(' ');
+
+export interface AuthSessionSnapshot {
+  userId: string;
+  email: string | null;
+  providerToken: string | null;
+  providerRefreshToken: string | null;
+  provider: string | null;
+  expiresAt: number | null;
+}
 
 /** Initialize or re-initialize the Supabase client. */
 export function initSupabase(url: string, anonKey: string): void {
@@ -49,6 +66,18 @@ export function getCurrentUserId(): string | null {
 /** Set the current user ID (called after auth state changes). */
 export function setCurrentUserId(userId: string | null): void {
   currentUserId = userId;
+}
+
+export function getAuthSessionSnapshot(): AuthSessionSnapshot | null {
+  if (!currentSession?.user) return null;
+  return {
+    userId: currentSession.user.id,
+    email: currentSession.user.email ?? null,
+    providerToken: currentSession.provider_token ?? null,
+    providerRefreshToken: currentSession.provider_refresh_token ?? null,
+    provider: currentSession.user.app_metadata?.provider ?? null,
+    expiresAt: currentSession.expires_at ?? null,
+  };
 }
 
 /** Check if user is authenticated. */
@@ -83,9 +112,12 @@ export async function signInWithGoogle(): Promise<void> {
   const { error } = await client.auth.signInWithOAuth({
     provider: 'google',
     options: {
+      scopes: GOOGLE_SIGN_IN_SCOPES,
       redirectTo: window.location.origin + (window.location.pathname.includes('/helm') ? '/helm/' : '/'),
       queryParams: {
-        prompt: 'select_account',
+        access_type: 'offline',
+        include_granted_scopes: 'true',
+        prompt: 'consent select_account',
       },
     },
   });
@@ -97,6 +129,7 @@ export async function signOut(): Promise<void> {
   if (!client) return;
   await client.auth.signOut();
   currentUserId = null;
+  currentSession = null;
 }
 
 /** Get current session user. */
@@ -106,10 +139,12 @@ export async function getSessionUser(): Promise<User | null> {
     const { data: { session } } = await client.auth.getSession();
     if (session?.user) {
       currentUserId = session.user.id;
+      currentSession = session;
       return session.user;
     }
   } catch { logWarn('Supabase', 'Get session user failed'); }
   currentUserId = null;
+  currentSession = null;
   return null;
 }
 
@@ -119,6 +154,7 @@ export function onAuthStateChange(callback: (user: User | null) => void): () => 
   const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
     const user = session?.user || null;
     currentUserId = user?.id || null;
+    currentSession = session ?? null;
     callback(user);
   });
   return () => subscription.unsubscribe();

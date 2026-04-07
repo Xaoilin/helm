@@ -162,6 +162,25 @@ describe('CalendarSurface', () => {
     await act(async () => { renderWithProvider(<CalendarSurface />); });
     expect(screen.getByText('Local-only data – not synced')).toBeInTheDocument();
   });
+
+  it('should surface reconnect-required Google accounts without prompting', async () => {
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'acc-google',
+      name: 'Google',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'needs_reconnect',
+      lastAuthError: 'Google access expired. Reconnect this account.',
+      lastAuthCheckAt: '2026-04-07T10:00:00.000Z',
+    }]));
+
+    await act(async () => { renderWithProvider(<CalendarSurface />); });
+    expect(screen.getByText('1 account need reconnect')).toBeInTheDocument();
+  });
 });
 
 describe('IntegrationsSurface', () => {
@@ -178,6 +197,33 @@ describe('IntegrationsSurface', () => {
 
     await act(async () => { renderWithProvider(<IntegrationsSurface />); });
     expect(screen.getByText('This connection is simulated. No real data is being exchanged with GitHub.')).toBeInTheDocument();
+  });
+
+  it('should show reconnect-needed Google accounts per row', async () => {
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'acc-google',
+      name: 'Google',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'needs_reconnect',
+      lastAuthError: 'Google access expired. Reconnect this account.',
+      lastAuthCheckAt: '2026-04-07T10:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:integrations', JSON.stringify(
+      defaultIntegrations.map(integration =>
+        integration.id === 'int-google'
+          ? { ...integration, status: 'error', lastError: 'Google access expired. Reconnect this account.' }
+          : integration
+      )
+    ));
+
+    await act(async () => { renderWithProvider(<IntegrationsSurface />); });
+    expect(screen.getByText('Needs reconnect')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
   });
 });
 

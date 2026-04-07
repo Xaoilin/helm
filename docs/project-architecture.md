@@ -104,14 +104,21 @@ Supabase sync is optional. The app still works in local-first mode without it.
 
 ## Integrations And External Services
 
-### Google auth split
+### Google auth and Calendar account linking
 
-There are two separate Google flows:
+Google identity now has two cooperating layers:
 
-- Supabase Google sign-in for account auth and cloud sync
-- GIS OAuth in `src/services/googleAuth.ts` for Google Calendar access
+- Supabase Google sign-in for HELM account auth and cloud sync
+- Google Calendar account auth managed through `src/services/googleCalendarAuthManager.ts`
 
-This split is intentional. Calendar connection lives in `src/surfaces/IntegrationsSurface.tsx` and supports multiple Google Calendar accounts at once.
+The auth manager links the matching signed-in Google profile to the same-email Calendar account when possible, while still preserving multi-account Google Calendar support for additional accounts.
+
+Important behavior:
+
+- Google Calendar accounts persist explicit auth metadata in the domain model.
+- Passive sync is non-interactive. Opening Calendar should never launch a consent or reconnect popup.
+- Accounts that lose Calendar access move into account-level states such as reconnect-required or revoked instead of surfacing as a generic global outage.
+- GIS OAuth is still used for separately connected Calendar accounts, but those tokens are treated as cached transport credentials rather than the source of truth for account connection state.
 
 ### Calendar data model
 
@@ -122,6 +129,8 @@ Calendar state is hierarchical:
 - event
 
 Sources belong to accounts, and events belong to sources. Account removal must cascade cleanly. Primary-account promotion is handled automatically when needed.
+
+Google-backed calendar accounts also carry per-account auth metadata such as provider mode, auth status, expiry, and last auth error so the UI can distinguish reconnect problems from service outages.
 
 ### Assistant and voice services
 
