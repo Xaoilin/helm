@@ -3,7 +3,7 @@
 ## Workflow
 
 - Use a dedicated branch for each task. `codex/<short-description>` is the default.
-- When meaningful work is complete and relevant checks are green, prefer a short branch -> PR -> merge cycle instead of leaving finished work only in a local checkout.
+- When meaningful work is complete and relevant checks are green, use the normal branch -> commit -> PR/merge -> deploy-verification flow instead of leaving finished work only in a local checkout.
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
 - Add a regression test for every bug fix that changes logic.
@@ -15,6 +15,7 @@ A change is not done until all of the following are true:
 
 - code behavior is complete
 - relevant checks are green
+- manual QA has been completed for the delivered feature before reporting back, with screenshot evidence for user-facing changes when practical, and the result is included in the handoff
 - docs are updated in the same change
 - user-facing copy matches the actual behavior
 - `docs/feature-status.md` is updated if feature status changed
@@ -56,15 +57,20 @@ For small changes, run the most relevant checks first. Before landing broader co
 
 ### Manual testing
 
-Some features still require manual verification:
+Manual QA is required before reporting back on any delivered feature. Automated coverage is not a substitute for checking the real rendered behavior of the change.
+
+Changes that touch the following areas always require a direct manual verification pass:
 
 - microphone input and speech output
 - wake-word detection
 - OAuth popup flows
 - Monzo live sync
 - time-dependent prayer and notification behavior
+- any UI or visible user flow change
 
-If a change touches any of these, say clearly what you verified and what still needs a manual pass.
+For user-facing changes, capture screenshot evidence when practical as part of the manual QA pass.
+
+For every delivered feature, say clearly what you verified manually, include the relevant screenshot evidence when practical, and call out what still needs a follow-up pass, if anything.
 
 ## Error Handling And Resilience
 
@@ -107,7 +113,7 @@ If a change touches any of these, say clearly what you verified and what still n
 - Empty states should explain what the feature is for and give the user a clear next step.
 - Destructive actions must require clear confirmation.
 - Accessibility matters: keep labels, roles, keyboard interactions, and focus behavior in mind when editing UI.
-- If a visual change is significant, inspect the rendered result instead of trusting code review alone.
+- Inspect rendered UI changes directly before reporting back instead of trusting code review alone.
 - Surface degraded states explicitly. Prefer "Ollama offline", "local-only", or "simulated connection" over vague fallback language.
 
 ## Documentation Rules

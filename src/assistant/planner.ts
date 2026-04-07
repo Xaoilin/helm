@@ -368,7 +368,7 @@ function planQueryLocally(
   return null;
 }
 
-function planTaskCreation(transcript: string): ActionPlan | null {
+function planTaskCreation(transcript: string, context: AssistantCommandContext): ActionPlan | null {
   const matchers = [
     /(?:add|create|make)(?: me)?(?: a| an| new)?\s+(?:(task|todo|habit|daily|goal)\s+)?(?:called\s+|named\s+|to\s+)?(.+)/i,
     /(?:remind me to)\s+(.+)/i,
@@ -381,19 +381,7 @@ function planTaskCreation(transcript: string): ActionPlan | null {
 
     const rawCategory = match.length > 2 ? match[1] : undefined;
     const rawTitle = match.length > 2 ? match[2] : match[1];
-    const extracted = extractTemporalReference(rawTitle || '', {
-      calendarAccounts: [],
-      calendarSources: [],
-      calendarEvents: [],
-      tasks: [],
-      financeAccounts: [],
-      transactions: [],
-      knowledgeEntries: [],
-      knowledgeTopics: [],
-      lifestyleItems: [],
-      workspaces: [],
-      gamification: { totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0, totalTasksCompleted: 0, badges: [] },
-    });
+    const extracted = extractTemporalReference(rawTitle || '', context);
     const { title, priority } = stripPriorityHints(extracted.cleanedText || rawTitle || '');
     if (!title) return null;
 
@@ -660,7 +648,7 @@ function planLocally(
   const queryPlan = planQueryLocally(lower, context, lang);
   if (queryPlan) return queryPlan;
 
-  const taskCreate = planTaskCreation(transcript);
+  const taskCreate = planTaskCreation(transcript, context);
   if (taskCreate) return { plan: taskCreate, source: 'local' };
 
   const taskComplete = planTaskCompletion(transcript);

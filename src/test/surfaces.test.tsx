@@ -253,6 +253,64 @@ describe('DashboardSurface', () => {
     expect(screen.getByText(/Lv\.1/)).toBeInTheDocument();
     expect(screen.getByText('0 XP')).toBeInTheDocument();
   });
+
+  it('should show timed meetings in chronological order', async () => {
+    const today = new Date();
+    const morningStart = new Date(today);
+    morningStart.setHours(10, 15, 0, 0);
+    const morningEnd = new Date(today);
+    morningEnd.setHours(11, 15, 0, 0);
+    const afternoonStart = new Date(today);
+    afternoonStart.setHours(13, 0, 0, 0);
+    const afternoonEnd = new Date(today);
+    afternoonEnd.setHours(13, 20, 0, 0);
+
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'acc-1',
+      name: 'Personal',
+      email: 'alisa@example.com',
+      provider: 'local',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+    }]));
+    localStorage.setItem('helm:calendarSources', JSON.stringify([{
+      id: 'src-1',
+      accountId: 'acc-1',
+      name: 'Personal',
+      color: '#4285f4',
+      visible: true,
+    }]));
+    localStorage.setItem('helm:calendarEvents', JSON.stringify([
+      {
+        id: 'evt-afternoon',
+        sourceId: 'src-1',
+        title: 'Afternoon meeting',
+        description: '',
+        start: afternoonStart.toISOString(),
+        end: afternoonEnd.toISOString(),
+        allDay: false,
+      },
+      {
+        id: 'evt-morning',
+        sourceId: 'src-1',
+        title: 'Morning meeting',
+        description: '',
+        start: morningStart.toISOString(),
+        end: morningEnd.toISOString(),
+        allDay: false,
+      },
+    ]));
+
+    await act(async () => { renderWithProvider(<DashboardSurface />); });
+
+    const agendaCard = screen.getByText("Today's Agenda").closest('.dash-card');
+    expect(agendaCard).not.toBeNull();
+
+    const agendaTitles = Array.from(agendaCard!.querySelectorAll('.dash-agenda-title'))
+      .map(node => node.textContent);
+    expect(agendaTitles).toEqual(['Morning meeting', 'Afternoon meeting']);
+  });
 });
 
 describe('KnowledgeSurface', () => {
