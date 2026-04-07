@@ -8,6 +8,7 @@ import {
   GoogleApiError,
   localEventToGooglePayload,
 } from '../services/googleCalendarApi';
+import { googleCalendarBreaker } from '../services/serviceBreakers';
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -26,6 +27,7 @@ function mockResponse(data: unknown, status = 200) {
 describe('Google Calendar API', () => {
   beforeEach(() => {
     mockFetch.mockReset();
+    googleCalendarBreaker.reset();
   });
 
   describe('fetchCalendarList', () => {
@@ -226,5 +228,54 @@ describe('Google Calendar API', () => {
       expect(err.body).toBe('{"error":"internal"}');
       expect(err.message).toBe('Server error');
     });
+  });
+
+  describe('circuit breaker classification', () => {
+    it('does not open the breaker after repeated 401 auth failures', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          text: () => Promise.resolve('{"error":"invalid_token"}'),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          text: () => Promise.resolve('{"error":"invalid_token"}'),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          text: () => Promise.resolve('{"error":"invalid_token"}'),
+        })
+        .mockResolvedValueOnce(mockResponse({ items: [] }));
+
+      await expect(fetchCalendarList('bad-token-1')).rejects.toThrow(GoogleApiError);
+      await expect(fetchCalendarList('bad-token-2')).rejects.toThrow(GoogleApiError);
+      await expect(fetchCalendarList('bad-token-3')).rejects.toThrow(GoogleApiError);
+
+      await expect(fetchCalendarList('good-token')).resolves.toEqual([]);
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+
+    it('opens the breaker on repeated transient service failures', async () => {
+      for (let i = 0; i < 9; i++) {
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          statusText: 'Unavailable',
+          text: () => Promise.resolve('{"error":"unavailable"}'),
+        });
+      }
+
+      await expect(fetchCalendarList('token-1')).rejects.toThrow(GoogleApiError);
+      await expect(fetchCalendarList('token-2')).rejects.toThrow(GoogleApiError);
+      await expect(fetchCalendarList('token-3')).rejects.toThrow(GoogleApiError);
+      await expect(fetchCalendarList('token-4')).rejects.toThrow('Circuit breaker open');
+      expect(mockFetch).toHaveBeenCalledTimes(9);
+    }, 15000);
   });
 });

@@ -25,6 +25,11 @@ export interface CircuitBreakerOptions {
   cooldownMs?: number;
 }
 
+export interface CircuitCallOptions {
+  /** Return false to avoid counting a failure against the circuit breaker. */
+  shouldRecordFailure?: (error: unknown) => boolean;
+}
+
 export class CircuitBreaker {
   private state: CircuitState = 'closed';
   private failures = 0;
@@ -44,7 +49,7 @@ export class CircuitBreaker {
    * Returns null if circuit is open (fast-fail).
    * Throws if the function throws and circuit is still closed.
    */
-  async call<T>(fn: () => Promise<T>): Promise<T> {
+  async call<T>(fn: () => Promise<T>, options: CircuitCallOptions = {}): Promise<T> {
     // Check if circuit should transition from open to half-open
     if (this.state === 'open') {
       if (Date.now() - this.lastFailureTime >= this.cooldownMs) {
@@ -59,7 +64,10 @@ export class CircuitBreaker {
       this.onSuccess();
       return result;
     } catch (error) {
-      this.onFailure();
+      const shouldRecordFailure = options.shouldRecordFailure?.(error) ?? true;
+      if (shouldRecordFailure) {
+        this.onFailure();
+      }
       throw error;
     }
   }

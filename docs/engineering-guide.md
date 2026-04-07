@@ -98,6 +98,8 @@ For every delivered feature, say clearly what you verified manually, include the
 - Preserve the account -> source -> event relationship in calendar code.
 - Do not break the signed-in Supabase precedence rules in persistence.
 - Keep multi-account Google Calendar behavior intact.
+- Passive Google Calendar sync must stay non-interactive. Reconnect or consent flows should only happen from an explicit user action.
+- Treat Google Calendar auth state as account data, not as an implicit side effect of whether a cached browser token still exists.
 - Treat workspaces and credentials as first-class stored records even though their current product depth is lighter than other domains.
 
 ## Security Notes

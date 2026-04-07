@@ -361,6 +361,8 @@ textarea.form-input {
 .tag-connected { background: #152d1a; color: #3ab553; }
 .tag-disconnected { background: #1e2030; color: #6b6f85; }
 .tag-error { background: #2d1515; color: #ff6b6b; }
+.tag-needs-reconnect { background: #2d2a15; color: #f0c040; }
+.tag-revoked { background: #2d1515; color: #ff6b6b; }
 .tag-mocked { background: #2d2a15; color: #f0c040; }
 .tag-primary { background: #1e2140; color: #a0aaff; font-size: 10px; margin-left: 6px; }
 

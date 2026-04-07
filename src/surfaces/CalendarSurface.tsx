@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
 import { useGoogleSync } from '../hooks/useGoogleSync';
-import { getValidAccessToken } from '../services/googleAuth';
 import {
   createEvent as googleCreateEvent,
   updateEvent as googleUpdateEvent,
@@ -10,6 +9,12 @@ import {
 } from '../services/googleCalendarApi';
 import type { CalendarAccount, CalendarEvent } from '../types/domain';
 import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
+import {
+  GoogleCalendarReconnectRequiredError,
+  getGoogleCalendarPassiveAccessTokenWithRefresh,
+  getGoogleCalendarStatusLabel,
+  isGoogleCalendarAccount,
+} from '../services/googleCalendarAuthManager';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -58,8 +63,8 @@ export default function CalendarSurface() {
   const month = viewDate.getMonth();
 
   // Multi-account sync
-  const googleAccounts = app.calendarAccounts.filter(a => a.provider === 'google' && a.connected && !a.mocked);
-  const { syncState, lastSyncTime, triggerSync } = useGoogleSync();
+  const googleAccounts = app.calendarAccounts.filter(isGoogleCalendarAccount);
+  const { syncState, lastSyncTime, syncError, triggerSync } = useGoogleSync();
   const hasGoogleAccounts = googleAccounts.length > 0;
 
   // Visible sources
@@ -78,7 +83,7 @@ export default function CalendarSurface() {
     const source = app.calendarSources.find(s => s.id === sourceId);
     if (!source) return false;
     const account = app.calendarAccounts.find(a => a.id === source.accountId);
-    return account?.provider === 'google' && account.connected && !account.mocked;
+    return !!account && isGoogleCalendarAccount(account);
   };
 
   const getGoogleCalendarId = (sourceId: string) => {
@@ -214,7 +219,8 @@ export default function CalendarSurface() {
     if (isGoogle && googleCalId && account && cId) {
       setSavingToGoogle(true);
       try {
-        const accessToken = await getValidAccessToken(account.id, cId);
+        const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, cId);
+        const accessToken = token.accessToken;
         const payload = localEventToGooglePayload(eventData);
 
         if (editingEvent && editingEvent.googleEventId) {
@@ -224,8 +230,27 @@ export default function CalendarSurface() {
           const result = await googleCreateEvent(accessToken, googleCalId, payload);
           app.addCalendarEvent({ ...eventData, googleEventId: result.id, googleCalendarId: googleCalId });
         }
+        app.updateCalendarAccount(account.id, {
+          authProvider: token.authProvider,
+          authStatus: 'connected',
+          authEmail: account.email,
+          authExpiresAt: token.authExpiresAt,
+          lastAuthCheckAt: new Date().toISOString(),
+          lastAuthError: undefined,
+          syncError: undefined,
+        });
       } catch (err) {
         console.error('Failed to sync event to Google:', err);
+        if (err instanceof GoogleCalendarReconnectRequiredError) {
+          app.updateCalendarAccount(account.id, {
+            authProvider: err.authProvider,
+            authStatus: err.authStatus,
+            authEmail: account.email,
+            lastAuthCheckAt: new Date().toISOString(),
+            lastAuthError: err.message,
+            syncError: undefined,
+          });
+        }
         if (editingEvent) {
           app.updateCalendarEvent(editingEvent.id, { ...eventData, pendingSync: 'update' });
         } else {
@@ -253,10 +278,30 @@ export default function CalendarSurface() {
 
     if (isGoogle && googleCalId && editingEvent.googleEventId && account && cId) {
       try {
-        const accessToken = await getValidAccessToken(account.id, cId);
+        const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, cId);
+        const accessToken = token.accessToken;
         await googleDeleteEvent(accessToken, googleCalId, editingEvent.googleEventId);
+        app.updateCalendarAccount(account.id, {
+          authProvider: token.authProvider,
+          authStatus: 'connected',
+          authEmail: account.email,
+          authExpiresAt: token.authExpiresAt,
+          lastAuthCheckAt: new Date().toISOString(),
+          lastAuthError: undefined,
+          syncError: undefined,
+        });
       } catch (err) {
         console.error('Failed to delete from Google:', err);
+        if (err instanceof GoogleCalendarReconnectRequiredError) {
+          app.updateCalendarAccount(account.id, {
+            authProvider: err.authProvider,
+            authStatus: err.authStatus,
+            authEmail: account.email,
+            lastAuthCheckAt: new Date().toISOString(),
+            lastAuthError: err.message,
+            syncError: undefined,
+          });
+        }
       }
       app.removeCalendarEvent(editingEvent.id);
     } else {
@@ -275,8 +320,12 @@ export default function CalendarSurface() {
   // ── Sync status ──
   const syncStatusText = () => {
     if (!hasGoogleAccounts) return null;
+    const reconnectCount = googleAccounts.filter(account => account.authStatus === 'needs_reconnect' || account.authStatus === 'revoked').length;
     if (syncState === 'syncing') return <span className="sync-indicator syncing"><span className="spinner" /> Syncing...</span>;
-    if (syncState === 'error') return <span className="sync-indicator error">Sync error</span>;
+    if (reconnectCount > 0) {
+      return <span className="sync-indicator error">{reconnectCount} account{reconnectCount !== 1 ? 's' : ''} need reconnect</span>;
+    }
+    if (syncState === 'error') return <span className="sync-indicator error">{syncError || 'Sync error'}</span>;
     if (lastSyncTime) {
       const ago = Math.round((Date.now() - new Date(lastSyncTime).getTime()) / 60000);
       const timeText = ago < 1 ? 'just now' : ago < 60 ? `${ago}m ago` : `${Math.round(ago / 60)}h ago`;
@@ -534,7 +583,10 @@ export default function CalendarSurface() {
             {googleAccounts.length > 0 && (
               <div className="info-box" style={{ background: '#152d1a', borderColor: '#1e4d28' }}>
                 {googleAccounts.length} Google account{googleAccounts.length > 1 ? 's' : ''} connected.
-                {' '}Manage connections in <button className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => app.navigate('integrations')}>Integrations</button>
+                {googleAccounts.some(account => account.authStatus === 'needs_reconnect' || account.authStatus === 'revoked')
+                  ? ' Some accounts need reconnect before they can sync again.'
+                  : ' Manage connections in '}
+                <button className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: 11, marginLeft: 6 }} onClick={() => app.navigate('integrations')}>Integrations</button>
               </div>
             )}
             {app.calendarAccounts.length === 0 ? (
@@ -549,7 +601,7 @@ export default function CalendarSurface() {
               </div>
             ) : (
               app.calendarAccounts.map(acc => {
-                const isGoogleAcc = acc.provider === 'google' && acc.connected && !acc.mocked;
+                const isGoogleAcc = isGoogleCalendarAccount(acc);
                 return (
                   <div key={acc.id} className="card">
                     <div className="card-header">
@@ -563,9 +615,17 @@ export default function CalendarSurface() {
                           {acc.email} &middot; {acc.provider}
                           {acc.mocked && ' (local only)'}
                           {isGoogleAcc && acc.lastSyncTime && ` \u00b7 Synced ${new Date(acc.lastSyncTime).toLocaleString()}`}
+                          {isGoogleAcc && acc.authProvider === 'profile-google' && ' \u00b7 Linked to HELM sign-in'}
                         </div>
+                        {isGoogleAcc && (acc.lastAuthError || acc.syncError) && (
+                          <div style={{ fontSize: 11, marginTop: 4, color: acc.authStatus === 'error' ? '#f0c040' : '#ff6b6b' }}>
+                            {acc.lastAuthError || acc.syncError}
+                          </div>
+                        )}
                       </div>
-                      <span className={`tag tag-${acc.connected ? 'connected' : 'disconnected'}`} role="status">{acc.connected ? 'Connected' : 'Local'}</span>
+                      <span className={`tag tag-${isGoogleAcc ? (acc.authStatus === 'needs_reconnect' ? 'needs-reconnect' : acc.authStatus || 'connected') : (acc.connected ? 'connected' : 'disconnected')}`} role="status">
+                        {isGoogleAcc ? getGoogleCalendarStatusLabel(acc) : (acc.connected ? 'Connected' : 'Local')}
+                      </span>
                     </div>
                     {/* Color picker */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '8px 0 4px' }}>
@@ -597,7 +657,9 @@ export default function CalendarSurface() {
                       {!acc.isPrimary && <button className="btn btn-secondary btn-sm" onClick={() => app.setPrimaryCalendarAccount(acc.id)}>Set Primary</button>}
                       {!isGoogleAcc && <button className="btn btn-secondary btn-sm" onClick={() => openEditAccount(acc)}>Edit</button>}
                       {isGoogleAcc
-                        ? <button className="btn btn-secondary btn-sm" onClick={() => app.navigate('integrations')}>Manage in Integrations</button>
+                        ? <button className="btn btn-secondary btn-sm" onClick={() => app.navigate('integrations')}>
+                            {acc.authStatus === 'needs_reconnect' || acc.authStatus === 'revoked' ? 'Reconnect in Integrations' : 'Manage in Integrations'}
+                          </button>
                         : deletingAccountId === acc.id
                           ? <div className="confirm-bar" style={{ margin: 0 }} role="alert">
                               Delete account?
