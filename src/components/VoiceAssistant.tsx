@@ -112,6 +112,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
     micDeviceId,
     sttLang,
     onTranscript: processTranscript,
+    onTranscriptPreview: useCallback((text: string) => {
+      setTranscript(text);
+    }, []),
     onListeningStart: useCallback(() => {
       setState('listening');
       setTranscript('');
@@ -126,7 +129,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     }, []),
     onProcessingStart: useCallback(() => {
       setState('processing');
-      setTranscript('Processing audio...');
+      setTranscript(currentTranscript => currentTranscript || 'Processing audio...');
     }, []),
   });
 
