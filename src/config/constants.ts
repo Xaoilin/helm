@@ -25,6 +25,8 @@ export const TIMING = {
   AUTH_LOAD_DEBOUNCE: 500,
   /** MediaRecorder chunk collection interval */
   CHUNK_INTERVAL: 250,
+  /** Grace period before forcing a live Deepgram socket closed */
+  DEEPGRAM_LIVE_CLOSE_GRACE: 250,
   /** Chrome SpeechRecognition test timeout */
   CHROME_STT_TIMEOUT: 5000,
   /** Chrome SpeechRecognition abort delay after start */
@@ -60,6 +62,8 @@ export const API_TIMEOUT = {
   MONZO: 10_000,
   /** Deepgram speech-to-text transcription */
   DEEPGRAM_STT: 15_000,
+  /** Deepgram live transcript preview connection */
+  DEEPGRAM_LIVE_CONNECT: 5_000,
   /** Ollama LLM chat completion */
   OLLAMA_CHAT: 30_000,
   /** Hosted assistant chat completion via Supabase Edge Function */

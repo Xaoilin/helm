@@ -16,7 +16,7 @@ Use this matrix when updating docs or UI copy. The allowed states are:
 | Chat assistant with hosted OpenAI | `real` | Real when Supabase is configured, the `assistant-openai` Edge Function is deployed, and the user is signed in. |
 | Chat assistant with Ollama | `real` | Real when Ollama is reachable locally. |
 | Chat assistant without a live AI provider | `local-only/degraded` | Uses a grounded local capability runtime for navigation, tasks, calendar actions, finance logging, and knowledge notes, but open-ended planning still depends on hosted OpenAI or local Ollama. |
-| Voice assistant | `local-only/degraded` | Shares the grounded capability runtime with chat. Open-ended reasoning is real when hosted OpenAI or Ollama is available, but STT/TTS coverage still degrades when Deepgram or voice output providers are unavailable. |
+| Voice assistant | `local-only/degraded` | Shares the grounded capability runtime with chat. Open-ended reasoning is real when hosted OpenAI or Ollama is available, voice capture now shows a live transcript preview, and STT/TTS coverage still degrades when Deepgram or voice output providers are unavailable. |
 | Wake word | `real` | OpenWakeWord runs locally in-browser via WASM. |
 | Deepgram speech-to-text | `real` | Requires a configured API key. |
 | Browser speech fallback | `local-only/degraded` | Usable where supported, less reliable than Deepgram. |

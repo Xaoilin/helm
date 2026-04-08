@@ -50,7 +50,7 @@ npm run check
 - Supabase auth and sync are real when configured.
 - Hosted GPT-5.4-mini assistant replies are real when Supabase is configured, the `assistant-openai` Edge Function is deployed, and the user is signed in.
 - Ollama-powered assistant responses are real when Ollama is running locally.
-- Voice input degrades when Deepgram is unavailable and can fall back to browser speech APIs where supported.
+- Voice input shows a live transcript preview while recording when Deepgram or the browser fallback is available, then confirms the final command after you stop.
 - Several integrations remain placeholder or simulated.
 - Credentials stored in the local vault are not encrypted at rest in this MVP.
 
