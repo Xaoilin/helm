@@ -1,13 +1,15 @@
 import { useState } from 'react';
+import AiDebug from '../components/debug/AiDebug';
 import WakeWordDebug from '../components/debug/WakeWordDebug';
 
-type DebugTab = 'wakeword' | 'audio' | 'network';
+type DebugTab = 'wakeword' | 'ai' | 'audio' | 'network';
 
 export default function DebugSurface() {
   const [tab, setTab] = useState<DebugTab>('wakeword');
 
   const tabs: { id: DebugTab; label: string; icon: string }[] = [
     { id: 'wakeword', label: 'Wake Word', icon: '🎤' },
+    { id: 'ai', label: 'AI Assistant', icon: '🧠' },
     { id: 'audio', label: 'Audio Pipeline', icon: '🔊' },
     { id: 'network', label: 'Network / APIs', icon: '🌐' },
   ];
@@ -35,6 +37,7 @@ export default function DebugSurface() {
         </div>
 
         {tab === 'wakeword' && <WakeWordDebug />}
+        {tab === 'ai' && <AiDebug />}
         {tab === 'audio' && (
           <div className="card" style={{ padding: 20, color: '#6b6f85' }}>
             Audio pipeline debugging — coming soon. Will test Deepgram STT, ElevenLabs TTS, and browser audio routing.
@@ -42,7 +45,7 @@ export default function DebugSurface() {
         )}
         {tab === 'network' && (
           <div className="card" style={{ padding: 20, color: '#6b6f85' }}>
-            Network / API debugging — coming soon. Will test Ollama, Supabase, Google Calendar, and Monzo connectivity with circuit breaker status.
+            Network / API debugging — coming soon. AI runtime checks now live under the AI Assistant tab, and this network tab will grow into broader service diagnostics for Google Calendar, Monzo, and external APIs.
           </div>
         )}
       </div>
