@@ -261,6 +261,8 @@ export interface GamificationProfile {
 }
 
 // ── Settings ──
+export type AssistantProvider = 'auto' | 'ollama' | 'hosted';
+
 export interface Settings {
   credentialSource: 'onepassword-first' | 'local-only';
   theme: 'dark' | 'light';
@@ -281,6 +283,7 @@ export interface Settings {
   wakeWordEnabled?: boolean;
   deepgramApiKey?: string;
   assistantLanguage?: 'en' | 'ar';
+  assistantProvider?: AssistantProvider;
   ollamaEndpoint?: string;
   ollamaModel?: string;
 }

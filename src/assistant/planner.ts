@@ -1,5 +1,7 @@
-import { OLLAMA_ENDPOINT } from '../config';
+import type { AssistantProvider } from '../types/domain';
+import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import { LIMITS, TIMING } from '../config/constants';
+import { chatWithHostedAssistant, testHostedAssistantConnection } from '../services/hostedAssistantApi';
 import { chatWithOllama, testOllamaConnection, type OllamaMessage } from '../services/ollamaApi';
 import { CAPABILITIES, listCapabilitiesForPrompt } from './capabilities';
 import { SURFACE_LABELS, resolveCalendarEventReference, resolveSurfaceReference } from './entityResolver';
@@ -16,8 +18,14 @@ import { extractTemporalReference } from './temporalResolver';
 export interface PlannerResult {
   plan: ActionPlan;
   referencedEntities?: AssistantEntityReference[];
-  source: 'local' | 'ollama' | 'degraded';
-  degradedReason?: 'ollama_offline' | 'ollama_error' | 'unsupported_without_ollama';
+  source: 'local' | 'ollama' | 'openai' | 'degraded';
+  degradedReason?:
+    | 'ollama_offline'
+    | 'ollama_error'
+    | 'hosted_sign_in_required'
+    | 'hosted_not_configured'
+    | 'hosted_error'
+    | 'unsupported_without_ai';
 }
 
 const NAVIGATION_VERBS = ['open', 'go to', 'show me', 'navigate', 'switch to', 'take me to', 'افتح', 'اذهب'];
@@ -81,20 +89,33 @@ const RESPONSES = {
     en: 'Ollama is offline. I can still handle grounded app actions like navigation, tasks, event scheduling, finance logging, and knowledge notes when the request is explicit.',
     ar: 'Ollama غير متصل. ما زال بإمكاني تنفيذ أوامر التطبيق الواضحة مثل التنقل والمهام والمواعيد والمالية والملاحظات.',
   },
+  hostedSignInRequired: {
+    en: 'Hosted AI is available after you sign in to HELM. I can still handle grounded app actions like navigation, tasks, event scheduling, finance logging, and knowledge notes when the request is explicit.',
+    ar: 'الذكاء الاصطناعي المستضاف متاح بعد تسجيل الدخول إلى HELM. ما زال بإمكاني تنفيذ أوامر التطبيق الواضحة مثل التنقل والمهام والمواعيد والمالية والملاحظات.',
+  },
+  hostedNotConfigured: {
+    en: 'Hosted AI is not configured in this build yet. I can still handle grounded app actions like navigation, tasks, event scheduling, finance logging, and knowledge notes when the request is explicit.',
+    ar: 'الذكاء الاصطناعي المستضاف غير مُعدّ في هذا الإصدار بعد. ما زال بإمكاني تنفيذ أوامر التطبيق الواضحة مثل التنقل والمهام والمواعيد والمالية والملاحظات.',
+  },
   ollamaError: {
     en: (message: string) => `I couldn't reach Ollama (${message}). I stayed on the grounded local assistant flow.`,
     ar: (message: string) => `تعذر علي الاتصال بـ Ollama (${message}). بقيت على مسار المساعد المحلي.`,
   },
+  hostedError: {
+    en: (message: string) => `I couldn't reach the hosted assistant (${message}). I stayed on the grounded local assistant flow.`,
+    ar: (message: string) => `تعذر علي الاتصال بالمساعد المستضاف (${message}). بقيت على مسار المساعد المحلي.`,
+  },
   unknown: {
     en: (transcript: string) =>
-      `I heard "${transcript}" but I need either a clearer instruction or Ollama online for open-ended help.`,
+      `I heard "${transcript}" but I need either a clearer instruction or an AI provider online for open-ended help.`,
     ar: (transcript: string) =>
-      `سمعت "${transcript}" لكني أحتاج إلى طلب أوضح أو إلى تشغيل Ollama للمساعدة المفتوحة.`,
+      `سمعت "${transcript}" لكني أحتاج إلى طلب أوضح أو إلى توفر مزود ذكاء اصطناعي للمساعدة المفتوحة.`,
   },
 };
 
 let cachedEndpoint: string | null = null;
 let ollamaAvailability: boolean | null = null;
+let hostedAvailability: 'available' | 'sign_in_required' | 'not_configured' | 'unavailable' | null = null;
 
 function normaliseText(value: string): string {
   return value
@@ -693,9 +714,102 @@ export async function isOllamaAvailable(endpoint: string = OLLAMA_ENDPOINT): Pro
 export function resetOllamaAvailability(): void {
   cachedEndpoint = null;
   ollamaAvailability = null;
+  hostedAvailability = null;
 }
 
-export async function planAssistantTurn(
+async function getHostedAvailability(): Promise<'available' | 'sign_in_required' | 'not_configured' | 'unavailable'> {
+  if (hostedAvailability) {
+    return hostedAvailability;
+  }
+
+  const status = await testHostedAssistantConnection();
+  hostedAvailability = status.status;
+  setTimeout(() => {
+    hostedAvailability = null;
+  }, TIMING.HOSTED_ASSISTANT_CACHE_EXPIRY);
+
+  return hostedAvailability;
+}
+
+function getAssistantProvider(provider?: AssistantProvider): AssistantProvider {
+  return provider || DEFAULT_ASSISTANT_PROVIDER;
+}
+
+async function planWithHostedAssistant(
+  transcript: string,
+  context: AssistantCommandContext,
+  options: {
+    lang: AssistantLang;
+    conversationHistory?: AssistantConversationMessage[];
+    dialogState?: AssistantDialogState;
+  },
+): Promise<PlannerResult> {
+  const availability = await getHostedAvailability();
+  if (availability === 'sign_in_required') {
+    return {
+      plan: buildAnswerPlan(RESPONSES.hostedSignInRequired[options.lang]),
+      source: 'degraded',
+      degradedReason: 'hosted_sign_in_required',
+    };
+  }
+
+  if (availability === 'not_configured') {
+    return {
+      plan: buildAnswerPlan(RESPONSES.hostedNotConfigured[options.lang]),
+      source: 'degraded',
+      degradedReason: 'hosted_not_configured',
+    };
+  }
+
+  if (availability !== 'available') {
+    return {
+      plan: buildAnswerPlan(RESPONSES.hostedError[options.lang]('Hosted AI unavailable')),
+      source: 'degraded',
+      degradedReason: 'hosted_error',
+    };
+  }
+
+  try {
+    const response = await chatWithHostedAssistant(
+      buildPlannerMessages(transcript, context, options.lang, options.conversationHistory, options.dialogState),
+      actionPlanJsonSchema,
+    );
+    const plan = parsePlanFromModelResponse(response);
+
+    if (!plan) {
+      return {
+        plan: buildAnswerPlan(response.trim() || RESPONSES.unknown[options.lang](transcript)),
+        source: 'openai',
+      };
+    }
+
+    const riskyIds = new Set(CAPABILITIES.filter(capability => capability.confirmationRule === 'always').map(capability => capability.id));
+    return {
+      plan: {
+        ...plan,
+        steps: plan.steps.map(step => ({
+          ...step,
+          requiresConfirmation: step.requiresConfirmation || riskyIds.has(step.capability),
+        })),
+      },
+      source: 'openai',
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    hostedAvailability = 'unavailable';
+    setTimeout(() => {
+      hostedAvailability = null;
+    }, TIMING.HOSTED_ASSISTANT_UNAVAILABLE_COOLDOWN);
+
+    return {
+      plan: buildAnswerPlan(RESPONSES.hostedError[options.lang](message)),
+      source: 'degraded',
+      degradedReason: 'hosted_error',
+    };
+  }
+}
+
+async function planWithOllama(
   transcript: string,
   context: AssistantCommandContext,
   options: {
@@ -706,11 +820,6 @@ export async function planAssistantTurn(
     dialogState?: AssistantDialogState;
   },
 ): Promise<PlannerResult> {
-  const local = planLocally(transcript, context, options.lang, options.dialogState);
-  if (local) {
-    return local;
-  }
-
   const endpoint = options.endpoint || OLLAMA_ENDPOINT;
   const available = await isOllamaAvailable(endpoint);
   if (!available) {
@@ -761,6 +870,45 @@ export async function planAssistantTurn(
       degradedReason: 'ollama_error',
     };
   }
+}
+
+export async function planAssistantTurn(
+  transcript: string,
+  context: AssistantCommandContext,
+  options: {
+    lang: AssistantLang;
+    conversationHistory?: AssistantConversationMessage[];
+    provider?: AssistantProvider;
+    endpoint?: string;
+    model?: string;
+    dialogState?: AssistantDialogState;
+  },
+): Promise<PlannerResult> {
+  const local = planLocally(transcript, context, options.lang, options.dialogState);
+  if (local) {
+    return local;
+  }
+
+  const provider = getAssistantProvider(options.provider);
+
+  if (provider === 'hosted') {
+    return planWithHostedAssistant(transcript, context, options);
+  }
+
+  if (provider === 'ollama') {
+    return planWithOllama(transcript, context, options);
+  }
+
+  const hosted = await planWithHostedAssistant(transcript, context, options);
+  if (hosted.source === 'openai') {
+    return hosted;
+  }
+  if (hosted.degradedReason !== 'hosted_sign_in_required' && hosted.degradedReason !== 'hosted_not_configured') {
+    const ollama = await planWithOllama(transcript, context, options);
+    return ollama.source === 'ollama' ? ollama : hosted;
+  }
+
+  return planWithOllama(transcript, context, options);
 }
 
 export { SURFACE_LABELS };

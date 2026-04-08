@@ -9,7 +9,8 @@ The current stack is:
 - Tauri 2 for desktop packaging and local file access
 - React 19 with TypeScript 5 and Vite 8 for the UI
 - Supabase for optional sign-in and cloud sync
-- Ollama, Deepgram, ElevenLabs, and OpenWakeWord for assistant features
+- Supabase Edge Functions plus OpenAI or local Ollama for assistant planning
+- Deepgram, ElevenLabs, and OpenWakeWord for voice features
 
 ## Runtime Map
 
@@ -136,13 +137,21 @@ Google-backed calendar accounts also carry per-account auth metadata such as pro
 
 Current assistant-related services live in:
 
-- `src/services/voiceAssistant.ts`
+- `src/assistant/`
+- `src/services/assistantRuntime.ts`
+- `src/services/hostedAssistantApi.ts`
 - `src/services/ollamaApi.ts`
 - `src/services/deepgramSTT.ts`
 - `src/components/VoiceAssistant.tsx`
 - `src/store/contexts/ChatContext.tsx`
+- `supabase/functions/assistant-openai/`
 
-Today the voice path uses a keyword-first parser with local read-only shortcuts and an Ollama fallback that emits action tags. Chat has a separate Ollama path that also parses action tags. This duplication is a known architecture seam and is the main reason the command-system redesign lives in `docs/assistant-command-architecture.md`.
+Both chat and voice now route through the shared grounded assistant runtime under `src/assistant/`. Deterministic local capabilities handle explicit app actions first, then open-ended planning can use either:
+
+- hosted GPT-5.4-mini through the `assistant-openai` Supabase Edge Function for signed-in web builds
+- local Ollama for desktop or local-first setups
+
+The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally.
 
 ### Other external services
 

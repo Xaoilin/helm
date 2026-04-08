@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "llm-compare": "node ./scripts/compare-assistant-models.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "check": "npm run lint && npm run typecheck && npm run test && npm run test:e2e && npm run build",

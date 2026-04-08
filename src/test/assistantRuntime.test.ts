@@ -12,10 +12,16 @@ import type {
   Transaction,
 } from '../types/domain';
 import { chatWithOllama, testOllamaConnection } from '../services/ollamaApi';
+import { chatWithHostedAssistant, testHostedAssistantConnection } from '../services/hostedAssistantApi';
 
 vi.mock('../services/ollamaApi', () => ({
   chatWithOllama: vi.fn(),
   testOllamaConnection: vi.fn(),
+}));
+
+vi.mock('../services/hostedAssistantApi', () => ({
+  chatWithHostedAssistant: vi.fn(),
+  testHostedAssistantConnection: vi.fn(),
 }));
 
 function makeTask(overrides: Partial<Task> = {}): Task {
@@ -144,6 +150,8 @@ describe('assistant runtime', () => {
     vi.clearAllMocks();
     vi.mocked(testOllamaConnection).mockResolvedValue(false);
     vi.mocked(chatWithOllama).mockResolvedValue('');
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'sign_in_required' });
+    vi.mocked(chatWithHostedAssistant).mockResolvedValue('');
   });
 
   it('uses the shared runtime to execute local navigation commands', async () => {
@@ -268,6 +276,17 @@ describe('assistant runtime', () => {
     expect(result.message).toContain('Ollama is offline');
   });
 
+  it('returns truthful hosted-AI messaging when sign-in is required', async () => {
+    const result = await processAssistantCommand('brainstorm my week', makeContext(), {
+      lang: 'en',
+      provider: 'hosted',
+    });
+
+    expect(result.source).toBe('degraded');
+    expect(result.degradedReason).toBe('hosted_sign_in_required');
+    expect(result.message).toContain('Hosted AI is available after you sign in');
+  });
+
   it('parses structured Ollama plans instead of action tags', async () => {
     vi.mocked(testOllamaConnection).mockResolvedValue(true);
     vi.mocked(chatWithOllama).mockResolvedValue(JSON.stringify({
@@ -295,6 +314,41 @@ describe('assistant runtime', () => {
     });
 
     expect(result.source).toBe('ollama');
+    expect(addKnowledgeEntry).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Patience note',
+      content: 'Patience brings steadiness.',
+    }));
+    expect(result.execution?.steps[0].capability).toBe('knowledge.create_entry');
+  });
+
+  it('parses structured hosted plans instead of falling back to free-form text', async () => {
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available' });
+    vi.mocked(chatWithHostedAssistant).mockResolvedValue(JSON.stringify({
+      mode: 'act',
+      response: 'Saving that note.',
+      confidence: 0.92,
+      steps: [{
+        capability: 'knowledge.create_entry',
+        args: {
+          title: 'Patience note',
+          content: 'Patience brings steadiness.',
+          topicQuery: 'Tazkiyah',
+        },
+      }],
+    }));
+
+    const addKnowledgeEntry = vi.fn(() => 'entry-hosted');
+    const result = await processAssistantCommand('capture something thoughtful about patience for later', makeContext(), {
+      lang: 'en',
+      provider: 'hosted',
+      handlers: {
+        addTask: vi.fn(() => 'unused'),
+        updateTask: vi.fn(),
+        addKnowledgeEntry,
+      },
+    });
+
+    expect(result.source).toBe('openai');
     expect(addKnowledgeEntry).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Patience note',
       content: 'Patience brings steadiness.',

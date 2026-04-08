@@ -82,6 +82,7 @@ export async function runAssistantTurn(
   const planning = await planAssistantTurn(transcript, context, {
     lang,
     conversationHistory: options.conversationHistory,
+    provider: options.provider,
     endpoint: options.endpoint,
     model: options.model,
     dialogState,

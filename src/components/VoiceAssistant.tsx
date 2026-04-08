@@ -80,6 +80,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
       lang,
       conversationHistory: chatHistoryRef.current,
       dialogState: dialogStateRef.current,
+      provider: app.settings.assistantProvider,
       endpoint: ollamaEndpoint,
       model: ollamaModel,
       handlers: {

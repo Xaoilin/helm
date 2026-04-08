@@ -41,6 +41,10 @@ export const TIMING = {
   OLLAMA_CACHE_EXPIRY: 60000,
   /** Ollama unavailable cooldown after failure */
   OLLAMA_UNAVAILABLE_COOLDOWN: 30000,
+  /** Hosted assistant availability cache expiry */
+  HOSTED_ASSISTANT_CACHE_EXPIRY: 60000,
+  /** Hosted assistant unavailable cooldown after failure */
+  HOSTED_ASSISTANT_UNAVAILABLE_COOLDOWN: 30000,
   /** Google Calendar auto-sync throttle */
   SYNC_THROTTLE: 15 * 60 * 1000,
   /** Level-up flash animation duration */
@@ -58,6 +62,8 @@ export const API_TIMEOUT = {
   DEEPGRAM_STT: 15_000,
   /** Ollama LLM chat completion */
   OLLAMA_CHAT: 30_000,
+  /** Hosted assistant chat completion via Supabase Edge Function */
+  HOSTED_ASSISTANT_CHAT: 30_000,
   /** ElevenLabs text-to-speech */
   ELEVENLABS_TTS: 10_000,
   /** AlAdhan prayer times API */

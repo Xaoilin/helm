@@ -76,8 +76,7 @@ describe('ChatSurface', () => {
 
   it('should show Ollama status indicator', async () => {
     await act(async () => { renderWithProvider(<ChatSurface />); });
-    // In test env, Ollama check starts as "Checking..." then resolves to offline
-    const matches = screen.getAllByText(/Checking|Ollama/);
+    const matches = screen.getAllByText(/Checking assistant|Ollama|Hosted AI|No AI provider/i);
     expect(matches.length).toBeGreaterThan(0);
   });
 
@@ -147,6 +146,12 @@ describe('SettingsSurface', () => {
   it('should have default calendar tab selector', async () => {
     await act(async () => { renderWithProvider(<SettingsSurface />); });
     expect(screen.getByText('Default calendar view')).toBeInTheDocument();
+  });
+
+  it('should show assistant mode controls', async () => {
+    await act(async () => { renderWithProvider(<SettingsSurface />); });
+    expect(screen.getByText('Open-ended AI mode')).toBeInTheDocument();
+    expect(screen.getByText('Runtime status')).toBeInTheDocument();
   });
 
   it('should have credential source selector', async () => {

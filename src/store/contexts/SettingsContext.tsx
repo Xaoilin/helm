@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import type { Settings, Integration } from '../../types/domain';
+import { DEFAULT_ASSISTANT_PROVIDER } from '../../config';
 import { loadStore, saveStore } from '../persistence';
 
 // ── Defaults ──
@@ -8,6 +9,7 @@ const defaultSettings: Settings = {
   theme: 'dark',
   dataRetentionDays: 90,
   telemetry: false,
+  assistantProvider: DEFAULT_ASSISTANT_PROVIDER,
 };
 
 const defaultIntegrations: Integration[] = [

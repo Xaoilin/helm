@@ -22,6 +22,13 @@ export const ollamaBreaker = new CircuitBreaker({
   cooldownMs: 30_000,
 });
 
+/** Hosted assistant — opens after 2 failures, 30s cooldown (fast recovery for transient provider issues) */
+export const hostedAssistantBreaker = new CircuitBreaker({
+  name: 'HostedAssistant',
+  maxFailures: 2,
+  cooldownMs: 30_000,
+});
+
 /** Deepgram STT — opens after 3 failures, 60s cooldown */
 export const deepgramBreaker = new CircuitBreaker({
   name: 'Deepgram',

@@ -1,7 +1,44 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
-import { testOllamaConnection } from '../services/ollamaApi';
-import { OLLAMA_ENDPOINT } from '../config';
+import { getCurrentUserId, isAuthenticated, isSupabaseReady } from '../store/supabase';
+import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
+import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
+
+function defaultAssistantStatus(): AssistantRuntimeStatus {
+  return {
+    activeProvider: null,
+    state: 'checking',
+    headline: 'Checking assistant runtime...',
+    detail: 'Lina is checking which AI provider is currently available.',
+  };
+}
+
+function getStatusBadge(status: AssistantRuntimeStatus): string {
+  switch (status.state) {
+    case 'ready':
+      return `🟢 ${status.headline}`;
+    case 'sign_in_required':
+    case 'not_configured':
+      return `🟡 ${status.headline}`;
+    case 'offline':
+      return `🔴 ${status.headline}`;
+    case 'checking':
+    default:
+      return 'Checking assistant...';
+  }
+}
+
+function getEmptyStateMessage(status: AssistantRuntimeStatus): string {
+  if (status.state === 'ready' && status.activeProvider === 'hosted') {
+    return 'Lina is powered by hosted GPT-5.4-mini. Ask anything about your schedule, tasks, or goals.';
+  }
+
+  if (status.state === 'ready' && status.activeProvider === 'ollama') {
+    return 'Lina is powered by your local Ollama setup. Ask anything about your schedule, tasks, or goals.';
+  }
+
+  return `${status.detail} Without a live AI provider, Lina still handles built-in commands like navigation, task updates, event scheduling, finance logging, and knowledge notes.`;
+}
 
 export default function ChatSurface() {
   const app = useApp();
@@ -10,16 +47,25 @@ export default function ChatSurface() {
   const [editTitle, setEditTitle] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
+  const [assistantStatus, setAssistantStatus] = useState<AssistantRuntimeStatus>(defaultAssistantStatus);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const authSyncKey = `${isSupabaseReady()}:${isAuthenticated()}:${getCurrentUserId() || ''}`;
+  const selectedProvider = getAssistantProviderSetting(app.settings);
 
   const activeConv = app.conversations.find(c => c.id === app.activeConversationId);
 
-  // Check Ollama connection on mount
   useEffect(() => {
-    const endpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
-    testOllamaConnection(endpoint).then(setOllamaConnected);
-  }, [app.settings.ollamaEndpoint]);
+    let cancelled = false;
+    getAssistantRuntimeStatus({
+      assistantProvider: selectedProvider,
+      ollamaEndpoint: app.settings.ollamaEndpoint,
+    }).then(status => {
+      if (!cancelled) setAssistantStatus(status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProvider, app.settings.ollamaEndpoint, authSyncKey]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -130,8 +176,7 @@ export default function ChatSurface() {
         </div>
         <div style={{ padding: '8px 16px', borderTop: '1px solid #1e2030' }}>
           <span className="mocked-indicator" role="status">
-            {ollamaConnected === null ? 'Checking...' :
-             ollamaConnected ? '🟢 Ollama connected' : '🔴 Ollama offline — built-in commands only'}
+            {getStatusBadge(assistantStatus)}
           </span>
         </div>
       </div>
@@ -146,9 +191,7 @@ export default function ChatSurface() {
                   <div className="empty-icon">&#128172;</div>
                   <h3>Start a conversation</h3>
                   <p>
-                    {ollamaConnected
-                      ? 'Lina is powered by your local Ollama LLM. Ask anything about your schedule, tasks, or goals.'
-                      : 'Start Ollama locally for open-ended AI replies. Without it, Lina can still handle built-in commands like navigation and task updates.'}
+                    {getEmptyStateMessage(assistantStatus)}
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
                     {quickPrompts.map(p => (
@@ -197,9 +240,7 @@ export default function ChatSurface() {
             <div className="empty-icon">&#128172;</div>
             <h3>Lina Assistant</h3>
             <p>
-              {ollamaConnected
-                ? 'Your local AI assistant powered by Ollama. Create a conversation to get started.'
-                : 'Start Ollama locally for open-ended AI conversations. Without it, Lina stays available for built-in commands and status-aware responses.'}
+              {getEmptyStateMessage(assistantStatus)}
             </p>
             <button className="btn btn-primary" onClick={() => app.createConversation()}>New conversation</button>
             {app.conversations.length === 0 && (

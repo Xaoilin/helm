@@ -14,9 +14,13 @@ const {
   fetchEventsMock: vi.fn(),
 }));
 
-vi.mock('../config', () => ({
-  GOOGLE_OAUTH_CLIENT_ID: 'test-client-id',
-}));
+vi.mock('../config', async () => {
+  const actual = await vi.importActual<typeof import('../config')>('../config');
+  return {
+    ...actual,
+    GOOGLE_OAUTH_CLIENT_ID: 'test-client-id',
+  };
+});
 
 vi.mock('../services/googleCalendarApi', async () => {
   const actual = await vi.importActual<typeof import('../services/googleCalendarApi')>('../services/googleCalendarApi');
