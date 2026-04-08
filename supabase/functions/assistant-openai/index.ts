@@ -1,4 +1,5 @@
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { extractOutputText } from './openaiResponse.ts';
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') || 'gpt-5.4-mini';
@@ -31,14 +32,6 @@ function getOpenAIErrorMessage(data: unknown): string {
   }
 
   return 'Unknown OpenAI error';
-}
-
-function extractOutputText(data: unknown): string {
-  if (typeof data !== 'object' || data === null || !('output_text' in data) || typeof data.output_text !== 'string') {
-    return '';
-  }
-
-  return data.output_text;
 }
 
 function buildPayload(messages: AssistantMessage[], format: unknown) {
