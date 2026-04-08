@@ -16,7 +16,7 @@ Implemented pieces:
 - temporal resolution for relative dates, clock times, part-of-day phrases, and basic prayer-based references
 - deterministic execution for navigation, task creation/completion, calendar creation/rescheduling, finance logging, and knowledge entry creation
 - shared dialog state with confirmation handling for risky actions such as event rescheduling
-- structured Ollama fallback planning instead of action-tag parsing
+- structured provider-backed planning through hosted OpenAI or local Ollama instead of action-tag parsing
 
 Still intentionally lightweight:
 
@@ -49,7 +49,7 @@ These are not keyword problems. They are grounding problems.
 
 ## Recommended Direction
 
-Use Ollama tool calling and structured outputs as the transport layer, but place them inside a grounded runtime with deterministic execution.
+Use structured outputs from hosted OpenAI or local Ollama as the transport layer, but place them inside a grounded runtime with deterministic execution.
 
 The architecture should combine:
 
@@ -232,7 +232,7 @@ That is the wrong abstraction for an app we own. Lina should work with semantic 
 
 ## Tool Calling's Actual Role
 
-Ollama tool calling is still useful, but it should be the transport between the model and the capability runtime, not the entire design.
+Hosted OpenAI or Ollama structured planning is still useful, but it should be the transport between the model and the capability runtime, not the entire design.
 
 A good shape is:
 

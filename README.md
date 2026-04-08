@@ -24,6 +24,7 @@ Open the app in the browser for web development, or run the Tauri shell separate
 
 ```bash
 npm run lint
+npm run llm-compare
 npm run typecheck
 npm run test
 npm run test:e2e
@@ -32,6 +33,8 @@ npm run check
 ```
 
 `npm run check` is the full local validation gate and runs lint, typecheck, unit tests, E2E, and build in sequence.
+
+`npm run llm-compare` compares `gpt-5.4-mini` and `claude-sonnet-4-6` on HELM-style prompts using your local `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`, then writes a Markdown report to `test-results/`.
 
 ## Project Map
 
@@ -45,12 +48,36 @@ npm run check
 
 - Google Calendar OAuth and sync are real.
 - Supabase auth and sync are real when configured.
+- Hosted GPT-5.4-mini assistant replies are real when Supabase is configured, the `assistant-openai` Edge Function is deployed, and the user is signed in.
 - Ollama-powered assistant responses are real when Ollama is running locally.
 - Voice input degrades when Deepgram is unavailable and can fall back to browser speech APIs where supported.
 - Several integrations remain placeholder or simulated.
 - Credentials stored in the local vault are not encrypted at rest in this MVP.
 
 Use [docs/feature-status.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/feature-status.md) for the authoritative feature-by-feature status instead of inferring from UI copy.
+
+## Hosted Assistant Deployment
+
+The GitHub Pages build now defaults to hosted GPT-5.4-mini for open-ended assistant turns. The client never receives the OpenAI key directly; it calls a Supabase Edge Function instead.
+
+One-time setup:
+
+```bash
+supabase functions deploy assistant-openai
+```
+
+Set these secrets in the `assistant-openai` function environment before you rely on the hosted path:
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL` (recommended: `gpt-5.4-mini`)
+
+For automated deploys on merge, add these GitHub repository secrets so `.github/workflows/deploy-supabase-assistant.yml` can sync the function:
+
+- `SUPABASE_ACCESS_TOKEN`
+- `SUPABASE_PROJECT_REF`
+- `OPENAI_API_KEY`
+
+The function is intended for signed-in HELM users. If hosted AI is not configured or the user is signed out, Lina falls back to local Ollama when available and otherwise stays on grounded built-in commands.
 
 ## Working Rules
 
@@ -62,5 +89,5 @@ Use [docs/feature-status.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/f
 ## Deployment And CI
 
 - Pull requests should satisfy `lint`, `typecheck`, `unit`, `e2e`, and `build`.
-- GitHub Pages deploys only after the CI workflow succeeds on `master`.
+- GitHub Pages deploys only after the CI workflow succeeds on `master`, and that build defaults the website to hosted GPT-5.4-mini mode.
 - `master` is protected to require pull requests plus the `lint`, `typecheck`, `unit`, `e2e`, and `build` checks before merge.

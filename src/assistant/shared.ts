@@ -8,6 +8,7 @@ import type {
   KnowledgeTopic,
   LifestyleItem,
   Settings,
+  AssistantProvider,
   Surface,
   Task,
   Transaction,
@@ -94,6 +95,7 @@ export interface AssistantActionHandlers {
 export interface AssistantCommandOptions {
   lang?: AssistantLang;
   conversationHistory?: AssistantConversationMessage[];
+  provider?: AssistantProvider;
   endpoint?: string;
   model?: string;
   dialogState?: AssistantDialogState;
@@ -119,6 +121,12 @@ export interface AssistantCommandResult {
   dialogState: AssistantDialogState;
   execution?: AssistantExecutionResult;
   referencedEntities?: AssistantEntityReference[];
-  degradedReason?: 'ollama_offline' | 'ollama_error' | 'unsupported_without_ollama';
-  source: 'local' | 'ollama' | 'degraded';
+  degradedReason?:
+    | 'ollama_offline'
+    | 'ollama_error'
+    | 'hosted_sign_in_required'
+    | 'hosted_not_configured'
+    | 'hosted_error'
+    | 'unsupported_without_ai';
+  source: 'local' | 'ollama' | 'openai' | 'degraded';
 }

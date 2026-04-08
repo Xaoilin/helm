@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { isSupabaseReady, isAuthenticated, getCurrentUserId } from '../store/supabase';
-import { ELEVENLABS_API_KEY, OLLAMA_ENDPOINT } from '../config';
+import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
+import { DEFAULT_ASSISTANT_PROVIDER, ELEVENLABS_API_KEY, HOSTED_ASSISTANT_MODEL, OLLAMA_ENDPOINT } from '../config';
 import { DEFAULT_PROFILE } from '../services/gamification';
+import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
 import { testOllamaConnection, listOllamaModels } from '../services/ollamaApi';
 
 export default function SettingsSurface() {
@@ -13,6 +15,14 @@ export default function SettingsSurface() {
 
   // Goal tags
   const [newTag, setNewTag] = useState('');
+  const [assistantStatus, setAssistantStatus] = useState<AssistantRuntimeStatus>({
+    activeProvider: null,
+    state: 'checking',
+    headline: 'Checking assistant runtime...',
+    detail: 'Lina is checking which AI provider is currently available.',
+  });
+  const selectedProvider = getAssistantProviderSetting(settings);
+  const authSyncKey = `${isSupabaseReady()}:${isAuthenticated()}:${getCurrentUserId() || ''}`;
 
   // Microphone devices
   const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
@@ -24,6 +34,19 @@ export default function SettingsSurface() {
       .then(devices => setMicrophones(devices.filter(d => d.kind === 'audioinput')))
       .catch(() => {}); // Permission denied — no mic list
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getAssistantRuntimeStatus({
+      assistantProvider: selectedProvider,
+      ollamaEndpoint: settings.ollamaEndpoint,
+    }).then(status => {
+      if (!cancelled) setAssistantStatus(status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProvider, settings.ollamaEndpoint, authSyncKey]);
 
   return (
     <>
@@ -317,6 +340,31 @@ export default function SettingsSurface() {
           </div>
           {/* Language */}
           <div className="form-group" style={{ marginTop: 12, marginBottom: 12 }}>
+            <label htmlFor="settings-assistant-provider">Open-ended AI mode</label>
+            <select
+              id="settings-assistant-provider"
+              className="form-select"
+              value={settings.assistantProvider || DEFAULT_ASSISTANT_PROVIDER}
+              onChange={e => app.updateSettings({ assistantProvider: e.target.value as typeof settings.assistantProvider })}
+            >
+              <option value="auto">Auto (hosted first, then Ollama)</option>
+              <option value="hosted">Hosted AI ({HOSTED_ASSISTANT_MODEL})</option>
+              <option value="ollama">Local AI (Ollama only)</option>
+            </select>
+            <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
+              Hosted AI uses your signed-in HELM session and a Supabase Edge Function. Browser builds cannot start Ollama for you.
+            </div>
+            <div style={{ marginTop: 8, padding: '10px 12px', background: '#13151c', border: '1px solid #1e2030', borderRadius: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Runtime status</div>
+              <div style={{ fontSize: 12, color: assistantStatus.state === 'ready' ? '#22c55e' : assistantStatus.state === 'checking' ? '#6b6f85' : assistantStatus.state === 'offline' ? '#ff6b6b' : '#f0c040' }}>
+                {assistantStatus.headline}
+              </div>
+              <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
+                {assistantStatus.detail}
+              </div>
+            </div>
+          </div>
+          <div className="form-group" style={{ marginTop: 12, marginBottom: 12 }}>
             <label htmlFor="settings-assistant-lang">Response language</label>
             <select
               id="settings-assistant-lang"
@@ -378,7 +426,7 @@ export default function SettingsSurface() {
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Local AI (Ollama)</h3>
         <div className="card">
           <div style={{ fontSize: 12, color: '#9499b0', marginBottom: 10 }}>
-            Connect to a local Ollama instance for real AI conversations. Install from <a href="https://ollama.com" target="_blank" rel="noreferrer" style={{ color: '#7c8aff' }}>ollama.com</a>, then run <code style={{ background: '#1a1d2e', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>ollama pull llama3.2</code>
+            Connect to a local Ollama instance for desktop or local-fallback AI conversations. Install from <a href="https://ollama.com" target="_blank" rel="noreferrer" style={{ color: '#7c8aff' }}>ollama.com</a>, then run <code style={{ background: '#1a1d2e', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>ollama pull llama3.2</code>
           </div>
           <div className="form-group" style={{ marginBottom: 12 }}>
             <label htmlFor="settings-ollama-endpoint">Ollama endpoint</label>
@@ -428,7 +476,7 @@ export default function SettingsSurface() {
           <div className="info-box" style={{ marginTop: 12 }}>
             Runtime status is reported where the feature actually lives:
             <br />
-            Chat shows Ollama online/offline state, Calendar labels local-only calendars, Integrations marks simulated providers, and Credentials explains the local vault security limits.
+            Chat shows the active assistant runtime state, Calendar labels local-only calendars, Integrations marks simulated providers, and Credentials explains the local vault security limits.
           </div>
         </div>
       </div>

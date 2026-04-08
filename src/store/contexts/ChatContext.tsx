@@ -162,6 +162,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
       lang: crossDomain.settings.assistantLanguage || 'en',
       conversationHistory: history,
       dialogState,
+      provider: crossDomain.settings.assistantProvider,
       endpoint: crossDomain.settings.ollamaEndpoint,
       model: crossDomain.settings.ollamaModel,
       handlers: {
