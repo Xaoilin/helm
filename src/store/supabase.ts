@@ -33,6 +33,7 @@ const GOOGLE_SIGN_IN_SCOPES = [
 export interface AuthSessionSnapshot {
   userId: string;
   email: string | null;
+  accessTokenPresent: boolean;
   providerToken: string | null;
   providerRefreshToken: string | null;
   provider: string | null;
@@ -73,6 +74,7 @@ export function getAuthSessionSnapshot(): AuthSessionSnapshot | null {
   return {
     userId: currentSession.user.id,
     email: currentSession.user.email ?? null,
+    accessTokenPresent: Boolean(currentSession.access_token),
     providerToken: currentSession.provider_token ?? null,
     providerRefreshToken: currentSession.provider_refresh_token ?? null,
     provider: currentSession.user.app_metadata?.provider ?? null,

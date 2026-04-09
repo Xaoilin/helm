@@ -41,6 +41,7 @@ vi.mock('../store/supabase', () => ({
   getAuthSessionSnapshot: vi.fn(() => ({
     userId: 'user-1',
     email: 'alisa@example.com',
+    accessTokenPresent: true,
     providerToken: 'provider-token-present',
     providerRefreshToken: 'refresh-token-present',
     provider: 'google',

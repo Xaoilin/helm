@@ -316,6 +316,7 @@ export default function AiDebug() {
           <DataRow label="Email" value={sessionSnapshot?.email || 'none'} />
           <DataRow label="Provider" value={sessionSnapshot?.provider || 'none'} />
           <DataRow label="Session expires" value={formatExpiry(sessionSnapshot?.expiresAt)} />
+          <DataRow label="Access token present" value={formatBoolean(Boolean(sessionSnapshot?.accessTokenPresent))} />
           <DataRow label="Provider token present" value={formatBoolean(Boolean(sessionSnapshot?.providerToken))} />
           <DataRow label="Refresh token present" value={formatBoolean(Boolean(sessionSnapshot?.providerRefreshToken))} />
         </StatusCard>
@@ -662,6 +663,7 @@ function buildSnapshotText(
     `Email: ${sessionSnapshot?.email || 'none'}`,
     `Provider: ${sessionSnapshot?.provider || 'none'}`,
     `Session expires: ${formatExpiry(sessionSnapshot?.expiresAt)}`,
+    `Access token present: ${formatBoolean(Boolean(sessionSnapshot?.accessTokenPresent))}`,
     '',
     '[Hosted Assistant]',
     `Function: ${HOSTED_ASSISTANT_FUNCTION}`,

@@ -33,6 +33,13 @@ export interface HostedAssistantConnectionStatus {
   message?: string;
 }
 
+class HostedAssistantSessionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HostedAssistantSessionError';
+  }
+}
+
 function isHttpError(error: unknown): error is FunctionsHttpError {
   return error instanceof FunctionsHttpError;
 }
@@ -79,16 +86,51 @@ function getHostedAssistantClient() {
   return client;
 }
 
+function isHostedSessionError(error: unknown): boolean {
+  return error instanceof HostedAssistantSessionError;
+}
+
+function shouldTreatErrorAsSignInRequired(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('missing authorization header')
+    || normalized.includes('jwt')
+    || normalized.includes('authorization header')
+    || normalized.includes('session token')
+    || normalized.includes('sign in');
+}
+
+async function getHostedAssistantAuthHeaders(client: NonNullable<ReturnType<typeof getClient>>): Promise<Record<string, string>> {
+  const { data, error } = await client.auth.getSession();
+  if (error) {
+    throw new HostedAssistantSessionError(`Hosted AI could not read the current HELM session: ${error.message}`);
+  }
+
+  const accessToken = data.session?.access_token?.trim();
+  if (!accessToken) {
+    throw new HostedAssistantSessionError('Hosted AI needs a fresh HELM session token. Sign out and sign back in, then retry.');
+  }
+
+  return {
+    Authorization: `Bearer ${accessToken}`,
+  };
+}
+
 async function invokeHostedAssistant<T>(body: Record<string, unknown>): Promise<T> {
   return hostedAssistantBreaker.call(async () => {
     const client = getHostedAssistantClient();
+    const headers = await getHostedAssistantAuthHeaders(client);
     const { data, error } = await client.functions.invoke<T>(HOSTED_ASSISTANT_FUNCTION, {
       body,
+      headers,
       timeout: API_TIMEOUT.HOSTED_ASSISTANT_CHAT,
     });
 
     if (error) {
-      throw new Error(await extractFunctionErrorMessage(error));
+      const message = await extractFunctionErrorMessage(error);
+      if (shouldTreatErrorAsSignInRequired(message)) {
+        throw new HostedAssistantSessionError(`Hosted AI needs you to sign in again: ${message}`);
+      }
+      throw new Error(message);
     }
 
     if (!data) {
@@ -96,6 +138,8 @@ async function invokeHostedAssistant<T>(body: Record<string, unknown>): Promise<
     }
 
     return data;
+  }, {
+    shouldRecordFailure: error => !isHostedSessionError(error),
   });
 }
 
@@ -115,6 +159,9 @@ export async function testHostedAssistantConnection(): Promise<HostedAssistantCo
       : { status: 'unavailable', message: 'Hosted assistant health check failed.' };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (isHostedSessionError(error)) {
+      return { status: 'sign_in_required', message };
+    }
     logError('HostedAssistant', error);
     return { status: 'unavailable', message };
   }
