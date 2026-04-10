@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, useCallback, ty
 import { v4 as uuid } from 'uuid';
 import { CHAT, VOICE_SESSION } from '../../config/constants';
 import type {
+  AssistantCorrection,
   ChatConversation,
   ChatMessage,
   CalendarAccount,
@@ -36,10 +37,19 @@ export interface ChatCrossDomainData {
   knowledgeEntries: KnowledgeEntry[];
   knowledgeTopics: KnowledgeTopic[];
   lifestyleItems: LifestyleItem[];
+  assistantCorrections: AssistantCorrection[];
   gamification: GamificationProfile;
   settings: Settings;
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateTask: (id: string, updates: Partial<Task>) => void;
+  removeTask: (id: string) => void;
+  upsertAssistantCorrection: (correction: {
+    sourceText: string;
+    targetText: string;
+    lang: 'en' | 'ar';
+    scope: AssistantCorrection['scope'];
+  }) => string | null;
+  noteAssistantCorrectionApplied: (id: string) => void;
   addCalendarEvent: (event: Omit<CalendarEvent, 'id'>) => string;
   updateCalendarEvent: (id: string, updates: Partial<CalendarEvent>) => void;
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => string;
@@ -206,6 +216,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
     }, {
       lang: crossDomain.settings.assistantLanguage || 'en',
       conversationHistory: history,
+      corrections: crossDomain.assistantCorrections,
       dialogState,
       provider: crossDomain.settings.assistantProvider,
       endpoint: crossDomain.settings.ollamaEndpoint,
@@ -213,6 +224,9 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
       handlers: {
         addTask: crossDomain.addTask,
         updateTask: crossDomain.updateTask,
+        removeTask: crossDomain.removeTask,
+        upsertAssistantCorrection: crossDomain.upsertAssistantCorrection,
+        noteAssistantCorrectionApplied: crossDomain.noteAssistantCorrectionApplied,
         addCalendarEvent: crossDomain.addCalendarEvent,
         updateCalendarEvent: crossDomain.updateCalendarEvent,
         addTransaction: crossDomain.addTransaction,

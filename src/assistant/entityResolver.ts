@@ -66,6 +66,14 @@ function tokenise(value: string): string[] {
   return normaliseText(value).split(' ').filter(Boolean);
 }
 
+function normaliseTokenRoot(token: string): string {
+  if (token.length <= 3) return token;
+  if (token.endsWith('ies') && token.length > 4) return `${token.slice(0, -3)}y`;
+  if (token.endsWith('es') && token.length > 4 && !token.endsWith('ses')) return token.slice(0, -2);
+  if (token.endsWith('s') && !token.endsWith('ss')) return token.slice(0, -1);
+  return token;
+}
+
 function computeStringScore(query: string, candidate: string): number {
   const normalisedQuery = normaliseText(query);
   const normalisedCandidate = normaliseText(candidate);
@@ -77,10 +85,13 @@ function computeStringScore(query: string, candidate: string): number {
 
   const queryTokens = tokenise(normalisedQuery);
   const candidateTokens = tokenise(normalisedCandidate);
-  const overlap = queryTokens.filter(token => candidateTokens.includes(token)).length;
+  const queryRoots = queryTokens.map(normaliseTokenRoot);
+  const candidateRoots = candidateTokens.map(normaliseTokenRoot);
+  const overlap = queryRoots.filter(token => candidateRoots.includes(token)).length;
   if (overlap === 0) return 0;
+  if (overlap === queryRoots.length) return 0.72;
 
-  return Math.min(0.78, overlap / Math.max(queryTokens.length, candidateTokens.length) + 0.35);
+  return Math.min(0.78, overlap / Math.max(queryRoots.length, candidateRoots.length) + 0.35);
 }
 
 function recencyBonus(

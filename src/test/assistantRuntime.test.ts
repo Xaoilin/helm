@@ -320,6 +320,140 @@ describe('assistant runtime', () => {
     expect(updateGamification).toHaveBeenCalledTimes(1);
   });
 
+  it('confirms and deletes all matching mirror tasks instead of completing just one', async () => {
+    const removeTask = vi.fn();
+    const updateTask = vi.fn();
+    const mirrorTasks = [
+      makeTask({
+        id: 'task-mirror-office',
+        title: 'Hang up the mirror in this small office',
+        completed: false,
+      }),
+      makeTask({
+        id: 'task-mirror-hooks',
+        title: 'Buy mirror hooks for the hallway',
+        completed: true,
+        completedAt: '2026-04-06T08:00:00.000Z',
+      }),
+    ];
+
+    const first = await processAssistantCommand(
+      'delete all of the tasks related to mirrors',
+      makeContext({ tasks: mirrorTasks }),
+      {
+        lang: 'en',
+        dialogState: makeDialogState(),
+        handlers: {
+          addTask: vi.fn(() => 'unused'),
+          updateTask,
+          removeTask,
+        },
+      },
+    );
+
+    expect(first.plan.mode).toBe('confirm');
+    expect(first.message).toContain('I can delete 2 tasks');
+    expect(updateTask).not.toHaveBeenCalled();
+    expect(removeTask).not.toHaveBeenCalled();
+
+    const second = await processAssistantCommand(
+      'yes',
+      makeContext({ tasks: mirrorTasks }),
+      {
+        lang: 'en',
+        dialogState: first.dialogState,
+        handlers: {
+          addTask: vi.fn(() => 'unused'),
+          updateTask,
+          removeTask,
+        },
+      },
+    );
+
+    expect(second.execution?.steps[0].capability).toBe('tasks.delete_matching');
+    expect(removeTask).toHaveBeenCalledTimes(2);
+    expect(removeTask).toHaveBeenCalledWith('task-mirror-office');
+    expect(removeTask).toHaveBeenCalledWith('task-mirror-hooks');
+    expect(updateTask).not.toHaveBeenCalled();
+    expect(second.message).toContain('Deleted 2 tasks matching "mirrors".');
+  });
+
+  it('learns a spoken correction when the user says "no, I said ..."', async () => {
+    const upsertAssistantCorrection = vi.fn(() => 'corr-1');
+    const mirrorTasks = [
+      makeTask({ id: 'task-mirror-office', title: 'Hang up the mirror in this small office' }),
+      makeTask({ id: 'task-mirror-hooks', title: 'Buy mirror hooks for the hallway' }),
+    ];
+
+    const result = await processAssistantCommand(
+      'No, I said delete all of the tasks related to mirrors',
+      makeContext({ tasks: mirrorTasks }),
+      {
+        lang: 'en',
+        conversationHistory: [
+          { role: 'user', content: 'delete all of the tasks related to minors' },
+          { role: 'assistant', content: `I couldn't find any tasks matching "minors".` },
+        ],
+        dialogState: makeDialogState(),
+        handlers: {
+          addTask: vi.fn(() => 'unused'),
+          updateTask: vi.fn(),
+          removeTask: vi.fn(),
+          upsertAssistantCorrection,
+        },
+      },
+    );
+
+    expect(result.plan.mode).toBe('confirm');
+    expect(result.message).toContain(`Thanks, I'll remember that.`);
+    expect(result.message).toContain('I can delete 2 tasks matching "mirrors"');
+    expect(upsertAssistantCorrection).toHaveBeenCalledWith(expect.objectContaining({
+      sourceText: 'delete all of the tasks related to minors',
+      targetText: 'delete all of the tasks related to mirrors',
+      scope: 'utterance',
+    }));
+    expect(upsertAssistantCorrection).toHaveBeenCalledWith(expect.objectContaining({
+      sourceText: 'minors',
+      targetText: 'mirrors',
+      scope: 'phrase',
+    }));
+  });
+
+  it('applies stored correction memory before planning future commands', async () => {
+    const mirrorTasks = [
+      makeTask({ id: 'task-mirror-office', title: 'Hang up the mirror in this small office' }),
+      makeTask({ id: 'task-mirror-hooks', title: 'Buy mirror hooks for the hallway' }),
+    ];
+
+    const result = await processAssistantCommand(
+      'delete all of the tasks related to minors',
+      makeContext({ tasks: mirrorTasks }),
+      {
+        lang: 'en',
+        corrections: [{
+          id: 'corr-mirrors',
+          sourceText: 'minors',
+          targetText: 'mirrors',
+          lang: 'en',
+          scope: 'phrase',
+          appliedCount: 0,
+          createdAt: '2026-04-10T09:00:00.000Z',
+          updatedAt: '2026-04-10T09:00:00.000Z',
+        }],
+        dialogState: makeDialogState(),
+        handlers: {
+          addTask: vi.fn(() => 'unused'),
+          updateTask: vi.fn(),
+          removeTask: vi.fn(),
+          noteAssistantCorrectionApplied: vi.fn(),
+        },
+      },
+    );
+
+    expect(result.plan.mode).toBe('confirm');
+    expect(result.message).toContain('I can delete 2 tasks matching "mirrors"');
+  });
+
   it('requires confirmation before rescheduling an existing event', async () => {
     const updateCalendarEvent = vi.fn();
     const event = makeEvent({ id: 'evt-9', title: 'Project Sync' });

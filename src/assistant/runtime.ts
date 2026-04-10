@@ -1,4 +1,5 @@
 import { getCapabilityDefinition } from './capabilities';
+import { applyStoredCorrections, parseCorrectionIntent } from './correctionMemory';
 import { normaliseDialogState, rememberEntities, rememberPlan, withPendingConfirmation } from './dialogState';
 import { executeActionPlan } from './executor';
 import { planAssistantTurn, resetOllamaAvailability, isOllamaAvailable } from './planner';
@@ -31,9 +32,27 @@ export async function runAssistantTurn(
 ): Promise<AssistantCommandResult> {
   const lang = options.lang || 'en';
   let dialogState = normaliseDialogState(options.dialogState, context.currentSurface);
+  const correctionIntent = parseCorrectionIntent(transcript, lang, options.conversationHistory);
+  const correctionDrafts = correctionIntent?.learnedCorrections || [];
+
+  for (const correction of correctionDrafts) {
+    options.handlers?.upsertAssistantCorrection?.(correction);
+  }
+
+  const correctedTranscript = correctionIntent?.correctedTranscript || transcript;
+  const correctionApplication = applyStoredCorrections(correctedTranscript, options.corrections, lang);
+  const effectiveTranscript = correctionApplication.transcript;
+  for (const id of correctionApplication.appliedCorrectionIds) {
+    options.handlers?.noteAssistantCorrectionApplied?.(id);
+  }
+  const learnedCorrectionPrefix = correctionDrafts.length > 0
+    ? lang === 'ar'
+      ? 'سأتذكر هذا. '
+      : "Thanks, I'll remember that. "
+    : '';
 
   if (dialogState.pendingConfirmation) {
-    if (isAffirmative(transcript)) {
+    if (isAffirmative(effectiveTranscript)) {
       if (!options.handlers) {
         const cleared = withPendingConfirmation(dialogState, undefined);
         return {
@@ -67,7 +86,7 @@ export async function runAssistantTurn(
       };
     }
 
-    if (isNegative(transcript)) {
+    if (isNegative(effectiveTranscript)) {
       const cleared = withPendingConfirmation(dialogState, undefined);
       const response = lang === 'ar' ? 'حسناً، ألغيت ذلك.' : 'Okay, I cancelled that.';
       return {
@@ -79,7 +98,7 @@ export async function runAssistantTurn(
     }
   }
 
-  const planning = await planAssistantTurn(transcript, context, {
+  const planning = await planAssistantTurn(effectiveTranscript, context, {
     lang,
     conversationHistory: options.conversationHistory,
     provider: options.provider,
@@ -98,8 +117,9 @@ export async function runAssistantTurn(
   if (plan.mode === 'confirm' || (plan.mode === 'act' && requiresConfirmation)) {
     const confirmationPlan = { ...plan, mode: 'act' as const };
     dialogState = withPendingConfirmation(dialogState, confirmationPlan);
+    const confirmationMessage = `${learnedCorrectionPrefix}${plan.response || defaultConfirmResponse(confirmationPlan, lang)}`.trim();
     return {
-      message: plan.response || defaultConfirmResponse(confirmationPlan, lang),
+      message: confirmationMessage,
       plan: { ...plan, mode: 'confirm' },
       dialogState,
       referencedEntities: planning.referencedEntities,
@@ -111,7 +131,7 @@ export async function runAssistantTurn(
   if (plan.mode !== 'act' || !options.handlers) {
     dialogState = rememberEntities(dialogState, planning.referencedEntities);
     return {
-      message: plan.response,
+      message: `${learnedCorrectionPrefix}${plan.response}`.trim(),
       plan,
       dialogState,
       referencedEntities: planning.referencedEntities,
@@ -124,13 +144,13 @@ export async function runAssistantTurn(
   if (execution.kind === 'clarify') {
     const clarifyPlan = {
       mode: 'clarify' as const,
-      response: execution.message,
+      response: `${learnedCorrectionPrefix}${execution.message}`.trim(),
       confidence: plan.confidence,
       steps: [],
     };
     dialogState = rememberPlan(dialogState, clarifyPlan);
     return {
-      message: execution.message,
+      message: clarifyPlan.response,
       plan: clarifyPlan,
       dialogState,
       source: 'local',
@@ -143,7 +163,7 @@ export async function runAssistantTurn(
   ]);
 
   return {
-    message: execution.message,
+    message: `${learnedCorrectionPrefix}${execution.message}`.trim(),
     plan,
     dialogState,
     execution: execution.execution,

@@ -142,6 +142,12 @@ V1 keeps the follow-up rule simple:
 
 This gives the user a natural spoken back-and-forth without needing a separate clarification-only branch or a complicated conversation planner.
 
+If Lina mishears a spoken request, the user can correct her with phrasing like:
+
+- `No, I said delete all of the tasks related to mirrors`
+
+The shared assistant runtime now stores that correction in local-first assistant memory and applies it to future matching voice and chat turns.
+
 ## Verification
 
 For any future changes to this flow:

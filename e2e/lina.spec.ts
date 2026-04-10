@@ -96,4 +96,64 @@ test.describe('Lina Assistant', () => {
     await page.getByRole('button', { name: 'All Tasks' }).click();
     await expect(page.locator('text=put the mirror up on the office')).toBeVisible();
   });
+
+  test('should confirm and delete all matching mirror tasks from chat', async ({ page }) => {
+    await page.getByRole('button', { name: 'Navigate to Chat' }).click();
+    await page.locator('.chat-main button:has-text("New conversation")').click();
+
+    const input = page.locator('input[placeholder*="Type a message"]');
+
+    await input.fill('Add task hang up the mirror in this small office');
+    await input.press('Enter');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText('Added "hang up the mirror in this small office" to your tasks.');
+
+    await input.fill('Add task buy mirror hooks for the hallway');
+    await input.press('Enter');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText('Added "buy mirror hooks for the hallway" to your tasks.');
+
+    await input.fill('Delete all of the tasks related to mirrors');
+    await input.press('Enter');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText('I can delete 2 tasks matching "mirrors"');
+
+    await input.fill('yes');
+    await input.press('Enter');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText('Deleted 2 tasks matching "mirrors".');
+
+    await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
+    await page.getByRole('button', { name: 'All Tasks' }).click();
+    await expect(page.locator('text=hang up the mirror in this small office')).toHaveCount(0);
+    await expect(page.locator('text=buy mirror hooks for the hallway')).toHaveCount(0);
+  });
+
+  test('should learn "no, I said" corrections and reuse them for later commands', async ({ page }) => {
+    await page.getByRole('button', { name: 'Navigate to Chat' }).click();
+    await page.locator('.chat-main button:has-text("New conversation")').click();
+
+    const input = page.locator('input[placeholder*="Type a message"]');
+
+    await input.fill('Add task hang up the mirror in this small office');
+    await input.press('Enter');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText('Added "hang up the mirror in this small office" to your tasks.');
+
+    await input.fill('Add task buy mirror hooks for the hallway');
+    await input.press('Enter');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText('Added "buy mirror hooks for the hallway" to your tasks.');
+
+    await input.fill('Delete all of the tasks related to minors');
+    await input.press('Enter');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText(`I couldn't find any tasks matching "minors".`);
+
+    await input.fill('No, I said delete all of the tasks related to mirrors');
+    await input.press('Enter');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText(`Thanks, I'll remember that.`);
+    await expect(page.locator('.chat-message.assistant').last()).toContainText('I can delete 2 tasks matching "mirrors"');
+
+    await input.fill('cancel');
+    await input.press('Enter');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText('Okay, I cancelled that.');
+
+    await input.fill('Delete all of the tasks related to minors');
+    await input.press('Enter');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText('I can delete 2 tasks matching "mirrors"');
+  });
 });

@@ -8,6 +8,7 @@ import type {
   KnowledgeTopic, KnowledgeEntry,
   LifestyleItem,
   FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
+  AssistantCorrection,
 } from '../types/domain';
 import { loadStore, saveStore } from './persistence';
 import {
@@ -25,6 +26,7 @@ import { KnowledgeProvider, useKnowledgeContext } from './contexts/KnowledgeCont
 import { FinanceProvider, useFinanceContext } from './contexts/FinanceContext';
 import { GamificationProvider, useGamificationContext } from './contexts/GamificationContext';
 import { SettingsProvider, useSettingsContext } from './contexts/SettingsContext';
+import { AssistantProvider, useAssistantContext } from './contexts/AssistantContext';
 
 // ── Context API (backward-compatible interface) ──
 interface AppContextAPI {
@@ -46,6 +48,7 @@ interface AppContextAPI {
   financeBudgets: FinanceBudget[];
   savingsGoals: SavingsGoal[];
   integrations: Integration[];
+  assistantCorrections: AssistantCorrection[];
   gamification: GamificationProfile;
   settings: Settings;
   loaded: boolean;
@@ -125,6 +128,15 @@ interface AppContextAPI {
   // Gamification
   updateGamification: (profile: GamificationProfile) => void;
   backfillPrayerLog: (taskId: string, dateStr: string, completed: boolean) => void;
+
+  // Assistant memory
+  upsertAssistantCorrection: (correction: {
+    sourceText: string;
+    targetText: string;
+    lang: 'en' | 'ar';
+    scope: AssistantCorrection['scope'];
+  }) => string | null;
+  noteAssistantCorrectionApplied: (id: string) => void;
 
   // Integrations
   updateIntegration: (id: string, updates: Partial<Integration>) => void;
@@ -272,6 +284,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   const finance = useFinanceContext();
   const gamificationCtx = useGamificationContext();
   const settingsCtx = useSettingsContext();
+  const assistantCtx = useAssistantContext();
 
   // Determine overall loaded state
   const allLoaded = state.loaded
@@ -281,7 +294,8 @@ function ShellProvider({ children }: { children: ReactNode }) {
     && knowledge.loaded
     && finance.loaded
     && gamificationCtx.loaded
-    && settingsCtx.loaded;
+    && settingsCtx.loaded
+    && assistantCtx.loaded;
 
   const api: AppContextAPI = useMemo(() => ({
     // Shell state
@@ -344,6 +358,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     transactions: finance.transactions,
     financeBudgets: finance.financeBudgets,
     savingsGoals: finance.savingsGoals,
+    assistantCorrections: assistantCtx.corrections,
     addFinanceAccount: finance.addFinanceAccount,
     updateFinanceAccount: finance.updateFinanceAccount,
     removeFinanceAccount: finance.removeFinanceAccount,
@@ -361,6 +376,8 @@ function ShellProvider({ children }: { children: ReactNode }) {
     gamification: gamificationCtx.gamification,
     updateGamification: gamificationCtx.updateGamification,
     backfillPrayerLog: gamificationCtx.backfillPrayerLog,
+    upsertAssistantCorrection: assistantCtx.upsertCorrection,
+    noteAssistantCorrectionApplied: assistantCtx.noteCorrectionApplied,
 
     // Settings & Integrations
     settings: settingsCtx.settings,
@@ -385,7 +402,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     setPrimaryWorkspace,
   }), [
     state, allLoaded,
-    calendar, taskCtx, chat, knowledge, finance, gamificationCtx, settingsCtx,
+    calendar, taskCtx, chat, knowledge, finance, gamificationCtx, settingsCtx, assistantCtx,
     navigate, requestAssistantNavigation, dismissAssistantNavigationRequest, addCredential, updateCredential, removeCredential,
     addWorkspace, updateWorkspace, removeWorkspace, setPrimaryWorkspace,
   ]);
@@ -408,6 +425,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
   const settingsCtx = useSettingsContext();
   const knowledge = useKnowledgeContext();
   const finance = useFinanceContext();
+  const assistantCtx = useAssistantContext();
 
   const crossDomain: ChatCrossDomainData = useMemo(() => ({
     calendarAccounts: calendar.calendarAccounts,
@@ -419,10 +437,14 @@ function ChatBridge({ children }: { children: ReactNode }) {
     knowledgeEntries: knowledge.knowledgeEntries,
     knowledgeTopics: knowledge.knowledgeTopics,
     lifestyleItems: knowledge.lifestyleItems,
+    assistantCorrections: assistantCtx.corrections,
     gamification: gamificationCtx.gamification,
     settings: settingsCtx.settings,
     addTask: taskCtx.addTask,
     updateTask: taskCtx.updateTask,
+    removeTask: taskCtx.removeTask,
+    upsertAssistantCorrection: assistantCtx.upsertCorrection,
+    noteAssistantCorrectionApplied: assistantCtx.noteCorrectionApplied,
     addCalendarEvent: calendar.addCalendarEvent,
     updateCalendarEvent: calendar.updateCalendarEvent,
     addTransaction: finance.addTransaction,
@@ -437,6 +459,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
     taskCtx.tasks,
     taskCtx.addTask,
     taskCtx.updateTask,
+    taskCtx.removeTask,
     finance.financeAccounts,
     finance.transactions,
     finance.addTransaction,
@@ -444,6 +467,9 @@ function ChatBridge({ children }: { children: ReactNode }) {
     knowledge.knowledgeTopics,
     knowledge.lifestyleItems,
     knowledge.addKnowledgeEntry,
+    assistantCtx.corrections,
+    assistantCtx.upsertCorrection,
+    assistantCtx.noteCorrectionApplied,
     gamificationCtx.gamification,
     gamificationCtx.updateGamification,
     settingsCtx.settings,
@@ -461,9 +487,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           <TaskProvider>
             <KnowledgeProvider>
               <FinanceProvider>
-                <ChatBridge>
-                  <ShellProvider>{children}</ShellProvider>
-                </ChatBridge>
+                <AssistantProvider>
+                  <ChatBridge>
+                    <ShellProvider>{children}</ShellProvider>
+                  </ChatBridge>
+                </AssistantProvider>
               </FinanceProvider>
             </KnowledgeProvider>
           </TaskProvider>

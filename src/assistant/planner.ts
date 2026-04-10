@@ -1,10 +1,15 @@
-import type { AssistantProvider } from '../types/domain';
+import type { AssistantProvider, Task } from '../types/domain';
 import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import { LIMITS, TIMING } from '../config/constants';
 import { chatWithHostedAssistant, testHostedAssistantConnection } from '../services/hostedAssistantApi';
 import { chatWithOllama, testOllamaConnection, type OllamaMessage } from '../services/ollamaApi';
 import { CAPABILITIES, listCapabilitiesForPrompt } from './capabilities';
-import { SURFACE_LABELS, resolveCalendarEventReference, resolveSurfaceReference } from './entityResolver';
+import {
+  SURFACE_LABELS,
+  resolveCalendarEventReference,
+  resolveSurfaceReference,
+  resolveTaskReference,
+} from './entityResolver';
 import { actionPlanJsonSchema, parseActionPlan, type ActionPlan } from './plannerSchema';
 import type {
   AssistantCommandContext,
@@ -144,6 +149,39 @@ function buildClarifyPlan(response: string): ActionPlan {
   return { mode: 'clarify', response, confidence: 0.7, steps: [] };
 }
 
+function inferTaskDeleteCategory(noun?: string): Task['category'] | 'any' {
+  if (!noun) return 'any';
+  if (/habit|habits|عادة|عادات/i.test(noun)) return 'daily';
+  if (/goal|goals|هدف|أهداف/i.test(noun)) return 'goal';
+  return 'any';
+}
+
+function inferTaskDeleteScope(rawScope?: string, noun?: string): 'one' | 'all' {
+  if (rawScope && /\ball\b|كل/i.test(rawScope)) return 'all';
+  if (noun && /(tasks|todos|habits|goals|مهام|عادات|أهداف)/i.test(noun)) return 'all';
+  return 'one';
+}
+
+function buildTaskDeleteConfirmation(
+  query: string,
+  matches: Task[],
+  scope: 'one' | 'all',
+  lang: AssistantLang,
+): string {
+  if (scope === 'one' || matches.length === 1) {
+    const title = matches[0]?.title || query;
+    return lang === 'ar'
+      ? `أستطيع حذف "${title}". هل تريدين أن أفعل ذلك؟`
+      : `I can delete "${title}". Do you want me to do that?`;
+  }
+
+  const preview = matches.slice(0, 3).map(task => `"${task.title}"`).join(', ');
+  const more = matches.length > 3 ? lang === 'ar' ? ' وغيرها' : ', and more' : '';
+  return lang === 'ar'
+    ? `أستطيع حذف ${matches.length} مهام تطابق "${query}": ${preview}${more}. هل تريدين أن أفعل ذلك؟`
+    : `I can delete ${matches.length} tasks matching "${query}": ${preview}${more}. Do you want me to do that?`;
+}
+
 function buildContextDigest(context: AssistantCommandContext, dialogState?: AssistantDialogState): string {
   const now = context.now ? new Date(context.now) : new Date();
   const upcomingEvents = context.calendarEvents
@@ -227,12 +265,13 @@ Choose one mode:
 Use only these capability ids:
 ${listCapabilitiesForPrompt()}
 
-Planning rules:
-- Never invent entity ids. Use raw phrases like taskQuery, eventQuery, calendarQuery, topicQuery, or accountQuery.
-- Use timePhrase for unresolved natural-language time.
-- Prefer clarify when the request is missing key details like time, amount, or topic.
-- Prefer confirm for rescheduling existing calendar events.
-- Keep response concise and user-facing.
+  Planning rules:
+  - Never invent entity ids. Use raw phrases like taskQuery, eventQuery, calendarQuery, topicQuery, or accountQuery.
+  - Use timePhrase for unresolved natural-language time.
+  - Prefer clarify when the request is missing key details like time, amount, or topic.
+  - Prefer confirm for rescheduling existing calendar events.
+  - If the user asks for an unsupported action, do not approximate it to a different capability. Reply truthfully that the action is not available.
+  - Keep response concise and user-facing.
 
 Live app context:
 ${buildContextDigest(context, dialogState)}`;
@@ -478,6 +517,93 @@ function planTaskCompletion(transcript: string): ActionPlan | null {
   return null;
 }
 
+function planTaskDeletion(
+  transcript: string,
+  context: AssistantCommandContext,
+  lang: AssistantLang,
+  dialogState?: AssistantDialogState,
+): ActionPlan | null {
+  const matchers = [
+    /(?:delete|remove|trash)(?:\s+(?<scope>all(?:\s+of)?))?(?:\s+(?:the|my))?\s+(?<noun>task|tasks|todo|todos|habit|habits|goal|goals)\s+(?:related to|about|for|called|named)?\s*(?<query>.+)$/i,
+    /(?:delete|remove|trash)(?:\s+(?<scope>all(?:\s+of)?))?\s+(?<query>.+?)\s+(?<noun>task|tasks|todo|todos|habit|habits|goal|goals)$/i,
+    /(?:delete|remove|trash)(?:\s+(?<scope>all(?:\s+of)?))?\s+(?<query>that task|this task|that one|this one|it)$/i,
+    /(?:احذف|امسح|شيل)(?:\s+(?<scope>كل))?(?:\s+(?:ال|هذه|هذا))?\s*(?<noun>مهمة|مهام|عادة|عادات|هدف|أهداف)\s+(?:عن|حول|اسمها)?\s*(?<query>.+)$/i,
+    /(?:احذف|امسح|شيل)(?:\s+(?<scope>كل))?\s+(?<query>.+?)\s+(?<noun>مهمة|مهام|عادة|عادات|هدف|أهداف)$/i,
+  ];
+
+  for (const matcher of matchers) {
+    const match = transcript.match(matcher);
+    const groups = match?.groups;
+    if (!groups) continue;
+
+    const query = sanitizeTitle(groups.query || '');
+    if (!query) {
+      return buildClarifyPlan(lang === 'ar' ? 'أي مهمة تريدين حذفها؟' : 'Which task should I delete?');
+    }
+
+    const category = inferTaskDeleteCategory(groups.noun);
+    const matchScope = inferTaskDeleteScope(groups.scope, groups.noun);
+    const resolution = resolveTaskReference(query, context, dialogState, {
+      category,
+      allowCompleted: true,
+    });
+
+    if (matchScope === 'all') {
+      if (resolution.matches.length === 0) {
+        return buildClarifyPlan(lang === 'ar'
+          ? `لم أجد مهاماً تطابق "${query}".`
+          : `I couldn't find any tasks matching "${query}".`);
+      }
+
+      const tasks = resolution.matches.map(item => item.data);
+      return {
+        mode: 'confirm',
+        response: buildTaskDeleteConfirmation(query, tasks, 'all', lang),
+        confidence: resolution.best?.score ?? 0.84,
+        steps: [{
+          capability: 'tasks.delete_matching',
+          args: {
+            taskQuery: query,
+            matchScope: 'all',
+            ...(category !== 'any' ? { category } : {}),
+          },
+          requiresConfirmation: true,
+        }],
+      };
+    }
+
+    if (!resolution.best) {
+      return buildClarifyPlan(lang === 'ar'
+        ? `لم أجد مهمة تطابق "${query}".`
+        : `I couldn't find a task matching "${query}".`);
+    }
+
+    if (resolution.ambiguous) {
+      const names = resolution.matches.slice(0, 3).map(item => item.data.title).join(', ');
+      return buildClarifyPlan(lang === 'ar'
+        ? `أي مهمة تقصدين: ${names}؟`
+        : `Which task did you mean: ${names}?`);
+    }
+
+    return {
+      mode: 'confirm',
+      response: buildTaskDeleteConfirmation(resolution.best.data.title, [resolution.best.data], 'one', lang),
+      confidence: resolution.best.score,
+      steps: [{
+        capability: 'tasks.delete_matching',
+        args: {
+          taskQuery: resolution.best.data.title,
+          matchScope: 'one',
+          ...(category !== 'any' ? { category } : {}),
+        },
+        requiresConfirmation: true,
+      }],
+    };
+  }
+
+  return null;
+}
+
 function planNavigation(transcript: string, dialogState?: AssistantDialogState): ActionPlan | null {
   const lower = normaliseText(transcript);
   const words = lower.split(/\s+/);
@@ -676,6 +802,9 @@ function planLocally(
 
   const taskReveal = planTaskReveal(transcript, dialogState);
   if (taskReveal) return { plan: taskReveal, source: 'local' };
+
+  const taskDelete = planTaskDeletion(transcript, context, lang, dialogState);
+  if (taskDelete) return { plan: taskDelete, source: 'local' };
 
   const taskComplete = planTaskCompletion(transcript);
   if (taskComplete) return { plan: taskComplete, source: 'local' };

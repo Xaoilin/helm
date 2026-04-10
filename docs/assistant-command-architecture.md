@@ -15,7 +15,7 @@ Implemented pieces:
 - entity resolution for surfaces, tasks, events, calendars, accounts, and knowledge topics
 - temporal resolution for relative dates, clock times, part-of-day phrases, and basic prayer-based references
 - normalized task-request parsing that strips conversational scaffolding before writes
-- deterministic execution for navigation, task creation/reveal/completion, calendar creation/rescheduling, finance logging, and knowledge entry creation
+- deterministic execution for navigation, task creation/reveal/completion/deletion, calendar creation/rescheduling, finance logging, and knowledge entry creation
 - shared dialog state with confirmation handling for risky actions such as event rescheduling
 - one-shot assistant navigation requests so Lina can reveal a specific task in the Tasks UI instead of only opening the surface
 - structured provider-backed planning through hosted OpenAI or local Ollama instead of action-tag parsing
@@ -24,7 +24,7 @@ Still intentionally lightweight:
 
 - entity ranking is heuristic and local-first rather than embedding-backed
 - prayer-based time resolution uses the currently loaded prayer snapshot only
-- teaching-loop memory and a larger eval corpus are still future work
+- exact transcript corrections such as "No, I said ..." now persist as local-first assistant memory, but a broader teaching-loop memory and a larger eval corpus are still future work
 
 ## Current Problem
 
@@ -88,6 +88,7 @@ Examples:
 - `tasks.create_task`
 - `tasks.reveal_task`
 - `tasks.complete_matching`
+- `tasks.delete_matching`
 - `calendar.create_event`
 - `calendar.reschedule_event`
 - `finance.record_transaction`
@@ -213,6 +214,14 @@ When the user corrects Lina, store:
 - the successful plan
 
 Retrieve these examples in future turns so the system adapts to the user's language without hardcoding more verbs.
+
+The current implementation now covers a lightweight version of this for transcript correction:
+
+- exact utterance corrections such as "No, I said delete all of the tasks related to mirrors"
+- phrase replacements derived from that correction, such as `minors` -> `mirrors`
+- local-first persistence shared by chat and voice
+
+Broader semantic teaching, plan reuse, and larger evaluation coverage are still future work.
 
 ### 8. Evaluation harness
 

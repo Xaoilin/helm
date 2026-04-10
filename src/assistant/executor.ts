@@ -91,6 +91,10 @@ function asTaskCategory(value: unknown): Task['category'] | 'any' {
   return value === 'daily' || value === 'task' || value === 'goal' ? value : 'any';
 }
 
+function asMatchScope(value: unknown): 'one' | 'all' {
+  return value === 'all' ? 'all' : 'one';
+}
+
 function pickCalendarSource(
   context: AssistantCommandContext,
   calendarQuery: string,
@@ -143,6 +147,35 @@ function findOrClarifyTask(
     return { task: null, clarify: `Which task did you mean: ${names}?` };
   }
   return { task: resolution.best.data };
+}
+
+function findTasksForDeletion(
+  query: string,
+  context: AssistantCommandContext,
+  dialogState: AssistantDialogState | undefined,
+  opts: { category?: Task['category'] | 'any'; scope?: 'one' | 'all' } = {},
+): { tasks: Task[]; clarify?: string } {
+  const scope = opts.scope || 'one';
+  if (scope === 'one') {
+    const resolution = findOrClarifyTask(query, context, dialogState, {
+      category: opts.category,
+      allowCompleted: true,
+    });
+    return resolution.task
+      ? { tasks: [resolution.task] }
+      : { tasks: [], clarify: resolution.clarify || `I couldn't find a task matching "${query}".` };
+  }
+
+  const resolution = resolveTaskReference(query, context, dialogState, {
+    category: opts.category,
+    allowCompleted: true,
+  });
+
+  if (resolution.matches.length === 0) {
+    return { tasks: [], clarify: `I couldn't find any tasks matching "${query}".` };
+  }
+
+  return { tasks: resolution.matches.map(match => match.data) };
 }
 
 function findOrClarifyEvent(
@@ -380,6 +413,54 @@ function executeSingleStep(
             : `Marked "${task.title}" as complete.`,
         refs: [ref],
         undoToken: JSON.stringify({ type: 'task.reopen', id: task.id }),
+      };
+    }
+
+    case 'tasks.delete_matching': {
+      if (!handlers.removeTask) {
+        return {
+          kind: 'clarify',
+          message: 'Task deletion is not available in this surface.',
+        };
+      }
+
+      const taskQuery = asString(step.args.taskQuery);
+      const category = asTaskCategory(step.args.category);
+      const matchScope = asMatchScope(step.args.matchScope);
+      const resolution = findTasksForDeletion(taskQuery, context, dialogState, {
+        category,
+        scope: matchScope,
+      });
+
+      if (resolution.tasks.length === 0) {
+        return { kind: 'clarify', message: resolution.clarify || 'Which task should I delete?' };
+      }
+
+      const tasksToDelete = resolution.tasks;
+      for (const task of tasksToDelete) {
+        handlers.removeTask(task.id);
+      }
+      const deletedIds = new Set(tasksToDelete.map(task => task.id));
+      context.tasks = context.tasks.filter(task => !deletedIds.has(task.id));
+
+      const refs = tasksToDelete.map(task => makeEntityReference('task', task.id, task.title, 'tasks', 1));
+      return {
+        stepResult: {
+          capability: step.capability,
+          status: 'completed',
+          summary: tasksToDelete.length === 1
+            ? `Deleted "${tasksToDelete[0].title}".`
+            : `Deleted ${tasksToDelete.length} tasks matching "${taskQuery}".`,
+          entityRefs: refs,
+        },
+        message: lang === 'ar'
+          ? tasksToDelete.length === 1
+            ? `تم حذف "${tasksToDelete[0].title}".`
+            : `تم حذف ${tasksToDelete.length} مهام تطابق "${taskQuery}".`
+          : tasksToDelete.length === 1
+            ? `Deleted "${tasksToDelete[0].title}".`
+            : `Deleted ${tasksToDelete.length} tasks matching "${taskQuery}".`,
+        refs,
       };
     }
 

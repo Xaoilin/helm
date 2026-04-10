@@ -260,6 +260,21 @@ export interface GamificationProfile {
   dailyLog?: Record<string, string[]>;
 }
 
+// ── Assistant Memory ──
+export type AssistantCorrectionScope = 'utterance' | 'phrase';
+
+export interface AssistantCorrection {
+  id: string;
+  sourceText: string;
+  targetText: string;
+  lang: 'en' | 'ar';
+  scope: AssistantCorrectionScope;
+  appliedCount?: number;
+  lastAppliedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Settings ──
 export type AssistantProvider = 'auto' | 'ollama' | 'hosted';
 
