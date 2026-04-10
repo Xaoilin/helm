@@ -4,6 +4,7 @@
 
 - Use a dedicated branch for each task. `codex/<short-description>` is the default.
 - When meaningful work is complete and relevant checks are green, use the normal branch -> commit -> PR/merge -> deploy-verification flow instead of leaving finished work only in a local checkout.
+- After a task branch is merged, delete it locally and on `origin`. If any branch remains unmerged, call out its status explicitly instead of leaving stale topic branches around.
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
 - Add a regression test for every bug fix that changes logic.
@@ -107,6 +108,7 @@ For every delivered feature, say clearly what you verified manually, include the
 
 - API keys are currently client-side configuration for a single-user MVP. Do not describe this as production-grade secret handling.
 - Credentials are stored locally and are not encrypted vault storage.
+- Localhost-only hosted-assistant debugging may use the configured Supabase project access without a signed-in user session. Keep that behavior restricted to local origins and reflect it truthfully in UI copy.
 - Avoid `dangerouslySetInnerHTML` and preserve React's default escaping protections.
 - If the product ever moves beyond single-user local-first usage, secrets and privileged API calls need a server-side redesign.
 

@@ -13,6 +13,7 @@ import {
   testHostedAssistantConnection,
   type HostedAssistantConnectionStatus,
 } from '../../services/hostedAssistantApi';
+import { formatHostedAssistantAccessMode } from '../../services/hostedAssistantAccess';
 import { listOllamaModels, testOllamaConnection } from '../../services/ollamaApi';
 import { ollamaBreaker } from '../../services/serviceBreakers';
 import {
@@ -35,7 +36,7 @@ interface DiagnosticResult {
 const DEFAULT_HOSTED_RESULT: DiagnosticResult = {
   state: 'idle',
   headline: 'Hosted assistant not tested yet',
-  detail: 'Run a hosted check to verify the Supabase Edge Function and signed-in AI path.',
+  detail: 'Run a hosted check to verify the Supabase Edge Function and the current hosted access path.',
   checkedAt: null,
 };
 
@@ -56,13 +57,24 @@ const DEFAULT_OLLAMA_RESULT: DiagnosticResult = {
 const SMOKE_TEST_MESSAGES = [
   {
     role: 'system' as const,
-    content: 'You are a HELM hosted assistant smoke test. Reply with exactly READY.',
+    content: 'You are a HELM hosted assistant smoke test. Return JSON with reply set to READY.',
   },
   {
     role: 'user' as const,
-    content: 'Reply with exactly READY.',
+    content: 'Return JSON with reply set to READY.',
   },
 ];
+
+const SMOKE_TEST_FORMAT = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    reply: {
+      type: 'string',
+    },
+  },
+  required: ['reply'],
+} as const;
 
 export default function AiDebug() {
   const app = useApp();
@@ -83,6 +95,7 @@ export default function AiDebug() {
   const authenticated = isAuthenticated();
   const currentUserId = getCurrentUserId();
   const hostedDiagnostics = getHostedAssistantDiagnostics();
+  const hostedAccessMode = formatHostedAssistantAccessMode(hostedDiagnostics.lastAccessMode);
 
   const refreshRuntime = useCallback(async () => {
     setRefreshingRuntime(true);
@@ -139,7 +152,7 @@ export default function AiDebug() {
     const checkedAt = new Date().toISOString();
 
     try {
-      const text = await chatWithHostedAssistant(SMOKE_TEST_MESSAGES, undefined);
+      const text = await chatWithHostedAssistant(SMOKE_TEST_MESSAGES, SMOKE_TEST_FORMAT);
       setSmokeResult({
         state: 'success',
         headline: 'Hosted smoke test passed',
@@ -305,11 +318,19 @@ export default function AiDebug() {
         <StatusCard
           title="Supabase Session"
           state={supabaseReady ? authenticated ? 'success' : 'warning' : 'warning'}
-          headline={supabaseReady ? authenticated ? 'Supabase ready and signed in' : 'Supabase ready but not signed in' : 'Supabase not configured'}
+          headline={supabaseReady
+            ? authenticated
+              ? 'Supabase ready and signed in'
+              : hostedDiagnostics.localProjectAccessAvailable
+                ? 'Supabase ready with local hosted access'
+                : 'Supabase ready but not signed in'
+            : 'Supabase not configured'}
           detail={supabaseReady
             ? authenticated
               ? 'Hosted GPT-5.4-mini can use the current HELM session.'
-              : 'The browser build can reach Supabase, but hosted AI still needs a signed-in Google session.'
+              : hostedDiagnostics.localProjectAccessAvailable
+                ? 'Localhost can use the configured project access to test the hosted GPT-5.4-mini assistant without signing in.'
+                : 'The browser build can reach Supabase, but hosted AI still needs a signed-in Google session.'
             : 'This build does not have Supabase configuration available, so hosted AI cannot run.'}
           checkedAt={runtimeCheckedAt}
         >
@@ -320,6 +341,7 @@ export default function AiDebug() {
           <DataRow label="Provider" value={sessionSnapshot?.provider || 'none'} />
           <DataRow label="Session expires" value={formatExpiry(sessionSnapshot?.expiresAt)} />
           <DataRow label="Access token present" value={formatBoolean(Boolean(sessionSnapshot?.accessTokenPresent))} />
+          <DataRow label="Local project access" value={formatBoolean(hostedDiagnostics.localProjectAccessAvailable)} />
           <DataRow label="Provider token present" value={formatBoolean(Boolean(sessionSnapshot?.providerToken))} />
           <DataRow label="Refresh token present" value={formatBoolean(Boolean(sessionSnapshot?.providerRefreshToken))} />
         </StatusCard>
@@ -346,6 +368,7 @@ export default function AiDebug() {
         >
           <DataRow label="Function" value={HOSTED_ASSISTANT_FUNCTION} />
           <DataRow label="Model" value={HOSTED_ASSISTANT_MODEL} />
+          <DataRow label="Last access mode" value={hostedAccessMode} />
           <DataRow label="Circuit allowing requests" value={formatBoolean(hostedDiagnostics.circuitAllowingRequests)} />
           <DataRow label="Last health result" value={hostedResult.headline} />
           <DataRow label="Last real failure source" value={formatHostedFailureSource(hostedDiagnostics.lastFailureSource)} />
@@ -534,7 +557,9 @@ function mapHostedStatus(status: HostedAssistantConnectionStatus, checkedAt: str
       return {
         state: 'success',
         headline: 'Hosted assistant reachable',
-        detail: 'The Supabase Edge Function responded successfully for the current signed-in session.',
+        detail: status.accessMode === 'local_project_key'
+          ? 'The Supabase Edge Function responded successfully using local project access on localhost.'
+          : 'The Supabase Edge Function responded successfully for the current signed-in session.',
         checkedAt,
       };
     case 'sign_in_required':
@@ -678,10 +703,12 @@ function buildSnapshotText(
     `Provider: ${sessionSnapshot?.provider || 'none'}`,
     `Session expires: ${formatExpiry(sessionSnapshot?.expiresAt)}`,
     `Access token present: ${formatBoolean(Boolean(sessionSnapshot?.accessTokenPresent))}`,
+    `Local project access: ${formatBoolean(hostedDiagnostics.localProjectAccessAvailable)}`,
     '',
     '[Hosted Assistant]',
     `Function: ${HOSTED_ASSISTANT_FUNCTION}`,
     `Model: ${HOSTED_ASSISTANT_MODEL}`,
+    `Last access mode: ${formatHostedAssistantAccessMode(hostedDiagnostics.lastAccessMode)}`,
     `Circuit allowing requests: ${formatBoolean(hostedDiagnostics.circuitAllowingRequests)}`,
     `Last failure source: ${formatHostedFailureSource(hostedDiagnostics.lastFailureSource)}`,
     `Last failure message: ${hostedDiagnostics.lastFailureMessage || 'none'}`,

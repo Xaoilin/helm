@@ -11,20 +11,31 @@ const {
   getClientMock,
   isAuthenticatedMock,
   isSupabaseReadyMock,
+  canUseHostedAssistantLocalProjectAccessMock,
   logErrorMock,
   logWarnMock,
 } = vi.hoisted(() => ({
   getClientMock: vi.fn(),
   isAuthenticatedMock: vi.fn(),
   isSupabaseReadyMock: vi.fn(),
+  canUseHostedAssistantLocalProjectAccessMock: vi.fn(),
   logErrorMock: vi.fn(),
   logWarnMock: vi.fn(),
+}));
+
+vi.mock('../config', () => ({
+  HOSTED_ASSISTANT_FUNCTION: 'assistant-openai',
+  SUPABASE_ANON_KEY: 'local-anon-key',
 }));
 
 vi.mock('../store/supabase', () => ({
   getClient: getClientMock,
   isAuthenticated: isAuthenticatedMock,
   isSupabaseReady: isSupabaseReadyMock,
+}));
+
+vi.mock('../services/hostedAssistantAccess', () => ({
+  canUseHostedAssistantLocalProjectAccess: canUseHostedAssistantLocalProjectAccessMock,
 }));
 
 vi.mock('../services/logger', () => ({
@@ -69,6 +80,7 @@ describe('hostedAssistantApi', () => {
     vi.clearAllMocks();
     isSupabaseReadyMock.mockReturnValue(true);
     isAuthenticatedMock.mockReturnValue(true);
+    canUseHostedAssistantLocalProjectAccessMock.mockReturnValue(false);
   });
 
   it('passes the Supabase access token when invoking the hosted assistant', async () => {
@@ -77,7 +89,7 @@ describe('hostedAssistantApi', () => {
 
     const status = await testHostedAssistantConnection();
 
-    expect(status).toEqual({ status: 'available' });
+    expect(status).toEqual({ status: 'available', accessMode: 'session_token' });
     expect(client.functions.invoke).toHaveBeenCalledWith('assistant-openai', expect.objectContaining({
       body: { action: 'health' },
       headers: expect.objectContaining({
@@ -96,6 +108,23 @@ describe('hostedAssistantApi', () => {
     expect(status.message).toContain('fresh HELM session token');
     expect(client.functions.invoke).not.toHaveBeenCalled();
     expect(logErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('uses local project access on localhost when no HELM session is signed in', async () => {
+    const client = makeClient();
+    getClientMock.mockReturnValue(client);
+    isAuthenticatedMock.mockReturnValue(false);
+    canUseHostedAssistantLocalProjectAccessMock.mockReturnValue(true);
+
+    const status = await testHostedAssistantConnection();
+
+    expect(status).toEqual({ status: 'available', accessMode: 'local_project_key' });
+    expect(client.auth.getSession).not.toHaveBeenCalled();
+    expect(client.functions.invoke).toHaveBeenCalledWith('assistant-openai', expect.objectContaining({
+      headers: expect.objectContaining({
+        Authorization: 'Bearer local-anon-key',
+      }),
+    }));
   });
 
   it('does not poison the hosted circuit breaker for missing-session-token failures', async () => {

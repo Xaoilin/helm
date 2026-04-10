@@ -1,6 +1,7 @@
 import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import type { AssistantProvider, Settings } from '../types/domain';
 import { testHostedAssistantConnection } from './hostedAssistantApi';
+import { formatHostedAssistantAccessMode } from './hostedAssistantAccess';
 import { testOllamaConnection } from './ollamaApi';
 
 export type AssistantRuntimeProvider = 'hosted' | 'ollama';
@@ -52,7 +53,7 @@ function getHostedReadyStatus(): AssistantRuntimeStatus {
     activeProvider: 'hosted',
     state: 'ready',
     headline: 'Hosted AI ready',
-    detail: 'Open-ended help is powered by OpenAI GPT-5.4-mini through your signed-in HELM session.',
+    detail: 'Open-ended help is powered by OpenAI GPT-5.4-mini through HELM\'s hosted assistant.',
   };
 }
 
@@ -60,7 +61,14 @@ async function getHostedStatus(): Promise<AssistantRuntimeStatus> {
   const status = await testHostedAssistantConnection();
   switch (status.status) {
     case 'available':
-      return getHostedReadyStatus();
+      return status.accessMode === 'local_project_key'
+        ? {
+            activeProvider: 'hosted',
+            state: 'ready',
+            headline: 'Hosted AI ready',
+            detail: `Open-ended help is powered by OpenAI GPT-5.4-mini through HELM's hosted assistant using ${formatHostedAssistantAccessMode(status.accessMode)} on localhost.`,
+          }
+        : getHostedReadyStatus();
     case 'sign_in_required':
       return getHostedSignInRequiredStatus();
     case 'not_configured':
@@ -106,7 +114,7 @@ export async function getAssistantRuntimeStatus(
     return {
       ...hosted,
       headline: 'Auto mode using hosted AI',
-      detail: 'Open-ended help is currently using hosted GPT-5.4-mini because your HELM session is signed in.',
+      detail: hosted.detail,
     };
   }
 

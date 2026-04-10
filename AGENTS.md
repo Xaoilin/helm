@@ -47,6 +47,7 @@ Also do manual QA before reporting back on any delivered feature. Changes that t
 
 - Use a dedicated branch per task. `codex/<short-description>` is the default branch style.
 - When meaningful work is complete and validation is green, land it through the normal branch -> commit -> merge -> deploy-verification flow unless the user explicitly wants it kept local or unmerged.
+- After a task branch is merged, delete that branch locally and on `origin` so stale merged branches do not accumulate. If a branch is still unmerged, call that out explicitly instead of leaving its status ambiguous.
 - Reproduce bugs before fixing them, then add a regression test.
 - Do not swallow errors silently. Log failures consistently and surface user-facing failures in the UI where appropriate.
 - Prefer domain-context changes over growing the compatibility shell in `AppContext.tsx`.
