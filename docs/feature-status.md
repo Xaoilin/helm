@@ -17,7 +17,7 @@ Use this matrix when updating docs or UI copy. The allowed states are:
 | Chat assistant with Ollama | `real` | Real when Ollama is reachable locally. |
 | Chat assistant without a live AI provider | `local-only/degraded` | Uses a grounded local capability runtime for navigation, tasks, calendar actions, finance logging, and knowledge notes, but open-ended planning still depends on hosted OpenAI or local Ollama. |
 | AI diagnostics in Debug tab | `real` | The Debug surface now includes a dedicated AI Assistant panel with runtime status, Supabase session details, hosted health/smoke tests, Ollama checks, and circuit-breaker reset controls. |
-| Voice assistant | `local-only/degraded` | Shares the grounded capability runtime with chat. Open-ended reasoning is real when hosted OpenAI or Ollama is available, voice capture now shows a live transcript preview, and STT/TTS coverage still degrades when Deepgram or voice output providers are unavailable. |
+| Voice assistant | `local-only/degraded` | Shares the grounded capability runtime with chat. With wake word plus STT/TTS available, Lina now runs a hands-free turn-based voice session with spoken acknowledgement, live transcript preview, and automatic follow-up listening. STT/TTS coverage still degrades when Deepgram or voice output providers are unavailable. |
 | Wake word | `real` | OpenWakeWord runs locally in-browser via WASM. |
 | Deepgram speech-to-text | `real` | Requires a configured API key. |
 | Browser speech fallback | `local-only/degraded` | Usable where supported, less reliable than Deepgram. |
