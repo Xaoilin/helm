@@ -13,7 +13,7 @@ import {
   testHostedAssistantConnection,
   type HostedAssistantConnectionStatus,
 } from '../../services/hostedAssistantApi';
-import { formatHostedAssistantAccessMode } from '../../services/hostedAssistantAccess';
+import { formatHostedAssistantAccessMode, isLocalhostRuntime } from '../../services/hostedAssistantAccess';
 import { listOllamaModels, testOllamaConnection } from '../../services/ollamaApi';
 import { ollamaBreaker } from '../../services/serviceBreakers';
 import {
@@ -96,6 +96,7 @@ export default function AiDebug() {
   const currentUserId = getCurrentUserId();
   const hostedDiagnostics = getHostedAssistantDiagnostics();
   const hostedAccessMode = formatHostedAssistantAccessMode(hostedDiagnostics.lastAccessMode);
+  const localhostRuntime = isLocalhostRuntime();
 
   const refreshRuntime = useCallback(async () => {
     setRefreshingRuntime(true);
@@ -321,16 +322,14 @@ export default function AiDebug() {
           headline={supabaseReady
             ? authenticated
               ? 'Supabase ready and signed in'
-              : hostedDiagnostics.localProjectAccessAvailable
-                ? 'Supabase ready with local hosted access'
-                : 'Supabase ready but not signed in'
+              : hostedDiagnostics.projectAccessAvailable
+                ? 'Supabase ready with hosted project access'
+                : 'Supabase ready but hosted project access is missing'
             : 'Supabase not configured'}
           detail={supabaseReady
-            ? authenticated
-              ? 'Hosted GPT-5.4-mini can use the current HELM session.'
-              : hostedDiagnostics.localProjectAccessAvailable
-                ? 'Localhost can use the configured project access to test the hosted GPT-5.4-mini assistant without signing in.'
-                : 'The browser build can reach Supabase, but hosted AI still needs a signed-in Google session.'
+            ? hostedDiagnostics.projectAccessAvailable
+              ? `Hosted GPT-5.4-mini can use the configured project access in this build${localhostRuntime ? ' on localhost' : ''}. Supabase sign-in remains for sync and user data.`
+              : 'This build can reach Supabase, but the hosted AI project access key is missing.'
             : 'This build does not have Supabase configuration available, so hosted AI cannot run.'}
           checkedAt={runtimeCheckedAt}
         >
@@ -341,7 +340,7 @@ export default function AiDebug() {
           <DataRow label="Provider" value={sessionSnapshot?.provider || 'none'} />
           <DataRow label="Session expires" value={formatExpiry(sessionSnapshot?.expiresAt)} />
           <DataRow label="Access token present" value={formatBoolean(Boolean(sessionSnapshot?.accessTokenPresent))} />
-          <DataRow label="Local project access" value={formatBoolean(hostedDiagnostics.localProjectAccessAvailable)} />
+          <DataRow label="Project access available" value={formatBoolean(hostedDiagnostics.projectAccessAvailable)} />
           <DataRow label="Provider token present" value={formatBoolean(Boolean(sessionSnapshot?.providerToken))} />
           <DataRow label="Refresh token present" value={formatBoolean(Boolean(sessionSnapshot?.providerRefreshToken))} />
         </StatusCard>
@@ -557,9 +556,9 @@ function mapHostedStatus(status: HostedAssistantConnectionStatus, checkedAt: str
       return {
         state: 'success',
         headline: 'Hosted assistant reachable',
-        detail: status.accessMode === 'local_project_key'
-          ? 'The Supabase Edge Function responded successfully using local project access on localhost.'
-          : 'The Supabase Edge Function responded successfully for the current signed-in session.',
+        detail: status.accessMode === 'project_key'
+          ? 'The Supabase Edge Function responded successfully using the configured project access key.'
+          : 'The Supabase Edge Function responded successfully.',
         checkedAt,
       };
     case 'sign_in_required':
@@ -703,7 +702,7 @@ function buildSnapshotText(
     `Provider: ${sessionSnapshot?.provider || 'none'}`,
     `Session expires: ${formatExpiry(sessionSnapshot?.expiresAt)}`,
     `Access token present: ${formatBoolean(Boolean(sessionSnapshot?.accessTokenPresent))}`,
-    `Local project access: ${formatBoolean(hostedDiagnostics.localProjectAccessAvailable)}`,
+    `Project access available: ${formatBoolean(hostedDiagnostics.projectAccessAvailable)}`,
     '',
     '[Hosted Assistant]',
     `Function: ${HOSTED_ASSISTANT_FUNCTION}`,

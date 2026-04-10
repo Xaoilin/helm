@@ -108,7 +108,7 @@ For every delivered feature, say clearly what you verified manually, include the
 
 - API keys are currently client-side configuration for a single-user MVP. Do not describe this as production-grade secret handling.
 - Credentials are stored locally and are not encrypted vault storage.
-- Localhost-only hosted-assistant debugging may use the configured Supabase project access without a signed-in user session. Keep that behavior restricted to local origins and reflect it truthfully in UI copy.
+- Hosted-assistant browser calls currently use the build's configured Supabase project access key. Keep the UI copy truthful about that architecture, and if tighter access control is needed later, move the OpenAI call behind a server-side auth boundary instead of implying the browser path is private.
 - Avoid `dangerouslySetInnerHTML` and preserve React's default escaping protections.
 - If the product ever moves beyond single-user local-first usage, secrets and privileged API calls need a server-side redesign.
 

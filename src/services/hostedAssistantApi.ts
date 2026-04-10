@@ -5,10 +5,10 @@ import {
 } from '@supabase/supabase-js';
 import { HOSTED_ASSISTANT_FUNCTION, SUPABASE_ANON_KEY } from '../config';
 import { API_TIMEOUT } from '../config/constants';
-import { getClient, isAuthenticated, isSupabaseReady } from '../store/supabase';
+import { getClient, isSupabaseReady } from '../store/supabase';
 import { CircuitOpenError } from './circuitBreaker';
 import {
-  canUseHostedAssistantLocalProjectAccess,
+  canUseHostedAssistantProjectAccess,
   type HostedAssistantAccessMode,
 } from './hostedAssistantAccess';
 import { logError } from './logger';
@@ -50,17 +50,10 @@ interface HostedAssistantFailureState {
 export interface HostedAssistantDiagnostics {
   circuitAllowingRequests: boolean;
   lastAccessMode: HostedAssistantAccessMode | null;
-  localProjectAccessAvailable: boolean;
+  projectAccessAvailable: boolean;
   lastFailureSource: HostedAssistantFailureSource | null;
   lastFailureMessage: string | null;
   lastFailureAt: string | null;
-}
-
-class HostedAssistantSessionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'HostedAssistantSessionError';
-  }
 }
 
 const hostedAssistantFailures: Partial<Record<HostedAssistantFailureSource, HostedAssistantFailureState>> = {};
@@ -87,20 +80,23 @@ async function extractFunctionErrorMessage(error: unknown): Promise<string> {
 
   if (isHttpError(error)) {
     const response = error.context;
+    const statusLabel = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
     try {
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         const data = await response.json();
         if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
-          return data.error;
+          return `${statusLabel}: ${data.error}`;
         }
       }
 
       const text = await response.text();
-      if (text) return text;
+      if (text) return `${statusLabel}: ${text}`;
     } catch {
-      return error.message;
+      return `${statusLabel}: ${error.message}`;
     }
+
+    return `${statusLabel}: ${error.message}`;
   }
 
   return error instanceof Error ? error.message : String(error);
@@ -117,10 +113,6 @@ function getHostedAssistantClient() {
   }
 
   return client;
-}
-
-function isHostedSessionError(error: unknown): boolean {
-  return error instanceof HostedAssistantSessionError;
 }
 
 function rememberHostedAssistantFailure(source: HostedAssistantFailureSource, message: string): void {
@@ -159,56 +151,16 @@ function decorateCircuitOpenError(error: CircuitOpenError): Error {
   );
 }
 
-function shouldTreatErrorAsSignInRequired(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return normalized.includes('missing authorization header')
-    || normalized.includes('jwt')
-    || normalized.includes('authorization header')
-    || normalized.includes('session token')
-    || normalized.includes('sign in');
-}
-
-async function getHostedAssistantAuthHeaders(client: NonNullable<ReturnType<typeof getClient>>): Promise<Record<string, string>> {
-  const localProjectAccessAvailable = canUseHostedAssistantLocalProjectAccess();
-
-  const getLocalProjectAccessHeaders = (): Record<string, string> | null => {
-    if (!localProjectAccessAvailable) return null;
-
-    lastHostedAssistantAccessMode = 'local_project_key';
-    return {
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    };
-  };
-
-  if (!isAuthenticated()) {
-    const localProjectHeaders = getLocalProjectAccessHeaders();
-    if (localProjectHeaders) return localProjectHeaders;
-
+function getHostedAssistantAuthHeaders(): Record<string, string> {
+  if (!canUseHostedAssistantProjectAccess()) {
     lastHostedAssistantAccessMode = 'none';
-    throw new HostedAssistantSessionError('Sign in with Google to use hosted AI.');
+    throw new Error('Hosted AI project access is not configured in this build.');
   }
 
-  const { data, error } = await client.auth.getSession();
-  if (error) {
-    const localProjectHeaders = getLocalProjectAccessHeaders();
-    if (localProjectHeaders) return localProjectHeaders;
-
-    lastHostedAssistantAccessMode = 'none';
-    throw new HostedAssistantSessionError(`Hosted AI could not read the current HELM session: ${error.message}`);
-  }
-
-  const accessToken = data.session?.access_token?.trim();
-  if (!accessToken) {
-    const localProjectHeaders = getLocalProjectAccessHeaders();
-    if (localProjectHeaders) return localProjectHeaders;
-
-    lastHostedAssistantAccessMode = 'none';
-    throw new HostedAssistantSessionError('Hosted AI needs a fresh HELM session token. Sign out and sign back in, then retry.');
-  }
-
-  lastHostedAssistantAccessMode = 'session_token';
+  lastHostedAssistantAccessMode = 'project_key';
   return {
-    Authorization: `Bearer ${accessToken}`,
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
   };
 }
 
@@ -217,7 +169,7 @@ export function getHostedAssistantDiagnostics(): HostedAssistantDiagnostics {
   return {
     circuitAllowingRequests: hostedAssistantBreaker.isAvailable,
     lastAccessMode: lastHostedAssistantAccessMode,
-    localProjectAccessAvailable: canUseHostedAssistantLocalProjectAccess(),
+    projectAccessAvailable: canUseHostedAssistantProjectAccess(),
     lastFailureSource: lastFailure?.source ?? null,
     lastFailureMessage: lastFailure?.message ?? null,
     lastFailureAt: lastFailure?.occurredAt ?? null,
@@ -238,7 +190,7 @@ async function invokeHostedAssistant<T>(
   try {
     return await hostedAssistantBreaker.call(async () => {
       const client = getHostedAssistantClient();
-      const headers = await getHostedAssistantAuthHeaders(client);
+      const headers = getHostedAssistantAuthHeaders();
       const { data, error } = await client.functions.invoke<T>(HOSTED_ASSISTANT_FUNCTION, {
         body,
         headers,
@@ -248,9 +200,6 @@ async function invokeHostedAssistant<T>(
       if (error) {
         const message = await extractFunctionErrorMessage(error);
         rememberHostedAssistantFailure(source, message);
-        if (shouldTreatErrorAsSignInRequired(message)) {
-          throw new HostedAssistantSessionError(`Hosted AI needs you to sign in again: ${message}`);
-        }
         throw new Error(message);
       }
 
@@ -262,8 +211,6 @@ async function invokeHostedAssistant<T>(
 
       clearHostedAssistantFailure(source);
       return data;
-    }, {
-      shouldRecordFailure: error => !isHostedSessionError(error),
     });
   } catch (error) {
     if (error instanceof CircuitOpenError) {
@@ -278,6 +225,10 @@ export async function testHostedAssistantConnection(): Promise<HostedAssistantCo
     return { status: 'not_configured', message: 'Supabase is not configured.' };
   }
 
+  if (!canUseHostedAssistantProjectAccess()) {
+    return { status: 'not_configured', message: 'Hosted AI project access is not configured in this build.' };
+  }
+
   try {
     const data = await invokeHostedAssistant<HostedAssistantHealthResponse>('health', { action: 'health' });
     return data.ok
@@ -285,9 +236,6 @@ export async function testHostedAssistantConnection(): Promise<HostedAssistantCo
       : { status: 'unavailable', message: 'Hosted assistant health check failed.' };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (isHostedSessionError(error)) {
-      return { status: 'sign_in_required', message, accessMode: 'none' };
-    }
     logError('HostedAssistant', error);
     return { status: 'unavailable', message, accessMode: lastHostedAssistantAccessMode ?? 'none' };
   }

@@ -1,7 +1,7 @@
 import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import type { AssistantProvider, Settings } from '../types/domain';
 import { testHostedAssistantConnection } from './hostedAssistantApi';
-import { formatHostedAssistantAccessMode } from './hostedAssistantAccess';
+import { formatHostedAssistantAccessMode, isLocalhostRuntime } from './hostedAssistantAccess';
 import { testOllamaConnection } from './ollamaApi';
 
 export type AssistantRuntimeProvider = 'hosted' | 'ollama';
@@ -61,12 +61,12 @@ async function getHostedStatus(): Promise<AssistantRuntimeStatus> {
   const status = await testHostedAssistantConnection();
   switch (status.status) {
     case 'available':
-      return status.accessMode === 'local_project_key'
+      return status.accessMode === 'project_key'
         ? {
             activeProvider: 'hosted',
             state: 'ready',
             headline: 'Hosted AI ready',
-            detail: `Open-ended help is powered by OpenAI GPT-5.4-mini through HELM's hosted assistant using ${formatHostedAssistantAccessMode(status.accessMode)} on localhost.`,
+            detail: `Open-ended help is powered by OpenAI GPT-5.4-mini through HELM's hosted assistant using the configured ${formatHostedAssistantAccessMode(status.accessMode)}${isLocalhostRuntime() ? ' on localhost.' : '.'}`,
           }
         : getHostedReadyStatus();
     case 'sign_in_required':
