@@ -7,8 +7,17 @@
 - After a task branch is merged, delete it locally and on `origin`. If any branch remains unmerged, call out its status explicitly instead of leaving stale topic branches around.
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
+- For every bug, regression, or feature failure, do a five-whys pass before solution planning or implementation. Ask "why did this happen?" repeatedly until you identify the root cause at the correct layer, not just the first visible symptom.
 - Add a regression test for every bug fix that changes logic.
 - Keep changes scoped. If a task spans multiple domains, prefer small coherent commits over one broad sweep.
+
+## Root Cause Analysis
+
+- Use five whys as the default root-cause method for issues and broken features.
+- Start with the user-visible failure, then ask why at least five times or until the chain stops yielding a deeper causal layer.
+- Do not jump from symptom to patch. Finish the root-cause pass first, then plan the fix against the deepest validated cause.
+- If the chain reveals multiple contributing causes, fix the primary root cause first and call out the secondary causes in the handoff.
+- Include the root-cause summary in your final handoff whenever it materially explains the fix or prevents future regressions.
 
 ## Definition Of Done
 
