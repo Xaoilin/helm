@@ -6,6 +6,7 @@ import {
 import { HOSTED_ASSISTANT_FUNCTION } from '../config';
 import { API_TIMEOUT } from '../config/constants';
 import { getClient, isAuthenticated, isSupabaseReady } from '../store/supabase';
+import { CircuitOpenError } from './circuitBreaker';
 import { logError } from './logger';
 import { hostedAssistantBreaker } from './serviceBreakers';
 import type { OllamaMessage } from './ollamaApi';
@@ -33,6 +34,21 @@ export interface HostedAssistantConnectionStatus {
   message?: string;
 }
 
+export type HostedAssistantFailureSource = 'health' | 'chat';
+
+interface HostedAssistantFailureState {
+  source: HostedAssistantFailureSource;
+  message: string;
+  occurredAt: string;
+}
+
+export interface HostedAssistantDiagnostics {
+  circuitAllowingRequests: boolean;
+  lastFailureSource: HostedAssistantFailureSource | null;
+  lastFailureMessage: string | null;
+  lastFailureAt: string | null;
+}
+
 class HostedAssistantSessionError extends Error {
   constructor(message: string) {
     super(message);
@@ -40,8 +56,20 @@ class HostedAssistantSessionError extends Error {
   }
 }
 
+const hostedAssistantFailures: Partial<Record<HostedAssistantFailureSource, HostedAssistantFailureState>> = {};
+
 function isHttpError(error: unknown): error is FunctionsHttpError {
-  return error instanceof FunctionsHttpError;
+  return error instanceof FunctionsHttpError
+    || (
+      typeof error === 'object'
+      && error !== null
+      && 'context' in error
+      && typeof error.context === 'object'
+      && error.context !== null
+      && 'headers' in error.context
+      && 'json' in error.context
+      && 'text' in error.context
+    );
 }
 
 async function extractFunctionErrorMessage(error: unknown): Promise<string> {
@@ -90,6 +118,42 @@ function isHostedSessionError(error: unknown): boolean {
   return error instanceof HostedAssistantSessionError;
 }
 
+function rememberHostedAssistantFailure(source: HostedAssistantFailureSource, message: string): void {
+  hostedAssistantFailures[source] = {
+    source,
+    message,
+    occurredAt: new Date().toISOString(),
+  };
+}
+
+function clearHostedAssistantFailure(source: HostedAssistantFailureSource): void {
+  delete hostedAssistantFailures[source];
+}
+
+function getLastHostedAssistantFailure(): HostedAssistantFailureState | null {
+  const failures = Object.values(hostedAssistantFailures);
+  if (failures.length === 0) return null;
+
+  return failures
+    .slice()
+    .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime())[0];
+}
+
+function formatHostedAssistantFailureSource(source: HostedAssistantFailureSource): string {
+  return source === 'health' ? 'health check' : 'chat request';
+}
+
+function decorateCircuitOpenError(error: CircuitOpenError): Error {
+  const lastFailure = getLastHostedAssistantFailure();
+  if (!lastFailure) {
+    return error;
+  }
+
+  return new Error(
+    `Hosted ${formatHostedAssistantFailureSource(lastFailure.source)} last failed: ${lastFailure.message}. ${error.message}`,
+  );
+}
+
 function shouldTreatErrorAsSignInRequired(message: string): boolean {
   const normalized = message.toLowerCase();
   return normalized.includes('missing authorization header')
@@ -115,32 +179,62 @@ async function getHostedAssistantAuthHeaders(client: NonNullable<ReturnType<type
   };
 }
 
-async function invokeHostedAssistant<T>(body: Record<string, unknown>): Promise<T> {
-  return hostedAssistantBreaker.call(async () => {
-    const client = getHostedAssistantClient();
-    const headers = await getHostedAssistantAuthHeaders(client);
-    const { data, error } = await client.functions.invoke<T>(HOSTED_ASSISTANT_FUNCTION, {
-      body,
-      headers,
-      timeout: API_TIMEOUT.HOSTED_ASSISTANT_CHAT,
-    });
+export function getHostedAssistantDiagnostics(): HostedAssistantDiagnostics {
+  const lastFailure = getLastHostedAssistantFailure();
+  return {
+    circuitAllowingRequests: hostedAssistantBreaker.isAvailable,
+    lastFailureSource: lastFailure?.source ?? null,
+    lastFailureMessage: lastFailure?.message ?? null,
+    lastFailureAt: lastFailure?.occurredAt ?? null,
+  };
+}
 
-    if (error) {
-      const message = await extractFunctionErrorMessage(error);
-      if (shouldTreatErrorAsSignInRequired(message)) {
-        throw new HostedAssistantSessionError(`Hosted AI needs you to sign in again: ${message}`);
+export function resetHostedAssistantDiagnostics(): void {
+  hostedAssistantBreaker.reset();
+  delete hostedAssistantFailures.health;
+  delete hostedAssistantFailures.chat;
+}
+
+async function invokeHostedAssistant<T>(
+  source: HostedAssistantFailureSource,
+  body: Record<string, unknown>,
+): Promise<T> {
+  try {
+    return await hostedAssistantBreaker.call(async () => {
+      const client = getHostedAssistantClient();
+      const headers = await getHostedAssistantAuthHeaders(client);
+      const { data, error } = await client.functions.invoke<T>(HOSTED_ASSISTANT_FUNCTION, {
+        body,
+        headers,
+        timeout: API_TIMEOUT.HOSTED_ASSISTANT_CHAT,
+      });
+
+      if (error) {
+        const message = await extractFunctionErrorMessage(error);
+        rememberHostedAssistantFailure(source, message);
+        if (shouldTreatErrorAsSignInRequired(message)) {
+          throw new HostedAssistantSessionError(`Hosted AI needs you to sign in again: ${message}`);
+        }
+        throw new Error(message);
       }
-      throw new Error(message);
-    }
 
-    if (!data) {
-      throw new Error('Hosted assistant returned no data.');
-    }
+      if (!data) {
+        const message = 'Hosted assistant returned no data.';
+        rememberHostedAssistantFailure(source, message);
+        throw new Error(message);
+      }
 
-    return data;
-  }, {
-    shouldRecordFailure: error => !isHostedSessionError(error),
-  });
+      clearHostedAssistantFailure(source);
+      return data;
+    }, {
+      shouldRecordFailure: error => !isHostedSessionError(error),
+    });
+  } catch (error) {
+    if (error instanceof CircuitOpenError) {
+      throw decorateCircuitOpenError(error);
+    }
+    throw error;
+  }
 }
 
 export async function testHostedAssistantConnection(): Promise<HostedAssistantConnectionStatus> {
@@ -153,7 +247,7 @@ export async function testHostedAssistantConnection(): Promise<HostedAssistantCo
   }
 
   try {
-    const data = await invokeHostedAssistant<HostedAssistantHealthResponse>({ action: 'health' });
+    const data = await invokeHostedAssistant<HostedAssistantHealthResponse>('health', { action: 'health' });
     return data.ok
       ? { status: 'available' }
       : { status: 'unavailable', message: 'Hosted assistant health check failed.' };
@@ -171,7 +265,7 @@ export async function chatWithHostedAssistant(
   messages: OllamaMessage[],
   format: unknown,
 ): Promise<string> {
-  const data = await invokeHostedAssistant<HostedAssistantChatResponse>({
+  const data = await invokeHostedAssistant<HostedAssistantChatResponse>('chat', {
     action: 'chat',
     messages,
     format,

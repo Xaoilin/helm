@@ -2,9 +2,14 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DebugSurface from '../surfaces/DebugSurface';
 import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
-import { chatWithHostedAssistant, testHostedAssistantConnection } from '../services/hostedAssistantApi';
+import {
+  chatWithHostedAssistant,
+  getHostedAssistantDiagnostics,
+  resetHostedAssistantDiagnostics,
+  testHostedAssistantConnection,
+} from '../services/hostedAssistantApi';
 import { listOllamaModels, testOllamaConnection } from '../services/ollamaApi';
-import { hostedAssistantBreaker, ollamaBreaker } from '../services/serviceBreakers';
+import { ollamaBreaker } from '../services/serviceBreakers';
 
 vi.mock('../components/debug/WakeWordDebug', () => ({
   default: () => <div>Wake word debug stub</div>,
@@ -29,6 +34,8 @@ vi.mock('../services/assistantAvailability', () => ({
 
 vi.mock('../services/hostedAssistantApi', () => ({
   chatWithHostedAssistant: vi.fn(),
+  getHostedAssistantDiagnostics: vi.fn(),
+  resetHostedAssistantDiagnostics: vi.fn(),
   testHostedAssistantConnection: vi.fn(),
 }));
 
@@ -54,7 +61,6 @@ vi.mock('../store/supabase', () => ({
 
 describe('DebugSurface AI diagnostics', () => {
   beforeEach(() => {
-    hostedAssistantBreaker.reset();
     ollamaBreaker.reset();
     vi.clearAllMocks();
     vi.mocked(getAssistantProviderSetting).mockReturnValue('hosted');
@@ -66,6 +72,12 @@ describe('DebugSurface AI diagnostics', () => {
     });
     vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available' });
     vi.mocked(chatWithHostedAssistant).mockResolvedValue('READY');
+    vi.mocked(getHostedAssistantDiagnostics).mockReturnValue({
+      circuitAllowingRequests: true,
+      lastFailureSource: null,
+      lastFailureMessage: null,
+      lastFailureAt: null,
+    });
     vi.mocked(testOllamaConnection).mockResolvedValue(true);
     vi.mocked(listOllamaModels).mockResolvedValue(['qwen3:latest', 'llama3.2:latest']);
   });
@@ -116,5 +128,27 @@ describe('DebugSurface AI diagnostics', () => {
 
     expect((await screen.findAllByText('Ollama reachable')).length).toBeGreaterThan(0);
     expect(screen.getByText('qwen3:latest, llama3.2:latest')).toBeInTheDocument();
+  });
+
+  it('shows the last real hosted failure details and resets hosted diagnostics', async () => {
+    vi.mocked(getHostedAssistantDiagnostics).mockReturnValue({
+      circuitAllowingRequests: false,
+      lastFailureSource: 'chat',
+      lastFailureMessage: 'OpenAI error 400: Invalid schema for response_format helm_action_plan.',
+      lastFailureAt: '2026-04-10T01:20:00.000Z',
+    });
+
+    await act(async () => {
+      render(<DebugSurface />);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /AI Assistant/i }));
+    await screen.findByText('Hosted AI ready');
+
+    expect(screen.getByText('chat request')).toBeInTheDocument();
+    expect(screen.getByText(/Invalid schema for response_format helm_action_plan/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Hosted Breaker' }));
+    expect(resetHostedAssistantDiagnostics).toHaveBeenCalledTimes(1);
   });
 });

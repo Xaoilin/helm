@@ -87,6 +87,7 @@ For every delivered feature, say clearly what you verified manually, include the
 - Keep domain types in `src/types/domain.ts`.
 - Prefer extending the domain contexts under `src/store/contexts/` over growing the compatibility shell in `src/store/AppContext.tsx`.
 - Keep assistant logic shared across voice and chat instead of duplicating parsers, prompt rules, or mutation paths.
+- When extending the hosted planner contract, update both `ActionPlanArgs` in `src/assistant/plannerSchema.ts` and the strict hosted JSON schema there. Every planner arg must remain a required nullable property in the schema so OpenAI structured outputs stay valid.
 - Extract timing, size, and threshold literals into `src/config/constants.ts`.
 - Favor explicit, typed interfaces over loose objects and stringly typed state.
 - When a component becomes hard to read, extract subcomponents or hooks instead of stacking more branches into one file.

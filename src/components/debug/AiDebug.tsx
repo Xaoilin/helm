@@ -8,11 +8,13 @@ import {
 } from '../../services/assistantAvailability';
 import {
   chatWithHostedAssistant,
+  getHostedAssistantDiagnostics,
+  resetHostedAssistantDiagnostics,
   testHostedAssistantConnection,
   type HostedAssistantConnectionStatus,
 } from '../../services/hostedAssistantApi';
 import { listOllamaModels, testOllamaConnection } from '../../services/ollamaApi';
-import { hostedAssistantBreaker, ollamaBreaker } from '../../services/serviceBreakers';
+import { ollamaBreaker } from '../../services/serviceBreakers';
 import {
   getAuthSessionSnapshot,
   getCurrentUserId,
@@ -80,6 +82,7 @@ export default function AiDebug() {
   const supabaseReady = isSupabaseReady();
   const authenticated = isAuthenticated();
   const currentUserId = getCurrentUserId();
+  const hostedDiagnostics = getHostedAssistantDiagnostics();
 
   const refreshRuntime = useCallback(async () => {
     setRefreshingRuntime(true);
@@ -197,7 +200,7 @@ export default function AiDebug() {
   }
 
   function resetHostedBreaker() {
-    hostedAssistantBreaker.reset();
+    resetHostedAssistantDiagnostics();
     setHostedResult(previous => ({
       ...previous,
       state: previous.state === 'error' ? 'warning' : previous.state,
@@ -343,8 +346,11 @@ export default function AiDebug() {
         >
           <DataRow label="Function" value={HOSTED_ASSISTANT_FUNCTION} />
           <DataRow label="Model" value={HOSTED_ASSISTANT_MODEL} />
-          <DataRow label="Circuit allowing requests" value={formatBoolean(hostedAssistantBreaker.isAvailable)} />
+          <DataRow label="Circuit allowing requests" value={formatBoolean(hostedDiagnostics.circuitAllowingRequests)} />
           <DataRow label="Last health result" value={hostedResult.headline} />
+          <DataRow label="Last real failure source" value={formatHostedFailureSource(hostedDiagnostics.lastFailureSource)} />
+          <DataRow label="Last real failure" value={hostedDiagnostics.lastFailureMessage || 'none'} />
+          <DataRow label="Last failure at" value={formatCheckedAt(hostedDiagnostics.lastFailureAt)} />
           {hostedResult.payload && <PayloadBlock label="Hosted payload">{hostedResult.payload}</PayloadBlock>}
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #1e2030' }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#cfd3e6', marginBottom: 6 }}>Hosted smoke test</div>
@@ -586,6 +592,12 @@ function formatBoolean(value: boolean): string {
   return value ? 'yes' : 'no';
 }
 
+function formatHostedFailureSource(value: 'health' | 'chat' | null): string {
+  if (value === 'health') return 'health check';
+  if (value === 'chat') return 'chat request';
+  return 'none';
+}
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -642,6 +654,8 @@ function buildSnapshotText(
     ollamaModel: string;
   },
 ): string {
+  const hostedDiagnostics = getHostedAssistantDiagnostics();
+
   return [
     'HELM AI Diagnostics Snapshot',
     `Captured: ${new Date().toLocaleString()}`,
@@ -668,7 +682,10 @@ function buildSnapshotText(
     '[Hosted Assistant]',
     `Function: ${HOSTED_ASSISTANT_FUNCTION}`,
     `Model: ${HOSTED_ASSISTANT_MODEL}`,
-    `Circuit allowing requests: ${formatBoolean(hostedAssistantBreaker.isAvailable)}`,
+    `Circuit allowing requests: ${formatBoolean(hostedDiagnostics.circuitAllowingRequests)}`,
+    `Last failure source: ${formatHostedFailureSource(hostedDiagnostics.lastFailureSource)}`,
+    `Last failure message: ${hostedDiagnostics.lastFailureMessage || 'none'}`,
+    `Last failure at: ${formatCheckedAt(hostedDiagnostics.lastFailureAt)}`,
     `Health headline: ${hostedResult.headline}`,
     `Health detail: ${hostedResult.detail}`,
     `Health checked at: ${formatCheckedAt(hostedResult.checkedAt)}`,
