@@ -64,15 +64,17 @@ export default function TasksSurface() {
 
   useEffect(() => {
     const request = assistantNavigationRequest;
-    if (!request || request.surface !== 'tasks' || !request.taskReveal) return;
+    if (!request || request.surface !== 'tasks') return;
 
-    const reveal = request.taskReveal;
-    const targetTask = tasks.find(task => task.id === reveal.taskId);
+    const tasksState = request.surfaceState?.tasks;
+    const revealTaskId = tasksState?.revealTaskId;
+    const highlightTaskId = tasksState?.highlightTaskId;
+    const targetTask = revealTaskId ? tasks.find(task => task.id === revealTaskId) : undefined;
 
-    if (reveal.tab) {
-      setTab(reveal.tab);
+    if (tasksState?.tab) {
+      setTab(tasksState.tab);
     }
-    if (reveal.resetFilters) {
+    if (tasksState?.resetFilters) {
       setFilterCategory('all');
       setFilterPriority('all');
       setFilterStatus('all');
@@ -81,8 +83,8 @@ export default function TasksSurface() {
     if (targetTask?.category === 'goal' && targetTask.completed) {
       setShowCompletedGoals(true);
     }
-    if (reveal.highlight) {
-      setHighlightedTaskId(reveal.taskId);
+    if (highlightTaskId) {
+      setHighlightedTaskId(highlightTaskId);
     }
 
     dismissAssistantNavigationRequest(request.id);

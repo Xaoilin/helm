@@ -1,0 +1,45 @@
+import type { AssistantNavigationRequest } from './assistantNavigation';
+import type {
+  AssistantCommandResult,
+  AssistantEntityReference,
+} from '../assistant/shared';
+import type { ActionPlan } from '../assistant/plannerSchema';
+
+export interface AssistantDebugTrace {
+  recordedAt: string;
+  transcript: string;
+  effectiveTranscript: string;
+  source: AssistantCommandResult['source'];
+  degradedReason?: AssistantCommandResult['degradedReason'];
+  plan: ActionPlan;
+  execution?: AssistantCommandResult['execution'];
+  referencedEntities?: AssistantEntityReference[];
+  navigationRequests?: AssistantNavigationRequest[];
+}
+
+type TraceListener = (trace: AssistantDebugTrace | null) => void;
+
+let latestTrace: AssistantDebugTrace | null = null;
+const listeners = new Set<TraceListener>();
+
+export function getAssistantDebugTrace(): AssistantDebugTrace | null {
+  return latestTrace;
+}
+
+export function recordAssistantDebugTrace(trace: AssistantDebugTrace): void {
+  latestTrace = trace;
+  listeners.forEach(listener => listener(latestTrace));
+}
+
+export function clearAssistantDebugTrace(): void {
+  latestTrace = null;
+  listeners.forEach(listener => listener(latestTrace));
+}
+
+export function subscribeAssistantDebugTrace(listener: TraceListener): () => void {
+  listeners.add(listener);
+  listener(latestTrace);
+  return () => {
+    listeners.delete(listener);
+  };
+}

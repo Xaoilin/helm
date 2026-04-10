@@ -1,8 +1,9 @@
-import { getCapabilityDefinition } from './capabilities';
+import { getCapabilityDefinition, isCapabilityLive } from './capabilities';
 import { applyStoredCorrections, parseCorrectionIntent } from './correctionMemory';
 import { normaliseDialogState, rememberEntities, rememberPlan, withPendingConfirmation } from './dialogState';
 import { executeActionPlan } from './executor';
 import { planAssistantTurn, resetOllamaAvailability, isOllamaAvailable } from './planner';
+import { recordAssistantDebugTrace } from '../services/assistantDebug';
 import type { AssistantCommandContext, AssistantCommandOptions, AssistantCommandResult, AssistantDialogState, AssistantLang } from './shared';
 
 function isAffirmative(text: string): boolean {
@@ -50,51 +51,65 @@ export async function runAssistantTurn(
       ? 'سأتذكر هذا. '
       : "Thanks, I'll remember that. "
     : '';
+  const finalize = (result: AssistantCommandResult): AssistantCommandResult => {
+    recordAssistantDebugTrace({
+      recordedAt: new Date().toISOString(),
+      transcript,
+      effectiveTranscript,
+      source: result.source,
+      degradedReason: result.degradedReason,
+      plan: result.plan,
+      execution: result.execution,
+      referencedEntities: result.referencedEntities,
+      navigationRequests: result.execution?.navigationRequests,
+    });
+    return result;
+  };
 
   if (dialogState.pendingConfirmation) {
     if (isAffirmative(effectiveTranscript)) {
       if (!options.handlers) {
         const cleared = withPendingConfirmation(dialogState, undefined);
-        return {
+        return finalize({
           message: lang === 'ar' ? 'أحتاج إلى معالجات التنفيذ قبل أن أتمكن من المتابعة.' : 'I need execution handlers before I can continue.',
           plan: dialogState.pendingConfirmation,
           dialogState: cleared,
           source: 'local',
-        };
+        });
       }
 
       const pendingPlan = dialogState.pendingConfirmation;
       const cleared = withPendingConfirmation(dialogState, undefined);
       const execution = executeActionPlan(pendingPlan, context, options.handlers, lang, cleared);
       if (execution.kind === 'clarify') {
-        return {
+        return finalize({
           message: execution.message,
           plan: { ...pendingPlan, mode: 'clarify', response: execution.message, steps: [] },
           dialogState: cleared,
           source: 'local',
-        };
+        });
       }
 
       const updatedDialogState = rememberEntities(rememberPlan(cleared, pendingPlan), execution.referencedEntities);
-      return {
+      return finalize({
         message: execution.message,
         plan: pendingPlan,
         dialogState: updatedDialogState,
         execution: execution.execution,
         referencedEntities: execution.referencedEntities,
         source: 'local',
-      };
+      });
     }
 
     if (isNegative(effectiveTranscript)) {
       const cleared = withPendingConfirmation(dialogState, undefined);
       const response = lang === 'ar' ? 'حسناً، ألغيت ذلك.' : 'Okay, I cancelled that.';
-      return {
+      return finalize({
         message: response,
         plan: { mode: 'answer', response, confidence: 1, steps: [] },
         dialogState: cleared,
         source: 'local',
-      };
+      });
     }
   }
 
@@ -110,6 +125,25 @@ export async function runAssistantTurn(
   const plan = planning.plan;
   dialogState = rememberPlan(dialogState, plan);
 
+  const unavailableStep = plan.steps.find(step => !isCapabilityLive(step.capability));
+  if (unavailableStep) {
+    const clarifyPlan = {
+      mode: 'clarify' as const,
+      response: lang === 'ar'
+        ? 'هذا الإجراء غير متاح بعد، لذلك لن أنفذ شيئاً مختلفاً عنه.'
+        : 'That action is not available yet, so I will not approximate it to something else.',
+      confidence: plan.confidence,
+      steps: [],
+    };
+    dialogState = rememberPlan(dialogState, clarifyPlan);
+    return finalize({
+      message: clarifyPlan.response,
+      plan: clarifyPlan,
+      dialogState,
+      source: 'local',
+    });
+  }
+
   const requiresConfirmation = plan.steps.some(step =>
     step.requiresConfirmation || getCapabilityDefinition(step.capability).confirmationRule === 'always',
   );
@@ -118,26 +152,26 @@ export async function runAssistantTurn(
     const confirmationPlan = { ...plan, mode: 'act' as const };
     dialogState = withPendingConfirmation(dialogState, confirmationPlan);
     const confirmationMessage = `${learnedCorrectionPrefix}${plan.response || defaultConfirmResponse(confirmationPlan, lang)}`.trim();
-    return {
+    return finalize({
       message: confirmationMessage,
       plan: { ...plan, mode: 'confirm' },
       dialogState,
       referencedEntities: planning.referencedEntities,
       source: planning.source,
       degradedReason: planning.degradedReason,
-    };
+    });
   }
 
   if (plan.mode !== 'act' || !options.handlers) {
     dialogState = rememberEntities(dialogState, planning.referencedEntities);
-    return {
+    return finalize({
       message: `${learnedCorrectionPrefix}${plan.response}`.trim(),
       plan,
       dialogState,
       referencedEntities: planning.referencedEntities,
       source: planning.source,
       degradedReason: planning.degradedReason,
-    };
+    });
   }
 
   const execution = executeActionPlan(plan, context, options.handlers, lang, dialogState);
@@ -149,12 +183,12 @@ export async function runAssistantTurn(
       steps: [],
     };
     dialogState = rememberPlan(dialogState, clarifyPlan);
-    return {
+    return finalize({
       message: clarifyPlan.response,
       plan: clarifyPlan,
       dialogState,
       source: 'local',
-    };
+    });
   }
 
   dialogState = rememberEntities(dialogState, [
@@ -162,7 +196,7 @@ export async function runAssistantTurn(
     ...execution.referencedEntities,
   ]);
 
-  return {
+  return finalize({
     message: `${learnedCorrectionPrefix}${execution.message}`.trim(),
     plan,
     dialogState,
@@ -170,7 +204,7 @@ export async function runAssistantTurn(
     referencedEntities: execution.referencedEntities,
     source: planning.source,
     degradedReason: planning.degradedReason,
-  };
+  });
 }
 
 export { isOllamaAvailable, resetOllamaAvailability };

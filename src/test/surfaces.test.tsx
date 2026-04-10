@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import { AppProvider } from '../store/AppContext';
+import { useApp } from '../store/AppContext';
 import App from '../App';
 import CalendarSurface from '../surfaces/CalendarSurface';
 import ChatSurface from '../surfaces/ChatSurface';
@@ -14,9 +15,21 @@ import WorkspacesSurface from '../surfaces/WorkspacesSurface';
 import SettingsSurface from '../surfaces/SettingsSurface';
 import { defaultIntegrations } from '../store/contexts/SettingsContext';
 import { APP_RELEASE_VERSION } from '../config/release';
+import type { AssistantNavigationTarget } from '../services/assistantNavigation';
 
 function renderWithProvider(ui: React.ReactElement) {
   return render(<AppProvider>{ui}</AppProvider>);
+}
+
+function TasksAssistantNavigationHarness({ target }: { target: AssistantNavigationTarget }) {
+  const app = useApp();
+
+  return (
+    <>
+      <button onClick={() => app.requestAssistantNavigation(target)}>Trigger assistant navigation</button>
+      <TasksSurface />
+    </>
+  );
 }
 
 describe('App shell', () => {
@@ -255,6 +268,126 @@ describe('TasksSurface', () => {
   it('should show no tasks subtitle', async () => {
     await act(async () => { renderWithProvider(<TasksSurface />); });
     expect(screen.getByText('No tasks yet')).toBeInTheDocument();
+  });
+
+  it('should switch to All Tasks from assistant navigation without a task id', async () => {
+    await act(async () => {
+      renderWithProvider(
+        <TasksAssistantNavigationHarness
+          target={{
+            surface: 'tasks',
+            surfaceState: {
+              tasks: {
+                tab: 'all',
+                resetFilters: true,
+              },
+            },
+          }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Trigger assistant navigation'));
+    });
+
+    expect(screen.getByRole('button', { name: 'All Tasks' })).toHaveClass('active');
+    expect(screen.getByDisplayValue('All types')).toBeInTheDocument();
+  });
+
+  it('should reset All Tasks filters when assistant navigation asks for it', async () => {
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'task-1',
+        title: 'Buy milk',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'task',
+        createdAt: '2026-04-10T09:00:00.000Z',
+        updatedAt: '2026-04-10T09:00:00.000Z',
+      },
+      {
+        id: 'task-2',
+        title: 'Water plants',
+        description: '',
+        completed: true,
+        completedAt: '2026-04-10T10:00:00.000Z',
+        priority: 'low',
+        category: 'task',
+        createdAt: '2026-04-10T09:00:00.000Z',
+        updatedAt: '2026-04-10T10:00:00.000Z',
+      },
+    ]));
+
+    await act(async () => {
+      renderWithProvider(
+        <TasksAssistantNavigationHarness
+          target={{
+            surface: 'tasks',
+            surfaceState: {
+              tasks: {
+                tab: 'all',
+                resetFilters: true,
+              },
+            },
+          }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'All Tasks' }));
+    });
+
+    fireEvent.change(screen.getByDisplayValue('All statuses'), { target: { value: 'completed' } });
+    expect(screen.getByText('1 task')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Trigger assistant navigation'));
+    });
+
+    expect(screen.getByDisplayValue('All statuses')).toBeInTheDocument();
+    expect(screen.getByText('2 tasks')).toBeInTheDocument();
+  });
+
+  it('should highlight the resolved task when assistant navigation includes a task id', async () => {
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'task-1',
+        title: 'Buy milk',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'task',
+        createdAt: '2026-04-10T09:00:00.000Z',
+        updatedAt: '2026-04-10T09:00:00.000Z',
+      },
+    ]));
+
+    await act(async () => {
+      renderWithProvider(
+        <TasksAssistantNavigationHarness
+          target={{
+            surface: 'tasks',
+            surfaceState: {
+              tasks: {
+                tab: 'all',
+                resetFilters: true,
+                revealTaskId: 'task-1',
+                highlightTaskId: 'task-1',
+              },
+            },
+          }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Trigger assistant navigation'));
+    });
+
+    expect(screen.getByText('Buy milk').closest('.assistant-focus')).not.toBeNull();
   });
 });
 

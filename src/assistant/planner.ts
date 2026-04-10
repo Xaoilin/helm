@@ -3,7 +3,7 @@ import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import { LIMITS, TIMING } from '../config/constants';
 import { chatWithHostedAssistant, testHostedAssistantConnection } from '../services/hostedAssistantApi';
 import { chatWithOllama, testOllamaConnection, type OllamaMessage } from '../services/ollamaApi';
-import { CAPABILITIES, listCapabilitiesForPrompt } from './capabilities';
+import { getLiveCapabilityDefinitions, listCapabilitiesForPrompt } from './capabilities';
 import {
   SURFACE_LABELS,
   resolveCalendarEventReference,
@@ -35,6 +35,11 @@ export interface PlannerResult {
 }
 
 const NAVIGATION_VERBS = ['open', 'go to', 'show me', 'navigate', 'switch to', 'take me to', 'افتح', 'اذهب'];
+const RISKY_CAPABILITY_IDS = new Set(
+  getLiveCapabilityDefinitions()
+    .filter(capability => capability.confirmationRule === 'always')
+    .map(capability => capability.id),
+);
 
 const RESPONSES = {
   noMeetings: {
@@ -424,11 +429,53 @@ function planTaskCreation(transcript: string, context: AssistantCommandContext):
         title: parsed.title,
         priority: parsed.priority,
         category: parsed.category,
-        dueDate: parsed.dueDate,
-        duePhrase: parsed.duePhrase,
+        ...(parsed.dueDate ? { dueDate: parsed.dueDate } : {}),
+        ...(parsed.duePhrase ? { duePhrase: parsed.duePhrase } : {}),
       },
     }],
   };
+}
+
+function buildTaskViewPlan(tab: 'today' | 'all' | 'goals'): ActionPlan {
+  return {
+    mode: 'act',
+    response: '',
+    confidence: 0.95,
+    steps: [{
+      capability: 'tasks.open_view',
+      args: {
+        tab,
+        resetFilters: true,
+      },
+    }],
+  };
+}
+
+function planTaskView(transcript: string): ActionPlan | null {
+  const cleanedTranscript = transcript.trim().replace(/[.?!،]+$/g, '');
+
+  const allMatchers = [
+    /^(?:show(?:\s+me)?|open|pull up|take me to|go to)\s+(?:all\s+tasks|all\s+my\s+tasks|my\s+tasks|task\s+list)$/i,
+  ];
+  if (allMatchers.some(matcher => matcher.test(cleanedTranscript))) {
+    return buildTaskViewPlan('all');
+  }
+
+  const goalMatchers = [
+    /^(?:show(?:\s+me)?|open|pull up|take me to|go to)\s+(?:my\s+goals|goals)$/i,
+  ];
+  if (goalMatchers.some(matcher => matcher.test(cleanedTranscript))) {
+    return buildTaskViewPlan('goals');
+  }
+
+  const todayMatchers = [
+    /^(?:show(?:\s+me)?|open|pull up|take me to|go to)\s+(?:today(?:'s)?\s+tasks|my\s+today(?:'s)?\s+tasks|tasks\s+for\s+today|today(?:'s)?\s+habits)$/i,
+  ];
+  if (todayMatchers.some(matcher => matcher.test(cleanedTranscript))) {
+    return buildTaskViewPlan('today');
+  }
+
+  return null;
 }
 
 function planTaskReveal(transcript: string, dialogState?: AssistantDialogState): ActionPlan | null {
@@ -660,7 +707,7 @@ function planCalendarCreation(transcript: string, context: AssistantCommandConte
         timePhrase: extracted.resolution.phrase,
         start: extracted.resolution.start,
         end: extracted.resolution.end,
-        calendarQuery,
+        ...(calendarQuery ? { calendarQuery } : {}),
       },
     }],
   };
@@ -800,6 +847,9 @@ function planLocally(
   const taskCreate = planTaskCreation(transcript, context);
   if (taskCreate) return { plan: taskCreate, source: 'local' };
 
+  const taskView = planTaskView(transcript);
+  if (taskView) return { plan: taskView, source: 'local' };
+
   const taskReveal = planTaskReveal(transcript, dialogState);
   if (taskReveal) return { plan: taskReveal, source: 'local' };
 
@@ -917,13 +967,12 @@ async function planWithHostedAssistant(
       };
     }
 
-    const riskyIds = new Set(CAPABILITIES.filter(capability => capability.confirmationRule === 'always').map(capability => capability.id));
     return {
       plan: {
         ...plan,
         steps: plan.steps.map(step => ({
           ...step,
-          requiresConfirmation: step.requiresConfirmation || riskyIds.has(step.capability),
+          requiresConfirmation: step.requiresConfirmation || RISKY_CAPABILITY_IDS.has(step.capability),
         })),
       },
       source: 'openai',
@@ -980,13 +1029,12 @@ async function planWithOllama(
       };
     }
 
-    const riskyIds = new Set(CAPABILITIES.filter(capability => capability.confirmationRule === 'always').map(capability => capability.id));
     return {
       plan: {
         ...plan,
         steps: plan.steps.map(step => ({
           ...step,
-          requiresConfirmation: step.requiresConfirmation || riskyIds.has(step.capability),
+          requiresConfirmation: step.requiresConfirmation || RISKY_CAPABILITY_IDS.has(step.capability),
         })),
       },
       source: 'ollama',

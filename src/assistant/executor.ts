@@ -1,4 +1,9 @@
-import { requestAssistantNavigation } from '../services/assistantNavigation';
+import {
+  normalizeAssistantNavigationRequest,
+  requestAssistantNavigation,
+  type AssistantNavigationRequest,
+  type AssistantTaskTab,
+} from '../services/assistantNavigation';
 import {
   buildCompletionContext,
   processTaskCompletion,
@@ -46,6 +51,7 @@ interface ExecutedStepOutcome {
   message: string;
   refs: AssistantEntityReference[];
   undoToken?: string;
+  navigationRequest?: AssistantNavigationRequest;
 }
 
 interface ExecuteOutcome {
@@ -87,12 +93,20 @@ function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function asBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
 function asTaskCategory(value: unknown): Task['category'] | 'any' {
   return value === 'daily' || value === 'task' || value === 'goal' ? value : 'any';
 }
 
 function asMatchScope(value: unknown): 'one' | 'all' {
   return value === 'all' ? 'all' : 'one';
+}
+
+function asTaskTab(value: unknown): AssistantTaskTab | undefined {
+  return value === 'today' || value === 'all' || value === 'goals' ? value : undefined;
 }
 
 function pickCalendarSource(
@@ -290,7 +304,8 @@ function executeSingleStep(
 
       const surface = surfaceValue as Surface;
       const navigate = handlers.navigate || requestAssistantNavigation;
-      navigate(surface);
+      const navigationRequest = normalizeAssistantNavigationRequest(surface);
+      navigate(navigationRequest);
 
       const ref = makeEntityReference('surface', surface, SURFACE_LABELS[surface].en, surface, 1);
       return {
@@ -304,6 +319,50 @@ function executeSingleStep(
           ? `جاري فتح ${SURFACE_LABELS[surface].ar}.`
           : `Opening ${SURFACE_LABELS[surface].en} for you.`,
         refs: [ref],
+        navigationRequest,
+      };
+    }
+
+    case 'tasks.open_view': {
+      const tab = asTaskTab(step.args.tab);
+      if (!tab) {
+        return { kind: 'clarify', message: 'Which Tasks view should I open?' };
+      }
+
+      const navigate = handlers.navigate || requestAssistantNavigation;
+      const navigationRequest = normalizeAssistantNavigationRequest({
+        surface: 'tasks',
+        surfaceState: {
+          tasks: {
+            tab,
+            resetFilters: asBoolean(step.args.resetFilters) ?? false,
+          },
+        },
+      });
+      navigate(navigationRequest);
+
+      const ref = makeEntityReference('surface', 'tasks', SURFACE_LABELS.tasks.en, 'tasks', 1);
+      const tabLabel = tab === 'all' ? 'All Tasks' : tab === 'goals' ? 'Goals' : 'Today';
+      return {
+        stepResult: {
+          capability: step.capability,
+          status: 'completed',
+          summary: `Opened the ${tabLabel} task view.`,
+          entityRefs: [ref],
+        },
+        message: lang === 'ar'
+          ? tab === 'all'
+            ? 'سأفتح كل مهامك.'
+            : tab === 'goals'
+              ? 'سأفتح أهدافك.'
+              : 'سأفتح مهام اليوم.'
+          : tab === 'all'
+            ? 'Opening all your tasks.'
+            : tab === 'goals'
+              ? 'Opening your goals.'
+              : "Opening today's tasks.",
+        refs: [ref],
+        navigationRequest,
       };
     }
 
@@ -476,15 +535,18 @@ function executeSingleStep(
 
       const task = resolution.task;
       const navigate = handlers.navigate || requestAssistantNavigation;
-      navigate({
+      const navigationRequest = normalizeAssistantNavigationRequest({
         surface: 'tasks',
-        taskReveal: {
-          taskId: task.id,
-          tab: task.category === 'goal' ? 'goals' : 'all',
-          resetFilters: true,
-          highlight: true,
+        surfaceState: {
+          tasks: {
+            tab: task.category === 'goal' ? 'goals' : 'all',
+            resetFilters: true,
+            revealTaskId: task.id,
+            highlightTaskId: task.id,
+          },
         },
       });
+      navigate(navigationRequest);
 
       const ref = makeEntityReference('task', task.id, task.title, 'tasks', 1);
       return {
@@ -498,6 +560,7 @@ function executeSingleStep(
           ? `سأعرض "${task.title}" في المهام.`
           : `Opening "${task.title}" in your tasks.`,
         refs: [ref],
+        navigationRequest,
       };
     }
 
@@ -718,6 +781,7 @@ export function executeActionPlan(
   const refs: AssistantEntityReference[] = [];
   let lastMessage = plan.response;
   const undoTokens: string[] = [];
+  const navigationRequests: AssistantNavigationRequest[] = [];
 
   for (const step of plan.steps) {
     const capability = getCapabilityDefinition(step.capability);
@@ -732,6 +796,9 @@ export function executeActionPlan(
     if (result.undoToken && capability.confirmationRule !== 'never') {
       undoTokens.push(result.undoToken);
     }
+    if (result.navigationRequest) {
+      navigationRequests.push(result.navigationRequest);
+    }
   }
 
   return {
@@ -742,6 +809,7 @@ export function executeActionPlan(
       status: steps.length > 0 ? 'executed' : 'skipped',
       steps,
       undoToken: undoTokens.length > 0 ? undoTokens.join('|') : undefined,
+      navigationRequests: navigationRequests.length > 0 ? navigationRequests : undefined,
     },
   };
 }

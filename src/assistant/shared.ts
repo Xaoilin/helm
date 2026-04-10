@@ -15,7 +15,7 @@ import type {
   Transaction,
   Workspace,
 } from '../types/domain';
-import type { AssistantNavigationHandler } from '../services/assistantNavigation';
+import type { AssistantNavigationHandler, AssistantNavigationRequest } from '../services/assistantNavigation';
 import type { ActionPlan } from './plannerSchema';
 
 export type AssistantLang = 'en' | 'ar';
@@ -124,6 +124,7 @@ export interface AssistantExecutionResult {
   status: 'executed' | 'skipped';
   steps: AssistantExecutionStep[];
   undoToken?: string;
+  navigationRequests?: AssistantNavigationRequest[];
 }
 
 export interface AssistantCommandResult {

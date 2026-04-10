@@ -60,6 +60,24 @@ test.describe('Lina Assistant', () => {
     await expect(page.locator('h1:has-text("Calendar")')).toBeVisible({ timeout: 5000 });
   });
 
+  test('should switch task tabs from Lina without needing a specific task', async ({ page }) => {
+    await page.locator('button[aria-label="Talk to Lina"]').click();
+    const input = page.locator('input[placeholder*="Type"]');
+
+    await input.fill('show me all my tasks');
+    await input.press('Enter');
+    await expect(page.locator('h1:has-text("Tasks")')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: 'All Tasks' })).toHaveClass(/active/);
+
+    await input.fill('show my goals');
+    await input.press('Enter');
+    await expect(page.getByRole('button', { name: 'Goals' })).toHaveClass(/active/);
+
+    await input.fill("show today's tasks");
+    await input.press('Enter');
+    await expect(page.getByRole('button', { name: 'Today' })).toHaveClass(/active/);
+  });
+
   test('should create a polite task request and reveal it in All Tasks', async ({ page }) => {
     await page.getByRole('button', { name: 'Navigate to Chat' }).click();
     await page.locator('.chat-main button:has-text("New conversation")').click();

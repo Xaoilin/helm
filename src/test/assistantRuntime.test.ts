@@ -169,7 +169,9 @@ describe('assistant runtime', () => {
     expect(result.source).toBe('local');
     expect(result.plan.mode).toBe('act');
     expect(result.execution?.steps[0].capability).toBe('navigation.go_to_surface');
-    expect(navigate).toHaveBeenCalledWith('calendar');
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
+      surface: 'calendar',
+    }));
   });
 
   it('executes task creation through the structured capability runtime', async () => {
@@ -236,11 +238,13 @@ describe('assistant runtime', () => {
     expect(reveal.execution?.steps[0].capability).toBe('tasks.reveal_task');
     expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({
       surface: 'tasks',
-      taskReveal: expect.objectContaining({
-        taskId: 'task-77',
-        tab: 'all',
-        resetFilters: true,
-        highlight: true,
+      surfaceState: expect.objectContaining({
+        tasks: expect.objectContaining({
+          revealTaskId: 'task-77',
+          highlightTaskId: 'task-77',
+          tab: 'all',
+          resetFilters: true,
+        }),
       }),
     }));
   });
@@ -270,9 +274,99 @@ describe('assistant runtime', () => {
     expect(result.execution?.steps[0].capability).toBe('tasks.reveal_task');
     expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
       surface: 'tasks',
-      taskReveal: expect.objectContaining({
-        taskId: 'task-buy-milk',
+      surfaceState: expect.objectContaining({
+        tasks: expect.objectContaining({
+          revealTaskId: 'task-buy-milk',
+        }),
       }),
+    }));
+  });
+
+  it('opens the all tasks view for explicit all-task requests', async () => {
+    const navigate = vi.fn();
+
+    const result = await processAssistantCommand('show me all my tasks', makeContext(), {
+      lang: 'en',
+      handlers: {
+        navigate,
+        addTask: vi.fn(() => 'task-1'),
+        updateTask: vi.fn(),
+      },
+    });
+
+    expect(result.execution?.steps[0].capability).toBe('tasks.open_view');
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
+      surface: 'tasks',
+      surfaceState: expect.objectContaining({
+        tasks: expect.objectContaining({
+          tab: 'all',
+          resetFilters: true,
+        }),
+      }),
+    }));
+  });
+
+  it('opens the goals view for explicit goals requests', async () => {
+    const navigate = vi.fn();
+
+    const result = await processAssistantCommand('show my goals', makeContext(), {
+      lang: 'en',
+      handlers: {
+        navigate,
+        addTask: vi.fn(() => 'task-1'),
+        updateTask: vi.fn(),
+      },
+    });
+
+    expect(result.execution?.steps[0].capability).toBe('tasks.open_view');
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
+      surface: 'tasks',
+      surfaceState: expect.objectContaining({
+        tasks: expect.objectContaining({
+          tab: 'goals',
+        }),
+      }),
+    }));
+  });
+
+  it("opens today's task view for explicit today-task requests", async () => {
+    const navigate = vi.fn();
+
+    const result = await processAssistantCommand("show today's tasks", makeContext(), {
+      lang: 'en',
+      handlers: {
+        navigate,
+        addTask: vi.fn(() => 'task-1'),
+        updateTask: vi.fn(),
+      },
+    });
+
+    expect(result.execution?.steps[0].capability).toBe('tasks.open_view');
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
+      surface: 'tasks',
+      surfaceState: expect.objectContaining({
+        tasks: expect.objectContaining({
+          tab: 'today',
+        }),
+      }),
+    }));
+  });
+
+  it('keeps plain "open tasks" as top-level surface navigation', async () => {
+    const navigate = vi.fn();
+
+    const result = await processAssistantCommand('open tasks', makeContext(), {
+      lang: 'en',
+      handlers: {
+        navigate,
+        addTask: vi.fn(() => 'task-1'),
+        updateTask: vi.fn(),
+      },
+    });
+
+    expect(result.execution?.steps[0].capability).toBe('navigation.go_to_surface');
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
+      surface: 'tasks',
     }));
   });
 

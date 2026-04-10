@@ -10,6 +10,7 @@ The current implementation now routes both chat and voice through a shared assis
 
 Implemented pieces:
 
+- a source-of-truth assistant action registry with per-action status, domain, args, examples, aliases, and executor metadata
 - schema-validated `ActionPlan` planning
 - a shared capability registry
 - entity resolution for surfaces, tasks, events, calendars, accounts, and knowledge topics
@@ -17,7 +18,7 @@ Implemented pieces:
 - normalized task-request parsing that strips conversational scaffolding before writes
 - deterministic execution for navigation, task creation/reveal/completion/deletion, calendar creation/rescheduling, finance logging, and knowledge entry creation
 - shared dialog state with confirmation handling for risky actions such as event rescheduling
-- one-shot assistant navigation requests so Lina can reveal a specific task in the Tasks UI instead of only opening the surface
+- typed assistant navigation requests so Lina can open the Tasks surface to `Today`, `All Tasks`, or `Goals`, optionally reset filters, and optionally reveal and highlight a specific task
 - structured provider-backed planning through hosted OpenAI or local Ollama instead of action-tag parsing
 
 Still intentionally lightweight:
@@ -75,16 +76,22 @@ Create a shared registry of semantic app actions.
 Each capability should define:
 
 - a stable capability id
+- a lifecycle status such as `live`, `planned`, or `disabled`
+- a domain owner such as navigation, tasks, calendar, finance, or knowledge
 - a strict input schema
+- examples and aliases
 - plain-language examples
 - preconditions
 - confirmation requirements
 - a deterministic executor
+- an executor key for debug visibility
+- debug metadata rendered in the Debug surface
 - postcondition checks where possible
 
 Examples:
 
 - `navigation.go_to_surface`
+- `tasks.open_view`
 - `tasks.create_task`
 - `tasks.reveal_task`
 - `tasks.complete_matching`
@@ -191,6 +198,7 @@ Execution should follow a deterministic pipeline:
 If confidence is low, the target is ambiguous, or the action is destructive, Lina should clarify or confirm before mutating state.
 
 For write actions, Lina should only describe success after the deterministic local mutation succeeds. For reveal actions, the executor should pass a typed navigation request that allows the UI to open the correct tab, clear restrictive filters, and highlight the resolved entity.
+For view-only task navigation, the executor should use the same typed Tasks surface-state payload even when no task id is involved so "show me all my tasks" is explicit and testable instead of being approximated to a generic surface jump.
 
 ### 6. Dialog state
 
@@ -222,6 +230,17 @@ The current implementation now covers a lightweight version of this for transcri
 - local-first persistence shared by chat and voice
 
 Broader semantic teaching, plan reuse, and larger evaluation coverage are still future work.
+
+## Debug Visibility
+
+The Debug surface should render the assistant action registry directly from code and show the latest assistant trace:
+
+- transcript and effective transcript
+- structured `ActionPlan`
+- executed steps
+- typed navigation payloads
+
+This makes unsupported gaps visible before they become user-facing surprises.
 
 ### 8. Evaluation harness
 

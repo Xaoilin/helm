@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { HOSTED_ASSISTANT_FUNCTION, HOSTED_ASSISTANT_MODEL, OLLAMA_ENDPOINT } from '../../config';
 import { useApp } from '../../store/AppContext';
+import { getAllCapabilityDefinitions } from '../../assistant/capabilities';
 import {
   getAssistantProviderSetting,
   getAssistantRuntimeStatus,
   type AssistantRuntimeStatus,
 } from '../../services/assistantAvailability';
+import {
+  getAssistantDebugTrace,
+  subscribeAssistantDebugTrace,
+  type AssistantDebugTrace,
+} from '../../services/assistantDebug';
 import {
   chatWithHostedAssistant,
   getHostedAssistantDiagnostics,
@@ -94,6 +100,7 @@ export default function AiDebug() {
   const [smokeResult, setSmokeResult] = useState<DiagnosticResult>(DEFAULT_HOSTED_SMOKE_RESULT);
   const [ollamaResult, setOllamaResult] = useState<DiagnosticResult>(DEFAULT_OLLAMA_RESULT);
   const [copyState, setCopyState] = useState<DiagnosticState>('idle');
+  const [assistantTrace, setAssistantTrace] = useState<AssistantDebugTrace | null>(() => getAssistantDebugTrace());
 
   const providerSetting = getAssistantProviderSetting(app.settings);
   const ollamaEndpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
@@ -126,6 +133,8 @@ export default function AiDebug() {
   useEffect(() => {
     void refreshRuntime();
   }, [refreshRuntime]);
+
+  useEffect(() => subscribeAssistantDebugTrace(setAssistantTrace), []);
 
   async function runHostedCheck() {
     setHostedResult({
@@ -271,6 +280,7 @@ export default function AiDebug() {
   const runtimeState = runtimeError
     ? 'error'
     : runtimeStatus ? mapRuntimeState(runtimeStatus.state) : 'idle';
+  const actions = getAllCapabilityDefinitions();
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -416,6 +426,88 @@ export default function AiDebug() {
           <DataRow label="Last Ollama result" value={ollamaResult.headline} />
           {ollamaResult.payload && <PayloadBlock label="Available models">{ollamaResult.payload}</PayloadBlock>}
         </StatusCard>
+      </div>
+
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#f5f7ff', marginBottom: 8 }}>Assistant Actions</div>
+            <div style={{ fontSize: 13, color: '#9ea4c5', maxWidth: 860 }}>
+              This registry is the source of truth for what Lina is allowed to claim and execute. Add or change actions here instead of scattering one-off parser rules.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <StatusBadge state="success">{actions.filter(action => action.status === 'live').length} live</StatusBadge>
+            <StatusBadge state="idle">{actions.length} total</StatusBadge>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16, display: 'grid', gap: 10 }}>
+          {actions.map(action => (
+            <div
+              key={action.id}
+              style={{
+                padding: 14,
+                borderRadius: 12,
+                border: '1px solid #1e2030',
+                background: 'rgba(10, 12, 18, 0.45)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#f5f7ff' }}>{action.id}</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <StatusBadge state={mapActionStatus(action.status)}>{action.status}</StatusBadge>
+                  <StatusBadge state="idle">{action.domain}</StatusBadge>
+                </div>
+              </div>
+              <div style={{ fontSize: 13, color: '#9ea4c5', marginTop: 8 }}>{action.debugSummary}</div>
+              <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+                <DataRow label="Confirmation" value={action.confirmationRule} />
+                <DataRow label="Executor" value={action.executorKey} />
+                <DataRow label="Args" value={formatActionArgs(action)} />
+                <DataRow label="Examples" value={action.examples.join(' | ')} />
+                <DataRow label="Aliases" value={action.aliases.join(' | ')} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#f5f7ff', marginBottom: 8 }}>Latest Assistant Trace</div>
+        <div style={{ fontSize: 13, color: '#9ea4c5' }}>
+          Run a chat or voice command and this panel will show the last structured plan, execution steps, and navigation payload that Lina produced.
+        </div>
+
+        {!assistantTrace ? (
+          <div style={{ marginTop: 14, color: '#6b6f85', fontSize: 13 }}>
+            No assistant trace captured yet.
+          </div>
+        ) : (
+          <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
+            <DataRow label="Recorded" value={formatCheckedAt(assistantTrace.recordedAt)} />
+            <DataRow label="Source" value={assistantTrace.source} />
+            <DataRow label="Transcript" value={assistantTrace.transcript} />
+            <DataRow label="Effective" value={assistantTrace.effectiveTranscript} />
+            <DataRow label="Plan Mode" value={assistantTrace.plan.mode} />
+            <DataRow label="Degraded" value={assistantTrace.degradedReason || 'none'} />
+            <DataRow
+              label="Execution"
+              value={assistantTrace.execution
+                ? assistantTrace.execution.steps.map(step => `${step.capability}: ${step.status}`).join(' | ')
+                : 'none'}
+            />
+            {assistantTrace.execution?.navigationRequests && (
+              <PayloadBlock label="Navigation Payload">
+                {JSON.stringify(assistantTrace.execution.navigationRequests, null, 2)}
+              </PayloadBlock>
+            )}
+            <PayloadBlock label="Plan JSON">{JSON.stringify(assistantTrace.plan, null, 2)}</PayloadBlock>
+            {assistantTrace.execution && (
+              <PayloadBlock label="Execution JSON">{JSON.stringify(assistantTrace.execution, null, 2)}</PayloadBlock>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -628,6 +720,29 @@ function formatHostedFailureSource(value: 'health' | 'chat' | null): string {
   if (value === 'health') return 'health check';
   if (value === 'chat') return 'chat request';
   return 'none';
+}
+
+function mapActionStatus(status: 'live' | 'planned' | 'disabled'): DiagnosticState {
+  switch (status) {
+    case 'live':
+      return 'success';
+    case 'planned':
+      return 'warning';
+    case 'disabled':
+    default:
+      return 'idle';
+  }
+}
+
+function formatActionArgs(action: ReturnType<typeof getAllCapabilityDefinitions>[number]): string {
+  if (action.args.length === 0) return 'none';
+  return action.args
+    .map(arg => {
+      const qualifier = arg.required ? 'required' : 'optional';
+      const values = arg.values && arg.values.length > 0 ? ` (${arg.values.join(', ')})` : '';
+      return `${arg.key}${values} [${arg.type}, ${qualifier}]`;
+    })
+    .join(' | ');
 }
 
 function getErrorMessage(error: unknown): string {

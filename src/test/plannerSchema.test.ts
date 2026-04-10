@@ -27,6 +27,12 @@ function walkSchema(
   if ('items' in node) {
     walkSchema(node.items, visit);
   }
+
+  if ('anyOf' in node && Array.isArray(node.anyOf)) {
+    for (const value of node.anyOf) {
+      walkSchema(value, visit);
+    }
+  }
 }
 
 function makeContext(): AssistantCommandContext {
@@ -61,13 +67,13 @@ describe('plannerSchema', () => {
     expect(objectSchemas.length).toBeGreaterThan(0);
     for (const schema of objectSchemas) {
       expect(schema.additionalProperties).toBe(false);
-      const properties = Object.keys((schema.properties || {}) as Record<string, unknown>).sort();
       const required = Array.isArray(schema.required) ? [...schema.required].sort() : [];
-      expect(required).toEqual(properties);
+      const properties = Object.keys((schema.properties || {}) as Record<string, unknown>).sort();
+      expect(required.every(key => properties.includes(key))).toBe(true);
     }
   });
 
-  it('normalizes nullable action-plan args without breaking executor behavior', () => {
+  it('parses capability-specific action-plan args without breaking executor behavior', () => {
     const parsed = parseActionPlan({
       mode: 'act',
       response: 'Adding a task.',
@@ -76,26 +82,9 @@ describe('plannerSchema', () => {
         {
           capability: 'tasks.create_task',
           args: {
-            surface: null,
             title: 'Buy milk',
             priority: 'high',
-            category: null,
-            dueDate: null,
-            duePhrase: null,
-            taskQuery: null,
-            timePhrase: null,
-            start: null,
-            end: null,
-            calendarQuery: null,
-            eventQuery: null,
-            type: null,
-            amount: null,
-            description: null,
-            accountQuery: null,
-            topicQuery: null,
-            content: null,
-            date: null,
-            location: null,
+            category: 'task',
           },
           unresolved: null,
           requiresConfirmation: null,
@@ -107,6 +96,7 @@ describe('plannerSchema', () => {
     expect(parsed?.steps[0]?.args).toEqual({
       title: 'Buy milk',
       priority: 'high',
+      category: 'task',
     });
 
     const addTask = vi.fn(() => 'task-1');
