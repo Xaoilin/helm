@@ -58,6 +58,7 @@ export const TIMING = {
 } as const;
 
 export const VOICE_SESSION = {
+  CONVERSATION_TITLE: 'Voice conversation',
   GREETING: {
     en: 'Hey, how can I help?',
     ar: 'مرحباً، كيف أقدر أساعدك؟',
@@ -88,6 +89,10 @@ export const VOICE_SESSION = {
       'مع السلامة لينا',
     ],
   },
+} as const;
+
+export const CHAT = {
+  DEFAULT_CONVERSATION_TITLE: 'New conversation',
 } as const;
 
 // ── API Timeouts (milliseconds) ──
