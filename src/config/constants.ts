@@ -141,6 +141,8 @@ export const LIMITS = {
   MIN_AUDIO_BLOB_SIZE: 500,
   /** LLM conversation history messages to keep */
   LLM_HISTORY_MESSAGES: 10,
+  /** Persist up to this many assistant transcript corrections */
+  ASSISTANT_CORRECTION_MEMORY: 100,
   /** Default calendar event duration (ms = 1 hour) */
   DEFAULT_EVENT_DURATION: 3600000,
 } as const;

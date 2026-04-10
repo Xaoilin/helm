@@ -40,6 +40,13 @@ export const CAPABILITIES: CapabilityDefinition[] = [
     confirmationRule: 'on_ambiguity',
   },
   {
+    id: 'tasks.delete_matching',
+    title: 'Delete Task',
+    description: 'Delete a matching task, habit, or goal.',
+    examples: ['Delete the mirror task', 'Remove all tasks related to mirrors'],
+    confirmationRule: 'always',
+  },
+  {
     id: 'calendar.create_event',
     title: 'Create Event',
     description: 'Create a calendar event on a resolved calendar source.',

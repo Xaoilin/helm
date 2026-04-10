@@ -336,6 +336,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
       }, {
         lang,
         conversationHistory: chatHistoryRef.current,
+        corrections: app.assistantCorrections,
         dialogState: dialogStateRef.current,
         provider: app.settings.assistantProvider,
         endpoint: ollamaEndpoint,
@@ -344,6 +345,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
           navigate: app.requestAssistantNavigation,
           addTask: app.addTask,
           updateTask: app.updateTask,
+          removeTask: app.removeTask,
+          upsertAssistantCorrection: app.upsertAssistantCorrection,
+          noteAssistantCorrectionApplied: app.noteAssistantCorrectionApplied,
           addCalendarEvent: app.addCalendarEvent,
           updateCalendarEvent: app.updateCalendarEvent,
           addTransaction: app.addTransaction,

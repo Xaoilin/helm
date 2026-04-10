@@ -1,4 +1,5 @@
 import type {
+  AssistantCorrection,
   CalendarAccount,
   CalendarEvent,
   CalendarSource,
@@ -86,6 +87,14 @@ export interface AssistantActionHandlers {
   navigate?: AssistantNavigationHandler;
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateTask: (id: string, updates: Partial<Task>) => void;
+  removeTask?: (id: string) => void;
+  upsertAssistantCorrection?: (correction: {
+    sourceText: string;
+    targetText: string;
+    lang: AssistantLang;
+    scope: AssistantCorrection['scope'];
+  }) => string | null;
+  noteAssistantCorrectionApplied?: (id: string) => void;
   addCalendarEvent?: (event: Omit<CalendarEvent, 'id'>) => string;
   updateCalendarEvent?: (id: string, updates: Partial<CalendarEvent>) => void;
   addTransaction?: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => string;
@@ -96,6 +105,7 @@ export interface AssistantActionHandlers {
 export interface AssistantCommandOptions {
   lang?: AssistantLang;
   conversationHistory?: AssistantConversationMessage[];
+  corrections?: AssistantCorrection[];
   provider?: AssistantProvider;
   endpoint?: string;
   model?: string;

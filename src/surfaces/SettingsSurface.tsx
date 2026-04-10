@@ -404,6 +404,9 @@ export default function SettingsSurface() {
           <div style={{ fontSize: 11, color: '#6b6f85', marginBottom: 10 }}>
             {ELEVENLABS_API_KEY ? 'ElevenLabs voice output configured ✓' : 'Using browser voice output (configure ElevenLabs in .env for cloned voice)'}
           </div>
+          <div style={{ fontSize: 10, color: '#4a4e62', marginBottom: 10 }}>
+            Tip: if Lina mishears you, say <strong>"No, I said ..."</strong>. HELM now stores that correction locally and reuses it for future voice and chat commands.
+          </div>
           {microphones.length > 0 && (
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label htmlFor="settings-mic">Microphone</label>
