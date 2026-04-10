@@ -26,6 +26,13 @@ export const CAPABILITIES: CapabilityDefinition[] = [
     confirmationRule: 'never',
   },
   {
+    id: 'tasks.reveal_task',
+    title: 'Reveal Task',
+    description: 'Open the Tasks surface and reveal a specific task from recent context or an explicit query.',
+    examples: ['Show me that task', 'Open task buy milk'],
+    confirmationRule: 'never',
+  },
+  {
     id: 'tasks.complete_matching',
     title: 'Complete Task',
     description: 'Mark a matching task or habit as complete.',

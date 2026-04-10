@@ -46,7 +46,7 @@ export async function runAssistantTurn(
 
       const pendingPlan = dialogState.pendingConfirmation;
       const cleared = withPendingConfirmation(dialogState, undefined);
-      const execution = executeActionPlan(pendingPlan, context, options.handlers, lang);
+      const execution = executeActionPlan(pendingPlan, context, options.handlers, lang, cleared);
       if (execution.kind === 'clarify') {
         return {
           message: execution.message,
@@ -120,7 +120,7 @@ export async function runAssistantTurn(
     };
   }
 
-  const execution = executeActionPlan(plan, context, options.handlers, lang);
+  const execution = executeActionPlan(plan, context, options.handlers, lang, dialogState);
   if (execution.kind === 'clarify') {
     const clarifyPlan = {
       mode: 'clarify' as const,

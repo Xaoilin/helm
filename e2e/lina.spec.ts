@@ -3,6 +3,8 @@ import { test, expect } from '@playwright/test';
 test.describe('Lina Assistant', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
     await page.waitForSelector('.sidebar');
   });
 
@@ -56,5 +58,42 @@ test.describe('Lina Assistant', () => {
     await input.press('Enter');
     // Should navigate to calendar
     await expect(page.locator('h1:has-text("Calendar")')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('should create a polite task request and reveal it in All Tasks', async ({ page }) => {
+    await page.getByRole('button', { name: 'Navigate to Chat' }).click();
+    await page.locator('.chat-main button:has-text("New conversation")').click();
+
+    const input = page.locator('input[placeholder*="Type a message"]');
+    await input.fill('Can you add a task for me to put the mirror up on the office?');
+    await input.press('Enter');
+
+    await expect(page.locator('.chat-message.assistant').last()).toContainText('Added "put the mirror up on the office" to your tasks.');
+
+    await input.fill('Show me that task.');
+    await input.press('Enter');
+
+    await expect(page.locator('h1:has-text("Tasks")')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: 'All Tasks' })).toHaveClass(/active/);
+    await expect(page.locator('.task-row.assistant-focus')).toContainText('put the mirror up on the office');
+  });
+
+  test('should keep undated assistant-created tasks out of Today but visible in All Tasks', async ({ page }) => {
+    await page.getByRole('button', { name: 'Navigate to Chat' }).click();
+    await page.locator('.chat-main button:has-text("New conversation")').click();
+
+    const input = page.locator('input[placeholder*="Type a message"]');
+    await input.fill('Can you add a task for me to put the mirror up on the office?');
+    await input.press('Enter');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText('Added "put the mirror up on the office" to your tasks.');
+
+    await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
+    await expect(page.locator('h1:has-text("Tasks")')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: 'Today' })).toHaveClass(/active/);
+    await expect(page.locator('text=Nothing for today')).toBeVisible();
+    await expect(page.locator('text=put the mirror up on the office')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'All Tasks' }).click();
+    await expect(page.locator('text=put the mirror up on the office')).toBeVisible();
   });
 });

@@ -1,6 +1,7 @@
 export const CAPABILITY_IDS = [
   'navigation.go_to_surface',
   'tasks.create_task',
+  'tasks.reveal_task',
   'tasks.complete_matching',
   'calendar.create_event',
   'calendar.reschedule_event',

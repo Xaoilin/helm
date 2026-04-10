@@ -7,6 +7,7 @@ import { DEFAULT_PROFILE } from '../services/gamification';
 import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
 import { canUseHostedAssistantProjectAccess, isLocalhostRuntime } from '../services/hostedAssistantAccess';
 import { testOllamaConnection, listOllamaModels } from '../services/ollamaApi';
+import { APP_RELEASE_VERSION } from '../config/release';
 
 export default function SettingsSurface() {
   const app = useApp();
@@ -472,11 +473,14 @@ export default function SettingsSurface() {
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>About</h3>
         <div className="card">
           <div style={{ fontSize: 13 }}>
-            <strong>HELM</strong> v0.1.0<br />
+            <strong>HELM</strong> {APP_RELEASE_VERSION}<br />
             <span style={{ color: '#6b6f85' }}>
               Local-first personal assistant for software engineers.<br />
               Built with Tauri + React + TypeScript + Rust.
             </span>
+          </div>
+          <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 8 }}>
+            The same release version is pinned in the sidebar so you can always see which build you are using.
           </div>
           <div className="info-box" style={{ marginTop: 12 }}>
             Runtime status is reported where the feature actually lives:

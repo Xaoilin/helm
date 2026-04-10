@@ -28,6 +28,7 @@ import type { ActionPlan } from './plannerSchema';
 import type {
   AssistantActionHandlers,
   AssistantCommandContext,
+  AssistantDialogState,
   AssistantEntityReference,
   AssistantExecutionResult,
   AssistantExecutionStep,
@@ -122,11 +123,20 @@ function pickCalendarSource(
 function findOrClarifyTask(
   query: string,
   context: AssistantCommandContext,
-  category: Task['category'] | 'any',
+  dialogState: AssistantDialogState | undefined,
+  opts: { category?: Task['category'] | 'any'; allowCompleted?: boolean } = {},
 ): { task: Task | null; clarify?: string } {
-  const resolution = resolveTaskReference(query, context, undefined, { category, allowCompleted: false });
+  const resolution = resolveTaskReference(query, context, dialogState, {
+    category: opts.category,
+    allowCompleted: opts.allowCompleted,
+  });
   if (!resolution.best) {
-    return { task: null, clarify: `I couldn't find an incomplete task matching "${query}".` };
+    return {
+      task: null,
+      clarify: opts.allowCompleted
+        ? `I couldn't find a task matching "${query}".`
+        : `I couldn't find an incomplete task matching "${query}".`,
+    };
   }
   if (resolution.ambiguous) {
     const names = resolution.matches.slice(0, 3).map(match => match.data.title).join(', ');
@@ -236,6 +246,7 @@ function executeSingleStep(
   context: AssistantCommandContext,
   handlers: AssistantActionHandlers,
   lang: AssistantLang,
+  dialogState?: AssistantDialogState,
 ): ClarifyOutcome | ExecutedStepOutcome {
   switch (step.capability) {
     case 'navigation.go_to_surface': {
@@ -312,7 +323,10 @@ function executeSingleStep(
     case 'tasks.complete_matching': {
       const taskQuery = asString(step.args.taskQuery);
       const category = asTaskCategory(step.args.category);
-      const resolution = findOrClarifyTask(taskQuery, context, category);
+      const resolution = findOrClarifyTask(taskQuery, context, dialogState, {
+        category,
+        allowCompleted: false,
+      });
       if (!resolution.task) {
         return { kind: 'clarify', message: resolution.clarify || 'Which task should I complete?' };
       }
@@ -366,6 +380,43 @@ function executeSingleStep(
             : `Marked "${task.title}" as complete.`,
         refs: [ref],
         undoToken: JSON.stringify({ type: 'task.reopen', id: task.id }),
+      };
+    }
+
+    case 'tasks.reveal_task': {
+      const taskQuery = asString(step.args.taskQuery);
+      const resolution = findOrClarifyTask(taskQuery || 'that task', context, dialogState, {
+        category: 'any',
+        allowCompleted: true,
+      });
+      if (!resolution.task) {
+        return { kind: 'clarify', message: resolution.clarify || 'Which task should I show you?' };
+      }
+
+      const task = resolution.task;
+      const navigate = handlers.navigate || requestAssistantNavigation;
+      navigate({
+        surface: 'tasks',
+        taskReveal: {
+          taskId: task.id,
+          tab: task.category === 'goal' ? 'goals' : 'all',
+          resetFilters: true,
+          highlight: true,
+        },
+      });
+
+      const ref = makeEntityReference('task', task.id, task.title, 'tasks', 1);
+      return {
+        stepResult: {
+          capability: step.capability,
+          status: 'completed',
+          summary: `Revealed task "${task.title}".`,
+          entityRefs: [ref],
+        },
+        message: lang === 'ar'
+          ? `سأعرض "${task.title}" في المهام.`
+          : `Opening "${task.title}" in your tasks.`,
+        refs: [ref],
       };
     }
 
@@ -579,6 +630,7 @@ export function executeActionPlan(
   context: AssistantCommandContext,
   handlers: AssistantActionHandlers,
   lang: AssistantLang,
+  dialogState?: AssistantDialogState,
 ): ExecutionOutcome {
   const workingContext = cloneContext(context);
   const steps: AssistantExecutionStep[] = [];
@@ -588,7 +640,7 @@ export function executeActionPlan(
 
   for (const step of plan.steps) {
     const capability = getCapabilityDefinition(step.capability);
-    const result = executeSingleStep(step, workingContext, handlers, lang);
+    const result = executeSingleStep(step, workingContext, handlers, lang, dialogState);
     if ('kind' in result) {
       return result;
     }

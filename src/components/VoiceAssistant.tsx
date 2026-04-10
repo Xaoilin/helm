@@ -341,7 +341,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
         endpoint: ollamaEndpoint,
         model: ollamaModel,
         handlers: {
-          navigate: app.navigate,
+          navigate: app.requestAssistantNavigation,
           addTask: app.addTask,
           updateTask: app.updateTask,
           addCalendarEvent: app.addCalendarEvent,

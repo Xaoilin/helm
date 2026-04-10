@@ -39,6 +39,10 @@ export const TIMING = {
   TOKEN_EXPIRY_BUFFER: 60000,
   /** Supabase write queue debounce */
   SUPABASE_DEBOUNCE: 1000,
+  /** Delay before scrolling a task revealed by Lina into view */
+  ASSISTANT_TASK_REVEAL_SCROLL_DELAY: 80,
+  /** How long a Lina-revealed task stays highlighted */
+  ASSISTANT_TASK_REVEAL_HIGHLIGHT: 3000,
   /** Ollama connection test timeout */
   OLLAMA_CONNECTION_TIMEOUT: 3000,
   /** Ollama model list fetch timeout */
