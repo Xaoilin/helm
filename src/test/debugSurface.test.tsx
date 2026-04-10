@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DebugSurface from '../surfaces/DebugSurface';
+import { clearAssistantDebugTrace, recordAssistantDebugTrace } from '../services/assistantDebug';
 import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
 import {
   chatWithHostedAssistant,
@@ -65,6 +66,7 @@ vi.mock('../store/supabase', () => ({
 
 describe('DebugSurface AI diagnostics', () => {
   beforeEach(() => {
+    clearAssistantDebugTrace();
     ollamaBreaker.reset();
     vi.clearAllMocks();
     getAuthSessionSnapshotMock.mockReturnValue({
@@ -111,6 +113,8 @@ describe('DebugSurface AI diagnostics', () => {
     expect(await screen.findByText('Hosted AI ready')).toBeInTheDocument();
     expect(screen.getByText('Supabase ready and signed in')).toBeInTheDocument();
     expect((await screen.findAllByText('gpt-5.4-mini')).length).toBeGreaterThan(0);
+    expect(screen.getByText('Assistant Actions')).toBeInTheDocument();
+    expect(screen.getByText('tasks.open_view')).toBeInTheDocument();
   });
 
   it('runs hosted health and smoke checks from the debug panel', async () => {
@@ -217,5 +221,56 @@ describe('DebugSurface AI diagnostics', () => {
 
     expect(await screen.findByText('Supabase ready with hosted project access')).toBeInTheDocument();
     expect(screen.getAllByText('project access key').length).toBeGreaterThan(0);
+  });
+
+  it('shows the latest assistant trace including navigation payloads', async () => {
+    recordAssistantDebugTrace({
+      recordedAt: '2026-04-10T21:45:00.000Z',
+      transcript: 'show me all my tasks',
+      effectiveTranscript: 'show me all my tasks',
+      source: 'local',
+      plan: {
+        mode: 'act',
+        response: '',
+        confidence: 0.95,
+        steps: [{
+          capability: 'tasks.open_view',
+          args: {
+            tab: 'all',
+            resetFilters: true,
+          },
+        }],
+      },
+      execution: {
+        status: 'executed',
+        steps: [{
+          capability: 'tasks.open_view',
+          status: 'completed',
+          summary: 'Opened the All Tasks task view.',
+        }],
+        navigationRequests: [{
+          id: 'assistant-nav-test',
+          surface: 'tasks',
+          surfaceState: {
+            tasks: {
+              tab: 'all',
+              resetFilters: true,
+            },
+          },
+        }],
+      },
+    });
+
+    await act(async () => {
+      render(<DebugSurface />);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /AI Assistant/i }));
+
+    expect(await screen.findByText('Latest Assistant Trace')).toBeInTheDocument();
+    expect(screen.getAllByText('show me all my tasks').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/tasks\.open_view/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Navigation Payload/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/assistant-nav-test/i).length).toBeGreaterThan(0);
   });
 });

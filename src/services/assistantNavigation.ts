@@ -2,17 +2,21 @@ import type { Surface } from '../types/domain';
 
 export type AssistantTaskTab = 'today' | 'all' | 'goals';
 
-export interface AssistantTaskRevealRequest {
-  taskId: string;
+export interface AssistantTasksNavigationState {
   tab?: AssistantTaskTab;
   resetFilters?: boolean;
-  highlight?: boolean;
+  revealTaskId?: string;
+  highlightTaskId?: string;
+}
+
+export interface AssistantSurfaceState {
+  tasks?: AssistantTasksNavigationState;
 }
 
 export interface AssistantNavigationRequest {
   id: string;
   surface: Surface;
-  taskReveal?: AssistantTaskRevealRequest;
+  surfaceState?: AssistantSurfaceState;
 }
 
 export type AssistantNavigationTarget = Surface | Omit<AssistantNavigationRequest, 'id'> | AssistantNavigationRequest;
@@ -22,6 +26,17 @@ type NavigationListener = (request: AssistantNavigationRequest) => void;
 
 const listeners = new Set<NavigationListener>();
 let requestSequence = 0;
+
+function normalizeTasksNavigationState(value: AssistantSurfaceState['tasks'] | undefined): AssistantTasksNavigationState | undefined {
+  if (!value) return undefined;
+
+  return {
+    tab: value.tab,
+    resetFilters: value.resetFilters,
+    revealTaskId: value.revealTaskId,
+    highlightTaskId: value.highlightTaskId,
+  };
+}
 
 export function normalizeAssistantNavigationRequest(target: AssistantNavigationTarget): AssistantNavigationRequest {
   if (typeof target === 'string') {
@@ -34,12 +49,9 @@ export function normalizeAssistantNavigationRequest(target: AssistantNavigationT
   return {
     id: 'id' in target && target.id ? target.id : `assistant-nav-${Date.now()}-${requestSequence++}`,
     surface: target.surface,
-    taskReveal: target.taskReveal
+    surfaceState: target.surfaceState
       ? {
-          taskId: target.taskReveal.taskId,
-          tab: target.taskReveal.tab,
-          resetFilters: target.taskReveal.resetFilters,
-          highlight: target.taskReveal.highlight,
+          tasks: normalizeTasksNavigationState(target.surfaceState.tasks),
         }
       : undefined,
   };

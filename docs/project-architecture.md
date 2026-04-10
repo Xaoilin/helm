@@ -67,7 +67,7 @@ State is split across:
 - `src/store/contexts/SettingsContext.tsx`
 
 The shell layer keeps only cross-cutting UI state plus credentials and workspaces.
-It also carries one-shot assistant navigation requests so chat and voice can hand the UI enough context to reveal a specific task after a grounded assistant action.
+It also carries one-shot assistant navigation requests so chat and voice can hand the UI enough context to open a specific Tasks tab, reset filters, and reveal or highlight a resolved task after a grounded assistant action.
 
 ### Domain model
 
@@ -158,6 +158,7 @@ Both chat and voice now route through the shared grounded assistant runtime unde
 - local Ollama for desktop or local-first setups
 
 The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally. That shared runtime now owns task-title normalization, recent-task reveal handling such as "show me that task", and the typed navigation handoff used by the Tasks surface to jump to `All Tasks` and highlight the resolved item.
+The assistant action registry in `src/assistant/capabilities.ts` is the source of truth for which actions Lina may claim and execute. The Debug surface renders that registry directly and also shows the latest structured assistant trace so action coverage stays inspectable.
 
 ### Other external services
 

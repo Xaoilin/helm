@@ -1,50 +1,14 @@
-export const CAPABILITY_IDS = [
-  'navigation.go_to_surface',
-  'tasks.create_task',
-  'tasks.reveal_task',
-  'tasks.complete_matching',
-  'tasks.delete_matching',
-  'calendar.create_event',
-  'calendar.reschedule_event',
-  'finance.record_transaction',
-  'knowledge.create_entry',
-] as const;
-
-export type CapabilityId = typeof CAPABILITY_IDS[number];
+import {
+  getCapabilityDefinition,
+  getLiveCapabilityDefinitions,
+  isKnownCapabilityId,
+  type AssistantActionArgDefinition,
+  type CapabilityId,
+} from './capabilities';
 
 export type ActionPlanMode = 'answer' | 'clarify' | 'confirm' | 'act';
-
-export const ACTION_PLAN_ARG_KEYS = [
-  'surface',
-  'title',
-  'priority',
-  'category',
-  'dueDate',
-  'duePhrase',
-  'taskQuery',
-  'matchScope',
-  'timePhrase',
-  'start',
-  'end',
-  'calendarQuery',
-  'eventQuery',
-  'type',
-  'amount',
-  'description',
-  'accountQuery',
-  'topicQuery',
-  'content',
-  'date',
-  'location',
-] as const;
-
-export type ActionPlanArgKey = typeof ACTION_PLAN_ARG_KEYS[number];
-
-export type ActionPlanArgs = {
-  [K in ActionPlanArgKey]: string | null;
-};
-
-export type ActionPlanStepArgs = Partial<Record<ActionPlanArgKey, string>>;
+export type ActionPlanArgValue = string | boolean;
+export type ActionPlanStepArgs = Record<string, ActionPlanArgValue>;
 
 export interface ActionPlanStep {
   capability: CapabilityId;
@@ -68,24 +32,52 @@ function isActionPlanMode(value: unknown): value is ActionPlanMode {
   return value === 'answer' || value === 'clarify' || value === 'confirm' || value === 'act';
 }
 
-function isCapabilityId(value: unknown): value is CapabilityId {
-  return typeof value === 'string' && CAPABILITY_IDS.includes(value as CapabilityId);
-}
-
 function clampConfidence(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(1, value));
 }
 
-function normalizeActionPlanArgs(value: unknown): ActionPlanStepArgs | null {
+function isValidArgValue(
+  definition: AssistantActionArgDefinition,
+  value: unknown,
+): value is ActionPlanArgValue {
+  if (definition.type === 'boolean') {
+    return typeof value === 'boolean';
+  }
+
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  if (definition.type === 'enum' && definition.values) {
+    return definition.values.includes(value);
+  }
+
+  return true;
+}
+
+function normalizeActionPlanArgs(
+  value: unknown,
+  capabilityId: CapabilityId,
+): ActionPlanStepArgs | null {
   if (!isPlainObject(value)) return null;
 
+  const capability = getCapabilityDefinition(capabilityId);
+  const argDefinitions = new Map(capability.args.map(arg => [arg.key, arg]));
   const args: ActionPlanStepArgs = {};
-  for (const key of ACTION_PLAN_ARG_KEYS) {
-    const nextValue = value[key];
-    if (nextValue === undefined || nextValue === null) continue;
-    if (typeof nextValue !== 'string') return null;
-    args[key] = nextValue;
+
+  for (const [key, rawValue] of Object.entries(value)) {
+    const definition = argDefinitions.get(key);
+    if (!definition) return null;
+    if (rawValue === null || rawValue === undefined) continue;
+    if (!isValidArgValue(definition, rawValue)) return null;
+    args[key] = rawValue;
+  }
+
+  for (const definition of capability.args) {
+    if (definition.required && !(definition.key in args)) {
+      return null;
+    }
   }
 
   return args;
@@ -99,8 +91,9 @@ export function parseActionPlan(value: unknown): ActionPlan | null {
   const steps = rawSteps
     .filter(isPlainObject)
     .map<ActionPlanStep | null>(step => {
-      const args = normalizeActionPlanArgs(step.args);
-      if (!isCapabilityId(step.capability) || !args) return null;
+      if (typeof step.capability !== 'string' || !isKnownCapabilityId(step.capability)) return null;
+      const args = normalizeActionPlanArgs(step.args, step.capability);
+      if (!args) return null;
       return {
         capability: step.capability,
         args,
@@ -124,22 +117,17 @@ export function parseActionPlan(value: unknown): ActionPlan | null {
   };
 }
 
-function getRequiredKeys<T extends Record<string, unknown>>(properties: T): Array<Extract<keyof T, string>> {
-  return Object.keys(properties) as Array<Extract<keyof T, string>>;
-}
-
-function buildStrictObjectSchema<T extends Record<string, unknown>>(properties: T) {
+function buildStrictObjectSchema(
+  properties: Record<string, unknown>,
+  required: string[] = Object.keys(properties),
+) {
   return {
     type: 'object',
     additionalProperties: false,
-    required: getRequiredKeys(properties),
+    required,
     properties,
   } as const;
 }
-
-const nullableStringSchema = {
-  type: ['string', 'null'],
-} as const;
 
 const nullableBooleanSchema = {
   type: ['boolean', 'null'],
@@ -150,25 +138,49 @@ const nullableStringArraySchema = {
   items: { type: 'string' },
 } as const;
 
-const actionPlanArgsProperties = ACTION_PLAN_ARG_KEYS.reduce<Record<ActionPlanArgKey, typeof nullableStringSchema>>(
-  (properties, key) => {
-    properties[key] = nullableStringSchema;
-    return properties;
-  },
-  {} as Record<ActionPlanArgKey, typeof nullableStringSchema>,
-);
+function buildArgSchema(definition: AssistantActionArgDefinition) {
+  if (definition.type === 'boolean') {
+    return {
+      type: 'boolean',
+    } as const;
+  }
 
-export const actionPlanArgsJsonSchema = buildStrictObjectSchema(actionPlanArgsProperties);
+  if (definition.type === 'enum' && definition.values) {
+    return {
+      type: 'string',
+      enum: [...definition.values],
+    } as const;
+  }
 
-export const actionPlanStepJsonSchema = buildStrictObjectSchema({
-  capability: {
+  return {
     type: 'string',
-    enum: [...CAPABILITY_IDS],
-  },
-  args: actionPlanArgsJsonSchema,
-  unresolved: nullableStringArraySchema,
-  requiresConfirmation: nullableBooleanSchema,
-});
+  } as const;
+}
+
+function buildActionArgsJsonSchema(capabilityId: CapabilityId) {
+  const capability = getCapabilityDefinition(capabilityId);
+  const properties = Object.fromEntries(
+    capability.args.map(arg => [arg.key, buildArgSchema(arg)]),
+  );
+  const required = capability.args.filter(arg => arg.required).map(arg => arg.key);
+  return buildStrictObjectSchema(properties, required);
+}
+
+function buildActionStepJsonSchema(capabilityId: CapabilityId) {
+  return buildStrictObjectSchema({
+    capability: {
+      type: 'string',
+      const: capabilityId,
+    },
+    args: buildActionArgsJsonSchema(capabilityId),
+    unresolved: nullableStringArraySchema,
+    requiresConfirmation: nullableBooleanSchema,
+  });
+}
+
+export const actionPlanStepJsonSchema = {
+  anyOf: getLiveCapabilityDefinitions().map(capability => buildActionStepJsonSchema(capability.id as CapabilityId)),
+} as const;
 
 export const actionPlanJsonSchema = buildStrictObjectSchema({
   mode: {
