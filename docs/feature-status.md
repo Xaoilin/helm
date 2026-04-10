@@ -13,7 +13,7 @@ Use this matrix when updating docs or UI copy. The allowed states are:
 | Google Calendar OAuth | `real` | Supports multi-account Calendar connections plus linking the matching HELM Google sign-in to the same-email Calendar account. |
 | Google Calendar sync | `real` | Events and calendars sync through the Google Calendar API with account-level reconnect states; passive sync is non-interactive and no longer uses auth failures to trip the service breaker. |
 | Local calendar accounts | `real` | Local accounts and sources work without cloud sync. |
-| Chat assistant with hosted OpenAI | `real` | Real when Supabase is configured and the `assistant-openai` Edge Function is deployed. Live/browser builds use a signed-in Supabase session token; localhost can also use the configured project access for local debugging. |
+| Chat assistant with hosted OpenAI | `real` | Real when Supabase is configured and the `assistant-openai` Edge Function is deployed. Browser builds currently call it with the configured Supabase project access key, while Supabase sign-in remains for sync and user-scoped data. |
 | Chat assistant with Ollama | `real` | Real when Ollama is reachable locally. |
 | Chat assistant without a live AI provider | `local-only/degraded` | Uses a grounded local capability runtime for navigation, tasks, calendar actions, finance logging, and knowledge notes, but open-ended planning still depends on hosted OpenAI or local Ollama. |
 | AI diagnostics in Debug tab | `real` | The Debug surface now includes a dedicated AI Assistant panel with runtime status, Supabase session details, hosted health/smoke tests, Ollama checks, and circuit-breaker reset controls. |

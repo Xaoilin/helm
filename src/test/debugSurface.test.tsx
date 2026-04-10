@@ -90,8 +90,8 @@ describe('DebugSurface AI diagnostics', () => {
     vi.mocked(chatWithHostedAssistant).mockResolvedValue('READY');
     vi.mocked(getHostedAssistantDiagnostics).mockReturnValue({
       circuitAllowingRequests: true,
-      lastAccessMode: 'session_token',
-      localProjectAccessAvailable: false,
+      lastAccessMode: 'project_key',
+      projectAccessAvailable: true,
       lastFailureSource: null,
       lastFailureMessage: null,
       lastFailureAt: null,
@@ -151,8 +151,8 @@ describe('DebugSurface AI diagnostics', () => {
   it('shows the last real hosted failure details and resets hosted diagnostics', async () => {
     vi.mocked(getHostedAssistantDiagnostics).mockReturnValue({
       circuitAllowingRequests: false,
-      lastAccessMode: 'session_token',
-      localProjectAccessAvailable: false,
+      lastAccessMode: 'project_key',
+      projectAccessAvailable: true,
       lastFailureSource: 'chat',
       lastFailureMessage: 'OpenAI error 400: Invalid schema for response_format helm_action_plan.',
       lastFailureAt: '2026-04-10T01:20:00.000Z',
@@ -172,16 +172,16 @@ describe('DebugSurface AI diagnostics', () => {
     expect(resetHostedAssistantDiagnostics).toHaveBeenCalledTimes(1);
   });
 
-  it('shows localhost project access when hosted AI is available without sign-in', async () => {
+  it('shows hosted project access even when no user is signed in', async () => {
     getAuthSessionSnapshotMock.mockReturnValue(null);
     getCurrentUserIdMock.mockReturnValue(null);
     isAuthenticatedMock.mockReturnValue(false);
     isSupabaseReadyMock.mockReturnValue(true);
-    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available', accessMode: 'local_project_key' });
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available', accessMode: 'project_key' });
     vi.mocked(getHostedAssistantDiagnostics).mockReturnValue({
       circuitAllowingRequests: true,
-      lastAccessMode: 'local_project_key',
-      localProjectAccessAvailable: true,
+      lastAccessMode: 'project_key',
+      projectAccessAvailable: true,
       lastFailureSource: null,
       lastFailureMessage: null,
       lastFailureAt: null,
@@ -193,7 +193,7 @@ describe('DebugSurface AI diagnostics', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /AI Assistant/i }));
 
-    expect(await screen.findByText('Supabase ready with local hosted access')).toBeInTheDocument();
-    expect(screen.getAllByText('local project access').length).toBeGreaterThan(0);
+    expect(await screen.findByText('Supabase ready with hosted project access')).toBeInTheDocument();
+    expect(screen.getAllByText('project access key').length).toBeGreaterThan(0);
   });
 });

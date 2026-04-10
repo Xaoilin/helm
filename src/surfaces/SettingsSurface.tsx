@@ -5,7 +5,7 @@ import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
 import { DEFAULT_ASSISTANT_PROVIDER, ELEVENLABS_API_KEY, HOSTED_ASSISTANT_MODEL, OLLAMA_ENDPOINT } from '../config';
 import { DEFAULT_PROFILE } from '../services/gamification';
 import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
-import { canUseHostedAssistantLocalProjectAccess } from '../services/hostedAssistantAccess';
+import { canUseHostedAssistantProjectAccess, isLocalhostRuntime } from '../services/hostedAssistantAccess';
 import { testOllamaConnection, listOllamaModels } from '../services/ollamaApi';
 
 export default function SettingsSurface() {
@@ -24,7 +24,8 @@ export default function SettingsSurface() {
   });
   const selectedProvider = getAssistantProviderSetting(settings);
   const authSyncKey = `${isSupabaseReady()}:${isAuthenticated()}:${getCurrentUserId() || ''}`;
-  const localHostedAccessAvailable = canUseHostedAssistantLocalProjectAccess();
+  const hostedProjectAccessAvailable = canUseHostedAssistantProjectAccess();
+  const localhostRuntime = isLocalhostRuntime();
 
   // Microphone devices
   const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
@@ -354,9 +355,9 @@ export default function SettingsSurface() {
               <option value="ollama">Local AI (Ollama only)</option>
             </select>
             <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
-              {localHostedAccessAvailable
-                ? 'Hosted AI uses the Supabase Edge Function. On localhost, HELM can use local project access for debugging; live website builds use your signed-in HELM session.'
-                : 'Hosted AI uses your signed-in HELM session and a Supabase Edge Function. Browser builds cannot start Ollama for you.'}
+              {hostedProjectAccessAvailable
+                ? `Hosted AI uses the Supabase Edge Function and this build's configured project access key${localhostRuntime ? ' on localhost' : ''}. Supabase sign-in is still used for sync; browser builds still cannot start Ollama for you.`
+                : 'Hosted AI needs Supabase project access in this build. Browser builds still cannot start Ollama for you.'}
             </div>
             <div style={{ marginTop: 8, padding: '10px 12px', background: '#13151c', border: '1px solid #1e2030', borderRadius: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Runtime status</div>
