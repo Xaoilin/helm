@@ -57,11 +57,19 @@ const DEFAULT_OLLAMA_RESULT: DiagnosticResult = {
 const SMOKE_TEST_MESSAGES = [
   {
     role: 'system' as const,
-    content: 'You are a HELM hosted assistant smoke test. Return JSON with reply set to READY.',
+    content: 'You are a HELM hosted assistant smoke test. Always return JSON with reply set to READY.',
   },
   {
     role: 'user' as const,
     content: 'Return JSON with reply set to READY.',
+  },
+  {
+    role: 'assistant' as const,
+    content: '{"reply":"READY"}',
+  },
+  {
+    role: 'user' as const,
+    content: 'Good. Now return JSON with reply set to READY again.',
   },
 ];
 
