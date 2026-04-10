@@ -13,6 +13,7 @@ import type {
   AssistantEntityReference,
   AssistantLang,
 } from './shared';
+import { parseTaskCreationRequest } from './taskRequestParser';
 import { extractTemporalReference } from './temporalResolver';
 
 export interface PlannerResult {
@@ -133,28 +134,6 @@ function sanitizeTitle(value: string): string {
     .replace(/^(?:to\s+)/i, '')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-function sanitizeCategory(raw: string | undefined): 'daily' | 'task' | 'goal' {
-  const value = normaliseText(raw || '');
-  if (value.includes('daily') || value.includes('habit') || value.includes('عادة') || value.includes('يومي')) return 'daily';
-  if (value.includes('goal') || value.includes('هدف')) return 'goal';
-  return 'task';
-}
-
-function stripPriorityHints(text: string): { title: string; priority: 'low' | 'medium' | 'high' } {
-  let title = text;
-  let priority: 'low' | 'medium' | 'high' = 'medium';
-
-  if (/\b(high priority|urgent)\b/i.test(title) || /(?:أولوية عالية|عاجل)/.test(title)) {
-    priority = 'high';
-    title = title.replace(/\b(high priority|urgent)\b/ig, '').replace(/(?:أولوية عالية|عاجل)/g, '');
-  } else if (/\b(low priority)\b/i.test(title) || /(?:أولوية منخفضة)/.test(title)) {
-    priority = 'low';
-    title = title.replace(/\b(low priority)\b/ig, '').replace(/(?:أولوية منخفضة)/g, '');
-  }
-
-  return { title: sanitizeTitle(title), priority };
 }
 
 function buildAnswerPlan(response: string): ActionPlan {
@@ -390,40 +369,63 @@ function planQueryLocally(
 }
 
 function planTaskCreation(transcript: string, context: AssistantCommandContext): ActionPlan | null {
-  const matchers = [
-    /(?:add|create|make)(?: me)?(?: a| an| new)?\s+(?:(task|todo|habit|daily|goal)\s+)?(?:called\s+|named\s+|to\s+)?(.+)/i,
-    /(?:remind me to)\s+(.+)/i,
-    /(?:أضف|أنشئ|اعمل)(?:\s+(?:مهمة|عادة|هدف))?\s+(.+)/i,
-  ];
+  const parsed = parseTaskCreationRequest(transcript, context);
+  if (!parsed) return null;
+  if (parsed.clarify || !parsed.title || !parsed.category || !parsed.priority) {
+    return buildClarifyPlan(parsed.clarify || 'What should I call the task?');
+  }
 
-  for (const matcher of matchers) {
-    const match = transcript.match(matcher);
-    if (!match) continue;
+  return {
+    mode: 'act',
+    response: '',
+    confidence: 0.94,
+    steps: [{
+      capability: 'tasks.create_task',
+      args: {
+        title: parsed.title,
+        priority: parsed.priority,
+        category: parsed.category,
+        dueDate: parsed.dueDate,
+        duePhrase: parsed.duePhrase,
+      },
+    }],
+  };
+}
 
-    const rawCategory = match.length > 2 ? match[1] : undefined;
-    const rawTitle = match.length > 2 ? match[2] : match[1];
-    const extracted = extractTemporalReference(rawTitle || '', context);
-    const { title, priority } = stripPriorityHints(extracted.cleanedText || rawTitle || '');
-    if (!title) return null;
+function planTaskReveal(transcript: string, dialogState?: AssistantDialogState): ActionPlan | null {
+  const cleanedTranscript = transcript.trim().replace(/[.?!،]+$/g, '');
+  const hasRecentTask = dialogState?.recentEntities.some(entity => entity.kind === 'task') ?? false;
 
+  const pronounMatcher = cleanedTranscript.match(/(?:show me|open|find|locate|pull up|take me to)\s+(that task|this task|that one|this one|it)$/i);
+  if (pronounMatcher) {
     return {
       mode: 'act',
       response: '',
-      confidence: 0.94,
+      confidence: hasRecentTask ? 0.9 : 0.72,
       steps: [{
-        capability: 'tasks.create_task',
-        args: {
-          title,
-          priority,
-          category: sanitizeCategory(rawCategory),
-          dueDate: extracted.resolution?.date,
-          duePhrase: extracted.resolution?.phrase,
-        },
+        capability: 'tasks.reveal_task',
+        args: { taskQuery: pronounMatcher[1] },
       }],
     };
   }
 
-  return null;
+  const explicitMatcher = cleanedTranscript.match(/(?:show me|open|find|locate|pull up|take me to)\s+(?:my\s+)?(?:task|todo)\s+(.+)/i);
+  if (!explicitMatcher) return null;
+
+  const taskQuery = sanitizeTitle(explicitMatcher[1] || '');
+  if (!taskQuery) {
+    return buildClarifyPlan('Which task should I show you?');
+  }
+
+  return {
+    mode: 'act',
+    response: '',
+    confidence: 0.86,
+    steps: [{
+      capability: 'tasks.reveal_task',
+      args: { taskQuery },
+    }],
+  };
 }
 
 function planTaskCompletion(transcript: string): ActionPlan | null {
@@ -671,6 +673,9 @@ function planLocally(
 
   const taskCreate = planTaskCreation(transcript, context);
   if (taskCreate) return { plan: taskCreate, source: 'local' };
+
+  const taskReveal = planTaskReveal(transcript, dialogState);
+  if (taskReveal) return { plan: taskReveal, source: 'local' };
 
   const taskComplete = planTaskCompletion(transcript);
   if (taskComplete) return { plan: taskComplete, source: 'local' };

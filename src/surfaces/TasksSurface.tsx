@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
 import HabitCards from '../components/HabitCards';
+import { TIMING } from '../config/constants';
 import { EMOJI_PALETTE, getHabitEmoji } from '../services/habitEmoji';
 import type { Task, TaskCategory, TaskPriority } from '../types/domain';
 import {
@@ -35,6 +36,7 @@ export default function TasksSurface() {
   const [showCompletedGoals, setShowCompletedGoals] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showLevelFlash, setShowLevelFlash] = useState(false);
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -56,6 +58,35 @@ export default function TasksSurface() {
 
   const todayStr = toLocalDateStr(new Date());
   const isWeekday = () => { const d = new Date().getDay(); return d >= 1 && d <= 5; };
+  const assistantNavigationRequest = app.assistantNavigationRequest;
+  const dismissAssistantNavigationRequest = app.dismissAssistantNavigationRequest;
+  const tasks = app.tasks;
+
+  useEffect(() => {
+    const request = assistantNavigationRequest;
+    if (!request || request.surface !== 'tasks' || !request.taskReveal) return;
+
+    const reveal = request.taskReveal;
+    const targetTask = tasks.find(task => task.id === reveal.taskId);
+
+    if (reveal.tab) {
+      setTab(reveal.tab);
+    }
+    if (reveal.resetFilters) {
+      setFilterCategory('all');
+      setFilterPriority('all');
+      setFilterStatus('all');
+      setFilterGoalTag('all');
+    }
+    if (targetTask?.category === 'goal' && targetTask.completed) {
+      setShowCompletedGoals(true);
+    }
+    if (reveal.highlight) {
+      setHighlightedTaskId(reveal.taskId);
+    }
+
+    dismissAssistantNavigationRequest(request.id);
+  }, [assistantNavigationRequest, dismissAssistantNavigationRequest, tasks]);
 
   // ── Recurring reset ──
   useEffect(() => {
@@ -83,6 +114,26 @@ export default function TasksSurface() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayStr]);
+
+  useEffect(() => {
+    if (!highlightedTaskId) return;
+
+    const scrollTimer = window.setTimeout(() => {
+      document.getElementById(`task-item-${highlightedTaskId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }, TIMING.ASSISTANT_TASK_REVEAL_SCROLL_DELAY);
+
+    const clearTimer = window.setTimeout(() => {
+      setHighlightedTaskId(current => current === highlightedTaskId ? null : current);
+    }, TIMING.ASSISTANT_TASK_REVEAL_HIGHLIGHT);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [highlightedTaskId]);
 
   // Toast helpers
   const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
@@ -252,9 +303,15 @@ export default function TasksSurface() {
     if (editing?.id === id) setShowForm(false);
   };
 
+  const isAssistantHighlighted = useCallback((taskId: string) => highlightedTaskId === taskId, [highlightedTaskId]);
+
   // ── Render helpers ──
   const renderTaskRow = (task: Task) => (
-    <div key={task.id} className={`task-row ${task.completed ? 'completed' : ''}`}>
+    <div
+      key={task.id}
+      id={`task-item-${task.id}`}
+      className={`task-row ${task.completed ? 'completed' : ''} ${isAssistantHighlighted(task.id) ? 'assistant-focus' : ''}`}
+    >
       <input
         type="checkbox"
         className="task-checkbox"
@@ -482,7 +539,11 @@ export default function TasksSurface() {
             ) : (
               <>
                 {activeGoals.map(goal => (
-                  <div key={goal.id} className="goal-card">
+                  <div
+                    key={goal.id}
+                    id={`task-item-${goal.id}`}
+                    className={`goal-card ${isAssistantHighlighted(goal.id) ? 'assistant-focus' : ''}`}
+                  >
                     <div className="goal-title">
                       {goal.title}
                       <span className={`tag tag-${goal.priority}`}>{goal.priority}</span>
@@ -515,7 +576,12 @@ export default function TasksSurface() {
                       {showCompletedGoals ? '\u25BC' : '\u25B6'} Completed Goals ({completedGoals.length})
                     </button>
                     {showCompletedGoals && completedGoals.map(goal => (
-                      <div key={goal.id} className="goal-card completed" style={{ marginTop: 8 }}>
+                      <div
+                        key={goal.id}
+                        id={`task-item-${goal.id}`}
+                        className={`goal-card completed ${isAssistantHighlighted(goal.id) ? 'assistant-focus' : ''}`}
+                        style={{ marginTop: 8 }}
+                      >
                         <div className="goal-title" style={{ textDecoration: 'line-through' }}>
                           {goal.title}
                         </div>

@@ -252,11 +252,38 @@ export async function deleteRemote(namespace: string, key: string): Promise<bool
 
 // ── Debounced write queue ──
 
-const writeQueue = new Map<string, { namespace: string; key: string; value: unknown }>();
+export interface RemoteWriteSettledResult {
+  success: boolean;
+  updatedAt: string;
+}
+
+interface QueuedWrite {
+  namespace: string;
+  key: string;
+  value: unknown;
+  updatedAt: string;
+  onSettled?: (result: RemoteWriteSettledResult) => void;
+}
+
+const writeQueue = new Map<string, QueuedWrite>();
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
 
-export function queueRemoteWrite<T>(namespace: string, key: string, value: T): void {
-  writeQueue.set(`${namespace}:${key}`, { namespace, key, value });
+export function queueRemoteWrite<T>(
+  namespace: string,
+  key: string,
+  value: T,
+  options: {
+    updatedAt?: string;
+    onSettled?: (result: RemoteWriteSettledResult) => void;
+  } = {},
+): void {
+  writeQueue.set(`${namespace}:${key}`, {
+    namespace,
+    key,
+    value,
+    updatedAt: options.updatedAt || new Date().toISOString(),
+    onSettled: options.onSettled,
+  });
   if (writeTimer) clearTimeout(writeTimer);
   writeTimer = setTimeout(flushWriteQueue, TIMING.SUPABASE_DEBOUNCE);
 }
@@ -272,15 +299,22 @@ export async function flushWriteQueue(): Promise<void> {
     namespace: e.namespace,
     key: e.key,
     value: e.value,
-    updated_at: new Date().toISOString(),
+    updated_at: e.updatedAt,
   }));
 
+  let success = false;
   try {
-    await client.from('kv_store').upsert(rows, { onConflict: 'user_id,namespace,key' });
+    const { error } = await client.from('kv_store').upsert(rows, { onConflict: 'user_id,namespace,key' });
+    if (error) throw error;
+    success = true;
   } catch (err) {
     console.warn('[Supabase] Flush failed, will retry next cycle:', err);
     for (const entry of entries) {
       writeQueue.set(`${entry.namespace}:${entry.key}`, entry);
+    }
+  } finally {
+    for (const entry of entries) {
+      entry.onSettled?.({ success, updatedAt: entry.updatedAt });
     }
   }
 }

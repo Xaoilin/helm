@@ -14,6 +14,7 @@ import type {
   Transaction,
   Workspace,
 } from '../types/domain';
+import type { AssistantNavigationHandler } from '../services/assistantNavigation';
 import type { ActionPlan } from './plannerSchema';
 
 export type AssistantLang = 'en' | 'ar';
@@ -82,7 +83,7 @@ export interface AssistantCommandContext {
 }
 
 export interface AssistantActionHandlers {
-  navigate?: (surface: Surface) => void;
+  navigate?: AssistantNavigationHandler;
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateTask: (id: string, updates: Partial<Task>) => void;
   addCalendarEvent?: (event: Omit<CalendarEvent, 'id'>) => string;

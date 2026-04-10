@@ -19,9 +19,12 @@ The current stack is:
 `src/App.tsx` renders:
 
 - the left-hand navigation
+- the persistent release badge in the sidebar footer
 - the active surface
 - the global `VoiceAssistant` panel
 - auth controls for Supabase-backed sign-in
+
+The shell release badge reads from the build version exposed through `src/config/release.ts`, so the visible UI version stays aligned with the packaged application version when the release files are kept in sync.
 
 The navigable surfaces are:
 
@@ -64,6 +67,7 @@ State is split across:
 - `src/store/contexts/SettingsContext.tsx`
 
 The shell layer keeps only cross-cutting UI state plus credentials and workspaces.
+It also carries one-shot assistant navigation requests so chat and voice can hand the UI enough context to reveal a specific task after a grounded assistant action.
 
 ### Domain model
 
@@ -87,6 +91,7 @@ The shell layer keeps only cross-cutting UI state plus credentials and workspace
 - Signed out: Tauri file storage is preferred, with `localStorage` as the web fallback.
 
 Writes always update `localStorage`, try the Tauri store when available, and queue debounced Supabase writes when the user is authenticated.
+Authenticated writes now also mark a local dirty-cache timestamp so a just-created item is not overwritten by stale remote data during an immediate reload before the remote queue flushes.
 
 ### Desktop boundary
 
@@ -102,6 +107,7 @@ The Tauri side is intentionally thin. Rust commands handle app-data directory di
 - a debounced remote write queue
 
 Supabase sync is optional. The app still works in local-first mode without it.
+When the authenticated write queue succeeds, the dirty-cache marker is cleared. Exit and background transitions also trigger best-effort queue flushes so cloud sync is less likely to lag behind the most recent local write.
 
 ## Integrations And External Services
 
@@ -151,7 +157,7 @@ Both chat and voice now route through the shared grounded assistant runtime unde
 - hosted GPT-5.4-mini through the `assistant-openai` Supabase Edge Function for signed-in web builds
 - local Ollama for desktop or local-first setups
 
-The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally.
+The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally. That shared runtime now owns task-title normalization, recent-task reveal handling such as "show me that task", and the typed navigation handoff used by the Tasks surface to jump to `All Tasks` and highlight the resolved item.
 
 ### Other external services
 

@@ -4,6 +4,7 @@
 
 - Use a dedicated branch for each task. `codex/<short-description>` is the default.
 - When meaningful work is complete and relevant checks are green, use the normal branch -> commit -> PR/merge -> deploy-verification flow instead of leaving finished work only in a local checkout.
+- Do not call a user-facing change live, shipped, or deployed until it is merged to `master`, the deployment has succeeded, and the deployed result has been verified directly. If the change only exists locally or on a branch, say that explicitly in the handoff.
 - After a task branch is merged, delete it locally and on `origin`. If any branch remains unmerged, call out its status explicitly instead of leaving stale topic branches around.
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
@@ -34,6 +35,7 @@ A change is not done until all of the following are true:
 
 Use the repo scripts or local binaries directly:
 
+- `npm run version:check`
 - `npm run lint`
 - `npm run typecheck`
 - `.\node_modules\.bin\tsc.cmd -b`
@@ -43,6 +45,13 @@ Use the repo scripts or local binaries directly:
 - `npm run check`
 
 For small changes, run the most relevant checks first. Before landing broader code changes, run the full set above unless a dependency or environment blocker prevents it.
+
+## Release Versioning
+
+- HELM release versions use semver and must stay aligned across `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
+- The UI release badge is sourced from the build version and is intentionally pinned in the shell sidebar so the current build is always visible.
+- Use `npm version <patch|minor|major> --no-git-tag-version` for a release bump, then run `npm run version:sync` if you edited files manually. `npm run version:check` is the guardrail that catches drift before handoff.
+- Final handoffs for shipped work should call out the release version explicitly so the user can verify it against the UI.
 
 ## CI And Branch Protection
 

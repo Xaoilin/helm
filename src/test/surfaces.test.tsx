@@ -13,6 +13,7 @@ import IntegrationsSurface from '../surfaces/IntegrationsSurface';
 import WorkspacesSurface from '../surfaces/WorkspacesSurface';
 import SettingsSurface from '../surfaces/SettingsSurface';
 import { defaultIntegrations } from '../store/contexts/SettingsContext';
+import { APP_RELEASE_VERSION } from '../config/release';
 
 function renderWithProvider(ui: React.ReactElement) {
   return render(<AppProvider>{ui}</AppProvider>);
@@ -24,6 +25,8 @@ describe('App shell', () => {
   it('should render the sidebar with all nav items', async () => {
     await act(async () => { renderWithProvider(<App />); });
     expect(screen.getByText('HELM')).toBeInTheDocument();
+    expect(screen.getByText('Current release')).toBeInTheDocument();
+    expect(screen.getByText(APP_RELEASE_VERSION)).toBeInTheDocument();
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Chat')).toBeInTheDocument();
     expect(screen.getByText('Calendar')).toBeInTheDocument();
@@ -140,7 +143,7 @@ describe('SettingsSurface', () => {
 
   it('should show HELM version', async () => {
     await act(async () => { renderWithProvider(<SettingsSurface />); });
-    expect(screen.getByText(/v0\.1\.0/)).toBeInTheDocument();
+    expect(screen.getByText(APP_RELEASE_VERSION)).toBeInTheDocument();
   });
 
   it('should have default calendar tab selector', async () => {

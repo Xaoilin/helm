@@ -81,6 +81,47 @@
   border-top: 1px solid #1e2030;
   font-size: 11px;
   color: #4a4e62;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-release {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(79, 91, 255, 0.16), rgba(79, 91, 255, 0.04));
+  border: 1px solid #2a2d42;
+  border-radius: 10px;
+}
+
+.sidebar-release-copy {
+  min-width: 0;
+}
+
+.sidebar-release-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7c8aff;
+}
+
+.sidebar-release-value {
+  margin-top: 3px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #f5f7ff;
+  letter-spacing: 0.02em;
+}
+
+.sidebar-release-meta,
+.sidebar-auth-status {
+  font-size: 10px;
+  line-height: 1.5;
+  color: #6b6f85;
 }
 
 .sidebar-auth {
@@ -947,6 +988,11 @@ textarea.form-input {
 }
 .task-row:hover { background: #1a1d2e; }
 .task-row.completed { opacity: 0.6; }
+.task-row.assistant-focus,
+.goal-card.assistant-focus {
+  border-color: #4f5bff;
+  box-shadow: 0 0 0 1px rgba(79, 91, 255, 0.45), 0 0 24px rgba(79, 91, 255, 0.18);
+}
 
 .task-checkbox {
   width: 18px;

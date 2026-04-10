@@ -10,7 +10,12 @@ import type {
   FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
 } from '../types/domain';
 import { loadStore, saveStore } from './persistence';
-import { subscribeAssistantNavigation } from '../services/assistantNavigation';
+import {
+  normalizeAssistantNavigationRequest,
+  subscribeAssistantNavigation,
+  type AssistantNavigationHandler,
+  type AssistantNavigationRequest,
+} from '../services/assistantNavigation';
 
 // ── Domain Contexts ──
 import { CalendarProvider, useCalendar } from './contexts/CalendarContext';
@@ -44,9 +49,12 @@ interface AppContextAPI {
   gamification: GamificationProfile;
   settings: Settings;
   loaded: boolean;
+  assistantNavigationRequest: AssistantNavigationRequest | null;
 
   // Navigation
   navigate: (s: Surface) => void;
+  requestAssistantNavigation: AssistantNavigationHandler;
+  dismissAssistantNavigationRequest: (requestId?: string) => void;
 
   // Chat
   createConversation: () => string;
@@ -138,6 +146,7 @@ export function useApp(): AppContextAPI {
 
 interface ShellState {
   surface: Surface;
+  assistantNavigationRequest: AssistantNavigationRequest | null;
   credentials: Credential[];
   workspaces: Workspace[];
   loaded: boolean;
@@ -146,6 +155,7 @@ interface ShellState {
 function ShellProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ShellState>({
     surface: 'dashboard',
+    assistantNavigationRequest: null,
     credentials: [],
     workspaces: [],
     loaded: false,
@@ -170,8 +180,33 @@ function ShellProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (state.loaded) saveStore('workspaces', state.workspaces); }, [state.workspaces, state.loaded]);
 
   // Navigation
-  const navigate = useCallback((surface: Surface) => setState(s => ({ ...s, surface })), []);
-  useEffect(() => subscribeAssistantNavigation(navigate), [navigate]);
+  const navigate = useCallback((surface: Surface) => setState(s => ({
+    ...s,
+    surface,
+    assistantNavigationRequest: null,
+  })), []);
+
+  const requestAssistantNavigation = useCallback<AssistantNavigationHandler>((target) => {
+    const request = normalizeAssistantNavigationRequest(target);
+    setState(s => ({
+      ...s,
+      surface: request.surface,
+      assistantNavigationRequest: request,
+    }));
+  }, []);
+
+  const dismissAssistantNavigationRequest = useCallback((requestId?: string) => {
+    setState(s => {
+      if (!s.assistantNavigationRequest) return s;
+      if (requestId && s.assistantNavigationRequest.id !== requestId) return s;
+      return {
+        ...s,
+        assistantNavigationRequest: null,
+      };
+    });
+  }, []);
+
+  useEffect(() => subscribeAssistantNavigation(requestAssistantNavigation), [requestAssistantNavigation]);
 
   // Credentials
   const addCredential = useCallback((cred: Omit<Credential, 'id' | 'createdAt' | 'updatedAt'>): string => {
@@ -254,6 +289,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     credentials: state.credentials,
     workspaces: state.workspaces,
     loaded: allLoaded,
+    assistantNavigationRequest: state.assistantNavigationRequest,
 
     // Calendar
     calendarAccounts: calendar.calendarAccounts,
@@ -334,6 +370,8 @@ function ShellProvider({ children }: { children: ReactNode }) {
 
     // Navigation
     navigate,
+    requestAssistantNavigation,
+    dismissAssistantNavigationRequest,
 
     // Credentials
     addCredential,
@@ -348,7 +386,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   }), [
     state, allLoaded,
     calendar, taskCtx, chat, knowledge, finance, gamificationCtx, settingsCtx,
-    navigate, addCredential, updateCredential, removeCredential,
+    navigate, requestAssistantNavigation, dismissAssistantNavigationRequest, addCredential, updateCredential, removeCredential,
     addWorkspace, updateWorkspace, removeWorkspace, setPrimaryWorkspace,
   ]);
 

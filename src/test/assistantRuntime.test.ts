@@ -191,6 +191,105 @@ describe('assistant runtime', () => {
     }));
   });
 
+  it('reveals the recently created task when the user says show me that task', async () => {
+    const addTask = vi.fn(() => 'task-77');
+    const navigate = vi.fn();
+
+    const first = await processAssistantCommand(
+      'Can you add a task for me to put the mirror up on the office?',
+      makeContext(),
+      {
+        lang: 'en',
+        dialogState: makeDialogState(),
+        handlers: {
+          addTask,
+          updateTask: vi.fn(),
+          navigate,
+        },
+      },
+    );
+
+    expect(addTask).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'put the mirror up on the office',
+      category: 'task',
+    }));
+
+    const reveal = await processAssistantCommand(
+      'show me that task',
+      makeContext({
+        tasks: [makeTask({
+          id: 'task-77',
+          title: 'put the mirror up on the office',
+        })],
+      }),
+      {
+        lang: 'en',
+        dialogState: first.dialogState,
+        handlers: {
+          addTask: vi.fn(() => 'unused'),
+          updateTask: vi.fn(),
+          navigate,
+        },
+      },
+    );
+
+    expect(reveal.execution?.steps[0].capability).toBe('tasks.reveal_task');
+    expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({
+      surface: 'tasks',
+      taskReveal: expect.objectContaining({
+        taskId: 'task-77',
+        tab: 'all',
+        resetFilters: true,
+        highlight: true,
+      }),
+    }));
+  });
+
+  it('reveals an explicitly named task from chat context', async () => {
+    const navigate = vi.fn();
+
+    const result = await processAssistantCommand(
+      'open task buy milk',
+      makeContext({
+        tasks: [makeTask({
+          id: 'task-buy-milk',
+          title: 'Buy milk',
+        })],
+      }),
+      {
+        lang: 'en',
+        dialogState: makeDialogState(),
+        handlers: {
+          addTask: vi.fn(() => 'unused'),
+          updateTask: vi.fn(),
+          navigate,
+        },
+      },
+    );
+
+    expect(result.execution?.steps[0].capability).toBe('tasks.reveal_task');
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
+      surface: 'tasks',
+      taskReveal: expect.objectContaining({
+        taskId: 'task-buy-milk',
+      }),
+    }));
+  });
+
+  it('clarifies when the user asks to reveal a task without enough context', async () => {
+    const result = await processAssistantCommand('show me that task', makeContext(), {
+      lang: 'en',
+      dialogState: makeDialogState(),
+      handlers: {
+        addTask: vi.fn(() => 'unused'),
+        updateTask: vi.fn(),
+      },
+    });
+
+    expect(result.plan.mode).toBe('clarify');
+    expect(result.message).toContain(`I couldn't find a task matching "that task".`);
+  });
+
   it('resolves and completes a matching task before mutating state', async () => {
     const updateTask = vi.fn();
     const updateGamification = vi.fn();

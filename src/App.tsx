@@ -25,6 +25,7 @@ import {
 import type { Surface } from './types/domain';
 import type { User } from '@supabase/supabase-js';
 import { TIMING } from './config/constants';
+import { APP_RELEASE_LABEL, APP_RELEASE_VERSION } from './config/release';
 import {
   getGoogleCalendarAuthPatch,
   isGoogleCalendarAccount,
@@ -166,7 +167,19 @@ function AppInner() {
           ))}
         </div>
         <div className="sidebar-footer" role="contentinfo">
-          {supabaseReady && !authLoading ? (
+          <div className="sidebar-release" aria-label={APP_RELEASE_LABEL}>
+            <div className="sidebar-release-copy">
+              <div className="sidebar-release-label">Current release</div>
+              <div className="sidebar-release-value">{APP_RELEASE_VERSION}</div>
+            </div>
+          </div>
+          <div className="sidebar-release-meta">
+            This sidebar always shows the exact build version you are running.
+          </div>
+          {supabaseReady ? (
+            authLoading ? (
+              <span className="sidebar-auth-status">Checking sign-in status...</span>
+            ) : (
             authUser ? (
               <div className="sidebar-auth">
                 <div className="sidebar-auth-user">
@@ -180,8 +193,9 @@ function AppInner() {
                 <span style={{ fontSize: 14 }}>G</span> Sign in with Google
               </button>
             )
+            )
           ) : (
-            <span>HELM v0.1.0 &middot; Local-first</span>
+            <span className="sidebar-auth-status">Local-first mode. Cloud sync is unavailable in this build.</span>
           )}
         </div>
       </nav>

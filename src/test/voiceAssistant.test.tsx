@@ -225,6 +225,61 @@ describe('VoiceAssistant', () => {
     expect(screen.getAllByText(/Listening for follow-up/i).length).toBeGreaterThan(0);
   });
 
+  it('passes shared dialog state between spoken turns so reveal-task follow-ups stay grounded', async () => {
+    const firstDialogState = {
+      currentSurface: 'dashboard',
+      recentEntities: [{
+        kind: 'task',
+        id: 'task-1',
+        label: 'Put the mirror up in the office',
+        surface: 'tasks',
+        score: 1,
+        lastUsedAt: '2026-04-10T10:00:00.000Z',
+      }],
+      recentPlans: [],
+    } as const;
+
+    processAssistantCommandMock
+      .mockResolvedValueOnce({
+        ...createAssistantResult('Added "Put the mirror up in the office" to your tasks.'),
+        dialogState: firstDialogState,
+      })
+      .mockResolvedValueOnce(createAssistantResult('Opening "Put the mirror up in the office" in your tasks.'));
+
+    await act(async () => {
+      renderAssistant();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(latestWakeWordOptions).not.toBeNull();
+    });
+
+    await act(async () => {
+      latestWakeWordOptions?.onWakeWordDetected();
+      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+    });
+
+    await act(async () => {
+      latestVoiceInputOptions?.onTranscript?.('Can you add a task for me to put the mirror up in the office?');
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      latestVoiceInputOptions?.onTranscript?.('show me that task');
+      await Promise.resolve();
+    });
+
+    expect(processAssistantCommandMock).toHaveBeenNthCalledWith(
+      2,
+      'show me that task',
+      expect.anything(),
+      expect.objectContaining({
+        dialogState: firstDialogState,
+      }),
+    );
+  });
+
   it('ends the hands-free session when the user says a stop phrase', async () => {
     await act(async () => {
       renderAssistant();
