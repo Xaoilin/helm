@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "handoff:check": "node ./scripts/verify-handoff.mjs",
     "lint": "eslint .",
     "llm-compare": "node ./scripts/compare-assistant-models.mjs",
     "postversion": "npm run version:sync",

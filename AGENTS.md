@@ -34,6 +34,8 @@ Run the relevant checks before closing out meaningful code changes:
 
 Also do manual QA before reporting back on any delivered feature. Changes that touch UI, voice, OAuth, wake-word, or external integrations always require a direct manual validation pass, and user-facing changes should include screenshot evidence when practical.
 
+Before calling a user-facing change live, shipped, or deployed, also run `npm run handoff:check` after merge and deploy. That command is the release gate for "no uncommitted non-generated changes, merged to master, deployed, live version verified, and merged topic branches cleaned up."
+
 ## Definition Of Done
 
 - Code changes are complete.
@@ -47,7 +49,7 @@ Also do manual QA before reporting back on any delivered feature. Changes that t
 
 - Use a dedicated branch per task. `codex/<short-description>` is the default branch style.
 - When meaningful work is complete and validation is green, land it through the normal branch -> commit -> merge -> deploy-verification flow unless the user explicitly wants it kept local or unmerged.
-- Do not describe a user-facing change as live, shipped, or on the website until it has been merged to `master`, the deployment has completed successfully, and the deployed result has been verified. If work is only local or branch-only, say that explicitly.
+- Do not describe a user-facing change as live, shipped, or on the website until it has been merged to `master`, the deployment has completed successfully, and `npm run handoff:check` has passed. If work is only local or branch-only, say that explicitly.
 - After a task branch is merged, delete that branch locally and on `origin` so stale merged branches do not accumulate. If a branch is still unmerged, call that out explicitly instead of leaving its status ambiguous.
 - Reproduce bugs before fixing them, then add a regression test.
 - For every bug, regression, or feature that did not behave as expected, perform a five-whys root-cause analysis before planning or implementing the fix. Keep asking "why" until the real failing layer is identified instead of stopping at the first visible symptom.

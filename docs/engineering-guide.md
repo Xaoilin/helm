@@ -4,7 +4,7 @@
 
 - Use a dedicated branch for each task. `codex/<short-description>` is the default.
 - When meaningful work is complete and relevant checks are green, use the normal branch -> commit -> PR/merge -> deploy-verification flow instead of leaving finished work only in a local checkout.
-- Do not call a user-facing change live, shipped, or deployed until it is merged to `master`, the deployment has succeeded, and the deployed result has been verified directly. If the change only exists locally or on a branch, say that explicitly in the handoff.
+- Do not call a user-facing change live, shipped, or deployed until it is merged to `master`, the deployment has succeeded, and the deployed result has been verified directly. `npm run handoff:check` is the required proof point for that state. If the change only exists locally or on a branch, say that explicitly in the handoff.
 - After a task branch is merged, delete it locally and on `origin`. If any branch remains unmerged, call out its status explicitly instead of leaving stale topic branches around.
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
@@ -46,12 +46,15 @@ Use the repo scripts or local binaries directly:
 
 For small changes, run the most relevant checks first. Before landing broader code changes, run the full set above unless a dependency or environment blocker prevents it.
 
+Before claiming a user-facing change is live or shipped, also run `npm run handoff:check` after merge and deploy. That command fails if uncommitted non-generated changes remain, if the work is still branch-only, if the `master` CI or deploy workflows have not succeeded for the deployed head, if the live GitHub Pages bundle is not serving the current version, or if merged `codex/` branches still exist.
+
 ## Release Versioning
 
 - HELM release versions use semver and must stay aligned across `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
 - The UI release badge is sourced from the build version and is intentionally pinned in the shell sidebar so the current build is always visible.
 - Use `npm version <patch|minor|major> --no-git-tag-version` for a release bump, then run `npm run version:sync` if you edited files manually. `npm run version:check` is the guardrail that catches drift before handoff.
 - Final handoffs for shipped work should call out the release version explicitly so the user can verify it against the UI.
+- Final handoffs for shipped work should call out the release version explicitly and mention the `npm run handoff:check` result so the user can verify both the UI badge and the deployment state.
 
 ## CI And Branch Protection
 
