@@ -11,6 +11,18 @@ import {
 import { listOllamaModels, testOllamaConnection } from '../services/ollamaApi';
 import { ollamaBreaker } from '../services/serviceBreakers';
 
+const {
+  getAuthSessionSnapshotMock,
+  getCurrentUserIdMock,
+  isAuthenticatedMock,
+  isSupabaseReadyMock,
+} = vi.hoisted(() => ({
+  getAuthSessionSnapshotMock: vi.fn(),
+  getCurrentUserIdMock: vi.fn(),
+  isAuthenticatedMock: vi.fn(),
+  isSupabaseReadyMock: vi.fn(),
+}));
+
 vi.mock('../components/debug/WakeWordDebug', () => ({
   default: () => <div>Wake word debug stub</div>,
 }));
@@ -45,35 +57,41 @@ vi.mock('../services/ollamaApi', () => ({
 }));
 
 vi.mock('../store/supabase', () => ({
-  getAuthSessionSnapshot: vi.fn(() => ({
-    userId: 'user-1',
-    email: 'alisa@example.com',
-    accessTokenPresent: true,
-    providerToken: 'provider-token-present',
-    providerRefreshToken: 'refresh-token-present',
-    provider: 'google',
-    expiresAt: 1_900_000_000,
-  })),
-  getCurrentUserId: vi.fn(() => 'user-1'),
-  isAuthenticated: vi.fn(() => true),
-  isSupabaseReady: vi.fn(() => true),
+  getAuthSessionSnapshot: getAuthSessionSnapshotMock,
+  getCurrentUserId: getCurrentUserIdMock,
+  isAuthenticated: isAuthenticatedMock,
+  isSupabaseReady: isSupabaseReadyMock,
 }));
 
 describe('DebugSurface AI diagnostics', () => {
   beforeEach(() => {
     ollamaBreaker.reset();
     vi.clearAllMocks();
+    getAuthSessionSnapshotMock.mockReturnValue({
+      userId: 'user-1',
+      email: 'alisa@example.com',
+      accessTokenPresent: true,
+      providerToken: 'provider-token-present',
+      providerRefreshToken: 'refresh-token-present',
+      provider: 'google',
+      expiresAt: 1_900_000_000,
+    });
+    getCurrentUserIdMock.mockReturnValue('user-1');
+    isAuthenticatedMock.mockReturnValue(true);
+    isSupabaseReadyMock.mockReturnValue(true);
     vi.mocked(getAssistantProviderSetting).mockReturnValue('hosted');
     vi.mocked(getAssistantRuntimeStatus).mockResolvedValue({
       activeProvider: 'hosted',
       state: 'ready',
       headline: 'Hosted AI ready',
-      detail: 'Open-ended help is powered by OpenAI GPT-5.4-mini through your signed-in HELM session.',
+      detail: 'Open-ended help is powered by OpenAI GPT-5.4-mini through HELM\'s hosted assistant.',
     });
     vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available' });
     vi.mocked(chatWithHostedAssistant).mockResolvedValue('READY');
     vi.mocked(getHostedAssistantDiagnostics).mockReturnValue({
       circuitAllowingRequests: true,
+      lastAccessMode: 'session_token',
+      localProjectAccessAvailable: false,
       lastFailureSource: null,
       lastFailureMessage: null,
       lastFailureAt: null,
@@ -133,6 +151,8 @@ describe('DebugSurface AI diagnostics', () => {
   it('shows the last real hosted failure details and resets hosted diagnostics', async () => {
     vi.mocked(getHostedAssistantDiagnostics).mockReturnValue({
       circuitAllowingRequests: false,
+      lastAccessMode: 'session_token',
+      localProjectAccessAvailable: false,
       lastFailureSource: 'chat',
       lastFailureMessage: 'OpenAI error 400: Invalid schema for response_format helm_action_plan.',
       lastFailureAt: '2026-04-10T01:20:00.000Z',
@@ -150,5 +170,30 @@ describe('DebugSurface AI diagnostics', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset Hosted Breaker' }));
     expect(resetHostedAssistantDiagnostics).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows localhost project access when hosted AI is available without sign-in', async () => {
+    getAuthSessionSnapshotMock.mockReturnValue(null);
+    getCurrentUserIdMock.mockReturnValue(null);
+    isAuthenticatedMock.mockReturnValue(false);
+    isSupabaseReadyMock.mockReturnValue(true);
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available', accessMode: 'local_project_key' });
+    vi.mocked(getHostedAssistantDiagnostics).mockReturnValue({
+      circuitAllowingRequests: true,
+      lastAccessMode: 'local_project_key',
+      localProjectAccessAvailable: true,
+      lastFailureSource: null,
+      lastFailureMessage: null,
+      lastFailureAt: null,
+    });
+
+    await act(async () => {
+      render(<DebugSurface />);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /AI Assistant/i }));
+
+    expect(await screen.findByText('Supabase ready with local hosted access')).toBeInTheDocument();
+    expect(screen.getAllByText('local project access').length).toBeGreaterThan(0);
   });
 });

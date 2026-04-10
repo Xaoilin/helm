@@ -98,3 +98,7 @@ export const LIMITS = {
   /** Default calendar event duration (ms = 1 hour) */
   DEFAULT_EVENT_DURATION: 3600000,
 } as const;
+
+// ── Environment ──
+
+export const LOCALHOST_HOSTNAMES = ['localhost', '127.0.0.1', '::1', '[::1]'] as const;

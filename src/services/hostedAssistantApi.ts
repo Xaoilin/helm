@@ -3,10 +3,14 @@ import {
   FunctionsHttpError,
   FunctionsRelayError,
 } from '@supabase/supabase-js';
-import { HOSTED_ASSISTANT_FUNCTION } from '../config';
+import { HOSTED_ASSISTANT_FUNCTION, SUPABASE_ANON_KEY } from '../config';
 import { API_TIMEOUT } from '../config/constants';
 import { getClient, isAuthenticated, isSupabaseReady } from '../store/supabase';
 import { CircuitOpenError } from './circuitBreaker';
+import {
+  canUseHostedAssistantLocalProjectAccess,
+  type HostedAssistantAccessMode,
+} from './hostedAssistantAccess';
 import { logError } from './logger';
 import { hostedAssistantBreaker } from './serviceBreakers';
 import type { OllamaMessage } from './ollamaApi';
@@ -32,6 +36,7 @@ interface HostedAssistantChatResponse {
 export interface HostedAssistantConnectionStatus {
   status: 'available' | 'sign_in_required' | 'not_configured' | 'unavailable';
   message?: string;
+  accessMode?: HostedAssistantAccessMode;
 }
 
 export type HostedAssistantFailureSource = 'health' | 'chat';
@@ -44,6 +49,8 @@ interface HostedAssistantFailureState {
 
 export interface HostedAssistantDiagnostics {
   circuitAllowingRequests: boolean;
+  lastAccessMode: HostedAssistantAccessMode | null;
+  localProjectAccessAvailable: boolean;
   lastFailureSource: HostedAssistantFailureSource | null;
   lastFailureMessage: string | null;
   lastFailureAt: string | null;
@@ -57,6 +64,7 @@ class HostedAssistantSessionError extends Error {
 }
 
 const hostedAssistantFailures: Partial<Record<HostedAssistantFailureSource, HostedAssistantFailureState>> = {};
+let lastHostedAssistantAccessMode: HostedAssistantAccessMode | null = null;
 
 function isHttpError(error: unknown): error is FunctionsHttpError {
   return error instanceof FunctionsHttpError
@@ -101,9 +109,6 @@ async function extractFunctionErrorMessage(error: unknown): Promise<string> {
 function getHostedAssistantClient() {
   if (!isSupabaseReady()) {
     throw new Error('Supabase is not configured.');
-  }
-  if (!isAuthenticated()) {
-    throw new Error('Sign in with Google to use hosted AI.');
   }
 
   const client = getClient();
@@ -164,16 +169,44 @@ function shouldTreatErrorAsSignInRequired(message: string): boolean {
 }
 
 async function getHostedAssistantAuthHeaders(client: NonNullable<ReturnType<typeof getClient>>): Promise<Record<string, string>> {
+  const localProjectAccessAvailable = canUseHostedAssistantLocalProjectAccess();
+
+  const getLocalProjectAccessHeaders = (): Record<string, string> | null => {
+    if (!localProjectAccessAvailable) return null;
+
+    lastHostedAssistantAccessMode = 'local_project_key';
+    return {
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    };
+  };
+
+  if (!isAuthenticated()) {
+    const localProjectHeaders = getLocalProjectAccessHeaders();
+    if (localProjectHeaders) return localProjectHeaders;
+
+    lastHostedAssistantAccessMode = 'none';
+    throw new HostedAssistantSessionError('Sign in with Google to use hosted AI.');
+  }
+
   const { data, error } = await client.auth.getSession();
   if (error) {
+    const localProjectHeaders = getLocalProjectAccessHeaders();
+    if (localProjectHeaders) return localProjectHeaders;
+
+    lastHostedAssistantAccessMode = 'none';
     throw new HostedAssistantSessionError(`Hosted AI could not read the current HELM session: ${error.message}`);
   }
 
   const accessToken = data.session?.access_token?.trim();
   if (!accessToken) {
+    const localProjectHeaders = getLocalProjectAccessHeaders();
+    if (localProjectHeaders) return localProjectHeaders;
+
+    lastHostedAssistantAccessMode = 'none';
     throw new HostedAssistantSessionError('Hosted AI needs a fresh HELM session token. Sign out and sign back in, then retry.');
   }
 
+  lastHostedAssistantAccessMode = 'session_token';
   return {
     Authorization: `Bearer ${accessToken}`,
   };
@@ -183,6 +216,8 @@ export function getHostedAssistantDiagnostics(): HostedAssistantDiagnostics {
   const lastFailure = getLastHostedAssistantFailure();
   return {
     circuitAllowingRequests: hostedAssistantBreaker.isAvailable,
+    lastAccessMode: lastHostedAssistantAccessMode,
+    localProjectAccessAvailable: canUseHostedAssistantLocalProjectAccess(),
     lastFailureSource: lastFailure?.source ?? null,
     lastFailureMessage: lastFailure?.message ?? null,
     lastFailureAt: lastFailure?.occurredAt ?? null,
@@ -193,6 +228,7 @@ export function resetHostedAssistantDiagnostics(): void {
   hostedAssistantBreaker.reset();
   delete hostedAssistantFailures.health;
   delete hostedAssistantFailures.chat;
+  lastHostedAssistantAccessMode = null;
 }
 
 async function invokeHostedAssistant<T>(
@@ -242,22 +278,18 @@ export async function testHostedAssistantConnection(): Promise<HostedAssistantCo
     return { status: 'not_configured', message: 'Supabase is not configured.' };
   }
 
-  if (!isAuthenticated()) {
-    return { status: 'sign_in_required', message: 'Sign in with Google to use hosted AI.' };
-  }
-
   try {
     const data = await invokeHostedAssistant<HostedAssistantHealthResponse>('health', { action: 'health' });
     return data.ok
-      ? { status: 'available' }
+      ? { status: 'available', accessMode: lastHostedAssistantAccessMode ?? 'none' }
       : { status: 'unavailable', message: 'Hosted assistant health check failed.' };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (isHostedSessionError(error)) {
-      return { status: 'sign_in_required', message };
+      return { status: 'sign_in_required', message, accessMode: 'none' };
     }
     logError('HostedAssistant', error);
-    return { status: 'unavailable', message };
+    return { status: 'unavailable', message, accessMode: lastHostedAssistantAccessMode ?? 'none' };
   }
 }
 

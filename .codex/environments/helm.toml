@@ -26,3 +26,7 @@ command = "npx playwright test"
 [[actions]]
 name = "Validate"
 command = "npm run check"
+
+[[actions]]
+name = "Kill app on 5173"
+command = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\kill-port.ps1 -Port 5173"
