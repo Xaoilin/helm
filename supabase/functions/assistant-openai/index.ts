@@ -1,25 +1,13 @@
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import {
+  buildOpenAIResponsesPayload,
+  isAssistantMessage,
+} from './openaiPayload.ts';
 import { extractOutputText } from './openaiResponse.ts';
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') || 'gpt-5.4-mini';
 const OPENAI_URL = 'https://api.openai.com/v1/responses';
-
-type AssistantMessageRole = 'system' | 'user' | 'assistant';
-
-interface AssistantMessage {
-  role: AssistantMessageRole;
-  content: string;
-}
-
-function isAssistantMessage(value: unknown): value is AssistantMessage {
-  return typeof value === 'object'
-    && value !== null
-    && 'role' in value
-    && 'content' in value
-    && (value.role === 'system' || value.role === 'user' || value.role === 'assistant')
-    && typeof value.content === 'string';
-}
 
 function getOpenAIErrorMessage(data: unknown): string {
   if (typeof data !== 'object' || data === null || !('error' in data)) {
@@ -32,44 +20,6 @@ function getOpenAIErrorMessage(data: unknown): string {
   }
 
   return 'Unknown OpenAI error';
-}
-
-function buildPayload(messages: AssistantMessage[], format: unknown) {
-  const instructions = messages
-    .filter(message => message.role === 'system')
-    .map(message => message.content.trim())
-    .filter(Boolean)
-    .join('\n\n');
-
-  const input = messages
-    .filter(message => message.role !== 'system')
-    .map(message => ({
-      role: message.role,
-      content: [
-        {
-          type: 'input_text',
-          text: message.content,
-        },
-      ],
-    }));
-
-  return {
-    model: OPENAI_MODEL,
-    store: false,
-    temperature: 0.2,
-    max_output_tokens: 600,
-    instructions: instructions || undefined,
-    input,
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'helm_action_plan',
-        description: 'Structured action plan for HELM assistant turns.',
-        schema: format,
-        strict: true,
-      },
-    },
-  };
 }
 
 Deno.serve(async (request) => {
@@ -122,7 +72,11 @@ Deno.serve(async (request) => {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(buildPayload(messages, body.format)),
+    body: JSON.stringify(buildOpenAIResponsesPayload({
+      model: OPENAI_MODEL,
+      messages,
+      format: body.format,
+    })),
   });
 
   const data = await response.json().catch(() => null);

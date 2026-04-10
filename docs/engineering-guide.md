@@ -89,6 +89,7 @@ For every delivered feature, say clearly what you verified manually, include the
 - Prefer extending the domain contexts under `src/store/contexts/` over growing the compatibility shell in `src/store/AppContext.tsx`.
 - Keep assistant logic shared across voice and chat instead of duplicating parsers, prompt rules, or mutation paths.
 - When extending the hosted planner contract, update both `ActionPlanArgs` in `src/assistant/plannerSchema.ts` and the strict hosted JSON schema there. Every planner arg must remain a required nullable property in the schema so OpenAI structured outputs stay valid.
+- Keep the hosted OpenAI Responses payload role-correct: `system` prompts belong in `instructions`, `user` history must serialize as `input_text`, and stored `assistant` history must serialize as `output_text`. Update the shared payload helper and its tests together if this contract changes.
 - Extract timing, size, and threshold literals into `src/config/constants.ts`.
 - Favor explicit, typed interfaces over loose objects and stringly typed state.
 - When a component becomes hard to read, extract subcomponents or hooks instead of stacking more branches into one file.

@@ -144,6 +144,7 @@ describe('hostedAssistantApi', () => {
   });
 
   it('preserves the last hosted chat failure when the circuit breaker opens', async () => {
+    const upstreamError = "OpenAI error 400: Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'.";
     const client = makeClient({
       invokeResult: {
         data: null,
@@ -154,10 +155,10 @@ describe('hostedAssistantApi', () => {
               get: (name: string) => name === 'content-type' ? 'application/json' : null,
             },
             json: async () => ({
-              error: 'OpenAI error 400: Invalid schema for response_format helm_action_plan.',
+              error: upstreamError,
             }),
             text: async () => JSON.stringify({
-              error: 'OpenAI error 400: Invalid schema for response_format helm_action_plan.',
+              error: upstreamError,
             }),
           },
         },
@@ -175,7 +176,7 @@ describe('hostedAssistantApi', () => {
         answer: { type: 'string' },
       },
       required: ['answer'],
-    })).rejects.toThrow('Invalid schema');
+    })).rejects.toThrow('input_text');
 
     await expect(chatWithHostedAssistant([
       { role: 'system', content: 'Reply with JSON.' },
@@ -187,12 +188,12 @@ describe('hostedAssistantApi', () => {
         answer: { type: 'string' },
       },
       required: ['answer'],
-    })).rejects.toThrow('Invalid schema');
+    })).rejects.toThrow('input_text');
 
     expect(hostedAssistantBreaker.isAvailable).toBe(false);
     expect(getHostedAssistantDiagnostics()).toEqual(expect.objectContaining({
       lastFailureSource: 'chat',
-      lastFailureMessage: expect.stringContaining('Invalid schema'),
+      lastFailureMessage: expect.stringContaining("Invalid value: 'input_text'"),
       projectAccessAvailable: true,
     }));
 
@@ -206,6 +207,6 @@ describe('hostedAssistantApi', () => {
         answer: { type: 'string' },
       },
       required: ['answer'],
-    })).rejects.toThrow(/chat request last failed: .*Invalid schema.*Circuit breaker open/i);
+    })).rejects.toThrow(/chat request last failed: .*input_text.*Circuit breaker open/i);
   });
 });

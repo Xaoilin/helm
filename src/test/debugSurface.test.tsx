@@ -130,6 +130,28 @@ describe('DebugSurface AI diagnostics', () => {
       expect(chatWithHostedAssistant).toHaveBeenCalledTimes(1);
     });
 
+    expect(chatWithHostedAssistant).toHaveBeenCalledWith([
+      {
+        role: 'system',
+        content: 'You are a HELM hosted assistant smoke test. Always return JSON with reply set to READY.',
+      },
+      {
+        role: 'user',
+        content: 'Return JSON with reply set to READY.',
+      },
+      {
+        role: 'assistant',
+        content: '{"reply":"READY"}',
+      },
+      {
+        role: 'user',
+        content: 'Good. Now return JSON with reply set to READY again.',
+      },
+    ], expect.objectContaining({
+      type: 'object',
+      required: ['reply'],
+    }));
+
     expect(await screen.findByText('Hosted smoke test passed')).toBeInTheDocument();
     expect(screen.getByText('READY')).toBeInTheDocument();
   });
