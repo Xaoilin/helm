@@ -33,24 +33,32 @@ export async function speakWithElevenLabs(
   return new Audio(url);
 }
 
-export function speakWithBrowserTTS(text: string, lang: AssistantLang = 'en'): void {
-  if (!('speechSynthesis' in window)) return;
+export function speakWithBrowserTTS(text: string, lang: AssistantLang = 'en'): Promise<void> {
+  return new Promise((resolve) => {
+    if (!('speechSynthesis' in window)) {
+      resolve();
+      return;
+    }
 
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.0;
-  utterance.pitch = 1.1;
-  utterance.lang = lang === 'ar' ? 'ar-SA' : 'en-GB';
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.1;
+    utterance.lang = lang === 'ar' ? 'ar-SA' : 'en-GB';
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
 
-  const voices = speechSynthesis.getVoices();
-  if (lang === 'ar') {
-    const arabicVoice = voices.find(voice => voice.lang.startsWith('ar'));
-    if (arabicVoice) utterance.voice = arabicVoice;
-  } else {
-    const femaleVoice = voices.find(voice =>
-      voice.name.includes('Female') || voice.name.includes('Zira') || voice.name.includes('Hazel')
-    );
-    if (femaleVoice) utterance.voice = femaleVoice;
-  }
+    const voices = speechSynthesis.getVoices();
+    if (lang === 'ar') {
+      const arabicVoice = voices.find(voice => voice.lang.startsWith('ar'));
+      if (arabicVoice) utterance.voice = arabicVoice;
+    } else {
+      const femaleVoice = voices.find(voice =>
+        voice.name.includes('Female') || voice.name.includes('Zira') || voice.name.includes('Hazel')
+      );
+      if (femaleVoice) utterance.voice = femaleVoice;
+    }
 
-  speechSynthesis.speak(utterance);
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+  });
 }

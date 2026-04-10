@@ -6,7 +6,6 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { speakWithElevenLabs, speakWithBrowserTTS } from '../services/voiceAssistant';
-import { TIMING } from '../config/constants';
 import { logError } from '../services/logger';
 import type { AssistantLang } from '../services/assistantTypes';
 
@@ -35,35 +34,33 @@ export function useVoiceOutput({
 
   const speak = useCallback(async (text: string): Promise<void> => {
     setIsSpeaking(true);
-    await new Promise<void>((resolve) => {
-      const done = () => {
-        setIsSpeaking(false);
-        resolve();
-      };
-
+    try {
       if (hasElevenLabs && elevenLabsApiKey && elevenLabsVoiceId) {
-        speakWithElevenLabs(text, elevenLabsApiKey, elevenLabsVoiceId)
-          .then(async (audio) => {
-            audioRef.current = audio;
-            audio.onended = done;
-            audio.onerror = () => {
-              logError('useVoiceOutput', 'ElevenLabs audio playback error, falling back to browser TTS');
-              speakWithBrowserTTS(text, lang);
-              setTimeout(done, TIMING.TTS_FALLBACK_TIMEOUT);
+        try {
+          const audio = await speakWithElevenLabs(text, elevenLabsApiKey, elevenLabsVoiceId);
+          audioRef.current = audio;
+          await new Promise<void>((resolve, reject) => {
+            audio.onended = () => {
+              audioRef.current = null;
+              resolve();
             };
-            await audio.play();
-          })
-          .catch((error) => {
-            logError('useVoiceOutput', error);
-            speakWithBrowserTTS(text, lang);
-            setTimeout(done, TIMING.TTS_FALLBACK_TIMEOUT);
+            audio.onerror = () => {
+              audioRef.current = null;
+              reject(new Error('ElevenLabs audio playback failed.'));
+            };
+            audio.play().catch(reject);
           });
-        return;
+          return;
+        } catch (error) {
+          audioRef.current = null;
+          logError('useVoiceOutput', error);
+        }
       }
 
-      speakWithBrowserTTS(text, lang);
-      setTimeout(done, TIMING.TTS_FALLBACK_TIMEOUT);
-    });
+      await speakWithBrowserTTS(text, lang);
+    } finally {
+      setIsSpeaking(false);
+    }
   }, [hasElevenLabs, elevenLabsApiKey, elevenLabsVoiceId, lang]);
 
   const stopSpeaking = useCallback(() => {

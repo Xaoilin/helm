@@ -11,6 +11,10 @@ export const TIMING = {
   TTS_FALLBACK_TIMEOUT: 3000,
   /** Max recording duration before auto-stop */
   RECORDING_MAX_DURATION: 8000,
+  /** End a voice turn early if no speech arrives at all. */
+  VOICE_NO_SPEECH_TIMEOUT: 5000,
+  /** Brief pause after Lina finishes speaking before reopening the mic. */
+  VOICE_SESSION_RESUME_DELAY: 250,
   /** Wake word detection cooldown between triggers */
   WAKE_WORD_COOLDOWN: 2000,
   /** Dashboard prayer countdown tick interval */
@@ -51,6 +55,39 @@ export const TIMING = {
   SYNC_THROTTLE: 15 * 60 * 1000,
   /** Level-up flash animation duration */
   LEVEL_FLASH_DURATION: 1000,
+} as const;
+
+export const VOICE_SESSION = {
+  GREETING: {
+    en: 'Hey, how can I help?',
+    ar: 'مرحباً، كيف أقدر أساعدك؟',
+  },
+  STOP_RESPONSE: {
+    en: "Okay, I'll stop listening.",
+    ar: 'حسناً، سأتوقف عن الاستماع.',
+  },
+  STOP_PHRASES: {
+    en: [
+      'stop',
+      'cancel',
+      'thats all',
+      "that's all",
+      'that is all',
+      'thanks lina',
+      'thank you lina',
+      'bye lina',
+      'goodbye lina',
+    ],
+    ar: [
+      'توقفي',
+      'إيقاف',
+      'خلاص',
+      'يكفي',
+      'شكراً لينا',
+      'شكرا لينا',
+      'مع السلامة لينا',
+    ],
+  },
 } as const;
 
 // ── API Timeouts (milliseconds) ──
