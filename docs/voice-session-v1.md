@@ -26,6 +26,7 @@ V1 covers:
 - automatic mic reopening after Lina replies
 - explicit spoken stop phrases
 - session end on silence
+- wake-word sessions mirrored into Chat history as separate conversation threads
 
 V1 does not attempt:
 
@@ -83,6 +84,7 @@ Each turn follows the same sequence:
 7. reopen the mic for the next turn
 
 The chat and voice surfaces still share the same assistant runtime and mutation handlers.
+Wake-word sessions should also create a fresh conversation in the Chat surface, append each spoken turn to that same thread, and start a brand-new thread the next time the wake word begins a new session.
 
 ## Ending The Session
 
@@ -149,6 +151,7 @@ For any future changes to this flow:
 - verify Lina reopens the mic after speaking
 - verify silence ends the session cleanly
 - verify stop phrases end the session cleanly
+- verify each wake-word session appears in Chat as its own conversation with the spoken turns recorded in order
 - verify the manual mic button still works outside hands-free mode
 
 Changes to this flow should update this document, `docs/feature-status.md`, and any tests that cover voice session behavior.

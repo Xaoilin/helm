@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
+import { CHAT, VOICE_SESSION } from '../../config/constants';
 import type {
   ChatConversation,
   ChatMessage,
@@ -18,6 +19,12 @@ import type {
 import { loadStore, saveStore } from '../persistence';
 import { processAssistantCommand } from '../../services/assistantRuntime';
 import type { AssistantConversationMessage, AssistantDialogState } from '../../services/assistantTypes';
+
+interface CreateConversationOptions {
+  title?: string;
+  initialMessages?: Array<Pick<ChatMessage, 'role' | 'content'>>;
+  dialogState?: AssistantDialogState;
+}
 
 export interface ChatCrossDomainData {
   calendarAccounts: CalendarAccount[];
@@ -44,14 +51,49 @@ export interface ChatContextValue {
   conversations: ChatConversation[];
   activeConversationId: string | null;
   loaded: boolean;
-  createConversation: () => string;
+  createConversation: (options?: CreateConversationOptions) => string;
   setActiveConversation: (id: string | null) => void;
   sendMessage: (conversationId: string, content: string) => Promise<void>;
+  recordAssistantConversationTurn: (
+    conversationId: string,
+    turn: {
+      userContent: string;
+      assistantContent: string;
+      dialogState?: AssistantDialogState;
+    },
+  ) => void;
   deleteConversation: (id: string) => void;
   renameConversation: (id: string, title: string) => void;
 }
 
 const ChatCtx = createContext<ChatContextValue | null>(null);
+
+function buildChatMessage(role: ChatMessage['role'], content: string, timestamp: string = new Date().toISOString()): ChatMessage {
+  return {
+    id: uuid(),
+    role,
+    content,
+    timestamp,
+  };
+}
+
+function getConversationTitleFromMessages(
+  messages: Array<Pick<ChatMessage, 'role' | 'content'>>,
+  fallbackTitle: string = CHAT.DEFAULT_CONVERSATION_TITLE,
+): string {
+  const firstUserMessage = messages.find(message => message.role === 'user' && message.content.trim());
+  if (firstUserMessage) {
+    return firstUserMessage.content.trim().slice(0, 50);
+  }
+
+  return fallbackTitle;
+}
+
+function shouldAutoRenameConversation(conversation: ChatConversation): boolean {
+  return conversation.messages.length === 0
+    || conversation.title === CHAT.DEFAULT_CONVERSATION_TITLE
+    || conversation.title === VOICE_SESSION.CONVERSATION_TITLE;
+}
 
 export function useChatContext(): ChatContextValue {
   const ctx = useContext(ChatCtx);
@@ -82,18 +124,21 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
   useEffect(() => { if (loaded) saveStore('conversations', conversations); }, [conversations, loaded]);
   useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
 
-  const createConversation = useCallback((): string => {
+  const createConversation = useCallback((options?: CreateConversationOptions): string => {
     const id = uuid();
     const now = new Date().toISOString();
+    const initialMessages = (options?.initialMessages || []).map((message, index) =>
+      buildChatMessage(message.role, message.content, new Date(new Date(now).getTime() + index).toISOString())
+    );
     const conversation: ChatConversation = {
       id,
-      title: 'New conversation',
-      messages: [],
+      title: options?.title || getConversationTitleFromMessages(initialMessages, CHAT.DEFAULT_CONVERSATION_TITLE),
+      messages: initialMessages,
       createdAt: now,
       updatedAt: now,
     };
 
-    dialogStatesRef.current[id] = {
+    dialogStatesRef.current[id] = options?.dialogState || {
       currentSurface: 'chat',
       recentEntities: [],
       recentPlans: [],
@@ -110,7 +155,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
 
   const sendMessage = useCallback(async (conversationId: string, content: string) => {
     const now = new Date().toISOString();
-    const userMessage: ChatMessage = { id: uuid(), role: 'user', content, timestamp: now };
+    const userMessage = buildChatMessage('user', content, now);
     const existingConversation = conversationsRef.current.find(conversation => conversation.id === conversationId);
     const history: AssistantConversationMessage[] = (existingConversation?.messages || []).slice(-10).map(message => ({
       role: message.role as 'user' | 'assistant',
@@ -135,7 +180,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
           ? {
               ...conversation,
               messages: [...conversation.messages, userMessage],
-              title: conversation.messages.length === 0 ? content.slice(0, 50) : conversation.title,
+              title: shouldAutoRenameConversation(conversation) ? content.slice(0, 50) : conversation.title,
               updatedAt: now,
             }
           : conversation
@@ -178,12 +223,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
 
     dialogStatesRef.current[conversationId] = result.dialogState;
 
-    const assistantMessage: ChatMessage = {
-      id: uuid(),
-      role: 'assistant',
-      content: result.message,
-      timestamp: new Date().toISOString(),
-    };
+    const assistantMessage = buildChatMessage('assistant', result.message);
 
     setConversations(prev =>
       prev.map(conversation =>
@@ -193,6 +233,53 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
       )
     );
   }, [crossDomain]);
+
+  const recordAssistantConversationTurn = useCallback((
+    conversationId: string,
+    turn: {
+      userContent: string;
+      assistantContent: string;
+      dialogState?: AssistantDialogState;
+    },
+  ) => {
+    const now = new Date().toISOString();
+    const userMessage = buildChatMessage('user', turn.userContent, now);
+    const assistantMessage = buildChatMessage('assistant', turn.assistantContent);
+
+    dialogStatesRef.current[conversationId] = turn.dialogState || dialogStatesRef.current[conversationId] || {
+      currentSurface: 'chat',
+      recentEntities: [],
+      recentPlans: [],
+    };
+
+    setConversations(prev => {
+      const exists = prev.some(conversation => conversation.id === conversationId);
+      if (!exists) {
+        const newConversation: ChatConversation = {
+          id: conversationId,
+          title: turn.userContent.slice(0, 50) || CHAT.DEFAULT_CONVERSATION_TITLE,
+          messages: [userMessage, assistantMessage],
+          createdAt: now,
+          updatedAt: new Date().toISOString(),
+        };
+
+        return [newConversation, ...prev];
+      }
+
+      return prev.map(conversation =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              messages: [...conversation.messages, userMessage, assistantMessage],
+              title: shouldAutoRenameConversation(conversation) ? turn.userContent.slice(0, 50) || conversation.title : conversation.title,
+              updatedAt: new Date().toISOString(),
+            }
+          : conversation
+      );
+    });
+
+    setActiveConversationIdState(conversationId);
+  }, []);
 
   const deleteConversation = useCallback((id: string) => {
     setConversations(prev => prev.filter(conversation => conversation.id !== id));
@@ -211,6 +298,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
     createConversation,
     setActiveConversation,
     sendMessage,
+    recordAssistantConversationTurn,
     deleteConversation,
     renameConversation,
   };

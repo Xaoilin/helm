@@ -1,14 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
 import { AppProvider } from '../store/AppContext';
 import VoiceAssistant from '../components/VoiceAssistant';
 import { TIMING } from '../config/constants';
+import { useApp } from '../store/AppContext';
+import type { ChatConversation } from '../types/domain';
 
 type VoiceInputOptions = Parameters<typeof import('../hooks/useVoiceInput').useVoiceInput>[0];
 type WakeWordOptions = Parameters<typeof import('../hooks/useWakeWord').useWakeWord>[0];
 
 let latestVoiceInputOptions: VoiceInputOptions | null = null;
 let latestWakeWordOptions: WakeWordOptions | null = null;
+let latestConversations: ChatConversation[] = [];
 
 const {
   startListeningMock,
@@ -68,8 +72,21 @@ vi.mock('../services/assistantRuntime', () => ({
 }));
 
 function renderAssistant() {
+  function ChatProbe() {
+    const app = useApp();
+    useEffect(() => {
+      latestConversations = app.conversations.map(conversation => ({
+        ...conversation,
+        messages: [...conversation.messages],
+      }));
+    }, [app.conversations]);
+
+    return null;
+  }
+
   return render(
     <AppProvider>
+      <ChatProbe />
       <VoiceAssistant />
     </AppProvider>,
   );
@@ -97,6 +114,7 @@ describe('VoiceAssistant', () => {
   beforeEach(() => {
     latestVoiceInputOptions = null;
     latestWakeWordOptions = null;
+    latestConversations = [];
     localStorage.clear();
     startListeningMock.mockReset();
     stopListeningMock.mockReset();
@@ -150,6 +168,12 @@ describe('VoiceAssistant', () => {
       expect(speakMock).toHaveBeenCalledWith('Hey, how can I help?');
     });
 
+    await waitFor(() => {
+      expect(latestConversations).toHaveLength(1);
+      expect(latestConversations[0].messages).toHaveLength(1);
+      expect(latestConversations[0].messages[0].content).toBe('Hey, how can I help?');
+    });
+
     await act(async () => {
       await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
     });
@@ -182,6 +206,15 @@ describe('VoiceAssistant', () => {
     await waitFor(() => {
       expect(processAssistantCommandMock).toHaveBeenCalledTimes(1);
       expect(speakMock).toHaveBeenCalledWith('You have one task left today.');
+    });
+
+    await waitFor(() => {
+      expect(latestConversations).toHaveLength(1);
+      expect(latestConversations[0].messages.map(message => message.content)).toEqual([
+        'Hey, how can I help?',
+        'what do I have left today?',
+        'You have one task left today.',
+      ]);
     });
 
     await act(async () => {
@@ -218,5 +251,75 @@ describe('VoiceAssistant', () => {
 
     expect(screen.queryByText(/Hands-free voice session active/i)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/Type or talk to Lina/i)).not.toBeInTheDocument();
+  });
+
+  it('creates a fresh chat conversation for each wake-word session', async () => {
+    processAssistantCommandMock
+      .mockResolvedValueOnce(createAssistantResult('First answer.'))
+      .mockResolvedValueOnce(createAssistantResult('Second answer.'));
+
+    await act(async () => {
+      renderAssistant();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(latestWakeWordOptions).not.toBeNull();
+    });
+
+    await act(async () => {
+      latestWakeWordOptions?.onWakeWordDetected();
+      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+    });
+
+    await act(async () => {
+      latestVoiceInputOptions?.onTranscript?.('first request');
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(latestConversations).toHaveLength(1);
+      expect(latestConversations[0].messages.map(message => message.content)).toEqual([
+        'Hey, how can I help?',
+        'first request',
+        'First answer.',
+      ]);
+    });
+
+    await act(async () => {
+      latestVoiceInputOptions?.onTranscript?.('thanks Lina');
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(latestConversations[0].messages.at(-2)?.content).toBe('thanks Lina');
+      expect(latestConversations[0].messages.at(-1)?.content).toBe("Okay, I'll stop listening.");
+    });
+
+    await act(async () => {
+      latestWakeWordOptions?.onWakeWordDetected();
+      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+    });
+
+    await act(async () => {
+      latestVoiceInputOptions?.onTranscript?.('second request');
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(latestConversations).toHaveLength(2);
+      expect(latestConversations[0].messages.map(message => message.content)).toEqual([
+        'Hey, how can I help?',
+        'second request',
+        'Second answer.',
+      ]);
+      expect(latestConversations[1].messages.map(message => message.content)).toEqual([
+        'Hey, how can I help?',
+        'first request',
+        'First answer.',
+        'thanks Lina',
+        "Okay, I'll stop listening.",
+      ]);
+    });
   });
 });

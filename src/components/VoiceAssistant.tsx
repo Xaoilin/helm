@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
+import { useChatContext } from '../store/contexts/ChatContext';
 import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY, OLLAMA_ENDPOINT } from '../config';
 import { TIMING, VOICE_SESSION } from '../config/constants';
 import { useVoiceOutput } from '../hooks/useVoiceOutput';
@@ -34,6 +35,7 @@ function isVoiceStopPhrase(text: string, lang: AssistantLang): boolean {
 
 export default function VoiceAssistant({ prayerData }: Props) {
   const app = useApp();
+  const chat = useChatContext();
   const [state, setState] = useState<AssistantState>('idle');
   const [transcript, setTranscript] = useState('');
   const [response, setResponse] = useState('');
@@ -54,6 +56,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const preserveResponseOnNextListeningRef = useRef(false);
   const nextListeningTimerRef = useRef<number | null>(null);
   const processTranscriptRef = useRef<(text: string, inputMode: InputMode) => Promise<void>>(async () => {});
+  const voiceConversationIdRef = useRef<string | null>(null);
 
   const enabled = app.settings.assistantEnabled !== false;
   const wakeWordEnabled = app.settings.wakeWordEnabled === true;
@@ -122,6 +125,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
       setError(message);
       if (handsFreeSessionActiveRef.current) {
         handsFreeSessionActiveRef.current = false;
+        voiceConversationIdRef.current = null;
         setVoiceSessionMode('manual');
         setListeningMode('initial');
         clearScheduledListening();
@@ -135,6 +139,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
       if (handsFreeSessionActiveRef.current) {
         sessionIdRef.current += 1;
         handsFreeSessionActiveRef.current = false;
+        voiceConversationIdRef.current = null;
         setVoiceSessionMode('manual');
         setListeningMode('initial');
         clearScheduledListening();
@@ -171,6 +176,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     const sessionId = sessionIdRef.current + 1;
     sessionIdRef.current = sessionId;
     handsFreeSessionActiveRef.current = false;
+    voiceConversationIdRef.current = null;
     setVoiceSessionMode('manual');
     setListeningMode('initial');
     clearScheduledListening();
@@ -227,6 +233,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const closeAssistant = useCallback(() => {
     sessionIdRef.current += 1;
     handsFreeSessionActiveRef.current = false;
+    voiceConversationIdRef.current = null;
     setVoiceSessionMode('manual');
     setListeningMode('initial');
     clearScheduledListening();
@@ -248,6 +255,23 @@ export default function VoiceAssistant({ prayerData }: Props) {
     const sessionId = sessionIdRef.current + 1;
     sessionIdRef.current = sessionId;
     handsFreeSessionActiveRef.current = true;
+    const nextDialogState: AssistantDialogState = {
+      currentSurface: app.surface,
+      recentEntities: [],
+      recentPlans: [],
+    };
+    dialogStateRef.current = nextDialogState;
+    chatHistoryRef.current = [];
+    voiceConversationIdRef.current = chat.createConversation({
+      title: VOICE_SESSION.CONVERSATION_TITLE,
+      initialMessages: [
+        {
+          role: 'assistant',
+          content: VOICE_SESSION.GREETING[lang],
+        },
+      ],
+      dialogState: nextDialogState,
+    });
     setVoiceSessionMode('handsfree');
     setListeningMode('initial');
     clearScheduledListening();
@@ -266,7 +290,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
       scheduleHandsFreeListening('initial', sessionId);
     })();
-  }, [cancelListening, clearScheduledListening, lang, openAssistantPanel, scheduleHandsFreeListening, setVoiceSessionMode, speakMessage, stopSpeaking, voiceBackend]);
+  }, [app.surface, cancelListening, chat, clearScheduledListening, lang, openAssistantPanel, scheduleHandsFreeListening, setVoiceSessionMode, speakMessage, stopSpeaking, voiceBackend]);
 
   const processTranscript = useCallback(async (text: string, inputMode: InputMode) => {
     const trimmed = text.trim();
@@ -276,6 +300,13 @@ export default function VoiceAssistant({ prayerData }: Props) {
     if (inputMode === 'voice' && handsFreeSessionActiveRef.current && isVoiceStopPhrase(trimmed, lang)) {
       setTranscript(trimmed);
       setError('');
+      if (voiceConversationIdRef.current) {
+        chat.recordAssistantConversationTurn(voiceConversationIdRef.current, {
+          userContent: trimmed,
+          assistantContent: VOICE_SESSION.STOP_RESPONSE[lang],
+          dialogState: dialogStateRef.current,
+        });
+      }
       await endHandsFreeSession({ closingMessage: VOICE_SESSION.STOP_RESPONSE[lang] });
       return;
     }
@@ -333,6 +364,14 @@ export default function VoiceAssistant({ prayerData }: Props) {
         { role: 'assistant' as const, content: result.message },
       ].slice(-10);
 
+      if (inputMode === 'voice' && handsFreeSessionActiveRef.current && voiceConversationIdRef.current) {
+        chat.recordAssistantConversationTurn(voiceConversationIdRef.current, {
+          userContent: trimmed,
+          assistantContent: result.message,
+          dialogState: result.dialogState,
+        });
+      }
+
       const sessionId = sessionIdRef.current;
       const continueHandsFree = inputMode === 'voice' && handsFreeSessionActiveRef.current;
       const finishedSpeaking = await speakMessage(result.message, continueHandsFree ? sessionId : undefined);
@@ -361,6 +400,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     }
   }, [
     app,
+    chat,
     clearScheduledListening,
     endHandsFreeSession,
     lang,
