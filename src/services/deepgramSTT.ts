@@ -17,10 +17,18 @@ export interface DeepgramResult {
 }
 
 export interface DeepgramLiveTranscriptUpdate {
+  type: 'transcript';
   transcript: string;
   isFinal: boolean;
   speechFinal: boolean;
 }
+
+export interface DeepgramLiveUtteranceEndEvent {
+  type: 'utterance-end';
+  lastWordEnd: number | null;
+}
+
+export type DeepgramLiveEvent = DeepgramLiveTranscriptUpdate | DeepgramLiveUtteranceEndEvent;
 
 interface RecorderOptions {
   deviceId?: string;
@@ -30,7 +38,7 @@ interface RecorderOptions {
 interface DeepgramLiveSessionOptions {
   apiKey: string;
   language?: string;
-  onTranscript: (update: DeepgramLiveTranscriptUpdate) => void;
+  onEvent: (event: DeepgramLiveEvent) => void;
   onError?: (error: Error) => void;
 }
 
@@ -40,7 +48,8 @@ export interface DeepgramLiveSession {
 }
 
 function getDeepgramModel(language: string): string {
-  return language.startsWith('ar') ? 'nova-3' : 'nova-2';
+  void language;
+  return 'nova-3';
 }
 
 function joinTranscriptParts(parts: string[]): string {
@@ -128,7 +137,7 @@ export function createRecorder(options: RecorderOptions | string = {}): {
 export function createDeepgramLiveSession({
   apiKey,
   language = 'en-GB',
-  onTranscript,
+  onEvent,
   onError,
 }: DeepgramLiveSessionOptions): DeepgramLiveSession {
   const params = new URLSearchParams({
@@ -136,6 +145,9 @@ export function createDeepgramLiveSession({
     language,
     smart_format: 'true',
     interim_results: 'true',
+    vad_events: 'true',
+    endpointing: String(TIMING.DEEPGRAM_ENDPOINTING),
+    utterance_end_ms: String(TIMING.DEEPGRAM_UTTERANCE_END_MS),
   });
   const socket = new WebSocket(`wss://api.deepgram.com/v1/listen?${params.toString()}`, ['token', apiKey]);
   const pendingBuffers: ArrayBuffer[] = [];
@@ -157,7 +169,7 @@ export function createDeepgramLiveSession({
   const emitTranscript = (isFinal: boolean, speechFinal: boolean) => {
     const transcript = joinTranscriptParts([...finalTranscriptParts, interimTranscript]);
     if (!transcript) return;
-    onTranscript({ transcript, isFinal, speechFinal });
+    onEvent({ type: 'transcript', transcript, isFinal, speechFinal });
   };
 
   const enqueueSend = (buffer: ArrayBuffer) => {
@@ -189,6 +201,14 @@ export function createDeepgramLiveSession({
     if (typeof event.data !== 'string') return;
     try {
       const payload = JSON.parse(event.data);
+      if (payload?.type === 'UtteranceEnd') {
+        onEvent({
+          type: 'utterance-end',
+          lastWordEnd: typeof payload.last_word_end === 'number' ? payload.last_word_end : null,
+        });
+        return;
+      }
+
       if (payload?.type !== 'Results') return;
 
       const transcript = payload?.channel?.alternatives?.[0]?.transcript?.trim() || '';
@@ -259,8 +279,13 @@ export async function transcribeWithDeepgram(
   language: string = 'en-GB',
 ): Promise<DeepgramResult> {
   const model = getDeepgramModel(language);
+  const params = new URLSearchParams({
+    model,
+    language,
+    smart_format: 'true',
+  });
   return deepgramBreaker.call(async () => {
-    const resp = await fetch(`https://api.deepgram.com/v1/listen?model=${model}&language=${encodeURIComponent(language)}&smart_format=true`, {
+    const resp = await fetch(`https://api.deepgram.com/v1/listen?${params.toString()}`, {
       method: 'POST',
       signal: AbortSignal.timeout(API_TIMEOUT.DEEPGRAM_STT),
       headers: {

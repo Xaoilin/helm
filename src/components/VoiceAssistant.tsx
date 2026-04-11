@@ -9,9 +9,10 @@ import { useVoiceInput } from '../hooks/useVoiceInput';
 import type { PrayerTimesData } from '../services/prayerTimes';
 import { processAssistantCommand } from '../services/assistantRuntime';
 import type { AssistantConversationMessage, AssistantDialogState, AssistantLang } from '../services/assistantTypes';
+import { playReadyTone } from '../services/voiceAssistant';
 import { logError } from '../services/logger';
 
-type AssistantState = 'idle' | 'open' | 'listening' | 'processing' | 'speaking';
+type AssistantState = 'idle' | 'open' | 'preparing' | 'listening' | 'processing' | 'speaking';
 type VoiceSessionMode = 'manual' | 'handsfree';
 type InputMode = 'voice' | 'text';
 type ListeningMode = 'initial' | 'followup';
@@ -112,14 +113,20 @@ export default function VoiceAssistant({ prayerData }: Props) {
     onTranscriptPreview: useCallback((text: string) => {
       setTranscript(text);
     }, []),
-    onListeningStart: useCallback(() => {
-      setState('listening');
+    onListeningPreparing: useCallback(() => {
+      setState('preparing');
       setTranscript('');
       if (!preserveResponseOnNextListeningRef.current) {
         setResponse('');
       }
       setError('');
+    }, []),
+    onListeningStart: useCallback(() => {
+      setState('listening');
+      setTranscript('');
+      setError('');
       preserveResponseOnNextListeningRef.current = false;
+      void playReadyTone();
     }, []),
     onError: useCallback((message: string) => {
       setError(message);
@@ -510,10 +517,12 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const isOpen = state !== 'idle';
   const canVoice = voiceBackend !== 'none';
   const showPromptSuggestions = state === 'open' && !transcript && !response && voiceSessionMode === 'manual';
-  const headerStatus = state === 'listening'
+  const headerStatus = state === 'preparing'
+    ? isArabic ? '\u23F3 \u0623\u062C\u0647\u0632 \u0627\u0644\u0645\u064A\u0643\u0631\u0648\u0641\u0648\u0646... \u0627\u0646\u062A\u0638\u0631 \u0627\u0644\u0646\u063A\u0645\u0629' : 'Getting the microphone ready... wait for the beep'
+    : state === 'listening'
     ? listeningMode === 'followup'
-      ? isArabic ? '\uD83C\uDF99\uFE0F \u0623\u0633\u062A\u0645\u0639 \u0644\u0644\u0645\u062A\u0627\u0628\u0639\u0629...' : '\uD83C\uDF99\uFE0F Listening for follow-up...'
-      : isArabic ? '\uD83C\uDF99\uFE0F \u0623\u0633\u062A\u0645\u0639...' : '\uD83C\uDF99\uFE0F Listening...'
+      ? isArabic ? '\uD83C\uDF99\uFE0F \u0623\u0633\u062A\u0645\u0639 \u0644\u0644\u0645\u062A\u0627\u0628\u0639\u0629... \u062A\u0643\u0644\u0645 \u0627\u0644\u0622\u0646' : '\uD83C\uDF99\uFE0F Listening for follow-up... speak now'
+      : isArabic ? '\uD83C\uDF99\uFE0F \u0623\u0633\u062A\u0645\u0639... \u062A\u0643\u0644\u0645 \u0627\u0644\u0622\u0646' : '\uD83C\uDF99\uFE0F Listening... speak now'
     : state === 'processing'
       ? isArabic ? '\uD83E\uDD14 \u062C\u0627\u0631\u064A \u0627\u0644\u062A\u0641\u0643\u064A\u0631...' : '\uD83E\uDD14 Thinking...'
       : state === 'speaking'
@@ -521,20 +530,24 @@ export default function VoiceAssistant({ prayerData }: Props) {
         : voiceSessionMode === 'handsfree'
           ? isArabic ? '\u062C\u0644\u0633\u0629 \u0635\u0648\u062A\u064A\u0629 \u0628\u062F\u0648\u0646 \u0644\u0645\u0633 \u0646\u0634\u0637\u0629' : 'Hands-free voice session active'
           : isArabic ? '\u0627\u0633\u0623\u0644\u0646\u064A \u0623\u064A \u0634\u064A\u0621' : 'Ask me anything';
+  const preparingPrompt = isArabic
+    ? '\u0623\u062C\u0647\u0632 \u0627\u0644\u0645\u064A\u0643\u0631\u0648\u0641\u0648\u0646... \u0627\u0646\u062A\u0638\u0631 \u0627\u0644\u0646\u063A\u0645\u0629'
+    : 'Getting the microphone ready... wait for the beep';
   const listeningPrompt = listeningMode === 'followup'
-    ? isArabic ? '\u0623\u0633\u062A\u0645\u0639 \u0644\u0644\u0645\u062A\u0627\u0628\u0639\u0629...' : 'Listening for follow-up...'
-    : isArabic ? '\u0623\u0633\u062A\u0645\u0639... \u062A\u062D\u062F\u062B \u0628\u0634\u0643\u0644 \u0637\u0628\u064A\u0639\u064A' : 'Listening... speak naturally';
+    ? isArabic ? '\u0623\u0633\u062A\u0645\u0639 \u0644\u0644\u0645\u062A\u0627\u0628\u0639\u0629... \u062A\u0643\u0644\u0645 \u0627\u0644\u0622\u0646' : 'Listening for follow-up... speak now'
+    : isArabic ? '\u0623\u0633\u062A\u0645\u0639... \u062A\u0643\u0644\u0645 \u0627\u0644\u0622\u0646' : 'Listening... speak now';
 
   return (
     <>
       <button
-        className={`va-button ${state === 'listening' ? 'listening' : state === 'speaking' ? 'speaking' : ''}`}
+        className={`va-button ${state === 'listening' ? 'listening' : state === 'preparing' ? 'preparing' : state === 'speaking' ? 'speaking' : ''}`}
         onClick={handleClick}
         aria-label={isOpen ? 'Close Lina' : 'Talk to Lina'}
         title={isOpen ? 'Close (Esc)' : 'Ask Lina anything (Ctrl+Shift+L)'}
       >
         <span className="va-avatar">{isOpen ? '\u00d7' : 'L'}</span>
         {state === 'listening' && <><span className="va-ring" /><span className="va-ring delay" /></>}
+        {state === 'preparing' && <span className="va-ring preparing" />}
         {state === 'speaking' && <span className="va-ring speaking" />}
       </button>
 
@@ -557,7 +570,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
           {state !== 'processing' && state !== 'speaking' && (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              {state !== 'listening' && (
+              {state !== 'listening' && state !== 'preparing' && (
                 <input
                   ref={inputRef}
                   className="form-input"
@@ -574,13 +587,19 @@ export default function VoiceAssistant({ prayerData }: Props) {
                   }}
                 />
               )}
+              {state === 'preparing' && (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 8 }}>
+                  <span className="va-dots preparing"><span /><span /><span /></span>
+                  <span style={{ fontSize: 12, color: '#f59e0b' }}>{preparingPrompt}</span>
+                </div>
+              )}
               {state === 'listening' && (
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: 8 }}>
                   <span className="va-dots"><span /><span /><span /></span>
                   <span style={{ fontSize: 12, color: '#22c55e' }}>{listeningPrompt}</span>
                 </div>
               )}
-              {canVoice && state !== 'listening' && (
+              {canVoice && state !== 'listening' && state !== 'preparing' && (
                 <button
                   onClick={(event) => {
                     event.stopPropagation();
@@ -606,23 +625,30 @@ export default function VoiceAssistant({ prayerData }: Props) {
                   {'\uD83C\uDF99\uFE0F'}
                 </button>
               )}
-              {state === 'listening' && (
+              {(state === 'listening' || state === 'preparing') && (
                 <button
-                  onClick={(event) => { event.stopPropagation(); stopListening(); }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (state === 'preparing') {
+                      cancelListening();
+                      return;
+                    }
+                    stopListening();
+                  }}
                   style={{
                     width: 36, height: 36, borderRadius: 8,
-                    border: '1px solid #22c55e', background: 'rgba(34, 197, 94, 0.15)',
+                    border: `1px solid ${state === 'preparing' ? '#f59e0b' : '#22c55e'}`, background: state === 'preparing' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(34, 197, 94, 0.15)',
                     cursor: 'pointer', fontSize: 14, display: 'flex',
                     alignItems: 'center', justifyContent: 'center',
-                    color: '#22c55e',
+                    color: state === 'preparing' ? '#f59e0b' : '#22c55e',
                   }}
-                  aria-label="Stop listening"
-                  title="Stop listening"
+                  aria-label={state === 'preparing' ? 'Cancel voice startup' : 'Stop listening'}
+                  title={state === 'preparing' ? 'Cancel voice startup' : 'Stop listening'}
                 >
                   {'\u23F9\uFE0F'}
                 </button>
               )}
-              {state !== 'listening' && (
+              {state !== 'listening' && state !== 'preparing' && (
                 <button
                   onClick={handleTextSubmit}
                   disabled={!textInput.trim()}
