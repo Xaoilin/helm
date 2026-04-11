@@ -25,6 +25,7 @@ The current stack is:
 - auth controls for Supabase-backed sign-in
 
 The shell release badge reads from the build version exposed through `src/config/release.ts`, so the visible UI version stays aligned with the packaged application version when the release files are kept in sync.
+For web builds, `src/hooks/useReleaseRefresh.ts` also polls the synced `public/release.json` manifest and forces a one-time browser reload when a newer deployed semver is detected, so open tabs move onto the new release automatically after deployment.
 
 The navigable surfaces are:
 

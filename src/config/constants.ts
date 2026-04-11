@@ -39,6 +39,8 @@ export const TIMING = {
   INPUT_FOCUS_DELAY: 50,
   /** Auth state initial load debounce */
   AUTH_LOAD_DEBOUNCE: 500,
+  /** How often the web app checks for a newer deployed release */
+  RELEASE_POLL_INTERVAL: 60000,
   /** MediaRecorder chunk collection interval */
   CHUNK_INTERVAL: 250,
   /** Grace period before forcing a live Deepgram socket closed */

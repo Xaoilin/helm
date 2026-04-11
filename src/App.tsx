@@ -31,6 +31,7 @@ import {
   getGoogleCalendarAuthPatch,
   isGoogleCalendarAccount,
 } from './services/googleCalendarAuthManager';
+import { useReleaseRefresh } from './hooks/useReleaseRefresh';
 
 const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'dashboard', label: 'Dashboard', icon: '\u{1F3E0}' },
@@ -53,6 +54,8 @@ function AppInner() {
   const supabaseReady = isSupabaseReady();
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(supabaseReady);
+
+  useReleaseRefresh();
 
   useEffect(() => {
     for (const account of app.calendarAccounts) {
