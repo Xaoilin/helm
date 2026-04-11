@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ClockSurface from '../surfaces/ClockSurface';
 import { AppProvider } from '../store/AppContext';
-import { playTimerAlarm, primeTimerAlarmAudio } from '../services/clockAudio';
+import { playTimerAlarm, primeTimerAlarmAudio, stopTimerAlarm } from '../services/clockAudio';
 
 vi.mock('../services/clockAudio', () => ({
   TIMER_SOUND_OPTIONS: [
@@ -79,6 +79,38 @@ describe('ClockSurface interactions', () => {
     expect(screen.getByRole('heading', { name: 'Stopwatch 2' })).toBeInTheDocument();
   });
 
+  it('persists custom timer and stopwatch names across remounts', async () => {
+    let firstRender!: ReturnType<typeof renderClockSurface>;
+
+    await act(async () => {
+      firstRender = renderClockSurface();
+    });
+
+    fireEvent.change(screen.getByLabelText('Name for Timer 1'), {
+      target: { value: 'Tea break' },
+    });
+    fireEvent.blur(screen.getByDisplayValue('Tea break'));
+
+    fireEvent.change(screen.getByLabelText('Name for Stopwatch 1'), {
+      target: { value: 'Study sprint' },
+    });
+    fireEvent.blur(screen.getByDisplayValue('Study sprint'));
+
+    expect(screen.getByRole('heading', { name: 'Tea break' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Study sprint' })).toBeInTheDocument();
+
+    firstRender.unmount();
+
+    await act(async () => {
+      renderClockSurface();
+    });
+
+    expect(screen.getByRole('heading', { name: 'Tea break' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Study sprint' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Tea break')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Study sprint')).toBeInTheDocument();
+  });
+
   it('restores an in-progress timer from persisted state', async () => {
     let firstRender!: ReturnType<typeof renderClockSurface>;
 
@@ -102,20 +134,36 @@ describe('ClockSurface interactions', () => {
     expect(screen.getByLabelText('Remaining for Timer 1')).toHaveTextContent('00:30');
   });
 
-  it('marks the timer as finished when the countdown reaches zero', async () => {
+  it('keeps a completed timer alerting until it is acknowledged', async () => {
     await act(async () => {
       renderClockSurface();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Set Timer 1 to 1 minutes' }));
+    fireEvent.change(screen.getByLabelText('Minutes for Timer 1'), {
+      target: { value: '0' },
+    });
+    fireEvent.change(screen.getByLabelText('Seconds for Timer 1'), {
+      target: { value: '1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Set duration for Timer 1' }));
     fireEvent.click(screen.getByRole('button', { name: 'Start Timer 1' }));
 
+    vi.mocked(stopTimerAlarm).mockClear();
+
     await act(async () => {
-      vi.advanceTimersByTime(60000);
+      vi.advanceTimersByTime(1000);
     });
 
-    expect(screen.getByText((content, node) => node?.textContent === 'Finished')).toBeInTheDocument();
+    expect(screen.getByText((content, node) => node?.textContent === 'Alerting')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Acknowledge Timer 1' })).toBeInTheDocument();
+    expect(screen.getByText('Timer 1 is finished.')).toBeInTheDocument();
     expect(screen.getByLabelText('Remaining for Timer 1')).toHaveTextContent('00:00');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Acknowledge Timer 1' }));
+
+    expect(stopTimerAlarm).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Acknowledge Timer 1' })).not.toBeInTheDocument();
+    expect(screen.getByText((content, node) => node?.textContent === 'Finished')).toBeInTheDocument();
   });
 
   it('persists the selected timer alarm sound across remounts', async () => {

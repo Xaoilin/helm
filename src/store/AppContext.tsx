@@ -135,18 +135,21 @@ interface AppContextAPI {
 
   // Clock
   createStopwatch: () => string;
+  setStopwatchLabel: (id: string, label: string) => void;
   removeStopwatch: (id: string) => void;
   startStopwatch: (id: string) => void;
   pauseStopwatch: (id: string) => void;
   resetStopwatch: (id: string) => void;
   recordStopwatchLap: (id: string) => void;
   createTimer: () => string;
+  setTimerLabel: (id: string, label: string) => void;
   removeTimer: (id: string) => void;
   setTimerDuration: (id: string, durationMs: number) => void;
   setTimerSound: (id: string, sound: ClockTimerSound) => void;
   startTimer: (id: string) => void;
   pauseTimer: (id: string) => void;
   resetTimer: (id: string) => void;
+  acknowledgeTimer: (id: string) => void;
   previewTimerSound: (id: string, sound?: ClockTimerSound) => Promise<void>;
 
   // Assistant memory
@@ -404,18 +407,21 @@ function ShellProvider({ children }: { children: ReactNode }) {
     // Clock
     clock: clockCtx.clock,
     createStopwatch: clockCtx.createStopwatch,
+    setStopwatchLabel: clockCtx.setStopwatchLabel,
     removeStopwatch: clockCtx.removeStopwatch,
     startStopwatch: clockCtx.startStopwatch,
     pauseStopwatch: clockCtx.pauseStopwatch,
     resetStopwatch: clockCtx.resetStopwatch,
     recordStopwatchLap: clockCtx.recordStopwatchLap,
     createTimer: clockCtx.createTimer,
+    setTimerLabel: clockCtx.setTimerLabel,
     removeTimer: clockCtx.removeTimer,
     setTimerDuration: clockCtx.setTimerDuration,
     setTimerSound: clockCtx.setTimerSound,
     startTimer: clockCtx.startTimer,
     pauseTimer: clockCtx.pauseTimer,
     resetTimer: clockCtx.resetTimer,
+    acknowledgeTimer: clockCtx.acknowledgeTimer,
     previewTimerSound: clockCtx.previewTimerSound,
 
     // Settings & Integrations

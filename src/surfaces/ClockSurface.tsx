@@ -1,4 +1,4 @@
-import { Children, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Children, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useApp } from '../store/AppContext';
 import { CLOCK, TIMING } from '../config/constants';
 import { TIMER_SOUND_OPTIONS } from '../services/clockAudio';
@@ -18,6 +18,7 @@ export default function ClockSurface() {
   const runningStopwatches = app.clock.stopwatches.filter(stopwatch => stopwatch.startedAt !== null).length;
   const runningTimers = app.clock.timers.filter(timer => timer.status === 'running').length;
   const completedTimers = app.clock.timers.filter(timer => timer.status === 'completed').length;
+  const alertingTimers = app.clock.timers.filter(timer => timer.status === 'completed' && timer.alerting).length;
   const hasLiveClock = runningStopwatches > 0 || runningTimers > 0;
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export default function ClockSurface() {
       <div className="surface-header">
         <div>
           <h1>Clock</h1>
-          <div className="subtitle">Build a neat workspace of independent timers and stopwatches that persist through HELM&apos;s local-first store</div>
+          <div className="subtitle">Build a neat workspace of named timers and stopwatches that persist through HELM&apos;s local-first store</div>
         </div>
       </div>
 
@@ -48,7 +49,7 @@ export default function ClockSurface() {
           <div className="clock-toolbar-copy">
             <div className="clock-toolbar-title">Multi-clock workspace</div>
             <div className="clock-toolbar-subtitle">
-              Add separate countdowns and lap trackers whenever you need them. Each card keeps its own progress, sound, and reset state.
+              Add separate countdowns and lap trackers whenever you need them. Each card keeps its own name, progress, sound, and finish state.
             </div>
           </div>
 
@@ -80,7 +81,7 @@ export default function ClockSurface() {
         <div className="clock-sections">
           <ClockSection
             title="Timers"
-            subtitle="Run multiple countdowns with their own presets, custom durations, and alarm sounds."
+            subtitle="Run multiple countdowns with their own names, presets, custom durations, alarm sounds, and finish alerts."
             count={`${app.clock.timers.length} ${app.clock.timers.length === 1 ? 'timer' : 'timers'}`}
             emptyTitle="No timers yet"
             emptyCopy="Add a timer whenever you need a fresh countdown."
@@ -92,12 +93,14 @@ export default function ClockSurface() {
                 key={`${timer.id}:${timer.durationMs}`}
                 timer={timer}
                 now={now}
+                onRename={app.setTimerLabel}
                 onRemove={app.removeTimer}
                 onSetDuration={app.setTimerDuration}
                 onSetSound={app.setTimerSound}
                 onStart={app.startTimer}
                 onPause={app.pauseTimer}
                 onReset={app.resetTimer}
+                onAcknowledge={app.acknowledgeTimer}
                 onPreview={app.previewTimerSound}
               />
             ))}
@@ -105,7 +108,7 @@ export default function ClockSurface() {
 
           <ClockSection
             title="Stopwatches"
-            subtitle="Track multiple elapsed sessions and keep lap history separate for each one."
+            subtitle="Track multiple elapsed sessions, give each one a custom name, and keep lap history separate."
             count={`${app.clock.stopwatches.length} ${app.clock.stopwatches.length === 1 ? 'stopwatch' : 'stopwatches'}`}
             emptyTitle="No stopwatches yet"
             emptyCopy="Add a stopwatch whenever you want a separate lap tracker."
@@ -117,6 +120,7 @@ export default function ClockSurface() {
                 key={stopwatch.id}
                 stopwatch={stopwatch}
                 now={now}
+                onRename={app.setStopwatchLabel}
                 onRemove={app.removeStopwatch}
                 onStart={app.startStopwatch}
                 onPause={app.pauseStopwatch}
@@ -128,7 +132,9 @@ export default function ClockSurface() {
         </div>
 
         <div className="clock-footnote">
-          {completedTimers > 0
+          {alertingTimers > 0
+            ? `${alertingTimers} finished ${alertingTimers === 1 ? 'timer still needs' : 'timers still need'} acknowledgement before the alert pulse clears.`
+            : completedTimers > 0
             ? `${completedTimers} finished ${completedTimers === 1 ? 'timer is' : 'timers are'} waiting in the workspace until you reset or restart ${completedTimers === 1 ? 'it' : 'them'}.`
             : 'Finished timers stay in place until you reset or restart them, so you can keep a tidy record of what just ended.'}
         </div>
@@ -186,22 +192,26 @@ function ClockSection({
 function TimerCard({
   timer,
   now,
+  onRename,
   onRemove,
   onSetDuration,
   onSetSound,
   onStart,
   onPause,
   onReset,
+  onAcknowledge,
   onPreview,
 }: {
   timer: ClockTimerState;
   now: number;
+  onRename: (id: string, label: string) => void;
   onRemove: (id: string) => void;
   onSetDuration: (id: string, durationMs: number) => void;
   onSetSound: (id: string, sound: ClockTimerSound) => void;
   onStart: (id: string) => void;
   onPause: (id: string) => void;
   onReset: (id: string) => void;
+  onAcknowledge: (id: string) => void;
   onPreview: (id: string, sound?: ClockTimerSound) => Promise<void>;
 }) {
   const [minutesInput, setMinutesInput] = useState(() => String(splitDuration(timer.durationMs).minutes));
@@ -209,6 +219,7 @@ function TimerCard({
   const [durationError, setDurationError] = useState<string | null>(null);
 
   const timerRunning = timer.status === 'running';
+  const timerAlerting = timer.status === 'completed' && timer.alerting;
   const timerRemainingMs = useMemo(
     () => getTimerRemainingMs(timer, now),
     [timer, now],
@@ -221,6 +232,16 @@ function TimerCard({
     () => TIMER_SOUND_OPTIONS.find(option => option.id === timer.sound) ?? TIMER_SOUND_OPTIONS[0],
     [timer.sound],
   );
+
+  const acknowledgeTimer = () => {
+    onAcknowledge(timer.id);
+  };
+
+  const handleAlertKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    acknowledgeTimer();
+  };
 
   const applyDuration = (durationMs: number) => {
     onSetDuration(timer.id, durationMs);
@@ -244,7 +265,7 @@ function TimerCard({
   };
 
   return (
-    <section className="card clock-card" aria-labelledby={`timer-heading-${timer.id}`}>
+    <section className={`card clock-card ${timerAlerting ? 'alerting' : ''}`} aria-labelledby={`timer-heading-${timer.id}`}>
       <div className="card-header">
         <div>
           <h3 id={`timer-heading-${timer.id}`} className="card-title">{timer.label}</h3>
@@ -252,8 +273,8 @@ function TimerCard({
         </div>
 
         <div className="clock-card-header-actions">
-          <span className={`clock-status ${timer.status}`}>
-            {timer.status === 'running' ? 'Running' : timer.status === 'completed' ? 'Finished' : 'Ready'}
+          <span className={`clock-status ${timerRunning ? 'running' : timerAlerting ? 'alerting' : timer.status}`}>
+            {timerRunning ? 'Running' : timerAlerting ? 'Alerting' : timer.status === 'completed' ? 'Finished' : 'Ready'}
           </span>
           <button
             className="btn-icon"
@@ -266,7 +287,21 @@ function TimerCard({
         </div>
       </div>
 
-      <div className="clock-face timer">
+      <ClockNameField
+        inputId={`clock-timer-name-${timer.id}`}
+        label="Name"
+        value={timer.label}
+        onCommit={label => onRename(timer.id, label)}
+      />
+
+      <div
+        className={`clock-face timer ${timerAlerting ? 'alerting' : ''}`}
+        aria-label={timerAlerting ? `Dismiss visual alert for ${timer.label}` : undefined}
+        onClick={timerAlerting ? acknowledgeTimer : undefined}
+        onKeyDown={timerAlerting ? handleAlertKeyDown : undefined}
+        role={timerAlerting ? 'button' : undefined}
+        tabIndex={timerAlerting ? 0 : undefined}
+      >
         <div className="clock-face-label">Remaining</div>
         <div className="clock-display" aria-label={`Remaining for ${timer.label}`}>
           {formatClockDuration(timerRemainingMs)}
@@ -274,11 +309,28 @@ function TimerCard({
         <div className="clock-subdisplay">
           Duration {formatClockDuration(timer.durationMs)} · {selectedTimerSound.label}
           {timer.completedAt ? ` · Finished at ${new Date(timer.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+          {timerAlerting ? ' · Click to acknowledge' : ''}
         </div>
         <div className="clock-progress" aria-hidden="true">
           <div className="clock-progress-fill" style={{ width: `${timerProgress * 100}%` }} />
         </div>
       </div>
+
+      {timerAlerting && (
+        <div className="clock-alert-banner" role="alert">
+          <div className="clock-alert-copy">
+            <strong>{timer.label} is finished.</strong>
+            <span>Click the timer face or acknowledge it here to clear the alert pulse.</span>
+          </div>
+          <button
+            className="btn btn-primary"
+            aria-label={`Acknowledge ${timer.label}`}
+            onClick={acknowledgeTimer}
+          >
+            Acknowledge
+          </button>
+        </div>
+      )}
 
       <div className="clock-form-row">
         <div className="clock-input-group">
@@ -393,7 +445,11 @@ function TimerCard({
       <div className="clock-note">
         {timerRunning
           ? 'Keeps counting even if you switch to another HELM surface.'
-          : 'The selected alarm plays when this timer finishes.'}
+          : timerAlerting
+            ? 'This card keeps pulsing until you acknowledge it or restart the timer.'
+            : timer.status === 'completed'
+              ? 'Finished and acknowledged. Reset or start again whenever you need it.'
+              : 'The selected alarm plays when this timer finishes.'}
       </div>
     </section>
   );
@@ -402,6 +458,7 @@ function TimerCard({
 function StopwatchCard({
   stopwatch,
   now,
+  onRename,
   onRemove,
   onStart,
   onPause,
@@ -410,6 +467,7 @@ function StopwatchCard({
 }: {
   stopwatch: ClockStopwatchState;
   now: number;
+  onRename: (id: string, label: string) => void;
   onRemove: (id: string) => void;
   onStart: (id: string) => void;
   onPause: (id: string) => void;
@@ -444,6 +502,13 @@ function StopwatchCard({
           </button>
         </div>
       </div>
+
+      <ClockNameField
+        inputId={`clock-stopwatch-name-${stopwatch.id}`}
+        label="Name"
+        value={stopwatch.label}
+        onCommit={label => onRename(stopwatch.id, label)}
+      />
 
       <div className="clock-face">
         <div className="clock-face-label">Elapsed</div>
@@ -498,6 +563,59 @@ function StopwatchCard({
         )}
       </div>
     </section>
+  );
+}
+
+function ClockNameField({
+  inputId,
+  label,
+  value,
+  onCommit,
+}: {
+  inputId: string;
+  label: string;
+  value: string;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  const commit = () => {
+    if (draft === value) return;
+    onCommit(draft);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.currentTarget.blur();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      setDraft(value);
+      event.currentTarget.blur();
+    }
+  };
+
+  return (
+    <div className="clock-name-field">
+      <label htmlFor={inputId}>{label}</label>
+      <input
+        id={inputId}
+        aria-label={`${label} for ${value}`}
+        className="form-input clock-name-input"
+        type="text"
+        maxLength={CLOCK.MAX_LABEL_LENGTH}
+        value={draft}
+        onBlur={commit}
+        onChange={event => setDraft(event.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={value}
+      />
+    </div>
   );
 }
 

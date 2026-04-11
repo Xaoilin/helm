@@ -29,6 +29,7 @@ export function createClockTimer(labelNumber: number): ClockTimerState {
     endsAt: null,
     status: 'idle',
     sound: CLOCK.DEFAULT_TIMER_SOUND,
+    alerting: false,
   };
 }
 
@@ -61,6 +62,14 @@ export function getTimerRemainingMs(timer: ClockTimerState, now = Date.now()): n
   return Math.max(0, timer.remainingMs);
 }
 
+export function sanitizeClockLabel(label: string | undefined, fallbackLabel: string): string {
+  const nextLabel = typeof label === 'string'
+    ? label.replace(/\s+/g, ' ').trim().slice(0, CLOCK.MAX_LABEL_LENGTH)
+    : '';
+
+  return nextLabel.length > 0 ? nextLabel : fallbackLabel;
+}
+
 function normaliseStopwatchState(
   stopwatch: Partial<ClockStopwatchState> | undefined,
   fallbackLabel: string,
@@ -69,9 +78,7 @@ function normaliseStopwatchState(
     id: typeof stopwatch?.id === 'string' && stopwatch.id.trim().length > 0
       ? stopwatch.id
       : createClockEntityId('stopwatch'),
-    label: typeof stopwatch?.label === 'string' && stopwatch.label.trim().length > 0
-      ? stopwatch.label
-      : fallbackLabel,
+    label: sanitizeClockLabel(stopwatch?.label, fallbackLabel),
     accumulatedMs: Math.max(0, Math.round(stopwatch?.accumulatedMs ?? 0)),
     startedAt: typeof stopwatch?.startedAt === 'number' && Number.isFinite(stopwatch.startedAt)
       ? stopwatch.startedAt
@@ -95,6 +102,7 @@ function normaliseTimerState(
     ? timer.endsAt
     : null;
   const sound = isClockTimerSound(timer?.sound) ? timer.sound : CLOCK.DEFAULT_TIMER_SOUND;
+  const alerting = timer?.alerting === true;
   const remainingMs = Math.min(
     durationMs,
     Math.max(0, Math.round(timer?.remainingMs ?? durationMs)),
@@ -108,14 +116,13 @@ function normaliseTimerState(
         id: typeof timer?.id === 'string' && timer.id.trim().length > 0
           ? timer.id
           : createClockEntityId('timer'),
-        label: typeof timer?.label === 'string' && timer.label.trim().length > 0
-          ? timer.label
-          : fallbackLabel,
+        label: sanitizeClockLabel(timer?.label, fallbackLabel),
         durationMs,
         remainingMs: 0,
         endsAt: null,
         status: 'completed',
         sound,
+        alerting: true,
         completedAt: typeof timer?.completedAt === 'string'
           ? timer.completedAt
           : new Date(now).toISOString(),
@@ -126,14 +133,13 @@ function normaliseTimerState(
       id: typeof timer?.id === 'string' && timer.id.trim().length > 0
         ? timer.id
         : createClockEntityId('timer'),
-      label: typeof timer?.label === 'string' && timer.label.trim().length > 0
-        ? timer.label
-        : fallbackLabel,
+      label: sanitizeClockLabel(timer?.label, fallbackLabel),
       durationMs,
       remainingMs: liveRemaining,
       endsAt,
       status: 'running',
       sound,
+      alerting: false,
       completedAt: undefined,
     };
   }
@@ -142,14 +148,13 @@ function normaliseTimerState(
     id: typeof timer?.id === 'string' && timer.id.trim().length > 0
       ? timer.id
       : createClockEntityId('timer'),
-    label: typeof timer?.label === 'string' && timer.label.trim().length > 0
-      ? timer.label
-      : fallbackLabel,
+    label: sanitizeClockLabel(timer?.label, fallbackLabel),
     durationMs,
     remainingMs: requestedStatus === 'completed' ? 0 : remainingMs,
     endsAt: null,
     status: requestedStatus === 'completed' ? 'completed' : 'idle',
     sound,
+    alerting: requestedStatus === 'completed' ? alerting : false,
     completedAt: requestedStatus === 'completed' && typeof timer?.completedAt === 'string'
       ? timer.completedAt
       : undefined,

@@ -54,7 +54,7 @@ npm run check
 - Hosted GPT-5.4-mini assistant replies are real when Supabase is configured, the `assistant-openai` Edge Function is deployed, and the user is signed in.
 - Ollama-powered assistant responses are real when Ollama is running locally.
 - Voice input shows a live transcript preview while recording when Deepgram or the browser fallback is available, then confirms the final command after you stop.
-- A dedicated Clock surface provides a neat multi-clock workspace with on-demand timers and stopwatches, selectable alarm sounds, and local-first persistence.
+- A dedicated Clock surface provides a neat multi-clock workspace with on-demand timers and stopwatches, custom names, selectable alarm sounds, eye-catching finish alerts, and local-first persistence.
 - Several integrations remain placeholder or simulated.
 - Credentials stored in the local vault are not encrypted at rest in this MVP.
 

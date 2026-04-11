@@ -122,6 +122,7 @@ export const CLOCK = {
   DEFAULT_TIMER_DURATION_MS: 5 * 60 * 1000,
   MIN_TIMER_DURATION_MS: 1000,
   MAX_TIMER_DURATION_MS: 24 * 60 * 60 * 1000,
+  MAX_LABEL_LENGTH: 40,
   MAX_STOPWATCH_LAPS: 20,
   DEFAULT_TIMER_SOUND: 'chime',
   TIMER_SOUNDS: ['chime', 'bell', 'pulse', 'dawn'] as const,

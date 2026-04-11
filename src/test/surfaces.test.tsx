@@ -229,6 +229,8 @@ describe('ClockSurface', () => {
     expect(screen.getByRole('heading', { name: 'Stopwatches' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Timer 1' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Stopwatch 1' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Name for Timer 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('Name for Stopwatch 1')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '+ Add Timer' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '+ Add Stopwatch' })).toBeInTheDocument();
     expect(screen.getByLabelText('Alarm sound for Timer 1')).toBeInTheDocument();
