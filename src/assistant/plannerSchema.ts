@@ -138,7 +138,7 @@ const nullableStringArraySchema = {
   items: { type: 'string' },
 } as const;
 
-function buildArgSchema(definition: AssistantActionArgDefinition) {
+function buildSemanticArgSchema(definition: AssistantActionArgDefinition) {
   if (definition.type === 'boolean') {
     return {
       type: 'boolean',
@@ -157,12 +157,34 @@ function buildArgSchema(definition: AssistantActionArgDefinition) {
   } as const;
 }
 
+function buildHostedArgSchema(definition: AssistantActionArgDefinition) {
+  const schema = buildSemanticArgSchema(definition);
+  if (definition.required) {
+    return schema;
+  }
+
+  if (definition.type === 'boolean') {
+    return nullableBooleanSchema;
+  }
+
+  if (definition.type === 'enum' && definition.values) {
+    return {
+      type: ['string', 'null'],
+      enum: [...definition.values],
+    } as const;
+  }
+
+  return {
+    type: ['string', 'null'],
+  } as const;
+}
+
 function buildActionArgsJsonSchema(capabilityId: CapabilityId) {
   const capability = getCapabilityDefinition(capabilityId);
   const properties = Object.fromEntries(
-    capability.args.map(arg => [arg.key, buildArgSchema(arg)]),
+    capability.args.map(arg => [arg.key, buildHostedArgSchema(arg)]),
   );
-  const required = capability.args.filter(arg => arg.required).map(arg => arg.key);
+  const required = capability.args.map(arg => arg.key);
   return buildStrictObjectSchema(properties, required);
 }
 

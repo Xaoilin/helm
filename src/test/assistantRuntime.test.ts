@@ -144,6 +144,23 @@ function makeDialogState(overrides: Partial<AssistantDialogState> = {}): Assista
   };
 }
 
+function findCapabilityStepSchema(schema: unknown, capabilityId: string) {
+  if (typeof schema !== 'object' || schema === null || !('properties' in schema)) {
+    return null;
+  }
+
+  const steps = (schema as { properties?: { steps?: { items?: { anyOf?: unknown[] } } } }).properties?.steps;
+  const variants = steps?.items?.anyOf || [];
+  return variants.find(step => {
+    if (typeof step !== 'object' || step === null || !('properties' in step)) {
+      return false;
+    }
+
+    const capability = (step as { properties?: { capability?: { const?: string } } }).properties?.capability;
+    return capability?.const === capabilityId;
+  }) || null;
+}
+
 describe('assistant runtime', () => {
   beforeEach(() => {
     resetOllamaCache();
@@ -700,5 +717,46 @@ describe('assistant runtime', () => {
       content: 'Patience brings steadiness.',
     }));
     expect(result.execution?.steps[0].capability).toBe('knowledge.create_entry');
+  });
+
+  it('sends a hosted planner schema that keeps optional args required and nullable', async () => {
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available' });
+    vi.mocked(chatWithHostedAssistant).mockResolvedValue(JSON.stringify({
+      mode: 'clarify',
+      response: 'Classes are not available in HELM yet.',
+      confidence: 0.7,
+      steps: [],
+    }));
+
+    const result = await processAssistantCommand('show me all my classes', makeContext(), {
+      lang: 'en',
+      provider: 'hosted',
+      handlers: {
+        addTask: vi.fn(() => 'unused'),
+        updateTask: vi.fn(),
+      },
+    });
+
+    expect(result.source).toBe('openai');
+    expect(result.plan.mode).toBe('clarify');
+    expect(chatWithHostedAssistant).toHaveBeenCalledTimes(1);
+
+    const schema = vi.mocked(chatWithHostedAssistant).mock.calls[0]?.[1];
+    const taskViewSchema = findCapabilityStepSchema(schema, 'tasks.open_view') as {
+      properties: {
+        args: {
+          required: string[];
+          properties: {
+            resetFilters: { type: string[] };
+          };
+        };
+      };
+    } | null;
+
+    expect(taskViewSchema).not.toBeNull();
+    expect(taskViewSchema?.properties.args.required).toContain('resetFilters');
+    expect(taskViewSchema?.properties.args.properties.resetFilters).toEqual({
+      type: ['boolean', 'null'],
+    });
   });
 });

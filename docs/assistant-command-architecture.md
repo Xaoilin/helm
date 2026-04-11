@@ -176,6 +176,7 @@ type ActionPlan = {
 ```
 
 The exact schema can evolve, but the planner must stay structured, inspectable, and easy to test.
+For hosted OpenAI structured outputs, strict nested objects must keep every declared arg key in `required`; semantically optional args should be represented as nullable fields instead of being omitted from the strict schema.
 
 Task creation is now intentionally stricter than the earlier regex-only path:
 
