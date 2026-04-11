@@ -5,7 +5,7 @@ import { AppProvider } from '../store/AppContext';
 import VoiceAssistant from '../components/VoiceAssistant';
 import { TIMING } from '../config/constants';
 import { useApp } from '../store/AppContext';
-import type { ChatConversation } from '../types/domain';
+import type { ChatConversation, Settings } from '../types/domain';
 
 type VoiceInputOptions = Parameters<typeof import('../hooks/useVoiceInput').useVoiceInput>[0];
 type WakeWordOptions = Parameters<typeof import('../hooks/useWakeWord').useWakeWord>[0];
@@ -81,7 +81,11 @@ vi.mock('../services/assistantRuntime', () => ({
   processAssistantCommand: (...args: unknown[]) => processAssistantCommandMock(...args),
 }));
 
-function renderAssistant() {
+function renderAssistant(options: { settings?: Partial<Settings> } = {}) {
+  if (options.settings) {
+    localStorage.setItem('helm:settings', JSON.stringify(options.settings));
+  }
+
   function ChatProbe() {
     const app = useApp();
     useEffect(() => {
@@ -354,6 +358,26 @@ describe('VoiceAssistant', () => {
       expect(speakMock).toHaveBeenCalledWith('Hey, how can I help?');
       expect(latestWakeWordOptions?.wakeWordArmed).toBe(false);
     });
+  });
+
+  it('uses the same configured microphone for wake word and voice input', async () => {
+    await act(async () => {
+      renderAssistant({
+        settings: {
+          microphoneDeviceId: 'usb-mic-1',
+          wakeWordEnabled: true,
+        },
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(latestVoiceInputOptions).not.toBeNull();
+      expect(latestWakeWordOptions).not.toBeNull();
+    });
+
+    expect(latestVoiceInputOptions?.micDeviceId).toBe('usb-mic-1');
+    expect(latestWakeWordOptions?.micDeviceId).toBe('usb-mic-1');
   });
 
   it('ends the hands-free session when the user says a stop phrase', async () => {

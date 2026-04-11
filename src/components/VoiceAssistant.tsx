@@ -496,6 +496,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     wakeWordEnabled,
     loaded: app.loaded,
     wakeWordArmed,
+    micDeviceId,
     onWakeWordDetected: beginHandsFreeSession,
   });
 

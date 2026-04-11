@@ -67,6 +67,7 @@ When the wake word fires and voice input is available:
 
 - open the Lina bubble
 - if the bubble is already open in manual mode, still start the hands-free session instead of ignoring the wake word
+- use the same configured microphone device for wake-word detection and speech-to-text capture
 - clear stale transcript and error state
 - switch into `handsfree`
 - speak the wake acknowledgement
@@ -167,6 +168,7 @@ For any future changes to this flow:
 
 - verify the wake word triggers spoken acknowledgement before the mic opens
 - verify the wake word still works while the manual Lina bubble is open
+- verify the wake word and speech-to-text paths are using the same configured microphone
 - verify Lina shows `preparing` before the mic becomes visibly live
 - verify the ready tone only plays once the mic is actually live
 - verify the first spoken words are not clipped after the ready tone
