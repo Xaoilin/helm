@@ -30,7 +30,7 @@ export default function WakeWordDebug() {
   const checkSettings = () => {
     log('info', '── Step 1: Checking Settings ──');
     log(app.settings.assistantEnabled !== false ? 'success' : 'error',
-      `Voice assistant enabled: ${app.settings.assistantEnabled !== false}`);
+      `Lina enabled: ${app.settings.assistantEnabled !== false}`);
     log(app.settings.wakeWordEnabled === true ? 'success' : 'error',
       `Wake word enabled: ${app.settings.wakeWordEnabled === true}`);
     if (!app.settings.wakeWordEnabled) {

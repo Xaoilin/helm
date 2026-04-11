@@ -172,6 +172,19 @@ describe('SettingsSurface', () => {
     expect(screen.getByText('Runtime status')).toBeInTheDocument();
   });
 
+  it('should explain that turning Lina off keeps chat available and silences wake word access', async () => {
+    localStorage.setItem('helm:settings', JSON.stringify({
+      assistantEnabled: false,
+      wakeWordEnabled: true,
+    }));
+
+    await act(async () => { renderWithProvider(<SettingsSurface />); });
+    expect(screen.getByText(/Turn this off when you want Lina fully quiet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Chat in the Chat tab still works/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lina is off\. The floating button, keyboard shortcut, and wake word are all disabled/i)).toBeInTheDocument();
+    expect(screen.getByText(/Wake-word listening is currently inactive because Lina is turned off/i)).toBeInTheDocument();
+  });
+
   it('should have credential source selector', async () => {
     await act(async () => { renderWithProvider(<SettingsSurface />); });
     expect(screen.getByText('Primary credential source')).toBeInTheDocument();
