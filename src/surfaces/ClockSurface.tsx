@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../store/AppContext';
 import { CLOCK, TIMING } from '../config/constants';
+import { TIMER_SOUND_OPTIONS } from '../services/clockAudio';
 import {
   formatClockDuration,
   getStopwatchElapsedMs,
@@ -8,6 +9,7 @@ import {
   getTimerRemainingMs,
   splitDuration,
 } from '../services/clock';
+import type { ClockTimerSound } from '../types/domain';
 
 export default function ClockSurface() {
   const app = useApp();
@@ -29,6 +31,10 @@ export default function ClockSurface() {
   const timerProgress = useMemo(
     () => getTimerProgress(app.clock.timer, now),
     [app.clock.timer, now],
+  );
+  const selectedTimerSound = useMemo(
+    () => TIMER_SOUND_OPTIONS.find(option => option.id === app.clock.timer.sound) ?? TIMER_SOUND_OPTIONS[0],
+    [app.clock.timer.sound],
   );
 
   useEffect(() => {
@@ -203,6 +209,38 @@ export default function ClockSurface() {
               </div>
             </div>
 
+            <div className="clock-form-row clock-sound-row">
+              <div className="clock-input-group">
+                <label htmlFor="clock-timer-sound">Alarm sound</label>
+                <select
+                  id="clock-timer-sound"
+                  className="form-select"
+                  value={app.clock.timer.sound}
+                  onChange={event => app.setTimerSound(event.target.value as ClockTimerSound)}
+                >
+                  {TIMER_SOUND_OPTIONS.map(option => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="clock-input-group clock-input-action">
+                <label>&nbsp;</label>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => void app.previewTimerSound()}
+                >
+                  Preview Sound
+                </button>
+              </div>
+            </div>
+
+            <div className="clock-sound-note">
+              {selectedTimerSound.description}
+            </div>
+
             {durationError && <div className="clock-error">{durationError}</div>}
 
             <div className="clock-presets">
@@ -235,7 +273,7 @@ export default function ClockSurface() {
             </div>
 
             <div className="clock-note">
-              The countdown keeps its place if you leave this surface and come back later.
+              The countdown keeps its place if you leave this surface, and HELM plays the selected alarm when it finishes.
             </div>
           </section>
         </div>

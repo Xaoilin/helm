@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CLOCK } from '../../config/constants';
 import {
   DEFAULT_CLOCK_STATE,
@@ -7,8 +7,9 @@ import {
   getTimerRemainingMs,
   normaliseClockState,
 } from '../../services/clock';
+import { playTimerAlarm, primeTimerAlarmAudio, stopTimerAlarm } from '../../services/clockAudio';
 import { loadStore, saveStore } from '../persistence';
-import type { ClockState } from '../../types/domain';
+import type { ClockState, ClockTimerSound, ClockTimerStatus } from '../../types/domain';
 
 interface ClockContextValue {
   clock: ClockState;
@@ -18,9 +19,11 @@ interface ClockContextValue {
   resetStopwatch: () => void;
   recordStopwatchLap: () => void;
   setTimerDuration: (durationMs: number) => void;
+  setTimerSound: (sound: ClockTimerSound) => void;
   startTimer: () => void;
   pauseTimer: () => void;
   resetTimer: () => void;
+  previewTimerSound: (sound?: ClockTimerSound) => Promise<void>;
 }
 
 const ClockContext = createContext<ClockContextValue | null>(null);
@@ -34,6 +37,7 @@ export function useClockContext(): ClockContextValue {
 export function ClockProvider({ children }: { children: ReactNode }) {
   const [clock, setClock] = useState<ClockState>(DEFAULT_CLOCK_STATE);
   const [loaded, setLoaded] = useState(false);
+  const previousTimerStatus = useRef<ClockTimerStatus | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -69,6 +73,27 @@ export function ClockProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(timeoutId);
     };
   }, [clock.timer.endsAt, clock.timer.status, loaded]);
+
+  useEffect(() => {
+    if (!loaded) return;
+
+    if (previousTimerStatus.current === null) {
+      previousTimerStatus.current = clock.timer.status;
+      return;
+    }
+
+    if (clock.timer.status === 'completed' && previousTimerStatus.current !== 'completed') {
+      void playTimerAlarm(clock.timer.sound);
+    }
+
+    if (clock.timer.status !== 'completed' && previousTimerStatus.current === 'completed') {
+      stopTimerAlarm();
+    }
+
+    previousTimerStatus.current = clock.timer.status;
+  }, [clock.timer.sound, clock.timer.status, loaded]);
+
+  useEffect(() => stopTimerAlarm, []);
 
   const startStopwatch = useCallback(() => {
     setClock(current => {
@@ -135,6 +160,7 @@ export function ClockProvider({ children }: { children: ReactNode }) {
       return {
         ...current,
         timer: {
+          ...current.timer,
           durationMs: nextDuration,
           remainingMs: nextDuration,
           endsAt: null,
@@ -145,7 +171,19 @@ export function ClockProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setTimerSound = useCallback((sound: ClockTimerSound) => {
+    setClock(current => ({
+      ...current,
+      timer: {
+        ...current.timer,
+        sound,
+      },
+    }));
+  }, []);
+
   const startTimer = useCallback(() => {
+    void primeTimerAlarmAudio();
+
     setClock(current => {
       if (current.timer.status === 'running') return current;
       const remainingMs = current.timer.status === 'completed'
@@ -197,6 +235,11 @@ export function ClockProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const previewTimerSound = useCallback(async (sound?: ClockTimerSound) => {
+    await primeTimerAlarmAudio();
+    await playTimerAlarm(sound ?? clock.timer.sound);
+  }, [clock.timer.sound]);
+
   const value = useMemo<ClockContextValue>(() => ({
     clock,
     loaded,
@@ -205,9 +248,11 @@ export function ClockProvider({ children }: { children: ReactNode }) {
     resetStopwatch,
     recordStopwatchLap,
     setTimerDuration,
+    setTimerSound,
     startTimer,
     pauseTimer,
     resetTimer,
+    previewTimerSound,
   }), [
     clock,
     loaded,
@@ -216,9 +261,11 @@ export function ClockProvider({ children }: { children: ReactNode }) {
     resetStopwatch,
     recordStopwatchLap,
     setTimerDuration,
+    setTimerSound,
     startTimer,
     pauseTimer,
     resetTimer,
+    previewTimerSound,
   ]);
 
   return <ClockContext.Provider value={value}>{children}</ClockContext.Provider>;

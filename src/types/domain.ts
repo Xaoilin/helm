@@ -305,6 +305,7 @@ export interface Settings {
 
 // ── Clock ──
 export type ClockTimerStatus = 'idle' | 'running' | 'completed';
+export type ClockTimerSound = 'chime' | 'bell' | 'pulse' | 'dawn';
 
 export interface ClockStopwatchState {
   accumulatedMs: number;
@@ -317,6 +318,7 @@ export interface ClockTimerState {
   remainingMs: number;
   endsAt: number | null;
   status: ClockTimerStatus;
+  sound: ClockTimerSound;
   completedAt?: string;
 }
 

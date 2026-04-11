@@ -13,6 +13,8 @@ test.describe('Clock', () => {
     await expect(page.getByRole('heading', { name: 'Timer' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Start Stopwatch' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Start Timer' })).toBeVisible();
+    await expect(page.getByLabel('Alarm sound')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Preview Sound' })).toBeVisible();
   });
 
   test('should start the stopwatch and use a timer preset', async ({ page }) => {
@@ -27,5 +29,18 @@ test.describe('Clock', () => {
     await expect(page.getByLabel('Timer remaining')).toContainText('25:00');
     await page.getByRole('button', { name: 'Start Timer' }).click();
     await expect(page.getByRole('button', { name: 'Pause Timer' })).toBeVisible();
+  });
+
+  test('should persist the selected alarm sound after reload', async ({ page }) => {
+    await page.getByLabel('Alarm sound').selectOption('bell');
+    await expect(page.getByLabel('Alarm sound')).toHaveValue('bell');
+    await expect(page.getByText('Warm bell-style strikes.')).toBeVisible();
+
+    await page.reload();
+    await page.waitForSelector('.sidebar');
+    await page.getByRole('button', { name: 'Navigate to Clock' }).click();
+
+    await expect(page.getByLabel('Alarm sound')).toHaveValue('bell');
+    await expect(page.getByText('Warm bell-style strikes.')).toBeVisible();
   });
 });

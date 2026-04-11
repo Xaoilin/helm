@@ -2566,6 +2566,10 @@ textarea.form-input {
   gap: 12px;
 }
 
+.clock-sound-row {
+  grid-template-columns: minmax(0, 2fr) minmax(140px, 1fr);
+}
+
 .clock-input-group {
   min-width: 0;
 }
@@ -2614,13 +2618,19 @@ textarea.form-input {
 }
 
 .clock-error,
-.clock-note {
+.clock-note,
+.clock-sound-note {
   font-size: 12px;
   line-height: 1.5;
 }
 
 .clock-error {
   color: #ff8b8b;
+}
+
+.clock-sound-note {
+  margin-top: -8px;
+  color: #8b8fa3;
 }
 
 .clock-note {
@@ -2630,6 +2640,10 @@ textarea.form-input {
 @media (max-width: 860px) {
   .clock-form-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .clock-sound-row {
+    grid-template-columns: 1fr;
   }
 
   .clock-input-action {
