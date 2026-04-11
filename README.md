@@ -1,6 +1,6 @@
 # HELM
 
-HELM is a local-first desktop assistant app called Lina. It combines calendar, tasks and habits, a stopwatch and timer, finance tracking, knowledge management, prayer times, voice input, and chat into one Tauri + React application for a single-user workflow.
+HELM is a local-first desktop assistant app called Lina. It combines calendar, tasks and habits, a multi-clock workspace for timers and stopwatches, finance tracking, knowledge management, prayer times, voice input, and chat into one Tauri + React application for a single-user workflow.
 
 ## Stack
 
@@ -54,7 +54,7 @@ npm run check
 - Hosted GPT-5.4-mini assistant replies are real when Supabase is configured, the `assistant-openai` Edge Function is deployed, and the user is signed in.
 - Ollama-powered assistant responses are real when Ollama is running locally.
 - Voice input shows a live transcript preview while recording when Deepgram or the browser fallback is available, then confirms the final command after you stop.
-- A dedicated Clock surface provides a stopwatch plus a countdown timer with selectable alarm sounds and local-first persistence.
+- A dedicated Clock surface provides a neat multi-clock workspace with on-demand timers and stopwatches, selectable alarm sounds, and local-first persistence.
 - Several integrations remain placeholder or simulated.
 - Credentials stored in the local vault are not encrypted at rest in this MVP.
 

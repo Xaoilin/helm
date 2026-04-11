@@ -134,16 +134,20 @@ interface AppContextAPI {
   backfillPrayerLog: (taskId: string, dateStr: string, completed: boolean) => void;
 
   // Clock
-  startStopwatch: () => void;
-  pauseStopwatch: () => void;
-  resetStopwatch: () => void;
-  recordStopwatchLap: () => void;
-  setTimerDuration: (durationMs: number) => void;
-  setTimerSound: (sound: ClockTimerSound) => void;
-  startTimer: () => void;
-  pauseTimer: () => void;
-  resetTimer: () => void;
-  previewTimerSound: (sound?: ClockTimerSound) => Promise<void>;
+  createStopwatch: () => string;
+  removeStopwatch: (id: string) => void;
+  startStopwatch: (id: string) => void;
+  pauseStopwatch: (id: string) => void;
+  resetStopwatch: (id: string) => void;
+  recordStopwatchLap: (id: string) => void;
+  createTimer: () => string;
+  removeTimer: (id: string) => void;
+  setTimerDuration: (id: string, durationMs: number) => void;
+  setTimerSound: (id: string, sound: ClockTimerSound) => void;
+  startTimer: (id: string) => void;
+  pauseTimer: (id: string) => void;
+  resetTimer: (id: string) => void;
+  previewTimerSound: (id: string, sound?: ClockTimerSound) => Promise<void>;
 
   // Assistant memory
   upsertAssistantCorrection: (correction: {
@@ -399,10 +403,14 @@ function ShellProvider({ children }: { children: ReactNode }) {
 
     // Clock
     clock: clockCtx.clock,
+    createStopwatch: clockCtx.createStopwatch,
+    removeStopwatch: clockCtx.removeStopwatch,
     startStopwatch: clockCtx.startStopwatch,
     pauseStopwatch: clockCtx.pauseStopwatch,
     resetStopwatch: clockCtx.resetStopwatch,
     recordStopwatchLap: clockCtx.recordStopwatchLap,
+    createTimer: clockCtx.createTimer,
+    removeTimer: clockCtx.removeTimer,
     setTimerDuration: clockCtx.setTimerDuration,
     setTimerSound: clockCtx.setTimerSound,
     startTimer: clockCtx.startTimer,
