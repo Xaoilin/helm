@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { executeActionPlan } from '../assistant/executor';
 import {
   actionPlanJsonSchema,
+  actionPlanStepJsonSchema,
   parseActionPlan,
   type ActionPlan,
 } from '../assistant/plannerSchema';
@@ -55,6 +56,21 @@ function makeContext(): AssistantCommandContext {
   };
 }
 
+function findCapabilityStepSchema(capabilityId: string) {
+  return actionPlanStepJsonSchema.anyOf.find(step => {
+    if (!('properties' in step) || typeof step.properties !== 'object' || step.properties === null) {
+      return false;
+    }
+
+    const capability = step.properties.capability;
+    if (typeof capability !== 'object' || capability === null || !('const' in capability)) {
+      return false;
+    }
+
+    return capability.const === capabilityId;
+  });
+}
+
 describe('plannerSchema', () => {
   it('uses strict object schemas throughout the hosted action-plan contract', () => {
     const objectSchemas: Record<string, unknown>[] = [];
@@ -69,22 +85,47 @@ describe('plannerSchema', () => {
       expect(schema.additionalProperties).toBe(false);
       const required = Array.isArray(schema.required) ? [...schema.required].sort() : [];
       const properties = Object.keys((schema.properties || {}) as Record<string, unknown>).sort();
-      expect(required.every(key => properties.includes(key))).toBe(true);
+      expect(required).toEqual(properties);
     }
   });
 
-  it('parses capability-specific action-plan args without breaking executor behavior', () => {
+  it('emits required nullable hosted args for optional capability fields', () => {
+    const taskViewSchema = findCapabilityStepSchema('tasks.open_view');
+    expect(taskViewSchema).toBeDefined();
+
+    const argsSchema = (taskViewSchema as {
+      properties: {
+        args: {
+          required: string[];
+          properties: {
+            resetFilters: { type: string[] };
+            tab: { type: string };
+          };
+        };
+      };
+    }).properties.args;
+
+    expect([...argsSchema.required].sort()).toEqual(['resetFilters', 'tab']);
+    expect(argsSchema.properties.resetFilters).toEqual({
+      type: ['boolean', 'null'],
+    });
+    expect(argsSchema.properties.tab).toEqual(expect.objectContaining({
+      type: 'string',
+    }));
+  });
+
+  it('parses capability-specific action-plan args with null optional values without breaking executor behavior', () => {
+    const navigate = vi.fn();
     const parsed = parseActionPlan({
       mode: 'act',
-      response: 'Adding a task.',
+      response: 'Opening all your tasks.',
       confidence: 1,
       steps: [
         {
-          capability: 'tasks.create_task',
+          capability: 'tasks.open_view',
           args: {
-            title: 'Buy milk',
-            priority: 'high',
-            category: 'task',
+            tab: 'all',
+            resetFilters: null,
           },
           unresolved: null,
           requiresConfirmation: null,
@@ -94,14 +135,12 @@ describe('plannerSchema', () => {
 
     expect(parsed).not.toBeNull();
     expect(parsed?.steps[0]?.args).toEqual({
-      title: 'Buy milk',
-      priority: 'high',
-      category: 'task',
+      tab: 'all',
     });
 
-    const addTask = vi.fn(() => 'task-1');
     const handlers = {
-      addTask,
+      navigate,
+      addTask: vi.fn(() => 'unused'),
       updateTask: vi.fn(),
     } as AssistantActionHandlers;
 
@@ -110,11 +149,15 @@ describe('plannerSchema', () => {
       throw new Error(`Expected executed outcome, got ${execution.kind}`);
     }
 
-    expect(addTask).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Buy milk',
-      priority: 'high',
-      category: 'task',
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
+      surface: 'tasks',
+      surfaceState: expect.objectContaining({
+        tasks: expect.objectContaining({
+          tab: 'all',
+          resetFilters: false,
+        }),
+      }),
     }));
-    expect(execution.message).toContain('Buy milk');
+    expect(execution.message).toContain('Opening all your tasks');
   });
 });

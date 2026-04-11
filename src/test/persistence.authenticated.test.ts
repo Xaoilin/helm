@@ -52,10 +52,11 @@ describe('Persistence layer in authenticated mode', () => {
 
   it('accepts fresher remote data and clears the dirty bit', async () => {
     await saveStore('tasks', [{ id: 'task-1', title: 'Put up mirror' }]);
+    const remoteUpdatedAt = new Date(Date.now() + 60_000).toISOString();
 
     loadRemoteMock.mockResolvedValueOnce({
       value: [{ id: 'task-1', title: 'Remote canonical copy' }],
-      updatedAt: '2026-04-11T09:00:00.000Z',
+      updatedAt: remoteUpdatedAt,
     });
 
     const loaded = await loadStore<Array<{ id: string; title: string }>>('tasks');
@@ -63,7 +64,7 @@ describe('Persistence layer in authenticated mode', () => {
 
     expect(loaded).toEqual([{ id: 'task-1', title: 'Remote canonical copy' }]);
     expect(meta).toMatchObject({
-      updatedAt: '2026-04-11T09:00:00.000Z',
+      updatedAt: remoteUpdatedAt,
       dirty: false,
     });
   });
