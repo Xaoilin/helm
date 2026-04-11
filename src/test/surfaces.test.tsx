@@ -228,6 +228,8 @@ describe('ClockSurface', () => {
     expect(screen.getByText('Timer')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start Stopwatch' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start Timer' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Alarm sound')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preview Sound' })).toBeInTheDocument();
   });
 });
 

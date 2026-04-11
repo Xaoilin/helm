@@ -1,5 +1,5 @@
 import { CLOCK } from '../config/constants';
-import type { ClockState, ClockStopwatchState, ClockTimerState } from '../types/domain';
+import type { ClockState, ClockStopwatchState, ClockTimerSound, ClockTimerState } from '../types/domain';
 
 export const DEFAULT_CLOCK_STATE: ClockState = {
   stopwatch: {
@@ -12,6 +12,7 @@ export const DEFAULT_CLOCK_STATE: ClockState = {
     remainingMs: CLOCK.DEFAULT_TIMER_DURATION_MS,
     endsAt: null,
     status: 'idle',
+    sound: CLOCK.DEFAULT_TIMER_SOUND,
   },
 };
 
@@ -57,6 +58,7 @@ function normaliseTimerState(timer?: Partial<ClockTimerState>, now = Date.now())
   const endsAt = typeof timer?.endsAt === 'number' && Number.isFinite(timer.endsAt)
     ? timer.endsAt
     : null;
+  const sound = isClockTimerSound(timer?.sound) ? timer.sound : DEFAULT_CLOCK_STATE.timer.sound;
   const remainingMs = Math.min(
     durationMs,
     Math.max(0, Math.round(timer?.remainingMs ?? durationMs)),
@@ -71,6 +73,7 @@ function normaliseTimerState(timer?: Partial<ClockTimerState>, now = Date.now())
         remainingMs: 0,
         endsAt: null,
         status: 'completed',
+        sound,
         completedAt: typeof timer?.completedAt === 'string'
           ? timer.completedAt
           : new Date(now).toISOString(),
@@ -82,6 +85,7 @@ function normaliseTimerState(timer?: Partial<ClockTimerState>, now = Date.now())
       remainingMs: liveRemaining,
       endsAt,
       status: 'running',
+      sound,
       completedAt: undefined,
     };
   }
@@ -91,10 +95,16 @@ function normaliseTimerState(timer?: Partial<ClockTimerState>, now = Date.now())
     remainingMs: requestedStatus === 'completed' ? 0 : remainingMs,
     endsAt: null,
     status: requestedStatus === 'completed' ? 'completed' : 'idle',
+    sound,
     completedAt: requestedStatus === 'completed' && typeof timer?.completedAt === 'string'
       ? timer.completedAt
       : undefined,
   };
+}
+
+export function isClockTimerSound(value: unknown): value is ClockTimerSound {
+  return typeof value === 'string'
+    && (CLOCK.TIMER_SOUNDS as readonly string[]).includes(value);
 }
 
 export function normaliseClockState(clock?: Partial<ClockState> | null, now = Date.now()): ClockState {

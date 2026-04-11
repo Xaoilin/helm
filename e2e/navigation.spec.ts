@@ -35,13 +35,14 @@ test.describe('Navigation', () => {
   });
 
   test('should force one refresh when the release manifest reports a newer deployment', async ({ page }) => {
+    const publishedVersion = '99.0.0';
     let releaseChecks = 0;
 
     await page.route('**/release.json*', async route => {
       releaseChecks += 1;
       await route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ version: '0.2.9' }),
+        body: JSON.stringify({ version: publishedVersion }),
       });
     });
 
@@ -49,6 +50,9 @@ test.describe('Navigation', () => {
     await page.waitForSelector('.sidebar');
 
     await expect.poll(() => releaseChecks >= 2).toBe(true);
-    await expect.poll(async () => page.evaluate(() => sessionStorage.getItem('helm:release-refresh:0.2.9'))).toBe('done');
+    await expect.poll(async () => page.evaluate(
+      (key) => sessionStorage.getItem(key),
+      `helm:release-refresh:${publishedVersion}`,
+    )).toBe('done');
   });
 });

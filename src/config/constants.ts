@@ -123,6 +123,12 @@ export const CLOCK = {
   MIN_TIMER_DURATION_MS: 1000,
   MAX_TIMER_DURATION_MS: 24 * 60 * 60 * 1000,
   MAX_STOPWATCH_LAPS: 20,
+  DEFAULT_TIMER_SOUND: 'chime',
+  TIMER_SOUNDS: ['chime', 'bell', 'pulse', 'dawn'] as const,
+  ALARM_GAIN: 0.045,
+  ALARM_ATTACK_MS: 24,
+  ALARM_RELEASE_MS: 170,
+  ALARM_SETTLE_MS: 240,
   PRESET_MINUTES: [1, 5, 15, 25] as const,
 } as const;
 

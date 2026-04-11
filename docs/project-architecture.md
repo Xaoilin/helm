@@ -81,7 +81,7 @@ It also carries one-shot assistant navigation requests so chat and voice can han
 - chat conversations and messages
 - calendar accounts, sources, and events
 - tasks, goals, and habits
-- stopwatch and timer state
+- stopwatch and timer state, including timer alarm sound selection
 - knowledge topics, entries, and lifestyle items
 - finance accounts, transactions, budgets, and savings goals
 - integrations, settings, credentials, and workspaces
@@ -183,7 +183,7 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 - Chat is persistent and conversation-based.
 - Calendar is the most integration-heavy surface and depends on account/source/event integrity.
 - Tasks and gamification are tightly linked through XP, streaks, and badge logic.
-- Clock is a local-first utility surface for stopwatch and countdown workflows, and it persists active sessions through the shared store.
+- Clock is a local-first utility surface for stopwatch and countdown workflows, and it persists active sessions plus timer alarm sound preferences through the shared store.
 - Knowledge contains both a topic-entry knowledge base and the lifestyle tracker.
 - Integrations is the operational hub for Google Calendar and placeholder external providers.
 - Credentials and Workspaces exist, but both are still lightweight compared with calendar, tasks, finance, and knowledge.

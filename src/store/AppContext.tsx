@@ -10,6 +10,7 @@ import type {
   FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
   AssistantCorrection,
   ClockState,
+  ClockTimerSound,
 } from '../types/domain';
 import { loadStore, saveStore } from './persistence';
 import {
@@ -138,9 +139,11 @@ interface AppContextAPI {
   resetStopwatch: () => void;
   recordStopwatchLap: () => void;
   setTimerDuration: (durationMs: number) => void;
+  setTimerSound: (sound: ClockTimerSound) => void;
   startTimer: () => void;
   pauseTimer: () => void;
   resetTimer: () => void;
+  previewTimerSound: (sound?: ClockTimerSound) => Promise<void>;
 
   // Assistant memory
   upsertAssistantCorrection: (correction: {
@@ -401,9 +404,11 @@ function ShellProvider({ children }: { children: ReactNode }) {
     resetStopwatch: clockCtx.resetStopwatch,
     recordStopwatchLap: clockCtx.recordStopwatchLap,
     setTimerDuration: clockCtx.setTimerDuration,
+    setTimerSound: clockCtx.setTimerSound,
     startTimer: clockCtx.startTimer,
     pauseTimer: clockCtx.pauseTimer,
     resetTimer: clockCtx.resetTimer,
+    previewTimerSound: clockCtx.previewTimerSound,
 
     // Settings & Integrations
     settings: settingsCtx.settings,
