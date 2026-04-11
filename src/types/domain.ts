@@ -303,11 +303,34 @@ export interface Settings {
   ollamaModel?: string;
 }
 
+// ── Clock ──
+export type ClockTimerStatus = 'idle' | 'running' | 'completed';
+
+export interface ClockStopwatchState {
+  accumulatedMs: number;
+  startedAt: number | null;
+  laps: number[];
+}
+
+export interface ClockTimerState {
+  durationMs: number;
+  remainingMs: number;
+  endsAt: number | null;
+  status: ClockTimerStatus;
+  completedAt?: string;
+}
+
+export interface ClockState {
+  stopwatch: ClockStopwatchState;
+  timer: ClockTimerState;
+}
+
 // ── Navigation ──
 export type Surface =
   | 'dashboard'
   | 'chat'
   | 'calendar'
+  | 'clock'
   | 'credentials'
   | 'workspaces'
   | 'tasks'

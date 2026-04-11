@@ -24,6 +24,7 @@ Use this matrix when updating docs or UI copy. The allowed states are:
 | ElevenLabs speech output | `real` | Requires env configuration. |
 | Browser speech output | `local-only/degraded` | Used when ElevenLabs is unavailable. |
 | Prayer times and adhan notifications | `real` | Backed by AlAdhan plus browser notifications. |
+| Clock surface (stopwatch and timer) | `real` | Local-first stopwatch and countdown timer persist through the shared store so in-progress sessions survive navigation and reloads. |
 | Finance accounts, budgets, and savings goals | `real` | Local-first app data is implemented. |
 | Monzo import | `real` | Live API path exists when configured. |
 | Knowledge base and lifestyle tracker | `real` | Local-first CRUD is implemented. |

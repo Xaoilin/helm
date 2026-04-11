@@ -9,6 +9,7 @@ import type {
   LifestyleItem,
   FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
   AssistantCorrection,
+  ClockState,
 } from '../types/domain';
 import { loadStore, saveStore } from './persistence';
 import {
@@ -27,6 +28,7 @@ import { FinanceProvider, useFinanceContext } from './contexts/FinanceContext';
 import { GamificationProvider, useGamificationContext } from './contexts/GamificationContext';
 import { SettingsProvider, useSettingsContext } from './contexts/SettingsContext';
 import { AssistantProvider, useAssistantContext } from './contexts/AssistantContext';
+import { ClockProvider, useClockContext } from './contexts/ClockContext';
 
 // ── Context API (backward-compatible interface) ──
 interface AppContextAPI {
@@ -51,6 +53,7 @@ interface AppContextAPI {
   assistantCorrections: AssistantCorrection[];
   gamification: GamificationProfile;
   settings: Settings;
+  clock: ClockState;
   loaded: boolean;
   assistantNavigationRequest: AssistantNavigationRequest | null;
 
@@ -128,6 +131,16 @@ interface AppContextAPI {
   // Gamification
   updateGamification: (profile: GamificationProfile) => void;
   backfillPrayerLog: (taskId: string, dateStr: string, completed: boolean) => void;
+
+  // Clock
+  startStopwatch: () => void;
+  pauseStopwatch: () => void;
+  resetStopwatch: () => void;
+  recordStopwatchLap: () => void;
+  setTimerDuration: (durationMs: number) => void;
+  startTimer: () => void;
+  pauseTimer: () => void;
+  resetTimer: () => void;
 
   // Assistant memory
   upsertAssistantCorrection: (correction: {
@@ -285,6 +298,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   const gamificationCtx = useGamificationContext();
   const settingsCtx = useSettingsContext();
   const assistantCtx = useAssistantContext();
+  const clockCtx = useClockContext();
 
   // Determine overall loaded state
   const allLoaded = state.loaded
@@ -295,7 +309,8 @@ function ShellProvider({ children }: { children: ReactNode }) {
     && finance.loaded
     && gamificationCtx.loaded
     && settingsCtx.loaded
-    && assistantCtx.loaded;
+    && assistantCtx.loaded
+    && clockCtx.loaded;
 
   const api: AppContextAPI = useMemo(() => ({
     // Shell state
@@ -379,6 +394,17 @@ function ShellProvider({ children }: { children: ReactNode }) {
     upsertAssistantCorrection: assistantCtx.upsertCorrection,
     noteAssistantCorrectionApplied: assistantCtx.noteCorrectionApplied,
 
+    // Clock
+    clock: clockCtx.clock,
+    startStopwatch: clockCtx.startStopwatch,
+    pauseStopwatch: clockCtx.pauseStopwatch,
+    resetStopwatch: clockCtx.resetStopwatch,
+    recordStopwatchLap: clockCtx.recordStopwatchLap,
+    setTimerDuration: clockCtx.setTimerDuration,
+    startTimer: clockCtx.startTimer,
+    pauseTimer: clockCtx.pauseTimer,
+    resetTimer: clockCtx.resetTimer,
+
     // Settings & Integrations
     settings: settingsCtx.settings,
     integrations: settingsCtx.integrations,
@@ -402,7 +428,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     setPrimaryWorkspace,
   }), [
     state, allLoaded,
-    calendar, taskCtx, chat, knowledge, finance, gamificationCtx, settingsCtx, assistantCtx,
+    calendar, taskCtx, chat, knowledge, finance, gamificationCtx, settingsCtx, assistantCtx, clockCtx,
     navigate, requestAssistantNavigation, dismissAssistantNavigationRequest, addCredential, updateCredential, removeCredential,
     addWorkspace, updateWorkspace, removeWorkspace, setPrimaryWorkspace,
   ]);
@@ -487,11 +513,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           <TaskProvider>
             <KnowledgeProvider>
               <FinanceProvider>
-                <AssistantProvider>
-                  <ChatBridge>
-                    <ShellProvider>{children}</ShellProvider>
-                  </ChatBridge>
-                </AssistantProvider>
+                <ClockProvider>
+                  <AssistantProvider>
+                    <ChatBridge>
+                      <ShellProvider>{children}</ShellProvider>
+                    </ChatBridge>
+                  </AssistantProvider>
+                </ClockProvider>
               </FinanceProvider>
             </KnowledgeProvider>
           </TaskProvider>
