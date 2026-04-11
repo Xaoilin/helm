@@ -33,4 +33,22 @@ test.describe('Navigation', () => {
     await expect(page.locator('.sidebar-release')).toContainText('Current release');
     await expect(page.locator('.sidebar-release')).toContainText(/v\d+\.\d+\.\d+/);
   });
+
+  test('should force one refresh when the release manifest reports a newer deployment', async ({ page }) => {
+    let releaseChecks = 0;
+
+    await page.route('**/release.json*', async route => {
+      releaseChecks += 1;
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ version: '0.2.9' }),
+      });
+    });
+
+    await page.goto('/');
+    await page.waitForSelector('.sidebar');
+
+    await expect.poll(() => releaseChecks >= 2).toBe(true);
+    await expect.poll(async () => page.evaluate(() => sessionStorage.getItem('helm:release-refresh:0.2.9'))).toBe('done');
+  });
 });

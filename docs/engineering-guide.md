@@ -53,8 +53,9 @@ Before claiming a user-facing change is live or shipped, `npm run handoff:check`
 
 ## Release Versioning
 
-- HELM release versions use semver and must stay aligned across `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
+- HELM release versions use semver and must stay aligned across `package.json`, `package-lock.json`, `public/release.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
 - The UI release badge is sourced from the build version and is intentionally pinned in the shell sidebar so the current build is always visible.
+- Web builds poll `public/release.json` on load, when a hidden tab becomes visible again, and on the configured release interval. If the deployed manifest reports a newer semver than the current bundle, the app forces a one-time page reload so users move onto the latest deployment without a manual refresh.
 - Every feature branch must include a version bump before handoff. Do not leave feature work on a branch at the previous release number.
 - Use `npm version <patch|minor|major> --no-git-tag-version` for a release bump, then run `npm run version:sync` if you edited files manually. `npm run version:check` is the guardrail that catches drift before handoff and now also fails `codex/*` branches that have not bumped above `origin/master`.
 - Every handoff must call out the current release version explicitly, including branch-only or local-only work.

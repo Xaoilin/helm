@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJsonPath = resolve(rootDir, 'package.json');
 const packageLockPath = resolve(rootDir, 'package-lock.json');
+const releaseManifestPath = resolve(rootDir, 'public', 'release.json');
 const cargoTomlPath = resolve(rootDir, 'src-tauri', 'Cargo.toml');
 const tauriConfigPath = resolve(rootDir, 'src-tauri', 'tauri.conf.json');
 const checkOnly = process.argv.includes('--check');
@@ -65,6 +66,17 @@ if (packageLock.version !== packageVersion || packageLock.packages?.['']?.versio
     }
     writeFileSync(packageLockPath, `${JSON.stringify(packageLock, null, 2)}\n`);
     updates.push(`Synced package-lock.json to ${packageVersion}`);
+  }
+}
+
+const releaseManifest = JSON.parse(readFileSync(releaseManifestPath, 'utf8'));
+if (releaseManifest.version !== packageVersion) {
+  if (checkOnly) {
+    mismatches.push(`public/release.json is ${releaseManifest.version} but package.json is ${packageVersion}`);
+  } else {
+    releaseManifest.version = packageVersion;
+    writeFileSync(releaseManifestPath, `${JSON.stringify(releaseManifest, null, 2)}\n`);
+    updates.push(`Synced public/release.json to ${packageVersion}`);
   }
 }
 
