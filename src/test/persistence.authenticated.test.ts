@@ -41,7 +41,7 @@ describe('Persistence layer in authenticated mode', () => {
 
     loadRemoteMock.mockResolvedValueOnce({
       value: [{ id: 'task-1', title: 'Old remote task' }],
-      updatedAt: '2026-04-09T09:00:00.000Z',
+      updatedAt: '2000-01-01T00:00:00.000Z',
     });
 
     const loaded = await loadStore<Array<{ id: string; title: string }>>('tasks');
@@ -55,7 +55,7 @@ describe('Persistence layer in authenticated mode', () => {
 
     loadRemoteMock.mockResolvedValueOnce({
       value: [{ id: 'task-1', title: 'Remote canonical copy' }],
-      updatedAt: '2026-04-11T09:00:00.000Z',
+      updatedAt: '2999-01-01T00:00:00.000Z',
     });
 
     const loaded = await loadStore<Array<{ id: string; title: string }>>('tasks');
@@ -63,7 +63,7 @@ describe('Persistence layer in authenticated mode', () => {
 
     expect(loaded).toEqual([{ id: 'task-1', title: 'Remote canonical copy' }]);
     expect(meta).toMatchObject({
-      updatedAt: '2026-04-11T09:00:00.000Z',
+      updatedAt: '2999-01-01T00:00:00.000Z',
       dirty: false,
     });
   });

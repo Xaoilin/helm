@@ -2,7 +2,7 @@
 
 ## Overview
 
-HELM is a local-first desktop assistant for a solo operator. The in-app assistant is Lina. The product combines calendar, tasks and habits, finance tracking, Islamic knowledge and lifestyle tracking, prayer times, integrations, and chat and voice AI in one desktop app.
+HELM is a local-first desktop assistant for a solo operator. The in-app assistant is Lina. The product combines calendar, tasks and habits, a stopwatch and timer, finance tracking, Islamic knowledge and lifestyle tracking, prayer times, integrations, and chat and voice AI in one desktop app.
 
 The current stack is:
 
@@ -31,6 +31,7 @@ The navigable surfaces are:
 - Dashboard
 - Chat
 - Calendar
+- Clock
 - Tasks
 - Finance
 - Knowledge
@@ -53,8 +54,9 @@ Provider stack:
 4. `TaskProvider`
 5. `KnowledgeProvider`
 6. `FinanceProvider`
-7. `ChatProvider` through `ChatBridge`
-8. `ShellProvider`
+7. `ClockProvider`
+8. `ChatProvider` through `ChatBridge`
+9. `ShellProvider`
 
 State is split across:
 
@@ -63,6 +65,7 @@ State is split across:
 - `src/store/contexts/ChatContext.tsx`
 - `src/store/contexts/KnowledgeContext.tsx`
 - `src/store/contexts/FinanceContext.tsx`
+- `src/store/contexts/ClockContext.tsx`
 - `src/store/contexts/GamificationContext.tsx`
 - `src/store/contexts/SettingsContext.tsx`
 
@@ -77,6 +80,7 @@ It also carries one-shot assistant navigation requests so chat and voice can han
 - chat conversations and messages
 - calendar accounts, sources, and events
 - tasks, goals, and habits
+- stopwatch and timer state
 - knowledge topics, entries, and lifestyle items
 - finance accounts, transactions, budgets, and savings goals
 - integrations, settings, credentials, and workspaces
@@ -178,6 +182,7 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 - Chat is persistent and conversation-based.
 - Calendar is the most integration-heavy surface and depends on account/source/event integrity.
 - Tasks and gamification are tightly linked through XP, streaks, and badge logic.
+- Clock is a local-first utility surface for stopwatch and countdown workflows, and it persists active sessions through the shared store.
 - Knowledge contains both a topic-entry knowledge base and the lifestyle tracker.
 - Integrations is the operational hub for Google Calendar and placeholder external providers.
 - Credentials and Workspaces exist, but both are still lightweight compared with calendar, tasks, finance, and knowledge.

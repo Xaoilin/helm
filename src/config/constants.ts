@@ -7,6 +7,8 @@
 // ── Timing (milliseconds) ──
 
 export const TIMING = {
+  /** Stopwatch and timer repaint cadence */
+  CLOCK_TICK: 100,
   /** Browser TTS fallback playback timeout */
   TTS_FALLBACK_TIMEOUT: 3000,
   /** Max recording duration before auto-stop */
@@ -112,6 +114,14 @@ export const VOICE_SESSION = {
 
 export const CHAT = {
   DEFAULT_CONVERSATION_TITLE: 'New conversation',
+} as const;
+
+export const CLOCK = {
+  DEFAULT_TIMER_DURATION_MS: 5 * 60 * 1000,
+  MIN_TIMER_DURATION_MS: 1000,
+  MAX_TIMER_DURATION_MS: 24 * 60 * 60 * 1000,
+  MAX_STOPWATCH_LAPS: 20,
+  PRESET_MINUTES: [1, 5, 15, 25] as const,
 } as const;
 
 // ── API Timeouts (milliseconds) ──

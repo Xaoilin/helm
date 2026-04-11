@@ -5,6 +5,7 @@ import { useApp } from '../store/AppContext';
 import App from '../App';
 import CalendarSurface from '../surfaces/CalendarSurface';
 import ChatSurface from '../surfaces/ChatSurface';
+import ClockSurface from '../surfaces/ClockSurface';
 import DashboardSurface from '../surfaces/DashboardSurface';
 import TasksSurface from '../surfaces/TasksSurface';
 import KnowledgeSurface from '../surfaces/KnowledgeSurface';
@@ -43,6 +44,7 @@ describe('App shell', () => {
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Chat')).toBeInTheDocument();
     expect(screen.getByText('Calendar')).toBeInTheDocument();
+    expect(screen.getByText('Clock')).toBeInTheDocument();
     expect(screen.getByText('Tasks')).toBeInTheDocument();
     expect(screen.getByText('Finance')).toBeInTheDocument();
     expect(screen.getByText('Knowledge')).toBeInTheDocument();
@@ -201,6 +203,18 @@ describe('CalendarSurface', () => {
 
     await act(async () => { renderWithProvider(<CalendarSurface />); });
     expect(screen.getByText('1 account need reconnect')).toBeInTheDocument();
+  });
+});
+
+describe('ClockSurface', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('should render stopwatch and timer controls', async () => {
+    await act(async () => { renderWithProvider(<ClockSurface />); });
+    expect(screen.getByText('Stopwatch')).toBeInTheDocument();
+    expect(screen.getByText('Timer')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start Stopwatch' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start Timer' })).toBeInTheDocument();
   });
 });
 

@@ -174,6 +174,25 @@ describe('assistant runtime', () => {
     }));
   });
 
+  it('recognizes timer and stopwatch requests as Clock surface navigation', async () => {
+    const navigate = vi.fn();
+
+    const result = await processAssistantCommand('open the timer', makeContext(), {
+      lang: 'en',
+      handlers: {
+        navigate,
+        addTask: vi.fn(() => 'task-1'),
+        updateTask: vi.fn(),
+      },
+    });
+
+    expect(result.source).toBe('local');
+    expect(result.execution?.steps[0].capability).toBe('navigation.go_to_surface');
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
+      surface: 'clock',
+    }));
+  });
+
   it('executes task creation through the structured capability runtime', async () => {
     const addTask = vi.fn(() => 'task-99');
 
