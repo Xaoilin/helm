@@ -14,6 +14,8 @@ test.describe('Clock', () => {
     await expect(page.getByRole('heading', { name: 'Stopwatches' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Timer 1' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Stopwatch 1' })).toBeVisible();
+    await expect(page.getByLabel('Name for Timer 1')).toBeVisible();
+    await expect(page.getByLabel('Name for Stopwatch 1')).toBeVisible();
     await expect(page.getByRole('button', { name: '+ Add Timer' })).toBeVisible();
     await expect(page.getByRole('button', { name: '+ Add Stopwatch' })).toBeVisible();
     await expect(page.getByLabel('Alarm sound for Timer 1')).toBeVisible();
@@ -60,5 +62,33 @@ test.describe('Clock', () => {
 
     await expect(page.getByLabel('Alarm sound for Timer 1')).toHaveValue('bell');
     await expect(page.getByText('Warm bell-style strikes.')).toBeVisible();
+  });
+
+  test('should persist renamed clocks and let me acknowledge a finished timer alert', async ({ page }) => {
+    await page.getByLabel('Name for Timer 1').fill('Tea break');
+    await page.getByLabel('Name for Timer 1').blur();
+    await page.getByLabel('Name for Stopwatch 1').fill('Study sprint');
+    await page.getByLabel('Name for Stopwatch 1').blur();
+
+    await expect(page.getByRole('heading', { name: 'Tea break' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Study sprint' })).toBeVisible();
+
+    await page.reload();
+    await page.waitForSelector('.sidebar');
+    await page.getByRole('button', { name: 'Navigate to Clock' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Tea break' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Study sprint' })).toBeVisible();
+
+    await page.getByLabel('Minutes for Tea break').fill('0');
+    await page.getByLabel('Seconds for Tea break').fill('1');
+    await page.getByRole('button', { name: 'Set duration for Tea break' }).click();
+    await page.getByRole('button', { name: 'Start Tea break' }).click();
+
+    await expect(page.getByRole('button', { name: 'Acknowledge Tea break' })).toBeVisible();
+    await page.getByRole('button', { name: 'Acknowledge Tea break' }).click();
+
+    await expect(page.getByRole('button', { name: 'Acknowledge Tea break' })).toHaveCount(0);
+    await expect(page.getByText('Finished and acknowledged. Reset or start again whenever you need it.')).toBeVisible();
   });
 });

@@ -323,6 +323,7 @@ export interface ClockTimerState {
   endsAt: number | null;
   status: ClockTimerStatus;
   sound: ClockTimerSound;
+  alerting: boolean;
   completedAt?: string;
 }
 

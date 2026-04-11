@@ -8,6 +8,7 @@ import {
   getStopwatchElapsedMs,
   getTimerRemainingMs,
   normaliseClockState,
+  sanitizeClockLabel,
 } from '../../services/clock';
 import { playTimerAlarm, primeTimerAlarmAudio, stopTimerAlarm } from '../../services/clockAudio';
 import { loadStore, saveStore } from '../persistence';
@@ -17,18 +18,21 @@ interface ClockContextValue {
   clock: ClockState;
   loaded: boolean;
   createStopwatch: () => string;
+  setStopwatchLabel: (id: string, label: string) => void;
   removeStopwatch: (id: string) => void;
   startStopwatch: (id: string) => void;
   pauseStopwatch: (id: string) => void;
   resetStopwatch: (id: string) => void;
   recordStopwatchLap: (id: string) => void;
   createTimer: () => string;
+  setTimerLabel: (id: string, label: string) => void;
   removeTimer: (id: string) => void;
   setTimerDuration: (id: string, durationMs: number) => void;
   setTimerSound: (id: string, sound: ClockTimerSound) => void;
   startTimer: (id: string) => void;
   pauseTimer: (id: string) => void;
   resetTimer: (id: string) => void;
+  acknowledgeTimer: (id: string) => void;
   previewTimerSound: (id: string, sound?: ClockTimerSound) => Promise<void>;
 }
 
@@ -112,6 +116,19 @@ export function ClockProvider({ children }: { children: ReactNode }) {
     });
 
     return createdId;
+  }, []);
+
+  const setStopwatchLabel = useCallback((id: string, label: string) => {
+    setClock(current => ({
+      ...current,
+      stopwatches: current.stopwatches.map(stopwatch =>
+        stopwatch.id === id
+          ? {
+            ...stopwatch,
+            label: sanitizeClockLabel(label, stopwatch.label),
+          }
+          : stopwatch),
+    }));
   }, []);
 
   const removeStopwatch = useCallback((id: string) => {
@@ -202,6 +219,19 @@ export function ClockProvider({ children }: { children: ReactNode }) {
     return createdId;
   }, []);
 
+  const setTimerLabel = useCallback((id: string, label: string) => {
+    setClock(current => ({
+      ...current,
+      timers: current.timers.map(timer =>
+        timer.id === id
+          ? {
+            ...timer,
+            label: sanitizeClockLabel(label, timer.label),
+          }
+          : timer),
+    }));
+  }, []);
+
   const removeTimer = useCallback((id: string) => {
     stopTimerAlarm();
 
@@ -217,6 +247,8 @@ export function ClockProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setTimerDuration = useCallback((id: string, durationMs: number) => {
+    stopTimerAlarm();
+
     setClock(current => {
       const nextDuration = clampTimerDuration(durationMs);
 
@@ -230,6 +262,7 @@ export function ClockProvider({ children }: { children: ReactNode }) {
               remainingMs: nextDuration,
               endsAt: null,
               status: 'idle',
+              alerting: false,
               completedAt: undefined,
             }
             : timer),
@@ -277,6 +310,7 @@ export function ClockProvider({ children }: { children: ReactNode }) {
             remainingMs,
             endsAt: now + remainingMs,
             status: 'running',
+            alerting: false,
             completedAt: undefined,
           };
         }),
@@ -301,6 +335,7 @@ export function ClockProvider({ children }: { children: ReactNode }) {
             remainingMs,
             endsAt: null,
             status: remainingMs === 0 ? 'completed' : 'idle',
+            alerting: remainingMs === 0,
             completedAt: remainingMs === 0 ? new Date(now).toISOString() : undefined,
           };
         }),
@@ -320,7 +355,23 @@ export function ClockProvider({ children }: { children: ReactNode }) {
             remainingMs: timer.durationMs,
             endsAt: null,
             status: 'idle',
+            alerting: false,
             completedAt: undefined,
+          }
+          : timer),
+    }));
+  }, []);
+
+  const acknowledgeTimer = useCallback((id: string) => {
+    stopTimerAlarm();
+
+    setClock(current => ({
+      ...current,
+      timers: current.timers.map(timer =>
+        timer.id === id && timer.status === 'completed'
+          ? {
+            ...timer,
+            alerting: false,
           }
           : timer),
     }));
@@ -338,35 +389,41 @@ export function ClockProvider({ children }: { children: ReactNode }) {
     clock,
     loaded,
     createStopwatch: createStopwatchItem,
+    setStopwatchLabel,
     removeStopwatch,
     startStopwatch,
     pauseStopwatch,
     resetStopwatch,
     recordStopwatchLap,
     createTimer: createTimerItem,
+    setTimerLabel,
     removeTimer,
     setTimerDuration,
     setTimerSound,
     startTimer,
     pauseTimer,
     resetTimer,
+    acknowledgeTimer,
     previewTimerSound,
   }), [
     clock,
     loaded,
     createStopwatchItem,
+    setStopwatchLabel,
     removeStopwatch,
     startStopwatch,
     pauseStopwatch,
     resetStopwatch,
     recordStopwatchLap,
     createTimerItem,
+    setTimerLabel,
     removeTimer,
     setTimerDuration,
     setTimerSound,
     startTimer,
     pauseTimer,
     resetTimer,
+    acknowledgeTimer,
     previewTimerSound,
   ]);
 

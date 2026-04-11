@@ -2563,6 +2563,11 @@ textarea.form-input {
   gap: 16px;
 }
 
+.clock-card.alerting {
+  border-color: rgba(255, 122, 89, 0.65);
+  box-shadow: 0 0 0 1px rgba(255, 122, 89, 0.28), 0 0 32px rgba(255, 122, 89, 0.16);
+}
+
 .clock-card-header-actions {
   display: flex;
   align-items: center;
@@ -2603,6 +2608,12 @@ textarea.form-input {
   color: #bac1ff;
 }
 
+.clock-status.alerting {
+  border-color: rgba(255, 122, 89, 0.55);
+  background: rgba(255, 122, 89, 0.16);
+  color: #ffd2c7;
+}
+
 .clock-face {
   padding: 22px;
   border-radius: 16px;
@@ -2617,6 +2628,20 @@ textarea.form-input {
   background:
     radial-gradient(circle at top, rgba(34, 197, 94, 0.14), transparent 58%),
     linear-gradient(180deg, #121522 0%, #0d1017 100%);
+}
+
+.clock-face.alerting {
+  cursor: pointer;
+  border-color: rgba(255, 122, 89, 0.58);
+  background:
+    radial-gradient(circle at top, rgba(255, 122, 89, 0.28), transparent 58%),
+    linear-gradient(180deg, #23151a 0%, #120d12 100%);
+  animation: clockAlertPulse 1.2s ease-in-out infinite;
+}
+
+.clock-face.alerting:focus-visible {
+  outline: 2px solid rgba(255, 122, 89, 0.95);
+  outline-offset: 4px;
 }
 
 .clock-face-label {
@@ -2665,6 +2690,22 @@ textarea.form-input {
   gap: 8px;
 }
 
+.clock-name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.clock-name-field label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #8b8fa3;
+}
+
+.clock-name-input {
+  font-weight: 600;
+}
+
 .clock-form-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2701,6 +2742,38 @@ textarea.form-input {
   flex-direction: column;
   gap: 8px;
   min-height: 146px;
+}
+
+.clock-alert-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 122, 89, 0.38);
+  background:
+    linear-gradient(135deg, rgba(255, 122, 89, 0.18), rgba(255, 122, 89, 0.06)),
+    #171117;
+  animation: clockAlertPanelPulse 1.6s ease-in-out infinite;
+}
+
+.clock-alert-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.clock-alert-copy strong {
+  font-size: 13px;
+  color: #fff1ed;
+}
+
+.clock-alert-copy span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ffcabd;
 }
 
 .clock-lap-row,
@@ -2766,6 +2839,28 @@ textarea.form-input {
   margin-top: 18px;
 }
 
+@keyframes clockAlertPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 122, 89, 0.12), inset 0 0 0 0 rgba(255, 122, 89, 0.12);
+  }
+
+  50% {
+    transform: scale(1.01);
+    box-shadow: 0 0 0 8px rgba(255, 122, 89, 0.05), inset 0 0 0 1px rgba(255, 223, 214, 0.12);
+  }
+}
+
+@keyframes clockAlertPanelPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 122, 89, 0.1);
+  }
+
+  50% {
+    box-shadow: 0 0 0 10px rgba(255, 122, 89, 0.03);
+  }
+}
+
 @media (max-width: 1080px) {
   .clock-toolbar {
     grid-template-columns: 1fr;
@@ -2795,5 +2890,10 @@ textarea.form-input {
 
   .clock-section-header {
     flex-direction: column;
+  }
+
+  .clock-alert-banner {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
