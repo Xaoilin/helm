@@ -1,19 +1,42 @@
 import { CLOCK } from '../config/constants';
 import type { ClockState, ClockStopwatchState, ClockTimerSound, ClockTimerState } from '../types/domain';
 
-export const DEFAULT_CLOCK_STATE: ClockState = {
-  stopwatch: {
+type LegacyClockState = {
+  stopwatch?: Partial<ClockStopwatchState>;
+  timer?: Partial<ClockTimerState>;
+};
+
+function createClockEntityId(prefix: 'stopwatch' | 'timer'): string {
+  return `clock-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+export function createClockStopwatch(labelNumber: number): ClockStopwatchState {
+  return {
+    id: createClockEntityId('stopwatch'),
+    label: `Stopwatch ${labelNumber}`,
     accumulatedMs: 0,
     startedAt: null,
     laps: [],
-  },
-  timer: {
+  };
+}
+
+export function createClockTimer(labelNumber: number): ClockTimerState {
+  return {
+    id: createClockEntityId('timer'),
+    label: `Timer ${labelNumber}`,
     durationMs: CLOCK.DEFAULT_TIMER_DURATION_MS,
     remainingMs: CLOCK.DEFAULT_TIMER_DURATION_MS,
     endsAt: null,
     status: 'idle',
     sound: CLOCK.DEFAULT_TIMER_SOUND,
-  },
+  };
+}
+
+export const DEFAULT_CLOCK_STATE: ClockState = {
+  stopwatches: [createClockStopwatch(1)],
+  timers: [createClockTimer(1)],
+  nextStopwatchNumber: 2,
+  nextTimerNumber: 2,
 };
 
 export function clampTimerDuration(durationMs: number): number {
@@ -38,9 +61,18 @@ export function getTimerRemainingMs(timer: ClockTimerState, now = Date.now()): n
   return Math.max(0, timer.remainingMs);
 }
 
-function normaliseStopwatchState(stopwatch?: Partial<ClockStopwatchState>): ClockStopwatchState {
+function normaliseStopwatchState(
+  stopwatch: Partial<ClockStopwatchState> | undefined,
+  fallbackLabel: string,
+): ClockStopwatchState {
   return {
-    accumulatedMs: Math.max(0, Math.round(stopwatch?.accumulatedMs ?? DEFAULT_CLOCK_STATE.stopwatch.accumulatedMs)),
+    id: typeof stopwatch?.id === 'string' && stopwatch.id.trim().length > 0
+      ? stopwatch.id
+      : createClockEntityId('stopwatch'),
+    label: typeof stopwatch?.label === 'string' && stopwatch.label.trim().length > 0
+      ? stopwatch.label
+      : fallbackLabel,
+    accumulatedMs: Math.max(0, Math.round(stopwatch?.accumulatedMs ?? 0)),
     startedAt: typeof stopwatch?.startedAt === 'number' && Number.isFinite(stopwatch.startedAt)
       ? stopwatch.startedAt
       : null,
@@ -53,22 +85,32 @@ function normaliseStopwatchState(stopwatch?: Partial<ClockStopwatchState>): Cloc
   };
 }
 
-function normaliseTimerState(timer?: Partial<ClockTimerState>, now = Date.now()): ClockTimerState {
-  const durationMs = clampTimerDuration(timer?.durationMs ?? DEFAULT_CLOCK_STATE.timer.durationMs);
+function normaliseTimerState(
+  timer: Partial<ClockTimerState> | undefined,
+  fallbackLabel: string,
+  now = Date.now(),
+): ClockTimerState {
+  const durationMs = clampTimerDuration(timer?.durationMs ?? CLOCK.DEFAULT_TIMER_DURATION_MS);
   const endsAt = typeof timer?.endsAt === 'number' && Number.isFinite(timer.endsAt)
     ? timer.endsAt
     : null;
-  const sound = isClockTimerSound(timer?.sound) ? timer.sound : DEFAULT_CLOCK_STATE.timer.sound;
+  const sound = isClockTimerSound(timer?.sound) ? timer.sound : CLOCK.DEFAULT_TIMER_SOUND;
   const remainingMs = Math.min(
     durationMs,
     Math.max(0, Math.round(timer?.remainingMs ?? durationMs)),
   );
-  const requestedStatus = timer?.status ?? DEFAULT_CLOCK_STATE.timer.status;
+  const requestedStatus = timer?.status ?? 'idle';
 
   if (requestedStatus === 'running' && endsAt) {
     const liveRemaining = Math.max(0, Math.round(endsAt - now));
     if (liveRemaining === 0) {
       return {
+        id: typeof timer?.id === 'string' && timer.id.trim().length > 0
+          ? timer.id
+          : createClockEntityId('timer'),
+        label: typeof timer?.label === 'string' && timer.label.trim().length > 0
+          ? timer.label
+          : fallbackLabel,
         durationMs,
         remainingMs: 0,
         endsAt: null,
@@ -81,6 +123,12 @@ function normaliseTimerState(timer?: Partial<ClockTimerState>, now = Date.now())
     }
 
     return {
+      id: typeof timer?.id === 'string' && timer.id.trim().length > 0
+        ? timer.id
+        : createClockEntityId('timer'),
+      label: typeof timer?.label === 'string' && timer.label.trim().length > 0
+        ? timer.label
+        : fallbackLabel,
       durationMs,
       remainingMs: liveRemaining,
       endsAt,
@@ -91,6 +139,12 @@ function normaliseTimerState(timer?: Partial<ClockTimerState>, now = Date.now())
   }
 
   return {
+    id: typeof timer?.id === 'string' && timer.id.trim().length > 0
+      ? timer.id
+      : createClockEntityId('timer'),
+    label: typeof timer?.label === 'string' && timer.label.trim().length > 0
+      ? timer.label
+      : fallbackLabel,
     durationMs,
     remainingMs: requestedStatus === 'completed' ? 0 : remainingMs,
     endsAt: null,
@@ -102,15 +156,58 @@ function normaliseTimerState(timer?: Partial<ClockTimerState>, now = Date.now())
   };
 }
 
+function normaliseNextNumber(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(fallback, Math.round(value));
+  }
+
+  return Math.max(1, fallback);
+}
+
 export function isClockTimerSound(value: unknown): value is ClockTimerSound {
   return typeof value === 'string'
     && (CLOCK.TIMER_SOUNDS as readonly string[]).includes(value);
 }
 
-export function normaliseClockState(clock?: Partial<ClockState> | null, now = Date.now()): ClockState {
+export function normaliseClockState(
+  clock?: Partial<ClockState> | LegacyClockState | null,
+  now = Date.now(),
+): ClockState {
+  const nextClock = clock ?? {};
+  const persistedStopwatches = Array.isArray((nextClock as Partial<ClockState>).stopwatches)
+    ? (nextClock as Partial<ClockState>).stopwatches
+    : null;
+  const persistedTimers = Array.isArray((nextClock as Partial<ClockState>).timers)
+    ? (nextClock as Partial<ClockState>).timers
+    : null;
+
+  const stopwatches = persistedStopwatches
+    ? persistedStopwatches.map((stopwatch, index) =>
+      normaliseStopwatchState(stopwatch, `Stopwatch ${index + 1}`))
+    : (nextClock as LegacyClockState).stopwatch
+      ? [normaliseStopwatchState((nextClock as LegacyClockState).stopwatch, 'Stopwatch 1')]
+      : DEFAULT_CLOCK_STATE.stopwatches.map(stopwatch =>
+        normaliseStopwatchState(stopwatch, stopwatch.label));
+
+  const timers = persistedTimers
+    ? persistedTimers.map((timer, index) =>
+      normaliseTimerState(timer, `Timer ${index + 1}`, now))
+    : (nextClock as LegacyClockState).timer
+      ? [normaliseTimerState((nextClock as LegacyClockState).timer, 'Timer 1', now)]
+      : DEFAULT_CLOCK_STATE.timers.map(timer =>
+        normaliseTimerState(timer, timer.label, now));
+
   return {
-    stopwatch: normaliseStopwatchState(clock?.stopwatch),
-    timer: normaliseTimerState(clock?.timer, now),
+    stopwatches,
+    timers,
+    nextStopwatchNumber: normaliseNextNumber(
+      (nextClock as Partial<ClockState>).nextStopwatchNumber,
+      stopwatches.length + 1,
+    ),
+    nextTimerNumber: normaliseNextNumber(
+      (nextClock as Partial<ClockState>).nextTimerNumber,
+      timers.length + 1,
+    ),
   };
 }
 

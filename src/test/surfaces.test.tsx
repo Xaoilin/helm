@@ -222,14 +222,17 @@ describe('CalendarSurface', () => {
 describe('ClockSurface', () => {
   beforeEach(() => { localStorage.clear(); });
 
-  it('should render stopwatch and timer controls', async () => {
+  it('should render the multi-clock workspace controls', async () => {
     await act(async () => { renderWithProvider(<ClockSurface />); });
-    expect(screen.getByText('Stopwatch')).toBeInTheDocument();
-    expect(screen.getByText('Timer')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start Stopwatch' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start Timer' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Alarm sound')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Preview Sound' })).toBeInTheDocument();
+    expect(screen.getByText('Multi-clock workspace')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Timers' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Stopwatches' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Timer 1' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Stopwatch 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Add Timer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Add Stopwatch' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Alarm sound for Timer 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preview sound for Timer 1' })).toBeInTheDocument();
   });
 });
 

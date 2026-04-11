@@ -3,6 +3,8 @@ import { CLOCK } from '../../config/constants';
 import {
   DEFAULT_CLOCK_STATE,
   clampTimerDuration,
+  createClockStopwatch,
+  createClockTimer,
   getStopwatchElapsedMs,
   getTimerRemainingMs,
   normaliseClockState,
@@ -14,16 +16,20 @@ import type { ClockState, ClockTimerSound, ClockTimerStatus } from '../../types/
 interface ClockContextValue {
   clock: ClockState;
   loaded: boolean;
-  startStopwatch: () => void;
-  pauseStopwatch: () => void;
-  resetStopwatch: () => void;
-  recordStopwatchLap: () => void;
-  setTimerDuration: (durationMs: number) => void;
-  setTimerSound: (sound: ClockTimerSound) => void;
-  startTimer: () => void;
-  pauseTimer: () => void;
-  resetTimer: () => void;
-  previewTimerSound: (sound?: ClockTimerSound) => Promise<void>;
+  createStopwatch: () => string;
+  removeStopwatch: (id: string) => void;
+  startStopwatch: (id: string) => void;
+  pauseStopwatch: (id: string) => void;
+  resetStopwatch: (id: string) => void;
+  recordStopwatchLap: (id: string) => void;
+  createTimer: () => string;
+  removeTimer: (id: string) => void;
+  setTimerDuration: (id: string, durationMs: number) => void;
+  setTimerSound: (id: string, sound: ClockTimerSound) => void;
+  startTimer: (id: string) => void;
+  pauseTimer: (id: string) => void;
+  resetTimer: (id: string) => void;
+  previewTimerSound: (id: string, sound?: ClockTimerSound) => Promise<void>;
 }
 
 const ClockContext = createContext<ClockContextValue | null>(null);
@@ -37,7 +43,7 @@ export function useClockContext(): ClockContextValue {
 export function ClockProvider({ children }: { children: ReactNode }) {
   const [clock, setClock] = useState<ClockState>(DEFAULT_CLOCK_STATE);
   const [loaded, setLoaded] = useState(false);
-  const previousTimerStatus = useRef<ClockTimerStatus | null>(null);
+  const previousTimerStatuses = useRef<Record<string, ClockTimerStatus>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -60,193 +66,285 @@ export function ClockProvider({ children }: { children: ReactNode }) {
   }, [clock, loaded]);
 
   useEffect(() => {
-    if (!loaded || clock.timer.status !== 'running' || !clock.timer.endsAt) return;
+    if (!loaded) return;
 
-    const timeoutId = window.setTimeout(() => {
-      setClock(current => {
-        if (current.timer.status !== 'running') return current;
-        return normaliseClockState(current);
-      });
-    }, Math.max(0, clock.timer.endsAt - Date.now()));
+    const timeoutIds = clock.timers
+      .filter(timer => timer.status === 'running' && timer.endsAt !== null)
+      .map(timer =>
+        window.setTimeout(() => {
+          setClock(current => normaliseClockState(current));
+        }, Math.max(0, (timer.endsAt ?? Date.now()) - Date.now())));
 
     return () => {
-      window.clearTimeout(timeoutId);
+      timeoutIds.forEach(window.clearTimeout);
     };
-  }, [clock.timer.endsAt, clock.timer.status, loaded]);
+  }, [clock.timers, loaded]);
 
   useEffect(() => {
     if (!loaded) return;
 
-    if (previousTimerStatus.current === null) {
-      previousTimerStatus.current = clock.timer.status;
-      return;
+    const nextStatuses: Record<string, ClockTimerStatus> = {};
+
+    for (const timer of clock.timers) {
+      nextStatuses[timer.id] = timer.status;
+      if (previousTimerStatuses.current[timer.id] && previousTimerStatuses.current[timer.id] !== 'completed' && timer.status === 'completed') {
+        void playTimerAlarm(timer.sound);
+      }
     }
 
-    if (clock.timer.status === 'completed' && previousTimerStatus.current !== 'completed') {
-      void playTimerAlarm(clock.timer.sound);
-    }
-
-    if (clock.timer.status !== 'completed' && previousTimerStatus.current === 'completed') {
-      stopTimerAlarm();
-    }
-
-    previousTimerStatus.current = clock.timer.status;
-  }, [clock.timer.sound, clock.timer.status, loaded]);
+    previousTimerStatuses.current = nextStatuses;
+  }, [clock.timers, loaded]);
 
   useEffect(() => stopTimerAlarm, []);
 
-  const startStopwatch = useCallback(() => {
+  const createStopwatchItem = useCallback(() => {
+    let createdId = '';
+
     setClock(current => {
-      if (current.stopwatch.startedAt) return current;
+      const nextStopwatch = createClockStopwatch(current.nextStopwatchNumber);
+      createdId = nextStopwatch.id;
+
       return {
         ...current,
-        stopwatch: {
-          ...current.stopwatch,
-          startedAt: Date.now(),
-        },
+        stopwatches: [...current.stopwatches, nextStopwatch],
+        nextStopwatchNumber: current.nextStopwatchNumber + 1,
+      };
+    });
+
+    return createdId;
+  }, []);
+
+  const removeStopwatch = useCallback((id: string) => {
+    setClock(current => {
+      const nextStopwatches = current.stopwatches.filter(stopwatch => stopwatch.id !== id);
+      if (nextStopwatches.length === current.stopwatches.length) return current;
+
+      return {
+        ...current,
+        stopwatches: nextStopwatches,
       };
     });
   }, []);
 
-  const pauseStopwatch = useCallback(() => {
-    setClock(current => {
-      if (!current.stopwatch.startedAt) return current;
-      return {
-        ...current,
-        stopwatch: {
-          ...current.stopwatch,
-          accumulatedMs: getStopwatchElapsedMs(current.stopwatch),
-          startedAt: null,
-        },
-      };
-    });
-  }, []);
-
-  const resetStopwatch = useCallback(() => {
-    setClock(current => {
-      if (
-        current.stopwatch.accumulatedMs === 0
-        && current.stopwatch.startedAt === null
-        && current.stopwatch.laps.length === 0
-      ) {
-        return current;
-      }
-
-      return {
-        ...current,
-        stopwatch: DEFAULT_CLOCK_STATE.stopwatch,
-      };
-    });
-  }, []);
-
-  const recordStopwatchLap = useCallback(() => {
-    setClock(current => {
-      if (!current.stopwatch.startedAt) return current;
-      const lap = getStopwatchElapsedMs(current.stopwatch);
-      return {
-        ...current,
-        stopwatch: {
-          ...current.stopwatch,
-          laps: [lap, ...current.stopwatch.laps].slice(0, CLOCK.MAX_STOPWATCH_LAPS),
-        },
-      };
-    });
-  }, []);
-
-  const setTimerDuration = useCallback((durationMs: number) => {
-    setClock(current => {
-      if (current.timer.status === 'running') return current;
-      const nextDuration = clampTimerDuration(durationMs);
-      return {
-        ...current,
-        timer: {
-          ...current.timer,
-          durationMs: nextDuration,
-          remainingMs: nextDuration,
-          endsAt: null,
-          status: 'idle',
-          completedAt: undefined,
-        },
-      };
-    });
-  }, []);
-
-  const setTimerSound = useCallback((sound: ClockTimerSound) => {
+  const startStopwatch = useCallback((id: string) => {
     setClock(current => ({
       ...current,
-      timer: {
-        ...current.timer,
-        sound,
-      },
+      stopwatches: current.stopwatches.map(stopwatch =>
+        stopwatch.id === id && !stopwatch.startedAt
+          ? {
+            ...stopwatch,
+            startedAt: Date.now(),
+          }
+          : stopwatch),
     }));
   }, []);
 
-  const startTimer = useCallback(() => {
+  const pauseStopwatch = useCallback((id: string) => {
+    setClock(current => ({
+      ...current,
+      stopwatches: current.stopwatches.map(stopwatch =>
+        stopwatch.id === id && stopwatch.startedAt
+          ? {
+            ...stopwatch,
+            accumulatedMs: getStopwatchElapsedMs(stopwatch),
+            startedAt: null,
+          }
+          : stopwatch),
+    }));
+  }, []);
+
+  const resetStopwatch = useCallback((id: string) => {
+    setClock(current => ({
+      ...current,
+      stopwatches: current.stopwatches.map(stopwatch =>
+        stopwatch.id === id
+          ? {
+            ...stopwatch,
+            accumulatedMs: 0,
+            startedAt: null,
+            laps: [],
+          }
+          : stopwatch),
+    }));
+  }, []);
+
+  const recordStopwatchLap = useCallback((id: string) => {
+    setClock(current => ({
+      ...current,
+      stopwatches: current.stopwatches.map(stopwatch => {
+        if (stopwatch.id !== id || !stopwatch.startedAt) {
+          return stopwatch;
+        }
+
+        const lap = getStopwatchElapsedMs(stopwatch);
+        return {
+          ...stopwatch,
+          laps: [lap, ...stopwatch.laps].slice(0, CLOCK.MAX_STOPWATCH_LAPS),
+        };
+      }),
+    }));
+  }, []);
+
+  const createTimerItem = useCallback(() => {
+    let createdId = '';
+
+    setClock(current => {
+      const nextTimer = createClockTimer(current.nextTimerNumber);
+      createdId = nextTimer.id;
+
+      return {
+        ...current,
+        timers: [...current.timers, nextTimer],
+        nextTimerNumber: current.nextTimerNumber + 1,
+      };
+    });
+
+    return createdId;
+  }, []);
+
+  const removeTimer = useCallback((id: string) => {
+    stopTimerAlarm();
+
+    setClock(current => {
+      const nextTimers = current.timers.filter(timer => timer.id !== id);
+      if (nextTimers.length === current.timers.length) return current;
+
+      return {
+        ...current,
+        timers: nextTimers,
+      };
+    });
+  }, []);
+
+  const setTimerDuration = useCallback((id: string, durationMs: number) => {
+    setClock(current => {
+      const nextDuration = clampTimerDuration(durationMs);
+
+      return {
+        ...current,
+        timers: current.timers.map(timer =>
+          timer.id === id && timer.status !== 'running'
+            ? {
+              ...timer,
+              durationMs: nextDuration,
+              remainingMs: nextDuration,
+              endsAt: null,
+              status: 'idle',
+              completedAt: undefined,
+            }
+            : timer),
+      };
+    });
+  }, []);
+
+  const setTimerSound = useCallback((id: string, sound: ClockTimerSound) => {
+    setClock(current => ({
+      ...current,
+      timers: current.timers.map(timer =>
+        timer.id === id
+          ? {
+            ...timer,
+            sound,
+          }
+          : timer),
+    }));
+  }, []);
+
+  const startTimer = useCallback((id: string) => {
+    stopTimerAlarm();
     void primeTimerAlarmAudio();
 
     setClock(current => {
-      if (current.timer.status === 'running') return current;
-      const remainingMs = current.timer.status === 'completed'
-        ? current.timer.durationMs
-        : getTimerRemainingMs(current.timer);
-
-      if (remainingMs <= 0) return current;
+      const now = Date.now();
 
       return {
         ...current,
-        timer: {
-          ...current.timer,
-          remainingMs,
-          endsAt: Date.now() + remainingMs,
-          status: 'running',
-          completedAt: undefined,
-        },
+        timers: current.timers.map(timer => {
+          if (timer.id !== id || timer.status === 'running') {
+            return timer;
+          }
+
+          const remainingMs = timer.status === 'completed'
+            ? timer.durationMs
+            : getTimerRemainingMs(timer, now);
+
+          if (remainingMs <= 0) {
+            return timer;
+          }
+
+          return {
+            ...timer,
+            remainingMs,
+            endsAt: now + remainingMs,
+            status: 'running',
+            completedAt: undefined,
+          };
+        }),
       };
     });
   }, []);
 
-  const pauseTimer = useCallback(() => {
+  const pauseTimer = useCallback((id: string) => {
     setClock(current => {
-      if (current.timer.status !== 'running') return current;
-      const remainingMs = getTimerRemainingMs(current.timer);
+      const now = Date.now();
+
       return {
         ...current,
-        timer: {
-          ...current.timer,
-          remainingMs,
-          endsAt: null,
-          status: remainingMs === 0 ? 'completed' : 'idle',
-          completedAt: remainingMs === 0 ? new Date().toISOString() : undefined,
-        },
+        timers: current.timers.map(timer => {
+          if (timer.id !== id || timer.status !== 'running') {
+            return timer;
+          }
+
+          const remainingMs = getTimerRemainingMs(timer, now);
+          return {
+            ...timer,
+            remainingMs,
+            endsAt: null,
+            status: remainingMs === 0 ? 'completed' : 'idle',
+            completedAt: remainingMs === 0 ? new Date(now).toISOString() : undefined,
+          };
+        }),
       };
     });
   }, []);
 
-  const resetTimer = useCallback(() => {
+  const resetTimer = useCallback((id: string) => {
+    stopTimerAlarm();
+
     setClock(current => ({
       ...current,
-      timer: {
-        ...current.timer,
-        remainingMs: current.timer.durationMs,
-        endsAt: null,
-        status: 'idle',
-        completedAt: undefined,
-      },
+      timers: current.timers.map(timer =>
+        timer.id === id
+          ? {
+            ...timer,
+            remainingMs: timer.durationMs,
+            endsAt: null,
+            status: 'idle',
+            completedAt: undefined,
+          }
+          : timer),
     }));
   }, []);
 
-  const previewTimerSound = useCallback(async (sound?: ClockTimerSound) => {
+  const previewTimerSound = useCallback(async (id: string, sound?: ClockTimerSound) => {
+    const timer = clock.timers.find(candidate => candidate.id === id);
+    if (!timer && !sound) return;
+
     await primeTimerAlarmAudio();
-    await playTimerAlarm(sound ?? clock.timer.sound);
-  }, [clock.timer.sound]);
+    await playTimerAlarm(sound ?? timer?.sound ?? CLOCK.DEFAULT_TIMER_SOUND);
+  }, [clock.timers]);
 
   const value = useMemo<ClockContextValue>(() => ({
     clock,
     loaded,
+    createStopwatch: createStopwatchItem,
+    removeStopwatch,
     startStopwatch,
     pauseStopwatch,
     resetStopwatch,
     recordStopwatchLap,
+    createTimer: createTimerItem,
+    removeTimer,
     setTimerDuration,
     setTimerSound,
     startTimer,
@@ -256,10 +354,14 @@ export function ClockProvider({ children }: { children: ReactNode }) {
   }), [
     clock,
     loaded,
+    createStopwatchItem,
+    removeStopwatch,
     startStopwatch,
     pauseStopwatch,
     resetStopwatch,
     recordStopwatchLap,
+    createTimerItem,
+    removeTimer,
     setTimerDuration,
     setTimerSound,
     startTimer,

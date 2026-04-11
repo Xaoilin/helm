@@ -308,12 +308,16 @@ export type ClockTimerStatus = 'idle' | 'running' | 'completed';
 export type ClockTimerSound = 'chime' | 'bell' | 'pulse' | 'dawn';
 
 export interface ClockStopwatchState {
+  id: string;
+  label: string;
   accumulatedMs: number;
   startedAt: number | null;
   laps: number[];
 }
 
 export interface ClockTimerState {
+  id: string;
+  label: string;
   durationMs: number;
   remainingMs: number;
   endsAt: number | null;
@@ -323,8 +327,10 @@ export interface ClockTimerState {
 }
 
 export interface ClockState {
-  stopwatch: ClockStopwatchState;
-  timer: ClockTimerState;
+  stopwatches: ClockStopwatchState[];
+  timers: ClockTimerState[];
+  nextStopwatchNumber: number;
+  nextTimerNumber: number;
 }
 
 // ── Navigation ──

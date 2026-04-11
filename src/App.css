@@ -2450,7 +2450,106 @@ textarea.form-input {
 .finance-budget-values { font-size: 11px; color: #9499b0; min-width: 120px; text-align: right; white-space: nowrap; }
 
 /* ── Clock Surface ── */
-.clock-grid {
+.clock-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) auto auto;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.clock-toolbar-copy {
+  min-width: 0;
+}
+
+.clock-toolbar-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f5f7ff;
+}
+
+.clock-toolbar-subtitle {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #8b8fa3;
+}
+
+.clock-toolbar-metrics {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.clock-toolbar-metric {
+  min-width: 78px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #2a2d42;
+  background: #11131a;
+  text-align: center;
+}
+
+.clock-toolbar-metric strong {
+  display: block;
+  font-size: 20px;
+  line-height: 1;
+  color: #f5f7ff;
+}
+
+.clock-toolbar-metric span {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8b8fa3;
+}
+
+.clock-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.clock-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.clock-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clock-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.clock-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #11131a;
+  border: 1px solid #2a2d42;
+  color: #8b8fa3;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.clock-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
@@ -2462,6 +2561,12 @@ textarea.form-input {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.clock-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .clock-status {
@@ -2617,9 +2722,28 @@ textarea.form-input {
   color: #6b6f85;
 }
 
+.clock-collection-empty {
+  margin-bottom: 0;
+  text-align: center;
+}
+
+.clock-collection-empty h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #e1e4ea;
+}
+
+.clock-collection-empty p {
+  margin: 8px 0 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #8b8fa3;
+}
+
 .clock-error,
 .clock-note,
-.clock-sound-note {
+.clock-sound-note,
+.clock-footnote {
   font-size: 12px;
   line-height: 1.5;
 }
@@ -2633,8 +2757,23 @@ textarea.form-input {
   color: #8b8fa3;
 }
 
-.clock-note {
+.clock-note,
+.clock-footnote {
   color: #6b6f85;
+}
+
+.clock-footnote {
+  margin-top: 18px;
+}
+
+@media (max-width: 1080px) {
+  .clock-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .clock-toolbar-actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 860px) {
@@ -2648,5 +2787,13 @@ textarea.form-input {
 
   .clock-input-action {
     grid-column: 1 / -1;
+  }
+
+  .clock-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .clock-section-header {
+    flex-direction: column;
   }
 }
