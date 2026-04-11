@@ -434,6 +434,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
     };
   }, [app.surface]);
 
+  const wakeWordArmed = state === 'idle' || (state === 'open' && voiceSessionMode === 'manual');
+
   useEffect(() => {
     if (!import.meta.env.DEV) return;
 
@@ -442,6 +444,11 @@ export default function VoiceAssistant({ prayerData }: Props) {
         startHandsFreeSession: () => void;
         closeAssistant: () => void;
         submitVoiceTranscript: (text: string) => void;
+        getState: () => {
+          assistantState: AssistantState;
+          voiceSessionMode: VoiceSessionMode;
+          wakeWordArmed: boolean;
+        };
       };
     }).__helmVoiceAssistantDebug = {
       startHandsFreeSession: beginHandsFreeSession,
@@ -449,6 +456,11 @@ export default function VoiceAssistant({ prayerData }: Props) {
       submitVoiceTranscript: (text: string) => {
         void processTranscript(text, 'voice');
       },
+      getState: () => ({
+        assistantState: state,
+        voiceSessionMode,
+        wakeWordArmed,
+      }),
     };
 
     return () => {
@@ -456,7 +468,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
         __helmVoiceAssistantDebug?: unknown;
       }).__helmVoiceAssistantDebug;
     };
-  }, [beginHandsFreeSession, closeAssistant, processTranscript]);
+  }, [beginHandsFreeSession, closeAssistant, processTranscript, state, voiceSessionMode, wakeWordArmed]);
 
   useEffect(() => {
     if (state === 'open' && inputRef.current && voiceSessionModeRef.current === 'manual') {
@@ -483,7 +495,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     enabled,
     wakeWordEnabled,
     loaded: app.loaded,
-    assistantIdle: state === 'idle',
+    wakeWordArmed,
     onWakeWordDetected: beginHandsFreeSession,
   });
 

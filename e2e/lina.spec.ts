@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
 
+type VoiceAssistantDebugState = {
+  assistantState: string;
+  voiceSessionMode: string;
+  wakeWordArmed: boolean;
+};
+
 test.describe('Lina Assistant', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -42,6 +48,32 @@ test.describe('Lina Assistant', () => {
     await expect(page.locator('button:has-text("next meeting")')).toBeVisible();
     await expect(page.locator('button:has-text("tasks left")')).toBeVisible();
     await expect(page.locator('button:has-text("prayer times")')).toBeVisible();
+  });
+
+  test('should keep the wake word armed while the manual popup is open', async ({ page }) => {
+    await page.locator('button[aria-label="Talk to Lina"]').click();
+    await page.waitForFunction(() => {
+      const debugWindow = window as Window & {
+        __helmVoiceAssistantDebug?: {
+          getState?: () => VoiceAssistantDebugState;
+        };
+      };
+      return typeof debugWindow.__helmVoiceAssistantDebug?.getState === 'function';
+    });
+
+    const manualState = await page.evaluate(() => {
+      const debugWindow = window as Window & {
+        __helmVoiceAssistantDebug?: {
+          getState?: () => VoiceAssistantDebugState;
+        };
+      };
+      return debugWindow.__helmVoiceAssistantDebug?.getState?.();
+    });
+    expect(manualState).toMatchObject({
+      assistantState: 'open',
+      voiceSessionMode: 'manual',
+      wakeWordArmed: true,
+    });
   });
 
   test('should respond to quick command chip click', async ({ page }) => {
