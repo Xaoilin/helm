@@ -4,7 +4,8 @@
 
 - Use a dedicated branch for each task. `codex/<short-description>` is the default.
 - When meaningful work is complete and relevant checks are green, use the normal branch -> commit -> PR/merge -> deploy-verification flow instead of leaving finished work only in a local checkout.
-- Do not call a user-facing change live, shipped, or deployed until it is merged to `master`, the deployment has succeeded, and the deployed result has been verified directly. `npm run handoff:check` is the required proof point for that state. If the change only exists locally or on a branch, say that explicitly in the handoff.
+- Run `npm run handoff:check` at the end of every completed feature handoff and report the result explicitly. If the change only exists locally or on a branch, say that explicitly in the handoff and explain any expected `handoff:check` failures.
+- Do not call a user-facing change live, shipped, or deployed until it is merged to `master`, the deployment has succeeded, and the deployed result has been verified directly. `npm run handoff:check` is the required proof point for that state.
 - After a task branch is merged, delete it locally and on `origin`. If any branch remains unmerged, call out its status explicitly instead of leaving stale topic branches around.
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
@@ -46,7 +47,9 @@ Use the repo scripts or local binaries directly:
 
 For small changes, run the most relevant checks first. Before landing broader code changes, run the full set above unless a dependency or environment blocker prevents it.
 
-Before claiming a user-facing change is live or shipped, also run `npm run handoff:check` after merge and deploy. That command fails if uncommitted non-generated changes remain, if the work is still branch-only, if the `master` CI or deploy workflows have not succeeded for the deployed head, if the live GitHub Pages bundle is not serving the current version, or if merged `codex/` branches still exist.
+Run `npm run handoff:check` for every completed feature handoff, even before merge. On branch-only work it is expected to fail if uncommitted non-generated changes remain, if the work is still branch-only, if the live GitHub Pages bundle is not yet serving the current version, or if the local topic branch still exists.
+
+Before claiming a user-facing change is live or shipped, `npm run handoff:check` must also pass after merge and deploy. That command fails if uncommitted non-generated changes remain, if the work is still branch-only, if the `master` CI or deploy workflows have not succeeded for the deployed head, if the live GitHub Pages bundle is not serving the current version, or if merged `codex/` branches still exist.
 
 ## Release Versioning
 
@@ -55,7 +58,8 @@ Before claiming a user-facing change is live or shipped, also run `npm run hando
 - Every feature branch must include a version bump before handoff. Do not leave feature work on a branch at the previous release number.
 - Use `npm version <patch|minor|major> --no-git-tag-version` for a release bump, then run `npm run version:sync` if you edited files manually. `npm run version:check` is the guardrail that catches drift before handoff and now also fails `codex/*` branches that have not bumped above `origin/master`.
 - Every handoff must call out the current release version explicitly, including branch-only or local-only work.
-- Final handoffs for shipped work should call out the release version explicitly and mention the `npm run handoff:check` result so the user can verify both the UI badge and the deployment state.
+- Every completed feature handoff should mention the `npm run handoff:check` result so the user can verify branch state, working tree cleanliness, and deployment status.
+- Final handoffs for shipped work should call out the release version explicitly and mention the passing `npm run handoff:check` result so the user can verify both the UI badge and the deployment state.
 
 ## CI And Branch Protection
 

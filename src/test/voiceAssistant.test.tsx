@@ -326,6 +326,36 @@ describe('VoiceAssistant', () => {
     expect(playReadyToneMock).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the wake word armed while the manual popup is open', async () => {
+    await act(async () => {
+      renderAssistant();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(latestWakeWordOptions).not.toBeNull();
+      expect(latestWakeWordOptions?.wakeWordArmed).toBe(true);
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Talk to Lina' }));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByPlaceholderText(/Type or talk to Lina/i)).toBeInTheDocument();
+    expect(latestWakeWordOptions?.wakeWordArmed).toBe(true);
+
+    await act(async () => {
+      latestWakeWordOptions?.onWakeWordDetected();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(speakMock).toHaveBeenCalledWith('Hey, how can I help?');
+      expect(latestWakeWordOptions?.wakeWordArmed).toBe(false);
+    });
+  });
+
   it('ends the hands-free session when the user says a stop phrase', async () => {
     await act(async () => {
       renderAssistant();
@@ -352,6 +382,34 @@ describe('VoiceAssistant', () => {
 
     expect(screen.queryByText(/Hands-free voice session active/i)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/Type or talk to Lina/i)).not.toBeInTheDocument();
+  });
+
+  it('re-arms the wake word after a hands-free session ends', async () => {
+    await act(async () => {
+      renderAssistant();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(latestWakeWordOptions).not.toBeNull();
+    });
+
+    await act(async () => {
+      latestWakeWordOptions?.onWakeWordDetected();
+      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+    });
+
+    expect(latestWakeWordOptions?.wakeWordArmed).toBe(false);
+
+    await act(async () => {
+      latestVoiceInputOptions?.onTranscript?.('thanks Lina');
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(speakMock).toHaveBeenCalledWith("Okay, I'll stop listening.");
+      expect(latestWakeWordOptions?.wakeWordArmed).toBe(true);
+    });
   });
 
   it('creates a fresh chat conversation for each wake-word session', async () => {

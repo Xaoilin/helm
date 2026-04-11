@@ -15,8 +15,8 @@ interface UseWakeWordOptions {
   wakeWordEnabled: boolean;
   /** Wait for app data to be loaded before initializing. */
   loaded: boolean;
-  /** Current assistant state — engine pauses when panel is open. */
-  assistantIdle: boolean;
+  /** Whether the detector should currently be armed. */
+  wakeWordArmed: boolean;
   onWakeWordDetected: () => void;
 }
 
@@ -28,7 +28,7 @@ export function useWakeWord({
   enabled,
   wakeWordEnabled,
   loaded,
-  assistantIdle,
+  wakeWordArmed,
   onWakeWordDetected,
 }: UseWakeWordOptions): UseWakeWordReturn {
   const wakeEngineRef = useRef<InstanceType<typeof WakeWordEngine> | null>(null);
@@ -74,17 +74,17 @@ export function useWakeWord({
     };
   }, [enabled, wakeWordEnabled, loaded]);
 
-  // ── Pause / resume wake word when assistant panel is open ──
+  // ── Pause / resume wake word when Lina is in an active voice phase ──
   useEffect(() => {
     const engine = wakeEngineRef.current;
     if (!engine || !wakeWordReady) return;
 
-    if (assistantIdle) {
+    if (wakeWordArmed) {
       engine.start().catch(() => {});
     } else {
       engine.stop().catch(() => {});
     }
-  }, [assistantIdle, wakeWordReady]);
+  }, [wakeWordArmed, wakeWordReady]);
 
   return { wakeWordReady };
 }

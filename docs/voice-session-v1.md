@@ -66,6 +66,7 @@ Listening turns also track whether Lina is listening for the first request or a 
 When the wake word fires and voice input is available:
 
 - open the Lina bubble
+- if the bubble is already open in manual mode, still start the hands-free session instead of ignoring the wake word
 - clear stale transcript and error state
 - switch into `handsfree`
 - speak the wake acknowledgement
@@ -165,6 +166,7 @@ The shared assistant runtime now stores that correction in local-first assistant
 For any future changes to this flow:
 
 - verify the wake word triggers spoken acknowledgement before the mic opens
+- verify the wake word still works while the manual Lina bubble is open
 - verify Lina shows `preparing` before the mic becomes visibly live
 - verify the ready tone only plays once the mic is actually live
 - verify the first spoken words are not clipped after the ready tone
