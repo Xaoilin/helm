@@ -10,6 +10,10 @@ import WakeWordEngine from 'openwakeword-wasm-browser';
 import { TIMING } from '../config/constants';
 import { logError } from '../services/logger';
 
+function getMicDeviceKey(deviceId?: string): string {
+  return deviceId || '__default__';
+}
+
 interface UseWakeWordOptions {
   enabled: boolean;
   wakeWordEnabled: boolean;
@@ -17,6 +21,8 @@ interface UseWakeWordOptions {
   loaded: boolean;
   /** Whether the detector should currently be armed. */
   wakeWordArmed: boolean;
+  /** The configured microphone device shared with STT. */
+  micDeviceId?: string;
   onWakeWordDetected: () => void;
 }
 
@@ -29,16 +35,41 @@ export function useWakeWord({
   wakeWordEnabled,
   loaded,
   wakeWordArmed,
+  micDeviceId,
   onWakeWordDetected,
 }: UseWakeWordOptions): UseWakeWordReturn {
   const wakeEngineRef = useRef<InstanceType<typeof WakeWordEngine> | null>(null);
+  const wakeEngineRunningRef = useRef(false);
+  const activeMicDeviceKeyRef = useRef<string | null>(null);
   const [wakeWordReady, setWakeWordReady] = useState(false);
   const handleWakeWordDetected = useEffectEvent(() => onWakeWordDetected());
+  const startWakeEngine = useEffectEvent(async () => {
+    const engine = wakeEngineRef.current;
+    if (!engine) return;
+
+    const nextMicDeviceKey = getMicDeviceKey(micDeviceId);
+    if (wakeEngineRunningRef.current && activeMicDeviceKeyRef.current === nextMicDeviceKey) {
+      return;
+    }
+
+    await engine.start(micDeviceId ? { deviceId: micDeviceId } : undefined);
+    wakeEngineRunningRef.current = true;
+    activeMicDeviceKeyRef.current = nextMicDeviceKey;
+  });
+  const stopWakeEngine = useEffectEvent(async () => {
+    const engine = wakeEngineRef.current;
+    if (!engine || !wakeEngineRunningRef.current) return;
+
+    await engine.stop();
+    wakeEngineRunningRef.current = false;
+    activeMicDeviceKeyRef.current = null;
+  });
 
   // ── Initialize / tear down OpenWakeWord engine ──
   useEffect(() => {
     if (!enabled || !wakeWordEnabled || !loaded || wakeEngineRef.current) return;
 
+    let cancelled = false;
     const engine = new WakeWordEngine({
       keywords: ['hey_lina'],
       modelFiles: {
@@ -54,23 +85,30 @@ export function useWakeWord({
         handleWakeWordDetected();
       }
     });
+    wakeEngineRef.current = engine;
 
     engine.load()
-      .then(() => engine.start())
       .then(() => {
+        if (cancelled || wakeEngineRef.current !== engine) return;
         wakeEngineRef.current = engine;
         setWakeWordReady(true);
       })
       .catch((e) => {
+        if (wakeEngineRef.current === engine) {
+          wakeEngineRef.current = null;
+        }
         logError('useWakeWord', e);
       });
 
     return () => {
-      if (wakeEngineRef.current) {
-        wakeEngineRef.current.stop().catch(() => {});
+      cancelled = true;
+      if (wakeEngineRef.current === engine) {
         wakeEngineRef.current = null;
-        setWakeWordReady(false);
       }
+      wakeEngineRunningRef.current = false;
+      activeMicDeviceKeyRef.current = null;
+      setWakeWordReady(false);
+      engine.stop().catch(() => {});
     };
   }, [enabled, wakeWordEnabled, loaded]);
 
@@ -79,12 +117,34 @@ export function useWakeWord({
     const engine = wakeEngineRef.current;
     if (!engine || !wakeWordReady) return;
 
-    if (wakeWordArmed) {
-      engine.start().catch(() => {});
-    } else {
-      engine.stop().catch(() => {});
+    const desiredMicDeviceKey = getMicDeviceKey(micDeviceId);
+
+    if (!wakeWordArmed) {
+      stopWakeEngine().catch((error) => {
+        logError('useWakeWord', error);
+      });
+      return;
     }
-  }, [wakeWordArmed, wakeWordReady]);
+
+    if (
+      wakeEngineRunningRef.current
+      && activeMicDeviceKeyRef.current !== desiredMicDeviceKey
+    ) {
+      void (async () => {
+        try {
+          await stopWakeEngine();
+          await startWakeEngine();
+        } catch (error) {
+          logError('useWakeWord', error);
+        }
+      })();
+      return;
+    }
+
+    startWakeEngine().catch((error) => {
+      logError('useWakeWord', error);
+    });
+  }, [micDeviceId, wakeWordArmed, wakeWordReady]);
 
   return { wakeWordReady };
 }
