@@ -228,6 +228,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
   }, [clearScheduledListening, setVoiceSessionMode, startListening, voiceBackend]);
 
   const openAssistantPanel = useCallback(() => {
+    if (!enabled) return;
+
     sessionIdRef.current += 1;
     handsFreeSessionActiveRef.current = false;
     setVoiceSessionMode('manual');
@@ -235,7 +237,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     clearScheduledListening();
     setState('open');
     clearAssistantUi();
-  }, [clearAssistantUi, clearScheduledListening, setVoiceSessionMode]);
+  }, [clearAssistantUi, clearScheduledListening, enabled, setVoiceSessionMode]);
 
   const closeAssistant = useCallback(() => {
     sessionIdRef.current += 1;
@@ -253,6 +255,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
   }, [cancelListening, clearScheduledListening, setVoiceSessionMode, stopSpeaking]);
 
   const beginHandsFreeSession = useCallback(() => {
+    if (!enabled) return;
+
     if (voiceBackend === 'none') {
       openAssistantPanel();
       setError('Voice input is unavailable. Add a Deepgram key in Settings → Voice Assistant to use hands-free mode.');
@@ -297,7 +301,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
       scheduleHandsFreeListening('initial', sessionId);
     })();
-  }, [app.surface, cancelListening, chat, clearScheduledListening, lang, openAssistantPanel, scheduleHandsFreeListening, setVoiceSessionMode, speakMessage, stopSpeaking, voiceBackend]);
+  }, [app.surface, cancelListening, chat, clearScheduledListening, enabled, lang, openAssistantPanel, scheduleHandsFreeListening, setVoiceSessionMode, speakMessage, stopSpeaking, voiceBackend]);
 
   const processTranscript = useCallback(async (text: string, inputMode: InputMode) => {
     const trimmed = text.trim();
@@ -428,6 +432,18 @@ export default function VoiceAssistant({ prayerData }: Props) {
   }, [processTranscript]);
 
   useEffect(() => {
+    if (enabled) return;
+
+    const shutdownTimer = window.setTimeout(() => {
+      closeAssistant();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(shutdownTimer);
+    };
+  }, [closeAssistant, enabled]);
+
+  useEffect(() => {
     dialogStateRef.current = {
       ...dialogStateRef.current,
       currentSurface: app.surface,
@@ -477,12 +493,14 @@ export default function VoiceAssistant({ prayerData }: Props) {
   }, [state]);
 
   const handleTextSubmit = () => {
-    if (!textInput.trim()) return;
+    if (!enabled || !textInput.trim()) return;
     void processTranscript(textInput.trim(), 'text');
     setTextInput('');
   };
 
   const handleClick = () => {
+    if (!enabled) return;
+
     if (state === 'idle') {
       openAssistantPanel();
       return;
@@ -501,6 +519,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
   });
 
   useEffect(() => {
+    if (!enabled) return;
+
     const handleKey = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.shiftKey && event.key === 'L') {
         event.preventDefault();
@@ -519,7 +539,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [closeAssistant, openAssistantPanel, state]);
+  }, [closeAssistant, enabled, openAssistantPanel, state]);
 
   useEffect(() => () => {
     clearScheduledListening();

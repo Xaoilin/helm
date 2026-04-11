@@ -407,26 +407,29 @@ export function useVoiceInput({
   }, [startChromeListening, startDeepgramListening, voiceBackend]);
 
   const stopListening = useCallback(() => {
-    if (voiceBackend === 'deepgram' && recorderRef.current) {
+    if (recorderRef.current) {
       if (recorderRef.current.isRecording()) {
         void stopDeepgramAndTranscribe();
       } else {
         invalidatePendingStart();
         cancelDeepgramListening();
       }
-    } else if (recognitionRef.current) {
+      return;
+    }
+
+    if (recognitionRef.current) {
       chromeStopRequestedRef.current = true;
       recognitionRef.current.abort();
       recognitionRef.current = null;
       setIsListening(false);
       onListeningEndRef.current?.();
     }
-  }, [cancelDeepgramListening, invalidatePendingStart, stopDeepgramAndTranscribe, voiceBackend]);
+  }, [cancelDeepgramListening, invalidatePendingStart, stopDeepgramAndTranscribe]);
 
   const cancelListening = useCallback(() => {
     invalidatePendingStart();
 
-    if (voiceBackend === 'deepgram') {
+    if (recorderRef.current || liveSessionRef.current) {
       cancelDeepgramListening();
       return;
     }
@@ -439,7 +442,7 @@ export function useVoiceInput({
 
     setIsListening(false);
     onListeningEndRef.current?.();
-  }, [cancelDeepgramListening, invalidatePendingStart, voiceBackend]);
+  }, [cancelDeepgramListening, invalidatePendingStart]);
 
   useEffect(() => () => {
     invalidatePendingStart();

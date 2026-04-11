@@ -28,6 +28,7 @@ V1 covers:
 - explicit spoken stop phrases
 - session end on silence
 - wake-word sessions mirrored into Chat history as separate conversation threads
+- a full Settings toggle that turns Lina off completely without removing Chat
 
 V1 does not attempt:
 
@@ -103,6 +104,7 @@ V1 ends the hands-free session in any of these cases:
 - no speech is detected within the no-speech window
 - the user presses `Esc`
 - the user closes the Lina bubble manually
+- the user turns Lina off in Settings
 - a microphone or speech-provider error breaks the turn
 
 When a stop phrase is heard, Lina speaks a short closing line first. When the session ends because of silence, Lina closes quietly so the experience does not feel noisy or repetitive.
@@ -146,6 +148,8 @@ The bubble should make the active voice phase obvious:
 - `Hands-free voice session active`
 
 The mic and send buttons still exist as fallback controls, but the wake-word path should no longer require manual recording clicks.
+
+When Lina is turned off in Settings, the floating button, wake word, and `Ctrl+Shift+L` shortcut should all be inactive immediately. The Chat surface should remain available.
 
 ## Follow-Up Rules
 

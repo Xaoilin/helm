@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, act, waitFor, fireEvent } from '@testing-library/react';
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { AppProvider } from '../store/AppContext';
 import VoiceAssistant from '../components/VoiceAssistant';
 import { TIMING } from '../config/constants';
@@ -20,6 +20,7 @@ const {
   stopListeningMock,
   cancelListeningMock,
   speakMock,
+  stopSpeakingMock,
   playReadyToneMock,
   processAssistantCommandMock,
 } = vi.hoisted(() => ({
@@ -27,6 +28,7 @@ const {
   stopListeningMock: vi.fn(),
   cancelListeningMock: vi.fn(),
   speakMock: vi.fn().mockResolvedValue(undefined),
+  stopSpeakingMock: vi.fn(),
   playReadyToneMock: vi.fn().mockResolvedValue(undefined),
   processAssistantCommandMock: vi.fn(),
 }));
@@ -60,7 +62,7 @@ vi.mock('../hooks/useVoiceInput', () => ({
 vi.mock('../hooks/useVoiceOutput', () => ({
   useVoiceOutput: () => ({
     speak: speakMock,
-    stopSpeaking: vi.fn(),
+    stopSpeaking: stopSpeakingMock,
     isSpeaking: false,
     audioRef: { current: null },
   }),
@@ -81,7 +83,7 @@ vi.mock('../services/assistantRuntime', () => ({
   processAssistantCommand: (...args: unknown[]) => processAssistantCommandMock(...args),
 }));
 
-function renderAssistant(options: { settings?: Partial<Settings> } = {}) {
+function renderAssistant(options: { settings?: Partial<Settings>; children?: ReactNode } = {}) {
   if (options.settings) {
     localStorage.setItem('helm:settings', JSON.stringify(options.settings));
   }
@@ -102,7 +104,18 @@ function renderAssistant(options: { settings?: Partial<Settings> } = {}) {
     <AppProvider>
       <ChatProbe />
       <VoiceAssistant />
+      {options.children}
     </AppProvider>,
+  );
+}
+
+function DisableLinaHarness() {
+  const app = useApp();
+
+  return (
+    <button onClick={() => app.updateSettings({ assistantEnabled: false })}>
+      Disable Lina
+    </button>
   );
 }
 
@@ -135,6 +148,7 @@ describe('VoiceAssistant', () => {
     stopListeningMock.mockReset();
     cancelListeningMock.mockReset();
     speakMock.mockReset().mockResolvedValue(undefined);
+    stopSpeakingMock.mockReset();
     playReadyToneMock.mockReset().mockResolvedValue(undefined);
     processAssistantCommandMock.mockReset();
   });
@@ -504,5 +518,38 @@ describe('VoiceAssistant', () => {
         "Okay, I'll stop listening.",
       ]);
     });
+  });
+
+  it('shuts Lina down immediately when disabled in settings', async () => {
+    await act(async () => {
+      renderAssistant({ children: <DisableLinaHarness /> });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Talk to Lina' }));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByPlaceholderText(/Type or talk to Lina/i)).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Disable Lina'));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Talk to Lina' })).not.toBeInTheDocument();
+      expect(latestWakeWordOptions?.enabled).toBe(false);
+      expect(cancelListeningMock).toHaveBeenCalled();
+      expect(stopSpeakingMock).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      fireEvent.keyDown(window, { ctrlKey: true, shiftKey: true, key: 'L' });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByPlaceholderText(/Type or talk to Lina/i)).not.toBeInTheDocument();
   });
 });

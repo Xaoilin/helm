@@ -12,6 +12,7 @@ import { APP_RELEASE_VERSION } from '../config/release';
 export default function SettingsSurface() {
   const app = useApp();
   const { settings } = app;
+  const linaEnabled = settings.assistantEnabled !== false;
   const [confirmReset, setConfirmReset] = useState(false);
   const [testAdhan, setTestAdhan] = useState<string | null>(null);
 
@@ -320,21 +321,26 @@ export default function SettingsSurface() {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>Enable voice assistant</div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>Enable Lina</div>
               <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 2 }}>
-                Click the floating "L" button to talk to Lina. She can navigate, check your schedule, and more.
+                Shows the floating Lina button and enables voice, wake word, and the <code style={{ background: '#1a1d2e', padding: '1px 4px', borderRadius: 4, fontSize: 10 }}>Ctrl+Shift+L</code> shortcut. Turn this off when you want Lina fully quiet. Chat in the Chat tab still works.
               </div>
             </div>
             <label className="toggle">
-              <input type="checkbox" checked={settings.assistantEnabled !== false} onChange={e => app.updateSettings({ assistantEnabled: e.target.checked })} aria-label="Toggle voice assistant" />
+              <input type="checkbox" checked={linaEnabled} onChange={e => app.updateSettings({ assistantEnabled: e.target.checked })} aria-label="Toggle Lina" />
               <span className="slider" />
             </label>
+          </div>
+          <div style={{ fontSize: 11, color: linaEnabled ? '#6b6f85' : '#f0c040', marginBottom: 10 }}>
+            {linaEnabled
+              ? 'Need fewer accidental wake-ups? Leave Lina on and turn off the wake word below.'
+              : 'Lina is off. The floating button, keyboard shortcut, and wake word are all disabled until you turn her back on.'}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 10 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 500 }}>Wake word ("Hey Lina")</div>
               <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 2 }}>
-                Listens for "Hey Lina" using OpenWakeWord (runs locally in your browser via WASM — no network, no API key, completely free). Say the wake word and Lina opens automatically.
+                Listens for "Hey Lina" using OpenWakeWord (runs locally in your browser via WASM — no network, no API key, completely free). Say the wake word and Lina opens automatically while Lina is enabled.
               </div>
             </div>
             <label className="toggle">
@@ -342,6 +348,11 @@ export default function SettingsSurface() {
               <span className="slider" />
             </label>
           </div>
+          {!linaEnabled && (
+            <div style={{ fontSize: 10, color: '#4a4e62', marginTop: -2, marginBottom: 10 }}>
+              Wake-word listening is currently inactive because Lina is turned off.
+            </div>
+          )}
           {/* Language */}
           <div className="form-group" style={{ marginTop: 12, marginBottom: 12 }}>
             <label htmlFor="settings-assistant-provider">Open-ended AI mode</label>
