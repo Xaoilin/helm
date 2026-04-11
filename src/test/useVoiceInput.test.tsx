@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useVoiceInput } from '../hooks/useVoiceInput';
-import type { DeepgramLiveTranscriptUpdate } from '../services/deepgramSTT';
 import { TIMING } from '../config/constants';
 
 const {
@@ -39,7 +38,8 @@ const {
     createDeepgramLiveSessionMock,
   };
 });
-let liveTranscriptHandler: ((update: DeepgramLiveTranscriptUpdate) => void) | null = null;
+
+let liveEventHandler: ((event: Record<string, unknown>) => void) | null = null;
 
 vi.mock('../services/deepgramSTT', () => ({
   createRecorder: createRecorderMock,
@@ -50,21 +50,115 @@ vi.mock('../services/deepgramSTT', () => ({
 
 describe('useVoiceInput', () => {
   beforeEach(() => {
-    liveTranscriptHandler = null;
-    startRecorder.mockClear();
-    stopRecorder.mockClear();
-    getRecorderBlob.mockClear();
+    liveEventHandler = null;
+    startRecorder.mockReset().mockResolvedValue(undefined);
+    stopRecorder.mockReset();
+    getRecorderBlob.mockReset().mockResolvedValue(new Blob([new Uint8Array(600)], { type: 'audio/webm' }));
     isRecorderRecording.mockReset().mockReturnValue(true);
     createRecorderMock.mockClear();
     transcribeWithDeepgramMock.mockReset();
     testChromeSpeechRecognitionMock.mockReset();
-    createDeepgramLiveSessionMock.mockReset().mockImplementation(({ onTranscript }) => {
-      liveTranscriptHandler = onTranscript;
+    createDeepgramLiveSessionMock.mockReset().mockImplementation(({ onEvent }) => {
+      liveEventHandler = onEvent;
       return {
         sendChunk: vi.fn(),
         close: vi.fn(),
       };
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('waits until the Deepgram recorder is actually live before firing the ready callback', async () => {
+    let resolveStart: (() => void) | null = null;
+    startRecorder.mockImplementationOnce(() => new Promise<void>(resolve => {
+      resolveStart = resolve;
+    }));
+    const onListeningPreparing = vi.fn();
+    const onListeningStart = vi.fn();
+
+    const { result } = renderHook(() => useVoiceInput({
+      enabled: true,
+      deepgramKey: 'dg-test-key',
+      sttLang: 'en-GB',
+      onTranscript: vi.fn(),
+      onListeningPreparing,
+      onListeningStart,
+    }));
+
+    act(() => {
+      result.current.startListening();
+    });
+
+    expect(onListeningPreparing).toHaveBeenCalledTimes(1);
+    expect(onListeningStart).not.toHaveBeenCalled();
+
+    resolveStart?.();
+
+    await waitFor(() => {
+      expect(onListeningStart).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('waits for the browser speech engine onstart event before firing the ready callback', async () => {
+    testChromeSpeechRecognitionMock.mockResolvedValue(true);
+    class FakeSpeechRecognition {
+      static latestInstance: FakeSpeechRecognition | null = null;
+
+      continuous = false;
+      interimResults = false;
+      lang = '';
+      onstart: (() => void) | null = null;
+      onresult: ((event: unknown) => void) | null = null;
+      onerror: ((event: { error: string }) => void) | null = null;
+      onend: (() => void) | null = null;
+
+      constructor() {
+        FakeSpeechRecognition.latestInstance = this;
+      }
+
+      start() {
+        return undefined;
+      }
+
+      abort() {
+        this.onend?.();
+      }
+    }
+
+    vi.stubGlobal('SpeechRecognition', FakeSpeechRecognition);
+
+    const onListeningPreparing = vi.fn();
+    const onListeningStart = vi.fn();
+
+    const { result } = renderHook(() => useVoiceInput({
+      enabled: true,
+      deepgramKey: '',
+      sttLang: 'en-GB',
+      onTranscript: vi.fn(),
+      onListeningPreparing,
+      onListeningStart,
+    }));
+
+    await waitFor(() => {
+      expect(result.current.voiceBackend).toBe('chrome');
+    });
+
+    act(() => {
+      result.current.startListening();
+    });
+
+    expect(onListeningPreparing).toHaveBeenCalledTimes(1);
+    expect(onListeningStart).not.toHaveBeenCalled();
+
+    act(() => {
+      FakeSpeechRecognition.latestInstance?.onstart?.();
+    });
+
+    expect(onListeningStart).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces live Deepgram transcript preview updates while recording', async () => {
@@ -88,10 +182,11 @@ describe('useVoiceInput', () => {
       expect(createRecorderMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(liveTranscriptHandler).not.toBeNull();
+    expect(liveEventHandler).not.toBeNull();
 
     act(() => {
-      liveTranscriptHandler?.({
+      liveEventHandler?.({
+        type: 'transcript',
         transcript: 'book a review with Sam tomorrow',
         isFinal: false,
         speechFinal: false,
@@ -102,20 +197,14 @@ describe('useVoiceInput', () => {
     expect(onTranscript).not.toHaveBeenCalled();
   });
 
-  it('auto-stops and transcribes when Deepgram marks speech as final', async () => {
+  it('does not finalize the turn when Deepgram only marks speech as final', async () => {
     const onTranscript = vi.fn();
-    const onTranscriptPreview = vi.fn();
-    transcribeWithDeepgramMock.mockResolvedValue({
-      transcript: 'book a review with Sam tomorrow',
-      confidence: 0.99,
-    });
 
     const { result } = renderHook(() => useVoiceInput({
       enabled: true,
       deepgramKey: 'dg-test-key',
       sttLang: 'en-GB',
       onTranscript,
-      onTranscriptPreview,
     }));
 
     act(() => {
@@ -127,18 +216,120 @@ describe('useVoiceInput', () => {
     });
 
     act(() => {
-      liveTranscriptHandler?.({
+      liveEventHandler?.({
+        type: 'transcript',
         transcript: 'book a review with Sam tomorrow',
         isFinal: true,
         speechFinal: true,
       });
     });
 
-    await waitFor(() => {
-      expect(stopRecorder).toHaveBeenCalledTimes(1);
-      expect(transcribeWithDeepgramMock).toHaveBeenCalledTimes(1);
-      expect(onTranscript).toHaveBeenCalledWith('book a review with Sam tomorrow');
+    expect(stopRecorder).not.toHaveBeenCalled();
+    expect(transcribeWithDeepgramMock).not.toHaveBeenCalled();
+    expect(onTranscript).not.toHaveBeenCalled();
+  });
+
+  it('finalizes after UtteranceEnd and the local settle window', async () => {
+    vi.useFakeTimers();
+    const onTranscript = vi.fn();
+    transcribeWithDeepgramMock.mockResolvedValue({
+      transcript: 'book a review with Sam tomorrow',
+      confidence: 0.99,
     });
+
+    const { result } = renderHook(() => useVoiceInput({
+      enabled: true,
+      deepgramKey: 'dg-test-key',
+      sttLang: 'en-GB',
+      onTranscript,
+    }));
+
+    await act(async () => {
+      result.current.startListening();
+      await Promise.resolve();
+    });
+
+    act(() => {
+      liveEventHandler?.({
+        type: 'transcript',
+        transcript: 'book a review with Sam tomorrow',
+        isFinal: true,
+        speechFinal: true,
+      });
+      liveEventHandler?.({
+        type: 'utterance-end',
+        lastWordEnd: 2.4,
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(TIMING.VOICE_TURN_END_SETTLE_DELAY - 50);
+      await Promise.resolve();
+    });
+
+    expect(stopRecorder).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(60);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(stopRecorder).toHaveBeenCalledTimes(1);
+    expect(transcribeWithDeepgramMock).toHaveBeenCalledTimes(1);
+    expect(onTranscript).toHaveBeenCalledWith('book a review with Sam tomorrow');
+  });
+
+  it('cancels a pending finalize when new transcript activity resumes', async () => {
+    vi.useFakeTimers();
+
+    const { result } = renderHook(() => useVoiceInput({
+      enabled: true,
+      deepgramKey: 'dg-test-key',
+      sttLang: 'en-GB',
+      onTranscript: vi.fn(),
+    }));
+
+    await act(async () => {
+      result.current.startListening();
+      await Promise.resolve();
+    });
+
+    act(() => {
+      liveEventHandler?.({
+        type: 'transcript',
+        transcript: 'book a review',
+        isFinal: true,
+        speechFinal: true,
+      });
+      liveEventHandler?.({
+        type: 'utterance-end',
+        lastWordEnd: 1.2,
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(TIMING.VOICE_TURN_END_SETTLE_DELAY / 2);
+      await Promise.resolve();
+    });
+
+    act(() => {
+      liveEventHandler?.({
+        type: 'transcript',
+        transcript: 'book a review with Sam tomorrow',
+        isFinal: false,
+        speechFinal: false,
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(TIMING.VOICE_TURN_END_SETTLE_DELAY + 20);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(stopRecorder).not.toHaveBeenCalled();
+    expect(transcribeWithDeepgramMock).not.toHaveBeenCalled();
   });
 
   it('treats silent Deepgram turns as no-speech instead of a generic error', async () => {
@@ -170,7 +361,5 @@ describe('useVoiceInput', () => {
 
     expect(onNoSpeech).toHaveBeenCalledTimes(1);
     expect(onTranscript).not.toHaveBeenCalled();
-
-    vi.useRealTimers();
   });
 });

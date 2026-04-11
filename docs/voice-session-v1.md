@@ -21,6 +21,7 @@ This keeps the wake-word path voice-first while avoiding the common failure mode
 V1 covers:
 
 - spoken acknowledgement after wake word
+- explicit mic-ready cue before the user should start talking
 - hands-free turn-taking with no record-button click required
 - live transcript preview while listening
 - automatic mic reopening after Lina replies
@@ -41,6 +42,7 @@ The voice assistant keeps the existing UI states:
 
 - `idle`
 - `open`
+- `preparing`
 - `listening`
 - `processing`
 - `speaking`
@@ -67,7 +69,9 @@ When the wake word fires and voice input is available:
 - clear stale transcript and error state
 - switch into `handsfree`
 - speak the wake acknowledgement
-- after speech output really ends, wait a very short guard delay and start listening
+- after speech output really ends, wait a very short guard delay and start arming the microphone
+- only switch into visible listening once the mic is actually live
+- play a short ready tone so the user knows Lina is ready for speech
 
 If voice input is not available, Lina opens with a truthful degraded-state error instead of pretending the session can continue.
 
@@ -75,13 +79,16 @@ If voice input is not available, Lina opens with a truthful degraded-state error
 
 Each turn follows the same sequence:
 
-1. show live transcript preview while the user speaks
-2. automatically stop the Deepgram recording when `speech_final` arrives
-3. fall back to the existing max-duration stop if no final boundary arrives
-4. transcribe the final utterance
-5. run the shared assistant runtime
-6. speak Lina's response
-7. reopen the mic for the next turn
+1. show a short `preparing` phase while the mic is arming
+2. play the ready tone once the mic is really live
+3. show live transcript preview while the user speaks
+4. treat Deepgram `UtteranceEnd` as the primary end-of-turn signal
+5. wait a short local settle window so a brief thinking pause does not end the turn too early
+6. fall back to the existing max-duration stop if no reliable end-of-turn boundary arrives
+7. transcribe the final utterance
+8. run the shared assistant runtime
+9. speak Lina's response
+10. reopen the mic for the next turn
 
 The chat and voice surfaces still share the same assistant runtime and mutation handlers.
 Wake-word sessions should also create a fresh conversation in the Chat surface, append each spoken turn to that same thread, and start a brand-new thread the next time the wake word begins a new session.
@@ -108,14 +115,18 @@ Because of that, V1 relies on real speech completion:
 - browser speech fallback resolves on `SpeechSynthesisUtterance.onend`
 
 Timeout-only completion is not good enough for wake-word conversations because it can reopen the mic too early and cause self-capture.
+The follow-up mic-ready cue should only happen after that real speech completion, not on a guessed timeout.
 
 ## Speech Input Contract
 
-Deepgram is the primary path for V1 because it already exposes live transcript updates and `speech_final` boundaries.
+Deepgram is the primary path for V1 because it exposes live transcript updates plus server-side utterance-end events.
 
 Behavior:
 
+- use Deepgram `nova-3` for both live preview and final transcription
 - use Deepgram live events for preview and utterance-end detection
+- keep `speech_final` as a transcript boundary hint, but do not end the turn immediately on that event alone
+- use explicit live endpointing and utterance-end timing so short pauses feel more natural
 - use the existing post-stop transcription path for final transcript accuracy
 - treat silent turns as `no speech`, not as a generic error
 
@@ -125,6 +136,7 @@ Chrome speech fallback remains available, but it is still a degraded path compar
 
 The bubble should make the active voice phase obvious:
 
+- `Getting the microphone ready... wait for the beep`
 - `Listening...`
 - `Listening for follow-up...`
 - `Thinking...`
@@ -153,7 +165,11 @@ The shared assistant runtime now stores that correction in local-first assistant
 For any future changes to this flow:
 
 - verify the wake word triggers spoken acknowledgement before the mic opens
-- verify Deepgram auto-stops on utterance end
+- verify Lina shows `preparing` before the mic becomes visibly live
+- verify the ready tone only plays once the mic is actually live
+- verify the first spoken words are not clipped after the ready tone
+- verify a brief 1-2 second thinking pause does not end the turn
+- verify Deepgram auto-stops after utterance end plus the local settle window
 - verify Lina reopens the mic after speaking
 - verify silence ends the session cleanly
 - verify stop phrases end the session cleanly

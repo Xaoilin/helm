@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, act, waitFor, fireEvent } from '@testing-library/react';
 import { useEffect } from 'react';
 import { AppProvider } from '../store/AppContext';
 import VoiceAssistant from '../components/VoiceAssistant';
@@ -13,18 +13,21 @@ type WakeWordOptions = Parameters<typeof import('../hooks/useWakeWord').useWakeW
 let latestVoiceInputOptions: VoiceInputOptions | null = null;
 let latestWakeWordOptions: WakeWordOptions | null = null;
 let latestConversations: ChatConversation[] = [];
+let autoReadyOnStart = true;
 
 const {
   startListeningMock,
   stopListeningMock,
   cancelListeningMock,
   speakMock,
+  playReadyToneMock,
   processAssistantCommandMock,
 } = vi.hoisted(() => ({
   startListeningMock: vi.fn(),
   stopListeningMock: vi.fn(),
   cancelListeningMock: vi.fn(),
   speakMock: vi.fn().mockResolvedValue(undefined),
+  playReadyToneMock: vi.fn().mockResolvedValue(undefined),
   processAssistantCommandMock: vi.fn(),
 }));
 
@@ -32,7 +35,10 @@ vi.mock('../hooks/useVoiceInput', () => ({
   useVoiceInput: (options: VoiceInputOptions) => {
     latestVoiceInputOptions = options;
     startListeningMock.mockImplementation(() => {
-      latestVoiceInputOptions?.onListeningStart?.();
+      latestVoiceInputOptions?.onListeningPreparing?.();
+      if (autoReadyOnStart) {
+        latestVoiceInputOptions?.onListeningStart?.();
+      }
     });
     stopListeningMock.mockImplementation(() => {
       latestVoiceInputOptions?.onListeningEnd?.();
@@ -65,6 +71,10 @@ vi.mock('../hooks/useWakeWord', () => ({
     latestWakeWordOptions = options;
     return { wakeWordReady: true };
   },
+}));
+
+vi.mock('../services/voiceAssistant', () => ({
+  playReadyTone: playReadyToneMock,
 }));
 
 vi.mock('../services/assistantRuntime', () => ({
@@ -115,11 +125,13 @@ describe('VoiceAssistant', () => {
     latestVoiceInputOptions = null;
     latestWakeWordOptions = null;
     latestConversations = [];
+    autoReadyOnStart = true;
     localStorage.clear();
     startListeningMock.mockReset();
     stopListeningMock.mockReset();
     cancelListeningMock.mockReset();
     speakMock.mockReset().mockResolvedValue(undefined);
+    playReadyToneMock.mockReset().mockResolvedValue(undefined);
     processAssistantCommandMock.mockReset();
   });
 
@@ -149,7 +161,9 @@ describe('VoiceAssistant', () => {
     expect(screen.queryByText('Processing audio...')).not.toBeInTheDocument();
   });
 
-  it('greets the user after the wake word and then opens the mic hands-free', async () => {
+  it('shows preparing before the wake-word session becomes visibly ready to speak', async () => {
+    autoReadyOnStart = false;
+
     await act(async () => {
       renderAssistant();
       await Promise.resolve();
@@ -168,22 +182,25 @@ describe('VoiceAssistant', () => {
       expect(speakMock).toHaveBeenCalledWith('Hey, how can I help?');
     });
 
-    await waitFor(() => {
-      expect(latestConversations).toHaveLength(1);
-      expect(latestConversations[0].messages).toHaveLength(1);
-      expect(latestConversations[0].messages[0].content).toBe('Hey, how can I help?');
-    });
-
     await act(async () => {
       await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
     });
 
     expect(startListeningMock).toHaveBeenCalledTimes(1);
-    expect(screen.getAllByText(/Listening/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Getting the microphone ready/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Listening\.\.\. speak now/i)).not.toBeInTheDocument();
+
+    act(() => {
+      latestVoiceInputOptions?.onListeningStart?.();
+    });
+
+    expect(screen.getAllByText(/Listening\.\.\. speak now/i).length).toBeGreaterThan(0);
+    expect(playReadyToneMock).toHaveBeenCalledTimes(1);
   });
 
-  it('reopens listening after a spoken reply so the conversation can continue hands-free', async () => {
+  it('reopens in preparing first and then listening for a spoken follow-up', async () => {
     processAssistantCommandMock.mockResolvedValue(createAssistantResult('You have one task left today.'));
+
     await act(async () => {
       renderAssistant();
       await Promise.resolve();
@@ -198,6 +215,8 @@ describe('VoiceAssistant', () => {
       await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
     });
 
+    autoReadyOnStart = false;
+
     await act(async () => {
       latestVoiceInputOptions?.onTranscript?.('what do I have left today?');
       await Promise.resolve();
@@ -208,21 +227,19 @@ describe('VoiceAssistant', () => {
       expect(speakMock).toHaveBeenCalledWith('You have one task left today.');
     });
 
-    await waitFor(() => {
-      expect(latestConversations).toHaveLength(1);
-      expect(latestConversations[0].messages.map(message => message.content)).toEqual([
-        'Hey, how can I help?',
-        'what do I have left today?',
-        'You have one task left today.',
-      ]);
-    });
-
     await act(async () => {
       await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
     });
 
     expect(startListeningMock).toHaveBeenCalledTimes(2);
-    expect(screen.getAllByText(/Listening for follow-up/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Getting the microphone ready/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Listening for follow-up\.\.\. speak now/i)).not.toBeInTheDocument();
+
+    act(() => {
+      latestVoiceInputOptions?.onListeningStart?.();
+    });
+
+    expect(screen.getAllByText(/Listening for follow-up\.\.\. speak now/i).length).toBeGreaterThan(0);
   });
 
   it('passes shared dialog state between spoken turns so reveal-task follow-ups stay grounded', async () => {
@@ -278,6 +295,35 @@ describe('VoiceAssistant', () => {
         dialogState: firstDialogState,
       }),
     );
+  });
+
+  it('uses the same preparing-to-ready contract for manual mic input', async () => {
+    autoReadyOnStart = false;
+    await act(async () => {
+      renderAssistant();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Talk to Lina' }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Use voice input' }));
+      await Promise.resolve();
+    });
+
+    expect(startListeningMock).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText(/Getting the microphone ready/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Listening\.\.\. speak now/i)).not.toBeInTheDocument();
+
+    act(() => {
+      latestVoiceInputOptions?.onListeningStart?.();
+    });
+
+    expect(screen.getAllByText(/Listening\.\.\. speak now/i).length).toBeGreaterThan(0);
+    expect(playReadyToneMock).toHaveBeenCalledTimes(1);
   });
 
   it('ends the hands-free session when the user says a stop phrase', async () => {

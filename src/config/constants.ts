@@ -15,6 +15,16 @@ export const TIMING = {
   VOICE_NO_SPEECH_TIMEOUT: 5000,
   /** Brief pause after Lina finishes speaking before reopening the mic. */
   VOICE_SESSION_RESUME_DELAY: 250,
+  /** Short settle window after Deepgram signals an utterance boundary. */
+  VOICE_TURN_END_SETTLE_DELAY: 450,
+  /** Deepgram live endpointing silence window. */
+  DEEPGRAM_ENDPOINTING: 300,
+  /** Deepgram live utterance-end silence window. */
+  DEEPGRAM_UTTERANCE_END_MS: 1800,
+  /** Duration of Lina's mic-ready earcon. */
+  VOICE_READY_TONE_DURATION: 140,
+  /** Fade-in/out used to keep the earcon soft. */
+  VOICE_READY_TONE_FADE: 24,
   /** Wake word detection cooldown between triggers */
   WAKE_WORD_COOLDOWN: 2000,
   /** Dashboard prayer countdown tick interval */
@@ -63,6 +73,11 @@ export const TIMING = {
 
 export const VOICE_SESSION = {
   CONVERSATION_TITLE: 'Voice conversation',
+  READY_TONE: {
+    FREQUENCY: 880,
+    GAIN: 0.025,
+    TYPE: 'triangle',
+  },
   GREETING: {
     en: 'Hey, how can I help?',
     ar: 'مرحباً، كيف أقدر أساعدك؟',

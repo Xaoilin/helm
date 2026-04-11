@@ -1,4 +1,4 @@
-import { API_TIMEOUT } from '../config/constants';
+import { API_TIMEOUT, TIMING, VOICE_SESSION } from '../config/constants';
 import type { AssistantLang } from './assistantTypes';
 
 export async function speakWithElevenLabs(
@@ -61,4 +61,46 @@ export function speakWithBrowserTTS(text: string, lang: AssistantLang = 'en'): P
     speechSynthesis.cancel();
     speechSynthesis.speak(utterance);
   });
+}
+
+export async function playReadyTone(): Promise<void> {
+  const AudioCtx = window.AudioContext || (window as Window & typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  }).webkitAudioContext;
+
+  if (!AudioCtx) return;
+
+  const audioContext = new AudioCtx();
+  const durationSeconds = TIMING.VOICE_READY_TONE_DURATION / 1000;
+  const fadeSeconds = Math.min(durationSeconds / 2, TIMING.VOICE_READY_TONE_FADE / 1000);
+
+  try {
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume().catch(() => {});
+    }
+
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    const startAt = audioContext.currentTime;
+    const endAt = startAt + durationSeconds;
+    const peakGain = VOICE_SESSION.READY_TONE.GAIN;
+
+    oscillator.type = VOICE_SESSION.READY_TONE.TYPE;
+    oscillator.frequency.setValueAtTime(VOICE_SESSION.READY_TONE.FREQUENCY, startAt);
+
+    gainNode.gain.setValueAtTime(0.0001, startAt);
+    gainNode.gain.linearRampToValueAtTime(peakGain, startAt + fadeSeconds);
+    gainNode.gain.linearRampToValueAtTime(0.0001, endAt);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    await new Promise<void>((resolve) => {
+      oscillator.onended = () => resolve();
+      oscillator.start(startAt);
+      oscillator.stop(endAt);
+    });
+  } finally {
+    await audioContext.close().catch(() => {});
+  }
 }

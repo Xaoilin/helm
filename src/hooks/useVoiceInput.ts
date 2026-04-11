@@ -27,7 +27,9 @@ interface UseVoiceInputOptions {
   onTranscript: (text: string) => void;
   /** Called with live speech-to-text preview updates while the user is speaking. */
   onTranscriptPreview?: (text: string) => void;
-  /** Called when listening starts (to update parent state). */
+  /** Called when the app starts arming the microphone. */
+  onListeningPreparing?: () => void;
+  /** Called when listening is truly live and the user can speak. */
   onListeningStart?: () => void;
   /** Called when an error occurs (to surface in UI). */
   onError?: (message: string) => void;
@@ -54,6 +56,7 @@ export function useVoiceInput({
   sttLang,
   onTranscript,
   onTranscriptPreview,
+  onListeningPreparing,
   onListeningStart,
   onError,
   onListeningEnd,
@@ -68,6 +71,8 @@ export function useVoiceInput({
   const liveSessionRef = useRef<ReturnType<typeof createDeepgramLiveSession> | null>(null);
   const recordingTimeoutRef = useRef<number | null>(null);
   const noSpeechTimeoutRef = useRef<number | null>(null);
+  const finalizeTurnTimeoutRef = useRef<number | null>(null);
+  const listeningAttemptRef = useRef(0);
   const deepgramStopInFlightRef = useRef(false);
   const chromeStopRequestedRef = useRef(false);
   const chromeFinalTranscriptRef = useRef('');
@@ -75,6 +80,7 @@ export function useVoiceInput({
   const hasPreviewSpeechRef = useRef(false);
   const onTranscriptRef = useRef(onTranscript);
   const onTranscriptPreviewRef = useRef(onTranscriptPreview);
+  const onListeningPreparingRef = useRef(onListeningPreparing);
   const onErrorRef = useRef(onError);
   const onListeningEndRef = useRef(onListeningEnd);
   const onNoSpeechRef = useRef(onNoSpeech);
@@ -84,11 +90,19 @@ export function useVoiceInput({
 
   useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
   useEffect(() => { onTranscriptPreviewRef.current = onTranscriptPreview; }, [onTranscriptPreview]);
+  useEffect(() => { onListeningPreparingRef.current = onListeningPreparing; }, [onListeningPreparing]);
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
   useEffect(() => { onListeningEndRef.current = onListeningEnd; }, [onListeningEnd]);
   useEffect(() => { onNoSpeechRef.current = onNoSpeech; }, [onNoSpeech]);
   useEffect(() => { onListeningStartRef.current = onListeningStart; }, [onListeningStart]);
   useEffect(() => { onProcessingStartRef.current = onProcessingStart; }, [onProcessingStart]);
+
+  const clearFinalizeTurnTimer = useCallback(() => {
+    if (finalizeTurnTimeoutRef.current !== null) {
+      window.clearTimeout(finalizeTurnTimeoutRef.current);
+      finalizeTurnTimeoutRef.current = null;
+    }
+  }, []);
 
   const clearDeepgramTimers = useCallback(() => {
     if (recordingTimeoutRef.current !== null) {
@@ -99,11 +113,16 @@ export function useVoiceInput({
       window.clearTimeout(noSpeechTimeoutRef.current);
       noSpeechTimeoutRef.current = null;
     }
-  }, []);
+    clearFinalizeTurnTimer();
+  }, [clearFinalizeTurnTimer]);
 
   const closeLiveSession = useCallback(() => {
     liveSessionRef.current?.close();
     liveSessionRef.current = null;
+  }, []);
+
+  const invalidatePendingStart = useCallback(() => {
+    listeningAttemptRef.current += 1;
   }, []);
 
   const stopDeepgramAndTranscribe = useCallback(async () => {
@@ -181,29 +200,42 @@ export function useVoiceInput({
   }, [enabled, deepgramKey, fallbackChecked]);
 
   // ── Deepgram recording ──
-  const startDeepgramListening = useCallback(async () => {
-    setIsListening(true);
+  const startDeepgramListening = useCallback(async (attemptId: number) => {
+    if (recorderRef.current || deepgramStopInFlightRef.current) return;
+
     hasPreviewSpeechRef.current = false;
     deepgramStopInFlightRef.current = false;
-    onListeningStartRef.current?.();
+    onListeningPreparingRef.current?.();
 
     try {
       liveSessionRef.current = createDeepgramLiveSession({
         apiKey: deepgramKey,
         language: sttLang,
-        onTranscript: ({ transcript, speechFinal }) => {
-          if (transcript) {
-            hasPreviewSpeechRef.current = true;
-            if (noSpeechTimeoutRef.current !== null) {
-              window.clearTimeout(noSpeechTimeoutRef.current);
-              noSpeechTimeoutRef.current = null;
+        onEvent: (event) => {
+          if (event.type === 'transcript') {
+            if (event.transcript) {
+              hasPreviewSpeechRef.current = true;
+              clearFinalizeTurnTimer();
+              if (noSpeechTimeoutRef.current !== null) {
+                window.clearTimeout(noSpeechTimeoutRef.current);
+                noSpeechTimeoutRef.current = null;
+              }
+              onTranscriptPreviewRef.current?.(event.transcript);
             }
-            onTranscriptPreviewRef.current?.(transcript);
+            return;
           }
 
-          if (speechFinal && transcript && recorderRef.current?.isRecording()) {
-            void stopDeepgramAndTranscribe();
+          if (!hasPreviewSpeechRef.current || !recorderRef.current?.isRecording()) {
+            return;
           }
+
+          clearFinalizeTurnTimer();
+          finalizeTurnTimeoutRef.current = window.setTimeout(() => {
+            finalizeTurnTimeoutRef.current = null;
+            if (recorderRef.current?.isRecording()) {
+              void stopDeepgramAndTranscribe();
+            }
+          }, TIMING.VOICE_TURN_END_SETTLE_DELAY);
         },
         onError: (error) => {
           logWarn('useVoiceInput', `Deepgram live preview unavailable: ${error.message}`);
@@ -219,6 +251,16 @@ export function useVoiceInput({
       recorderRef.current = recorder;
       await recorder.start();
 
+      if (listeningAttemptRef.current !== attemptId || recorderRef.current !== recorder) {
+        if (recorder.isRecording()) {
+          recorder.stop();
+        }
+        return;
+      }
+
+      setIsListening(true);
+      onListeningStartRef.current?.();
+
       noSpeechTimeoutRef.current = window.setTimeout(() => {
         if (!hasPreviewSpeechRef.current && recorder.isRecording()) {
           void stopDeepgramAndTranscribe();
@@ -231,8 +273,13 @@ export function useVoiceInput({
         }
       }, TIMING.RECORDING_MAX_DURATION);
     } catch (e: any) {
+      if (listeningAttemptRef.current !== attemptId) {
+        return;
+      }
+
       logError('useVoiceInput', e);
       closeLiveSession();
+      recorderRef.current = null;
       const msg = e.message?.includes('Permission') || e.message?.includes('NotAllowed')
         ? 'Microphone blocked. Click \uD83D\uDD12 in Chrome\'s address bar to allow.'
         : `Mic error: ${e.message}`;
@@ -240,13 +287,14 @@ export function useVoiceInput({
       setIsListening(false);
       onListeningEndRef.current?.();
     }
-  }, [closeLiveSession, deepgramKey, micDeviceId, sttLang, stopDeepgramAndTranscribe]);
+  }, [clearFinalizeTurnTimer, closeLiveSession, deepgramKey, micDeviceId, sttLang, stopDeepgramAndTranscribe]);
 
   // ── Chrome SpeechRecognition (fallback) ──
-  const startChromeListening = useCallback(() => {
+  const startChromeListening = useCallback((attemptId: number) => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
+    if (!SR || recognitionRef.current) return;
 
+    onListeningPreparingRef.current?.();
     chromeStopRequestedRef.current = false;
     chromeFinalTranscriptRef.current = '';
     chromeHasFinalTranscriptRef.current = false;
@@ -255,6 +303,15 @@ export function useVoiceInput({
     rec.continuous = false;
     rec.interimResults = true;
     rec.lang = sttLang;
+
+    rec.onstart = () => {
+      if (recognitionRef.current !== rec || listeningAttemptRef.current !== attemptId || chromeStopRequestedRef.current) {
+        return;
+      }
+
+      setIsListening(true);
+      onListeningStartRef.current?.();
+    };
 
     rec.onresult = (event: any) => {
       let finalTranscript = '';
@@ -310,7 +367,9 @@ export function useVoiceInput({
     };
 
     rec.onend = () => {
-      recognitionRef.current = null;
+      if (recognitionRef.current === rec) {
+        recognitionRef.current = null;
+      }
       setIsListening(false);
       if (!chromeStopRequestedRef.current && !chromeHasFinalTranscriptRef.current) {
         onNoSpeechRef.current?.();
@@ -319,17 +378,28 @@ export function useVoiceInput({
     };
 
     recognitionRef.current = rec;
-    setIsListening(true);
-    onListeningStartRef.current?.();
-    rec.start();
+
+    try {
+      rec.start();
+    } catch (e: any) {
+      if (recognitionRef.current === rec) {
+        recognitionRef.current = null;
+      }
+      setIsListening(false);
+      onErrorRef.current?.(`Mic error: ${e.message || 'Speech recognition failed to start.'}`);
+      onListeningEndRef.current?.();
+    }
   }, [sttLang]);
 
   // ── Unified start / stop ──
   const startListening = useCallback(() => {
+    const attemptId = listeningAttemptRef.current + 1;
+    listeningAttemptRef.current = attemptId;
+
     if (voiceBackend === 'deepgram') {
-      void startDeepgramListening();
+      void startDeepgramListening(attemptId);
     } else if (voiceBackend === 'chrome') {
-      startChromeListening();
+      startChromeListening(attemptId);
     } else {
       onErrorRef.current?.('Voice not available. Add a Deepgram API key in Settings \u2192 Voice Assistant to enable voice input.');
       onListeningEndRef.current?.();
@@ -338,7 +408,12 @@ export function useVoiceInput({
 
   const stopListening = useCallback(() => {
     if (voiceBackend === 'deepgram' && recorderRef.current) {
-      void stopDeepgramAndTranscribe();
+      if (recorderRef.current.isRecording()) {
+        void stopDeepgramAndTranscribe();
+      } else {
+        invalidatePendingStart();
+        cancelDeepgramListening();
+      }
     } else if (recognitionRef.current) {
       chromeStopRequestedRef.current = true;
       recognitionRef.current.abort();
@@ -346,9 +421,11 @@ export function useVoiceInput({
       setIsListening(false);
       onListeningEndRef.current?.();
     }
-  }, [stopDeepgramAndTranscribe, voiceBackend]);
+  }, [cancelDeepgramListening, invalidatePendingStart, stopDeepgramAndTranscribe, voiceBackend]);
 
   const cancelListening = useCallback(() => {
+    invalidatePendingStart();
+
     if (voiceBackend === 'deepgram') {
       cancelDeepgramListening();
       return;
@@ -362,9 +439,10 @@ export function useVoiceInput({
 
     setIsListening(false);
     onListeningEndRef.current?.();
-  }, [cancelDeepgramListening, voiceBackend]);
+  }, [cancelDeepgramListening, invalidatePendingStart, voiceBackend]);
 
   useEffect(() => () => {
+    invalidatePendingStart();
     clearDeepgramTimers();
     closeLiveSession();
     if (recognitionRef.current) {
@@ -377,7 +455,9 @@ export function useVoiceInput({
     if (recorderRef.current?.isRecording()) {
       recorderRef.current.stop();
     }
-  }, [clearDeepgramTimers, closeLiveSession]);
+    recorderRef.current = null;
+    recognitionRef.current = null;
+  }, [clearDeepgramTimers, closeLiveSession, invalidatePendingStart]);
 
   return {
     startListening,

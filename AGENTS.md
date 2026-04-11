@@ -43,11 +43,13 @@ Before calling a user-facing change live, shipped, or deployed, also run `npm ru
 - Manual QA has been completed for the delivered feature before reporting back, with screenshot evidence for user-facing changes when practical, and the result is called out in the handoff.
 - Documentation is updated in the same change.
 - User-facing copy reflects the real runtime state.
+- The task branch includes a release version bump.
 - `docs/feature-status.md` is updated when a feature moves between `real`, `local-only/degraded`, or `placeholder/simulated`.
 
 ## Working Rules
 
 - Use a dedicated branch per task. `codex/<short-description>` is the default branch style.
+- Every feature branch must bump the app version, keep the release files in sync, and report that version back in the handoff even if the work is still branch-only.
 - When meaningful work is complete and validation is green, land it through the normal branch -> commit -> merge -> deploy-verification flow unless the user explicitly wants it kept local or unmerged.
 - Do not describe a user-facing change as live, shipped, or on the website until it has been merged to `master`, the deployment has completed successfully, and `npm run handoff:check` has passed. If work is only local or branch-only, say that explicitly.
 - After a task branch is merged, delete that branch locally and on `origin` so stale merged branches do not accumulate. If a branch is still unmerged, call that out explicitly instead of leaving its status ambiguous.
