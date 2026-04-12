@@ -116,6 +116,14 @@ const RESPONSES = {
     en: (message: string) => `I couldn't reach the hosted assistant (${message}). I stayed on the grounded local assistant flow.`,
     ar: (message: string) => `تعذر علي الاتصال بالمساعد المستضاف (${message}). بقيت على مسار المساعد المحلي.`,
   },
+  hostedInvalidStructuredResponse: {
+    en: "I had trouble interpreting the hosted assistant response, so I didn't run anything. Please try again.",
+    ar: 'واجهت مشكلة في تفسير رد المساعد المستضاف، لذلك لم أنفذ أي إجراء. حاولي مرة أخرى.',
+  },
+  ollamaInvalidStructuredResponse: {
+    en: "I had trouble interpreting Ollama's response, so I didn't run anything. Please try again.",
+    ar: 'واجهت مشكلة في تفسير رد Ollama، لذلك لم أنفذ أي إجراء. حاولي مرة أخرى.',
+  },
   unknown: {
     en: (transcript: string) =>
       `I heard "${transcript}" but I need either a clearer instruction or an AI provider online for open-ended help.`,
@@ -293,19 +301,93 @@ ${buildContextDigest(context, dialogState)}`;
   ];
 }
 
-function parsePlanFromModelResponse(response: string): ActionPlan | null {
+function tryParsePlanCandidate(response: string): ActionPlan | null {
   try {
     return parseActionPlan(JSON.parse(response));
   } catch {
-    const firstBrace = response.indexOf('{');
-    const lastBrace = response.lastIndexOf('}');
-    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) return null;
-    try {
-      return parseActionPlan(JSON.parse(response.slice(firstBrace, lastBrace + 1)));
-    } catch {
-      return null;
+    return null;
+  }
+}
+
+function extractJsonObjectCandidates(response: string): string[] {
+  const candidates: string[] = [];
+  let startIndex = -1;
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = 0; index < response.length; index += 1) {
+    const char = response[index];
+
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+
+    if (char === '\\' && inString) {
+      escaping = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (char === '{') {
+      if (depth === 0) {
+        startIndex = index;
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (char === '}' && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && startIndex !== -1) {
+        candidates.push(response.slice(startIndex, index + 1));
+        startIndex = -1;
+      }
     }
   }
+
+  return candidates;
+}
+
+function parsePlanFromModelResponse(response: string): ActionPlan | null {
+  const directPlan = tryParsePlanCandidate(response);
+  if (directPlan) {
+    return directPlan;
+  }
+
+  for (const candidate of extractJsonObjectCandidates(response)) {
+    const plan = tryParsePlanCandidate(candidate);
+    if (plan) {
+      return plan;
+    }
+  }
+
+  return null;
+}
+
+function looksLikeStructuredPlanPayload(response: string): boolean {
+  if (!response.trim()) {
+    return false;
+  }
+
+  const planPattern = /"mode"\s*:\s*"(?:answer|clarify|confirm|act)"/;
+  const stepsPattern = /"steps"\s*:/;
+  if (planPattern.test(response) && stepsPattern.test(response)) {
+    return true;
+  }
+
+  return extractJsonObjectCandidates(response).some(candidate =>
+    planPattern.test(candidate) && stepsPattern.test(candidate),
+  );
 }
 
 function planQueryLocally(
@@ -961,6 +1043,14 @@ async function planWithHostedAssistant(
     const plan = parsePlanFromModelResponse(response);
 
     if (!plan) {
+      if (looksLikeStructuredPlanPayload(response)) {
+        return {
+          plan: buildAnswerPlan(RESPONSES.hostedInvalidStructuredResponse[options.lang]),
+          source: 'degraded',
+          degradedReason: 'hosted_error',
+        };
+      }
+
       return {
         plan: buildAnswerPlan(response.trim() || RESPONSES.unknown[options.lang](transcript)),
         source: 'openai',
@@ -1023,6 +1113,14 @@ async function planWithOllama(
     const plan = parsePlanFromModelResponse(response);
 
     if (!plan) {
+      if (looksLikeStructuredPlanPayload(response)) {
+        return {
+          plan: buildAnswerPlan(RESPONSES.ollamaInvalidStructuredResponse[options.lang]),
+          source: 'degraded',
+          degradedReason: 'ollama_error',
+        };
+      }
+
       return {
         plan: buildAnswerPlan(response.trim() || RESPONSES.unknown[options.lang](transcript)),
         source: 'ollama',

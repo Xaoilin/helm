@@ -719,6 +719,67 @@ describe('assistant runtime', () => {
     expect(result.execution?.steps[0].capability).toBe('knowledge.create_entry');
   });
 
+  it('recovers a valid hosted plan when the provider repeats the same JSON payload', async () => {
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available' });
+    const repeatedPlan = JSON.stringify({
+      mode: 'act',
+      response: 'Saving that note.',
+      confidence: 0.98,
+      steps: [{
+        capability: 'knowledge.create_entry',
+        args: {
+          title: 'Patience note',
+          content: 'Patience brings steadiness.',
+          topicQuery: 'Tazkiyah',
+        },
+      }],
+    });
+    vi.mocked(chatWithHostedAssistant).mockResolvedValue(`${repeatedPlan}\n${repeatedPlan}`);
+
+    const addKnowledgeEntry = vi.fn(() => 'entry-repeated');
+    const result = await processAssistantCommand('capture something thoughtful about patience for later', makeContext(), {
+      lang: 'en',
+      provider: 'hosted',
+      handlers: {
+        addTask: vi.fn(() => 'unused'),
+        updateTask: vi.fn(),
+        addKnowledgeEntry,
+      },
+    });
+
+    expect(result.source).toBe('openai');
+    expect(result.execution?.steps[0].capability).toBe('knowledge.create_entry');
+    expect(result.message).toBe('Saved "Patience note" under Tazkiyah.');
+    expect(result.message).not.toContain('"mode":"act"');
+    expect(addKnowledgeEntry).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Patience note',
+      content: 'Patience brings steadiness.',
+      topicId: 'topic-1',
+    }));
+  });
+
+  it('never surfaces malformed hosted planner JSON as the visible assistant reply', async () => {
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available' });
+    vi.mocked(chatWithHostedAssistant).mockResolvedValue(
+      '{"mode":"act","response":"Saving that note.","confidence":0.98,"steps":[{"capability":"knowledge.create_entry"',
+    );
+
+    const result = await processAssistantCommand('capture something thoughtful about patience for later', makeContext(), {
+      lang: 'en',
+      provider: 'hosted',
+      handlers: {
+        addTask: vi.fn(() => 'unused'),
+        updateTask: vi.fn(),
+        addKnowledgeEntry: vi.fn(() => 'unused'),
+      },
+    });
+
+    expect(result.source).toBe('degraded');
+    expect(result.degradedReason).toBe('hosted_error');
+    expect(result.message).toContain('I had trouble interpreting the hosted assistant response');
+    expect(result.message).not.toContain('"mode":"act"');
+  });
+
   it('sends a hosted planner schema that keeps optional args required and nullable', async () => {
     vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available' });
     vi.mocked(chatWithHostedAssistant).mockResolvedValue(JSON.stringify({
