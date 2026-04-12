@@ -39,7 +39,7 @@ jobs:
           VITE_DEFAULT_ASSISTANT_PROVIDER: hosted
           VITE_HOSTED_ASSISTANT_FUNCTION: assistant-openai
           VITE_HOSTED_ASSISTANT_MODEL: gpt-5.4
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
