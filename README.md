@@ -37,7 +37,7 @@ npm run check
 
 `npm run handoff:check` is the shipped-release gate. It fails unless there are no uncommitted non-generated changes, the current work is merged into `origin/master`, the `CI`, `Deploy to GitHub Pages`, and `Deploy Supabase Assistant Function` workflows have all succeeded for the deployed `master` head, the live GitHub Pages bundle is serving the current package version, and merged `codex/` branches have been cleaned up.
 
-`npm run llm-compare` compares `gpt-5.4-mini` and `claude-sonnet-4-6` on HELM-style prompts using your local `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`, then writes a Markdown report to `test-results/`.
+`npm run llm-compare` compares `gpt-5.4` and `claude-sonnet-4-6` on HELM-style prompts using your local `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`, then writes a Markdown report to `test-results/`.
 
 ## Project Map
 
@@ -51,7 +51,7 @@ npm run check
 
 - Google Calendar OAuth and sync are real.
 - Supabase auth and sync are real when configured.
-- Hosted GPT-5.4-mini assistant replies are real when Supabase is configured, the `assistant-openai` Edge Function is deployed, and the user is signed in.
+- Hosted GPT-5.4 assistant replies are real when Supabase is configured, the `assistant-openai` Edge Function is deployed, and the live planner is available.
 - Ollama-powered assistant responses are real when Ollama is running locally.
 - Voice input shows a live transcript preview while recording when Deepgram or the browser fallback is available, then confirms the final command after you stop.
 - A dedicated Clock surface provides a neat multi-clock workspace with on-demand timers and stopwatches, custom names, selectable alarm sounds, eye-catching finish alerts, and local-first persistence.
@@ -62,7 +62,7 @@ Use [docs/feature-status.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/f
 
 ## Hosted Assistant Deployment
 
-The GitHub Pages build now defaults to hosted GPT-5.4-mini for open-ended assistant turns. The client never receives the OpenAI key directly; it calls a Supabase Edge Function instead.
+The GitHub Pages build now defaults to hosted GPT-5.4 for assistant planning. The client never receives the OpenAI key directly; it calls a Supabase Edge Function instead.
 
 One-time setup:
 
@@ -73,7 +73,7 @@ supabase functions deploy assistant-openai
 Set these secrets in the `assistant-openai` function environment before you rely on the hosted path:
 
 - `OPENAI_API_KEY`
-- `OPENAI_MODEL` (recommended: `gpt-5.4-mini`)
+- `OPENAI_MODEL` (recommended: `gpt-5.4`)
 
 For automated deploys on merge, add these GitHub repository secrets so `.github/workflows/deploy-supabase-assistant.yml` can sync the function:
 
@@ -81,7 +81,7 @@ For automated deploys on merge, add these GitHub repository secrets so `.github/
 - `SUPABASE_PROJECT_REF`
 - `OPENAI_API_KEY`
 
-The function is intended for signed-in HELM users. If hosted AI is not configured or the user is signed out, Lina falls back to local Ollama when available and otherwise stays on grounded built-in commands.
+The function is intended for signed-in HELM users. If hosted AI is not configured or the user is signed out, Lina uses local Ollama only when a live Ollama planner is available and otherwise refuses to guess.
 
 ## Working Rules
 
@@ -93,6 +93,6 @@ The function is intended for signed-in HELM users. If hosted AI is not configure
 ## Deployment And CI
 
 - Pull requests should satisfy `lint`, `typecheck`, `unit`, `e2e`, and `build`.
-- GitHub Pages deploys only after the CI workflow succeeds on `master`, and that build defaults the website to hosted GPT-5.4-mini mode.
+- GitHub Pages deploys only after the CI workflow succeeds on `master`, and that build defaults the website to hosted GPT-5.4 mode.
 - `master` is protected to require pull requests plus the `lint`, `typecheck`, `unit`, `e2e`, and `build` checks before merge.
 - Before calling a web-facing change live in a handoff, run `npm run handoff:check` after the merge and deploy complete.

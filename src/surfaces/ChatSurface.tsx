@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
+import { HOSTED_ASSISTANT_MODEL } from '../config';
 import { getCurrentUserId, isAuthenticated, isSupabaseReady } from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
 import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
@@ -30,14 +31,14 @@ function getStatusBadge(status: AssistantRuntimeStatus): string {
 
 function getEmptyStateMessage(status: AssistantRuntimeStatus): string {
   if (status.state === 'ready' && status.activeProvider === 'hosted') {
-    return 'Lina is powered by hosted GPT-5.4-mini. Ask anything about your schedule, tasks, or goals.';
+    return `Lina is powered by hosted ${HOSTED_ASSISTANT_MODEL}. Ask anything about your schedule, tasks, or goals.`;
   }
 
   if (status.state === 'ready' && status.activeProvider === 'ollama') {
     return 'Lina is powered by your local Ollama setup. Ask anything about your schedule, tasks, or goals.';
   }
 
-  return `${status.detail} Without a live AI provider, Lina still handles built-in commands like navigation, task updates, event scheduling, finance logging, and knowledge notes.`;
+  return `${status.detail} Without a live AI planner, Lina will not guess or execute assistant actions from chat.`;
 }
 
 export default function ChatSurface() {
@@ -114,9 +115,17 @@ export default function ChatSurface() {
           )}
           {app.conversations.map(conv => (
             <div key={conv.id}>
-              <button
+              <div
                 className={`chat-list-item ${conv.id === app.activeConversationId ? 'active' : ''}`}
+                role="button"
+                tabIndex={0}
                 onClick={() => app.setActiveConversation(conv.id)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    app.setActiveConversation(conv.id);
+                  }
+                }}
               >
                 <span className="title">
                   {editingId === conv.id ? (
@@ -163,7 +172,7 @@ export default function ChatSurface() {
                     </button>
                   </span>
                 )}
-              </button>
+              </div>
               {deletingId === conv.id && (
                 <div className="confirm-bar" style={{ margin: '4px 8px' }} role="alert">
                   Delete this conversation?

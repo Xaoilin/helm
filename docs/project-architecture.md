@@ -157,13 +157,15 @@ Current assistant-related services live in:
 - `src/store/contexts/ChatContext.tsx`
 - `supabase/functions/assistant-openai/`
 
-Both chat and voice now route through the shared grounded assistant runtime under `src/assistant/`. Deterministic local capabilities handle explicit app actions first, then open-ended planning can use either:
+Both chat and voice now route through the shared grounded assistant runtime under `src/assistant/`. Fresh assistant intents are planned by a live model first, and local code is limited to transcript normalization, correction memory, capability/entity retrieval, validator guardrails, confirmation handling, deterministic execution, and debug tracing.
 
-- hosted GPT-5.4-mini through the `assistant-openai` Supabase Edge Function for signed-in web builds
-- local Ollama for desktop or local-first setups
+Planning providers:
 
-The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally. That shared runtime now owns task-title normalization, recent-task reveal handling such as "show me that task", and the typed navigation handoff used by the Tasks surface to jump to `All Tasks` and highlight the resolved item.
-The assistant action registry in `src/assistant/capabilities.ts` is the source of truth for which actions Lina may claim and execute. The Debug surface renders that registry directly and also shows the latest structured assistant trace so action coverage stays inspectable.
+- hosted GPT-5.4 through the `assistant-openai` Supabase Edge Function for web builds
+- local Ollama for desktop or local-first setups when a live Ollama planner is available
+
+The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally. That shared runtime owns task-title normalization, recent-task reveal handling such as "show me that task", grounded ID validation for mutations, and the typed navigation handoff used by the Tasks surface to jump to `All Tasks` and highlight the resolved item.
+The assistant action registry in `src/assistant/capabilities.ts` is the source of truth for which actions Lina may claim and execute. The Debug surface renders that registry directly and also shows the latest planning bundle, raw planner response, validator verdict, structured plan, execution steps, and navigation payload so action coverage stays inspectable.
 
 ### Other external services
 
@@ -200,7 +202,7 @@ The Vite README is still the default template, so the docs in this folder and `A
 
 ## Current Architecture Risks
 
-- Assistant command understanding is duplicated across voice and chat.
+- Entity and benchmark retrieval are still heuristic, so improvements should be measured before changing prompts or capability metadata.
 - Some integrations are real and some are still mock or placeholder paths, so docs must distinguish between them carefully.
 - Large surface components still exist, even though state has already been split into domain providers.
 - Security is MVP-grade for a single-user local-first app; credentials and API keys are not managed like a hardened multi-user product.

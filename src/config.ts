@@ -51,7 +51,7 @@ export const DEFAULT_ASSISTANT_PROVIDER = getAssistantProviderEnv();
 export const HOSTED_ASSISTANT_FUNCTION = getEnv('VITE_HOSTED_ASSISTANT_FUNCTION') || 'assistant-openai';
 
 /** Hosted assistant model label for truthful UI copy. */
-export const HOSTED_ASSISTANT_MODEL = getEnv('VITE_HOSTED_ASSISTANT_MODEL') || 'gpt-5.4-mini';
+export const HOSTED_ASSISTANT_MODEL = getEnv('VITE_HOSTED_ASSISTANT_MODEL') || 'gpt-5.4';
 
 /** Ollama local LLM endpoint. */
 export const OLLAMA_ENDPOINT = getEnv('VITE_OLLAMA_ENDPOINT') || getSettingsValue('ollamaEndpoint') || 'http://localhost:11434';

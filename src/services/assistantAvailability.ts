@@ -1,4 +1,4 @@
-import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
+import { DEFAULT_ASSISTANT_PROVIDER, HOSTED_ASSISTANT_MODEL, OLLAMA_ENDPOINT } from '../config';
 import type { AssistantProvider, Settings } from '../types/domain';
 import { testHostedAssistantConnection } from './hostedAssistantApi';
 import { formatHostedAssistantAccessMode, isLocalhostRuntime } from './hostedAssistantAccess';
@@ -26,7 +26,7 @@ function getHostedSignInRequiredStatus(): AssistantRuntimeStatus {
     activeProvider: 'hosted',
     state: 'sign_in_required',
     headline: 'Hosted AI available after sign-in',
-    detail: 'Sign in with Google to use the hosted GPT-5.4-mini assistant on the website.',
+    detail: `Sign in with Google to use the hosted ${HOSTED_ASSISTANT_MODEL} planner on the website.`,
   };
 }
 
@@ -53,7 +53,7 @@ function getHostedReadyStatus(): AssistantRuntimeStatus {
     activeProvider: 'hosted',
     state: 'ready',
     headline: 'Hosted AI ready',
-    detail: 'Open-ended help is powered by OpenAI GPT-5.4-mini through HELM\'s hosted assistant.',
+    detail: `Intent planning is powered by OpenAI ${HOSTED_ASSISTANT_MODEL} through HELM's hosted assistant.`,
   };
 }
 
@@ -66,7 +66,7 @@ async function getHostedStatus(): Promise<AssistantRuntimeStatus> {
             activeProvider: 'hosted',
             state: 'ready',
             headline: 'Hosted AI ready',
-            detail: `Open-ended help is powered by OpenAI GPT-5.4-mini through HELM's hosted assistant using the configured ${formatHostedAssistantAccessMode(status.accessMode)}${isLocalhostRuntime() ? ' on localhost.' : '.'}`,
+            detail: `Intent planning is powered by OpenAI ${status.model || HOSTED_ASSISTANT_MODEL} through HELM's hosted assistant using the configured ${formatHostedAssistantAccessMode(status.accessMode)}${isLocalhostRuntime() ? ' on localhost.' : '.'}`,
           }
         : getHostedReadyStatus();
     case 'sign_in_required':
@@ -132,7 +132,7 @@ export async function getAssistantRuntimeStatus(
       activeProvider: null,
       state: 'sign_in_required',
       headline: 'Auto mode needs sign-in or Ollama',
-      detail: 'Sign in with Google for hosted GPT-5.4-mini, or start Ollama locally for local AI.',
+      detail: `Sign in with Google for hosted ${HOSTED_ASSISTANT_MODEL}, or start Ollama locally for local AI planning.`,
     };
   }
 
@@ -149,6 +149,6 @@ export async function getAssistantRuntimeStatus(
     activeProvider: null,
     state: 'offline',
     headline: 'No AI provider available',
-    detail: 'Hosted AI is unavailable and Ollama is offline, so Lina stays on grounded built-in commands only.',
+    detail: 'Hosted AI is unavailable and Ollama is offline, so Lina refuses to guess until a live planner is back.',
   };
 }

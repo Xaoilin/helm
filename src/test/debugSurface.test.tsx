@@ -86,13 +86,14 @@ describe('DebugSurface AI diagnostics', () => {
       activeProvider: 'hosted',
       state: 'ready',
       headline: 'Hosted AI ready',
-      detail: 'Open-ended help is powered by OpenAI GPT-5.4-mini through HELM\'s hosted assistant.',
+      detail: 'Intent planning is powered by OpenAI GPT-5.4 through HELM\'s hosted assistant.',
     });
-    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available' });
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available', model: 'gpt-5.4' });
     vi.mocked(chatWithHostedAssistant).mockResolvedValue('READY');
     vi.mocked(getHostedAssistantDiagnostics).mockReturnValue({
       circuitAllowingRequests: true,
       lastAccessMode: 'project_key',
+      lastModel: 'gpt-5.4',
       projectAccessAvailable: true,
       lastFailureSource: null,
       lastFailureMessage: null,
@@ -112,7 +113,7 @@ describe('DebugSurface AI diagnostics', () => {
     expect(screen.getByText('AI Assistant Diagnostics')).toBeInTheDocument();
     expect(await screen.findByText('Hosted AI ready')).toBeInTheDocument();
     expect(screen.getByText('Supabase ready and signed in')).toBeInTheDocument();
-    expect((await screen.findAllByText('gpt-5.4-mini')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('gpt-5.4')).length).toBeGreaterThan(0);
     expect(screen.getByText('Assistant Actions')).toBeInTheDocument();
     expect(screen.getByText('tasks.open_view')).toBeInTheDocument();
   });
@@ -178,6 +179,7 @@ describe('DebugSurface AI diagnostics', () => {
     vi.mocked(getHostedAssistantDiagnostics).mockReturnValue({
       circuitAllowingRequests: false,
       lastAccessMode: 'project_key',
+      lastModel: 'gpt-5.4',
       projectAccessAvailable: true,
       lastFailureSource: 'chat',
       lastFailureMessage: 'OpenAI error 400: Invalid schema for response_format helm_action_plan.',
@@ -203,10 +205,11 @@ describe('DebugSurface AI diagnostics', () => {
     getCurrentUserIdMock.mockReturnValue(null);
     isAuthenticatedMock.mockReturnValue(false);
     isSupabaseReadyMock.mockReturnValue(true);
-    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available', accessMode: 'project_key' });
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available', accessMode: 'project_key', model: 'gpt-5.4' });
     vi.mocked(getHostedAssistantDiagnostics).mockReturnValue({
       circuitAllowingRequests: true,
       lastAccessMode: 'project_key',
+      lastModel: 'gpt-5.4',
       projectAccessAvailable: true,
       lastFailureSource: null,
       lastFailureMessage: null,
@@ -228,7 +231,71 @@ describe('DebugSurface AI diagnostics', () => {
       recordedAt: '2026-04-10T21:45:00.000Z',
       transcript: 'show me all my tasks',
       effectiveTranscript: 'show me all my tasks',
-      source: 'local',
+      source: 'openai',
+      planningSource: 'openai',
+      planningStatus: 'planned',
+      planningModel: 'gpt-5.4',
+      planningBundle: {
+        transcript: 'show me all my tasks',
+        normalizedTranscript: 'show me all my tasks',
+        currentSurface: 'chat',
+        nowIso: '2026-04-10T21:45:00.000Z',
+        timezone: 'Europe/London',
+        recentEntities: [],
+        recentPlans: [],
+        capabilities: [{
+          id: 'tasks.open_view',
+          title: 'Open Tasks View',
+          domain: 'tasks',
+          description: 'Open the Tasks surface to a specific tab.',
+          confirmationRule: 'never',
+          score: 1,
+          examples: ['Show me all my tasks'],
+          aliases: ['all tasks'],
+        }],
+        entityCandidates: {
+          surfaces: [],
+          tasks: [],
+          calendarEvents: [],
+          calendarSources: [],
+          financeAccounts: [],
+          knowledgeTopics: [],
+        },
+        benchmarkExamples: [{
+          id: 'task-view-1',
+          transcript: 'Show me all my tasks',
+          expectedMode: 'act',
+          expectedCapabilities: ['tasks.open_view'],
+        }],
+      },
+      rawPlannerResponse: '{"mode":"act"}',
+      parsedPlan: {
+        mode: 'act',
+        response: 'Showing all your tasks.',
+        confidence: 0.95,
+        steps: [{
+          capability: 'tasks.open_view',
+          args: {
+            tab: 'all',
+            resetFilters: true,
+          },
+        }],
+      },
+      validatedPlan: {
+        mode: 'act',
+        response: 'Showing all your tasks.',
+        confidence: 0.95,
+        steps: [{
+          capability: 'tasks.open_view',
+          args: {
+            tab: 'all',
+            resetFilters: true,
+          },
+        }],
+      },
+      plannerValidation: {
+        status: 'accepted',
+      },
       plan: {
         mode: 'act',
         response: '',
@@ -269,6 +336,10 @@ describe('DebugSurface AI diagnostics', () => {
 
     expect(await screen.findByText('Latest Assistant Trace')).toBeInTheDocument();
     expect(screen.getAllByText('show me all my tasks').length).toBeGreaterThan(0);
+    expect(screen.getByText('Planning Bundle')).toBeInTheDocument();
+    expect(screen.getByText('Raw Planner Response')).toBeInTheDocument();
+    expect(screen.getByText('Validated Plan')).toBeInTheDocument();
+    expect(screen.getByText('accepted')).toBeInTheDocument();
     expect(screen.getAllByText(/tasks\.open_view/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Navigation Payload/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/assistant-nav-test/i).length).toBeGreaterThan(0);

@@ -6,7 +6,7 @@ import {
 import { extractOutputText } from './openaiResponse.ts';
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
-const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') || 'gpt-5.4-mini';
+const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') || 'gpt-5.4';
 const OPENAI_URL = 'https://api.openai.com/v1/responses';
 
 function getOpenAIErrorMessage(data: unknown): string {

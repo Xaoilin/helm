@@ -51,13 +51,30 @@ export async function runAssistantTurn(
       ? 'سأتذكر هذا. '
       : "Thanks, I'll remember that. "
     : '';
+  const localPlanningMetadata = {
+    planningSource: 'local' as const,
+    planningModel: undefined,
+    planningBundle: undefined,
+    rawPlannerResponse: undefined,
+    parsedPlan: undefined,
+    validatedPlan: undefined,
+    plannerValidation: { status: 'skipped' as const },
+  };
   const finalize = (result: AssistantCommandResult): AssistantCommandResult => {
     recordAssistantDebugTrace({
       recordedAt: new Date().toISOString(),
       transcript,
       effectiveTranscript,
       source: result.source,
+      planningSource: result.planningSource,
+      planningStatus: result.planningStatus,
+      planningModel: result.planningModel,
       degradedReason: result.degradedReason,
+      planningBundle: result.planningBundle,
+      rawPlannerResponse: result.rawPlannerResponse,
+      parsedPlan: result.parsedPlan,
+      validatedPlan: result.validatedPlan,
+      plannerValidation: result.plannerValidation,
       plan: result.plan,
       execution: result.execution,
       referencedEntities: result.referencedEntities,
@@ -75,6 +92,8 @@ export async function runAssistantTurn(
           plan: dialogState.pendingConfirmation,
           dialogState: cleared,
           source: 'local',
+          planningStatus: 'local_confirmation',
+          ...localPlanningMetadata,
         });
       }
 
@@ -87,6 +106,8 @@ export async function runAssistantTurn(
           plan: { ...pendingPlan, mode: 'clarify', response: execution.message, steps: [] },
           dialogState: cleared,
           source: 'local',
+          planningStatus: 'local_confirmation',
+          ...localPlanningMetadata,
         });
       }
 
@@ -98,6 +119,8 @@ export async function runAssistantTurn(
         execution: execution.execution,
         referencedEntities: execution.referencedEntities,
         source: 'local',
+        planningStatus: 'local_confirmation',
+        ...localPlanningMetadata,
       });
     }
 
@@ -109,6 +132,8 @@ export async function runAssistantTurn(
         plan: { mode: 'answer', response, confidence: 1, steps: [] },
         dialogState: cleared,
         source: 'local',
+        planningStatus: 'local_confirmation',
+        ...localPlanningMetadata,
       });
     }
   }
@@ -140,7 +165,16 @@ export async function runAssistantTurn(
       message: clarifyPlan.response,
       plan: clarifyPlan,
       dialogState,
-      source: 'local',
+      source: planning.source,
+      degradedReason: planning.degradedReason,
+      planningSource: planning.planningSource,
+      planningStatus: planning.planningStatus,
+      planningModel: planning.planningModel,
+      planningBundle: planning.planningBundle,
+      rawPlannerResponse: planning.rawPlannerResponse,
+      parsedPlan: planning.parsedPlan,
+      validatedPlan: planning.validatedPlan,
+      plannerValidation: planning.plannerValidation,
     });
   }
 
@@ -159,6 +193,14 @@ export async function runAssistantTurn(
       referencedEntities: planning.referencedEntities,
       source: planning.source,
       degradedReason: planning.degradedReason,
+      planningSource: planning.planningSource,
+      planningStatus: planning.planningStatus,
+      planningModel: planning.planningModel,
+      planningBundle: planning.planningBundle,
+      rawPlannerResponse: planning.rawPlannerResponse,
+      parsedPlan: planning.parsedPlan,
+      validatedPlan: planning.validatedPlan,
+      plannerValidation: planning.plannerValidation,
     });
   }
 
@@ -171,6 +213,14 @@ export async function runAssistantTurn(
       referencedEntities: planning.referencedEntities,
       source: planning.source,
       degradedReason: planning.degradedReason,
+      planningSource: planning.planningSource,
+      planningStatus: planning.planningStatus,
+      planningModel: planning.planningModel,
+      planningBundle: planning.planningBundle,
+      rawPlannerResponse: planning.rawPlannerResponse,
+      parsedPlan: planning.parsedPlan,
+      validatedPlan: planning.validatedPlan,
+      plannerValidation: planning.plannerValidation,
     });
   }
 
@@ -187,7 +237,16 @@ export async function runAssistantTurn(
       message: clarifyPlan.response,
       plan: clarifyPlan,
       dialogState,
-      source: 'local',
+      source: planning.source,
+      degradedReason: planning.degradedReason,
+      planningSource: planning.planningSource,
+      planningStatus: planning.planningStatus,
+      planningModel: planning.planningModel,
+      planningBundle: planning.planningBundle,
+      rawPlannerResponse: planning.rawPlannerResponse,
+      parsedPlan: planning.parsedPlan,
+      validatedPlan: planning.validatedPlan,
+      plannerValidation: planning.plannerValidation,
     });
   }
 
@@ -204,6 +263,14 @@ export async function runAssistantTurn(
     referencedEntities: execution.referencedEntities,
     source: planning.source,
     degradedReason: planning.degradedReason,
+    planningSource: planning.planningSource,
+    planningStatus: planning.planningStatus,
+    planningModel: planning.planningModel,
+    planningBundle: planning.planningBundle,
+    rawPlannerResponse: planning.rawPlannerResponse,
+    parsedPlan: planning.parsedPlan,
+    validatedPlan: planning.validatedPlan,
+    plannerValidation: planning.plannerValidation,
   });
 }
 
