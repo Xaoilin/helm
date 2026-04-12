@@ -57,6 +57,74 @@ export interface AssistantDialogPlanReference {
   createdAt: string;
 }
 
+export interface AssistantPlanningCapabilityCandidate {
+  id: string;
+  title: string;
+  domain: string;
+  description: string;
+  confirmationRule: string;
+  score: number;
+  examples: string[];
+  aliases: string[];
+}
+
+export interface AssistantPlanningEntityCandidate {
+  kind: AssistantEntityKind;
+  id: string;
+  label: string;
+  surface?: Surface;
+  score: number;
+  detail?: string;
+}
+
+export interface AssistantPlanningExample {
+  id: string;
+  transcript: string;
+  expectedMode: ActionPlan['mode'];
+  expectedCapabilities: string[];
+}
+
+export interface AssistantTemporalCandidate {
+  phrase: string;
+  start: string;
+  end: string;
+}
+
+export interface AssistantPlanningBundle {
+  transcript: string;
+  normalizedTranscript: string;
+  currentSurface?: Surface;
+  nowIso: string;
+  timezone: string;
+  recentEntities: AssistantEntityReference[];
+  recentPlans: AssistantDialogPlanReference[];
+  capabilities: AssistantPlanningCapabilityCandidate[];
+  entityCandidates: {
+    surfaces: AssistantPlanningEntityCandidate[];
+    tasks: AssistantPlanningEntityCandidate[];
+    calendarEvents: AssistantPlanningEntityCandidate[];
+    calendarSources: AssistantPlanningEntityCandidate[];
+    financeAccounts: AssistantPlanningEntityCandidate[];
+    knowledgeTopics: AssistantPlanningEntityCandidate[];
+  };
+  temporalCandidate?: AssistantTemporalCandidate;
+  benchmarkExamples: AssistantPlanningExample[];
+}
+
+export type AssistantPlanningSource = 'openai' | 'ollama' | 'local' | 'none';
+export type AssistantPlanningStatus =
+  | 'planned'
+  | 'blocked_provider_unavailable'
+  | 'model_response_invalid'
+  | 'validator_rejected'
+  | 'local_confirmation'
+  | 'local_correction';
+
+export interface AssistantPlannerValidation {
+  status: 'accepted' | 'rejected' | 'skipped';
+  reason?: string;
+}
+
 export interface AssistantDialogState {
   currentSurface?: Surface;
   recentEntities: AssistantEntityReference[];
@@ -141,4 +209,12 @@ export interface AssistantCommandResult {
     | 'hosted_error'
     | 'unsupported_without_ai';
   source: 'local' | 'ollama' | 'openai' | 'degraded';
+  planningSource: AssistantPlanningSource;
+  planningStatus: AssistantPlanningStatus;
+  planningModel?: string;
+  planningBundle?: AssistantPlanningBundle;
+  rawPlannerResponse?: string;
+  parsedPlan?: ActionPlan | null;
+  validatedPlan?: ActionPlan | null;
+  plannerValidation?: AssistantPlannerValidation;
 }

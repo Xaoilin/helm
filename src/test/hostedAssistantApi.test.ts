@@ -49,7 +49,7 @@ function makeClient(overrides: {
     data: {
       ok: true,
       provider: 'openai',
-      model: 'gpt-5.4-mini',
+      model: 'gpt-5.4',
     },
     error: null,
   });
@@ -85,7 +85,7 @@ describe('hostedAssistantApi', () => {
 
     const status = await testHostedAssistantConnection();
 
-    expect(status).toEqual({ status: 'available', accessMode: 'project_key' });
+    expect(status).toEqual({ status: 'available', accessMode: 'project_key', model: 'gpt-5.4' });
     expect(client.functions.invoke).toHaveBeenCalledWith('assistant-openai', expect.objectContaining({
       body: { action: 'health' },
       headers: expect.objectContaining({
@@ -114,7 +114,7 @@ describe('hostedAssistantApi', () => {
         data: {
           ok: true,
           provider: 'openai',
-          model: 'gpt-5.4-mini',
+          model: 'gpt-5.4',
           text: '{"answer":"READY"}',
         },
         error: null,

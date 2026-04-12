@@ -7,7 +7,7 @@ import {
 } from './capabilities';
 
 export type ActionPlanMode = 'answer' | 'clarify' | 'confirm' | 'act';
-export type ActionPlanArgValue = string | boolean;
+export type ActionPlanArgValue = string | string[] | boolean;
 export type ActionPlanStepArgs = Record<string, ActionPlanArgValue>;
 
 export interface ActionPlanStep {
@@ -43,6 +43,10 @@ function isValidArgValue(
 ): value is ActionPlanArgValue {
   if (definition.type === 'boolean') {
     return typeof value === 'boolean';
+  }
+
+  if (definition.type === 'string_array') {
+    return Array.isArray(value) && value.every(item => typeof item === 'string');
   }
 
   if (typeof value !== 'string') {
@@ -145,6 +149,15 @@ function buildSemanticArgSchema(definition: AssistantActionArgDefinition) {
     } as const;
   }
 
+  if (definition.type === 'string_array') {
+    return {
+      type: 'array',
+      items: {
+        type: 'string',
+      },
+    } as const;
+  }
+
   if (definition.type === 'enum' && definition.values) {
     return {
       type: 'string',
@@ -165,6 +178,15 @@ function buildHostedArgSchema(definition: AssistantActionArgDefinition) {
 
   if (definition.type === 'boolean') {
     return nullableBooleanSchema;
+  }
+
+  if (definition.type === 'string_array') {
+    return {
+      type: ['array', 'null'],
+      items: {
+        type: 'string',
+      },
+    } as const;
   }
 
   if (definition.type === 'enum' && definition.values) {
@@ -200,25 +222,40 @@ function buildActionStepJsonSchema(capabilityId: CapabilityId) {
   });
 }
 
-export const actionPlanStepJsonSchema = {
-  anyOf: getLiveCapabilityDefinitions().map(capability => buildActionStepJsonSchema(capability.id as CapabilityId)),
-} as const;
+function buildActionPlanStepSchema(capabilityIds: CapabilityId[]) {
+  return {
+    anyOf: capabilityIds.map(capabilityId => buildActionStepJsonSchema(capabilityId)),
+  } as const;
+}
 
-export const actionPlanJsonSchema = buildStrictObjectSchema({
-  mode: {
-    type: 'string',
-    enum: ['answer', 'clarify', 'confirm', 'act'],
-  },
-  response: {
-    type: 'string',
-  },
-  confidence: {
-    type: 'number',
-    minimum: 0,
-    maximum: 1,
-  },
-  steps: {
-    type: 'array',
-    items: actionPlanStepJsonSchema,
-  },
-});
+export function buildActionPlanJsonSchema(capabilityIds?: CapabilityId[]) {
+  const resolvedCapabilityIds = capabilityIds && capabilityIds.length > 0
+    ? capabilityIds
+    : getLiveCapabilityDefinitions().map(capability => capability.id as CapabilityId);
+  const stepSchema = buildActionPlanStepSchema(resolvedCapabilityIds);
+
+  return buildStrictObjectSchema({
+    mode: {
+      type: 'string',
+      enum: ['answer', 'clarify', 'confirm', 'act'],
+    },
+    response: {
+      type: 'string',
+    },
+    confidence: {
+      type: 'number',
+      minimum: 0,
+      maximum: 1,
+    },
+    steps: {
+      type: 'array',
+      items: stepSchema,
+    },
+  });
+}
+
+export const actionPlanStepJsonSchema = buildActionPlanStepSchema(
+  getLiveCapabilityDefinitions().map(capability => capability.id as CapabilityId),
+);
+
+export const actionPlanJsonSchema = buildActionPlanJsonSchema();

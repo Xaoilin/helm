@@ -37,7 +37,7 @@ describe('openaiPayload', () => {
 
   it('keeps system content in instructions instead of duplicating it into input messages', () => {
     const payload = buildOpenAIResponsesPayload({
-      model: 'gpt-5.4-mini',
+      model: 'gpt-5.4',
       messages: [
         {
           role: 'system',
@@ -80,7 +80,7 @@ describe('openaiPayload', () => {
     };
 
     const payload = buildOpenAIResponsesPayload({
-      model: 'gpt-5.4-mini',
+      model: 'gpt-5.4',
       messages: [
         {
           role: 'system',
@@ -103,7 +103,7 @@ describe('openaiPayload', () => {
     });
 
     expect(payload).toEqual({
-      model: 'gpt-5.4-mini',
+      model: 'gpt-5.4',
       store: false,
       temperature: 0.2,
       max_output_tokens: 600,

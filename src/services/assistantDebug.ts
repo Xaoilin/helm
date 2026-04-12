@@ -2,6 +2,8 @@ import type { AssistantNavigationRequest } from './assistantNavigation';
 import type {
   AssistantCommandResult,
   AssistantEntityReference,
+  AssistantPlannerValidation,
+  AssistantPlanningBundle,
 } from '../assistant/shared';
 import type { ActionPlan } from '../assistant/plannerSchema';
 
@@ -10,7 +12,15 @@ export interface AssistantDebugTrace {
   transcript: string;
   effectiveTranscript: string;
   source: AssistantCommandResult['source'];
+  planningSource: AssistantCommandResult['planningSource'];
+  planningStatus: AssistantCommandResult['planningStatus'];
+  planningModel?: AssistantCommandResult['planningModel'];
   degradedReason?: AssistantCommandResult['degradedReason'];
+  planningBundle?: AssistantPlanningBundle;
+  rawPlannerResponse?: string;
+  parsedPlan?: ActionPlan | null;
+  validatedPlan?: ActionPlan | null;
+  plannerValidation?: AssistantPlannerValidation;
   plan: ActionPlan;
   execution?: AssistantCommandResult['execution'];
   referencedEntities?: AssistantEntityReference[];

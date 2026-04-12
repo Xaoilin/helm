@@ -19,36 +19,33 @@ Implemented pieces:
 - deterministic execution for navigation, task creation/reveal/completion/deletion, calendar creation/rescheduling, finance logging, and knowledge entry creation
 - shared dialog state with confirmation handling for risky actions such as event rescheduling
 - typed assistant navigation requests so Lina can open the Tasks surface to `Today`, `All Tasks`, or `Goals`, optionally reset filters, and optionally reveal and highlight a specific task
-- structured provider-backed planning through hosted OpenAI or local Ollama instead of action-tag parsing
+- model-first structured planning through hosted OpenAI or local Ollama instead of action-tag parsing
+- grounded ID-based validation for task reveal, task complete, task delete, calendar reschedule, finance account selection, and knowledge topic selection
+- benchmark example retrieval from a 200-plus command corpus
+- expanded debug traces that capture the planning bundle, raw planner response, validator verdict, validated plan, and execution payloads
 
 Still intentionally lightweight:
 
 - entity ranking is heuristic and local-first rather than embedding-backed
 - prayer-based time resolution uses the currently loaded prayer snapshot only
-- exact transcript corrections such as "No, I said ..." now persist as local-first assistant memory, but a broader teaching-loop memory and a larger eval corpus are still future work
+- exact transcript corrections such as "No, I said ..." now persist as local-first assistant memory, but a broader teaching-loop memory and benchmark scoring harness are still future work
 
-## Current Problem
+## Shipped Cutover
 
-The current assistant implementation is split across two separate paths:
+The shipped runtime now uses the model as the first planner for new chat and voice intents.
 
-- `src/services/voiceAssistant.ts` uses hardcoded navigation keywords, action verbs, local query shortcuts, and Ollama action tags.
-- `src/store/contexts/ChatContext.tsx` builds a separate Ollama path that also parses action tags and mutates tasks directly.
+Local code still matters, but only for the layers that should remain deterministic:
 
-This approach creates four recurring problems:
+- transcript normalization
+- correction-memory application
+- capability retrieval
+- grounded entity and time candidate retrieval
+- validator guardrails
+- confirmation handling
+- deterministic execution
+- debug tracing
 
-1. Wording is mistaken for intent.
-2. Voice and chat can drift apart behaviorally.
-3. Pronouns, references, and time phrases are weakly handled.
-4. Write actions are harder to validate, confirm, and undo safely.
-
-Examples that expose the ceiling:
-
-- "Move my 3pm to tomorrow."
-- "Push that meeting back an hour."
-- "Mark that one done."
-- "Remind me before Maghrib."
-
-These are not keyword problems. They are grounding problems.
+There is no longer a supported local regex action-selection path for fresh assistant turns. If no live planner is available, Lina refuses to guess.
 
 ## Recommended Direction
 
@@ -247,12 +244,12 @@ This makes unsupported gaps visible before they become user-facing surprises.
 
 Build a benchmark from real commands.
 
-Target coverage:
+Current shipped coverage:
 
-- 200 to 500 representative utterances
-- expected `ActionPlan` outputs
-- expected entity selections
-- expected final state changes
+- 200-plus representative utterances in `src/assistant/evals/benchmarkCorpus.ts`
+- expected plan mode
+- expected capability family
+- no-approximation coverage for unsupported and destructive intents
 
 Prompt or model changes should not ship unless they improve or preserve benchmark results.
 
@@ -274,7 +271,7 @@ That is the wrong abstraction for an app we own. Lina should work with semantic 
 
 Hosted OpenAI or Ollama structured planning is still useful, but it should be the transport between the model and the capability runtime, not the entire design.
 
-A good shape is:
+The shipped runtime now follows this shape:
 
 1. retrieve relevant capabilities, entities, and examples
 2. ask the model for a structured plan or tool call
@@ -299,44 +296,21 @@ Suggested starting structure:
 
 Both `voiceAssistant.ts` and `ChatContext.tsx` should delegate to this shared runtime rather than continue to own separate command systems.
 
-## Rollout Plan
+## Cutover Status
 
-### Phase 0: benchmark first
+The model-first cutover is now shipped:
 
-- collect real commands from current usage
-- define expected plans and outcomes
-- keep the existing parser in place while building the corpus
-
-### Phase 1: capability and executor layer
-
-- implement the capability registry
-- move all current app mutations behind deterministic executors
-- centralize confirmation rules and success/failure reporting
-
-### Phase 2: planner and resolvers
-
-- add schema-constrained planning
-- add entity resolution
-- add temporal resolution
-- add shared dialog state
-
-### Phase 3: shadow mode
-
-- run the new planner alongside the current parser
-- compare proposed actions against current behavior
-- inspect failures before cutover
-
-### Phase 4: cutover
-
-- replace action-tag parsing in chat
-- replace keyword-first command handling in voice
-- keep fast local read shortcuts only if they are routed through the same capability runtime
+- chat and voice share one assistant runtime under `src/assistant/`
+- fresh intents are planned by a live hosted or Ollama model first
+- local code validates, grounds, confirms, and executes
+- destructive or unsupported requests clarify instead of approximating to another action
+- when no live planner is available, Lina responds truthfully and executes nothing
 
 ## Design Principles
 
 - one assistant runtime for both voice and chat
 - semantic capabilities instead of raw state patches
-- local deterministic execution after model planning
+- model-first planning with local deterministic validation and execution
 - confirmation for risky actions
 - undo where practical
 - benchmark-driven iteration

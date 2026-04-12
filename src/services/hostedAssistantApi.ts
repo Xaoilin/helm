@@ -37,6 +37,7 @@ export interface HostedAssistantConnectionStatus {
   status: 'available' | 'sign_in_required' | 'not_configured' | 'unavailable';
   message?: string;
   accessMode?: HostedAssistantAccessMode;
+  model?: string;
 }
 
 export type HostedAssistantFailureSource = 'health' | 'chat';
@@ -50,6 +51,7 @@ interface HostedAssistantFailureState {
 export interface HostedAssistantDiagnostics {
   circuitAllowingRequests: boolean;
   lastAccessMode: HostedAssistantAccessMode | null;
+  lastModel: string | null;
   projectAccessAvailable: boolean;
   lastFailureSource: HostedAssistantFailureSource | null;
   lastFailureMessage: string | null;
@@ -58,6 +60,7 @@ export interface HostedAssistantDiagnostics {
 
 const hostedAssistantFailures: Partial<Record<HostedAssistantFailureSource, HostedAssistantFailureState>> = {};
 let lastHostedAssistantAccessMode: HostedAssistantAccessMode | null = null;
+let lastHostedAssistantModel: string | null = null;
 
 function isHttpError(error: unknown): error is FunctionsHttpError {
   return error instanceof FunctionsHttpError
@@ -169,6 +172,7 @@ export function getHostedAssistantDiagnostics(): HostedAssistantDiagnostics {
   return {
     circuitAllowingRequests: hostedAssistantBreaker.isAvailable,
     lastAccessMode: lastHostedAssistantAccessMode,
+    lastModel: lastHostedAssistantModel,
     projectAccessAvailable: canUseHostedAssistantProjectAccess(),
     lastFailureSource: lastFailure?.source ?? null,
     lastFailureMessage: lastFailure?.message ?? null,
@@ -181,6 +185,7 @@ export function resetHostedAssistantDiagnostics(): void {
   delete hostedAssistantFailures.health;
   delete hostedAssistantFailures.chat;
   lastHostedAssistantAccessMode = null;
+  lastHostedAssistantModel = null;
 }
 
 async function invokeHostedAssistant<T>(
@@ -231,8 +236,9 @@ export async function testHostedAssistantConnection(): Promise<HostedAssistantCo
 
   try {
     const data = await invokeHostedAssistant<HostedAssistantHealthResponse>('health', { action: 'health' });
+    lastHostedAssistantModel = data.model;
     return data.ok
-      ? { status: 'available', accessMode: lastHostedAssistantAccessMode ?? 'none' }
+      ? { status: 'available', accessMode: lastHostedAssistantAccessMode ?? 'none', model: data.model }
       : { status: 'unavailable', message: 'Hosted assistant health check failed.' };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -255,5 +261,6 @@ export async function chatWithHostedAssistant(
     throw new Error('Hosted assistant returned an empty response.');
   }
 
+  lastHostedAssistantModel = data.model;
   return data.text;
 }

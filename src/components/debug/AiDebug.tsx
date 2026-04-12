@@ -111,6 +111,7 @@ export default function AiDebug() {
   const currentUserId = getCurrentUserId();
   const hostedDiagnostics = getHostedAssistantDiagnostics();
   const hostedAccessMode = formatHostedAssistantAccessMode(hostedDiagnostics.lastAccessMode);
+  const hostedModelLabel = hostedDiagnostics.lastModel || HOSTED_ASSISTANT_MODEL;
   const localhostRuntime = isLocalhostRuntime();
 
   const refreshRuntime = useCallback(async () => {
@@ -308,7 +309,7 @@ export default function AiDebug() {
           <MetaCard label="Origin" value={window.location.origin} />
           <MetaCard label="Configured Mode" value={providerSetting.toUpperCase()} />
           <MetaCard label="Hosted Function" value={HOSTED_ASSISTANT_FUNCTION} />
-          <MetaCard label="Hosted Model" value={HOSTED_ASSISTANT_MODEL} />
+          <MetaCard label="Hosted Model" value={hostedModelLabel} />
           <MetaCard label="Ollama Endpoint" value={ollamaEndpoint} />
         </div>
       </div>
@@ -346,7 +347,7 @@ export default function AiDebug() {
             : 'Supabase not configured'}
           detail={supabaseReady
             ? hostedDiagnostics.projectAccessAvailable
-              ? `Hosted GPT-5.4-mini can use the configured project access in this build${localhostRuntime ? ' on localhost' : ''}. Supabase sign-in remains for sync and user data.`
+              ? `Hosted ${hostedModelLabel} can use the configured project access in this build${localhostRuntime ? ' on localhost' : ''}. Supabase sign-in remains for sync and user data.`
               : 'This build can reach Supabase, but the hosted AI project access key is missing.'
             : 'This build does not have Supabase configuration available, so hosted AI cannot run.'}
           checkedAt={runtimeCheckedAt}
@@ -384,7 +385,7 @@ export default function AiDebug() {
           )}
         >
           <DataRow label="Function" value={HOSTED_ASSISTANT_FUNCTION} />
-          <DataRow label="Model" value={HOSTED_ASSISTANT_MODEL} />
+          <DataRow label="Model" value={hostedModelLabel} />
           <DataRow label="Last access mode" value={hostedAccessMode} />
           <DataRow label="Circuit allowing requests" value={formatBoolean(hostedDiagnostics.circuitAllowingRequests)} />
           <DataRow label="Last health result" value={hostedResult.headline} />
@@ -489,6 +490,19 @@ export default function AiDebug() {
             <DataRow label="Source" value={assistantTrace.source} />
             <DataRow label="Transcript" value={assistantTrace.transcript} />
             <DataRow label="Effective" value={assistantTrace.effectiveTranscript} />
+            <DataRow label="Planning Source" value={assistantTrace.planningSource || 'unknown'} />
+            <DataRow label="Planning Status" value={assistantTrace.planningStatus || 'unknown'} />
+            <DataRow label="Planning Model" value={assistantTrace.planningModel || 'none'} />
+            <DataRow
+              label="Validator"
+              value={assistantTrace.plannerValidation
+                ? assistantTrace.plannerValidation.status === 'accepted'
+                  ? 'accepted'
+                  : assistantTrace.plannerValidation.status === 'rejected'
+                    ? `rejected: ${assistantTrace.plannerValidation.reason || 'no reason recorded'}`
+                    : 'skipped'
+                : 'not recorded'}
+            />
             <DataRow label="Plan Mode" value={assistantTrace.plan.mode} />
             <DataRow label="Degraded" value={assistantTrace.degradedReason || 'none'} />
             <DataRow
@@ -497,6 +511,26 @@ export default function AiDebug() {
                 ? assistantTrace.execution.steps.map(step => `${step.capability}: ${step.status}`).join(' | ')
                 : 'none'}
             />
+            {assistantTrace.planningBundle && (
+              <PayloadBlock label="Planning Bundle">
+                {JSON.stringify(assistantTrace.planningBundle, null, 2)}
+              </PayloadBlock>
+            )}
+            {assistantTrace.rawPlannerResponse && (
+              <PayloadBlock label="Raw Planner Response">
+                {assistantTrace.rawPlannerResponse}
+              </PayloadBlock>
+            )}
+            {assistantTrace.parsedPlan && (
+              <PayloadBlock label="Parsed Plan">
+                {JSON.stringify(assistantTrace.parsedPlan, null, 2)}
+              </PayloadBlock>
+            )}
+            {assistantTrace.validatedPlan && (
+              <PayloadBlock label="Validated Plan">
+                {JSON.stringify(assistantTrace.validatedPlan, null, 2)}
+              </PayloadBlock>
+            )}
             {assistantTrace.execution?.navigationRequests && (
               <PayloadBlock label="Navigation Payload">
                 {JSON.stringify(assistantTrace.execution.navigationRequests, null, 2)}

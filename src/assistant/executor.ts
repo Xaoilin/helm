@@ -101,10 +101,6 @@ function asTaskCategory(value: unknown): Task['category'] | 'any' {
   return value === 'daily' || value === 'task' || value === 'goal' ? value : 'any';
 }
 
-function asMatchScope(value: unknown): 'one' | 'all' {
-  return value === 'all' ? 'all' : 'one';
-}
-
 function asTaskTab(value: unknown): AssistantTaskTab | undefined {
   return value === 'today' || value === 'all' || value === 'goals' ? value : undefined;
 }
@@ -413,32 +409,40 @@ function executeSingleStep(
     }
 
     case 'tasks.complete_matching': {
-      const taskQuery = asString(step.args.taskQuery);
-      const category = asTaskCategory(step.args.category);
-      const resolution = findOrClarifyTask(taskQuery, context, dialogState, {
-        category,
-        allowCompleted: false,
-      });
-      if (!resolution.task) {
-        return { kind: 'clarify', message: resolution.clarify || 'Which task should I complete?' };
+      const taskId = asString(step.args.taskId);
+      const task = taskId
+        ? context.tasks.find(item => item.id === taskId && !item.completed) || null
+        : null;
+      const legacyTaskQuery = asString(step.args.taskQuery);
+      const legacyResolution = !task && legacyTaskQuery
+        ? findOrClarifyTask(legacyTaskQuery, context, dialogState, {
+            category: asTaskCategory(step.args.category),
+            allowCompleted: false,
+          })
+        : { task: null as Task | null, clarify: undefined as string | undefined };
+      if (!task && !legacyResolution.task) {
+        return { kind: 'clarify', message: legacyResolution.clarify || 'Which task should I complete?' };
       }
 
-      const task = resolution.task;
+      const resolvedTask = task || legacyResolution.task;
+      if (!resolvedTask) {
+        return { kind: 'clarify', message: 'Which task should I complete?' };
+      }
       const now = getNow(context);
       const today = toLocalDateStr(now);
       const completedAt = now.toISOString();
-      handlers.updateTask(task.id, {
+      handlers.updateTask(resolvedTask.id, {
         completed: true,
         completedAt,
-        ...(task.recurring ? { recurring: { ...task.recurring, lastReset: today } } : {}),
+        ...(resolvedTask.recurring ? { recurring: { ...resolvedTask.recurring, lastReset: today } } : {}),
       });
       context.tasks = context.tasks.map(item =>
-        item.id === task.id ? { ...item, completed: true, completedAt, recurring: task.recurring ? { ...task.recurring, lastReset: today } : undefined } : item
+        item.id === resolvedTask.id ? { ...item, completed: true, completedAt, recurring: resolvedTask.recurring ? { ...resolvedTask.recurring, lastReset: today } : undefined } : item
       );
 
       if (handlers.updateGamification) {
         const todayLog = context.gamification.dailyLog?.[today] || [];
-        const alreadyRewarded = task.category === 'daily' && todayLog.includes(task.id);
+        const alreadyRewarded = resolvedTask.category === 'daily' && todayLog.includes(resolvedTask.id);
         if (!alreadyRewarded) {
           const completionsToday = context.tasks.filter(item => item.completed && item.completedAt?.startsWith(today)).length;
           const extCtx = buildCompletionContext(context.tasks, context.goalTags, today, context.gamification, {
@@ -448,30 +452,30 @@ function executeSingleStep(
             lifestyleHalalConsistent: context.lifestyleItems.filter(item => item.type === 'halal' && item.status === 'consistent').length,
             lifestyleTotal: context.lifestyleItems.length,
           });
-          let profile = processTaskCompletion(context.gamification, task, completionsToday, now, extCtx).updatedProfile;
-          if (task.category === 'daily') {
-            profile = recordHabitCompletion(profile, task.id, today);
+          let profile = processTaskCompletion(context.gamification, resolvedTask, completionsToday, now, extCtx).updatedProfile;
+          if (resolvedTask.category === 'daily') {
+            profile = recordHabitCompletion(profile, resolvedTask.id, today);
           }
           handlers.updateGamification(profile);
           context.gamification = profile;
         }
       }
 
-      const ref = makeEntityReference('task', task.id, task.title, 'tasks', 1);
+      const ref = makeEntityReference('task', resolvedTask.id, resolvedTask.title, 'tasks', 1);
       return {
         stepResult: {
           capability: step.capability,
           status: 'completed',
-          summary: `Completed "${task.title}".`,
+          summary: `Completed "${resolvedTask.title}".`,
           entityRefs: [ref],
         },
         message: lang === 'ar'
-          ? `تم تعليم "${task.title}" كمكتملة.`
-          : task.category === 'daily'
-            ? `Marked the habit "${task.title}" as complete.`
-            : `Marked "${task.title}" as complete.`,
+          ? `تم تعليم "${resolvedTask.title}" كمكتملة.`
+          : resolvedTask.category === 'daily'
+            ? `Marked the habit "${resolvedTask.title}" as complete.`
+            : `Marked "${resolvedTask.title}" as complete.`,
         refs: [ref],
-        undoToken: JSON.stringify({ type: 'task.reopen', id: task.id }),
+        undoToken: JSON.stringify({ type: 'task.reopen', id: resolvedTask.id }),
       };
     }
 
@@ -483,19 +487,29 @@ function executeSingleStep(
         };
       }
 
-      const taskQuery = asString(step.args.taskQuery);
-      const category = asTaskCategory(step.args.category);
-      const matchScope = asMatchScope(step.args.matchScope);
-      const resolution = findTasksForDeletion(taskQuery, context, dialogState, {
-        category,
-        scope: matchScope,
-      });
+      const taskIds = Array.isArray(step.args.taskIds)
+        ? step.args.taskIds.filter((item): item is string => typeof item === 'string')
+        : [];
+      const tasksToDelete = taskIds.length > 0
+        ? context.tasks.filter(task => taskIds.includes(task.id))
+        : (() => {
+            const taskQuery = asString(step.args.taskQuery);
+            const category = asTaskCategory(step.args.category);
+            const resolution = findTasksForDeletion(taskQuery, context, dialogState, {
+              category,
+              scope: step.args.matchScope === 'all' ? 'all' : 'one',
+            });
 
-      if (resolution.tasks.length === 0) {
-        return { kind: 'clarify', message: resolution.clarify || 'Which task should I delete?' };
+            if (resolution.tasks.length === 0) {
+              return [];
+            }
+
+            return resolution.tasks;
+          })();
+      if (tasksToDelete.length === 0) {
+        return { kind: 'clarify', message: 'Which task should I delete?' };
       }
 
-      const tasksToDelete = resolution.tasks;
       for (const task of tasksToDelete) {
         handlers.removeTask(task.id);
       }
@@ -509,56 +523,62 @@ function executeSingleStep(
           status: 'completed',
           summary: tasksToDelete.length === 1
             ? `Deleted "${tasksToDelete[0].title}".`
-            : `Deleted ${tasksToDelete.length} tasks matching "${taskQuery}".`,
+            : `Deleted ${tasksToDelete.length} tasks.`,
           entityRefs: refs,
         },
         message: lang === 'ar'
           ? tasksToDelete.length === 1
             ? `تم حذف "${tasksToDelete[0].title}".`
-            : `تم حذف ${tasksToDelete.length} مهام تطابق "${taskQuery}".`
+            : `تم حذف ${tasksToDelete.length} مهام.`
           : tasksToDelete.length === 1
             ? `Deleted "${tasksToDelete[0].title}".`
-            : `Deleted ${tasksToDelete.length} tasks matching "${taskQuery}".`,
+            : `Deleted ${tasksToDelete.length} tasks.`,
         refs,
       };
     }
 
     case 'tasks.reveal_task': {
-      const taskQuery = asString(step.args.taskQuery);
-      const resolution = findOrClarifyTask(taskQuery || 'that task', context, dialogState, {
-        category: 'any',
-        allowCompleted: true,
-      });
+      const taskId = asString(step.args.taskId);
+      const task = taskId
+        ? context.tasks.find(item => item.id === taskId) || null
+        : null;
+      const legacyTaskQuery = asString(step.args.taskQuery);
+      const resolution = !task
+        ? findOrClarifyTask(legacyTaskQuery || 'that task', context, dialogState, {
+            category: 'any',
+            allowCompleted: true,
+          })
+        : { task, clarify: undefined as string | undefined };
       if (!resolution.task) {
         return { kind: 'clarify', message: resolution.clarify || 'Which task should I show you?' };
       }
 
-      const task = resolution.task;
+      const resolvedTask = resolution.task;
       const navigate = handlers.navigate || requestAssistantNavigation;
       const navigationRequest = normalizeAssistantNavigationRequest({
         surface: 'tasks',
         surfaceState: {
           tasks: {
-            tab: task.category === 'goal' ? 'goals' : 'all',
+            tab: resolvedTask.category === 'goal' ? 'goals' : 'all',
             resetFilters: true,
-            revealTaskId: task.id,
-            highlightTaskId: task.id,
+            revealTaskId: resolvedTask.id,
+            highlightTaskId: resolvedTask.id,
           },
         },
       });
       navigate(navigationRequest);
 
-      const ref = makeEntityReference('task', task.id, task.title, 'tasks', 1);
+      const ref = makeEntityReference('task', resolvedTask.id, resolvedTask.title, 'tasks', 1);
       return {
         stepResult: {
           capability: step.capability,
           status: 'completed',
-          summary: `Revealed task "${task.title}".`,
+          summary: `Revealed task "${resolvedTask.title}".`,
           entityRefs: [ref],
         },
         message: lang === 'ar'
-          ? `سأعرض "${task.title}" في المهام.`
-          : `Opening "${task.title}" in your tasks.`,
+          ? `سأعرض "${resolvedTask.title}" في المهام.`
+          : `Opening "${resolvedTask.title}" in your tasks.`,
         refs: [ref],
         navigationRequest,
       };
@@ -574,7 +594,13 @@ function executeSingleStep(
         return { kind: 'clarify', message: 'What should I call the event?' };
       }
 
-      const calendarChoice = pickCalendarSource(context, asString(step.args.calendarQuery));
+      const calendarSourceId = asString(step.args.calendarSourceId);
+      const calendarChoice = calendarSourceId
+        ? {
+            source: context.calendarSources.find(item => item.id === calendarSourceId) || null,
+            clarify: undefined as string | undefined,
+          }
+        : pickCalendarSource(context, asString(step.args.calendarQuery));
       if (!calendarChoice.source) {
         return { kind: 'clarify', message: calendarChoice.clarify || 'Which calendar should I use?' };
       }
@@ -627,7 +653,16 @@ function executeSingleStep(
         return { kind: 'clarify', message: 'Calendar rescheduling is not available in this surface.' };
       }
 
-      const eventResolution = findOrClarifyEvent(asString(step.args.eventQuery), context);
+      const eventId = asString(step.args.eventId);
+      const selectedEvent = eventId
+        ? context.calendarEvents.find(item => item.id === eventId) || null
+        : null;
+      const eventResolution = !selectedEvent
+        ? findOrClarifyEvent(asString(step.args.eventQuery), context)
+        : {
+            event: selectedEvent,
+            clarify: undefined as string | undefined,
+          };
       if (!eventResolution.event) {
         return { kind: 'clarify', message: eventResolution.clarify || 'Which event should I move?' };
       }
@@ -639,25 +674,30 @@ function executeSingleStep(
         return { kind: 'clarify', message: 'What time should I move it to?' };
       }
 
-      const event = eventResolution.event;
-      handlers.updateCalendarEvent(event.id, { start, end, allDay: false });
+      const resolvedEvent = eventResolution.event;
+      handlers.updateCalendarEvent(resolvedEvent.id, { start, end, allDay: false });
       context.calendarEvents = context.calendarEvents.map(item =>
-        item.id === event.id ? { ...item, start, end, allDay: false } : item
+        item.id === resolvedEvent.id ? { ...item, start, end, allDay: false } : item
       );
 
-      const ref = makeEntityReference('calendar_event', event.id, event.title, 'calendar', 1);
+      const ref = makeEntityReference('calendar_event', resolvedEvent.id, resolvedEvent.title, 'calendar', 1);
       return {
         stepResult: {
           capability: step.capability,
           status: 'completed',
-          summary: `Moved "${event.title}".`,
+          summary: `Moved "${resolvedEvent.title}".`,
           entityRefs: [ref],
         },
         message: lang === 'ar'
-          ? `تم نقل "${event.title}".`
-          : `Moved "${event.title}" to the new time.`,
+          ? `تم نقل "${resolvedEvent.title}".`
+          : `Moved "${resolvedEvent.title}" to the new time.`,
         refs: [ref],
-        undoToken: JSON.stringify({ type: 'calendar.reschedule', id: event.id, start: event.start, end: event.end }),
+        undoToken: JSON.stringify({
+          type: 'calendar.reschedule',
+          id: resolvedEvent.id,
+          start: resolvedEvent.start,
+          end: resolvedEvent.end,
+        }),
       };
     }
 
@@ -673,7 +713,13 @@ function executeSingleStep(
         return { kind: 'clarify', message: 'What amount should I record?' };
       }
 
-      const accountChoice = pickFinanceAccount(context, asString(step.args.accountQuery));
+      const accountId = asString(step.args.accountId);
+      const accountChoice = accountId
+        ? {
+            account: context.financeAccounts.find(item => item.id === accountId) || null,
+            clarify: undefined as string | undefined,
+          }
+        : pickFinanceAccount(context, asString(step.args.accountQuery));
       if (!accountChoice.account) {
         return { kind: 'clarify', message: accountChoice.clarify || 'Which account should I use?' };
       }
@@ -722,7 +768,13 @@ function executeSingleStep(
         return { kind: 'clarify', message: 'Knowledge capture is not available in this surface.' };
       }
 
-      const topicChoice = pickKnowledgeTopic(context, asString(step.args.topicQuery));
+      const topicId = asString(step.args.topicId);
+      const topicChoice = topicId
+        ? {
+            topic: context.knowledgeTopics.find(item => item.id === topicId) || null,
+            clarify: undefined as string | undefined,
+          }
+        : pickKnowledgeTopic(context, asString(step.args.topicQuery));
       if (!topicChoice.topic) {
         return { kind: 'clarify', message: topicChoice.clarify || 'Which topic should I use?' };
       }

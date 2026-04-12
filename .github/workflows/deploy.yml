@@ -35,7 +35,7 @@ jobs:
           VITE_ELEVENLABS_VOICE_ID: ${{ secrets.VITE_ELEVENLABS_VOICE_ID }}
           VITE_DEFAULT_ASSISTANT_PROVIDER: hosted
           VITE_HOSTED_ASSISTANT_FUNCTION: assistant-openai
-          VITE_HOSTED_ASSISTANT_MODEL: gpt-5.4-mini
+          VITE_HOSTED_ASSISTANT_MODEL: gpt-5.4
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

@@ -3,7 +3,7 @@ import type { Surface, TaskCategory, TaskPriority } from '../types/domain';
 export type ConfirmationRule = 'never' | 'always' | 'on_ambiguity';
 export type AssistantActionStatus = 'live' | 'planned' | 'disabled';
 export type AssistantActionDomain = 'navigation' | 'tasks' | 'calendar' | 'finance' | 'knowledge';
-export type AssistantActionArgType = 'string' | 'boolean' | 'enum';
+export type AssistantActionArgType = 'string' | 'string_array' | 'boolean' | 'enum';
 
 export interface AssistantActionArgDefinition {
   key: string;
@@ -47,8 +47,6 @@ const SURFACE_VALUES: readonly Surface[] = [
 const TASK_TAB_VALUES = ['today', 'all', 'goals'] as const;
 const TASK_PRIORITY_VALUES: readonly TaskPriority[] = ['high', 'medium', 'low'];
 const TASK_CATEGORY_VALUES: readonly TaskCategory[] = ['daily', 'task', 'goal'];
-const TASK_MUTATION_CATEGORY_VALUES = ['daily', 'task', 'goal', 'any'] as const;
-
 export const ASSISTANT_ACTIONS = [
   {
     id: 'navigation.go_to_surface',
@@ -165,9 +163,9 @@ export const ASSISTANT_ACTIONS = [
     debugSummary: 'Uses task resolution plus a typed Tasks navigation payload to focus a specific item.',
     args: [
       {
-        key: 'taskQuery',
-        label: 'Task Query',
-        description: 'The task title or recent reference to resolve.',
+        key: 'taskId',
+        label: 'Task ID',
+        description: 'The grounded task identifier to reveal.',
         type: 'string',
         required: true,
       },
@@ -186,19 +184,11 @@ export const ASSISTANT_ACTIONS = [
     debugSummary: 'Resolves an incomplete task or habit and marks it complete through the shared task executor.',
     args: [
       {
-        key: 'taskQuery',
-        label: 'Task Query',
-        description: 'The task or habit to complete.',
+        key: 'taskId',
+        label: 'Task ID',
+        description: 'The grounded task or habit identifier to complete.',
         type: 'string',
         required: true,
-      },
-      {
-        key: 'category',
-        label: 'Category',
-        description: 'An optional category constraint during resolution.',
-        type: 'enum',
-        required: false,
-        values: TASK_MUTATION_CATEGORY_VALUES,
       },
     ],
   },
@@ -215,27 +205,11 @@ export const ASSISTANT_ACTIONS = [
     debugSummary: 'Deletes one or more resolved tasks after confirmation.',
     args: [
       {
-        key: 'taskQuery',
-        label: 'Task Query',
-        description: 'The task query to resolve before deletion.',
-        type: 'string',
+        key: 'taskIds',
+        label: 'Task IDs',
+        description: 'One or more grounded task identifiers to delete.',
+        type: 'string_array',
         required: true,
-      },
-      {
-        key: 'matchScope',
-        label: 'Match Scope',
-        description: 'Whether to delete one match or all matches.',
-        type: 'enum',
-        required: true,
-        values: ['one', 'all'],
-      },
-      {
-        key: 'category',
-        label: 'Category',
-        description: 'An optional category constraint during deletion.',
-        type: 'enum',
-        required: false,
-        values: TASK_MUTATION_CATEGORY_VALUES,
       },
     ],
   },
@@ -280,9 +254,9 @@ export const ASSISTANT_ACTIONS = [
         required: false,
       },
       {
-        key: 'calendarQuery',
-        label: 'Calendar Query',
-        description: 'Optional calendar source query.',
+        key: 'calendarSourceId',
+        label: 'Calendar Source ID',
+        description: 'Optional grounded calendar source identifier.',
         type: 'string',
         required: false,
       },
@@ -315,9 +289,9 @@ export const ASSISTANT_ACTIONS = [
     debugSummary: 'Reschedules a resolved event after confirmation.',
     args: [
       {
-        key: 'eventQuery',
-        label: 'Event Query',
-        description: 'The event to reschedule.',
+        key: 'eventId',
+        label: 'Event ID',
+        description: 'The grounded event identifier to reschedule.',
         type: 'string',
         required: true,
       },
@@ -379,9 +353,9 @@ export const ASSISTANT_ACTIONS = [
         required: false,
       },
       {
-        key: 'accountQuery',
-        label: 'Account Query',
-        description: 'Optional finance account query.',
+        key: 'accountId',
+        label: 'Account ID',
+        description: 'Optional grounded finance account identifier.',
         type: 'string',
         required: false,
       },
@@ -421,9 +395,9 @@ export const ASSISTANT_ACTIONS = [
         required: true,
       },
       {
-        key: 'topicQuery',
-        label: 'Topic Query',
-        description: 'Optional knowledge topic query.',
+        key: 'topicId',
+        label: 'Topic ID',
+        description: 'Optional grounded knowledge topic identifier.',
         type: 'string',
         required: false,
       },
@@ -461,8 +435,8 @@ export function isCapabilityLive(id: string): id is CapabilityId {
   return capabilityMap.get(id)?.status === 'live';
 }
 
-export function listCapabilitiesForPrompt(): string {
-  return getLiveCapabilityDefinitions().map(capability => {
+export function listCapabilitiesForPrompt(capabilities: readonly CapabilityDefinition[] = getLiveCapabilityDefinitions()): string {
+  return capabilities.map(capability => {
     const args = capability.args.length > 0
       ? capability.args
         .map(arg => {

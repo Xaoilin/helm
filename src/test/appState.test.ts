@@ -1,7 +1,33 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { AppProvider, useApp } from '../store/AppContext';
 import { createElement, type ReactNode } from 'react';
+
+const { processAssistantCommandMock } = vi.hoisted(() => ({
+  processAssistantCommandMock: vi.fn(),
+}));
+
+vi.mock('../services/assistantRuntime', () => ({
+  isOllamaAvailable: vi.fn(),
+  resetOllamaCache: vi.fn(),
+  processAssistantCommand: processAssistantCommandMock,
+}));
+
+beforeEach(() => {
+  processAssistantCommandMock.mockReset();
+  processAssistantCommandMock.mockResolvedValue({
+    message: 'Opening calendar for you.',
+    plan: { mode: 'act', response: 'Opening calendar for you.', confidence: 1, steps: [] },
+    dialogState: {
+      currentSurface: 'chat',
+      recentEntities: [],
+      recentPlans: [],
+    },
+    source: 'openai',
+    planningSource: 'openai',
+    planningStatus: 'planned',
+  });
+});
 
 async function renderWithApp() {
   const wrapper = ({ children }: { children: ReactNode }) => createElement(AppProvider, null, children);

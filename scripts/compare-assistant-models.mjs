@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
-const DEFAULT_OPENAI_MODEL = 'gpt-5.4-mini';
+const DEFAULT_OPENAI_MODEL = 'gpt-5.4';
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const DEFAULT_OUTPUT_DIR = 'test-results';
 
