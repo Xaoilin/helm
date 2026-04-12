@@ -35,4 +35,12 @@ describe('assistant benchmark corpus', () => {
     expect(examples.length).toBeGreaterThan(0);
     expect(examples.every(example => example.expectedCapabilities.includes('tasks.delete_matching'))).toBe(true);
   });
+
+  it('includes dialog seeds and grounded entity expectations for pronoun-heavy and destructive cases', () => {
+    const seededCases = ASSISTANT_BENCHMARK_CASES.filter(example => example.dialogStateSeed);
+    const groundedCases = ASSISTANT_BENCHMARK_CASES.filter(example => example.expectedReferencedEntityIds?.length);
+
+    expect(seededCases.length).toBeGreaterThan(0);
+    expect(groundedCases.length).toBeGreaterThan(20);
+  });
 });

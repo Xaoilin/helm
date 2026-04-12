@@ -181,6 +181,17 @@ export const LIMITS = {
   DEFAULT_EVENT_DURATION: 3600000,
 } as const;
 
+export const ASSISTANT_BENCHMARK = {
+  /** Minimum overall corpus pass rate required for the release gate. */
+  MIN_OVERALL_PASS_RATE: 0.98,
+  /** Destructive intents must never regress below a perfect pass rate. */
+  MIN_DESTRUCTIVE_PASS_RATE: 1,
+  /** Unsupported-action no-approximation cases must never regress below a perfect pass rate. */
+  MIN_UNSUPPORTED_PASS_RATE: 1,
+  /** Number of failing cases to show inline before summarising the remainder. */
+  MAX_FAILURES_IN_SUMMARY: 12,
+} as const;
+
 // ── Environment ──
 
 export const LOCALHOST_HOSTNAMES = ['localhost', '127.0.0.1', '::1', '[::1]'] as const;

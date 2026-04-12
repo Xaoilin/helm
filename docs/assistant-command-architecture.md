@@ -28,7 +28,7 @@ Still intentionally lightweight:
 
 - entity ranking is heuristic and local-first rather than embedding-backed
 - prayer-based time resolution uses the currently loaded prayer snapshot only
-- exact transcript corrections such as "No, I said ..." now persist as local-first assistant memory, but a broader teaching-loop memory and benchmark scoring harness are still future work
+- exact transcript corrections such as "No, I said ..." now persist as local-first assistant memory, but a broader teaching-loop memory and richer semantic reuse are still future work
 
 ## Shipped Cutover
 
@@ -247,9 +247,12 @@ Build a benchmark from real commands.
 Current shipped coverage:
 
 - 200-plus representative utterances in `src/assistant/evals/benchmarkCorpus.ts`
+- benchmark dialog seeds plus grounded-id expectations for destructive, referential, and other grounded cases
 - expected plan mode
 - expected capability family
 - no-approximation coverage for unsupported and destructive intents
+- a runnable benchmark scorer in `scripts/run-assistant-benchmark.ts`
+- threshold enforcement on `master` before deployment: 100% destructive, 100% unsupported no-approximation, and 98% overall benchmark pass rate
 
 Prompt or model changes should not ship unless they improve or preserve benchmark results.
 

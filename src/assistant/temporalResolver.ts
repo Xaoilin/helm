@@ -97,12 +97,14 @@ function cleanupText(value: string): string {
 export function extractTemporalReference(
   input: string,
   context: AssistantCommandContext,
-  options: { defaultDurationMs?: number } = {},
+  options: { defaultDurationMs?: number; baseStart?: string; baseEnd?: string } = {},
 ): TemporalExtraction {
   const defaultDurationMs = options.defaultDurationMs ?? LIMITS.DEFAULT_EVENT_DURATION;
   const original = input;
   let remaining = input;
   const now = getReferenceDate(context);
+  const baseStart = options.baseStart ? new Date(options.baseStart) : null;
+  const baseEnd = options.baseEnd ? new Date(options.baseEnd) : null;
   let baseDate = new Date(now);
   let precision: TemporalResolution['precision'] = 'day';
   const phrases: string[] = [];
@@ -122,6 +124,10 @@ export function extractTemporalReference(
     baseDate.setDate(baseDate.getDate() + 1);
     phrases.push('tomorrow');
     remaining = remaining.replace(/\btomorrow\b/i, ' ');
+  } else if (/\bnext month\b/i.test(remaining)) {
+    baseDate.setMonth(baseDate.getMonth() + 1);
+    phrases.push('next month');
+    remaining = remaining.replace(/\bnext month\b/i, ' ');
   } else if (/\bnext week\b/i.test(remaining)) {
     baseDate.setDate(baseDate.getDate() + 7);
     phrases.push('next week');
@@ -185,6 +191,35 @@ export function extractTemporalReference(
     precision = 'window';
     phrases.push('tonight');
     remaining = remaining.replace(/\btonight\b/i, ' ');
+  }
+
+  const relativeHourShift = remaining.match(
+    /\b(?:(back|ahead|forward|later|earlier)\s+(?:by\s+)?(an|one|\d+)\s+hour(?:s)?|(an|one|\d+)\s+hour(?:s)?\s+(later|earlier))\b/i,
+  );
+  if (!exactTime && relativeHourShift && baseStart) {
+    const verb = (relativeHourShift[1] || relativeHourShift[5] || '').toLowerCase();
+    const amountToken = relativeHourShift[2] || relativeHourShift[4] || '1';
+    const amount = amountToken.match(/^\d+$/u) ? parseInt(amountToken, 10) : 1;
+    const direction = verb === 'earlier' ? -1 : 1;
+    const shiftedStart = new Date(baseStart);
+    shiftedStart.setHours(shiftedStart.getHours() + (direction * amount));
+    const shiftedEnd = baseEnd
+      ? new Date(new Date(baseEnd).getTime() + (direction * amount * 60 * 60 * 1000))
+      : new Date(shiftedStart.getTime() + defaultDurationMs);
+
+    phrases.push(relativeHourShift[0]);
+    remaining = remaining.replace(relativeHourShift[0], ' ');
+
+    return {
+      resolution: {
+        phrase: phrases.join(' '),
+        date: toLocalDateStr(shiftedStart),
+        start: shiftedStart.toISOString(),
+        end: shiftedEnd.toISOString(),
+        precision: 'exact',
+      },
+      cleanedText: cleanupText(remaining),
+    };
   }
 
   const explicitTimeMatch = remaining.match(/\b(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i);
