@@ -24,4 +24,47 @@ describe('extractOutputText', () => {
       ],
     })).toBe('{"answer":"hello"}');
   });
+
+  it('prefers a single valid JSON object when output_text is duplicated', () => {
+    expect(extractOutputText({
+      output_text: '{"answer":"hello"}\n{"answer":"hello"}',
+      output: [
+        {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'output_text',
+              text: '{"answer":"hello"}',
+            },
+            {
+              type: 'output_text',
+              text: '{"answer":"hello"}',
+            },
+          ],
+        },
+      ],
+    })).toBe('{"answer":"hello"}');
+  });
+
+  it('reassembles split nested output_text chunks into one JSON object', () => {
+    expect(extractOutputText({
+      output: [
+        {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'output_text',
+              text: '{"answer":',
+            },
+            {
+              type: 'output_text',
+              text: '"hello"}',
+            },
+          ],
+        },
+      ],
+    })).toBe('{"answer":"hello"}');
+  });
 });
