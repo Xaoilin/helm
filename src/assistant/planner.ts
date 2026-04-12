@@ -209,7 +209,7 @@ function pickDefaultKnowledgeTopic(context: AssistantCommandContext): KnowledgeT
   return context.knowledgeTopics.length === 1 ? context.knowledgeTopics[0] : null;
 }
 
-function deriveGuardrailIntent(transcript: string): GuardrailIntent {
+function derivePlannerHintIntent(transcript: string): GuardrailIntent {
   const lower = normaliseText(transcript);
 
   if (/(?:\bdelete\b|\bremove\b|\btrash\b|احذف|امسح|شيل)/i.test(lower)) return 'delete_task';
@@ -223,6 +223,11 @@ function deriveGuardrailIntent(transcript: string): GuardrailIntent {
   if (/(?:\badd task\b|\bcreate task\b|\bnew task\b|\bhabit\b|\bgoal\b)/i.test(lower)) return 'create_task';
   if (/(?:\bopen\b|\bgo to\b|\bswitch to\b|\btake me to\b|\bshow\b)/i.test(lower)) return 'navigate';
   return null;
+}
+
+function deriveGuardrailIntent(transcript: string): GuardrailIntent {
+  const lower = normaliseText(transcript);
+  return /(?:\bdelete\b|\bremove\b|\btrash\b|احذف|امسح|شيل)/i.test(lower) ? 'delete_task' : null;
 }
 
 function guardrailCapabilityIds(intent: GuardrailIntent): CapabilityId[] {
@@ -273,6 +278,13 @@ function guardrailClarifyMessage(intent: GuardrailIntent, lang: AssistantLang): 
   }
 }
 
+function looksLikeImperativeActionRequest(transcript: string): boolean {
+  const lower = normaliseText(transcript);
+  if (lower.endsWith('?')) return false;
+
+  return /^(?:open|show|take|go|switch|add|create|make|delete|remove|trash|complete|finish|mark|check off|schedule|book|move|push|reschedule|record|log|save|email|text|call|post|send|order|reply|transfer|write|publish|sync|turn|start)\b/i.test(lower);
+}
+
 function capabilityScore(transcript: string, capability: CapabilityDefinition): number {
   const query = normaliseText(transcript);
   const texts = [
@@ -287,12 +299,12 @@ function capabilityScore(transcript: string, capability: CapabilityDefinition): 
   const best = Math.max(...texts.map(text => computeOverlapScore(query, text)));
   if (best === 0) return 0;
 
-  const bonus = capability.confirmationRule === 'always' && deriveGuardrailIntent(transcript) === 'delete_task' ? 0.2 : 0;
+  const bonus = capability.confirmationRule === 'always' && derivePlannerHintIntent(transcript) === 'delete_task' ? 0.2 : 0;
   return Math.min(1, best + bonus);
 }
 
 function buildCapabilityCandidates(transcript: string): CapabilityDefinition[] {
-  const guardrailIds = new Set(guardrailCapabilityIds(deriveGuardrailIntent(transcript)));
+  const guardrailIds = new Set(guardrailCapabilityIds(derivePlannerHintIntent(transcript)));
   const scored = getLiveCapabilityDefinitions()
     .map(capability => ({
       capability,
@@ -339,22 +351,44 @@ function pushUniqueCandidate(
   list.push(candidate);
 }
 
-function buildPlanningBundle(
+function extractTaskEntityQuery(transcript: string): string {
+  return transcript
+    .replace(/^(?:please\s+)?(?:show(?:\s+me)?|open|find|locate|pull\s+up|take\s+me\s+to|complete|mark|finish|check\s+off|delete|remove|trash)\s+/i, '')
+    .replace(/^(?:all\s+of\s+)?(?:the\s+)?(?:my\s+)?/i, '')
+    .replace(/\b(?:tasks?|task|goals?|goal|habits?|habit)\b/gi, ' ')
+    .replace(/\b(?:related to|about|for|called|named|as done|done)\b/gi, ' ')
+    .replace(/^(?:the|my)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function buildPlanningBundle(
   transcript: string,
   context: AssistantCommandContext,
   dialogState: AssistantDialogState | undefined,
 ): AssistantPlanningBundle {
   const capabilities = buildCapabilityCandidates(transcript);
-  const tasks = resolveTaskReference(transcript, context, dialogState, { allowCompleted: true }).matches
-    .slice(0, MAX_CANDIDATES)
-    .map(match => ({
-      kind: 'task' as const,
-      id: match.data.id,
-      label: match.data.title,
-      surface: 'tasks' as const,
-      score: match.score,
-      detail: `${match.data.category}${match.data.completed ? ', completed' : ', open'}`,
-    }));
+  const taskCandidateMap = new Map<string, AssistantPlanningEntityCandidate>();
+  const taskQueries = [...new Set([transcript, extractTaskEntityQuery(transcript)].filter(Boolean))];
+  for (const query of taskQueries) {
+    for (const match of resolveTaskReference(query, context, dialogState, { allowCompleted: true }).matches.slice(0, MAX_CANDIDATES)) {
+      const candidate: AssistantPlanningEntityCandidate = {
+        kind: 'task',
+        id: match.data.id,
+        label: match.data.title,
+        surface: 'tasks',
+        score: match.score,
+        detail: `${match.data.category}${match.data.completed ? ', completed' : ', open'}`,
+      };
+      const existing = taskCandidateMap.get(candidate.id);
+      if (!existing || candidate.score > existing.score) {
+        taskCandidateMap.set(candidate.id, candidate);
+      }
+    }
+  }
+  const tasks = [...taskCandidateMap.values()]
+    .sort((left, right) => right.score - left.score || left.label.localeCompare(right.label))
+    .slice(0, MAX_CANDIDATES);
   const recentTask = dialogState?.recentEntities.find(entity => entity.kind === 'task');
   if (recentTask) {
     const task = context.tasks.find(item => item.id === recentTask.id);
@@ -516,7 +550,7 @@ function buildPlanningBundle(
   };
 }
 
-function buildPlannerMessages(
+export function buildPlannerMessages(
   transcript: string,
   bundle: AssistantPlanningBundle,
   lang: AssistantLang,
@@ -555,7 +589,9 @@ Planning rules:
 - For knowledge.create_entry, pass topicId when a specific topic is intended or the bundle makes a default clear.
 - Prefer clarify over guessing when the correct id, time, or target is uncertain.
 - If the user asks for an unsupported action, clarify truthfully and do not approximate it to another capability.
+- For unsupported requests that ask Lina to perform work, use mode "clarify", not "answer".
 - If the request is destructive and you are not fully sure which item(s) to delete, choose clarify.
+- If the user asks to delete all matching tasks and the bundle contains multiple clear task matches, include every relevant task id in taskIds and choose confirm instead of clarify.
 - Keep response concise and user-facing.`;
 
   const history = (conversationHistory || []).slice(-LIMITS.LLM_HISTORY_MESSAGES).map<OllamaMessage>(message => ({
@@ -626,7 +662,7 @@ function extractJsonObjectCandidates(response: string): string[] {
   return candidates;
 }
 
-function parsePlanFromModelResponse(response: string): ActionPlan | null {
+export function parsePlanFromModelResponse(response: string): ActionPlan | null {
   const directPlan = tryParsePlanCandidate(response);
   if (directPlan) return directPlan;
 
@@ -638,7 +674,7 @@ function parsePlanFromModelResponse(response: string): ActionPlan | null {
   return null;
 }
 
-function looksLikeStructuredPlanPayload(response: string): boolean {
+export function looksLikeStructuredPlanPayload(response: string): boolean {
   if (!response.trim()) return false;
 
   const planPattern = /"mode"\s*:\s*"(?:answer|clarify|confirm|act)"/;
@@ -704,7 +740,7 @@ function validateTaskId(
   return { task };
 }
 
-function validateModelPlan(
+export function validateModelPlan(
   transcript: string,
   plan: ActionPlan,
   context: AssistantCommandContext,
@@ -732,6 +768,13 @@ function validateModelPlan(
         guardrailClarifyMessage(guardrailIntent, lang),
       );
     }
+  }
+
+  if (plan.mode === 'answer' && looksLikeImperativeActionRequest(transcript)) {
+    return validationSuccess({
+      ...plan,
+      mode: 'clarify',
+    }, []);
   }
 
   if (plan.mode === 'clarify' || plan.mode === 'answer') {
@@ -864,7 +907,10 @@ function validateModelPlan(
         let start = typeof step.args.start === 'string' ? step.args.start : '';
         let end = typeof step.args.end === 'string' ? step.args.end : '';
         if ((!start || !end) && typeof step.args.timePhrase === 'string') {
-          const resolution = extractTemporalReference(step.args.timePhrase, context).resolution;
+          const resolution = extractTemporalReference(step.args.timePhrase, context, {
+            baseStart: event.start,
+            baseEnd: event.end,
+          }).resolution;
           start = start || resolution?.start || '';
           end = end || resolution?.end || '';
         }

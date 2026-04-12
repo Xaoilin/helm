@@ -166,6 +166,7 @@ Planning providers:
 
 The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally. That shared runtime owns task-title normalization, recent-task reveal handling such as "show me that task", grounded ID validation for mutations, and the typed navigation handoff used by the Tasks surface to jump to `All Tasks` and highlight the resolved item.
 The assistant action registry in `src/assistant/capabilities.ts` is the source of truth for which actions Lina may claim and execute. The Debug surface renders that registry directly and also shows the latest planning bundle, raw planner response, validator verdict, structured plan, execution steps, and navigation payload so action coverage stays inspectable.
+The assistant benchmark corpus and scorer now live under `src/assistant/evals/` plus `scripts/run-assistant-benchmark.ts`, and the hosted benchmark thresholds are enforced on `master` before deployment.
 
 ### Other external services
 
@@ -202,7 +203,7 @@ The Vite README is still the default template, so the docs in this folder and `A
 
 ## Current Architecture Risks
 
-- Entity and benchmark retrieval are still heuristic, so improvements should be measured before changing prompts or capability metadata.
+- Entity retrieval and benchmark example retrieval are still heuristic, so improvements should be measured before changing prompts or capability metadata.
 - Some integrations are real and some are still mock or placeholder paths, so docs must distinguish between them carefully.
 - Large surface components still exist, even though state has already been split into domain providers.
 - Security is MVP-grade for a single-user local-first app; credentials and API keys are not managed like a hardened multi-user product.

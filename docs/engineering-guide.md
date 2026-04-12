@@ -44,12 +44,20 @@ Use the repo scripts or local binaries directly:
 - `npm run test:e2e`
 - `npm run build`
 - `npm run check`
+- `npm run benchmark:assistant -- --provider hosted --enforce` when the hosted assistant env is available
+- `npm run release:check` when you want the local release gate plus the hosted benchmark in one command
 
 For small changes, run the most relevant checks first. Before landing broader code changes, run the full set above unless a dependency or environment blocker prevents it.
 
 Run `npm run handoff:check` for every completed feature handoff, even before merge. On branch-only work it is expected to fail if uncommitted non-generated changes remain, if the work is still branch-only, if the live GitHub Pages bundle is not yet serving the current version, or if the local topic branch still exists.
 
 Before claiming a user-facing change is live or shipped, `npm run handoff:check` must also pass after merge and deploy. That command fails if uncommitted non-generated changes remain, if the work is still branch-only, if the `master` CI or deploy workflows have not succeeded for the deployed head, if the live GitHub Pages bundle is not serving the current version, or if merged `codex/` branches still exist.
+
+For assistant-planning changes, the release bar is higher than generic unit coverage:
+
+- keep the 200-plus assistant benchmark corpus current with real utterances, dialog seeds, and grounded-id expectations
+- run the live hosted benchmark before release when the environment is available
+- do not ship if the assistant benchmark drops below 100% destructive intent coverage, 100% unsupported no-approximation coverage, or 98% overall pass rate
 
 ## Release Versioning
 
@@ -66,6 +74,7 @@ Before claiming a user-facing change is live or shipped, `npm run handoff:check`
 
 - The CI workflow job names are part of the contract with GitHub branch protection. Keep them as `lint`, `typecheck`, `unit`, `e2e`, and `build`.
 - `master` should stay protected with pull requests required and those five checks required before merge.
+- The non-required `assistant-benchmark` CI job now runs on pushes to `master` and blocks deployment if the live hosted benchmark thresholds fail.
 - The normal landing path is therefore a small branch and PR into `master`, not direct commits to `master` or long-lived finished changes sitting only locally.
 - Deploy should continue to trigger only from a successful CI run on `master`, not from arbitrary pushes or partial workflows.
 
