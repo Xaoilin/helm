@@ -1,9 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { HOSTED_ASSISTANT_MODEL } from '../config';
+import { TIMING } from '../config/constants';
 import { getCurrentUserId, isAuthenticated, isSupabaseReady } from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
 import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
+import { downloadConversationAsMarkdown, formatConversationAsMarkdown } from '../services/chatExport';
+
+interface ExportFeedback {
+  tone: 'success' | 'error';
+  message: string;
+}
 
 function defaultAssistantStatus(): AssistantRuntimeStatus {
   return {
@@ -41,6 +48,18 @@ function getEmptyStateMessage(status: AssistantRuntimeStatus): string {
   return `${status.detail} Without a live AI planner, Lina will not guess or execute assistant actions from chat.`;
 }
 
+function formatConversationUpdatedAt(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
+
+  return date.toLocaleString([], {
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export default function ChatSurface() {
   const app = useApp();
   const [input, setInput] = useState('');
@@ -49,11 +68,13 @@ export default function ChatSurface() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [assistantStatus, setAssistantStatus] = useState<AssistantRuntimeStatus>(defaultAssistantStatus);
+  const [exportFeedback, setExportFeedback] = useState<ExportFeedback | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const authSyncKey = `${isSupabaseReady()}:${isAuthenticated()}:${getCurrentUserId() || ''}`;
   const selectedProvider = getAssistantProviderSetting(app.settings);
 
   const activeConv = app.conversations.find(c => c.id === app.activeConversationId);
+  const canExportConversation = Boolean(activeConv && activeConv.messages.length > 0);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +93,16 @@ export default function ChatSurface() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConv?.messages.length, isTyping]);
 
+  useEffect(() => {
+    if (!exportFeedback) return;
+    const timeout = window.setTimeout(() => setExportFeedback(null), TIMING.TOAST_LIFETIME);
+    return () => window.clearTimeout(timeout);
+  }, [exportFeedback]);
+
+  useEffect(() => {
+    setExportFeedback(null);
+  }, [activeConv?.id]);
+
   const handleSend = async () => {
     const text = input.trim();
     if (!text || isTyping) return;
@@ -89,6 +120,48 @@ export default function ChatSurface() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const handleCopyConversation = async () => {
+    if (!activeConv || activeConv.messages.length === 0) return;
+
+    if (!navigator.clipboard?.writeText) {
+      setExportFeedback({
+        tone: 'error',
+        message: 'Clipboard access is unavailable here. Export the Markdown file instead.',
+      });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(formatConversationAsMarkdown(activeConv));
+      setExportFeedback({
+        tone: 'success',
+        message: 'Conversation copied as Markdown.',
+      });
+    } catch {
+      setExportFeedback({
+        tone: 'error',
+        message: 'Clipboard access failed. Export the Markdown file instead.',
+      });
+    }
+  };
+
+  const handleExportConversation = () => {
+    if (!activeConv || activeConv.messages.length === 0) return;
+
+    try {
+      const { fileName } = downloadConversationAsMarkdown(activeConv);
+      setExportFeedback({
+        tone: 'success',
+        message: `Exported ${fileName}.`,
+      });
+    } catch {
+      setExportFeedback({
+        tone: 'error',
+        message: 'The Markdown export failed.',
+      });
     }
   };
 
@@ -194,6 +267,37 @@ export default function ChatSurface() {
       <div className="chat-main">
         {activeConv ? (
           <>
+            <div className="chat-main-header">
+              <div className="chat-main-copy">
+                <h3 className="chat-main-title">{activeConv.title}</h3>
+                <p className="chat-main-meta">
+                  {activeConv.messages.length > 0
+                    ? `${activeConv.messages.length} message${activeConv.messages.length === 1 ? '' : 's'} · Updated ${formatConversationUpdatedAt(activeConv.updatedAt)} · Copy or export this chat as Markdown for Codex.`
+                    : 'Add a message to copy or export this chat as Markdown for Codex.'}
+                </p>
+              </div>
+              <div className="chat-main-actions">
+                {exportFeedback && (
+                  <span className={`chat-export-status ${exportFeedback.tone}`} role="status">
+                    {exportFeedback.message}
+                  </span>
+                )}
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { void handleCopyConversation(); }}
+                  disabled={!canExportConversation}
+                >
+                  Copy Markdown
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleExportConversation}
+                  disabled={!canExportConversation}
+                >
+                  Export .md
+                </button>
+              </div>
+            </div>
             <div className="chat-messages">
               {activeConv.messages.length === 0 && (
                 <div className="empty-state" role="status">

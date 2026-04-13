@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
 const SETTINGS_KEY = 'helm:settings';
@@ -342,6 +343,55 @@ test.describe('Lina Assistant', () => {
 
     await page.getByRole('button', { name: 'All Tasks' }).click();
     await expect(page.locator('text=put the mirror up on the office')).toBeVisible();
+  });
+
+  test('should export the active chat conversation as markdown', async ({ page }) => {
+    await page.addInitScript(({ conversations }) => {
+      localStorage.setItem('helm:conversations', JSON.stringify(conversations));
+    }, {
+      conversations: [
+        {
+          id: 'conv-export',
+          title: 'Delete my Internet task.',
+          createdAt: '2026-04-13T09:00:00.000Z',
+          updatedAt: '2026-04-13T09:05:00.000Z',
+          messages: [
+            {
+              id: 'msg-1',
+              role: 'user',
+              content: 'Delete my Internet task.',
+              timestamp: '2026-04-13T09:00:00.000Z',
+            },
+            {
+              id: 'msg-2',
+              role: 'assistant',
+              content: 'I can delete that. Do you want me to continue?',
+              timestamp: '2026-04-13T09:00:05.000Z',
+            },
+          ],
+        },
+      ],
+    });
+
+    await page.reload();
+    await page.waitForSelector('.sidebar');
+    await page.getByRole('button', { name: 'Navigate to Chat' }).click();
+    await page.getByText('Delete my Internet task.').click();
+    await expect(page.getByRole('heading', { name: 'Delete my Internet task.' })).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export .md' }).click();
+    const download = await downloadPromise;
+    const downloadPath = await download.path();
+
+    expect(download.suggestedFilename()).toMatch(/^helm-chat-delete-my-internet-task-/);
+    expect(downloadPath).not.toBeNull();
+
+    const markdown = readFileSync(downloadPath!, 'utf8');
+    expect(markdown).toContain('# HELM Chat Export');
+    expect(markdown).toContain('## Transcript');
+    expect(markdown).toContain('Delete my Internet task.');
+    expect(markdown).toContain('I can delete that. Do you want me to continue?');
   });
 
   test('should confirm and delete all matching mirror tasks from chat', async ({ page }) => {

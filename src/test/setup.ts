@@ -16,3 +16,18 @@ const localStorageMock = {
   key: vi.fn((i: number) => Object.keys(store)[i] || null),
 };
 Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock });
+
+const clipboardMock = {
+  writeText: vi.fn().mockResolvedValue(undefined),
+  readText: vi.fn().mockResolvedValue(''),
+};
+
+Object.defineProperty(globalThis.navigator, 'clipboard', {
+  value: clipboardMock,
+  configurable: true,
+});
+
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+  value: vi.fn(),
+  configurable: true,
+});
