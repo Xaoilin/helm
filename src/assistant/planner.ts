@@ -69,6 +69,7 @@ type GuardrailIntent =
   | 'create_knowledge'
   | 'create_task'
   | null;
+type UnsupportedGuardrail = 'device_control' | null;
 
 const DEFAULT_OLLAMA_MODEL = 'qwen3';
 const MAX_CANDIDATES = 5;
@@ -143,6 +144,10 @@ const RESPONSES = {
   validatorRejected: {
     en: 'I did not get a safe grounded action plan for that request, so I need to clarify first.',
     ar: 'لم أحصل على خطة إجراء مؤرضة وآمنة لهذا الطلب، لذلك أحتاج إلى توضيح أولاً.',
+  },
+  unsupportedDeviceControl: {
+    en: 'I can help inside HELM, but I cannot control device or internet settings from here.',
+    ar: 'أستطيع المساعدة داخل HELM، لكن لا يمكنني التحكم في إعدادات الجهاز أو الإنترنت من هنا.',
   },
 };
 
@@ -230,6 +235,14 @@ function deriveGuardrailIntent(transcript: string): GuardrailIntent {
   return /(?:\bdelete\b|\bremove\b|\btrash\b|احذف|امسح|شيل)/i.test(lower) ? 'delete_task' : null;
 }
 
+function deriveUnsupportedGuardrail(transcript: string): UnsupportedGuardrail {
+  const lower = normaliseText(transcript);
+  if (/\bturn\b.+\b(?:off|on)\b/i.test(lower)) return 'device_control';
+  if (/\bdo not disturb\b/i.test(lower)) return 'device_control';
+  if (/\bplay\b/i.test(lower) && /\bspotify\b/i.test(lower)) return 'device_control';
+  return null;
+}
+
 function guardrailCapabilityIds(intent: GuardrailIntent): CapabilityId[] {
   switch (intent) {
     case 'delete_task':
@@ -273,6 +286,15 @@ function guardrailClarifyMessage(intent: GuardrailIntent, lang: AssistantLang): 
       return RESPONSES.financeClarify[lang];
     case 'create_knowledge':
       return RESPONSES.knowledgeClarify[lang];
+    default:
+      return RESPONSES.validatorRejected[lang];
+  }
+}
+
+function unsupportedGuardrailClarifyMessage(intent: UnsupportedGuardrail, lang: AssistantLang): string {
+  switch (intent) {
+    case 'device_control':
+      return RESPONSES.unsupportedDeviceControl[lang];
     default:
       return RESPONSES.validatorRejected[lang];
   }
@@ -476,6 +498,15 @@ export function buildPlanningBundle(
       }
     : null);
 
+  const defaultTopic = pickDefaultKnowledgeTopic(context);
+  const describeKnowledgeTopicCandidate = (topic: KnowledgeTopic, isDefault: boolean): string | undefined => {
+    const parts = [
+      isDefault ? 'default topic' : '',
+      topic.description?.trim() || '',
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join('; ') : undefined;
+  };
+
   const knowledgeTopics = context.knowledgeTopics.length > 0
     ? resolveKnowledgeTopicReference(transcript, context, dialogState).matches
       .slice(0, MAX_CANDIDATES)
@@ -485,9 +516,9 @@ export function buildPlanningBundle(
         label: match.data.name,
         surface: 'knowledge' as const,
         score: match.score,
+        detail: describeKnowledgeTopicCandidate(match.data, match.data.id === defaultTopic?.id),
       }))
     : [];
-  const defaultTopic = pickDefaultKnowledgeTopic(context);
   pushUniqueCandidate(knowledgeTopics, defaultTopic
     ? {
         kind: 'knowledge_topic',
@@ -495,7 +526,7 @@ export function buildPlanningBundle(
         label: defaultTopic.name,
         surface: 'knowledge',
         score: 0.8,
-        detail: 'default',
+        detail: describeKnowledgeTopicCandidate(defaultTopic, true),
       }
     : null);
 
@@ -581,6 +612,7 @@ ${listCapabilitiesForPrompt(capabilities)}
 Planning rules:
 - Use only capability ids from the relevant capability list.
 - For grounded entity actions, use only ids from the planning bundle candidate lists. Never invent ids.
+- Entity candidate detail may describe a default or umbrella target. If exactly one grounded candidate is marked default and its detail clearly covers the user's requested subtopic, use that grounded id instead of clarifying.
 - For tasks.reveal_task and tasks.complete_matching, pass taskId.
 - For tasks.delete_matching, pass taskIds as an array of one or more grounded task ids.
 - For calendar.reschedule_event, pass eventId.
@@ -751,6 +783,18 @@ export function validateModelPlan(
   plannerValidation: AssistantPlannerValidation;
   planningStatus: PlannerResult['planningStatus'];
 } {
+  const unsupportedGuardrail = deriveUnsupportedGuardrail(transcript);
+  if (unsupportedGuardrail) {
+    if (plan.mode === 'clarify' && plan.steps.length === 0) {
+      return validationSuccess(plan, []);
+    }
+
+    return validationSuccess(
+      buildClarifyPlan(unsupportedGuardrailClarifyMessage(unsupportedGuardrail, lang)),
+      [],
+    );
+  }
+
   const guardrailIntent = deriveGuardrailIntent(transcript);
   const expectedCapabilityIds = guardrailCapabilityIds(guardrailIntent);
 

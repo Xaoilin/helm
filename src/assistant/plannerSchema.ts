@@ -60,7 +60,7 @@ function isValidArgValue(
   return true;
 }
 
-function normalizeActionPlanArgs(
+export function normalizeActionPlanArgs(
   value: unknown,
   capabilityId: CapabilityId,
 ): ActionPlanStepArgs | null {

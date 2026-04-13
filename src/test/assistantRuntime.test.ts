@@ -346,6 +346,47 @@ describe('assistant runtime', () => {
     expect(result.message).toBe(result.assistantMessage);
   });
 
+  it('uses the validated clarify turn instead of the raw hosted draft when guardrails coerce an unsupported action', async () => {
+    mockHostedAssistant(transcript => {
+      expect(transcript).toBe('turn my internet off');
+      return makeHostedTextTurn('confirm', 'Do you want me to mark the task “Internet” as done?', [{
+        capability: 'tasks.complete_matching',
+        args: {
+          taskId: 'task-internet',
+        },
+      }]);
+    });
+
+    const result = await processAssistantCommand('turn my internet off', makeContext({
+      tasks: [
+        makeTask({ id: 'task-internet', title: 'Internet' }),
+      ],
+    }), {
+      lang: 'en',
+      provider: 'hosted',
+      handlers: {
+        navigate: vi.fn(),
+        addTask: vi.fn(() => 'task-1'),
+        updateTask: vi.fn(),
+      },
+    });
+
+    expect(result.planningStatus).toBe('planned');
+    expect(result.assistantMessage).toBe('I can help inside HELM, but I cannot control device or internet settings from here.');
+    expect(result.plan).toEqual(expect.objectContaining({
+      mode: 'clarify',
+      response: 'I can help inside HELM, but I cannot control device or internet settings from here.',
+      steps: [],
+    }));
+    expect(result.modelTurn).toEqual({
+      mode: 'clarify',
+      assistantMessage: 'I can help inside HELM, but I cannot control device or internet settings from here.',
+      toolCalls: [],
+    });
+    expect(result.toolCalls).toEqual([]);
+    expect(result.execution).toBeUndefined();
+  });
+
   it('stores validated delete confirmations as pending tool calls and resolves natural assent locally', async () => {
     mockHostedAssistant(transcript => {
       if (transcript === 'Delete my Internet task.') {
