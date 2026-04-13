@@ -121,6 +121,7 @@ function DisableLinaHarness() {
 
 function createAssistantResult(message: string) {
   return {
+    assistantMessage: message,
     message,
     plan: {
       mode: 'answer',

@@ -376,20 +376,20 @@ export default function VoiceAssistant({ prayerData }: Props) {
       chatHistoryRef.current = [
         ...chatHistoryRef.current,
         { role: 'user' as const, content: trimmed },
-        { role: 'assistant' as const, content: result.message },
+        { role: 'assistant' as const, content: result.assistantMessage },
       ].slice(-10);
 
       if (inputMode === 'voice' && handsFreeSessionActiveRef.current && voiceConversationIdRef.current) {
         chat.recordAssistantConversationTurn(voiceConversationIdRef.current, {
           userContent: trimmed,
-          assistantContent: result.message,
+          assistantContent: result.assistantMessage,
           dialogState: result.dialogState,
         });
       }
 
       const sessionId = sessionIdRef.current;
       const continueHandsFree = inputMode === 'voice' && handsFreeSessionActiveRef.current;
-      const finishedSpeaking = await speakMessage(result.message, continueHandsFree ? sessionId : undefined);
+      const finishedSpeaking = await speakMessage(result.assistantMessage, continueHandsFree ? sessionId : undefined);
 
       if (continueHandsFree && finishedSpeaking) {
         scheduleHandsFreeListening('followup', sessionId);

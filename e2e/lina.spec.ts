@@ -21,6 +21,20 @@ type PlanningBundle = {
   };
 };
 
+type HostedTurn =
+  | {
+      type: 'text';
+      text: string;
+    }
+  | {
+      type: 'tool_calls';
+      toolCalls: Array<{
+        callId: string;
+        name: string;
+        arguments: string;
+      }>;
+    };
+
 function normalizeTranscript(value: string): string {
   return value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -38,126 +52,236 @@ function parsePlanningBundle(messages: AssistantMessage[]): PlanningBundle {
   }
 }
 
-function makePlan(
-  mode: 'answer' | 'clarify' | 'confirm' | 'act',
-  response: string,
-  steps: Array<{
+function makeTextTurn(
+  mode: 'reply' | 'clarify' | 'confirm' | 'tool_calls',
+  assistantMessage: string,
+  toolCalls: Array<{
     capability: string;
     args: Record<string, string | boolean | string[]>;
   }> = [],
-) {
+): HostedTurn {
   return {
-    mode,
-    response,
-    confidence: 0.98,
-    steps,
+    type: 'text',
+    text: JSON.stringify({
+      mode,
+      assistantMessage,
+      toolCalls: toolCalls.map(toolCall => ({
+        capability: toolCall.capability,
+        args: toolCall.args,
+      })),
+    }),
   };
 }
 
-function buildPlannerResponse(messages: AssistantMessage[]): string {
+function makeToolTurn(
+  toolCalls: Array<{
+    callId: string;
+    name: string;
+    args: Record<string, string | boolean | string[]>;
+  }>,
+): HostedTurn {
+  return {
+    type: 'tool_calls',
+    toolCalls: toolCalls.map(toolCall => ({
+      callId: toolCall.callId,
+      name: toolCall.name,
+      arguments: JSON.stringify(toolCall.args),
+    })),
+  };
+}
+
+function parseNarrationPayload(messages: AssistantMessage[]): Record<string, unknown> {
+  const content = messages[messages.length - 1]?.content || '';
+  const prefix = 'Verified turn facts JSON:\n';
+  if (!content.startsWith(prefix)) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(content.slice(prefix.length)) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function buildTurnResponse(messages: AssistantMessage[]): HostedTurn {
   const transcript = messages[messages.length - 1]?.content || '';
   const normalized = normalizeTranscript(transcript);
   const bundle = parsePlanningBundle(messages);
   const taskCandidates = bundle.entityCandidates?.tasks || [];
 
   if (normalized === 'open calendar') {
-    return JSON.stringify(makePlan('act', 'Opening Calendar for you.', [
-      { capability: 'navigation.go_to_surface', args: { surface: 'calendar' } },
-    ]));
+    return makeToolTurn([
+      { callId: 'call_open_calendar', name: 'navigation.go_to_surface', args: { surface: 'calendar' } },
+    ]);
   }
 
   if (normalized === 'show me all my tasks') {
-    return JSON.stringify(makePlan('act', 'Showing all your tasks.', [
-      { capability: 'tasks.open_view', args: { tab: 'all', resetFilters: true } },
-    ]));
+    return makeToolTurn([
+      { callId: 'call_open_all_tasks', name: 'tasks.open_view', args: { tab: 'all', resetFilters: true } },
+    ]);
   }
 
   if (normalized === 'show my goals') {
-    return JSON.stringify(makePlan('act', 'Showing your goals.', [
-      { capability: 'tasks.open_view', args: { tab: 'goals', resetFilters: true } },
-    ]));
+    return makeToolTurn([
+      { callId: 'call_open_goals', name: 'tasks.open_view', args: { tab: 'goals', resetFilters: true } },
+    ]);
   }
 
   if (normalized === 'show today s tasks' || normalized === 'show todays tasks') {
-    return JSON.stringify(makePlan('act', 'Showing today\'s tasks.', [
-      { capability: 'tasks.open_view', args: { tab: 'today', resetFilters: true } },
-    ]));
+    return makeToolTurn([
+      { callId: 'call_open_today_tasks', name: 'tasks.open_view', args: { tab: 'today', resetFilters: true } },
+    ]);
   }
 
   if (normalized === 'can you add a task for me to put the mirror up on the office') {
-    return JSON.stringify(makePlan('act', 'Adding that task.', [
+    return makeToolTurn([
       {
-        capability: 'tasks.create_task',
+        callId: 'call_create_task_office_mirror',
+        name: 'tasks.create_task',
         args: {
           title: 'put the mirror up on the office',
           priority: 'medium',
           category: 'task',
         },
       },
-    ]));
+    ]);
   }
 
   if (normalized === 'add task hang up the mirror in this small office') {
-    return JSON.stringify(makePlan('act', 'Adding that task.', [
+    return makeToolTurn([
       {
-        capability: 'tasks.create_task',
+        callId: 'call_create_task_small_office_mirror',
+        name: 'tasks.create_task',
         args: {
           title: 'hang up the mirror in this small office',
           priority: 'medium',
           category: 'task',
         },
       },
-    ]));
+    ]);
   }
 
   if (normalized === 'add task buy mirror hooks for the hallway') {
-    return JSON.stringify(makePlan('act', 'Adding that task.', [
+    return makeToolTurn([
       {
-        capability: 'tasks.create_task',
+        callId: 'call_create_task_mirror_hooks',
+        name: 'tasks.create_task',
         args: {
           title: 'buy mirror hooks for the hallway',
           priority: 'medium',
           category: 'task',
         },
       },
-    ]));
+    ]);
   }
 
   if (normalized === 'show me that task' || normalized === 'show me that task.') {
     const taskId = taskCandidates[0]?.id || '';
     if (!taskId) {
-      return JSON.stringify(makePlan('clarify', 'Which task should I show you?'));
+      return makeTextTurn('clarify', 'Which task should I show you?');
     }
 
-    return JSON.stringify(makePlan('act', 'Opening that task.', [
+    return makeToolTurn([
       {
-        capability: 'tasks.reveal_task',
+        callId: 'call_reveal_task',
+        name: 'tasks.reveal_task',
         args: {
           taskId,
         },
       },
-    ]));
+    ]);
   }
 
   if (normalized === 'delete all of the tasks related to mirrors' || normalized === 'no i said delete all of the tasks related to mirrors') {
     const taskIds = taskCandidates
       .filter(task => task.label.toLowerCase().includes('mirror'))
       .map(task => task.id);
-    return JSON.stringify(makePlan('act', `I can delete ${taskIds.length} tasks. Do you want me to do that?`, [
+    return makeTextTurn('confirm', `I can delete ${taskIds.length} tasks. Do you want me to do that?`, [
       {
         capability: 'tasks.delete_matching',
         args: {
           taskIds,
         },
       },
-    ]));
+    ]);
   }
 
   if (normalized === 'delete all of the tasks related to minors') {
-    return JSON.stringify(makePlan('clarify', `I couldn't find any tasks matching "minors".`));
+    return makeTextTurn('clarify', `I couldn't find any tasks matching "minors".`);
   }
 
-  return JSON.stringify(makePlan('answer', 'I can help once a live planner gives me a grounded action for that request.'));
+  return makeTextTurn('reply', 'I can help once a live planner gives me a grounded action for that request.');
+}
+
+function buildNarrationResponse(messages: AssistantMessage[]): string {
+  const payload = parseNarrationPayload(messages);
+  const turnState = typeof payload.turnState === 'string' ? payload.turnState : '';
+  const executedToolResults = Array.isArray(payload.executedToolResults)
+    ? payload.executedToolResults as Array<Record<string, unknown>>
+    : [];
+  const firstResult = executedToolResults[0];
+  const firstCapability = typeof firstResult?.capability === 'string' ? firstResult.capability : '';
+  const firstSummary = typeof firstResult?.summary === 'string' ? firstResult.summary : '';
+
+  if (turnState === 'awaiting_confirmation') {
+    const requested = Array.isArray(payload.requestedToolCalls)
+      ? payload.requestedToolCalls as Array<Record<string, unknown>>
+      : [];
+    const deleteCall = requested.find(call => call.capability === 'tasks.delete_matching');
+    if (deleteCall) {
+      const args = typeof deleteCall.args === 'object' && deleteCall.args !== null
+        ? deleteCall.args as { taskIds?: string[] }
+        : {};
+      return args.taskIds && args.taskIds.length > 1
+        ? `I can delete ${args.taskIds.length} tasks. Do you want me to do that?`
+        : 'Do you want me to delete that task?';
+    }
+    return 'Do you want me to go ahead?';
+  }
+
+  if (turnState === 'cancelled') {
+    return "Okay, I won't do that.";
+  }
+
+  if (turnState === 'clarify') {
+    return typeof payload.clarifyReason === 'string' ? payload.clarifyReason : 'I need a bit more detail first.';
+  }
+
+  if (turnState === 'executed') {
+    if (firstCapability === 'tasks.create_task') {
+      const facts = Array.isArray(firstResult?.facts) ? firstResult.facts : [];
+      const created = facts.find(fact => typeof fact === 'string' && fact.startsWith('Created the task "'));
+      const title = typeof created === 'string'
+        ? (created.match(/^Created the task "(.+)"\.$/u)?.[1] || '')
+        : '';
+      return title ? `Added "${title}" to your tasks.` : 'Added that task to your tasks.';
+    }
+
+    if (firstCapability === 'tasks.reveal_task') {
+      const entities = Array.isArray(firstResult?.entities) ? firstResult.entities as Array<Record<string, unknown>> : [];
+      const label = typeof entities[0]?.label === 'string' ? entities[0].label : 'that task';
+      return `Opening "${label}" in your tasks.`;
+    }
+
+    if (firstCapability === 'tasks.delete_matching') {
+      return firstSummary || 'Deleted that task.';
+    }
+
+    if (firstCapability === 'tasks.open_view') {
+      return firstSummary || 'Opening your tasks.';
+    }
+
+    if (firstCapability === 'navigation.go_to_surface') {
+      return firstSummary || 'Opening that surface.';
+    }
+
+    if (firstSummary) {
+      return firstSummary;
+    }
+  }
+
+  return 'How can I help next?';
 }
 
 test.describe('Lina Assistant', () => {
@@ -196,6 +320,22 @@ test.describe('Lina Assistant', () => {
         return;
       }
 
+      if (body?.action === 'turn') {
+        const turn = buildTurnResponse(body?.messages || []);
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            provider: 'openai',
+            model: 'gpt-5.4',
+            turn,
+            rawResponse: turn.type === 'text' ? turn.text : JSON.stringify(turn.toolCalls),
+          }),
+        });
+        return;
+      }
+
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -203,7 +343,9 @@ test.describe('Lina Assistant', () => {
           ok: true,
           provider: 'openai',
           model: 'gpt-5.4',
-          text: buildPlannerResponse(body?.messages || []),
+          text: JSON.stringify({
+            assistantMessage: buildNarrationResponse(body?.messages || []),
+          }),
         }),
       });
     });
@@ -442,12 +584,11 @@ test.describe('Lina Assistant', () => {
 
     await input.fill('No, I said delete all of the tasks related to mirrors');
     await input.press('Enter');
-    await expect(page.locator('.chat-message.assistant').last()).toContainText(`Thanks, I'll remember that.`);
     await expect(page.locator('.chat-message.assistant').last()).toContainText('I can delete 2 tasks');
 
     await input.fill('cancel');
     await input.press('Enter');
-    await expect(page.locator('.chat-message.assistant').last()).toContainText('Okay, I cancelled that.');
+    await expect(page.locator('.chat-message.assistant').last()).toContainText("Okay, I won't do that.");
 
     await input.fill('Delete all of the tasks related to minors');
     await input.press('Enter');

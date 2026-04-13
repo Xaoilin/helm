@@ -23,11 +23,20 @@ interface HostedAssistantHealthResponse {
   model: string;
 }
 
-interface HostedAssistantChatResponse {
+interface HostedAssistantTurnResponse {
   ok: boolean;
   provider: 'openai';
   model: string;
-  text: string;
+  turn: {
+    type: 'text' | 'tool_calls';
+    text?: string;
+    toolCalls?: Array<{
+      callId: string;
+      name: string;
+      arguments: string;
+    }>;
+  };
+  rawResponse?: string;
 }
 
 interface OllamaChatResponse {
@@ -195,7 +204,13 @@ async function fetchHostedHealth(modelOverride?: string): Promise<string> {
 async function callHostedPlanner(
   request: AssistantBenchmarkPlannerRequest,
   modelOverride?: string,
-): Promise<{ rawResponse: string; planningModel: string }> {
+): Promise<{
+  rawResponse: string;
+  planningModel: string;
+  turnType: 'text' | 'tool_calls';
+  text?: string;
+  toolCalls?: HostedAssistantTurnResponse['turn']['toolCalls'];
+}> {
   const config = getHostedConfig(modelOverride);
   const response = await fetch(config.url, {
     method: 'POST',
@@ -205,9 +220,10 @@ async function callHostedPlanner(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      action: 'chat',
+      action: 'turn',
       messages: request.messages,
-      format: request.schema,
+      format: request.format,
+      tools: request.tools,
     }),
   });
 
@@ -216,14 +232,17 @@ async function callHostedPlanner(
     throw new Error(`Hosted planner failed with ${response.status}: ${body}`);
   }
 
-  const data = await response.json() as HostedAssistantChatResponse;
-  if (!data.ok || !data.text?.trim()) {
-    throw new Error('Hosted planner returned an empty response.');
+  const data = await response.json() as HostedAssistantTurnResponse;
+  if (!data.ok || !data.turn || (data.turn.type !== 'text' && data.turn.type !== 'tool_calls')) {
+    throw new Error('Hosted planner returned an invalid orchestration turn.');
   }
 
   return {
-    rawResponse: data.text,
+    rawResponse: data.rawResponse || data.turn.text || JSON.stringify(data.turn.toolCalls || []),
     planningModel: data.model || config.model,
+    turnType: data.turn.type,
+    text: data.turn.text,
+    toolCalls: data.turn.toolCalls || [],
   };
 }
 
@@ -244,7 +263,7 @@ async function checkOllamaAvailable(endpoint: string): Promise<void> {
 async function callOllamaPlanner(
   request: AssistantBenchmarkPlannerRequest,
   modelOverride?: string,
-): Promise<{ rawResponse: string; planningModel: string }> {
+): Promise<{ rawResponse: string; planningModel: string; turnType: 'text'; text: string }> {
   const config = getOllamaConfig(modelOverride);
   const response = await fetch(`${config.endpoint.replace(/\/+$/u, '')}/api/chat`, {
     method: 'POST',
@@ -256,7 +275,7 @@ async function callOllamaPlanner(
       messages: request.messages,
       stream: false,
       think: false,
-      format: request.schema,
+      format: request.format,
       options: {
         temperature: 0.2,
         num_predict: 300,
@@ -278,6 +297,8 @@ async function callOllamaPlanner(
   return {
     rawResponse,
     planningModel: config.model,
+    turnType: 'text',
+    text: rawResponse,
   };
 }
 
@@ -325,6 +346,9 @@ async function main(): Promise<void> {
           rawResponse: response.rawResponse,
           planningSource: 'openai' as const,
           planningModel: response.planningModel,
+          turnType: response.turnType,
+          text: response.text,
+          toolCalls: response.toolCalls,
         };
       }
 
@@ -333,6 +357,8 @@ async function main(): Promise<void> {
         rawResponse: response.rawResponse,
         planningSource: 'ollama' as const,
         planningModel: response.planningModel,
+        turnType: response.turnType,
+        text: response.text,
       };
     },
   });

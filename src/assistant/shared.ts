@@ -16,7 +16,8 @@ import type {
   Workspace,
 } from '../types/domain';
 import type { AssistantNavigationHandler, AssistantNavigationRequest } from '../services/assistantNavigation';
-import type { ActionPlan } from './plannerSchema';
+import type { CapabilityId } from './capabilities';
+import type { ActionPlan, ActionPlanStepArgs } from './plannerSchema';
 
 export type AssistantLang = 'en' | 'ar';
 
@@ -55,6 +56,34 @@ export interface AssistantDialogPlanReference {
   capabilityIds: string[];
   response: string;
   createdAt: string;
+}
+
+export type AssistantConversationMode = 'reply' | 'clarify' | 'confirm' | 'tool_calls';
+
+export interface AssistantToolCallDraft {
+  capability: CapabilityId;
+  args: ActionPlanStepArgs;
+  unresolved?: string[];
+  requiresConfirmation?: boolean;
+}
+
+export interface AssistantToolCall extends AssistantToolCallDraft {
+  callId: string;
+}
+
+export interface AssistantPendingConfirmation {
+  assistantMessage: string;
+  toolCalls: AssistantToolCall[];
+  referencedEntities: AssistantEntityReference[];
+  createdAt: string;
+  source: AssistantPlanningSource;
+  planningModel?: string;
+}
+
+export interface AssistantModelTurn {
+  mode: AssistantConversationMode;
+  assistantMessage: string;
+  toolCalls: AssistantToolCall[];
 }
 
 export interface AssistantPlanningCapabilityCandidate {
@@ -129,7 +158,7 @@ export interface AssistantDialogState {
   currentSurface?: Surface;
   recentEntities: AssistantEntityReference[];
   recentPlans: AssistantDialogPlanReference[];
-  pendingConfirmation?: ActionPlan;
+  pendingConfirmation?: AssistantPendingConfirmation;
 }
 
 export interface AssistantCommandContext {
@@ -182,22 +211,37 @@ export interface AssistantCommandOptions {
 }
 
 export interface AssistantExecutionStep {
+  callId: string;
   capability: string;
   status: 'completed' | 'skipped';
   summary: string;
   entityRefs?: AssistantEntityReference[];
 }
 
+export interface AssistantToolResult {
+  callId: string;
+  capability: string;
+  status: 'completed' | 'skipped' | 'failed';
+  summary: string;
+  facts: string[];
+  entityRefs?: AssistantEntityReference[];
+  navigationRequest?: AssistantNavigationRequest;
+}
+
 export interface AssistantExecutionResult {
   status: 'executed' | 'skipped';
+  toolResults: AssistantToolResult[];
   steps: AssistantExecutionStep[];
   undoToken?: string;
   navigationRequests?: AssistantNavigationRequest[];
 }
 
 export interface AssistantCommandResult {
+  assistantMessage: string;
   message: string;
   plan: ActionPlan;
+  modelTurn?: AssistantModelTurn | null;
+  toolCalls?: AssistantToolCall[];
   dialogState: AssistantDialogState;
   execution?: AssistantExecutionResult;
   referencedEntities?: AssistantEntityReference[];
@@ -214,6 +258,7 @@ export interface AssistantCommandResult {
   planningModel?: string;
   planningBundle?: AssistantPlanningBundle;
   rawPlannerResponse?: string;
+  rawNarrationResponse?: string;
   parsedPlan?: ActionPlan | null;
   validatedPlan?: ActionPlan | null;
   plannerValidation?: AssistantPlannerValidation;

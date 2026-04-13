@@ -2,8 +2,9 @@ import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
 import {
   buildOpenAIResponsesPayload,
   isAssistantMessage,
+  type OpenAIToolDefinition,
 } from './openaiPayload.ts';
-import { extractOutputText } from './openaiResponse.ts';
+import { extractFunctionCalls, extractOutputText } from './openaiResponse.ts';
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') || 'gpt-5.4';
@@ -20,6 +21,35 @@ function getOpenAIErrorMessage(data: unknown): string {
   }
 
   return 'Unknown OpenAI error';
+}
+
+function isToolDefinition(value: unknown): value is OpenAIToolDefinition {
+  return typeof value === 'object'
+    && value !== null
+    && 'type' in value
+    && value.type === 'function'
+    && 'name' in value
+    && typeof value.name === 'string'
+    && 'description' in value
+    && typeof value.description === 'string'
+    && 'parameters' in value;
+}
+
+function extractUsage(data: unknown) {
+  return typeof data === 'object' && data !== null && 'usage' in data && typeof data.usage === 'object' && data.usage !== null
+    ? {
+        inputTokens: 'input_tokens' in data.usage && typeof data.usage.input_tokens === 'number' ? data.usage.input_tokens : undefined,
+        outputTokens: 'output_tokens' in data.usage && typeof data.usage.output_tokens === 'number' ? data.usage.output_tokens : undefined,
+        totalTokens: 'total_tokens' in data.usage && typeof data.usage.total_tokens === 'number' ? data.usage.total_tokens : undefined,
+      }
+    : undefined;
+}
+
+function stringifyRawResponse(data: unknown): string {
+  return JSON.stringify({
+    output_text: typeof data === 'object' && data !== null && 'output_text' in data ? data.output_text : undefined,
+    output: typeof data === 'object' && data !== null && 'output' in data ? data.output : undefined,
+  }, null, 2);
 }
 
 Deno.serve(async (request) => {
@@ -53,7 +83,7 @@ Deno.serve(async (request) => {
     });
   }
 
-  if (body.action !== 'chat') {
+  if (body.action !== 'chat' && body.action !== 'turn') {
     return jsonResponse({ error: `Unsupported action: ${body.action}` }, { status: 400 });
   }
 
@@ -62,8 +92,24 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: 'messages must be a non-empty array of assistant messages.' }, { status: 400 });
   }
 
-  if (typeof body.format !== 'object' || body.format === null || Array.isArray(body.format)) {
+  if (
+    body.action === 'chat'
+    && (typeof body.format !== 'object' || body.format === null || Array.isArray(body.format))
+  ) {
     return jsonResponse({ error: 'format must be a JSON schema object.' }, { status: 400 });
+  }
+
+  if (
+    body.action === 'turn'
+    && body.format !== undefined
+    && (typeof body.format !== 'object' || body.format === null || Array.isArray(body.format))
+  ) {
+    return jsonResponse({ error: 'format must be a JSON schema object when provided.' }, { status: 400 });
+  }
+
+  const tools = Array.isArray(body.tools) ? body.tools : [];
+  if (body.action === 'turn' && tools.some(tool => !isToolDefinition(tool))) {
+    return jsonResponse({ error: 'tools must be valid OpenAI function tool definitions.' }, { status: 400 });
   }
 
   const response = await fetch(OPENAI_URL, {
@@ -75,7 +121,12 @@ Deno.serve(async (request) => {
     body: JSON.stringify(buildOpenAIResponsesPayload({
       model: OPENAI_MODEL,
       messages,
-      format: body.format,
+      format: typeof body.format === 'object' && body.format !== null && !Array.isArray(body.format)
+        ? body.format
+        : undefined,
+      tools: body.action === 'turn'
+        ? tools
+        : undefined,
     })),
   });
 
@@ -87,18 +138,47 @@ Deno.serve(async (request) => {
     );
   }
 
+  const usage = extractUsage(data);
+  const rawResponse = stringifyRawResponse(data);
+
+  if (body.action === 'turn') {
+    const toolCalls = extractFunctionCalls(data);
+    if (toolCalls.length > 0) {
+      return jsonResponse({
+        ok: true,
+        provider: 'openai',
+        model: OPENAI_MODEL,
+        turn: {
+          type: 'tool_calls',
+          toolCalls,
+        },
+        rawResponse,
+        usage,
+      });
+    }
+
+    const text = extractOutputText(data).trim();
+    if (!text) {
+      return jsonResponse({ error: 'OpenAI returned neither output_text nor tool calls.' }, { status: 502 });
+    }
+
+    return jsonResponse({
+      ok: true,
+      provider: 'openai',
+      model: OPENAI_MODEL,
+      turn: {
+        type: 'text',
+        text,
+      },
+      rawResponse,
+      usage,
+    });
+  }
+
   const text = extractOutputText(data).trim();
   if (!text) {
     return jsonResponse({ error: 'OpenAI returned no output_text.' }, { status: 502 });
   }
-
-  const usage = typeof data === 'object' && data !== null && 'usage' in data && typeof data.usage === 'object' && data.usage !== null
-    ? {
-        inputTokens: 'input_tokens' in data.usage && typeof data.usage.input_tokens === 'number' ? data.usage.input_tokens : undefined,
-        outputTokens: 'output_tokens' in data.usage && typeof data.usage.output_tokens === 'number' ? data.usage.output_tokens : undefined,
-        totalTokens: 'total_tokens' in data.usage && typeof data.usage.total_tokens === 'number' ? data.usage.total_tokens : undefined,
-      }
-    : undefined;
 
   return jsonResponse({
     ok: true,

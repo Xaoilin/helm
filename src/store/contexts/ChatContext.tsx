@@ -237,7 +237,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
 
     dialogStatesRef.current[conversationId] = result.dialogState;
 
-    const assistantMessage = buildChatMessage('assistant', result.message);
+    const assistantMessage = buildChatMessage('assistant', result.assistantMessage);
 
     setConversations(prev =>
       prev.map(conversation =>

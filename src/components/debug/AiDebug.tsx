@@ -477,7 +477,7 @@ export default function AiDebug() {
       <div className="card" style={{ padding: 20 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: '#f5f7ff', marginBottom: 8 }}>Latest Assistant Trace</div>
         <div style={{ fontSize: 13, color: '#9ea4c5' }}>
-          Run a chat or voice command and this panel will show the last structured plan, execution steps, and navigation payload that Lina produced.
+          Run a chat or voice command and this panel will show the last model turn, tool calls, validator verdict, execution facts, and final narrated reply that Lina produced.
         </div>
 
         {!assistantTrace ? (
@@ -490,6 +490,7 @@ export default function AiDebug() {
             <DataRow label="Source" value={assistantTrace.source} />
             <DataRow label="Transcript" value={assistantTrace.transcript} />
             <DataRow label="Effective" value={assistantTrace.effectiveTranscript} />
+            <DataRow label="Assistant Message" value={assistantTrace.assistantMessage || 'none'} />
             <DataRow label="Planning Source" value={assistantTrace.planningSource || 'unknown'} />
             <DataRow label="Planning Status" value={assistantTrace.planningStatus || 'unknown'} />
             <DataRow label="Planning Model" value={assistantTrace.planningModel || 'none'} />
@@ -508,7 +509,7 @@ export default function AiDebug() {
             <DataRow
               label="Execution"
               value={assistantTrace.execution
-                ? assistantTrace.execution.steps.map(step => `${step.capability}: ${step.status}`).join(' | ')
+                ? assistantTrace.execution.toolResults.map(result => `${result.capability}: ${result.status}`).join(' | ')
                 : 'none'}
             />
             {assistantTrace.planningBundle && (
@@ -519,6 +520,26 @@ export default function AiDebug() {
             {assistantTrace.rawPlannerResponse && (
               <PayloadBlock label="Raw Planner Response">
                 {assistantTrace.rawPlannerResponse}
+              </PayloadBlock>
+            )}
+            {assistantTrace.rawNarrationResponse && (
+              <PayloadBlock label="Raw Narration Response">
+                {assistantTrace.rawNarrationResponse}
+              </PayloadBlock>
+            )}
+            {assistantTrace.modelTurn && (
+              <PayloadBlock label="Model Turn">
+                {JSON.stringify(assistantTrace.modelTurn, null, 2)}
+              </PayloadBlock>
+            )}
+            {assistantTrace.toolCalls && (
+              <PayloadBlock label="Tool Calls">
+                {JSON.stringify(assistantTrace.toolCalls, null, 2)}
+              </PayloadBlock>
+            )}
+            {assistantTrace.pendingConfirmation && (
+              <PayloadBlock label="Pending Confirmation">
+                {JSON.stringify(assistantTrace.pendingConfirmation, null, 2)}
               </PayloadBlock>
             )}
             {assistantTrace.parsedPlan && (

@@ -201,7 +201,7 @@ function buildHostedArgSchema(definition: AssistantActionArgDefinition) {
   } as const;
 }
 
-function buildActionArgsJsonSchema(capabilityId: CapabilityId) {
+export function buildActionArgsJsonSchema(capabilityId: CapabilityId) {
   const capability = getCapabilityDefinition(capabilityId);
   const properties = Object.fromEntries(
     capability.args.map(arg => [arg.key, buildHostedArgSchema(arg)]),
@@ -210,7 +210,7 @@ function buildActionArgsJsonSchema(capabilityId: CapabilityId) {
   return buildStrictObjectSchema(properties, required);
 }
 
-function buildActionStepJsonSchema(capabilityId: CapabilityId) {
+export function buildActionPlanStepJsonSchema(capabilityId: CapabilityId) {
   return buildStrictObjectSchema({
     capability: {
       type: 'string',
@@ -224,7 +224,7 @@ function buildActionStepJsonSchema(capabilityId: CapabilityId) {
 
 function buildActionPlanStepSchema(capabilityIds: CapabilityId[]) {
   return {
-    anyOf: capabilityIds.map(capabilityId => buildActionStepJsonSchema(capabilityId)),
+    anyOf: capabilityIds.map(capabilityId => buildActionPlanStepJsonSchema(capabilityId)),
   } as const;
 }
 

@@ -158,6 +158,6 @@ describe('plannerSchema', () => {
         }),
       }),
     }));
-    expect(execution.message).toContain('Opening all your tasks');
+    expect(execution.execution.toolResults[0].summary).toContain('Opened the All Tasks task view');
   });
 });

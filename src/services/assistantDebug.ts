@@ -2,6 +2,8 @@ import type { AssistantNavigationRequest } from './assistantNavigation';
 import type {
   AssistantCommandResult,
   AssistantEntityReference,
+  AssistantModelTurn,
+  AssistantPendingConfirmation,
   AssistantPlannerValidation,
   AssistantPlanningBundle,
 } from '../assistant/shared';
@@ -11,6 +13,7 @@ export interface AssistantDebugTrace {
   recordedAt: string;
   transcript: string;
   effectiveTranscript: string;
+  assistantMessage: string;
   source: AssistantCommandResult['source'];
   planningSource: AssistantCommandResult['planningSource'];
   planningStatus: AssistantCommandResult['planningStatus'];
@@ -18,10 +21,14 @@ export interface AssistantDebugTrace {
   degradedReason?: AssistantCommandResult['degradedReason'];
   planningBundle?: AssistantPlanningBundle;
   rawPlannerResponse?: string;
+  rawNarrationResponse?: string;
+  modelTurn?: AssistantModelTurn | null;
   parsedPlan?: ActionPlan | null;
   validatedPlan?: ActionPlan | null;
   plannerValidation?: AssistantPlannerValidation;
   plan: ActionPlan;
+  toolCalls?: AssistantCommandResult['toolCalls'];
+  pendingConfirmation?: AssistantPendingConfirmation;
   execution?: AssistantCommandResult['execution'];
   referencedEntities?: AssistantEntityReference[];
   navigationRequests?: AssistantNavigationRequest[];

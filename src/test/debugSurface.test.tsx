@@ -231,6 +231,7 @@ describe('DebugSurface AI diagnostics', () => {
       recordedAt: '2026-04-10T21:45:00.000Z',
       transcript: 'show me all my tasks',
       effectiveTranscript: 'show me all my tasks',
+      assistantMessage: "I've opened your full task list.",
       source: 'openai',
       planningSource: 'openai',
       planningStatus: 'planned',
@@ -310,7 +311,25 @@ describe('DebugSurface AI diagnostics', () => {
       },
       execution: {
         status: 'executed',
+        toolResults: [{
+          callId: 'call_open_tasks',
+          capability: 'tasks.open_view',
+          status: 'completed',
+          summary: 'Opened the All Tasks task view.',
+          facts: ['Opened the Tasks surface on the All Tasks tab.'],
+          navigationRequest: {
+            id: 'assistant-nav-test',
+            surface: 'tasks',
+            surfaceState: {
+              tasks: {
+                tab: 'all',
+                resetFilters: true,
+              },
+            },
+          },
+        }],
         steps: [{
+          callId: 'call_open_tasks',
           capability: 'tasks.open_view',
           status: 'completed',
           summary: 'Opened the All Tasks task view.',
