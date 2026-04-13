@@ -189,4 +189,94 @@ describe('assistant benchmark runner', () => {
       passed: true,
     }));
   });
+
+  it('accepts hosted text turns when optional args come back as null', async () => {
+    const report = await runAssistantBenchmark({
+      provider: 'hosted',
+      cases: [findCase('task-create-3')],
+      planner: async () => ({
+        rawResponse: JSON.stringify({
+          mode: 'tool_calls',
+          assistantMessage: "I'll add that task.",
+          toolCalls: [{
+            capability: 'tasks.create_task',
+            args: {
+              title: 'renew passport',
+              priority: 'medium',
+              category: 'task',
+              dueDate: null,
+              duePhrase: null,
+            },
+          }],
+        }),
+        turnType: 'text',
+        text: JSON.stringify({
+          mode: 'tool_calls',
+          assistantMessage: "I'll add that task.",
+          toolCalls: [{
+            capability: 'tasks.create_task',
+            args: {
+              title: 'renew passport',
+              priority: 'medium',
+              category: 'task',
+              dueDate: null,
+              duePhrase: null,
+            },
+          }],
+        }),
+        planningSource: 'openai',
+        planningModel: 'gpt-5.4',
+      }),
+    });
+
+    expect(report.summary.total).toBe(1);
+    expect(report.summary.passed).toBe(1);
+    expect(report.results[0]).toEqual(expect.objectContaining({
+      actualMode: 'act',
+      actualCapabilities: ['tasks.create_task'],
+      planningStatus: 'planned',
+      passed: true,
+    }));
+  });
+
+  it('coerces unsupported device-control approximations back to truthful clarify results', async () => {
+    const report = await runAssistantBenchmark({
+      provider: 'hosted',
+      cases: [findCase('unsupported-10')],
+      planner: async () => ({
+        rawResponse: JSON.stringify({
+          mode: 'confirm',
+          assistantMessage: 'Do you want me to mark the task “Internet” as done?',
+          toolCalls: [{
+            capability: 'tasks.complete_matching',
+            args: {
+              taskId: 'task-internet',
+            },
+          }],
+        }),
+        turnType: 'text',
+        text: JSON.stringify({
+          mode: 'confirm',
+          assistantMessage: 'Do you want me to mark the task “Internet” as done?',
+          toolCalls: [{
+            capability: 'tasks.complete_matching',
+            args: {
+              taskId: 'task-internet',
+            },
+          }],
+        }),
+        planningSource: 'openai',
+        planningModel: 'gpt-5.4',
+      }),
+    });
+
+    expect(report.summary.total).toBe(1);
+    expect(report.summary.passed).toBe(1);
+    expect(report.results[0]).toEqual(expect.objectContaining({
+      actualMode: 'clarify',
+      actualCapabilities: [],
+      planningStatus: 'planned',
+      passed: true,
+    }));
+  });
 });

@@ -18,6 +18,7 @@ import {
   type PlannerResult,
 } from './planner';
 import type { ActionPlan } from './plannerSchema';
+import { normalizeActionPlanArgs } from './plannerSchema';
 import type {
   AssistantCommandContext,
   AssistantConversationMessage,
@@ -150,6 +151,35 @@ function buildToolCalls(
   }));
 }
 
+function toConversationMode(mode: ActionPlan['mode']): AssistantModelTurn['mode'] {
+  switch (mode) {
+    case 'answer':
+      return 'reply';
+    case 'clarify':
+      return 'clarify';
+    case 'confirm':
+      return 'confirm';
+    case 'act':
+    default:
+      return 'tool_calls';
+  }
+}
+
+function buildValidatedModelTurn(
+  validatedPlan: ActionPlan | null,
+  fallbackMode: AssistantModelTextTurn['mode'] | undefined,
+  fallbackAssistantMessage: string,
+  toolCalls: AssistantToolCall[],
+): AssistantModelTurn {
+  return {
+    mode: validatedPlan
+      ? toConversationMode(validatedPlan.mode)
+      : fallbackMode || (toolCalls.length > 0 ? 'tool_calls' : 'reply'),
+    assistantMessage: validatedPlan?.response || fallbackAssistantMessage,
+    toolCalls,
+  };
+}
+
 function buildMessageHistory(
   conversationHistory: AssistantConversationMessage[] | undefined,
 ): OllamaMessage[] {
@@ -199,6 +229,7 @@ Rules:
 - Never say an action is complete unless verified execution results are later provided.
 - Use only tool names and grounded ids from the planning bundle.
 - Never invent ids, titles, calendars, accounts, topics, or events.
+- Entity candidate detail may describe a default or umbrella target. If exactly one grounded candidate is marked default and its detail clearly covers the user's requested subtopic, use that grounded id instead of clarifying.
 - Prefer clarify over guessing.
 - If a tool requires confirmation and the user has not clearly approved it yet, return confirm instead of tool_calls.
 - If the user is replying to a pending confirmation, update or reuse those toolCalls.
@@ -253,11 +284,14 @@ function parseHostedToolCalls(toolCalls: Array<{ callId: string; name: string; a
     if (!rawArguments) return null;
 
     try {
-      const args = JSON.parse(rawArguments);
+      const rawArgs = JSON.parse(rawArguments);
       const capabilityId = typeof toolCall.name === 'string'
         ? fromAssistantToolName(toolCall.name)
         : null;
-      if (!capabilityId || typeof args !== 'object' || args === null || Array.isArray(args)) {
+      const args = capabilityId
+        ? normalizeActionPlanArgs(rawArgs, capabilityId)
+        : null;
+      if (!capabilityId || !args) {
         return null;
       }
       parsedCalls.push({
@@ -463,16 +497,17 @@ async function runHostedInitialTurn(
       }
     }
 
+    const normalizedTurn = buildValidatedModelTurn(
+      validatedPlan,
+      parsedTurn?.mode,
+      assistantMessage || parsedTurn?.assistantMessage || '',
+      toolCalls,
+    );
+
     if (planningStatus !== 'planned') {
       return {
-        assistantMessage: validatedPlan?.response || assistantMessage || RESPONSES.invalidTurn[options.lang],
-        modelTurn: parsedTurn
-          ? {
-              mode: parsedTurn.mode,
-              assistantMessage: parsedTurn.assistantMessage,
-              toolCalls,
-            }
-          : null,
+        assistantMessage: normalizedTurn.assistantMessage || RESPONSES.invalidTurn[options.lang],
+        modelTurn: normalizedTurn,
         toolCalls,
         referencedEntities,
         source: 'openai',
@@ -486,12 +521,6 @@ async function runHostedInitialTurn(
         plannerValidation,
       };
     }
-
-    const normalizedTurn: AssistantModelTurn = {
-      mode: parsedTurn?.mode || 'tool_calls',
-      assistantMessage: assistantMessage || parsedTurn?.assistantMessage || '',
-      toolCalls,
-    };
 
     return {
       assistantMessage: normalizedTurn.assistantMessage,
@@ -623,13 +652,16 @@ async function runOllamaInitialTurn(
         : [];
     }
 
+    const normalizedTurn = buildValidatedModelTurn(
+      validatedPlan,
+      parsedTurn.mode,
+      parsedTurn.assistantMessage,
+      toolCalls,
+    );
+
     return {
-      assistantMessage: parsedTurn.assistantMessage,
-      modelTurn: {
-        mode: parsedTurn.mode,
-        assistantMessage: parsedTurn.assistantMessage,
-        toolCalls,
-      },
+      assistantMessage: normalizedTurn.assistantMessage,
+      modelTurn: normalizedTurn,
       toolCalls,
       referencedEntities,
       source: 'ollama',

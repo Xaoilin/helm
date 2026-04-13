@@ -5,8 +5,7 @@ import {
 } from './capabilities';
 import {
   buildActionPlanStepJsonSchema,
-  type ActionPlanArgValue,
-  type ActionPlanStepArgs,
+  normalizeActionPlanArgs,
   type ActionPlanStep,
 } from './plannerSchema';
 
@@ -71,19 +70,7 @@ function normalizeStep(step: unknown): ActionPlanStep | null {
     return null;
   }
 
-  const rawArgs = isPlainObject(step.args) ? step.args : null;
-  const args = rawArgs ? Object.entries(rawArgs).reduce<ActionPlanStepArgs | null>((acc, [key, value]) => {
-    if (!acc) return null;
-    if (
-      typeof value === 'string'
-      || typeof value === 'boolean'
-      || (Array.isArray(value) && value.every(item => typeof item === 'string'))
-    ) {
-      acc[key] = value as ActionPlanArgValue;
-      return acc;
-    }
-    return null;
-  }, {}) : null;
+  const args = normalizeActionPlanArgs(step.args, step.capability);
   if (!args) return null;
 
   return {

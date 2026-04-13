@@ -3,6 +3,7 @@ import type { CapabilityId } from '../capabilities';
 import { buildAssistantModelTurnJsonSchema, parseAssistantModelTextTurn } from '../orchestrationSchema';
 import { buildAssistantInitialTurnMessages } from '../orchestrator';
 import { validateModelPlan, buildPlanningBundle } from '../planner';
+import { normalizeActionPlanArgs } from '../plannerSchema';
 import type { ActionPlan } from '../plannerSchema';
 import type {
   AssistantConversationMessage,
@@ -154,9 +155,12 @@ function parseToolCallPlan(response: AssistantBenchmarkPlannerResponse): ActionP
 
   const steps = rawToolCalls.map(toolCall => {
     try {
-      const args = JSON.parse(toolCall.arguments);
+      const rawArgs = JSON.parse(toolCall.arguments);
       const capabilityId = fromAssistantToolName(toolCall.name);
-      if (!capabilityId || typeof args !== 'object' || args === null || Array.isArray(args)) {
+      const args = capabilityId
+        ? normalizeActionPlanArgs(rawArgs, capabilityId)
+        : null;
+      if (!capabilityId || !args) {
         return null;
       }
       return {
