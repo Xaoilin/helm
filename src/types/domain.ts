@@ -299,6 +299,7 @@ export interface Settings {
   deepgramApiKey?: string;
   assistantLanguage?: 'en' | 'ar';
   assistantProvider?: AssistantProvider;
+  hostedModel?: string;
   ollamaEndpoint?: string;
   ollamaModel?: string;
 }

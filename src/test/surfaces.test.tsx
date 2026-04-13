@@ -214,7 +214,18 @@ describe('SettingsSurface', () => {
   it('should show assistant mode controls', async () => {
     await act(async () => { renderWithProvider(<SettingsSurface />); });
     expect(screen.getByText('Open-ended AI mode')).toBeInTheDocument();
+    expect(screen.getByText('Hosted OpenAI model')).toBeInTheDocument();
     expect(screen.getByText('Runtime status')).toBeInTheDocument();
+  });
+
+  it('should let you choose a curated hosted OpenAI model', async () => {
+    await act(async () => { renderWithProvider(<SettingsSurface />); });
+
+    const hostedModelSelect = screen.getByLabelText('Hosted OpenAI model');
+    fireEvent.change(hostedModelSelect, { target: { value: 'gpt-5.4-mini' } });
+
+    expect(screen.getByDisplayValue('GPT-5.4 mini - Best value')).toBeInTheDocument();
+    expect(screen.getByText(/Lower-cost hosted model with strong general performance/i)).toBeInTheDocument();
   });
 
   it('should explain that turning Lina off keeps chat available and silences wake word access', async () => {

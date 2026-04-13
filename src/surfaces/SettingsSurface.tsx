@@ -2,9 +2,15 @@ import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { isSupabaseReady, isAuthenticated, getCurrentUserId } from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
-import { DEFAULT_ASSISTANT_PROVIDER, ELEVENLABS_API_KEY, HOSTED_ASSISTANT_MODEL, OLLAMA_ENDPOINT } from '../config';
+import { DEFAULT_ASSISTANT_PROVIDER, ELEVENLABS_API_KEY, OLLAMA_ENDPOINT } from '../config';
 import { DEFAULT_PROFILE } from '../services/gamification';
 import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
+import {
+  HOSTED_ASSISTANT_MODEL_OPTIONS,
+  getHostedAssistantModelLabel,
+  getHostedAssistantModelOption,
+  getHostedAssistantModelSetting,
+} from '../services/assistantModels';
 import { canUseHostedAssistantProjectAccess, isLocalhostRuntime } from '../services/hostedAssistantAccess';
 import { testOllamaConnection, listOllamaModels } from '../services/ollamaApi';
 import { APP_RELEASE_VERSION } from '../config/release';
@@ -25,6 +31,8 @@ export default function SettingsSurface() {
     detail: 'Lina is checking which AI provider is currently available.',
   });
   const selectedProvider = getAssistantProviderSetting(settings);
+  const selectedHostedModel = getHostedAssistantModelSetting(settings);
+  const selectedHostedModelOption = getHostedAssistantModelOption(selectedHostedModel);
   const authSyncKey = `${isSupabaseReady()}:${isAuthenticated()}:${getCurrentUserId() || ''}`;
   const hostedProjectAccessAvailable = canUseHostedAssistantProjectAccess();
   const localhostRuntime = isLocalhostRuntime();
@@ -44,6 +52,7 @@ export default function SettingsSurface() {
     let cancelled = false;
     getAssistantRuntimeStatus({
       assistantProvider: selectedProvider,
+      hostedModel: selectedHostedModel,
       ollamaEndpoint: settings.ollamaEndpoint,
     }).then(status => {
       if (!cancelled) setAssistantStatus(status);
@@ -51,7 +60,7 @@ export default function SettingsSurface() {
     return () => {
       cancelled = true;
     };
-  }, [selectedProvider, settings.ollamaEndpoint, authSyncKey]);
+  }, [selectedHostedModel, selectedProvider, settings.ollamaEndpoint, authSyncKey]);
 
   return (
     <>
@@ -363,13 +372,39 @@ export default function SettingsSurface() {
               onChange={e => app.updateSettings({ assistantProvider: e.target.value as typeof settings.assistantProvider })}
             >
               <option value="auto">Auto (hosted first, then Ollama)</option>
-              <option value="hosted">Hosted AI ({HOSTED_ASSISTANT_MODEL})</option>
+              <option value="hosted">Hosted AI (OpenAI)</option>
               <option value="ollama">Local AI (Ollama only)</option>
             </select>
             <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
               {hostedProjectAccessAvailable
-                ? `Hosted AI uses the Supabase Edge Function and this build's configured project access key${localhostRuntime ? ' on localhost' : ''}. Supabase sign-in is still used for sync; browser builds still cannot start Ollama for you.`
+                ? `Hosted AI uses the Supabase Edge Function, this build's configured project access key, and the selected ${getHostedAssistantModelLabel(selectedHostedModel)} model${localhostRuntime ? ' on localhost' : ''}. Supabase sign-in is still used for sync; browser builds still cannot start Ollama for you.`
                 : 'Hosted AI needs Supabase project access in this build. Browser builds still cannot start Ollama for you.'}
+            </div>
+            <div className="form-group" style={{ marginTop: 12, marginBottom: 0 }}>
+              <label htmlFor="settings-hosted-model">Hosted OpenAI model</label>
+              <select
+                id="settings-hosted-model"
+                className="form-select"
+                value={selectedHostedModel}
+                onChange={e => app.updateSettings({ hostedModel: e.target.value })}
+              >
+                {HOSTED_ASSISTANT_MODEL_OPTIONS.map(option => (
+                  <option key={option.id} value={option.id}>
+                    {option.label} - {option.badge}
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
+                Applies whenever Hosted AI is selected, or when Auto mode lands on hosted OpenAI instead of Ollama.
+              </div>
+              <div style={{ marginTop: 8, padding: '10px 12px', background: '#10131b', border: '1px solid #1e2030', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
+                  {selectedHostedModelOption?.label || selectedHostedModel}
+                </div>
+                <div style={{ fontSize: 10, color: '#4a4e62' }}>
+                  {selectedHostedModelOption?.detail || 'This hosted model comes from the current build configuration.'}
+                </div>
+              </div>
             </div>
             <div style={{ marginTop: 8, padding: '10px 12px', background: '#13151c', border: '1px solid #1e2030', borderRadius: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Runtime status</div>

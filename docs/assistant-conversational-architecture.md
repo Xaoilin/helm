@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make Lina feel like a real GPT-5.4-powered personal assistant:
+Make Lina feel like a real GPT-5.4-family-powered personal assistant:
 
 - the model understands the user's intent first
 - the model chooses grounded HELM actions or asks for clarification
@@ -123,13 +123,14 @@ If model narration is unavailable, HELM falls back truthfully and minimally.
 
 ## Provider Contract
 
-### Hosted GPT-5.4
+### Hosted GPT-5.4 Family
 
-Hosted GPT-5.4 is the primary path.
+Hosted GPT-5.4 is still the default primary path, but Settings can now switch the hosted assistant between curated GPT-5.4, GPT-5.4 mini, and GPT-5.4 nano presets.
 
 The Supabase Edge Function in `supabase/functions/assistant-openai/` now supports a tool-capable `turn` action:
 
 - client sends messages, response schema, and tools
+- client can also send the selected hosted model id from Settings
 - tool definitions use OpenAI-safe function names and are mapped back to HELM capability ids after the response
 - model returns text or tool calls
 - HELM validates and executes

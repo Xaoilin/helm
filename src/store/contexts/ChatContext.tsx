@@ -219,8 +219,9 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
       corrections: crossDomain.assistantCorrections,
       dialogState,
       provider: crossDomain.settings.assistantProvider,
+      hostedModel: crossDomain.settings.hostedModel,
       endpoint: crossDomain.settings.ollamaEndpoint,
-      model: crossDomain.settings.ollamaModel,
+      ollamaModel: crossDomain.settings.ollamaModel,
       handlers: {
         addTask: crossDomain.addTask,
         updateTask: crossDomain.updateTask,

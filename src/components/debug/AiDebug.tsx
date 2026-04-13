@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { HOSTED_ASSISTANT_FUNCTION, HOSTED_ASSISTANT_MODEL, OLLAMA_ENDPOINT } from '../../config';
+import { HOSTED_ASSISTANT_FUNCTION, OLLAMA_ENDPOINT } from '../../config';
 import { useApp } from '../../store/AppContext';
 import { getAllCapabilityDefinitions } from '../../assistant/capabilities';
 import {
@@ -7,6 +7,9 @@ import {
   getAssistantRuntimeStatus,
   type AssistantRuntimeStatus,
 } from '../../services/assistantAvailability';
+import {
+  getHostedAssistantModelSetting,
+} from '../../services/assistantModels';
 import {
   getAssistantDebugTrace,
   subscribeAssistantDebugTrace,
@@ -103,6 +106,7 @@ export default function AiDebug() {
   const [assistantTrace, setAssistantTrace] = useState<AssistantDebugTrace | null>(() => getAssistantDebugTrace());
 
   const providerSetting = getAssistantProviderSetting(app.settings);
+  const selectedHostedModel = getHostedAssistantModelSetting(app.settings);
   const ollamaEndpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
   const ollamaModel = app.settings.ollamaModel || 'qwen3';
   const sessionSnapshot = getAuthSessionSnapshot();
@@ -111,7 +115,7 @@ export default function AiDebug() {
   const currentUserId = getCurrentUserId();
   const hostedDiagnostics = getHostedAssistantDiagnostics();
   const hostedAccessMode = formatHostedAssistantAccessMode(hostedDiagnostics.lastAccessMode);
-  const hostedModelLabel = hostedDiagnostics.lastModel || HOSTED_ASSISTANT_MODEL;
+  const hostedModelLabel = hostedDiagnostics.lastModel || selectedHostedModel;
   const localhostRuntime = isLocalhostRuntime();
 
   const refreshRuntime = useCallback(async () => {
@@ -148,7 +152,7 @@ export default function AiDebug() {
     const checkedAt = new Date().toISOString();
 
     try {
-      const status = await testHostedAssistantConnection();
+      const status = await testHostedAssistantConnection({ model: selectedHostedModel });
       setHostedResult(mapHostedStatus(status, checkedAt));
     } catch (error) {
       setHostedResult({
@@ -171,7 +175,9 @@ export default function AiDebug() {
     const checkedAt = new Date().toISOString();
 
     try {
-      const text = await chatWithHostedAssistant(SMOKE_TEST_MESSAGES, SMOKE_TEST_FORMAT);
+      const text = await chatWithHostedAssistant(SMOKE_TEST_MESSAGES, SMOKE_TEST_FORMAT, {
+        model: selectedHostedModel,
+      });
       setSmokeResult({
         state: 'success',
         headline: 'Hosted smoke test passed',
@@ -263,6 +269,7 @@ export default function AiDebug() {
       sessionSnapshot,
       hostedResult,
       smokeResult,
+      selectedHostedModel,
       ollamaResult,
       ollamaEndpoint,
       ollamaModel,
@@ -837,6 +844,7 @@ function buildSnapshotText(
     sessionSnapshot,
     hostedResult,
     smokeResult,
+    selectedHostedModel,
     ollamaResult,
     ollamaEndpoint,
     ollamaModel,
@@ -851,6 +859,7 @@ function buildSnapshotText(
     sessionSnapshot: ReturnType<typeof getAuthSessionSnapshot>;
     hostedResult: DiagnosticResult;
     smokeResult: DiagnosticResult;
+    selectedHostedModel: string;
     ollamaResult: DiagnosticResult;
     ollamaEndpoint: string;
     ollamaModel: string;
@@ -884,7 +893,7 @@ function buildSnapshotText(
     '',
     '[Hosted Assistant]',
     `Function: ${HOSTED_ASSISTANT_FUNCTION}`,
-    `Model: ${HOSTED_ASSISTANT_MODEL}`,
+    `Model: ${selectedHostedModel}`,
     `Last access mode: ${formatHostedAssistantAccessMode(hostedDiagnostics.lastAccessMode)}`,
     `Circuit allowing requests: ${formatBoolean(hostedDiagnostics.circuitAllowingRequests)}`,
     `Last failure source: ${formatHostedFailureSource(hostedDiagnostics.lastFailureSource)}`,

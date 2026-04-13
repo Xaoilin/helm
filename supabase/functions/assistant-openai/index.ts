@@ -9,6 +9,12 @@ import { extractFunctionCalls, extractOutputText } from './openaiResponse.ts';
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') || 'gpt-5.4';
 const OPENAI_URL = 'https://api.openai.com/v1/responses';
+const ALLOWED_OPENAI_MODELS = new Set([
+  OPENAI_MODEL,
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gpt-5.4-nano',
+]);
 
 function getOpenAIErrorMessage(data: unknown): string {
   if (typeof data !== 'object' || data === null || !('error' in data)) {
@@ -52,6 +58,23 @@ function stringifyRawResponse(data: unknown): string {
   }, null, 2);
 }
 
+function resolveRequestedModel(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') {
+    return OPENAI_MODEL;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return OPENAI_MODEL;
+  }
+
+  return ALLOWED_OPENAI_MODELS.has(normalized) ? normalized : null;
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -75,11 +98,16 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: 'Missing action.' }, { status: 400 });
   }
 
+  const requestedModel = resolveRequestedModel('model' in body ? body.model : undefined);
+  if (!requestedModel) {
+    return jsonResponse({ error: 'Unsupported OpenAI model requested for the hosted assistant.' }, { status: 400 });
+  }
+
   if (body.action === 'health') {
     return jsonResponse({
       ok: true,
       provider: 'openai',
-      model: OPENAI_MODEL,
+      model: requestedModel,
     });
   }
 
@@ -119,7 +147,7 @@ Deno.serve(async (request) => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(buildOpenAIResponsesPayload({
-      model: OPENAI_MODEL,
+      model: requestedModel,
       messages,
       format: typeof body.format === 'object' && body.format !== null && !Array.isArray(body.format)
         ? body.format
@@ -147,7 +175,7 @@ Deno.serve(async (request) => {
       return jsonResponse({
         ok: true,
         provider: 'openai',
-        model: OPENAI_MODEL,
+        model: requestedModel,
         turn: {
           type: 'tool_calls',
           toolCalls,
@@ -165,7 +193,7 @@ Deno.serve(async (request) => {
     return jsonResponse({
       ok: true,
       provider: 'openai',
-      model: OPENAI_MODEL,
+      model: requestedModel,
       turn: {
         type: 'text',
         text,
@@ -183,7 +211,7 @@ Deno.serve(async (request) => {
   return jsonResponse({
     ok: true,
     provider: 'openai',
-    model: OPENAI_MODEL,
+    model: requestedModel,
     text,
     usage,
   });

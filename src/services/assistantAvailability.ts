@@ -1,7 +1,8 @@
-import { DEFAULT_ASSISTANT_PROVIDER, HOSTED_ASSISTANT_MODEL, OLLAMA_ENDPOINT } from '../config';
+import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import type { AssistantProvider, Settings } from '../types/domain';
 import { testHostedAssistantConnection } from './hostedAssistantApi';
 import { formatHostedAssistantAccessMode, isLocalhostRuntime } from './hostedAssistantAccess';
+import { getHostedAssistantModelLabel, getHostedAssistantModelSetting } from './assistantModels';
 import { testOllamaConnection } from './ollamaApi';
 
 export type AssistantRuntimeProvider = 'hosted' | 'ollama';
@@ -21,12 +22,12 @@ function getOllamaEndpoint(settings: Pick<Settings, 'ollamaEndpoint'>): string {
   return settings.ollamaEndpoint || OLLAMA_ENDPOINT;
 }
 
-function getHostedSignInRequiredStatus(): AssistantRuntimeStatus {
+function getHostedSignInRequiredStatus(modelLabel: string): AssistantRuntimeStatus {
   return {
     activeProvider: 'hosted',
     state: 'sign_in_required',
     headline: 'Hosted AI available after sign-in',
-    detail: `Sign in with Google to use the hosted ${HOSTED_ASSISTANT_MODEL} planner on the website.`,
+    detail: `Sign in with Google to use the hosted ${modelLabel} planner on the website.`,
   };
 }
 
@@ -48,17 +49,19 @@ function getHostedOfflineStatus(message: string): AssistantRuntimeStatus {
   };
 }
 
-function getHostedReadyStatus(): AssistantRuntimeStatus {
+function getHostedReadyStatus(modelLabel: string): AssistantRuntimeStatus {
   return {
     activeProvider: 'hosted',
     state: 'ready',
     headline: 'Hosted AI ready',
-    detail: `Intent planning is powered by OpenAI ${HOSTED_ASSISTANT_MODEL} through HELM's hosted assistant.`,
+    detail: `Intent planning is powered by OpenAI ${modelLabel} through HELM's hosted assistant.`,
   };
 }
 
-async function getHostedStatus(): Promise<AssistantRuntimeStatus> {
-  const status = await testHostedAssistantConnection();
+async function getHostedStatus(settings: Pick<Settings, 'hostedModel'>): Promise<AssistantRuntimeStatus> {
+  const hostedModel = getHostedAssistantModelSetting(settings);
+  const hostedModelLabel = getHostedAssistantModelLabel(hostedModel);
+  const status = await testHostedAssistantConnection({ model: hostedModel });
   switch (status.status) {
     case 'available':
       return status.accessMode === 'project_key'
@@ -66,11 +69,11 @@ async function getHostedStatus(): Promise<AssistantRuntimeStatus> {
             activeProvider: 'hosted',
             state: 'ready',
             headline: 'Hosted AI ready',
-            detail: `Intent planning is powered by OpenAI ${status.model || HOSTED_ASSISTANT_MODEL} through HELM's hosted assistant using the configured ${formatHostedAssistantAccessMode(status.accessMode)}${isLocalhostRuntime() ? ' on localhost.' : '.'}`,
+            detail: `Intent planning is powered by OpenAI ${getHostedAssistantModelLabel(status.model || hostedModel)} through HELM's hosted assistant using the configured ${formatHostedAssistantAccessMode(status.accessMode)}${isLocalhostRuntime() ? ' on localhost.' : '.'}`,
           }
-        : getHostedReadyStatus();
+        : getHostedReadyStatus(getHostedAssistantModelLabel(status.model || hostedModel));
     case 'sign_in_required':
-      return getHostedSignInRequiredStatus();
+      return getHostedSignInRequiredStatus(hostedModelLabel);
     case 'not_configured':
       return getHostedNotConfiguredStatus();
     case 'unavailable':
@@ -97,19 +100,20 @@ async function getOllamaStatus(settings: Pick<Settings, 'ollamaEndpoint'>): Prom
 }
 
 export async function getAssistantRuntimeStatus(
-  settings: Pick<Settings, 'assistantProvider' | 'ollamaEndpoint'>,
+  settings: Pick<Settings, 'assistantProvider' | 'hostedModel' | 'ollamaEndpoint'>,
 ): Promise<AssistantRuntimeStatus> {
   const provider = getAssistantProviderSetting(settings);
+  const hostedModelLabel = getHostedAssistantModelLabel(getHostedAssistantModelSetting(settings));
 
   if (provider === 'hosted') {
-    return getHostedStatus();
+    return getHostedStatus(settings);
   }
 
   if (provider === 'ollama') {
     return getOllamaStatus(settings);
   }
 
-  const hosted = await getHostedStatus();
+  const hosted = await getHostedStatus(settings);
   if (hosted.state === 'ready') {
     return {
       ...hosted,
@@ -132,7 +136,7 @@ export async function getAssistantRuntimeStatus(
       activeProvider: null,
       state: 'sign_in_required',
       headline: 'Auto mode needs sign-in or Ollama',
-      detail: `Sign in with Google for hosted ${HOSTED_ASSISTANT_MODEL}, or start Ollama locally for local AI planning.`,
+      detail: `Sign in with Google for hosted ${hostedModelLabel}, or start Ollama locally for local AI planning.`,
     };
   }
 

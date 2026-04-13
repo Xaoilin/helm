@@ -204,7 +204,9 @@ export interface AssistantCommandOptions {
   conversationHistory?: AssistantConversationMessage[];
   corrections?: AssistantCorrection[];
   provider?: AssistantProvider;
+  hostedModel?: string;
   endpoint?: string;
+  ollamaModel?: string;
   model?: string;
   dialogState?: AssistantDialogState;
   handlers?: AssistantActionHandlers;
