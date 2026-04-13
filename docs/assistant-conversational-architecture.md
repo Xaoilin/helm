@@ -130,6 +130,7 @@ Hosted GPT-5.4 is the primary path.
 The Supabase Edge Function in `supabase/functions/assistant-openai/` now supports a tool-capable `turn` action:
 
 - client sends messages, response schema, and tools
+- tool definitions use OpenAI-safe function names and are mapped back to HELM capability ids after the response
 - model returns text or tool calls
 - HELM validates and executes
 - HELM performs a narration pass for the final reply

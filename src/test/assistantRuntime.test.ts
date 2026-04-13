@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CapabilityId } from '../assistant/capabilities';
+import { toAssistantToolName } from '../assistant/toolSchemas';
 import { DEFAULT_PROFILE } from '../services/gamification';
 import { processAssistantCommand, resetOllamaCache } from '../services/assistantRuntime';
 import type {
@@ -159,13 +161,13 @@ function makeHostedTextTurn(
 }
 
 function makeHostedToolTurn(
-  toolCalls: Array<{ callId: string; capability: string; args: Record<string, string | boolean | string[]> }>,
+  toolCalls: Array<{ callId: string; capability: CapabilityId; args: Record<string, string | boolean | string[]> }>,
 ): HostedAssistantTurnResult {
   return {
     type: 'tool_calls',
     toolCalls: toolCalls.map(toolCall => ({
       callId: toolCall.callId,
-      name: toolCall.capability,
+      name: toAssistantToolName(toolCall.capability),
       arguments: JSON.stringify(toolCall.args),
     })),
     model: 'gpt-5.4',

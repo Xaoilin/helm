@@ -34,7 +34,7 @@ import type {
   AssistantToolCallDraft,
   AssistantToolResult,
 } from './shared';
-import { buildAssistantToolDefinitions } from './toolSchemas';
+import { buildAssistantToolDefinitions, fromAssistantToolName } from './toolSchemas';
 
 interface ModelTurnResult {
   assistantMessage: string;
@@ -254,11 +254,14 @@ function parseHostedToolCalls(toolCalls: Array<{ callId: string; name: string; a
 
     try {
       const args = JSON.parse(rawArguments);
-      if (typeof toolCall.name !== 'string' || typeof args !== 'object' || args === null || Array.isArray(args)) {
+      const capabilityId = typeof toolCall.name === 'string'
+        ? fromAssistantToolName(toolCall.name)
+        : null;
+      if (!capabilityId || typeof args !== 'object' || args === null || Array.isArray(args)) {
         return null;
       }
       parsedCalls.push({
-        capability: toolCall.name as CapabilityId,
+        capability: capabilityId,
         args,
       });
     } catch {
