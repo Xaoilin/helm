@@ -7,6 +7,7 @@ import {
   getAssistantBenchmarkThresholdFailures,
   runAssistantBenchmark,
 } from '../assistant/evals/benchmarkRunner';
+import { toAssistantToolName } from '../assistant/toolSchemas';
 
 function findCase(id: string): AssistantBenchmarkCase {
   const benchmarkCase = ASSISTANT_BENCHMARK_CASES.find(entry => entry.id === id);
@@ -148,5 +149,44 @@ describe('assistant benchmark runner', () => {
     expect(failures.join(' ')).toContain('Overall assistant benchmark pass rate');
     expect(failures.join(' ')).toContain('Destructive assistant benchmark pass rate');
     expect(failures.join(' ')).toContain('Unsupported-intent benchmark pass rate');
+  });
+
+  it('accepts hosted tool call turns that use OpenAI-safe tool names', async () => {
+    const report = await runAssistantBenchmark({
+      provider: 'hosted',
+      cases: [findCase('task-view-1')],
+      planner: async () => ({
+        rawResponse: JSON.stringify({
+          toolCalls: [{
+            callId: 'call_1',
+            name: toAssistantToolName('tasks.open_view'),
+            arguments: JSON.stringify({
+              tab: 'all',
+              resetFilters: true,
+            }),
+          }],
+        }),
+        turnType: 'tool_calls',
+        toolCalls: [{
+          callId: 'call_1',
+          name: toAssistantToolName('tasks.open_view'),
+          arguments: JSON.stringify({
+            tab: 'all',
+            resetFilters: true,
+          }),
+        }],
+        planningSource: 'openai',
+        planningModel: 'gpt-5.4',
+      }),
+    });
+
+    expect(report.summary.total).toBe(1);
+    expect(report.summary.passed).toBe(1);
+    expect(report.results[0]).toEqual(expect.objectContaining({
+      actualMode: 'act',
+      actualCapabilities: ['tasks.open_view'],
+      planningStatus: 'planned',
+      passed: true,
+    }));
   });
 });

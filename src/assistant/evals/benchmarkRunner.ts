@@ -9,7 +9,7 @@ import type {
   AssistantLang,
   AssistantPlanningBundle,
 } from '../shared';
-import { buildAssistantToolDefinitions } from '../toolSchemas';
+import { buildAssistantToolDefinitions, fromAssistantToolName } from '../toolSchemas';
 import {
   ASSISTANT_BENCHMARK_CASES,
   type AssistantBenchmarkCase,
@@ -155,11 +155,12 @@ function parseToolCallPlan(response: AssistantBenchmarkPlannerResponse): ActionP
   const steps = rawToolCalls.map(toolCall => {
     try {
       const args = JSON.parse(toolCall.arguments);
-      if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+      const capabilityId = fromAssistantToolName(toolCall.name);
+      if (!capabilityId || typeof args !== 'object' || args === null || Array.isArray(args)) {
         return null;
       }
       return {
-        capability: toolCall.name as CapabilityId,
+        capability: capabilityId,
         args,
       };
     } catch {

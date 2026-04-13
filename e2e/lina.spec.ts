@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
+import type { CapabilityId } from '../src/assistant/capabilities';
+import { toAssistantToolName } from '../src/assistant/toolSchemas';
 
 const SETTINGS_KEY = 'helm:settings';
 
@@ -76,7 +78,7 @@ function makeTextTurn(
 function makeToolTurn(
   toolCalls: Array<{
     callId: string;
-    name: string;
+    capability: CapabilityId;
     args: Record<string, string | boolean | string[]>;
   }>,
 ): HostedTurn {
@@ -84,7 +86,7 @@ function makeToolTurn(
     type: 'tool_calls',
     toolCalls: toolCalls.map(toolCall => ({
       callId: toolCall.callId,
-      name: toolCall.name,
+      name: toAssistantToolName(toolCall.capability),
       arguments: JSON.stringify(toolCall.args),
     })),
   };
@@ -112,25 +114,25 @@ function buildTurnResponse(messages: AssistantMessage[]): HostedTurn {
 
   if (normalized === 'open calendar') {
     return makeToolTurn([
-      { callId: 'call_open_calendar', name: 'navigation.go_to_surface', args: { surface: 'calendar' } },
+      { callId: 'call_open_calendar', capability: 'navigation.go_to_surface', args: { surface: 'calendar' } },
     ]);
   }
 
   if (normalized === 'show me all my tasks') {
     return makeToolTurn([
-      { callId: 'call_open_all_tasks', name: 'tasks.open_view', args: { tab: 'all', resetFilters: true } },
+      { callId: 'call_open_all_tasks', capability: 'tasks.open_view', args: { tab: 'all', resetFilters: true } },
     ]);
   }
 
   if (normalized === 'show my goals') {
     return makeToolTurn([
-      { callId: 'call_open_goals', name: 'tasks.open_view', args: { tab: 'goals', resetFilters: true } },
+      { callId: 'call_open_goals', capability: 'tasks.open_view', args: { tab: 'goals', resetFilters: true } },
     ]);
   }
 
   if (normalized === 'show today s tasks' || normalized === 'show todays tasks') {
     return makeToolTurn([
-      { callId: 'call_open_today_tasks', name: 'tasks.open_view', args: { tab: 'today', resetFilters: true } },
+      { callId: 'call_open_today_tasks', capability: 'tasks.open_view', args: { tab: 'today', resetFilters: true } },
     ]);
   }
 
@@ -138,7 +140,7 @@ function buildTurnResponse(messages: AssistantMessage[]): HostedTurn {
     return makeToolTurn([
       {
         callId: 'call_create_task_office_mirror',
-        name: 'tasks.create_task',
+        capability: 'tasks.create_task',
         args: {
           title: 'put the mirror up on the office',
           priority: 'medium',
@@ -152,7 +154,7 @@ function buildTurnResponse(messages: AssistantMessage[]): HostedTurn {
     return makeToolTurn([
       {
         callId: 'call_create_task_small_office_mirror',
-        name: 'tasks.create_task',
+        capability: 'tasks.create_task',
         args: {
           title: 'hang up the mirror in this small office',
           priority: 'medium',
@@ -166,7 +168,7 @@ function buildTurnResponse(messages: AssistantMessage[]): HostedTurn {
     return makeToolTurn([
       {
         callId: 'call_create_task_mirror_hooks',
-        name: 'tasks.create_task',
+        capability: 'tasks.create_task',
         args: {
           title: 'buy mirror hooks for the hallway',
           priority: 'medium',
@@ -185,7 +187,7 @@ function buildTurnResponse(messages: AssistantMessage[]): HostedTurn {
     return makeToolTurn([
       {
         callId: 'call_reveal_task',
-        name: 'tasks.reveal_task',
+        capability: 'tasks.reveal_task',
         args: {
           taskId,
         },
