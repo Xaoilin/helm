@@ -13,7 +13,7 @@ import {
   testChromeSpeechRecognition,
 } from '../services/deepgramSTT';
 import { TIMING, LIMITS } from '../config/constants';
-import { logError, logWarn } from '../services/logger';
+import { logError, logInfo, logWarn } from '../services/logger';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -69,7 +69,7 @@ export function useVoiceInput({
   const recorderRef = useRef<ReturnType<typeof createRecorder> | null>(null);
   const recognitionRef = useRef<any>(null);
   const liveSessionRef = useRef<ReturnType<typeof createDeepgramLiveSession> | null>(null);
-  const recordingTimeoutRef = useRef<number | null>(null);
+  const absoluteTurnTimeoutRef = useRef<number | null>(null);
   const noSpeechTimeoutRef = useRef<number | null>(null);
   const finalizeTurnTimeoutRef = useRef<number | null>(null);
   const listeningAttemptRef = useRef(0);
@@ -105,9 +105,9 @@ export function useVoiceInput({
   }, []);
 
   const clearDeepgramTimers = useCallback(() => {
-    if (recordingTimeoutRef.current !== null) {
-      window.clearTimeout(recordingTimeoutRef.current);
-      recordingTimeoutRef.current = null;
+    if (absoluteTurnTimeoutRef.current !== null) {
+      window.clearTimeout(absoluteTurnTimeoutRef.current);
+      absoluteTurnTimeoutRef.current = null;
     }
     if (noSpeechTimeoutRef.current !== null) {
       window.clearTimeout(noSpeechTimeoutRef.current);
@@ -267,11 +267,13 @@ export function useVoiceInput({
         }
       }, TIMING.VOICE_NO_SPEECH_TIMEOUT);
 
-      recordingTimeoutRef.current = window.setTimeout(() => {
+      // Keep a long absolute cap so a missing utterance boundary cannot leave the mic open forever.
+      absoluteTurnTimeoutRef.current = window.setTimeout(() => {
         if (recorder.isRecording()) {
+          logInfo('useVoiceInput', `Ending Deepgram turn after ${TIMING.VOICE_TURN_MAX_DURATION}ms absolute failsafe.`);
           void stopDeepgramAndTranscribe();
         }
-      }, TIMING.RECORDING_MAX_DURATION);
+      }, TIMING.VOICE_TURN_MAX_DURATION);
     } catch (e: any) {
       if (listeningAttemptRef.current !== attemptId) {
         return;

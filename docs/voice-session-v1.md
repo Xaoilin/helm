@@ -87,7 +87,7 @@ Each turn follows the same sequence:
 3. show live transcript preview while the user speaks
 4. treat Deepgram `UtteranceEnd` as the primary end-of-turn signal
 5. wait a short local settle window so a brief thinking pause does not end the turn too early
-6. fall back to the existing max-duration stop if no reliable end-of-turn boundary arrives
+6. fall back to a long last-resort safety stop only if no reliable end-of-turn boundary arrives
 7. transcribe the final utterance
 8. run the shared assistant runtime
 9. speak Lina's response
@@ -130,9 +130,10 @@ Behavior:
 - use Deepgram `nova-3` for both live preview and final transcription
 - use Deepgram live events for preview and utterance-end detection
 - keep `speech_final` as a transcript boundary hint, but do not end the turn immediately on that event alone
-- use explicit live endpointing and utterance-end timing so short pauses feel more natural
+- use explicit live endpointing and utterance-end timing so Lina waits about 2.5-3.0 seconds before deciding the user is done
 - use the existing post-stop transcription path for final transcript accuracy
 - treat silent turns as `no speech`, not as a generic error
+- keep the absolute turn cap as a 45-second failsafe, not the normal end-of-turn rule
 
 Chrome speech fallback remains available, but it is still a degraded path compared with Deepgram.
 
@@ -177,6 +178,7 @@ For any future changes to this flow:
 - verify the ready tone only plays once the mic is actually live
 - verify the first spoken words are not clipped after the ready tone
 - verify a brief 1-2 second thinking pause does not end the turn
+- verify an uninterrupted 10-15 second request does not stop early
 - verify Deepgram auto-stops after utterance end plus the local settle window
 - verify Lina reopens the mic after speaking
 - verify silence ends the session cleanly
