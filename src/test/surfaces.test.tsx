@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import { AppProvider } from '../store/AppContext';
 import { useApp } from '../store/AppContext';
@@ -78,7 +78,10 @@ describe('App shell', () => {
 });
 
 describe('ChatSurface', () => {
-  beforeEach(() => { localStorage.clear(); });
+  beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(navigator.clipboard.writeText).mockClear();
+  });
 
   it('should render empty state with welcome message', async () => {
     await act(async () => { renderWithProvider(<ChatSurface />); });
@@ -101,6 +104,48 @@ describe('ChatSurface', () => {
   it('should show no conversations yet text', async () => {
     await act(async () => { renderWithProvider(<ChatSurface />); });
     expect(screen.getByText('No conversations yet')).toBeInTheDocument();
+  });
+
+  it('should copy the active conversation as markdown for Codex', async () => {
+    localStorage.setItem('helm:conversations', JSON.stringify([
+      {
+        id: 'conv-export',
+        title: 'Delete my Internet task.',
+        createdAt: '2026-04-13T09:00:00.000Z',
+        updatedAt: '2026-04-13T09:05:00.000Z',
+        messages: [
+          {
+            id: 'msg-1',
+            role: 'user',
+            content: 'Delete my Internet task.',
+            timestamp: '2026-04-13T09:00:00.000Z',
+          },
+          {
+            id: 'msg-2',
+            role: 'assistant',
+            content: 'I can delete that. Do you want me to continue?',
+            timestamp: '2026-04-13T09:00:05.000Z',
+          },
+        ],
+      },
+    ]));
+
+    await act(async () => { renderWithProvider(<ChatSurface />); });
+
+    const conversationRow = await screen.findByText('Delete my Internet task.');
+
+    await act(async () => {
+      fireEvent.click(conversationRow.closest('.chat-list-item') as HTMLElement);
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Copy Markdown' }));
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1);
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('# HELM Chat Export'));
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('Delete my Internet task.'));
+    expect(screen.getByText('Conversation copied as Markdown.')).toBeInTheDocument();
   });
 });
 
