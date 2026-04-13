@@ -1,6 +1,7 @@
-import { DEFAULT_ASSISTANT_PROVIDER, HOSTED_ASSISTANT_MODEL, OLLAMA_ENDPOINT } from '../config';
+import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import { LIMITS } from '../config/constants';
 import { chatWithHostedAssistant, runHostedAssistantTurn, testHostedAssistantConnection } from '../services/hostedAssistantApi';
+import { normalizeHostedAssistantModel } from '../services/assistantModels';
 import { chatWithOllama, type OllamaMessage } from '../services/ollamaApi';
 import type { AssistantProvider } from '../types/domain';
 import { getCapabilityDefinition, getLiveCapabilityDefinitions, listCapabilitiesForPrompt, type CapabilityId } from './capabilities';
@@ -338,9 +339,11 @@ async function runHostedInitialTurn(
     conversationHistory?: AssistantConversationMessage[];
     dialogState?: AssistantDialogState;
     pendingConfirmation?: AssistantPendingConfirmation;
+    hostedModel?: string;
   },
 ): Promise<ModelTurnResult> {
-  const availability = await testHostedAssistantConnection();
+  const hostedModel = normalizeHostedAssistantModel(options.hostedModel);
+  const availability = await testHostedAssistantConnection({ model: hostedModel });
   const planningDialogState = options.pendingConfirmation
     ? {
         ...(options.dialogState || {
@@ -361,7 +364,7 @@ async function runHostedInitialTurn(
       degradedReason: 'hosted_sign_in_required',
       planningSource: 'none',
       planningStatus: toPlannerStatus(availability.status),
-      planningModel: HOSTED_ASSISTANT_MODEL,
+      planningModel: availability.model || hostedModel,
       planningBundle: bundle,
       parsedPlan: null,
       validatedPlan: null,
@@ -376,7 +379,7 @@ async function runHostedInitialTurn(
       degradedReason: 'hosted_not_configured',
       planningSource: 'none',
       planningStatus: toPlannerStatus(availability.status),
-      planningModel: HOSTED_ASSISTANT_MODEL,
+      planningModel: availability.model || hostedModel,
       planningBundle: bundle,
       parsedPlan: null,
       validatedPlan: null,
@@ -391,7 +394,7 @@ async function runHostedInitialTurn(
       degradedReason: 'hosted_error',
       planningSource: 'none',
       planningStatus: toPlannerStatus(availability.status),
-      planningModel: HOSTED_ASSISTANT_MODEL,
+      planningModel: availability.model || hostedModel,
       planningBundle: bundle,
       parsedPlan: null,
       validatedPlan: null,
@@ -408,6 +411,7 @@ async function runHostedInitialTurn(
       options.pendingConfirmation,
     );
     const response = await runHostedAssistantTurn(messages, {
+      model: hostedModel,
       format: buildAssistantModelTurnJsonSchema(capabilityIds),
       tools: buildAssistantToolDefinitions(capabilityIds),
     });
@@ -545,7 +549,7 @@ async function runHostedInitialTurn(
       degradedReason: 'hosted_error',
       planningSource: 'none',
       planningStatus: 'blocked_provider_unavailable',
-      planningModel: HOSTED_ASSISTANT_MODEL,
+      planningModel: hostedModel,
       planningBundle: bundle,
       parsedPlan: null,
       validatedPlan: null,
@@ -560,14 +564,14 @@ async function runOllamaInitialTurn(
   options: {
     lang: AssistantLang;
     endpoint?: string;
-    model?: string;
+    ollamaModel?: string;
     conversationHistory?: AssistantConversationMessage[];
     dialogState?: AssistantDialogState;
     pendingConfirmation?: AssistantPendingConfirmation;
   },
 ): Promise<ModelTurnResult> {
   const endpoint = options.endpoint || OLLAMA_ENDPOINT;
-  const model = options.model || DEFAULT_OLLAMA_MODEL;
+  const model = options.ollamaModel || DEFAULT_OLLAMA_MODEL;
   const planningDialogState = options.pendingConfirmation
     ? {
         ...(options.dialogState || {
@@ -698,8 +702,9 @@ export async function runAssistantInitialModelTurn(
     lang: AssistantLang;
     conversationHistory?: AssistantConversationMessage[];
     provider?: AssistantProvider;
+    hostedModel?: string;
     endpoint?: string;
-    model?: string;
+    ollamaModel?: string;
     dialogState?: AssistantDialogState;
     pendingConfirmation?: AssistantPendingConfirmation;
   },
@@ -757,9 +762,12 @@ async function runNarrationWithHosted(
   lang: AssistantLang,
   conversationHistory: AssistantConversationMessage[] | undefined,
   payload: Record<string, unknown>,
+  model?: string,
 ): Promise<AssistantNarrationResult> {
   const messages = buildNarrationMessages(lang, conversationHistory, payload);
-  const text = await chatWithHostedAssistant(messages, buildAssistantNarrationJsonSchema());
+  const text = await chatWithHostedAssistant(messages, buildAssistantNarrationJsonSchema(), {
+    model: normalizeHostedAssistantModel(model),
+  });
   const parsed = parseAssistantNarration(JSON.parse(text));
   if (!parsed?.assistantMessage) {
     throw new Error('Hosted narration returned invalid JSON.');
@@ -800,15 +808,21 @@ export async function narrateAssistantOutcome(
     lang: AssistantLang;
     conversationHistory?: AssistantConversationMessage[];
     planningSource: AssistantPlanningSource;
+    hostedModel?: string;
     endpoint?: string;
-    model?: string;
+    ollamaModel?: string;
   },
   payload: Record<string, unknown>,
   localFallback: string,
 ): Promise<AssistantNarrationResult> {
   try {
     if (options.planningSource === 'openai') {
-      return await runNarrationWithHosted(options.lang, options.conversationHistory, payload);
+      return await runNarrationWithHosted(
+        options.lang,
+        options.conversationHistory,
+        payload,
+        options.hostedModel,
+      );
     }
 
     if (options.planningSource === 'ollama') {
@@ -817,7 +831,7 @@ export async function narrateAssistantOutcome(
         options.conversationHistory,
         payload,
         options.endpoint,
-        options.model,
+        options.ollamaModel,
       );
     }
   } catch {

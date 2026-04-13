@@ -68,6 +68,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const isArabic = lang === 'ar';
   const sttLang = isArabic ? 'ar' : 'en-GB';
   const ollamaEndpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
+  const hostedModel = app.settings.hostedModel;
   const ollamaModel = app.settings.ollamaModel || undefined;
 
   const setVoiceSessionMode = useCallback((mode: VoiceSessionMode) => {
@@ -350,8 +351,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
         corrections: app.assistantCorrections,
         dialogState: dialogStateRef.current,
         provider: app.settings.assistantProvider,
+        hostedModel,
         endpoint: ollamaEndpoint,
-        model: ollamaModel,
+        ollamaModel,
         handlers: {
           navigate: app.requestAssistantNavigation,
           addTask: app.addTask,
@@ -419,6 +421,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     clearScheduledListening,
     endHandsFreeSession,
     lang,
+    hostedModel,
     ollamaEndpoint,
     ollamaModel,
     prayerData,

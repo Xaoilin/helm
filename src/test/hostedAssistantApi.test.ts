@@ -95,6 +95,30 @@ describe('hostedAssistantApi', () => {
     }));
   });
 
+  it('passes the selected hosted model through the health check request', async () => {
+    const client = makeClient({
+      invokeResult: {
+        data: {
+          ok: true,
+          provider: 'openai',
+          model: 'gpt-5.4-mini',
+        },
+        error: null,
+      },
+    });
+    getClientMock.mockReturnValue(client);
+
+    const status = await testHostedAssistantConnection({ model: 'gpt-5.4-mini' });
+
+    expect(status).toEqual({ status: 'available', accessMode: 'project_key', model: 'gpt-5.4-mini' });
+    expect(client.functions.invoke).toHaveBeenCalledWith('assistant-openai', expect.objectContaining({
+      body: {
+        action: 'health',
+        model: 'gpt-5.4-mini',
+      },
+    }));
+  });
+
   it('returns not_configured when project access is unavailable in the current build', async () => {
     const client = makeClient();
     getClientMock.mockReturnValue(client);
@@ -139,6 +163,42 @@ describe('hostedAssistantApi', () => {
       headers: expect.objectContaining({
         apikey: 'local-anon-key',
         Authorization: 'Bearer local-anon-key',
+      }),
+    }));
+  });
+
+  it('passes the selected hosted model through chat requests', async () => {
+    const client = makeClient({
+      invokeResult: {
+        data: {
+          ok: true,
+          provider: 'openai',
+          model: 'gpt-5.4-mini',
+          text: '{"answer":"READY"}',
+        },
+        error: null,
+      },
+    });
+    getClientMock.mockReturnValue(client);
+
+    await chatWithHostedAssistant([
+      { role: 'system', content: 'Reply with JSON.' },
+      { role: 'user', content: 'Say READY.' },
+    ], {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        answer: { type: 'string' },
+      },
+      required: ['answer'],
+    }, {
+      model: 'gpt-5.4-mini',
+    });
+
+    expect(client.functions.invoke).toHaveBeenCalledWith('assistant-openai', expect.objectContaining({
+      body: expect.objectContaining({
+        action: 'chat',
+        model: 'gpt-5.4-mini',
       }),
     }));
   });

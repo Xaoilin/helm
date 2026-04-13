@@ -155,6 +155,8 @@ describe('DebugSurface AI diagnostics', () => {
     ], expect.objectContaining({
       type: 'object',
       required: ['reply'],
+    }), expect.objectContaining({
+      model: 'gpt-5.4',
     }));
 
     expect(await screen.findByText('Hosted smoke test passed')).toBeInTheDocument();

@@ -346,6 +346,41 @@ describe('assistant runtime', () => {
     expect(result.message).toBe(result.assistantMessage);
   });
 
+  it('passes the selected hosted model through planning and narration', async () => {
+    mockHostedAssistant(() => makeHostedToolTurn([{
+      callId: 'call_open_tasks',
+      capability: 'tasks.open_view',
+      args: {
+        tab: 'all',
+        resetFilters: true,
+      },
+    }]));
+
+    const result = await processAssistantCommand('show me all my tasks', makeContext(), {
+      lang: 'en',
+      provider: 'hosted',
+      hostedModel: 'gpt-5.4-mini',
+      handlers: {
+        navigate: vi.fn(),
+        addTask: vi.fn(() => 'task-1'),
+        updateTask: vi.fn(),
+      },
+    });
+
+    expect(testHostedAssistantConnection).toHaveBeenCalledWith({ model: 'gpt-5.4-mini' });
+    expect(runHostedAssistantTurn).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({
+      model: 'gpt-5.4-mini',
+    }));
+    expect(chatWithHostedAssistant).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Object),
+      expect.objectContaining({
+        model: 'gpt-5.4-mini',
+      }),
+    );
+    expect(result.planningModel).toBe('gpt-5.4');
+  });
+
   it('uses the validated clarify turn instead of the raw hosted draft when guardrails coerce an unsupported action', async () => {
     mockHostedAssistant(transcript => {
       expect(transcript).toBe('turn my internet off');

@@ -90,6 +90,10 @@ const hostedAssistantFailures: Partial<Record<HostedAssistantFailureSource, Host
 let lastHostedAssistantAccessMode: HostedAssistantAccessMode | null = null;
 let lastHostedAssistantModel: string | null = null;
 
+interface HostedAssistantRequestOptions {
+  model?: string;
+}
+
 function isHttpError(error: unknown): error is FunctionsHttpError {
   return error instanceof FunctionsHttpError
     || (
@@ -253,7 +257,9 @@ async function invokeHostedAssistant<T>(
   }
 }
 
-export async function testHostedAssistantConnection(): Promise<HostedAssistantConnectionStatus> {
+export async function testHostedAssistantConnection(
+  options: HostedAssistantRequestOptions = {},
+): Promise<HostedAssistantConnectionStatus> {
   if (!isSupabaseReady()) {
     return { status: 'not_configured', message: 'Supabase is not configured.' };
   }
@@ -263,7 +269,10 @@ export async function testHostedAssistantConnection(): Promise<HostedAssistantCo
   }
 
   try {
-    const data = await invokeHostedAssistant<HostedAssistantHealthResponse>('health', { action: 'health' });
+    const data = await invokeHostedAssistant<HostedAssistantHealthResponse>('health', {
+      action: 'health',
+      ...(options.model ? { model: options.model } : {}),
+    });
     lastHostedAssistantModel = data.model;
     return data.ok
       ? { status: 'available', accessMode: lastHostedAssistantAccessMode ?? 'none', model: data.model }
@@ -278,11 +287,13 @@ export async function testHostedAssistantConnection(): Promise<HostedAssistantCo
 export async function chatWithHostedAssistant(
   messages: OllamaMessage[],
   format: unknown,
+  options: HostedAssistantRequestOptions = {},
 ): Promise<string> {
   const data = await invokeHostedAssistant<HostedAssistantChatResponse>('chat', {
     action: 'chat',
     messages,
     format,
+    ...(options.model ? { model: options.model } : {}),
   });
 
   if (!data.ok || !data.text?.trim()) {
@@ -298,11 +309,13 @@ export async function runHostedAssistantTurn(
   options: {
     format?: unknown;
     tools?: AssistantToolDefinition[];
+    model?: string;
   } = {},
 ): Promise<HostedAssistantTurnResult> {
   const data = await invokeHostedAssistant<HostedAssistantTurnResponse>('chat', {
     action: 'turn',
     messages,
+    ...(options.model ? { model: options.model } : {}),
     ...(options.format ? { format: options.format } : {}),
     ...(options.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
   });

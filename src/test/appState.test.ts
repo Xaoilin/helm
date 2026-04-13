@@ -195,6 +195,12 @@ describe('AppContext - Settings', () => {
     act(() => { r.api!.updateSettings({ defaultCalendarTab: 'month' }); });
     expect(r.api!.settings.defaultCalendarTab).toBe('month');
   });
+
+  it('should persist the selected hosted model in settings', async () => {
+    const r = await renderWithApp();
+    act(() => { r.api!.updateSettings({ hostedModel: 'gpt-5.4-mini' }); });
+    expect(r.api!.settings.hostedModel).toBe('gpt-5.4-mini');
+  });
 });
 
 describe('AppContext - Workspaces', () => {

@@ -169,8 +169,9 @@ export async function runAssistantTurn(
       lang,
       conversationHistory: options.conversationHistory,
       planningSource,
+      hostedModel: options.hostedModel,
       endpoint: options.endpoint,
-      model: options.model,
+      ollamaModel: options.ollamaModel || options.model,
     }, payload, localFallback);
   }
 
@@ -325,8 +326,9 @@ export async function runAssistantTurn(
     lang,
     conversationHistory: options.conversationHistory,
     provider: options.provider,
+    hostedModel: options.hostedModel,
     endpoint: options.endpoint,
-    model: options.model,
+    ollamaModel: options.ollamaModel || options.model,
     dialogState,
     pendingConfirmation: dialogState.pendingConfirmation,
   });

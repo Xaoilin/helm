@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
-import { HOSTED_ASSISTANT_MODEL } from '../config';
 import { TIMING } from '../config/constants';
 import { getCurrentUserId, isAuthenticated, isSupabaseReady } from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
 import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
+import { getHostedAssistantModelLabel, getHostedAssistantModelSetting } from '../services/assistantModels';
 import { downloadConversationAsMarkdown, formatConversationAsMarkdown } from '../services/chatExport';
 
 interface ExportFeedback {
@@ -36,9 +36,9 @@ function getStatusBadge(status: AssistantRuntimeStatus): string {
   }
 }
 
-function getEmptyStateMessage(status: AssistantRuntimeStatus): string {
+function getEmptyStateMessage(status: AssistantRuntimeStatus, hostedModelLabel: string): string {
   if (status.state === 'ready' && status.activeProvider === 'hosted') {
-    return `Lina is powered by hosted ${HOSTED_ASSISTANT_MODEL}. Ask anything about your schedule, tasks, or goals.`;
+    return `Lina is powered by hosted ${hostedModelLabel}. Ask anything about your schedule, tasks, or goals.`;
   }
 
   if (status.state === 'ready' && status.activeProvider === 'ollama') {
@@ -72,6 +72,7 @@ export default function ChatSurface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const authSyncKey = `${isSupabaseReady()}:${isAuthenticated()}:${getCurrentUserId() || ''}`;
   const selectedProvider = getAssistantProviderSetting(app.settings);
+  const hostedModelLabel = getHostedAssistantModelLabel(getHostedAssistantModelSetting(app.settings));
 
   const activeConv = app.conversations.find(c => c.id === app.activeConversationId);
   const canExportConversation = Boolean(activeConv && activeConv.messages.length > 0);
@@ -80,6 +81,7 @@ export default function ChatSurface() {
     let cancelled = false;
     getAssistantRuntimeStatus({
       assistantProvider: selectedProvider,
+      hostedModel: app.settings.hostedModel,
       ollamaEndpoint: app.settings.ollamaEndpoint,
     }).then(status => {
       if (!cancelled) setAssistantStatus(status);
@@ -87,7 +89,7 @@ export default function ChatSurface() {
     return () => {
       cancelled = true;
     };
-  }, [selectedProvider, app.settings.ollamaEndpoint, authSyncKey]);
+  }, [selectedProvider, app.settings.hostedModel, app.settings.ollamaEndpoint, authSyncKey]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -304,7 +306,7 @@ export default function ChatSurface() {
                   <div className="empty-icon">&#128172;</div>
                   <h3>Start a conversation</h3>
                   <p>
-                    {getEmptyStateMessage(assistantStatus)}
+                    {getEmptyStateMessage(assistantStatus, hostedModelLabel)}
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
                     {quickPrompts.map(p => (
@@ -353,7 +355,7 @@ export default function ChatSurface() {
             <div className="empty-icon">&#128172;</div>
             <h3>Lina Assistant</h3>
             <p>
-              {getEmptyStateMessage(assistantStatus)}
+              {getEmptyStateMessage(assistantStatus, hostedModelLabel)}
             </p>
             <button className="btn btn-primary" onClick={() => app.createConversation()}>New conversation</button>
             {app.conversations.length === 0 && (

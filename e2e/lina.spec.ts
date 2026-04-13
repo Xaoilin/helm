@@ -381,7 +381,17 @@ test.describe('Lina Assistant', () => {
   });
 
   test('should open panel with Ctrl+Shift+L', async ({ page }) => {
-    await page.keyboard.press('Control+Shift+L');
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('button[aria-label="Talk to Lina"]')).toBeVisible();
+    await page.evaluate(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'L',
+        code: 'KeyL',
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+      }));
+    });
     await expect(page.locator('text=Ask me anything').or(page.locator('text=اسألني أي شيء'))).toBeVisible();
   });
 
