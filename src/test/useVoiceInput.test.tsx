@@ -12,6 +12,9 @@ const {
   transcribeWithDeepgramMock,
   testChromeSpeechRecognitionMock,
   createDeepgramLiveSessionMock,
+  logErrorMock,
+  logInfoMock,
+  logWarnMock,
 } = vi.hoisted(() => {
   const startRecorder = vi.fn().mockResolvedValue(undefined);
   const stopRecorder = vi.fn();
@@ -26,6 +29,9 @@ const {
   const transcribeWithDeepgramMock = vi.fn();
   const testChromeSpeechRecognitionMock = vi.fn();
   const createDeepgramLiveSessionMock = vi.fn();
+  const logErrorMock = vi.fn();
+  const logInfoMock = vi.fn();
+  const logWarnMock = vi.fn();
 
   return {
     startRecorder,
@@ -36,6 +42,9 @@ const {
     transcribeWithDeepgramMock,
     testChromeSpeechRecognitionMock,
     createDeepgramLiveSessionMock,
+    logErrorMock,
+    logInfoMock,
+    logWarnMock,
   };
 });
 
@@ -46,6 +55,12 @@ vi.mock('../services/deepgramSTT', () => ({
   transcribeWithDeepgram: transcribeWithDeepgramMock,
   testChromeSpeechRecognition: testChromeSpeechRecognitionMock,
   createDeepgramLiveSession: (...args: Parameters<typeof createDeepgramLiveSessionMock>) => createDeepgramLiveSessionMock(...args),
+}));
+
+vi.mock('../services/logger', () => ({
+  logError: logErrorMock,
+  logInfo: logInfoMock,
+  logWarn: logWarnMock,
 }));
 
 describe('useVoiceInput', () => {
@@ -65,6 +80,9 @@ describe('useVoiceInput', () => {
         close: vi.fn(),
       };
     });
+    logErrorMock.mockReset();
+    logInfoMock.mockReset();
+    logWarnMock.mockReset();
   });
 
   afterEach(() => {
@@ -330,6 +348,139 @@ describe('useVoiceInput', () => {
 
     expect(stopRecorder).not.toHaveBeenCalled();
     expect(transcribeWithDeepgramMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps spoken Deepgram turns alive past the old 8-second cap while speech continues', async () => {
+    vi.useFakeTimers();
+
+    const { result } = renderHook(() => useVoiceInput({
+      enabled: true,
+      deepgramKey: 'dg-test-key',
+      sttLang: 'en-GB',
+      onTranscript: vi.fn(),
+    }));
+
+    await act(async () => {
+      result.current.startListening();
+      await Promise.resolve();
+    });
+
+    act(() => {
+      liveEventHandler?.({
+        type: 'transcript',
+        transcript: 'book a review with Sam tomorrow afternoon',
+        isFinal: false,
+        speechFinal: false,
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(7000);
+      await Promise.resolve();
+    });
+
+    act(() => {
+      liveEventHandler?.({
+        type: 'transcript',
+        transcript: 'book a review with Sam tomorrow afternoon and remind me an hour before',
+        isFinal: false,
+        speechFinal: false,
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1500);
+      await Promise.resolve();
+    });
+
+    expect(stopRecorder).not.toHaveBeenCalled();
+    expect(transcribeWithDeepgramMock).not.toHaveBeenCalled();
+    expect(logInfoMock).not.toHaveBeenCalled();
+  });
+
+  it('does not cut off a two-second pause before Deepgram emits an utterance boundary', async () => {
+    vi.useFakeTimers();
+
+    const { result } = renderHook(() => useVoiceInput({
+      enabled: true,
+      deepgramKey: 'dg-test-key',
+      sttLang: 'en-GB',
+      onTranscript: vi.fn(),
+    }));
+
+    await act(async () => {
+      result.current.startListening();
+      await Promise.resolve();
+    });
+
+    act(() => {
+      liveEventHandler?.({
+        type: 'transcript',
+        transcript: 'book a review with Sam tomorrow',
+        isFinal: true,
+        speechFinal: true,
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await Promise.resolve();
+    });
+
+    expect(stopRecorder).not.toHaveBeenCalled();
+    expect(transcribeWithDeepgramMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the absolute Deepgram turn failsafe only for abnormally long turns', async () => {
+    vi.useFakeTimers();
+    const onTranscript = vi.fn();
+    transcribeWithDeepgramMock.mockResolvedValue({
+      transcript: 'book a review with Sam tomorrow afternoon',
+      confidence: 0.99,
+    });
+
+    const { result } = renderHook(() => useVoiceInput({
+      enabled: true,
+      deepgramKey: 'dg-test-key',
+      sttLang: 'en-GB',
+      onTranscript,
+    }));
+
+    await act(async () => {
+      result.current.startListening();
+      await Promise.resolve();
+    });
+
+    act(() => {
+      liveEventHandler?.({
+        type: 'transcript',
+        transcript: 'book a review with Sam tomorrow afternoon',
+        isFinal: false,
+        speechFinal: false,
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(TIMING.VOICE_TURN_MAX_DURATION - 100);
+      await Promise.resolve();
+    });
+
+    expect(stopRecorder).not.toHaveBeenCalled();
+    expect(transcribeWithDeepgramMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(logInfoMock).toHaveBeenCalledWith(
+      'useVoiceInput',
+      `Ending Deepgram turn after ${TIMING.VOICE_TURN_MAX_DURATION}ms absolute failsafe.`,
+    );
+    expect(stopRecorder).toHaveBeenCalledTimes(1);
+    expect(transcribeWithDeepgramMock).toHaveBeenCalledTimes(1);
+    expect(onTranscript).toHaveBeenCalledWith('book a review with Sam tomorrow afternoon');
   });
 
   it('treats silent Deepgram turns as no-speech instead of a generic error', async () => {

@@ -11,18 +11,18 @@ export const TIMING = {
   CLOCK_TICK: 100,
   /** Browser TTS fallback playback timeout */
   TTS_FALLBACK_TIMEOUT: 3000,
-  /** Max recording duration before auto-stop */
-  RECORDING_MAX_DURATION: 8000,
+  /** Last-resort cap on a single spoken turn if no reliable boundary arrives. */
+  VOICE_TURN_MAX_DURATION: 45000,
   /** End a voice turn early if no speech arrives at all. */
   VOICE_NO_SPEECH_TIMEOUT: 5000,
   /** Brief pause after Lina finishes speaking before reopening the mic. */
   VOICE_SESSION_RESUME_DELAY: 250,
   /** Short settle window after Deepgram signals an utterance boundary. */
-  VOICE_TURN_END_SETTLE_DELAY: 450,
+  VOICE_TURN_END_SETTLE_DELAY: 500,
   /** Deepgram live endpointing silence window. */
   DEEPGRAM_ENDPOINTING: 300,
   /** Deepgram live utterance-end silence window. */
-  DEEPGRAM_UTTERANCE_END_MS: 1800,
+  DEEPGRAM_UTTERANCE_END_MS: 2500,
   /** Duration of Lina's mic-ready earcon. */
   VOICE_READY_TONE_DURATION: 140,
   /** Fade-in/out used to keep the earcon soft. */
