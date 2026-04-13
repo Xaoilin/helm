@@ -38,17 +38,18 @@ import type {
   AssistantExecutionResult,
   AssistantExecutionStep,
   AssistantLang,
+  AssistantToolResult,
 } from './shared';
 import { extractTemporalReference } from './temporalResolver';
 
 interface ClarifyOutcome {
   kind: 'clarify';
-  message: string;
+  reason: string;
 }
 
 interface ExecutedStepOutcome {
   stepResult: AssistantExecutionStep;
-  message: string;
+  toolResult: AssistantToolResult;
   refs: AssistantEntityReference[];
   undoToken?: string;
   navigationRequest?: AssistantNavigationRequest;
@@ -56,7 +57,6 @@ interface ExecutedStepOutcome {
 
 interface ExecuteOutcome {
   kind: 'executed';
-  message: string;
   execution: AssistantExecutionResult;
   referencedEntities: AssistantEntityReference[];
 }
@@ -286,16 +286,17 @@ function guessIncomeCategory(description: string): Transaction['category'] {
 
 function executeSingleStep(
   step: ActionPlan['steps'][number],
+  callId: string,
   context: AssistantCommandContext,
   handlers: AssistantActionHandlers,
-  lang: AssistantLang,
+  _lang: AssistantLang,
   dialogState?: AssistantDialogState,
 ): ClarifyOutcome | ExecutedStepOutcome {
   switch (step.capability) {
     case 'navigation.go_to_surface': {
       const surfaceValue = step.args.surface;
       if (typeof surfaceValue !== 'string') {
-        return { kind: 'clarify', message: 'Which part of HELM should I open?' };
+        return { kind: 'clarify', reason: 'Which part of HELM should I open?' };
       }
 
       const surface = surfaceValue as Surface;
@@ -306,14 +307,23 @@ function executeSingleStep(
       const ref = makeEntityReference('surface', surface, SURFACE_LABELS[surface].en, surface, 1);
       return {
         stepResult: {
+          callId,
           capability: step.capability,
           status: 'completed',
           summary: `Opened ${SURFACE_LABELS[surface].en}.`,
           entityRefs: [ref],
         },
-        message: lang === 'ar'
-          ? `جاري فتح ${SURFACE_LABELS[surface].ar}.`
-          : `Opening ${SURFACE_LABELS[surface].en} for you.`,
+        toolResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary: `Opened ${SURFACE_LABELS[surface].en}.`,
+          facts: [
+            `Navigated to the ${SURFACE_LABELS[surface].en} surface.`,
+          ],
+          entityRefs: [ref],
+          navigationRequest,
+        },
         refs: [ref],
         navigationRequest,
       };
@@ -322,7 +332,7 @@ function executeSingleStep(
     case 'tasks.open_view': {
       const tab = asTaskTab(step.args.tab);
       if (!tab) {
-        return { kind: 'clarify', message: 'Which Tasks view should I open?' };
+        return { kind: 'clarify', reason: 'Which Tasks view should I open?' };
       }
 
       const navigate = handlers.navigate || requestAssistantNavigation;
@@ -341,22 +351,23 @@ function executeSingleStep(
       const tabLabel = tab === 'all' ? 'All Tasks' : tab === 'goals' ? 'Goals' : 'Today';
       return {
         stepResult: {
+          callId,
           capability: step.capability,
           status: 'completed',
           summary: `Opened the ${tabLabel} task view.`,
           entityRefs: [ref],
         },
-        message: lang === 'ar'
-          ? tab === 'all'
-            ? 'سأفتح كل مهامك.'
-            : tab === 'goals'
-              ? 'سأفتح أهدافك.'
-              : 'سأفتح مهام اليوم.'
-          : tab === 'all'
-            ? 'Opening all your tasks.'
-            : tab === 'goals'
-              ? 'Opening your goals.'
-              : "Opening today's tasks.",
+        toolResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary: `Opened the ${tabLabel} task view.`,
+          facts: [
+            `Opened the Tasks surface on the ${tabLabel} tab.`,
+          ],
+          entityRefs: [ref],
+          navigationRequest,
+        },
         refs: [ref],
         navigationRequest,
       };
@@ -365,7 +376,7 @@ function executeSingleStep(
     case 'tasks.create_task': {
       const title = asString(step.args.title);
       if (!title) {
-        return { kind: 'clarify', message: 'What should I call the task?' };
+        return { kind: 'clarify', reason: 'What should I call the task?' };
       }
 
       const priority = step.args.priority === 'high' || step.args.priority === 'low' ? step.args.priority : 'medium';
@@ -397,12 +408,25 @@ function executeSingleStep(
       const ref = makeEntityReference('task', id, title, 'tasks', 1);
       return {
         stepResult: {
+          callId,
           capability: step.capability,
           status: 'completed',
           summary: `Created task "${title}".`,
           entityRefs: [ref],
         },
-        message: lang === 'ar' ? `أضفت "${title}" إلى مهامك.` : `Added "${title}" to your tasks.`,
+        toolResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary: `Created task "${title}".`,
+          facts: [
+            `Created the task "${title}".`,
+            `Priority: ${priority}.`,
+            `Category: ${category}.`,
+            ...(dueDate ? [`Due date: ${dueDate}.`] : []),
+          ],
+          entityRefs: [ref],
+        },
         refs: [ref],
         undoToken: JSON.stringify({ type: 'task.delete', id }),
       };
@@ -421,12 +445,12 @@ function executeSingleStep(
           })
         : { task: null as Task | null, clarify: undefined as string | undefined };
       if (!task && !legacyResolution.task) {
-        return { kind: 'clarify', message: legacyResolution.clarify || 'Which task should I complete?' };
+        return { kind: 'clarify', reason: legacyResolution.clarify || 'Which task should I complete?' };
       }
 
       const resolvedTask = task || legacyResolution.task;
       if (!resolvedTask) {
-        return { kind: 'clarify', message: 'Which task should I complete?' };
+        return { kind: 'clarify', reason: 'Which task should I complete?' };
       }
       const now = getNow(context);
       const today = toLocalDateStr(now);
@@ -464,16 +488,22 @@ function executeSingleStep(
       const ref = makeEntityReference('task', resolvedTask.id, resolvedTask.title, 'tasks', 1);
       return {
         stepResult: {
+          callId,
           capability: step.capability,
           status: 'completed',
           summary: `Completed "${resolvedTask.title}".`,
           entityRefs: [ref],
         },
-        message: lang === 'ar'
-          ? `تم تعليم "${resolvedTask.title}" كمكتملة.`
-          : resolvedTask.category === 'daily'
-            ? `Marked the habit "${resolvedTask.title}" as complete.`
-            : `Marked "${resolvedTask.title}" as complete.`,
+        toolResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary: `Completed "${resolvedTask.title}".`,
+          facts: [
+            `${resolvedTask.category === 'daily' ? 'Marked the habit' : 'Marked the task'} "${resolvedTask.title}" as complete.`,
+          ],
+          entityRefs: [ref],
+        },
         refs: [ref],
         undoToken: JSON.stringify({ type: 'task.reopen', id: resolvedTask.id }),
       };
@@ -483,7 +513,7 @@ function executeSingleStep(
       if (!handlers.removeTask) {
         return {
           kind: 'clarify',
-          message: 'Task deletion is not available in this surface.',
+          reason: 'Task deletion is not available in this surface.',
         };
       }
 
@@ -507,7 +537,7 @@ function executeSingleStep(
             return resolution.tasks;
           })();
       if (tasksToDelete.length === 0) {
-        return { kind: 'clarify', message: 'Which task should I delete?' };
+        return { kind: 'clarify', reason: 'Which task should I delete?' };
       }
 
       for (const task of tasksToDelete) {
@@ -519,6 +549,7 @@ function executeSingleStep(
       const refs = tasksToDelete.map(task => makeEntityReference('task', task.id, task.title, 'tasks', 1));
       return {
         stepResult: {
+          callId,
           capability: step.capability,
           status: 'completed',
           summary: tasksToDelete.length === 1
@@ -526,13 +557,21 @@ function executeSingleStep(
             : `Deleted ${tasksToDelete.length} tasks.`,
           entityRefs: refs,
         },
-        message: lang === 'ar'
-          ? tasksToDelete.length === 1
-            ? `تم حذف "${tasksToDelete[0].title}".`
-            : `تم حذف ${tasksToDelete.length} مهام.`
-          : tasksToDelete.length === 1
+        toolResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary: tasksToDelete.length === 1
             ? `Deleted "${tasksToDelete[0].title}".`
             : `Deleted ${tasksToDelete.length} tasks.`,
+          facts: tasksToDelete.length === 1
+            ? [`Deleted the task "${tasksToDelete[0].title}".`]
+            : [
+                `Deleted ${tasksToDelete.length} tasks.`,
+                `Deleted titles: ${tasksToDelete.map(task => `"${task.title}"`).join(', ')}.`,
+              ],
+          entityRefs: refs,
+        },
         refs,
       };
     }
@@ -550,7 +589,7 @@ function executeSingleStep(
           })
         : { task, clarify: undefined as string | undefined };
       if (!resolution.task) {
-        return { kind: 'clarify', message: resolution.clarify || 'Which task should I show you?' };
+        return { kind: 'clarify', reason: resolution.clarify || 'Which task should I show you?' };
       }
 
       const resolvedTask = resolution.task;
@@ -571,14 +610,23 @@ function executeSingleStep(
       const ref = makeEntityReference('task', resolvedTask.id, resolvedTask.title, 'tasks', 1);
       return {
         stepResult: {
+          callId,
           capability: step.capability,
           status: 'completed',
           summary: `Revealed task "${resolvedTask.title}".`,
           entityRefs: [ref],
         },
-        message: lang === 'ar'
-          ? `سأعرض "${resolvedTask.title}" في المهام.`
-          : `Opening "${resolvedTask.title}" in your tasks.`,
+        toolResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary: `Revealed task "${resolvedTask.title}".`,
+          facts: [
+            `Opened the Tasks surface and highlighted "${resolvedTask.title}".`,
+          ],
+          entityRefs: [ref],
+          navigationRequest,
+        },
         refs: [ref],
         navigationRequest,
       };
@@ -586,12 +634,12 @@ function executeSingleStep(
 
     case 'calendar.create_event': {
       if (!handlers.addCalendarEvent) {
-        return { kind: 'clarify', message: 'Calendar event creation is not available in this surface.' };
+        return { kind: 'clarify', reason: 'Calendar event creation is not available in this surface.' };
       }
 
       const title = asString(step.args.title);
       if (!title) {
-        return { kind: 'clarify', message: 'What should I call the event?' };
+        return { kind: 'clarify', reason: 'What should I call the event?' };
       }
 
       const calendarSourceId = asString(step.args.calendarSourceId);
@@ -602,14 +650,14 @@ function executeSingleStep(
           }
         : pickCalendarSource(context, asString(step.args.calendarQuery));
       if (!calendarChoice.source) {
-        return { kind: 'clarify', message: calendarChoice.clarify || 'Which calendar should I use?' };
+        return { kind: 'clarify', reason: calendarChoice.clarify || 'Which calendar should I use?' };
       }
 
       const extracted = extractTemporalReference(asString(step.args.timePhrase), context);
       const start = asString(step.args.start) || extracted.resolution?.start;
       const end = asString(step.args.end) || extracted.resolution?.end;
       if (!start || !end) {
-        return { kind: 'clarify', message: 'When should I schedule it?' };
+        return { kind: 'clarify', reason: 'When should I schedule it?' };
       }
 
       const id = handlers.addCalendarEvent({
@@ -635,14 +683,26 @@ function executeSingleStep(
       const ref = makeEntityReference('calendar_event', id, title, 'calendar', 1);
       return {
         stepResult: {
+          callId,
           capability: step.capability,
           status: 'completed',
           summary: `Created event "${title}".`,
           entityRefs: [ref],
         },
-        message: lang === 'ar'
-          ? `أضفت "${title}" إلى تقويمك.`
-          : `Scheduled "${title}" on ${calendarChoice.source.name}.`,
+        toolResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary: `Created event "${title}".`,
+          facts: [
+            `Created the calendar event "${title}".`,
+            `Calendar: ${calendarChoice.source.name}.`,
+            `Start: ${start}.`,
+            `End: ${end}.`,
+            ...(asString(step.args.location) ? [`Location: ${asString(step.args.location)}.`] : []),
+          ],
+          entityRefs: [ref],
+        },
         refs: [ref],
         undoToken: JSON.stringify({ type: 'calendar.delete', id }),
       };
@@ -650,7 +710,7 @@ function executeSingleStep(
 
     case 'calendar.reschedule_event': {
       if (!handlers.updateCalendarEvent) {
-        return { kind: 'clarify', message: 'Calendar rescheduling is not available in this surface.' };
+        return { kind: 'clarify', reason: 'Calendar rescheduling is not available in this surface.' };
       }
 
       const eventId = asString(step.args.eventId);
@@ -664,14 +724,14 @@ function executeSingleStep(
             clarify: undefined as string | undefined,
           };
       if (!eventResolution.event) {
-        return { kind: 'clarify', message: eventResolution.clarify || 'Which event should I move?' };
+        return { kind: 'clarify', reason: eventResolution.clarify || 'Which event should I move?' };
       }
 
       const extracted = extractTemporalReference(asString(step.args.timePhrase), context);
       const start = asString(step.args.start) || extracted.resolution?.start;
       const end = asString(step.args.end) || extracted.resolution?.end;
       if (!start || !end) {
-        return { kind: 'clarify', message: 'What time should I move it to?' };
+        return { kind: 'clarify', reason: 'What time should I move it to?' };
       }
 
       const resolvedEvent = eventResolution.event;
@@ -683,14 +743,26 @@ function executeSingleStep(
       const ref = makeEntityReference('calendar_event', resolvedEvent.id, resolvedEvent.title, 'calendar', 1);
       return {
         stepResult: {
+          callId,
           capability: step.capability,
           status: 'completed',
           summary: `Moved "${resolvedEvent.title}".`,
           entityRefs: [ref],
         },
-        message: lang === 'ar'
-          ? `تم نقل "${resolvedEvent.title}".`
-          : `Moved "${resolvedEvent.title}" to the new time.`,
+        toolResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary: `Moved "${resolvedEvent.title}".`,
+          facts: [
+            `Moved the event "${resolvedEvent.title}".`,
+            `Previous start: ${resolvedEvent.start}.`,
+            `Previous end: ${resolvedEvent.end}.`,
+            `New start: ${start}.`,
+            `New end: ${end}.`,
+          ],
+          entityRefs: [ref],
+        },
         refs: [ref],
         undoToken: JSON.stringify({
           type: 'calendar.reschedule',
@@ -703,14 +775,14 @@ function executeSingleStep(
 
     case 'finance.record_transaction': {
       if (!handlers.addTransaction) {
-        return { kind: 'clarify', message: 'Finance logging is not available in this surface.' };
+        return { kind: 'clarify', reason: 'Finance logging is not available in this surface.' };
       }
 
       const type = step.args.type === 'income' ? 'income' : 'expense';
       const amountRaw = asString(step.args.amount);
       const amount = parseToPence(amountRaw.replace(/[£$,]/g, ''));
       if (amount <= 0) {
-        return { kind: 'clarify', message: 'What amount should I record?' };
+        return { kind: 'clarify', reason: 'What amount should I record?' };
       }
 
       const accountId = asString(step.args.accountId);
@@ -721,7 +793,7 @@ function executeSingleStep(
           }
         : pickFinanceAccount(context, asString(step.args.accountQuery));
       if (!accountChoice.account) {
-        return { kind: 'clarify', message: accountChoice.clarify || 'Which account should I use?' };
+        return { kind: 'clarify', reason: accountChoice.clarify || 'Which account should I use?' };
       }
 
       const description = asString(step.args.description) || (type === 'income' ? 'Income' : 'Expense');
@@ -751,21 +823,33 @@ function executeSingleStep(
       const ref = makeEntityReference('finance_account', accountChoice.account.id, accountChoice.account.name, 'finance', 1);
       return {
         stepResult: {
+          callId,
           capability: step.capability,
           status: 'completed',
           summary: `Recorded ${type} of ${formatGBP(amount)}.`,
           entityRefs: [ref],
         },
-        message: lang === 'ar'
-          ? `تم تسجيل ${formatGBP(amount)} في ${accountChoice.account.name}.`
-          : `Recorded ${type} of ${formatGBP(amount)} in ${accountChoice.account.name}.`,
+        toolResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary: `Recorded ${type} of ${formatGBP(amount)}.`,
+          facts: [
+            `Recorded a ${type} transaction.`,
+            `Amount: ${formatGBP(amount)}.`,
+            `Account: ${accountChoice.account.name}.`,
+            `Description: ${description}.`,
+            `Date: ${date}.`,
+          ],
+          entityRefs: [ref],
+        },
         refs: [ref],
       };
     }
 
     case 'knowledge.create_entry': {
       if (!handlers.addKnowledgeEntry) {
-        return { kind: 'clarify', message: 'Knowledge capture is not available in this surface.' };
+        return { kind: 'clarify', reason: 'Knowledge capture is not available in this surface.' };
       }
 
       const topicId = asString(step.args.topicId);
@@ -776,13 +860,13 @@ function executeSingleStep(
           }
         : pickKnowledgeTopic(context, asString(step.args.topicQuery));
       if (!topicChoice.topic) {
-        return { kind: 'clarify', message: topicChoice.clarify || 'Which topic should I use?' };
+        return { kind: 'clarify', reason: topicChoice.clarify || 'Which topic should I use?' };
       }
 
       const title = asString(step.args.title) || 'Quick note';
       const content = asString(step.args.content);
       if (!content) {
-        return { kind: 'clarify', message: 'What note should I save?' };
+        return { kind: 'clarify', reason: 'What note should I save?' };
       }
 
       const id = handlers.addKnowledgeEntry({
@@ -807,14 +891,23 @@ function executeSingleStep(
       const ref = makeEntityReference('knowledge_entry', id, title, 'knowledge', 1);
       return {
         stepResult: {
+          callId,
           capability: step.capability,
           status: 'completed',
           summary: `Saved note "${title}".`,
           entityRefs: [ref],
         },
-        message: lang === 'ar'
-          ? `تم حفظ الملاحظة "${title}" تحت ${topicChoice.topic.name}.`
-          : `Saved "${title}" under ${topicChoice.topic.name}.`,
+        toolResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary: `Saved note "${title}".`,
+          facts: [
+            `Saved the note "${title}".`,
+            `Topic: ${topicChoice.topic.name}.`,
+          ],
+          entityRefs: [ref],
+        },
         refs: [ref],
       };
     }
@@ -825,26 +918,28 @@ export function executeActionPlan(
   plan: ActionPlan,
   context: AssistantCommandContext,
   handlers: AssistantActionHandlers,
-  lang: AssistantLang,
+  _lang: AssistantLang,
   dialogState?: AssistantDialogState,
+  toolCalls?: Array<{ callId: string }>,
 ): ExecutionOutcome {
   const workingContext = cloneContext(context);
   const steps: AssistantExecutionStep[] = [];
+  const toolResults: AssistantToolResult[] = [];
   const refs: AssistantEntityReference[] = [];
-  let lastMessage = plan.response;
   const undoTokens: string[] = [];
   const navigationRequests: AssistantNavigationRequest[] = [];
 
-  for (const step of plan.steps) {
+  for (const [index, step] of plan.steps.entries()) {
     const capability = getCapabilityDefinition(step.capability);
-    const result = executeSingleStep(step, workingContext, handlers, lang, dialogState);
+    const callId = toolCalls?.[index]?.callId || `call_${index + 1}`;
+    const result = executeSingleStep(step, callId, workingContext, handlers, _lang, dialogState);
     if ('kind' in result) {
       return result;
     }
 
     steps.push(result.stepResult);
+    toolResults.push(result.toolResult);
     refs.push(...result.refs);
-    lastMessage = result.message || lastMessage;
     if (result.undoToken && capability.confirmationRule !== 'never') {
       undoTokens.push(result.undoToken);
     }
@@ -855,10 +950,10 @@ export function executeActionPlan(
 
   return {
     kind: 'executed',
-    message: lastMessage,
     referencedEntities: refs,
     execution: {
       status: steps.length > 0 ? 'executed' : 'skipped',
+      toolResults,
       steps,
       undoToken: undoTokens.length > 0 ? undoTokens.join('|') : undefined,
       navigationRequests: navigationRequests.length > 0 ? navigationRequests : undefined,

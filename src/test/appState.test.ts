@@ -16,6 +16,7 @@ vi.mock('../services/assistantRuntime', () => ({
 beforeEach(() => {
   processAssistantCommandMock.mockReset();
   processAssistantCommandMock.mockResolvedValue({
+    assistantMessage: 'Opening calendar for you.',
     message: 'Opening calendar for you.',
     plan: { mode: 'act', response: 'Opening calendar for you.', confidence: 1, steps: [] },
     dialogState: {

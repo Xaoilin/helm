@@ -14,6 +14,7 @@ import {
 import { logError } from './logger';
 import { hostedAssistantBreaker } from './serviceBreakers';
 import type { OllamaMessage } from './ollamaApi';
+import type { AssistantToolDefinition } from '../assistant/toolSchemas';
 
 interface HostedAssistantHealthResponse {
   ok: boolean;
@@ -31,6 +32,33 @@ interface HostedAssistantChatResponse {
     outputTokens?: number;
     totalTokens?: number;
   };
+}
+
+interface HostedAssistantTurnToolCall {
+  callId: string;
+  name: string;
+  arguments: string;
+}
+
+interface HostedAssistantTurnResponse {
+  ok: boolean;
+  provider: 'openai';
+  model: string;
+  turn: {
+    type: 'text' | 'tool_calls';
+    text?: string;
+    toolCalls?: HostedAssistantTurnToolCall[];
+  };
+  rawResponse?: string;
+  usage?: HostedAssistantChatResponse['usage'];
+}
+
+export interface HostedAssistantTurnResult {
+  type: 'text' | 'tool_calls';
+  text?: string;
+  toolCalls: HostedAssistantTurnToolCall[];
+  model: string;
+  rawResponse?: string;
 }
 
 export interface HostedAssistantConnectionStatus {
@@ -263,4 +291,32 @@ export async function chatWithHostedAssistant(
 
   lastHostedAssistantModel = data.model;
   return data.text;
+}
+
+export async function runHostedAssistantTurn(
+  messages: OllamaMessage[],
+  options: {
+    format?: unknown;
+    tools?: AssistantToolDefinition[];
+  } = {},
+): Promise<HostedAssistantTurnResult> {
+  const data = await invokeHostedAssistant<HostedAssistantTurnResponse>('chat', {
+    action: 'turn',
+    messages,
+    ...(options.format ? { format: options.format } : {}),
+    ...(options.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
+  });
+
+  if (!data.ok || !data.turn || (data.turn.type !== 'text' && data.turn.type !== 'tool_calls')) {
+    throw new Error('Hosted assistant returned an invalid orchestration turn.');
+  }
+
+  lastHostedAssistantModel = data.model;
+  return {
+    type: data.turn.type,
+    text: data.turn.text,
+    toolCalls: data.turn.toolCalls || [],
+    model: data.model,
+    rawResponse: data.rawResponse,
+  };
 }

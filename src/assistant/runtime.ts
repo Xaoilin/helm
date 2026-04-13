@@ -1,29 +1,114 @@
-import { getCapabilityDefinition, isCapabilityLive } from './capabilities';
+import { getCapabilityDefinition } from './capabilities';
 import { applyStoredCorrections, parseCorrectionIntent } from './correctionMemory';
+import { classifyConfirmationReply } from './confirmation';
 import { normaliseDialogState, rememberEntities, rememberPlan, withPendingConfirmation } from './dialogState';
 import { executeActionPlan } from './executor';
-import { planAssistantTurn, resetOllamaAvailability, isOllamaAvailable } from './planner';
+import {
+  buildExecutionFacts,
+  buildExecutionFallbackMessage,
+  buildPendingConfirmation,
+  buildToolResultFacts,
+  narrateAssistantOutcome,
+  needsConfirmation,
+  runAssistantInitialModelTurn,
+} from './orchestrator';
+import { resetOllamaAvailability, isOllamaAvailable } from './planner';
+import type { ActionPlan } from './plannerSchema';
 import { recordAssistantDebugTrace } from '../services/assistantDebug';
-import type { AssistantCommandContext, AssistantCommandOptions, AssistantCommandResult, AssistantDialogState, AssistantLang } from './shared';
+import type {
+  AssistantCommandContext,
+  AssistantCommandOptions,
+  AssistantCommandResult,
+  AssistantEntityReference,
+  AssistantLang,
+  AssistantModelTurn,
+  AssistantToolCall,
+} from './shared';
 
-function isAffirmative(text: string): boolean {
-  return /^(?:yes|yeah|yep|please do|do it|go ahead|ok|okay|sure|نعم|أكيد|تمام)$/i.test(text.trim());
+function buildReplyPlan(
+  mode: ActionPlan['mode'],
+  response: string,
+  toolCalls: AssistantToolCall[] = [],
+): ActionPlan {
+  return {
+    mode,
+    response,
+    confidence: 1,
+    steps: toolCalls.map(toolCall => ({
+      capability: toolCall.capability,
+      args: toolCall.args,
+      unresolved: toolCall.unresolved,
+      requiresConfirmation: toolCall.requiresConfirmation,
+    })),
+  };
 }
 
-function isNegative(text: string): boolean {
-  return /^(?:no|nope|cancel|stop|never mind|لا|إلغاء|خلاص)$/i.test(text.trim());
+function buildModelTurnPlan(
+  modelTurn: AssistantModelTurn | null | undefined,
+  fallbackResponse: string,
+  fallbackMode: ActionPlan['mode'] = 'answer',
+): ActionPlan {
+  if (!modelTurn) {
+    return buildReplyPlan(fallbackMode, fallbackResponse);
+  }
+
+  return buildReplyPlan(
+    modelTurn.mode === 'reply'
+      ? 'answer'
+      : modelTurn.mode === 'clarify'
+        ? 'clarify'
+        : modelTurn.mode === 'confirm'
+          ? 'confirm'
+          : 'act',
+    modelTurn.assistantMessage || fallbackResponse,
+    modelTurn.toolCalls,
+  );
 }
 
-function defaultConfirmResponse(plan: AssistantDialogState['pendingConfirmation'], lang: AssistantLang): string {
-  if (!plan || plan.steps.length === 0) {
+function buildLocalConfirmationFallback(toolCalls: AssistantToolCall[], lang: AssistantLang): string {
+  if (toolCalls.length === 0) {
     return lang === 'ar' ? 'هل تريدين أن أتابع؟' : 'Do you want me to continue?';
   }
 
-  const step = plan.steps[0];
-  const capability = getCapabilityDefinition(step.capability);
+  if (toolCalls.length === 1) {
+    const capability = getCapabilityDefinition(toolCalls[0].capability);
+    return lang === 'ar'
+      ? `هل تريدين أن أنفذ ${capability.title}؟`
+      : `Do you want me to ${capability.title.toLowerCase()}?`;
+  }
+
   return lang === 'ar'
-    ? `أستطيع تنفيذ ${capability.title}. هل تريدين أن أفعل ذلك؟`
-    : `I can ${capability.title.toLowerCase()}. Do you want me to do that?`;
+    ? `هل تريدين أن أنفذ هذه الإجراءات وعددها ${toolCalls.length}؟`
+    : `Do you want me to carry out these ${toolCalls.length} actions?`;
+}
+
+function mergeReferencedEntities(
+  ...groups: Array<AssistantEntityReference[] | undefined>
+): AssistantEntityReference[] {
+  const merged = new Map<string, AssistantEntityReference>();
+  for (const group of groups) {
+    for (const entity of group || []) {
+      merged.set(`${entity.kind}:${entity.id}`, entity);
+    }
+  }
+  return [...merged.values()];
+}
+
+function resolveTurnSource(
+  preferred: AssistantCommandResult['source'],
+  fallback: AssistantCommandResult['source'],
+): AssistantCommandResult['source'] {
+  return preferred === 'local' && fallback !== 'degraded'
+    ? fallback
+    : preferred;
+}
+
+function toToolCallSummary(toolCalls: AssistantToolCall[]) {
+  return toolCalls.map(toolCall => ({
+    callId: toolCall.callId,
+    capability: toolCall.capability,
+    args: toolCall.args,
+  }));
 }
 
 export async function runAssistantTurn(
@@ -32,7 +117,7 @@ export async function runAssistantTurn(
   options: AssistantCommandOptions = {},
 ): Promise<AssistantCommandResult> {
   const lang = options.lang || 'en';
-  let dialogState = normaliseDialogState(options.dialogState, context.currentSurface);
+  const dialogState = normaliseDialogState(options.dialogState, context.currentSurface);
   const correctionIntent = parseCorrectionIntent(transcript, lang, options.conversationHistory);
   const correctionDrafts = correctionIntent?.learnedCorrections || [];
 
@@ -46,25 +131,13 @@ export async function runAssistantTurn(
   for (const id of correctionApplication.appliedCorrectionIds) {
     options.handlers?.noteAssistantCorrectionApplied?.(id);
   }
-  const learnedCorrectionPrefix = correctionDrafts.length > 0
-    ? lang === 'ar'
-      ? 'سأتذكر هذا. '
-      : "Thanks, I'll remember that. "
-    : '';
-  const localPlanningMetadata = {
-    planningSource: 'local' as const,
-    planningModel: undefined,
-    planningBundle: undefined,
-    rawPlannerResponse: undefined,
-    parsedPlan: undefined,
-    validatedPlan: undefined,
-    plannerValidation: { status: 'skipped' as const },
-  };
+
   const finalize = (result: AssistantCommandResult): AssistantCommandResult => {
     recordAssistantDebugTrace({
       recordedAt: new Date().toISOString(),
       transcript,
       effectiveTranscript,
+      assistantMessage: result.assistantMessage,
       source: result.source,
       planningSource: result.planningSource,
       planningStatus: result.planningStatus,
@@ -72,10 +145,14 @@ export async function runAssistantTurn(
       degradedReason: result.degradedReason,
       planningBundle: result.planningBundle,
       rawPlannerResponse: result.rawPlannerResponse,
+      rawNarrationResponse: result.rawNarrationResponse,
+      modelTurn: result.modelTurn,
       parsedPlan: result.parsedPlan,
       validatedPlan: result.validatedPlan,
       plannerValidation: result.plannerValidation,
       plan: result.plan,
+      toolCalls: result.toolCalls,
+      pendingConfirmation: result.dialogState.pendingConfirmation,
       execution: result.execution,
       referencedEntities: result.referencedEntities,
       navigationRequests: result.execution?.navigationRequests,
@@ -83,90 +160,197 @@ export async function runAssistantTurn(
     return result;
   };
 
+  async function narrateFromFacts(
+    planningSource: AssistantCommandResult['planningSource'],
+    payload: Record<string, unknown>,
+    localFallback: string,
+  ) {
+    return narrateAssistantOutcome({
+      lang,
+      conversationHistory: options.conversationHistory,
+      planningSource,
+      endpoint: options.endpoint,
+      model: options.model,
+    }, payload, localFallback);
+  }
+
   if (dialogState.pendingConfirmation) {
-    if (isAffirmative(effectiveTranscript)) {
+    const pending = dialogState.pendingConfirmation;
+    const confirmationIntent = classifyConfirmationReply(effectiveTranscript, lang);
+
+    if (confirmationIntent === 'confirm') {
+      const pendingPlan = buildReplyPlan('act', pending.assistantMessage, pending.toolCalls);
+      const clearedDialogState = withPendingConfirmation(dialogState, undefined);
+
       if (!options.handlers) {
-        const cleared = withPendingConfirmation(dialogState, undefined);
+        const narration = await narrateFromFacts(
+          pending.source,
+          {
+            transcript: effectiveTranscript,
+            turnState: 'blocked',
+            reason: 'Execution handlers are unavailable.',
+            pendingToolCalls: toToolCallSummary(pending.toolCalls),
+          },
+          lang === 'ar'
+            ? 'أحتاج إلى معالجات التنفيذ قبل أن أتمكن من المتابعة.'
+            : 'I need execution handlers before I can continue.',
+        );
+        const plan = buildReplyPlan('answer', narration.assistantMessage);
+        const updatedDialogState = rememberPlan(clearedDialogState, plan);
         return finalize({
-          message: lang === 'ar' ? 'أحتاج إلى معالجات التنفيذ قبل أن أتمكن من المتابعة.' : 'I need execution handlers before I can continue.',
-          plan: dialogState.pendingConfirmation,
-          dialogState: cleared,
-          source: 'local',
+          assistantMessage: narration.assistantMessage,
+          message: narration.assistantMessage,
+          plan,
+          dialogState: updatedDialogState,
+          source: resolveTurnSource(narration.source, 'local'),
+          planningSource: pending.source,
           planningStatus: 'local_confirmation',
-          ...localPlanningMetadata,
+          planningModel: pending.planningModel,
+          rawNarrationResponse: narration.rawNarrationResponse,
         });
       }
 
-      const pendingPlan = dialogState.pendingConfirmation;
-      const cleared = withPendingConfirmation(dialogState, undefined);
-      const execution = executeActionPlan(pendingPlan, context, options.handlers, lang, cleared);
+      const execution = executeActionPlan(
+        pendingPlan,
+        context,
+        options.handlers,
+        lang,
+        clearedDialogState,
+        pending.toolCalls,
+      );
+
       if (execution.kind === 'clarify') {
+        const narration = await narrateFromFacts(
+          pending.source,
+          {
+            transcript: effectiveTranscript,
+            turnState: 'clarify',
+            clarifyReason: execution.reason,
+            pendingToolCalls: toToolCallSummary(pending.toolCalls),
+            pendingReferencedEntities: pending.referencedEntities,
+          },
+          execution.reason,
+        );
+        const plan = buildReplyPlan('clarify', narration.assistantMessage);
+        const updatedDialogState = rememberPlan(clearedDialogState, plan);
         return finalize({
-          message: execution.message,
-          plan: { ...pendingPlan, mode: 'clarify', response: execution.message, steps: [] },
-          dialogState: cleared,
-          source: 'local',
+          assistantMessage: narration.assistantMessage,
+          message: narration.assistantMessage,
+          plan,
+          dialogState: updatedDialogState,
+          referencedEntities: pending.referencedEntities,
+          source: resolveTurnSource(narration.source, 'local'),
+          planningSource: pending.source,
           planningStatus: 'local_confirmation',
-          ...localPlanningMetadata,
+          planningModel: pending.planningModel,
+          rawNarrationResponse: narration.rawNarrationResponse,
+          toolCalls: pending.toolCalls,
         });
       }
 
-      const updatedDialogState = rememberEntities(rememberPlan(cleared, pendingPlan), execution.referencedEntities);
+      const toolResults = buildToolResultFacts(execution.execution.toolResults);
+      const executionResult = {
+        ...execution.execution,
+        toolResults,
+      };
+      const referencedEntities = mergeReferencedEntities(
+        pending.referencedEntities,
+        execution.referencedEntities,
+      );
+      const narration = await narrateFromFacts(
+        pending.source,
+        {
+          transcript: effectiveTranscript,
+          turnState: 'executed',
+          confirmationReply: effectiveTranscript,
+          requestedToolCalls: toToolCallSummary(pending.toolCalls),
+          referencedEntities,
+          ...buildExecutionFacts(toolResults),
+        },
+        buildExecutionFallbackMessage(toolResults, executionResult.steps.at(-1)?.summary || 'Done.'),
+      );
+      const updatedDialogState = rememberEntities(
+        rememberPlan(clearedDialogState, pendingPlan),
+        referencedEntities,
+      );
+
       return finalize({
-        message: execution.message,
+        assistantMessage: narration.assistantMessage,
+        message: narration.assistantMessage,
         plan: pendingPlan,
         dialogState: updatedDialogState,
-        execution: execution.execution,
-        referencedEntities: execution.referencedEntities,
-        source: 'local',
+        execution: executionResult,
+        referencedEntities,
+        source: resolveTurnSource(narration.source, pending.source === 'openai' ? 'openai' : 'ollama'),
+        planningSource: pending.source,
         planningStatus: 'local_confirmation',
-        ...localPlanningMetadata,
+        planningModel: pending.planningModel,
+        rawNarrationResponse: narration.rawNarrationResponse,
+        toolCalls: pending.toolCalls,
       });
     }
 
-    if (isNegative(effectiveTranscript)) {
-      const cleared = withPendingConfirmation(dialogState, undefined);
-      const response = lang === 'ar' ? 'حسناً، ألغيت ذلك.' : 'Okay, I cancelled that.';
+    if (confirmationIntent === 'deny') {
+      const clearedDialogState = withPendingConfirmation(dialogState, undefined);
+      const narration = await narrateFromFacts(
+        pending.source,
+        {
+          transcript: effectiveTranscript,
+          turnState: 'cancelled',
+          cancellationReply: effectiveTranscript,
+          pendingToolCalls: toToolCallSummary(pending.toolCalls),
+          pendingReferencedEntities: pending.referencedEntities,
+        },
+        lang === 'ar' ? 'حسناً، لن أفعل ذلك.' : "Okay, I won't do that.",
+      );
+      const plan = buildReplyPlan('answer', narration.assistantMessage);
+      const updatedDialogState = rememberPlan(clearedDialogState, plan);
       return finalize({
-        message: response,
-        plan: { mode: 'answer', response, confidence: 1, steps: [] },
-        dialogState: cleared,
-        source: 'local',
+        assistantMessage: narration.assistantMessage,
+        message: narration.assistantMessage,
+        plan,
+        dialogState: updatedDialogState,
+        referencedEntities: pending.referencedEntities,
+        source: resolveTurnSource(narration.source, 'local'),
+        planningSource: pending.source,
         planningStatus: 'local_confirmation',
-        ...localPlanningMetadata,
+        planningModel: pending.planningModel,
+        rawNarrationResponse: narration.rawNarrationResponse,
+        toolCalls: pending.toolCalls,
       });
     }
   }
 
-  const planning = await planAssistantTurn(effectiveTranscript, context, {
+  const planning = await runAssistantInitialModelTurn(effectiveTranscript, context, {
     lang,
     conversationHistory: options.conversationHistory,
     provider: options.provider,
     endpoint: options.endpoint,
     model: options.model,
     dialogState,
+    pendingConfirmation: dialogState.pendingConfirmation,
   });
 
-  const plan = planning.plan;
-  dialogState = rememberPlan(dialogState, plan);
+  const resolvedToolCalls = planning.toolCalls || planning.modelTurn?.toolCalls || [];
+  const resultPlan = planning.validatedPlan
+    || planning.parsedPlan
+    || buildModelTurnPlan(planning.modelTurn, planning.assistantMessage, 'clarify');
 
-  const unavailableStep = plan.steps.find(step => !isCapabilityLive(step.capability));
-  if (unavailableStep) {
-    const clarifyPlan = {
-      mode: 'clarify' as const,
-      response: lang === 'ar'
-        ? 'هذا الإجراء غير متاح بعد، لذلك لن أنفذ شيئاً مختلفاً عنه.'
-        : 'That action is not available yet, so I will not approximate it to something else.',
-      confidence: plan.confidence,
-      steps: [],
-    };
-    dialogState = rememberPlan(dialogState, clarifyPlan);
+  if (planning.planningStatus !== 'planned') {
+    const nextDialogState = rememberEntities(
+      rememberPlan(withPendingConfirmation(dialogState, undefined), resultPlan),
+      planning.referencedEntities,
+    );
     return finalize({
-      message: clarifyPlan.response,
-      plan: clarifyPlan,
-      dialogState,
-      source: planning.source,
+      assistantMessage: planning.assistantMessage,
+      message: planning.assistantMessage,
+      plan: resultPlan,
+      modelTurn: planning.modelTurn,
+      toolCalls: resolvedToolCalls,
+      dialogState: nextDialogState,
+      referencedEntities: planning.referencedEntities,
       degradedReason: planning.degradedReason,
+      source: planning.source,
       planningSource: planning.planningSource,
       planningStatus: planning.planningStatus,
       planningModel: planning.planningModel,
@@ -178,96 +362,207 @@ export async function runAssistantTurn(
     });
   }
 
-  const requiresConfirmation = plan.steps.some(step =>
-    step.requiresConfirmation || getCapabilityDefinition(step.capability).confirmationRule === 'always',
+  if (planning.modelTurn?.mode === 'reply' || planning.modelTurn?.mode === 'clarify' || resolvedToolCalls.length === 0) {
+    const nextDialogState = rememberEntities(
+      rememberPlan(withPendingConfirmation(dialogState, undefined), resultPlan),
+      planning.referencedEntities,
+    );
+    return finalize({
+      assistantMessage: planning.assistantMessage,
+      message: planning.assistantMessage,
+      plan: resultPlan,
+      modelTurn: planning.modelTurn,
+      toolCalls: resolvedToolCalls,
+      dialogState: nextDialogState,
+      referencedEntities: planning.referencedEntities,
+      degradedReason: planning.degradedReason,
+      source: planning.source,
+      planningSource: planning.planningSource,
+      planningStatus: planning.planningStatus,
+      planningModel: planning.planningModel,
+      planningBundle: planning.planningBundle,
+      rawPlannerResponse: planning.rawPlannerResponse,
+      parsedPlan: planning.parsedPlan,
+      validatedPlan: planning.validatedPlan,
+      plannerValidation: planning.plannerValidation,
+    });
+  }
+
+  if (planning.modelTurn?.mode === 'confirm' || needsConfirmation(resolvedToolCalls)) {
+    const confirmationNarration = !planning.assistantMessage
+      ? await narrateFromFacts(
+          planning.planningSource,
+          {
+            transcript: effectiveTranscript,
+            turnState: 'awaiting_confirmation',
+            requestedToolCalls: toToolCallSummary(resolvedToolCalls),
+            referencedEntities: planning.referencedEntities,
+          },
+          buildLocalConfirmationFallback(resolvedToolCalls, lang),
+        )
+      : null;
+    const confirmationMessage = planning.assistantMessage || confirmationNarration?.assistantMessage || buildLocalConfirmationFallback(resolvedToolCalls, lang);
+    const pendingConfirmation = buildPendingConfirmation(
+      confirmationMessage,
+      resolvedToolCalls,
+      planning.referencedEntities || [],
+      planning.planningSource,
+      planning.planningModel,
+    );
+    const confirmationPlan = buildReplyPlan('confirm', confirmationMessage, resolvedToolCalls);
+    const nextDialogState = withPendingConfirmation(
+      rememberEntities(rememberPlan(dialogState, confirmationPlan), planning.referencedEntities),
+      pendingConfirmation,
+    );
+
+    return finalize({
+      assistantMessage: confirmationMessage,
+      message: confirmationMessage,
+      plan: confirmationPlan,
+      modelTurn: planning.modelTurn,
+      toolCalls: resolvedToolCalls,
+      dialogState: nextDialogState,
+      referencedEntities: planning.referencedEntities,
+      degradedReason: planning.degradedReason,
+      source: confirmationNarration
+        ? resolveTurnSource(confirmationNarration.source, planning.source)
+        : planning.source,
+      planningSource: planning.planningSource,
+      planningStatus: planning.planningStatus,
+      planningModel: planning.planningModel,
+      planningBundle: planning.planningBundle,
+      rawPlannerResponse: planning.rawPlannerResponse,
+      rawNarrationResponse: confirmationNarration?.rawNarrationResponse,
+      parsedPlan: planning.parsedPlan,
+      validatedPlan: planning.validatedPlan,
+      plannerValidation: planning.plannerValidation,
+    });
+  }
+
+  if (!options.handlers) {
+    const narration = await narrateFromFacts(
+      planning.planningSource,
+      {
+        transcript: effectiveTranscript,
+        turnState: 'blocked',
+        reason: 'Execution handlers are unavailable.',
+        requestedToolCalls: toToolCallSummary(resolvedToolCalls),
+      },
+      lang === 'ar'
+        ? 'أحتاج إلى معالجات التنفيذ قبل أن أتمكن من المتابعة.'
+        : 'I need execution handlers before I can continue.',
+    );
+    const blockedPlan = buildReplyPlan('answer', narration.assistantMessage);
+    const nextDialogState = rememberPlan(withPendingConfirmation(dialogState, undefined), blockedPlan);
+    return finalize({
+      assistantMessage: narration.assistantMessage,
+      message: narration.assistantMessage,
+      plan: blockedPlan,
+      modelTurn: planning.modelTurn,
+      toolCalls: resolvedToolCalls,
+      dialogState: nextDialogState,
+      referencedEntities: planning.referencedEntities,
+      degradedReason: planning.degradedReason,
+      source: resolveTurnSource(narration.source, 'local'),
+      planningSource: planning.planningSource,
+      planningStatus: planning.planningStatus,
+      planningModel: planning.planningModel,
+      planningBundle: planning.planningBundle,
+      rawPlannerResponse: planning.rawPlannerResponse,
+      rawNarrationResponse: narration.rawNarrationResponse,
+      parsedPlan: planning.parsedPlan,
+      validatedPlan: planning.validatedPlan,
+      plannerValidation: planning.plannerValidation,
+    });
+  }
+
+  const execution = executeActionPlan(
+    resultPlan,
+    context,
+    options.handlers,
+    lang,
+    dialogState,
+    resolvedToolCalls,
   );
 
-  if (plan.mode === 'confirm' || (plan.mode === 'act' && requiresConfirmation)) {
-    const confirmationPlan = { ...plan, mode: 'act' as const };
-    dialogState = withPendingConfirmation(dialogState, confirmationPlan);
-    const confirmationMessage = `${learnedCorrectionPrefix}${plan.response || defaultConfirmResponse(confirmationPlan, lang)}`.trim();
-    return finalize({
-      message: confirmationMessage,
-      plan: { ...plan, mode: 'confirm' },
-      dialogState,
-      referencedEntities: planning.referencedEntities,
-      source: planning.source,
-      degradedReason: planning.degradedReason,
-      planningSource: planning.planningSource,
-      planningStatus: planning.planningStatus,
-      planningModel: planning.planningModel,
-      planningBundle: planning.planningBundle,
-      rawPlannerResponse: planning.rawPlannerResponse,
-      parsedPlan: planning.parsedPlan,
-      validatedPlan: planning.validatedPlan,
-      plannerValidation: planning.plannerValidation,
-    });
-  }
-
-  if (plan.mode !== 'act' || !options.handlers) {
-    dialogState = rememberEntities(dialogState, planning.referencedEntities);
-    return finalize({
-      message: `${learnedCorrectionPrefix}${plan.response}`.trim(),
-      plan,
-      dialogState,
-      referencedEntities: planning.referencedEntities,
-      source: planning.source,
-      degradedReason: planning.degradedReason,
-      planningSource: planning.planningSource,
-      planningStatus: planning.planningStatus,
-      planningModel: planning.planningModel,
-      planningBundle: planning.planningBundle,
-      rawPlannerResponse: planning.rawPlannerResponse,
-      parsedPlan: planning.parsedPlan,
-      validatedPlan: planning.validatedPlan,
-      plannerValidation: planning.plannerValidation,
-    });
-  }
-
-  const execution = executeActionPlan(plan, context, options.handlers, lang, dialogState);
   if (execution.kind === 'clarify') {
-    const clarifyPlan = {
-      mode: 'clarify' as const,
-      response: `${learnedCorrectionPrefix}${execution.message}`.trim(),
-      confidence: plan.confidence,
-      steps: [],
-    };
-    dialogState = rememberPlan(dialogState, clarifyPlan);
+    const narration = await narrateFromFacts(
+      planning.planningSource,
+      {
+        transcript: effectiveTranscript,
+        turnState: 'clarify',
+        clarifyReason: execution.reason,
+        requestedToolCalls: toToolCallSummary(resolvedToolCalls),
+        referencedEntities: planning.referencedEntities,
+      },
+      execution.reason,
+    );
+    const clarifyPlan = buildReplyPlan('clarify', narration.assistantMessage);
+    const nextDialogState = rememberPlan(withPendingConfirmation(dialogState, undefined), clarifyPlan);
     return finalize({
-      message: clarifyPlan.response,
+      assistantMessage: narration.assistantMessage,
+      message: narration.assistantMessage,
       plan: clarifyPlan,
-      dialogState,
-      source: planning.source,
+      modelTurn: planning.modelTurn,
+      toolCalls: resolvedToolCalls,
+      dialogState: nextDialogState,
+      referencedEntities: planning.referencedEntities,
       degradedReason: planning.degradedReason,
+      source: resolveTurnSource(narration.source, planning.source),
       planningSource: planning.planningSource,
       planningStatus: planning.planningStatus,
       planningModel: planning.planningModel,
       planningBundle: planning.planningBundle,
       rawPlannerResponse: planning.rawPlannerResponse,
+      rawNarrationResponse: narration.rawNarrationResponse,
       parsedPlan: planning.parsedPlan,
       validatedPlan: planning.validatedPlan,
       plannerValidation: planning.plannerValidation,
     });
   }
 
-  dialogState = rememberEntities(dialogState, [
-    ...(planning.referencedEntities || []),
-    ...execution.referencedEntities,
-  ]);
+  const toolResults = buildToolResultFacts(execution.execution.toolResults);
+  const executionResult = {
+    ...execution.execution,
+    toolResults,
+  };
+  const referencedEntities = mergeReferencedEntities(
+    planning.referencedEntities,
+    execution.referencedEntities,
+  );
+  const narration = await narrateFromFacts(
+    planning.planningSource,
+    {
+      transcript: effectiveTranscript,
+      turnState: 'executed',
+      requestedToolCalls: toToolCallSummary(resolvedToolCalls),
+      referencedEntities,
+      ...buildExecutionFacts(toolResults),
+    },
+    buildExecutionFallbackMessage(toolResults, executionResult.steps.at(-1)?.summary || 'Done.'),
+  );
+  const nextDialogState = rememberEntities(
+    rememberPlan(withPendingConfirmation(dialogState, undefined), resultPlan),
+    referencedEntities,
+  );
 
   return finalize({
-    message: `${learnedCorrectionPrefix}${execution.message}`.trim(),
-    plan,
-    dialogState,
-    execution: execution.execution,
-    referencedEntities: execution.referencedEntities,
-    source: planning.source,
+    assistantMessage: narration.assistantMessage,
+    message: narration.assistantMessage,
+    plan: resultPlan,
+    modelTurn: planning.modelTurn,
+    toolCalls: resolvedToolCalls,
+    dialogState: nextDialogState,
+    execution: executionResult,
+    referencedEntities,
     degradedReason: planning.degradedReason,
+    source: resolveTurnSource(narration.source, planning.source),
     planningSource: planning.planningSource,
     planningStatus: planning.planningStatus,
     planningModel: planning.planningModel,
     planningBundle: planning.planningBundle,
     rawPlannerResponse: planning.rawPlannerResponse,
+    rawNarrationResponse: narration.rawNarrationResponse,
     parsedPlan: planning.parsedPlan,
     validatedPlan: planning.validatedPlan,
     plannerValidation: planning.plannerValidation,

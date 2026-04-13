@@ -35,6 +35,24 @@ test('should not render malformed hosted planner JSON in chat', async ({ page })
       return;
     }
 
+    if (body?.action === 'turn') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          provider: 'openai',
+          model: 'gpt-5.4',
+          turn: {
+            type: 'text',
+            text: '{"mode":"tool_calls","assistantMessage":"","toolCalls":[{"capability":"tasks.open_view"',
+          },
+          rawResponse: '{"mode":"tool_calls","assistantMessage":"","toolCalls":[{"capability":"tasks.open_view"',
+        }),
+      });
+      return;
+    }
+
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -42,7 +60,9 @@ test('should not render malformed hosted planner JSON in chat', async ({ page })
         ok: true,
         provider: 'openai',
         model: 'gpt-5.4',
-        text: '{"mode":"act","response":"Showing all tasks.","confidence":0.98,"steps":[{"capability":"tasks.open_view"',
+        text: JSON.stringify({
+          assistantMessage: 'This narration should never be shown for an invalid planner turn.',
+        }),
       }),
     });
   });
@@ -58,11 +78,11 @@ test('should not render malformed hosted planner JSON in chat', async ({ page })
   await input.press('Enter');
 
   const assistantReply = page.locator('.chat-message.assistant').last();
-  await expect(assistantReply).toContainText("I had trouble interpreting the hosted planner's response");
-  await expect(assistantReply).not.toContainText('"mode":"act"');
+  await expect(assistantReply).toContainText('I had trouble interpreting the model response');
+  await expect(assistantReply).not.toContainText('"mode":"tool_calls"');
 
   await page.screenshot({
-    path: 'test-results/manual-hosted-json-guard-v0213.png',
+    path: 'test-results/manual-hosted-json-guard-v0219.png',
     fullPage: true,
   });
 });

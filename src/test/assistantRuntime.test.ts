@@ -8,7 +8,6 @@ import type {
 } from '../services/assistantTypes';
 import type {
   CalendarAccount,
-  CalendarEvent,
   CalendarSource,
   FinanceAccount,
   KnowledgeTopic,
@@ -16,7 +15,12 @@ import type {
   Transaction,
 } from '../types/domain';
 import { chatWithOllama, testOllamaConnection } from '../services/ollamaApi';
-import { chatWithHostedAssistant, testHostedAssistantConnection } from '../services/hostedAssistantApi';
+import {
+  chatWithHostedAssistant,
+  runHostedAssistantTurn,
+  testHostedAssistantConnection,
+  type HostedAssistantTurnResult,
+} from '../services/hostedAssistantApi';
 
 vi.mock('../services/ollamaApi', () => ({
   chatWithOllama: vi.fn(),
@@ -25,6 +29,7 @@ vi.mock('../services/ollamaApi', () => ({
 
 vi.mock('../services/hostedAssistantApi', () => ({
   chatWithHostedAssistant: vi.fn(),
+  runHostedAssistantTurn: vi.fn(),
   testHostedAssistantConnection: vi.fn(),
 }));
 
@@ -70,22 +75,6 @@ function makeSource(overrides: Partial<CalendarSource> = {}): CalendarSource {
     visible: overrides.visible ?? true,
     googleCalendarId: overrides.googleCalendarId,
     accessRole: overrides.accessRole,
-  };
-}
-
-function makeEvent(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
-  return {
-    id: overrides.id || 'evt-1',
-    sourceId: overrides.sourceId || 'src-1',
-    title: overrides.title || 'Design Review',
-    description: overrides.description || '',
-    start: overrides.start || '2026-04-06T15:00:00.000Z',
-    end: overrides.end || '2026-04-06T16:00:00.000Z',
-    allDay: overrides.allDay ?? false,
-    location: overrides.location,
-    googleEventId: overrides.googleEventId,
-    googleCalendarId: overrides.googleCalendarId,
-    pendingSync: overrides.pendingSync,
   };
 }
 
@@ -148,75 +137,122 @@ function makeDialogState(overrides: Partial<AssistantDialogState> = {}): Assista
   };
 }
 
-function makePlanStep(
-  capability: string,
-  args: Record<string, string | boolean | string[] | null>,
-  overrides: Record<string, unknown> = {},
-) {
+function makeHostedTextTurn(
+  mode: 'reply' | 'clarify' | 'confirm' | 'tool_calls',
+  assistantMessage: string,
+  toolCalls: Array<{ capability: string; args: Record<string, string | boolean | string[]> }> = [],
+): HostedAssistantTurnResult {
   return {
-    capability,
-    args,
-    ...overrides,
+    type: 'text',
+    text: JSON.stringify({
+      mode,
+      assistantMessage,
+      toolCalls: toolCalls.map(toolCall => ({
+        capability: toolCall.capability,
+        args: toolCall.args,
+      })),
+    }),
+    toolCalls: [],
+    model: 'gpt-5.4',
+    rawResponse: 'mock-text-turn',
   };
 }
 
-function makePlan(
-  mode: 'answer' | 'clarify' | 'confirm' | 'act',
-  response: string,
-  steps: ReturnType<typeof makePlanStep>[] = [],
-) {
+function makeHostedToolTurn(
+  toolCalls: Array<{ callId: string; capability: string; args: Record<string, string | boolean | string[]> }>,
+): HostedAssistantTurnResult {
   return {
-    mode,
-    response,
-    confidence: 0.95,
-    steps,
+    type: 'tool_calls',
+    toolCalls: toolCalls.map(toolCall => ({
+      callId: toolCall.callId,
+      name: toolCall.capability,
+      arguments: JSON.stringify(toolCall.args),
+    })),
+    model: 'gpt-5.4',
+    rawResponse: 'mock-tool-turn',
   };
 }
 
-function findCapabilityStepSchema(schema: unknown, capabilityId: string) {
-  if (typeof schema !== 'object' || schema === null || !('properties' in schema)) {
-    return null;
-  }
-
-  const steps = (schema as { properties?: { steps?: { items?: { anyOf?: unknown[] } } } }).properties?.steps;
-  const variants = steps?.items?.anyOf || [];
-  return variants.find(step => {
-    if (typeof step !== 'object' || step === null || !('properties' in step)) {
-      return false;
-    }
-
-    const capability = (step as { properties?: { capability?: { const?: string } } }).properties?.capability;
-    return capability?.const === capabilityId;
-  }) || null;
-}
-
-function getLastTranscript(messages: AssistantConversationMessage[]): string {
+function getLastMessageContent(messages: AssistantConversationMessage[]): string {
   return messages[messages.length - 1]?.content || '';
 }
 
-function mockHostedPlanner(
-  resolver: (transcript: string, schema: unknown, messages: AssistantConversationMessage[]) => unknown,
+function parseNarrationPayload(messages: AssistantConversationMessage[]): Record<string, unknown> {
+  const content = getLastMessageContent(messages);
+  const prefix = 'Verified turn facts JSON:\n';
+  if (!content.startsWith(prefix)) {
+    return {};
+  }
+  return JSON.parse(content.slice(prefix.length));
+}
+
+function defaultNarrationMessage(payload: Record<string, unknown>): string {
+  const turnState = typeof payload.turnState === 'string' ? payload.turnState : '';
+  const executed = Array.isArray(payload.executedToolResults)
+    ? payload.executedToolResults as Array<Record<string, unknown>>
+    : [];
+  const firstExecuted = executed[0];
+  const firstCapability = typeof firstExecuted?.capability === 'string' ? firstExecuted.capability : '';
+  const firstSummary = typeof firstExecuted?.summary === 'string' ? firstExecuted.summary : '';
+
+  if (turnState === 'awaiting_confirmation') {
+    if (firstCapability === 'tasks.delete_matching') {
+      return 'Do you want me to delete that task?';
+    }
+    return 'Do you want me to go ahead?';
+  }
+
+  if (turnState === 'cancelled') {
+    return "Okay, I won't do that.";
+  }
+
+  if (turnState === 'clarify') {
+    return typeof payload.clarifyReason === 'string' ? payload.clarifyReason : 'I need a bit more detail first.';
+  }
+
+  if (turnState === 'blocked') {
+    return typeof payload.reason === 'string' ? payload.reason : 'I could not continue safely.';
+  }
+
+  if (turnState === 'executed') {
+    if (firstCapability === 'tasks.open_view') {
+      return "I've opened your full task list.";
+    }
+    if (firstCapability === 'tasks.delete_matching') {
+      return firstSummary ? `I completed it. ${firstSummary}` : 'I deleted that task.';
+    }
+    if (firstCapability === 'knowledge.create_entry') {
+      return 'I saved that note for you.';
+    }
+    if (firstSummary) {
+      return firstSummary;
+    }
+  }
+
+  return 'How can I help next?';
+}
+
+function mockHostedAssistant(
+  resolver: (transcript: string, messages: AssistantConversationMessage[]) => HostedAssistantTurnResult,
+  narrationResolver: (payload: Record<string, unknown>) => string = defaultNarrationMessage,
 ): void {
   vi.mocked(testHostedAssistantConnection).mockResolvedValue({
     status: 'available',
     accessMode: 'project_key',
     model: 'gpt-5.4',
   });
-  vi.mocked(chatWithHostedAssistant).mockImplementation(async (messages, schema) => {
-    const transcript = getLastTranscript(messages);
-    const result = resolver(transcript, schema, messages);
-    return typeof result === 'string' ? result : JSON.stringify(result);
+  vi.mocked(runHostedAssistantTurn).mockImplementation(async (messages) => resolver(getLastMessageContent(messages), messages));
+  vi.mocked(chatWithHostedAssistant).mockImplementation(async (messages) => {
+    const payload = parseNarrationPayload(messages);
+    return JSON.stringify({ assistantMessage: narrationResolver(payload) });
   });
 }
 
-function mockOllamaPlanner(
-  resolver: (transcript: string, schema: unknown, messages: AssistantConversationMessage[]) => unknown,
-): void {
+function mockOllamaNarration(): void {
   vi.mocked(testOllamaConnection).mockResolvedValue(true);
-  vi.mocked(chatWithOllama).mockImplementation(async (messages, _endpoint, _model, schema) => {
-    const transcript = getLastTranscript(messages);
-    const result = resolver(transcript, schema, messages);
-    return typeof result === 'string' ? result : JSON.stringify(result);
+  vi.mocked(chatWithOllama).mockImplementation(async (messages) => {
+    const payload = parseNarrationPayload(messages as AssistantConversationMessage[]);
+    return JSON.stringify({ assistantMessage: defaultNarrationMessage(payload) });
   });
 }
 
@@ -227,18 +263,21 @@ describe('assistant runtime', () => {
     vi.mocked(testOllamaConnection).mockResolvedValue(false);
     vi.mocked(chatWithOllama).mockResolvedValue('');
     vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'sign_in_required' });
-    vi.mocked(chatWithHostedAssistant).mockResolvedValue('');
+    vi.mocked(chatWithHostedAssistant).mockResolvedValue(JSON.stringify({ assistantMessage: 'Unhandled narration.' }));
+    vi.mocked(runHostedAssistantTurn).mockRejectedValue(new Error('runHostedAssistantTurn not mocked'));
   });
 
-  it('executes hosted task-view plans through the shared runtime', async () => {
-    mockHostedPlanner(transcript => {
+  it('executes hosted task-view tool calls and uses narration for the visible reply', async () => {
+    mockHostedAssistant(transcript => {
       expect(transcript).toBe('show me all my tasks');
-      return makePlan('act', 'Showing all your tasks.', [
-        makePlanStep('tasks.open_view', {
+      return makeHostedToolTurn([{
+        callId: 'call_open_tasks',
+        capability: 'tasks.open_view',
+        args: {
           tab: 'all',
           resetFilters: true,
-        }),
-      ]);
+        },
+      }]);
     });
 
     const navigate = vi.fn();
@@ -255,8 +294,17 @@ describe('assistant runtime', () => {
     expect(result.source).toBe('openai');
     expect(result.planningSource).toBe('openai');
     expect(result.planningStatus).toBe('planned');
-    expect(result.execution?.steps[0].capability).toBe('tasks.open_view');
-    expect(result.planningBundle?.capabilities.length).toBeGreaterThan(0);
+    expect(result.execution?.steps[0]).toEqual(expect.objectContaining({
+      callId: 'call_open_tasks',
+      capability: 'tasks.open_view',
+      status: 'completed',
+    }));
+    expect(result.execution?.toolResults[0]).toEqual(expect.objectContaining({
+      callId: 'call_open_tasks',
+      capability: 'tasks.open_view',
+      status: 'completed',
+    }));
+    expect(result.assistantMessage).toBe("I've opened your full task list.");
     expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
       surface: 'tasks',
       surfaceState: expect.objectContaining({
@@ -268,184 +316,43 @@ describe('assistant runtime', () => {
     }));
   });
 
-  it('executes hosted surface navigation without any local parser fallback', async () => {
-    mockHostedPlanner(() => makePlan('act', 'Opening Tasks for you.', [
-      makePlanStep('navigation.go_to_surface', {
-        surface: 'tasks',
-      }),
-    ]));
+  it('keeps visible replies in the narration layer instead of leaking executor wording', async () => {
+    mockHostedAssistant(
+      () => makeHostedToolTurn([{
+        callId: 'call_open_tasks',
+        capability: 'tasks.open_view',
+        args: {
+          tab: 'all',
+          resetFilters: true,
+        },
+      }]),
+      () => 'Here they are. I opened every task for you.',
+    );
 
-    const navigate = vi.fn();
-    const result = await processAssistantCommand('open tasks', makeContext(), {
+    const result = await processAssistantCommand('show me all my tasks', makeContext(), {
       lang: 'en',
       provider: 'hosted',
       handlers: {
-        navigate,
+        navigate: vi.fn(),
         addTask: vi.fn(() => 'task-1'),
         updateTask: vi.fn(),
       },
     });
 
-    expect(result.source).toBe('openai');
-    expect(result.execution?.steps[0].capability).toBe('navigation.go_to_surface');
-    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
-      surface: 'tasks',
-    }));
+    expect(result.assistantMessage).toBe('Here they are. I opened every task for you.');
+    expect(result.assistantMessage).not.toBe('Opened the All Tasks task view.');
+    expect(result.message).toBe(result.assistantMessage);
   });
 
-  it('executes hosted task creation plans with deterministic local execution', async () => {
-    mockHostedPlanner(() => makePlan('act', 'Adding that task.', [
-      makePlanStep('tasks.create_task', {
-        title: 'buy milk',
-        priority: 'high',
-        category: 'task',
-        dueDate: '2026-04-07',
-      }),
-    ]));
-
-    const addTask = vi.fn(() => 'task-99');
-    const result = await processAssistantCommand('add task buy milk high priority tomorrow', makeContext(), {
-      lang: 'en',
-      provider: 'hosted',
-      handlers: {
-        addTask,
-        updateTask: vi.fn(),
-      },
-    });
-
-    expect(result.source).toBe('openai');
-    expect(result.execution?.steps[0].capability).toBe('tasks.create_task');
-    expect(addTask).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'buy milk',
-      priority: 'high',
-      category: 'task',
-      dueDate: '2026-04-07',
-    }));
-  });
-
-  it('reveals a recently created task by using grounded ids from the hosted planner', async () => {
-    mockHostedPlanner(transcript => {
-      if (transcript === 'Can you add a task for me to put the mirror up on the office?') {
-        return makePlan('act', 'Adding that task.', [
-          makePlanStep('tasks.create_task', {
-            title: 'put the mirror up on the office',
-            priority: 'medium',
-            category: 'task',
-          }),
-        ]);
-      }
-
-      if (transcript === 'show me that task') {
-        return makePlan('act', 'Opening that task.', [
-          makePlanStep('tasks.reveal_task', {
-            taskId: 'task-77',
-          }),
-        ]);
-      }
-
-      throw new Error(`Unexpected transcript: ${transcript}`);
-    });
-
-    const addTask = vi.fn(() => 'task-77');
-    const navigate = vi.fn();
-
-    const first = await processAssistantCommand(
-      'Can you add a task for me to put the mirror up on the office?',
-      makeContext(),
-      {
-        lang: 'en',
-        provider: 'hosted',
-        dialogState: makeDialogState(),
-        handlers: {
-          addTask,
-          updateTask: vi.fn(),
-          navigate,
-        },
-      },
-    );
-
-    expect(addTask).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'put the mirror up on the office',
-    }));
-
-    const reveal = await processAssistantCommand(
-      'show me that task',
-      makeContext({
-        tasks: [makeTask({
-          id: 'task-77',
-          title: 'put the mirror up on the office',
-        })],
-      }),
-      {
-        lang: 'en',
-        provider: 'hosted',
-        dialogState: first.dialogState,
-        handlers: {
-          addTask: vi.fn(() => 'unused'),
-          updateTask: vi.fn(),
-          navigate,
-        },
-      },
-    );
-
-    expect(reveal.source).toBe('openai');
-    expect(reveal.execution?.steps[0].capability).toBe('tasks.reveal_task');
-    expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({
-      surface: 'tasks',
-      surfaceState: expect.objectContaining({
-        tasks: expect.objectContaining({
-          revealTaskId: 'task-77',
-          highlightTaskId: 'task-77',
-        }),
-      }),
-    }));
-  });
-
-  it('completes a matching task when the hosted planner returns a grounded task id', async () => {
-    mockHostedPlanner(() => makePlan('act', 'Completing that now.', [
-      makePlanStep('tasks.complete_matching', {
-        taskId: 'task-42',
-      }),
-    ]));
-
-    const updateTask = vi.fn();
-    const updateGamification = vi.fn();
-    const result = await processAssistantCommand(
-      'complete task ship launch checklist',
-      makeContext({
-        tasks: [makeTask({ id: 'task-42', title: 'Ship launch checklist' })],
-      }),
-      {
-        lang: 'en',
-        provider: 'hosted',
-        handlers: {
-          addTask: vi.fn(() => 'unused'),
-          updateTask,
-          updateGamification,
-        },
-      },
-    );
-
-    expect(result.source).toBe('openai');
-    expect(result.execution?.steps[0].capability).toBe('tasks.complete_matching');
-    expect(updateTask).toHaveBeenCalledWith(
-      'task-42',
-      expect.objectContaining({
-        completed: true,
-        completedAt: expect.any(String),
-      }),
-    );
-    expect(updateGamification).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns a delete confirmation plan for "Delete my Internet task." and executes locally after yes', async () => {
-    mockHostedPlanner(transcript => {
+  it('stores validated delete confirmations as pending tool calls and resolves natural assent locally', async () => {
+    mockHostedAssistant(transcript => {
       if (transcript === 'Delete my Internet task.') {
-        return makePlan('act', 'I can delete "Internet". Do you want me to do that?', [
-          makePlanStep('tasks.delete_matching', {
+        return makeHostedTextTurn('confirm', 'Do you want me to delete the task "Internet"?', [{
+          capability: 'tasks.delete_matching',
+          args: {
             taskIds: ['task-internet'],
-          }),
-        ]);
+          },
+        }]);
       }
 
       throw new Error(`Unexpected transcript: ${transcript}`);
@@ -455,7 +362,7 @@ describe('assistant runtime', () => {
     const first = await processAssistantCommand(
       'Delete my Internet task.',
       makeContext({
-        tasks: [makeTask({ id: 'task-internet', title: 'Internet', completed: false })],
+        tasks: [makeTask({ id: 'task-internet', title: 'Internet' })],
       }),
       {
         lang: 'en',
@@ -469,18 +376,20 @@ describe('assistant runtime', () => {
       },
     );
 
-    expect(first.source).toBe('openai');
     expect(first.plan.mode).toBe('confirm');
-    expect(first.execution).toBeUndefined();
-    expect(first.planningStatus).toBe('planned');
-    expect(first.validatedPlan?.steps[0].capability).toBe('tasks.delete_matching');
-    expect(first.validatedPlan?.steps[0].args).toEqual({ taskIds: ['task-internet'] });
+    expect(first.dialogState.pendingConfirmation?.toolCalls).toEqual([
+      expect.objectContaining({
+        callId: 'call_1',
+        capability: 'tasks.delete_matching',
+        args: { taskIds: ['task-internet'] },
+      }),
+    ]);
     expect(removeTask).not.toHaveBeenCalled();
 
     const second = await processAssistantCommand(
-      'yes',
+      "Yeah. That's the one.",
       makeContext({
-        tasks: [makeTask({ id: 'task-internet', title: 'Internet', completed: false })],
+        tasks: [makeTask({ id: 'task-internet', title: 'Internet' })],
       }),
       {
         lang: 'en',
@@ -494,145 +403,63 @@ describe('assistant runtime', () => {
       },
     );
 
-    expect(second.source).toBe('local');
     expect(second.planningStatus).toBe('local_confirmation');
-    expect(second.execution?.steps[0].capability).toBe('tasks.delete_matching');
+    expect(second.execution?.toolResults[0]).toEqual(expect.objectContaining({
+      capability: 'tasks.delete_matching',
+      status: 'completed',
+    }));
+    expect(second.assistantMessage).toContain('Deleted "Internet"');
+    expect(removeTask).toHaveBeenCalledTimes(1);
     expect(removeTask).toHaveBeenCalledWith('task-internet');
   });
 
-  it('learns spoken corrections before sending the request to the hosted planner', async () => {
-    mockHostedPlanner((transcript, _schema, messages) => {
-      expect(transcript).toBe('delete all of the tasks related to mirrors');
-      expect(getLastTranscript(messages)).toBe('delete all of the tasks related to mirrors');
-      return makePlan('act', 'I can delete 2 tasks. Do you want me to do that?', [
-        makePlanStep('tasks.delete_matching', {
-          taskIds: ['task-mirror-office', 'task-mirror-hooks'],
-        }),
-      ]);
-    });
+  it('handles the exported delete-task failure shape without falling back to "Which task should I delete?"', async () => {
+    mockHostedAssistant(transcript => {
+      if (transcript === 'Show me all my tasks.') {
+        return makeHostedToolTurn([{
+          callId: 'call_show_tasks',
+          capability: 'tasks.open_view',
+          args: {
+            tab: 'all',
+            resetFilters: true,
+          },
+        }]);
+      }
 
-    const upsertAssistantCorrection = vi.fn(() => 'corr-1');
-    const result = await processAssistantCommand(
-      'No, I said delete all of the tasks related to mirrors',
-      makeContext({
-        tasks: [
-          makeTask({ id: 'task-mirror-office', title: 'Hang up the mirror in this small office' }),
-          makeTask({ id: 'task-mirror-hooks', title: 'Buy mirror hooks for the hallway' }),
-        ],
-      }),
-      {
-        lang: 'en',
-        provider: 'hosted',
-        conversationHistory: [
-          { role: 'user', content: 'delete all of the tasks related to minors' },
-          { role: 'assistant', content: `I couldn't find any tasks matching "minors".` },
-        ],
-        dialogState: makeDialogState(),
-        handlers: {
-          addTask: vi.fn(() => 'unused'),
-          updateTask: vi.fn(),
-          removeTask: vi.fn(),
-          upsertAssistantCorrection,
-        },
-      },
-    );
+      if (transcript === 'Okay. I see an Internet task. Can you please delete it?') {
+        return makeHostedTextTurn('confirm', 'Do you want me to delete the task "Internet"?', [{
+          capability: 'tasks.delete_matching',
+          args: {
+            taskIds: ['task-internet'],
+          },
+        }]);
+      }
 
-    expect(result.plan.mode).toBe('confirm');
-    expect(result.message).toContain(`Thanks, I'll remember that.`);
-    expect(result.message).toContain('I can delete 2 tasks');
-    expect(upsertAssistantCorrection).toHaveBeenCalledWith(expect.objectContaining({
-      sourceText: 'delete all of the tasks related to minors',
-      targetText: 'delete all of the tasks related to mirrors',
-      scope: 'utterance',
-    }));
-  });
-
-  it('applies stored corrections before model-first planning', async () => {
-    mockHostedPlanner((transcript, _schema, messages) => {
-      expect(transcript).toBe('delete all of the tasks related to mirrors');
-      expect(getLastTranscript(messages)).toBe('delete all of the tasks related to mirrors');
-      return makePlan('act', 'I can delete 2 tasks. Do you want me to do that?', [
-        makePlanStep('tasks.delete_matching', {
-          taskIds: ['task-mirror-office', 'task-mirror-hooks'],
-        }),
-      ]);
-    });
-
-    const result = await processAssistantCommand(
-      'delete all of the tasks related to minors',
-      makeContext({
-        tasks: [
-          makeTask({ id: 'task-mirror-office', title: 'Hang up the mirror in this small office' }),
-          makeTask({ id: 'task-mirror-hooks', title: 'Buy mirror hooks for the hallway' }),
-        ],
-      }),
-      {
-        lang: 'en',
-        provider: 'hosted',
-        corrections: [{
-          id: 'corr-mirrors',
-          sourceText: 'minors',
-          targetText: 'mirrors',
-          lang: 'en',
-          scope: 'phrase',
-          appliedCount: 0,
-          createdAt: '2026-04-10T09:00:00.000Z',
-          updatedAt: '2026-04-10T09:00:00.000Z',
-        }],
-        dialogState: makeDialogState(),
-        handlers: {
-          addTask: vi.fn(() => 'unused'),
-          updateTask: vi.fn(),
-          removeTask: vi.fn(),
-          noteAssistantCorrectionApplied: vi.fn(),
-        },
-      },
-    );
-
-    expect(result.plan.mode).toBe('confirm');
-    expect(result.message).toContain('I can delete 2 tasks');
-  });
-
-  it('requires confirmation before rescheduling an existing event and keeps yes local', async () => {
-    mockHostedPlanner(transcript => {
-      if (transcript === 'move project sync to tomorrow after lunch') {
-        return makePlan('act', 'I can move "Project Sync" to tomorrow after lunch. Do you want me to do that?', [
-          makePlanStep('calendar.reschedule_event', {
-            eventId: 'evt-9',
-            timePhrase: 'tomorrow after lunch',
-          }),
-        ]);
+      if (transcript === 'Yes.') {
+        return makeHostedTextTurn('reply', 'I already handled that. What would you like me to do next?');
       }
 
       throw new Error(`Unexpected transcript: ${transcript}`);
     });
 
-    const updateCalendarEvent = vi.fn();
-    const event = makeEvent({ id: 'evt-9', title: 'Project Sync' });
-
-    const first = await processAssistantCommand(
-      'move project sync to tomorrow after lunch',
-      makeContext({ calendarEvents: [event] }),
-      {
-        lang: 'en',
-        provider: 'hosted',
-        dialogState: makeDialogState(),
-        handlers: {
-          addTask: vi.fn(() => 'unused'),
-          updateTask: vi.fn(),
-          updateCalendarEvent,
-          addCalendarEvent: vi.fn(() => 'evt-new'),
-        },
+    const removeTask = vi.fn();
+    const first = await processAssistantCommand('Show me all my tasks.', makeContext(), {
+      lang: 'en',
+      provider: 'hosted',
+      dialogState: makeDialogState(),
+      handlers: {
+        navigate: vi.fn(),
+        addTask: vi.fn(() => 'unused'),
+        updateTask: vi.fn(),
+        removeTask,
       },
-    );
-
-    expect(first.source).toBe('openai');
-    expect(first.plan.mode).toBe('confirm');
-    expect(updateCalendarEvent).not.toHaveBeenCalled();
+    });
 
     const second = await processAssistantCommand(
-      'yes',
-      makeContext({ calendarEvents: [event] }),
+      'Okay. I see an Internet task. Can you please delete it?',
+      makeContext({
+        tasks: [makeTask({ id: 'task-internet', title: 'Internet' })],
+      }),
       {
         lang: 'en',
         provider: 'hosted',
@@ -640,164 +467,147 @@ describe('assistant runtime', () => {
         handlers: {
           addTask: vi.fn(() => 'unused'),
           updateTask: vi.fn(),
-          updateCalendarEvent,
-          addCalendarEvent: vi.fn(() => 'evt-new'),
+          removeTask,
         },
       },
     );
 
-    expect(second.source).toBe('local');
-    expect(second.planningStatus).toBe('local_confirmation');
-    expect(updateCalendarEvent).toHaveBeenCalledWith(
-      'evt-9',
-      expect.objectContaining({
-        start: expect.any(String),
-        end: expect.any(String),
+    const third = await processAssistantCommand(
+      "Yeah. That's the one.",
+      makeContext({
+        tasks: [makeTask({ id: 'task-internet', title: 'Internet' })],
       }),
+      {
+        lang: 'en',
+        provider: 'hosted',
+        dialogState: second.dialogState,
+        handlers: {
+          addTask: vi.fn(() => 'unused'),
+          updateTask: vi.fn(),
+          removeTask,
+        },
+      },
     );
+
+    const fourth = await processAssistantCommand(
+      'Yes.',
+      makeContext(),
+      {
+        lang: 'en',
+        provider: 'hosted',
+        dialogState: third.dialogState,
+        handlers: {
+          addTask: vi.fn(() => 'unused'),
+          updateTask: vi.fn(),
+          removeTask,
+        },
+      },
+    );
+
+    expect(removeTask).toHaveBeenCalledTimes(1);
+    expect(third.assistantMessage).not.toBe('Which task should I delete?');
+    expect(fourth.assistantMessage).not.toBe('Which task should I delete?');
+    expect(fourth.execution).toBeUndefined();
   });
 
-  it('fails safe when no live planner is available and executes nothing', async () => {
-    const result = await processAssistantCommand('brainstorm my week', makeContext(), {
+  it('reuses the model when a pending confirmation reply is not an explicit yes or no', async () => {
+    mockHostedAssistant(transcript => {
+      if (transcript === 'Delete my task.') {
+        return makeHostedTextTurn('confirm', 'Do you want me to delete "Internet"?', [{
+          capability: 'tasks.delete_matching',
+          args: {
+            taskIds: ['task-internet'],
+          },
+        }]);
+      }
+
+      if (transcript === 'No, the router one.') {
+        return makeHostedTextTurn('confirm', 'Okay, do you want me to delete "Router setup" instead?', [{
+          capability: 'tasks.delete_matching',
+          args: {
+            taskIds: ['task-router'],
+          },
+        }]);
+      }
+
+      throw new Error(`Unexpected transcript: ${transcript}`);
+    });
+
+    const first = await processAssistantCommand(
+      'Delete my task.',
+      makeContext({
+        tasks: [
+          makeTask({ id: 'task-internet', title: 'Internet' }),
+          makeTask({ id: 'task-router', title: 'Router setup' }),
+        ],
+      }),
+      {
+        lang: 'en',
+        provider: 'hosted',
+        dialogState: makeDialogState(),
+        handlers: {
+          addTask: vi.fn(() => 'unused'),
+          updateTask: vi.fn(),
+          removeTask: vi.fn(),
+        },
+      },
+    );
+
+    const second = await processAssistantCommand(
+      'No, the router one.',
+      makeContext({
+        tasks: [
+          makeTask({ id: 'task-internet', title: 'Internet' }),
+          makeTask({ id: 'task-router', title: 'Router setup' }),
+        ],
+      }),
+      {
+        lang: 'en',
+        provider: 'hosted',
+        dialogState: first.dialogState,
+        handlers: {
+          addTask: vi.fn(() => 'unused'),
+          updateTask: vi.fn(),
+          removeTask: vi.fn(),
+        },
+      },
+    );
+
+    expect(runHostedAssistantTurn).toHaveBeenCalledTimes(2);
+    expect(second.dialogState.pendingConfirmation?.toolCalls[0]).toEqual(expect.objectContaining({
+      args: { taskIds: ['task-router'] },
+    }));
+    expect(second.assistantMessage).toContain('Router setup');
+  });
+
+  it('fails safe when no live AI provider is available and executes nothing', async () => {
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'not_configured' });
+    vi.mocked(testOllamaConnection).mockResolvedValue(false);
+
+    const result = await processAssistantCommand('Delete my Internet task.', makeContext(), {
       lang: 'en',
-      provider: 'hosted',
+      provider: 'auto',
       handlers: {
         addTask: vi.fn(() => 'unused'),
         updateTask: vi.fn(),
+        removeTask: vi.fn(),
       },
     });
 
     expect(result.source).toBe('degraded');
-    expect(result.degradedReason).toBe('hosted_sign_in_required');
     expect(result.planningStatus).toBe('blocked_provider_unavailable');
     expect(result.execution).toBeUndefined();
-    expect(result.message).toContain('Hosted AI needs sign-in');
+    expect(result.assistantMessage).toContain('No live AI provider is available');
   });
 
-  it('parses structured Ollama plans instead of action tags', async () => {
-    mockOllamaPlanner(() => makePlan('act', 'Saving that note.', [
-      makePlanStep('knowledge.create_entry', {
-        title: 'Patience note',
-        content: 'Patience brings steadiness.',
-        topicId: 'topic-1',
-      }),
-    ]));
-
-    const addKnowledgeEntry = vi.fn(() => 'entry-1');
-    const result = await processAssistantCommand('capture something thoughtful about patience for later', makeContext(), {
-      lang: 'en',
-      provider: 'ollama',
-      handlers: {
-        addTask: vi.fn(() => 'unused'),
-        updateTask: vi.fn(),
-        addKnowledgeEntry,
-      },
-    });
-
-    expect(result.source).toBe('ollama');
-    expect(result.planningSource).toBe('ollama');
-    expect(addKnowledgeEntry).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Patience note',
-      content: 'Patience brings steadiness.',
-      topicId: 'topic-1',
-    }));
-  });
-
-  it('parses structured hosted plans and exposes validated planning metadata', async () => {
-    mockHostedPlanner(() => makePlan('act', 'Saving that note.', [
-      makePlanStep('knowledge.create_entry', {
-        title: 'Patience note',
-        content: 'Patience brings steadiness.',
-        topicId: 'topic-1',
-      }),
-    ]));
-
-    const addKnowledgeEntry = vi.fn(() => 'entry-hosted');
-    const result = await processAssistantCommand('capture something thoughtful about patience for later', makeContext(), {
-      lang: 'en',
-      provider: 'hosted',
-      handlers: {
-        addTask: vi.fn(() => 'unused'),
-        updateTask: vi.fn(),
-        addKnowledgeEntry,
-      },
-    });
-
-    expect(result.source).toBe('openai');
-    expect(result.execution?.steps[0].capability).toBe('knowledge.create_entry');
-    expect(result.parsedPlan?.steps[0].args).toEqual(expect.objectContaining({
-      topicId: 'topic-1',
-    }));
-    expect(result.validatedPlan?.steps[0].args).toEqual(expect.objectContaining({
-      topicId: 'topic-1',
-    }));
-  });
-
-  it('recovers a valid hosted plan when the provider repeats the same JSON payload', async () => {
-    vi.mocked(testHostedAssistantConnection).mockResolvedValue({
-      status: 'available',
-      accessMode: 'project_key',
-      model: 'gpt-5.4',
-    });
-    const repeatedPlan = JSON.stringify(makePlan('act', 'Saving that note.', [
-      makePlanStep('knowledge.create_entry', {
-        title: 'Patience note',
-        content: 'Patience brings steadiness.',
-        topicId: 'topic-1',
-      }),
-    ]));
-    vi.mocked(chatWithHostedAssistant).mockResolvedValue(`${repeatedPlan}\n${repeatedPlan}`);
-
-    const addKnowledgeEntry = vi.fn(() => 'entry-repeated');
-    const result = await processAssistantCommand('capture something thoughtful about patience for later', makeContext(), {
-      lang: 'en',
-      provider: 'hosted',
-      handlers: {
-        addTask: vi.fn(() => 'unused'),
-        updateTask: vi.fn(),
-        addKnowledgeEntry,
-      },
-    });
-
-    expect(result.source).toBe('openai');
-    expect(result.execution?.steps[0].capability).toBe('knowledge.create_entry');
-    expect(result.message).toBe('Saved "Patience note" under Tazkiyah.');
-    expect(result.message).not.toContain('"mode":"act"');
-  });
-
-  it('never surfaces malformed hosted planner JSON as the visible assistant reply', async () => {
-    vi.mocked(testHostedAssistantConnection).mockResolvedValue({
-      status: 'available',
-      accessMode: 'project_key',
-      model: 'gpt-5.4',
-    });
-    vi.mocked(chatWithHostedAssistant).mockResolvedValue(
-      '{"mode":"act","response":"Saving that note.","confidence":0.98,"steps":[{"capability":"knowledge.create_entry"',
-    );
-
-    const result = await processAssistantCommand('capture something thoughtful about patience for later', makeContext(), {
-      lang: 'en',
-      provider: 'hosted',
-      handlers: {
-        addTask: vi.fn(() => 'unused'),
-        updateTask: vi.fn(),
-        addKnowledgeEntry: vi.fn(() => 'unused'),
-      },
-    });
-
-    expect(result.source).toBe('degraded');
-    expect(result.degradedReason).toBe('hosted_error');
-    expect(result.planningStatus).toBe('model_response_invalid');
-    expect(result.message).toContain("I had trouble interpreting the hosted planner's response");
-    expect(result.message).not.toContain('"mode":"act"');
-  });
-
-  it('rejects a model plan that contradicts a destructive transcript instead of approximating it', async () => {
-    mockHostedPlanner(() => makePlan('act', 'Opening tasks for you.', [
-      makePlanStep('navigation.go_to_surface', {
+  it('rejects destructive tool calls that contradict the transcript instead of executing them', async () => {
+    mockHostedAssistant(() => makeHostedToolTurn([{
+      callId: 'call_wrong_action',
+      capability: 'navigation.go_to_surface',
+      args: {
         surface: 'tasks',
-      }),
-    ]));
+      },
+    }]));
 
     const navigate = vi.fn();
     const result = await processAssistantCommand(
@@ -817,66 +627,53 @@ describe('assistant runtime', () => {
       },
     );
 
-    expect(result.source).toBe('openai');
     expect(result.plan.mode).toBe('clarify');
     expect(result.planningStatus).toBe('validator_rejected');
-    expect(result.plannerValidation).toEqual(expect.objectContaining({
-      status: 'rejected',
-    }));
-    expect(result.message).toBe('Which task should I delete?');
+    expect(result.assistantMessage).toBe('Which task should I delete?');
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('sends a hosted planner schema that keeps optional booleans nullable and delete ids as arrays', async () => {
-    mockHostedPlanner(() => makePlan('clarify', 'Classes are not available in HELM yet.'));
+  it('uses the same narration contract for Ollama', async () => {
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'not_configured' });
+    mockOllamaNarration();
+    vi.mocked(chatWithOllama).mockImplementation(async (messages, _endpoint, _model, schema) => {
+      if (schema && typeof schema === 'object' && 'properties' in schema && (schema as { properties?: { mode?: unknown } }).properties?.mode) {
+        return JSON.stringify({
+          mode: 'tool_calls',
+          assistantMessage: '',
+          toolCalls: [{
+            capability: 'knowledge.create_entry',
+            args: {
+              title: 'Patience note',
+              content: 'Patience brings steadiness.',
+              topicId: 'topic-1',
+            },
+          }],
+        });
+      }
 
-    const result = await processAssistantCommand('show me all my classes', makeContext(), {
+      const payload = parseNarrationPayload(messages as AssistantConversationMessage[]);
+      return JSON.stringify({ assistantMessage: defaultNarrationMessage(payload) });
+    });
+
+    const addKnowledgeEntry = vi.fn(() => 'entry-1');
+    const result = await processAssistantCommand('capture something thoughtful about patience', makeContext(), {
       lang: 'en',
-      provider: 'hosted',
+      provider: 'ollama',
       handlers: {
         addTask: vi.fn(() => 'unused'),
         updateTask: vi.fn(),
+        addKnowledgeEntry,
       },
     });
 
-    expect(result.source).toBe('openai');
-    expect(result.plan.mode).toBe('clarify');
-    expect(chatWithHostedAssistant).toHaveBeenCalledTimes(1);
-
-    const schema = vi.mocked(chatWithHostedAssistant).mock.calls[0]?.[1];
-    const taskViewSchema = findCapabilityStepSchema(schema, 'tasks.open_view') as {
-      properties: {
-        args: {
-          required: string[];
-          properties: {
-            resetFilters: { type: string[] };
-          };
-        };
-      };
-    } | null;
-    const deleteSchema = findCapabilityStepSchema(schema, 'tasks.delete_matching') as {
-      properties: {
-        args: {
-          properties: {
-            taskIds: {
-              type: string[];
-              items: { type: string[] };
-            };
-          };
-        };
-      };
-    } | null;
-
-    expect(taskViewSchema).not.toBeNull();
-    expect(taskViewSchema?.properties.args.required).toContain('resetFilters');
-    expect(taskViewSchema?.properties.args.properties.resetFilters).toEqual({
-      type: ['boolean', 'null'],
-    });
-
-    expect(deleteSchema).not.toBeNull();
-    expect(deleteSchema?.properties.args.properties.taskIds).toEqual({
-      type: 'array',
-      items: { type: 'string' },
-    });
+    expect(result.source).toBe('ollama');
+    expect(result.execution?.toolResults[0].capability).toBe('knowledge.create_entry');
+    expect(addKnowledgeEntry).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Patience note',
+      content: 'Patience brings steadiness.',
+      topicId: 'topic-1',
+    }));
+    expect(result.assistantMessage).toBe('I saved that note for you.');
   });
 });

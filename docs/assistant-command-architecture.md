@@ -4,6 +4,8 @@
 
 Make Lina understand and execute app commands in a way that feels conversational, contextual, and reliable, while staying grounded in real app state.
 
+For the concrete shipped conversational runtime, see `docs/assistant-conversational-architecture.md`.
+
 ## Current Runtime
 
 The current implementation now routes both chat and voice through a shared assistant runtime under `src/assistant/`.
@@ -20,9 +22,12 @@ Implemented pieces:
 - shared dialog state with confirmation handling for risky actions such as event rescheduling
 - typed assistant navigation requests so Lina can open the Tasks surface to `Today`, `All Tasks`, or `Goals`, optionally reset filters, and optionally reveal and highlight a specific task
 - model-first structured planning through hosted OpenAI or local Ollama instead of action-tag parsing
+- model-led conversational turns that return `reply`, `clarify`, `confirm`, or `tool_calls`
 - grounded ID-based validation for task reveal, task complete, task delete, calendar reschedule, finance account selection, and knowledge topic selection
+- structured pending confirmations stored as validated tool-call batches plus grounded entity references
+- final assistant replies narrated from verified execution results instead of surfacing executor templates directly
 - benchmark example retrieval from a 200-plus command corpus
-- expanded debug traces that capture the planning bundle, raw planner response, validator verdict, validated plan, and execution payloads
+- expanded debug traces that capture the planning bundle, raw planner response, model turn, validator verdict, validated plan, pending confirmation state, raw narration response, and execution payloads
 
 Still intentionally lightweight:
 
@@ -32,7 +37,7 @@ Still intentionally lightweight:
 
 ## Shipped Cutover
 
-The shipped runtime now uses the model as the first planner for new chat and voice intents.
+The shipped runtime now uses the model as the first conversational layer for new chat and voice intents.
 
 Local code still matters, but only for the layers that should remain deterministic:
 
@@ -46,6 +51,8 @@ Local code still matters, but only for the layers that should remain determinist
 - debug tracing
 
 There is no longer a supported local regex action-selection path for fresh assistant turns. If no live planner is available, Lina refuses to guess.
+
+The user-visible assistant text now comes from the model's clarification, confirmation, or post-execution narration step. Internal plan transport and executor summaries are no longer meant to be shown directly.
 
 ## Recommended Direction
 
@@ -173,6 +180,7 @@ type ActionPlan = {
 ```
 
 The exact schema can evolve, but the planner must stay structured, inspectable, and easy to test.
+`ActionPlan` is now primarily an internal compatibility and validation shape rather than the user-facing conversational contract.
 For hosted OpenAI structured outputs, strict nested objects must keep every declared arg key in `required`; semantically optional args should be represented as nullable fields instead of being omitted from the strict schema.
 
 Task creation is now intentionally stricter than the earlier regex-only path:
@@ -277,12 +285,12 @@ Hosted OpenAI or Ollama structured planning is still useful, but it should be th
 The shipped runtime now follows this shape:
 
 1. retrieve relevant capabilities, entities, and examples
-2. ask the model for a structured plan or tool call
+2. ask the model for a conversational turn or tool call
 3. validate and ground the result locally
-4. execute deterministically
+4. confirm and execute deterministically
 5. generate the final user-facing response from verified results
 
-For read actions, a second response pass can turn structured results into natural language. For writes, success should be described only after execution and verification.
+For both reads and writes, visible assistant wording should come from the model after clarification, confirmation, or execution facts are available. For writes, success should be described only after execution and verification.
 
 ## Proposed Module Layout
 
@@ -304,8 +312,9 @@ Both `voiceAssistant.ts` and `ChatContext.tsx` should delegate to this shared ru
 The model-first cutover is now shipped:
 
 - chat and voice share one assistant runtime under `src/assistant/`
-- fresh intents are planned by a live hosted or Ollama model first
+- fresh intents are led by a live hosted or Ollama model first
 - local code validates, grounds, confirms, and executes
+- the model writes the visible clarification, confirmation, and post-execution reply
 - destructive or unsupported requests clarify instead of approximating to another action
 - when no live planner is available, Lina responds truthfully and executes nothing
 

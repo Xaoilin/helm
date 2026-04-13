@@ -33,6 +33,28 @@ function getNestedOutputTextCandidates(data: unknown): string[] {
     .filter(Boolean);
 }
 
+export interface OpenAIFunctionCall {
+  callId: string;
+  name: string;
+  arguments: string;
+}
+
+export function extractFunctionCalls(data: unknown): OpenAIFunctionCall[] {
+  if (!isRecord(data) || !Array.isArray(data.output)) {
+    return [];
+  }
+
+  return data.output
+    .filter(isRecord)
+    .filter(item => item.type === 'function_call' && typeof item.name === 'string' && typeof item.arguments === 'string')
+    .map(item => ({
+      callId: typeof item.call_id === 'string' ? item.call_id : '',
+      name: item.name,
+      arguments: item.arguments,
+    }))
+    .filter(item => item.callId && item.name && item.arguments);
+}
+
 export function extractOutputText(data: unknown): string {
   const topLevel = isRecord(data) ? normalizeOutputText(data.output_text) : '';
   const nested = getNestedOutputTextCandidates(data);

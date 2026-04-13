@@ -9,7 +9,7 @@ The current stack is:
 - Tauri 2 for desktop packaging and local file access
 - React 19 with TypeScript 5 and Vite 8 for the UI
 - Supabase for optional sign-in and cloud sync
-- Supabase Edge Functions plus OpenAI or local Ollama for assistant planning
+- Supabase Edge Functions plus OpenAI or local Ollama for assistant orchestration
 - Deepgram, ElevenLabs, and OpenWakeWord for voice features
 
 ## Runtime Map
@@ -157,15 +157,16 @@ Current assistant-related services live in:
 - `src/store/contexts/ChatContext.tsx`
 - `supabase/functions/assistant-openai/`
 
-Both chat and voice now route through the shared grounded assistant runtime under `src/assistant/`. Fresh assistant intents are planned by a live model first, and local code is limited to transcript normalization, correction memory, capability/entity retrieval, validator guardrails, confirmation handling, deterministic execution, and debug tracing.
+Both chat and voice now route through the shared grounded assistant runtime under `src/assistant/`. Fresh assistant intents are handled by a live model first, and local code is limited to transcript normalization, correction memory, capability/entity retrieval, validator guardrails, confirmation handling, deterministic execution, and debug tracing.
 
 Planning providers:
 
 - hosted GPT-5.4 through the `assistant-openai` Supabase Edge Function for web builds
-- local Ollama for desktop or local-first setups when a live Ollama planner is available
+- local Ollama for desktop or local-first setups when a live Ollama model is available
 
 The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally. That shared runtime owns task-title normalization, recent-task reveal handling such as "show me that task", grounded ID validation for mutations, and the typed navigation handoff used by the Tasks surface to jump to `All Tasks` and highlight the resolved item.
-The assistant action registry in `src/assistant/capabilities.ts` is the source of truth for which actions Lina may claim and execute. The Debug surface renders that registry directly and also shows the latest planning bundle, raw planner response, validator verdict, structured plan, execution steps, and navigation payload so action coverage stays inspectable.
+The assistant action registry in `src/assistant/capabilities.ts` is the source of truth for which actions Lina may claim and execute. The model now decides whether a turn is `reply`, `clarify`, `confirm`, or `tool_calls`, HELM validates and executes locally, and the final visible assistant reply is narrated from verified results rather than coming from executor templates.
+The Debug surface renders the registry directly and also shows the latest planning bundle, raw planner response, model turn, validator verdict, validated plan, pending confirmation state, execution payloads, raw narration response, and final assistant message so action coverage stays inspectable.
 The assistant benchmark corpus and scorer now live under `src/assistant/evals/` plus `scripts/run-assistant-benchmark.ts`, and the hosted benchmark thresholds are enforced on `master` before deployment.
 
 ### Other external services

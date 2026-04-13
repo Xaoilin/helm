@@ -1,5 +1,10 @@
 import type { Surface } from '../types/domain';
-import type { AssistantDialogPlanReference, AssistantDialogState, AssistantEntityReference } from './shared';
+import type {
+  AssistantDialogPlanReference,
+  AssistantDialogState,
+  AssistantEntityReference,
+  AssistantPendingConfirmation,
+} from './shared';
 import type { ActionPlan } from './plannerSchema';
 
 const MAX_RECENT_ENTITIES = 10;
@@ -58,7 +63,7 @@ export function rememberPlan(state: AssistantDialogState, plan: ActionPlan): Ass
 
 export function withPendingConfirmation(
   state: AssistantDialogState,
-  plan: ActionPlan | undefined,
+  plan: AssistantPendingConfirmation | undefined,
 ): AssistantDialogState {
   return {
     ...state,

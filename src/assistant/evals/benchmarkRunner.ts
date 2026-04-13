@@ -1,18 +1,15 @@
 import { ASSISTANT_BENCHMARK } from '../../config/constants';
 import type { CapabilityId } from '../capabilities';
-import {
-  buildPlannerMessages,
-  buildPlanningBundle,
-  looksLikeStructuredPlanPayload,
-  parsePlanFromModelResponse,
-  validateModelPlan,
-} from '../planner';
-import { buildActionPlanJsonSchema, type ActionPlan } from '../plannerSchema';
+import { buildAssistantModelTurnJsonSchema, parseAssistantModelTextTurn } from '../orchestrationSchema';
+import { buildAssistantInitialTurnMessages } from '../orchestrator';
+import { validateModelPlan, buildPlanningBundle } from '../planner';
+import type { ActionPlan } from '../plannerSchema';
 import type {
   AssistantConversationMessage,
   AssistantLang,
   AssistantPlanningBundle,
 } from '../shared';
+import { buildAssistantToolDefinitions } from '../toolSchemas';
 import {
   ASSISTANT_BENCHMARK_CASES,
   type AssistantBenchmarkCase,
@@ -22,17 +19,28 @@ import {
   buildAssistantBenchmarkDialogState,
 } from './benchmarkFixtures';
 
+export interface AssistantBenchmarkToolCall {
+  callId: string;
+  name: string;
+  arguments: string;
+}
+
 export interface AssistantBenchmarkPlannerRequest {
   benchmarkCase: AssistantBenchmarkCase;
   bundle: AssistantPlanningBundle;
   messages: AssistantConversationMessage[];
-  schema: ReturnType<typeof buildActionPlanJsonSchema>;
+  format: ReturnType<typeof buildAssistantModelTurnJsonSchema>;
+  tools: ReturnType<typeof buildAssistantToolDefinitions>;
+  capabilityIds: CapabilityId[];
 }
 
 export interface AssistantBenchmarkPlannerResponse {
   rawResponse: string;
   planningSource: 'openai' | 'ollama';
   planningModel?: string;
+  turnType: 'text' | 'tool_calls';
+  text?: string;
+  toolCalls?: AssistantBenchmarkToolCall[];
 }
 
 export interface AssistantBenchmarkCaseResult {
@@ -138,6 +146,67 @@ function extractEntityIds(planResult: ReturnType<typeof validateModelPlan>): str
   return uniqueSorted(planResult.referencedEntities.map(entity => entity.id));
 }
 
+function parseToolCallPlan(response: AssistantBenchmarkPlannerResponse): ActionPlan | null {
+  const rawToolCalls = response.toolCalls || [];
+  if (rawToolCalls.length === 0) {
+    return null;
+  }
+
+  const steps = rawToolCalls.map(toolCall => {
+    try {
+      const args = JSON.parse(toolCall.arguments);
+      if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+        return null;
+      }
+      return {
+        capability: toolCall.name as CapabilityId,
+        args,
+      };
+    } catch {
+      return null;
+    }
+  });
+
+  if (steps.some(step => step === null)) {
+    return null;
+  }
+
+  return {
+    mode: 'act',
+    response: '',
+    confidence: 1,
+    steps: steps.filter((step): step is NonNullable<typeof step> => step !== null),
+  };
+}
+
+function parsePlannerResponse(response: AssistantBenchmarkPlannerResponse): ActionPlan | null {
+  if (response.turnType === 'tool_calls') {
+    return parseToolCallPlan(response);
+  }
+
+  try {
+    const parsedTurn = parseAssistantModelTextTurn(JSON.parse(response.text || response.rawResponse));
+    if (!parsedTurn) {
+      return null;
+    }
+
+    return {
+      mode: parsedTurn.mode === 'reply'
+        ? 'answer'
+        : parsedTurn.mode === 'clarify'
+          ? 'clarify'
+          : parsedTurn.mode === 'confirm'
+            ? 'confirm'
+            : 'act',
+      response: parsedTurn.assistantMessage,
+      confidence: 1,
+      steps: parsedTurn.toolCalls,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function evaluateParsedCase(
   benchmarkCase: AssistantBenchmarkCase,
   response: AssistantBenchmarkPlannerResponse,
@@ -167,9 +236,9 @@ function evaluateParsedCase(
       rawResponse: response.rawResponse,
       parsedPlan: null,
       validatedPlan: null,
-      failureReason: looksLikeStructuredPlanPayload(response.rawResponse)
-        ? 'Planner returned malformed structured JSON.'
-        : 'Planner returned no parseable structured plan.',
+      failureReason: response.turnType === 'tool_calls'
+        ? 'Planner returned malformed tool calls.'
+        : 'Planner returned no parseable conversational turn.',
     };
   }
 
@@ -191,7 +260,7 @@ function evaluateParsedCase(
   const failureReason = passed
     ? undefined
     : validation.planningStatus === 'validator_rejected'
-      ? validation.plannerValidation.reason || 'Validator rejected the model plan.'
+      ? validation.plannerValidation.reason || 'Validator rejected the model turn.'
       : !modeMatched
         ? `Expected mode ${benchmarkCase.expectedMode} but got ${validation.plan.mode}.`
         : !capabilityMatched
@@ -260,10 +329,10 @@ export async function runAssistantBenchmark(
   for (const benchmarkCase of benchmarkCases) {
     const dialogState = buildAssistantBenchmarkDialogState(benchmarkCase.dialogStateSeed);
     const bundle = buildPlanningBundle(benchmarkCase.transcript, context, dialogState);
-    const schema = buildActionPlanJsonSchema(
-      bundle.capabilities.map(candidate => candidate.id as CapabilityId),
-    );
-    const messages = buildPlannerMessages(
+    const capabilityIds = bundle.capabilities.map(candidate => candidate.id as CapabilityId);
+    const format = buildAssistantModelTurnJsonSchema(capabilityIds);
+    const tools = buildAssistantToolDefinitions(capabilityIds);
+    const messages = buildAssistantInitialTurnMessages(
       benchmarkCase.transcript,
       bundle,
       lang,
@@ -273,10 +342,12 @@ export async function runAssistantBenchmark(
       benchmarkCase,
       bundle,
       messages,
-      schema,
+      format,
+      tools,
+      capabilityIds,
     });
     model = response.planningModel || model;
-    const parsedPlan = parsePlanFromModelResponse(response.rawResponse);
+    const parsedPlan = parsePlannerResponse(response);
     results.push(evaluateParsedCase(benchmarkCase, response, parsedPlan, lang));
   }
 

@@ -21,7 +21,16 @@ interface OpenAIInputMessage {
 interface BuildOpenAIResponsesPayloadOptions {
   model: string;
   messages: AssistantMessage[];
-  format: unknown;
+  format?: unknown;
+  tools?: OpenAIToolDefinition[];
+}
+
+export interface OpenAIToolDefinition {
+  type: 'function';
+  name: string;
+  description: string;
+  parameters: unknown;
+  strict?: boolean;
 }
 
 const SYSTEM_SEPARATOR = '\n\n';
@@ -64,6 +73,7 @@ export function buildOpenAIResponsesPayload(
     model,
     messages,
     format,
+    tools,
   }: BuildOpenAIResponsesPayloadOptions,
 ) {
   const instructions = messages
@@ -83,14 +93,29 @@ export function buildOpenAIResponsesPayload(
     max_output_tokens: 600,
     instructions: instructions || undefined,
     input,
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'helm_action_plan',
-        description: 'Structured action plan for HELM assistant turns.',
-        schema: format,
-        strict: true,
-      },
-    },
+    ...(format
+      ? {
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'helm_action_plan',
+              description: 'Structured action plan for HELM assistant turns.',
+              schema: format,
+              strict: true,
+            },
+          },
+        }
+      : {}),
+    ...(tools && tools.length > 0
+      ? {
+          tools: tools.map(tool => ({
+            type: 'function',
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parameters,
+            strict: tool.strict ?? true,
+          })),
+        }
+      : {}),
   };
 }
