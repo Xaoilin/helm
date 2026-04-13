@@ -1,0 +1,50 @@
+name: Post-Deploy Assistant Benchmark
+
+on:
+  workflow_run:
+    workflows: ["Deploy Supabase Assistant Function"]
+    types: [completed]
+    branches: [master]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  benchmark:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - id: preflight
+        name: Check benchmark secrets
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping assistant benchmark because VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing."
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - if: ${{ steps.preflight.outputs.should_run == 'true' }}
+        uses: actions/checkout@v5
+
+      - if: ${{ steps.preflight.outputs.should_run == 'true' }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - if: ${{ steps.preflight.outputs.should_run == 'true' }}
+        run: npm ci
+
+      - if: ${{ steps.preflight.outputs.should_run == 'true' }}
+        name: Run hosted assistant benchmark gate
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_HOSTED_ASSISTANT_FUNCTION: assistant-openai
+          VITE_HOSTED_ASSISTANT_MODEL: gpt-5.4
+        run: npm run benchmark:assistant -- --provider hosted --enforce --output test-results/assistant-benchmark-post-deploy.json
