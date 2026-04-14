@@ -129,6 +129,8 @@ Important behavior:
 
 - Google Calendar accounts persist explicit auth metadata in the domain model.
 - Passive sync is non-interactive. Opening Calendar should never launch a consent or reconnect popup.
+- Reconnect-required is a confirmed failure state, not a shortcut for "cached GIS token expired". Calendar-OAuth accounts only move into reconnect-required after passive auth actually fails, a 401 comes back, or the user no longer has transport credentials to retry with.
+- Linked `profile-google` accounts stay tied to the HELM sign-in session. If that profile session is missing after auth bootstrap, the account shows a truthful HELM sign-in reconnect state instead of silently falling back to stale Calendar OAuth state.
 - Accounts that lose Calendar access move into account-level states such as reconnect-required or revoked instead of surfacing as a generic global outage.
 - GIS OAuth is still used for separately connected Calendar accounts, but those tokens are treated as cached transport credentials rather than the source of truth for account connection state.
 
@@ -143,6 +145,7 @@ Calendar state is hierarchical:
 Sources belong to accounts, and events belong to sources. Account removal must cascade cleanly. Primary-account promotion is handled automatically when needed.
 
 Google-backed calendar accounts also carry per-account auth metadata such as provider mode, auth status, expiry, and last auth error so the UI can distinguish reconnect problems from service outages.
+The Debug surface's `Network / APIs` tab now exposes Google Calendar diagnostics as well: Supabase auth context, redacted token presence/expiry/scope, passive-sync eligibility, and a manual passive auth probe that checks access without mutating calendar sources or events.
 
 ### Assistant and voice services
 

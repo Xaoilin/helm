@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import AiDebug from '../components/debug/AiDebug';
+import GoogleCalendarDebug from '../components/debug/GoogleCalendarDebug';
 import WakeWordDebug from '../components/debug/WakeWordDebug';
 
 type DebugTab = 'wakeword' | 'ai' | 'audio' | 'network';
@@ -44,9 +45,7 @@ export default function DebugSurface() {
           </div>
         )}
         {tab === 'network' && (
-          <div className="card" style={{ padding: 20, color: '#6b6f85' }}>
-            Network / API debugging — coming soon. AI runtime checks now live under the AI Assistant tab, and this network tab will grow into broader service diagnostics for Google Calendar, Monzo, and external APIs.
-          </div>
+          <GoogleCalendarDebug />
         )}
       </div>
     </>

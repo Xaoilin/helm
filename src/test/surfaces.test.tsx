@@ -360,10 +360,34 @@ describe('CalendarSurface', () => {
       authStatus: 'needs_reconnect',
       lastAuthError: 'Google access expired. Reconnect this account.',
       lastAuthCheckAt: '2026-04-07T10:00:00.000Z',
+      authExpiresAt: '2026-04-07T09:45:00.000Z',
     }]));
 
     await act(async () => { renderWithProvider(<CalendarSurface />); });
     expect(screen.getByText('1 account need reconnect')).toBeInTheDocument();
+  });
+
+  it('shows Google access checks separately from token expiry in the accounts view', async () => {
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'acc-google',
+      name: 'Google',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'connected',
+      lastSyncTime: '2026-04-07T10:15:00.000Z',
+      lastAuthCheckAt: '2026-04-07T10:00:00.000Z',
+      authExpiresAt: '2026-04-07T09:45:00.000Z',
+    }]));
+
+    await act(async () => { renderWithProvider(<CalendarSurface />); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Accounts & Sources' })); });
+
+    expect(screen.getByText(/Access checked/i)).toBeInTheDocument();
+    expect(screen.getByText(/Token expires/i)).toBeInTheDocument();
   });
 });
 
@@ -415,6 +439,7 @@ describe('IntegrationsSurface', () => {
       authStatus: 'needs_reconnect',
       lastAuthError: 'Google access expired. Reconnect this account.',
       lastAuthCheckAt: '2026-04-07T10:00:00.000Z',
+      authExpiresAt: '2026-04-07T09:45:00.000Z',
     }]));
     localStorage.setItem('helm:integrations', JSON.stringify(
       defaultIntegrations.map(integration =>
@@ -427,6 +452,8 @@ describe('IntegrationsSurface', () => {
     await act(async () => { renderWithProvider(<IntegrationsSurface />); });
     expect(screen.getByText('Needs reconnect')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+    expect(screen.getByText(/Access checked/i)).toBeInTheDocument();
+    expect(screen.getByText(/Token expires/i)).toBeInTheDocument();
   });
 });
 

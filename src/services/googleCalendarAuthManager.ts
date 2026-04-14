@@ -19,9 +19,12 @@ import {
 } from './googleCalendarApi';
 import {
   getAuthSessionSnapshot,
+  isAuthSessionBootstrapped,
+  isSupabaseReady,
   signInWithGoogle,
   type AuthSessionSnapshot,
 } from '../store/supabase';
+import { TIMING } from '../config/constants';
 
 export const GOOGLE_RECONNECT_REQUIRED_MESSAGE = 'Reconnect required';
 export const GOOGLE_ACCESS_EXPIRED_MESSAGE = 'Google access expired. Reconnect this account.';
@@ -41,6 +44,11 @@ interface PassiveTokenResult {
   accessToken: string;
   authProvider: CalendarAuthProvider;
   authExpiresAt?: string;
+}
+
+export interface GoogleCalendarPassiveSyncEligibility {
+  eligible: boolean;
+  blockedReason?: string;
 }
 
 export class GoogleCalendarReconnectRequiredError extends Error {
@@ -63,6 +71,10 @@ function toAuthExpiry(tokens: GoogleTokens | null): string | undefined {
   return tokens ? new Date(tokens.expiresAt).toISOString() : undefined;
 }
 
+function hasStoredGoogleTokens(tokens: GoogleTokens | null): boolean {
+  return Boolean(tokens?.accessToken);
+}
+
 export function isGoogleCalendarAccount(account: CalendarAccount): boolean {
   return account.provider === 'google' && account.connected && !account.mocked;
 }
@@ -76,7 +88,69 @@ export function getResolvedGoogleAuthProvider(
   if (profileEmail && profileEmail === accountEmail) {
     return 'profile-google';
   }
-  return account.authProvider === 'profile-google' ? 'calendar-oauth' : (account.authProvider ?? 'calendar-oauth');
+  if (account.authProvider === 'profile-google') {
+    return 'profile-google';
+  }
+  return account.authProvider ?? 'calendar-oauth';
+}
+
+export function getGoogleCalendarAccountActivityTime(
+  account: Pick<CalendarAccount, 'lastSyncTime' | 'lastAuthCheckAt'>,
+): number {
+  const lastSync = account.lastSyncTime ? new Date(account.lastSyncTime).getTime() : 0;
+  const lastAuthCheck = account.lastAuthCheckAt ? new Date(account.lastAuthCheckAt).getTime() : 0;
+  return Math.max(lastSync, lastAuthCheck);
+}
+
+export function getGoogleCalendarPassiveSyncEligibility(
+  account: CalendarAccount,
+  options: { manual?: boolean } = {},
+): GoogleCalendarPassiveSyncEligibility {
+  const manual = options.manual ?? false;
+
+  if (!isGoogleCalendarAccount(account)) {
+    return {
+      eligible: false,
+      blockedReason: 'This account is not an active Google Calendar connection.',
+    };
+  }
+
+  const resolvedProvider = getResolvedGoogleAuthProvider(account);
+  if (resolvedProvider === 'profile-google' && isSupabaseReady() && !isAuthSessionBootstrapped()) {
+    return {
+      eligible: false,
+      blockedReason: 'Waiting for HELM Google sign-in status to finish loading.',
+    };
+  }
+
+  if (account.authStatus === 'revoked') {
+    return {
+      eligible: false,
+      blockedReason: 'Google revoked access for this account. Reconnect it before syncing again.',
+    };
+  }
+
+  if (!manual && account.authStatus === 'needs_reconnect') {
+    return {
+      eligible: false,
+      blockedReason: 'Auto sync is paused until this account is rechecked or reconnected.',
+    };
+  }
+
+  const activityTime = getGoogleCalendarAccountActivityTime(account);
+  if (!manual && activityTime >= Date.now() - TIMING.SYNC_THROTTLE) {
+    return {
+      eligible: false,
+      blockedReason: 'Auto sync is waiting for the next passive check window.',
+    };
+  }
+
+  return {
+    eligible: true,
+    blockedReason: manual
+      ? 'Ready for a manual passive auth check.'
+      : 'Ready for passive background sync.',
+  };
 }
 
 export function getGoogleCalendarAuthPatch(
@@ -89,12 +163,14 @@ export function getGoogleCalendarAuthPatch(
 
   const authProvider = getResolvedGoogleAuthProvider(account, snapshot);
   const storedTokens = loadGoogleTokens(account.id);
+  const storedTokenPresent = hasStoredGoogleTokens(storedTokens);
   const storedTokenValid = isTokenValid(storedTokens);
   const profileToken = snapshot?.providerToken ?? null;
   const profileExpiry = snapshot?.expiresAt ? new Date(snapshot.expiresAt * 1000).toISOString() : undefined;
+  const authBootstrapped = !isSupabaseReady() || isAuthSessionBootstrapped();
 
   let authStatus: CalendarAuthStatus = account.authStatus ?? 'connected';
-  let authExpiresAt = account.authExpiresAt;
+  let authExpiresAt = toAuthExpiry(storedTokens) ?? account.authExpiresAt;
   let lastAuthError = account.lastAuthError;
   let syncError = account.syncError;
 
@@ -104,15 +180,13 @@ export function getGoogleCalendarAuthPatch(
       authExpiresAt = profileExpiry;
       lastAuthError = undefined;
       syncError = undefined;
-    } else if (storedTokenValid) {
-      authStatus = 'connected';
-      authExpiresAt = toAuthExpiry(storedTokens);
-      lastAuthError = undefined;
-      syncError = undefined;
+    } else if (!authBootstrapped) {
+      authStatus = account.authStatus === 'revoked' ? 'revoked' : (account.authStatus ?? 'connected');
+      authExpiresAt = profileExpiry ?? account.authExpiresAt;
     } else {
       authStatus = account.authStatus === 'revoked' ? 'revoked' : 'needs_reconnect';
-      authExpiresAt = toAuthExpiry(storedTokens) ?? profileExpiry;
-      lastAuthError = account.lastAuthError || GOOGLE_PROFILE_RECONNECT_MESSAGE;
+      authExpiresAt = profileExpiry ?? account.authExpiresAt;
+      lastAuthError = GOOGLE_PROFILE_RECONNECT_MESSAGE;
       syncError = undefined;
     }
   } else if (storedTokenValid) {
@@ -121,10 +195,25 @@ export function getGoogleCalendarAuthPatch(
     lastAuthError = undefined;
     syncError = undefined;
   } else {
-    authStatus = account.authStatus === 'revoked' ? 'revoked' : 'needs_reconnect';
-    authExpiresAt = toAuthExpiry(storedTokens);
-    lastAuthError = account.lastAuthError || GOOGLE_ACCESS_EXPIRED_MESSAGE;
-    syncError = undefined;
+    authStatus = account.authStatus === 'revoked' ? 'revoked' : (account.authStatus ?? 'connected');
+
+    // Legacy reconnect states were derived from expired cached GIS tokens.
+    // If transport credentials still exist, allow passive revalidation instead
+    // of keeping the account latched in reconnect-required.
+    if (authStatus === 'needs_reconnect' && storedTokenPresent) {
+      authStatus = 'connected';
+      lastAuthError = undefined;
+      syncError = undefined;
+    } else if (authStatus === 'connected') {
+      lastAuthError = undefined;
+      syncError = undefined;
+    } else if (authStatus === 'needs_reconnect' && !lastAuthError) {
+      lastAuthError = GOOGLE_ACCESS_EXPIRED_MESSAGE;
+      syncError = undefined;
+    } else if (authStatus === 'revoked' && !lastAuthError) {
+      lastAuthError = GOOGLE_ACCESS_REVOKED_MESSAGE;
+      syncError = undefined;
+    }
   }
 
   return {
@@ -152,6 +241,10 @@ export function getGoogleCalendarPassiveAccessToken(
     };
   }
 
+  if (authProvider === 'profile-google') {
+    throw new GoogleCalendarReconnectRequiredError(GOOGLE_PROFILE_RECONNECT_MESSAGE, authProvider);
+  }
+
   const storedTokens = loadGoogleTokens(account.id);
   if (storedTokens && isTokenValid(storedTokens)) {
     return {
@@ -161,10 +254,7 @@ export function getGoogleCalendarPassiveAccessToken(
     };
   }
 
-  const message = authProvider === 'profile-google'
-    ? GOOGLE_PROFILE_RECONNECT_MESSAGE
-    : GOOGLE_ACCESS_EXPIRED_MESSAGE;
-  throw new GoogleCalendarReconnectRequiredError(message, authProvider);
+  throw new GoogleCalendarReconnectRequiredError(GOOGLE_ACCESS_EXPIRED_MESSAGE, authProvider);
 }
 
 export async function getGoogleCalendarPassiveAccessTokenWithRefresh(

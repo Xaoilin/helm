@@ -22,6 +22,7 @@ import { TIMING } from '../config/constants';
 let client: SupabaseClient | null = null;
 let currentUserId: string | null = null;
 let currentSession: Session | null = null;
+let authSessionBootstrapped = false;
 
 const GOOGLE_SIGN_IN_SCOPES = [
   'openid',
@@ -44,9 +45,13 @@ export interface AuthSessionSnapshot {
 export function initSupabase(url: string, anonKey: string): void {
   if (!url || !anonKey) {
     client = null;
+    currentUserId = null;
+    currentSession = null;
+    authSessionBootstrapped = false;
     return;
   }
   client = createClient(url, anonKey);
+  authSessionBootstrapped = false;
 }
 
 /** Check if Supabase is configured and ready. */
@@ -80,6 +85,10 @@ export function getAuthSessionSnapshot(): AuthSessionSnapshot | null {
     provider: currentSession.user.app_metadata?.provider ?? null,
     expiresAt: currentSession.expires_at ?? null,
   };
+}
+
+export function isAuthSessionBootstrapped(): boolean {
+  return authSessionBootstrapped;
 }
 
 /** Check if user is authenticated. */
@@ -132,6 +141,7 @@ export async function signOut(): Promise<void> {
   await client.auth.signOut();
   currentUserId = null;
   currentSession = null;
+  authSessionBootstrapped = true;
 }
 
 /** Get current session user. */
@@ -142,11 +152,13 @@ export async function getSessionUser(): Promise<User | null> {
     if (session?.user) {
       currentUserId = session.user.id;
       currentSession = session;
+      authSessionBootstrapped = true;
       return session.user;
     }
   } catch { logWarn('Supabase', 'Get session user failed'); }
   currentUserId = null;
   currentSession = null;
+  authSessionBootstrapped = true;
   return null;
 }
 
@@ -157,6 +169,7 @@ export function onAuthStateChange(callback: (user: User | null) => void): () => 
     const user = session?.user || null;
     currentUserId = user?.id || null;
     currentSession = session ?? null;
+    authSessionBootstrapped = true;
     callback(user);
   });
   return () => subscription.unsubscribe();
