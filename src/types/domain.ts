@@ -1,9 +1,40 @@
 // ── Chat ──
+export type AssistantReplyProvider = 'openai' | 'ollama' | 'local' | 'degraded';
+export type AssistantBillingEstimateStatus = 'estimated_from_openai_usage';
+
+export interface AssistantTokenUsageTotals {
+  inputTokens: number;
+  cachedTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+}
+
+export interface OpenAIAssistantRequestBilling extends AssistantTokenUsageTotals {
+  kind: 'planner' | 'narration';
+  responseId?: string;
+  model: string;
+  serviceTier?: string;
+  estimatedUsd: number;
+}
+
+export interface AssistantMessageBilling {
+  provider: AssistantReplyProvider;
+  model?: string;
+  requestCount: number;
+  requests: OpenAIAssistantRequestBilling[];
+  totals?: AssistantTokenUsageTotals;
+  estimatedUsd?: number;
+  estimateStatus?: AssistantBillingEstimateStatus;
+  estimateLabel?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  assistantBilling?: AssistantMessageBilling;
 }
 
 export interface ChatConversation {

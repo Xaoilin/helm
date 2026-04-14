@@ -1,6 +1,14 @@
 import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import { LIMITS } from '../config/constants';
-import { chatWithHostedAssistant, runHostedAssistantTurn, testHostedAssistantConnection } from '../services/hostedAssistantApi';
+import {
+  chatWithHostedAssistantDetailed,
+  runHostedAssistantTurn,
+  testHostedAssistantConnection,
+} from '../services/hostedAssistantApi';
+import {
+  buildOpenAIAssistantBilling,
+  buildOpenAIRequestBilling,
+} from '../services/assistantBilling';
 import { normalizeHostedAssistantModel } from '../services/assistantModels';
 import { chatWithOllama, type OllamaMessage } from '../services/ollamaApi';
 import type { AssistantProvider } from '../types/domain';
@@ -36,12 +44,14 @@ import type {
   AssistantToolCallDraft,
   AssistantToolResult,
 } from './shared';
+import type { AssistantMessageBilling } from '../types/domain';
 import { buildAssistantToolDefinitions, fromAssistantToolName } from './toolSchemas';
 
 interface ModelTurnResult {
   assistantMessage: string;
   modelTurn?: AssistantModelTurn | null;
   toolCalls?: AssistantToolCall[];
+  assistantBilling?: AssistantMessageBilling;
   referencedEntities?: AssistantEntityReference[];
   source: 'openai' | 'ollama' | 'degraded';
   degradedReason?: PlannerResult['degradedReason'];
@@ -57,6 +67,7 @@ interface ModelTurnResult {
 
 interface AssistantNarrationResult {
   assistantMessage: string;
+  assistantBilling?: AssistantMessageBilling;
   rawNarrationResponse?: string;
   source: 'openai' | 'ollama' | 'local' | 'degraded';
 }
@@ -415,6 +426,11 @@ async function runHostedInitialTurn(
       format: buildAssistantModelTurnJsonSchema(capabilityIds),
       tools: buildAssistantToolDefinitions(capabilityIds),
     });
+    const assistantBilling = buildOpenAIAssistantBilling(
+      [
+        buildOpenAIRequestBilling('planner', response.usage),
+      ].filter((request): request is NonNullable<ReturnType<typeof buildOpenAIRequestBilling>> => request !== null),
+    );
 
     let parsedTurn: AssistantModelTextTurn | null = null;
     let parsedPlan: ActionPlan | null = null;
@@ -432,6 +448,7 @@ async function runHostedInitialTurn(
           assistantMessage: RESPONSES.invalidTurn[options.lang],
           source: 'degraded',
           degradedReason: 'hosted_error',
+          assistantBilling,
           planningSource: 'openai',
           planningStatus: 'model_response_invalid',
           planningModel: response.model,
@@ -473,6 +490,7 @@ async function runHostedInitialTurn(
           assistantMessage: RESPONSES.invalidTurn[options.lang],
           source: 'degraded',
           degradedReason: 'hosted_error',
+          assistantBilling,
           planningSource: 'openai',
           planningStatus: 'model_response_invalid',
           planningModel: response.model,
@@ -513,6 +531,7 @@ async function runHostedInitialTurn(
         assistantMessage: normalizedTurn.assistantMessage || RESPONSES.invalidTurn[options.lang],
         modelTurn: normalizedTurn,
         toolCalls,
+        assistantBilling,
         referencedEntities,
         source: 'openai',
         planningSource: 'openai',
@@ -530,6 +549,7 @@ async function runHostedInitialTurn(
       assistantMessage: normalizedTurn.assistantMessage,
       modelTurn: normalizedTurn,
       toolCalls,
+      assistantBilling,
       referencedEntities,
       source: 'openai',
       planningSource: 'openai',
@@ -765,16 +785,21 @@ async function runNarrationWithHosted(
   model?: string,
 ): Promise<AssistantNarrationResult> {
   const messages = buildNarrationMessages(lang, conversationHistory, payload);
-  const text = await chatWithHostedAssistant(messages, buildAssistantNarrationJsonSchema(), {
+  const response = await chatWithHostedAssistantDetailed(messages, buildAssistantNarrationJsonSchema(), {
     model: normalizeHostedAssistantModel(model),
   });
-  const parsed = parseAssistantNarration(JSON.parse(text));
+  const parsed = parseAssistantNarration(JSON.parse(response.text));
   if (!parsed?.assistantMessage) {
     throw new Error('Hosted narration returned invalid JSON.');
   }
   return {
     assistantMessage: parsed.assistantMessage,
-    rawNarrationResponse: text,
+    assistantBilling: buildOpenAIAssistantBilling(
+      [
+        buildOpenAIRequestBilling('narration', response.usage),
+      ].filter((request): request is NonNullable<ReturnType<typeof buildOpenAIRequestBilling>> => request !== null),
+    ),
+    rawNarrationResponse: response.text,
     source: 'openai',
   };
 }

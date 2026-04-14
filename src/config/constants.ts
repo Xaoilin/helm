@@ -148,6 +148,8 @@ export const API_TIMEOUT = {
   OLLAMA_CHAT: 30_000,
   /** Hosted assistant chat completion via Supabase Edge Function */
   HOSTED_ASSISTANT_CHAT: 30_000,
+  /** Hosted assistant billing summary via Supabase Edge Function */
+  HOSTED_ASSISTANT_BILLING: 30_000,
   /** ElevenLabs text-to-speech */
   ELEVENLABS_TTS: 10_000,
   /** AlAdhan prayer times API */

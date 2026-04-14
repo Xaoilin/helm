@@ -3,6 +3,7 @@ import type { CapabilityId } from '../assistant/capabilities';
 import { toAssistantToolName } from '../assistant/toolSchemas';
 import { DEFAULT_PROFILE } from '../services/gamification';
 import { processAssistantCommand, resetOllamaCache } from '../services/assistantRuntime';
+import type { HostedAssistantUsageSnapshot } from '../services/assistantBilling';
 import type {
   AssistantCommandContext,
   AssistantConversationMessage,
@@ -18,9 +19,10 @@ import type {
 } from '../types/domain';
 import { chatWithOllama, testOllamaConnection } from '../services/ollamaApi';
 import {
-  chatWithHostedAssistant,
+  chatWithHostedAssistantDetailed,
   runHostedAssistantTurn,
   testHostedAssistantConnection,
+  type HostedAssistantChatResult,
   type HostedAssistantTurnResult,
 } from '../services/hostedAssistantApi';
 
@@ -30,7 +32,7 @@ vi.mock('../services/ollamaApi', () => ({
 }));
 
 vi.mock('../services/hostedAssistantApi', () => ({
-  chatWithHostedAssistant: vi.fn(),
+  chatWithHostedAssistantDetailed: vi.fn(),
   runHostedAssistantTurn: vi.fn(),
   testHostedAssistantConnection: vi.fn(),
 }));
@@ -175,6 +177,26 @@ function makeHostedToolTurn(
   };
 }
 
+function makeHostedNarrationResult(message: string, overrides: Partial<HostedAssistantChatResult> = {}): HostedAssistantChatResult {
+  return {
+    text: JSON.stringify({ assistantMessage: message }),
+    model: 'gpt-5.4',
+    ...overrides,
+  };
+}
+
+function makeUsage(overrides: Partial<HostedAssistantUsageSnapshot> = {}): HostedAssistantUsageSnapshot {
+  return {
+    model: 'gpt-5.4',
+    inputTokens: 1200,
+    cachedTokens: 200,
+    outputTokens: 300,
+    reasoningTokens: 180,
+    totalTokens: 1500,
+    ...overrides,
+  };
+}
+
 function getLastMessageContent(messages: AssistantConversationMessage[]): string {
   return messages[messages.length - 1]?.content || '';
 }
@@ -244,9 +266,9 @@ function mockHostedAssistant(
     model: 'gpt-5.4',
   });
   vi.mocked(runHostedAssistantTurn).mockImplementation(async (messages) => resolver(getLastMessageContent(messages), messages));
-  vi.mocked(chatWithHostedAssistant).mockImplementation(async (messages) => {
+  vi.mocked(chatWithHostedAssistantDetailed).mockImplementation(async (messages) => {
     const payload = parseNarrationPayload(messages);
-    return JSON.stringify({ assistantMessage: narrationResolver(payload) });
+    return makeHostedNarrationResult(narrationResolver(payload));
   });
 }
 
@@ -265,7 +287,7 @@ describe('assistant runtime', () => {
     vi.mocked(testOllamaConnection).mockResolvedValue(false);
     vi.mocked(chatWithOllama).mockResolvedValue('');
     vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'sign_in_required' });
-    vi.mocked(chatWithHostedAssistant).mockResolvedValue(JSON.stringify({ assistantMessage: 'Unhandled narration.' }));
+    vi.mocked(chatWithHostedAssistantDetailed).mockResolvedValue(makeHostedNarrationResult('Unhandled narration.'));
     vi.mocked(runHostedAssistantTurn).mockRejectedValue(new Error('runHostedAssistantTurn not mocked'));
   });
 
@@ -371,7 +393,7 @@ describe('assistant runtime', () => {
     expect(runHostedAssistantTurn).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({
       model: 'gpt-5.4-mini',
     }));
-    expect(chatWithHostedAssistant).toHaveBeenCalledWith(
+    expect(chatWithHostedAssistantDetailed).toHaveBeenCalledWith(
       expect.any(Array),
       expect.any(Object),
       expect.objectContaining({
@@ -379,6 +401,79 @@ describe('assistant runtime', () => {
       }),
     );
     expect(result.planningModel).toBe('gpt-5.4');
+  });
+
+  it('aggregates hosted planner and narration billing into one assistant turn estimate', async () => {
+    vi.mocked(testHostedAssistantConnection).mockResolvedValue({
+      status: 'available',
+      accessMode: 'project_key',
+      model: 'gpt-5.4',
+    });
+    vi.mocked(runHostedAssistantTurn).mockResolvedValue({
+      ...makeHostedToolTurn([{
+        callId: 'call_open_tasks',
+        capability: 'tasks.open_view',
+        args: {
+          tab: 'all',
+          resetFilters: true,
+        },
+      }]),
+      usage: makeUsage({
+        responseId: 'resp-plan',
+        inputTokens: 1000,
+        cachedTokens: 100,
+        outputTokens: 200,
+        reasoningTokens: 120,
+        totalTokens: 1200,
+      }),
+    });
+    vi.mocked(chatWithHostedAssistantDetailed).mockResolvedValue(makeHostedNarrationResult(
+      "I've opened your full task list.",
+      {
+        usage: makeUsage({
+          responseId: 'resp-narrate',
+          inputTokens: 600,
+          cachedTokens: 50,
+          outputTokens: 120,
+          reasoningTokens: 70,
+          totalTokens: 720,
+        }),
+      },
+    ));
+
+    const result = await processAssistantCommand('show me all my tasks', makeContext(), {
+      lang: 'en',
+      provider: 'hosted',
+      handlers: {
+        navigate: vi.fn(),
+        addTask: vi.fn(() => 'task-1'),
+        updateTask: vi.fn(),
+      },
+    });
+
+    expect(result.assistantBilling).toEqual(expect.objectContaining({
+      provider: 'openai',
+      requestCount: 2,
+      estimateLabel: 'Estimated from OpenAI usage',
+      requests: [
+        expect.objectContaining({
+          kind: 'planner',
+          responseId: 'resp-plan',
+        }),
+        expect.objectContaining({
+          kind: 'narration',
+          responseId: 'resp-narrate',
+        }),
+      ],
+      totals: expect.objectContaining({
+        inputTokens: 1600,
+        cachedTokens: 150,
+        outputTokens: 320,
+        reasoningTokens: 190,
+        totalTokens: 1920,
+      }),
+      estimatedUsd: 0.008463,
+    }));
   });
 
   it('uses the validated clarify turn instead of the raw hosted draft when guardrails coerce an unsupported action', async () => {

@@ -119,7 +119,7 @@ function DisableLinaHarness() {
   );
 }
 
-function createAssistantResult(message: string) {
+function createAssistantResult(message: string, overrides: Record<string, unknown> = {}) {
   return {
     assistantMessage: message,
     message,
@@ -135,6 +135,7 @@ function createAssistantResult(message: string) {
       recentPlans: [],
     },
     source: 'local',
+    ...overrides,
   } as const;
 }
 
@@ -518,6 +519,83 @@ describe('VoiceAssistant', () => {
         'thanks Lina',
         "Okay, I'll stop listening.",
       ]);
+    });
+  });
+
+  it('stores assistant billing metadata on voice-created conversation turns', async () => {
+    processAssistantCommandMock.mockResolvedValue(createAssistantResult('Hosted answer.', {
+      source: 'openai',
+      planningSource: 'openai',
+      planningStatus: 'planned',
+      planningModel: 'gpt-5.4',
+      assistantBilling: {
+        provider: 'openai',
+        model: 'gpt-5.4',
+        requestCount: 2,
+        requests: [
+          {
+            kind: 'planner',
+            responseId: 'resp-plan',
+            model: 'gpt-5.4',
+            serviceTier: 'default',
+            inputTokens: 1000,
+            cachedTokens: 100,
+            outputTokens: 200,
+            reasoningTokens: 120,
+            totalTokens: 1200,
+            estimatedUsd: 0.005275,
+          },
+          {
+            kind: 'narration',
+            responseId: 'resp-narration',
+            model: 'gpt-5.4',
+            serviceTier: 'default',
+            inputTokens: 600,
+            cachedTokens: 50,
+            outputTokens: 120,
+            reasoningTokens: 70,
+            totalTokens: 720,
+            estimatedUsd: 0.003188,
+          },
+        ],
+        totals: {
+          inputTokens: 1600,
+          cachedTokens: 150,
+          outputTokens: 320,
+          reasoningTokens: 190,
+          totalTokens: 1920,
+        },
+        estimatedUsd: 0.008463,
+        estimateStatus: 'estimated_from_openai_usage',
+        estimateLabel: 'Estimated from OpenAI usage',
+      },
+    }));
+
+    await act(async () => {
+      renderAssistant();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(latestWakeWordOptions).not.toBeNull();
+    });
+
+    await act(async () => {
+      latestWakeWordOptions?.onWakeWordDetected();
+      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+    });
+
+    await act(async () => {
+      latestVoiceInputOptions?.onTranscript?.('show me my tasks');
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(latestConversations[0].messages.at(-1)?.assistantBilling).toEqual(expect.objectContaining({
+        provider: 'openai',
+        estimatedUsd: 0.008463,
+        requestCount: 2,
+      }));
     });
   });
 

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { HOSTED_ASSISTANT_FUNCTION, OLLAMA_ENDPOINT } from '../../config';
+import {
+  HOSTED_ASSISTANT_BILLING_FUNCTION,
+  HOSTED_ASSISTANT_FUNCTION,
+  OLLAMA_ENDPOINT,
+} from '../../config';
 import { useApp } from '../../store/AppContext';
 import { getAllCapabilityDefinitions } from '../../assistant/capabilities';
 import {
@@ -15,6 +19,16 @@ import {
   subscribeAssistantDebugTrace,
   type AssistantDebugTrace,
 } from '../../services/assistantDebug';
+import {
+  formatAssistantTokenCount,
+  formatCurrencyAmount,
+  formatUsdEstimate,
+  OPENAI_USAGE_ESTIMATE_LABEL,
+} from '../../services/assistantBilling';
+import {
+  fetchHostedAssistantProjectBilling,
+  type HostedAssistantProjectBillingSummary,
+} from '../../services/hostedAssistantBillingApi';
 import {
   chatWithHostedAssistant,
   getHostedAssistantDiagnostics,
@@ -63,6 +77,13 @@ const DEFAULT_OLLAMA_RESULT: DiagnosticResult = {
   checkedAt: null,
 };
 
+const DEFAULT_OPENAI_BILLING_RESULT: DiagnosticResult = {
+  state: 'idle',
+  headline: 'OpenAI billing not checked yet',
+  detail: 'Load the OpenAI billing summary to see factual daily project costs and usage from the configured hosted-assistant project.',
+  checkedAt: null,
+};
+
 const SMOKE_TEST_MESSAGES = [
   {
     role: 'system' as const,
@@ -102,6 +123,8 @@ export default function AiDebug() {
   const [hostedResult, setHostedResult] = useState<DiagnosticResult>(DEFAULT_HOSTED_RESULT);
   const [smokeResult, setSmokeResult] = useState<DiagnosticResult>(DEFAULT_HOSTED_SMOKE_RESULT);
   const [ollamaResult, setOllamaResult] = useState<DiagnosticResult>(DEFAULT_OLLAMA_RESULT);
+  const [openAIBillingResult, setOpenAIBillingResult] = useState<DiagnosticResult>(DEFAULT_OPENAI_BILLING_RESULT);
+  const [openAIBillingSummary, setOpenAIBillingSummary] = useState<HostedAssistantProjectBillingSummary | null>(null);
   const [copyState, setCopyState] = useState<DiagnosticState>('idle');
   const [assistantTrace, setAssistantTrace] = useState<AssistantDebugTrace | null>(() => getAssistantDebugTrace());
 
@@ -140,6 +163,43 @@ export default function AiDebug() {
   }, [refreshRuntime]);
 
   useEffect(() => subscribeAssistantDebugTrace(setAssistantTrace), []);
+
+  const refreshOpenAIBilling = useCallback(async () => {
+    setOpenAIBillingResult({
+      state: 'running',
+      headline: 'Loading OpenAI billing...',
+      detail: 'Fetching the last 7 UTC billing buckets from OpenAI for the configured hosted-assistant project.',
+      checkedAt: null,
+    });
+
+    const checkedAt = new Date().toISOString();
+
+    try {
+      const summary = await fetchHostedAssistantProjectBilling();
+      setOpenAIBillingSummary(summary);
+      setOpenAIBillingResult({
+        state: 'success',
+        headline: 'OpenAI billing loaded',
+        detail: `Showing factual daily project costs and usage from OpenAI for project ${summary.projectId}.`,
+        checkedAt,
+      });
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setOpenAIBillingSummary(null);
+      setOpenAIBillingResult({
+        state: message.includes('unavailable in this build') || message.includes('not configured')
+          ? 'warning'
+          : 'error',
+        headline: 'OpenAI project billing is unavailable in this build',
+        detail: message,
+        checkedAt,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshOpenAIBilling();
+  }, [refreshOpenAIBilling]);
 
   async function runHostedCheck() {
     setHostedResult({
@@ -316,6 +376,7 @@ export default function AiDebug() {
           <MetaCard label="Origin" value={window.location.origin} />
           <MetaCard label="Configured Mode" value={providerSetting.toUpperCase()} />
           <MetaCard label="Hosted Function" value={HOSTED_ASSISTANT_FUNCTION} />
+          <MetaCard label="Billing Function" value={HOSTED_ASSISTANT_BILLING_FUNCTION} />
           <MetaCard label="Hosted Model" value={hostedModelLabel} />
           <MetaCard label="Ollama Endpoint" value={ollamaEndpoint} />
         </div>
@@ -439,6 +500,157 @@ export default function AiDebug() {
       <div className="card" style={{ padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#f5f7ff', marginBottom: 8 }}>OpenAI Billing</div>
+            <StatusBadge state={openAIBillingResult.state}>{openAIBillingResult.headline}</StatusBadge>
+            <div style={{ fontSize: 13, color: '#9ea4c5', marginTop: 10, maxWidth: 860 }}>
+              Latest-turn figures are estimated from OpenAI usage on the assistant trace. Daily project costs and usage come from OpenAI organization billing APIs for the configured hosted-assistant project and use UTC bucket dates.
+            </div>
+            <div style={{ fontSize: 12, color: '#9ea4c5', marginTop: 8 }}>
+              {openAIBillingResult.detail}
+            </div>
+            <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 8 }}>
+              Last checked: {formatCheckedAt(openAIBillingResult.checkedAt)}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => void refreshOpenAIBilling()} disabled={openAIBillingResult.state === 'running'}>
+              {openAIBillingResult.state === 'running' ? 'Loading...' : 'Refresh OpenAI Billing'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16, display: 'grid', gap: 16 }}>
+          <div style={{ padding: 14, borderRadius: 12, border: '1px solid #1e2030', background: 'rgba(10, 12, 18, 0.45)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#f5f7ff', marginBottom: 10 }}>Latest Assistant Turn Estimate</div>
+            {!assistantTrace?.assistantBilling ? (
+              <div style={{ fontSize: 12, color: '#9ea4c5' }}>
+                No assistant billing metadata has been recorded yet.
+              </div>
+            ) : assistantTrace.assistantBilling.provider !== 'openai' ? (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <DataRow label="Latest source" value={formatAssistantBillingSourceDetail(assistantTrace.assistantBilling.provider, assistantTrace.assistantBilling.model)} />
+                <div style={{ fontSize: 12, color: '#9ea4c5' }}>
+                  The latest assistant turn did not include hosted OpenAI usage, so there is no OpenAI estimate to show here.
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <DataRow label="Estimate label" value={assistantTrace.assistantBilling.estimateLabel || OPENAI_USAGE_ESTIMATE_LABEL} />
+                <DataRow label="Estimated total" value={formatUsdEstimate(assistantTrace.assistantBilling.estimatedUsd ?? 0)} />
+                <DataRow label="Request count" value={String(assistantTrace.assistantBilling.requestCount)} />
+                <DataRow label="Model" value={assistantTrace.assistantBilling.model || 'mixed'} />
+                <DataRow label="Tokens" value={formatAssistantBillingTokens(assistantTrace.assistantBilling)} />
+                {assistantTrace.assistantBilling.requests.map(request => (
+                  <div
+                    key={`${request.kind}:${request.responseId || request.model}`}
+                    style={{
+                      marginTop: 4,
+                      padding: 12,
+                      borderRadius: 10,
+                      border: '1px solid #1e2030',
+                      background: '#0a0c12',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#f5f7ff', textTransform: 'capitalize' }}>
+                        {request.kind}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#79e2b2', fontWeight: 600 }}>
+                        {formatUsdEstimate(request.estimatedUsd)}
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+                      <DataRow label="Model" value={request.model} />
+                      <DataRow label="Service tier" value={request.serviceTier || 'default'} />
+                      <DataRow label="Response ID" value={request.responseId || 'none'} />
+                      <DataRow label="Tokens" value={formatAssistantRequestTokens(request)} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ padding: 14, borderRadius: 12, border: '1px solid #1e2030', background: 'rgba(10, 12, 18, 0.45)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#f5f7ff', marginBottom: 10 }}>Last 7 UTC Days Of Factual Project Costs</div>
+            {openAIBillingSummary ? (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <DataRow label="Project ID" value={openAIBillingSummary.projectId} />
+                <DataRow label="Fetched At" value={formatCheckedAt(openAIBillingSummary.fetchedAt)} />
+                {openAIBillingSummary.costs.length === 0 ? (
+                  <div style={{ fontSize: 12, color: '#9ea4c5' }}>
+                    OpenAI returned no project cost buckets for the last 7 UTC days.
+                  </div>
+                ) : (
+                  openAIBillingSummary.costs.map(bucket => (
+                    <DataRow
+                      key={`cost-${bucket.startTime}`}
+                      label={formatUtcBucketLabel(bucket.startTime)}
+                      value={formatCurrencyAmount(bucket.amount.value, bucket.amount.currency)}
+                    />
+                  ))
+                )}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: '#9ea4c5' }}>
+                OpenAI project billing is unavailable in this build.
+              </div>
+            )}
+          </div>
+
+          <div style={{ padding: 14, borderRadius: 12, border: '1px solid #1e2030', background: 'rgba(10, 12, 18, 0.45)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#f5f7ff', marginBottom: 10 }}>Last 7 UTC Days Of Factual Usage</div>
+            {openAIBillingSummary ? (
+              openAIBillingSummary.usage.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#9ea4c5' }}>
+                  OpenAI returned no completion-usage buckets for the last 7 UTC days.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: 12 }}>
+                  {openAIBillingSummary.usage.map(bucket => (
+                    <div
+                      key={`usage-${bucket.startTime}`}
+                      style={{
+                        padding: 12,
+                        borderRadius: 10,
+                        border: '1px solid #1e2030',
+                        background: '#0a0c12',
+                      }}
+                    >
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#f5f7ff', marginBottom: 8 }}>
+                        {formatUtcBucketLabel(bucket.startTime)}
+                      </div>
+                      {bucket.results.length === 0 ? (
+                        <div style={{ fontSize: 12, color: '#9ea4c5' }}>
+                          No usage rows returned for this UTC bucket.
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid', gap: 6 }}>
+                          {bucket.results.map(result => (
+                            <DataRow
+                              key={`${bucket.startTime}:${result.model}:${result.serviceTier}`}
+                              label={`${result.model} · ${result.serviceTier || 'default'}`}
+                              value={formatOpenAIUsageSummary(result)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              <div style={{ fontSize: 12, color: '#9ea4c5' }}>
+                OpenAI project billing is unavailable in this build.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#f5f7ff', marginBottom: 8 }}>Assistant Actions</div>
             <div style={{ fontSize: 13, color: '#9ea4c5', maxWidth: 860 }}>
               This registry is the source of truth for what Lina is allowed to claim and execute. Add or change actions here instead of scattering one-off parser rules.
@@ -484,7 +696,7 @@ export default function AiDebug() {
       <div className="card" style={{ padding: 20 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: '#f5f7ff', marginBottom: 8 }}>Latest Assistant Trace</div>
         <div style={{ fontSize: 13, color: '#9ea4c5' }}>
-          Run a chat or voice command and this panel will show the last model turn, tool calls, validator verdict, execution facts, and final narrated reply that Lina produced.
+          Run a chat or voice command and this panel will show the last model turn, tool calls, validator verdict, execution facts, billing metadata, and final narrated reply that Lina produced.
         </div>
 
         {!assistantTrace ? (
@@ -498,6 +710,8 @@ export default function AiDebug() {
             <DataRow label="Transcript" value={assistantTrace.transcript} />
             <DataRow label="Effective" value={assistantTrace.effectiveTranscript} />
             <DataRow label="Assistant Message" value={assistantTrace.assistantMessage || 'none'} />
+            <DataRow label="Billing Source" value={assistantTrace.assistantBilling ? formatAssistantBillingSourceDetail(assistantTrace.assistantBilling.provider, assistantTrace.assistantBilling.model) : 'none'} />
+            <DataRow label="Billing Summary" value={assistantTrace.assistantBilling ? formatLatestTurnBillingSummary(assistantTrace.assistantBilling) : 'none'} />
             <DataRow label="Planning Source" value={assistantTrace.planningSource || 'unknown'} />
             <DataRow label="Planning Status" value={assistantTrace.planningStatus || 'unknown'} />
             <DataRow label="Planning Model" value={assistantTrace.planningModel || 'none'} />
@@ -532,6 +746,11 @@ export default function AiDebug() {
             {assistantTrace.rawNarrationResponse && (
               <PayloadBlock label="Raw Narration Response">
                 {assistantTrace.rawNarrationResponse}
+              </PayloadBlock>
+            )}
+            {assistantTrace.assistantBilling && (
+              <PayloadBlock label="Assistant Billing">
+                {JSON.stringify(assistantTrace.assistantBilling, null, 2)}
               </PayloadBlock>
             )}
             {assistantTrace.modelTurn && (
@@ -784,6 +1003,43 @@ function formatHostedFailureSource(value: 'health' | 'chat' | null): string {
   return 'none';
 }
 
+function formatUtcBucketLabel(startTime: number): string {
+  return `${new Date(startTime * 1000).toISOString().slice(0, 10)} UTC`;
+}
+
+function formatAssistantBillingTokens(
+  billing: NonNullable<AssistantDebugTrace['assistantBilling']>,
+): string {
+  if (!billing.totals) return 'none recorded';
+  return `${formatAssistantTokenCount(billing.totals.inputTokens)} input · ${formatAssistantTokenCount(billing.totals.cachedTokens)} cached · ${formatAssistantTokenCount(billing.totals.outputTokens)} output · ${formatAssistantTokenCount(billing.totals.totalTokens)} total`;
+}
+
+function formatAssistantRequestTokens(
+  request: NonNullable<NonNullable<AssistantDebugTrace['assistantBilling']>['requests']>[number],
+): string {
+  return `${formatAssistantTokenCount(request.inputTokens)} input · ${formatAssistantTokenCount(request.cachedTokens)} cached · ${formatAssistantTokenCount(request.outputTokens)} output · ${formatAssistantTokenCount(request.reasoningTokens)} reasoning · ${formatAssistantTokenCount(request.totalTokens)} total`;
+}
+
+function formatAssistantBillingSourceDetail(provider: string, model?: string): string {
+  return model ? `${provider} (${model})` : provider;
+}
+
+function formatLatestTurnBillingSummary(
+  billing: NonNullable<AssistantDebugTrace['assistantBilling']>,
+): string {
+  if (billing.provider !== 'openai') {
+    return `No hosted OpenAI estimate. Provider was ${formatAssistantBillingSourceDetail(billing.provider, billing.model)}.`;
+  }
+
+  return `${formatUsdEstimate(billing.estimatedUsd ?? 0)} across ${billing.requestCount} request${billing.requestCount === 1 ? '' : 's'} (${billing.estimateLabel || OPENAI_USAGE_ESTIMATE_LABEL}).`;
+}
+
+function formatOpenAIUsageSummary(
+  result: HostedAssistantProjectBillingSummary['usage'][number]['results'][number],
+): string {
+  return `${formatAssistantTokenCount(result.totalRequests)} requests · ${formatAssistantTokenCount(result.inputTokens)} input · ${formatAssistantTokenCount(result.cachedTokens)} cached · ${formatAssistantTokenCount(result.outputTokens)} output`;
+}
+
 function mapActionStatus(status: 'live' | 'planned' | 'disabled'): DiagnosticState {
   switch (status) {
     case 'live':
@@ -893,6 +1149,7 @@ function buildSnapshotText(
     '',
     '[Hosted Assistant]',
     `Function: ${HOSTED_ASSISTANT_FUNCTION}`,
+    `Billing function: ${HOSTED_ASSISTANT_BILLING_FUNCTION}`,
     `Model: ${selectedHostedModel}`,
     `Last access mode: ${formatHostedAssistantAccessMode(hostedDiagnostics.lastAccessMode)}`,
     `Circuit allowing requests: ${formatBoolean(hostedDiagnostics.circuitAllowingRequests)}`,
