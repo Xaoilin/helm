@@ -1,6 +1,15 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { useApp } from '../store/AppContext';
-import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
+import {
+  createElement,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import type { CalendarAccount, CalendarEvent, CalendarSource } from '../types/domain';
 import {
   fetchCalendarList,
   fetchEvents,
@@ -11,14 +20,43 @@ import {
   GOOGLE_ACCESS_EXPIRED_MESSAGE,
   GOOGLE_ACCESS_REVOKED_MESSAGE,
   GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
+  type GoogleCalendarOwnershipResult,
   GoogleCalendarReconnectRequiredError,
-  getGoogleCalendarPassiveSyncEligibility,
+  getGoogleCalendarOwnershipResult,
   getGoogleCalendarPassiveAccessTokenWithRefresh,
+  getGoogleCalendarPassiveSyncEligibility,
   isGoogleCalendarAccount,
 } from '../services/googleCalendarAuthManager';
 import { LIMITS } from '../config/constants';
 
 export type SyncState = 'idle' | 'syncing' | 'error';
+export type GoogleSyncTriggerSource = 'auto' | 'manual';
+export type GoogleSyncDiagnosticOutcome =
+  | 'success'
+  | 'blocked'
+  | 'needs_reconnect'
+  | 'revoked'
+  | 'error'
+  | 'ownership_mismatch';
+
+export interface GoogleSyncAccountDiagnostic {
+  accountId: string;
+  email: string;
+  checkedAt: string;
+  triggerSource: GoogleSyncTriggerSource;
+  outcome: GoogleSyncDiagnosticOutcome;
+  message: string;
+  primaryCalendarEmail?: string;
+  preservedSourceCount?: number;
+  preservedEventCount?: number;
+  skippedDestructiveRemovals?: boolean;
+}
+
+export interface GoogleSyncDiagnostics {
+  lastTriggerSource?: GoogleSyncTriggerSource;
+  lastTriggerAt?: string;
+  accounts: Record<string, GoogleSyncAccountDiagnostic>;
+}
 
 export interface GoogleSyncResult {
   syncState: SyncState;
@@ -26,21 +64,137 @@ export interface GoogleSyncResult {
   syncError: string | null;
   triggerSync: (manual?: boolean) => Promise<void>;
   accountSyncStates: Record<string, { state: SyncState; lastSync: string | null; error: string | null }>;
+  diagnostics: GoogleSyncDiagnostics;
 }
 
-/** Hook that orchestrates syncing all connected Google Calendar accounts without interactive auth. */
-export function useGoogleSync(): GoogleSyncResult {
-  const app = useApp();
+interface GoogleSyncApp {
+  calendarAccounts: CalendarAccount[];
+  calendarSources: CalendarSource[];
+  calendarEvents: CalendarEvent[];
+  updateCalendarAccount: (id: string, updates: Partial<CalendarAccount>) => void;
+  bulkUpsertCalendarSources: (sources: Array<
+    Partial<CalendarSource> & {
+      accountId: string;
+      name: string;
+      color: string;
+      visible: boolean;
+    }
+  >) => void;
+  bulkUpsertCalendarEvents: (events: Array<
+    Partial<CalendarEvent> & {
+      sourceId: string;
+      title: string;
+      description: string;
+      start: string;
+      end: string;
+      allDay: boolean;
+    }
+  >) => void;
+  removeCalendarSource: (id: string) => void;
+  updateCalendarEvent: (id: string, updates: { sourceId: string }) => void;
+  removeCalendarEvent: (id: string) => void;
+}
+
+const GoogleSyncContext = createContext<GoogleSyncResult | null>(null);
+
+function createBlockedDiagnostic(
+  account: CalendarAccount,
+  triggerSource: GoogleSyncTriggerSource,
+  checkedAt: string,
+  message: string,
+): GoogleSyncAccountDiagnostic {
+  return {
+    accountId: account.id,
+    email: account.email,
+    checkedAt,
+    triggerSource,
+    outcome: 'blocked',
+    message,
+  };
+}
+
+function createOwnershipMismatchDiagnostic(
+  account: CalendarAccount,
+  triggerSource: GoogleSyncTriggerSource,
+  checkedAt: string,
+  ownership: GoogleCalendarOwnershipResult,
+): GoogleSyncAccountDiagnostic {
+  return {
+    accountId: account.id,
+    email: account.email,
+    checkedAt,
+    triggerSource,
+    outcome: 'ownership_mismatch',
+    message: ownership.message || 'Google returned a different account.',
+    primaryCalendarEmail: ownership.primaryEmail,
+    skippedDestructiveRemovals: true,
+  };
+}
+
+function createSuccessMessage(preservedSourceCount: number, preservedEventCount: number): string {
+  if (preservedSourceCount === 0 && preservedEventCount === 0) {
+    return 'Passive sync updated cached Google data without destructive deletes.';
+  }
+
+  const parts: string[] = [];
+  if (preservedSourceCount > 0) {
+    parts.push(`kept ${preservedSourceCount} cached calendar${preservedSourceCount === 1 ? '' : 's'}`);
+  }
+  if (preservedEventCount > 0) {
+    parts.push(`kept ${preservedEventCount} cached event${preservedEventCount === 1 ? '' : 's'}`);
+  }
+
+  return `Passive sync updated cached Google data and ${parts.join(' and ')} missing from this fetch window.`;
+}
+
+function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
   const [syncState, setSyncState] = useState<SyncState>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
   const [accountSyncStates, setAccountSyncStates] = useState<Record<string, { state: SyncState; lastSync: string | null; error: string | null }>>({});
+  const [diagnostics, setDiagnostics] = useState<GoogleSyncDiagnostics>({ accounts: {} });
   const syncingRef = useRef(false);
+  const appRef = useRef(app);
 
-  const googleAccounts = app.calendarAccounts.filter(isGoogleCalendarAccount);
-  const clientId = GOOGLE_OAUTH_CLIENT_ID;
+  useEffect(() => {
+    appRef.current = app;
+  }, [app]);
 
-  const syncAccount = useCallback(async (accountId: string): Promise<boolean> => {
-    const account = app.calendarAccounts.find(candidate => candidate.id === accountId);
+  const googleAccounts = useMemo(
+    () => app.calendarAccounts.filter(isGoogleCalendarAccount),
+    [app.calendarAccounts],
+  );
+  const googleAccountsSignature = useMemo(
+    () => googleAccounts
+      .map(account => [
+        account.id,
+        account.email,
+        account.authProvider ?? '',
+        account.authStatus ?? '',
+        account.lastSyncTime ?? '',
+        account.lastAuthCheckAt ?? '',
+      ].join(':'))
+      .join('|'),
+    [googleAccounts],
+  );
+  const shouldAutoSync = useMemo(
+    () => googleAccounts.some(account => getGoogleCalendarPassiveSyncEligibility(account).eligible),
+    [googleAccounts],
+  );
+
+  const recordDiagnostic = useCallback((entry: GoogleSyncAccountDiagnostic) => {
+    setDiagnostics(prev => ({
+      lastTriggerSource: entry.triggerSource,
+      lastTriggerAt: entry.checkedAt,
+      accounts: {
+        ...prev.accounts,
+        [entry.accountId]: entry,
+      },
+    }));
+  }, []);
+
+  const syncAccount = useCallback(async (accountId: string, triggerSource: GoogleSyncTriggerSource): Promise<boolean> => {
+    const currentApp = appRef.current;
+    const account = currentApp.calendarAccounts.find(candidate => candidate.id === accountId);
     if (!account) return false;
 
     setAccountSyncStates(prev => ({
@@ -53,14 +207,42 @@ export function useGoogleSync(): GoogleSyncResult {
     }));
 
     try {
-      const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, clientId);
+      const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, '');
       const accessToken = token.accessToken;
       const googleCalendars = await fetchCalendarList(accessToken);
+      const ownership = getGoogleCalendarOwnershipResult(account, googleCalendars);
+      const checkedAt = new Date().toISOString();
 
-      const existingSources = app.calendarSources.filter(source => source.accountId === accountId);
-      const existingByGoogleId = new Map(existingSources.filter(source => source.googleCalendarId).map(source => [source.googleCalendarId!, source]));
-      const allGoogleCalendarIds = new Set(
-        app.calendarSources
+      if (!ownership.matches) {
+        const message = ownership.message || GOOGLE_ACCESS_EXPIRED_MESSAGE;
+        currentApp.updateCalendarAccount(accountId, {
+          authProvider: token.authProvider,
+          authStatus: 'needs_reconnect',
+          authEmail: account.email,
+          lastAuthCheckAt: checkedAt,
+          lastAuthError: message,
+          syncError: undefined,
+        });
+        setAccountSyncStates(prev => ({
+          ...prev,
+          [accountId]: {
+            state: 'error',
+            lastSync: prev[accountId]?.lastSync || account.lastSyncTime || null,
+            error: message,
+          },
+        }));
+        recordDiagnostic(createOwnershipMismatchDiagnostic(account, triggerSource, checkedAt, ownership));
+        return false;
+      }
+
+      const existingSources = currentApp.calendarSources.filter(source => source.accountId === accountId);
+      const existingByGoogleId = new Map(
+        existingSources
+          .filter(source => source.googleCalendarId)
+          .map(source => [source.googleCalendarId!, source]),
+      );
+      const foreignGoogleCalendarIds = new Set(
+        currentApp.calendarSources
           .filter(source => source.googleCalendarId && source.accountId !== accountId)
           .map(source => source.googleCalendarId!),
       );
@@ -76,11 +258,14 @@ export function useGoogleSync(): GoogleSyncResult {
       }> = [];
 
       for (const googleCalendar of googleCalendars) {
-        if (allGoogleCalendarIds.has(googleCalendar.id)) continue;
+        if (foreignGoogleCalendarIds.has(googleCalendar.id)) continue;
 
         const existing = existingByGoogleId.get(googleCalendar.id);
         if (existing) {
-          if (existing.name !== googleCalendar.summary || existing.color !== (googleCalendar.backgroundColor || '#4f5bff')) {
+          if (
+            existing.name !== googleCalendar.summary
+            || existing.color !== (googleCalendar.backgroundColor || '#4f5bff')
+          ) {
             sourcesToUpsert.push({
               id: existing.id,
               accountId,
@@ -103,32 +288,39 @@ export function useGoogleSync(): GoogleSyncResult {
         }
       }
 
-      const googleCalendarIds = new Set(googleCalendars.map(calendar => calendar.id));
-      for (const source of existingSources) {
-        if (source.googleCalendarId && (!googleCalendarIds.has(source.googleCalendarId) || allGoogleCalendarIds.has(source.googleCalendarId))) {
-          app.removeCalendarSource(source.id);
-        }
+      if (sourcesToUpsert.length > 0) {
+        currentApp.bulkUpsertCalendarSources(sourcesToUpsert);
       }
 
-      if (sourcesToUpsert.length > 0) {
-        app.bulkUpsertCalendarSources(sourcesToUpsert);
-      }
+      const googleCalendarIds = new Set(googleCalendars.map(calendar => calendar.id));
+      const preservedSourceCount = existingSources.filter(source => (
+        Boolean(source.googleCalendarId)
+        && (!googleCalendarIds.has(source.googleCalendarId!) || foreignGoogleCalendarIds.has(source.googleCalendarId!))
+      )).length;
 
       const timeMin = new Date(Date.now() - LIMITS.CALENDAR_PAST_DAYS * 86400000).toISOString();
       const timeMax = new Date(Date.now() + LIMITS.CALENDAR_FUTURE_DAYS * 86400000).toISOString();
-      const updatedSources = app.calendarSources.filter(source => source.accountId === accountId && source.googleCalendarId);
-      const globalEventIds = new Set(app.calendarEvents.filter(event => event.googleEventId).map(event => event.googleEventId!));
+      const syncableSources = existingSources.filter(source => source.googleCalendarId && !foreignGoogleCalendarIds.has(source.googleCalendarId));
+      const globalEventIds = new Set(
+        currentApp.calendarEvents
+          .filter(event => event.googleEventId)
+          .map(event => event.googleEventId!),
+      );
 
-      for (const source of updatedSources) {
+      let preservedEventCount = 0;
+
+      for (const source of syncableSources) {
         if (!source.googleCalendarId) continue;
 
         try {
           const googleEvents = await fetchEvents(accessToken, source.googleCalendarId, timeMin, timeMax);
           const mappedEvents = googleEvents.map(event => googleEventToLocal(event, source.id, source.googleCalendarId!));
 
-          const existingEvents = app.calendarEvents.filter(event => event.sourceId === source.id);
+          const existingEvents = currentApp.calendarEvents.filter(event => event.sourceId === source.id);
           const existingByGoogleEventId = new Map(
-            existingEvents.filter(event => event.googleEventId).map(event => [event.googleEventId!, event]),
+            existingEvents
+              .filter(event => event.googleEventId)
+              .map(event => [event.googleEventId!, event]),
           );
 
           const eventsToUpsert: Array<typeof mappedEvents[number] & { id?: string }> = [];
@@ -143,6 +335,7 @@ export function useGoogleSync(): GoogleSyncResult {
                 || existing.start !== mappedEvent.start
                 || existing.end !== mappedEvent.end
                 || existing.description !== mappedEvent.description
+                || existing.location !== mappedEvent.location
               ) {
                 eventsToUpsert.push({ ...mappedEvent, id: existing.id });
               }
@@ -152,19 +345,23 @@ export function useGoogleSync(): GoogleSyncResult {
             }
           }
 
-          const eventsToRemove = existingEvents
-            .filter(event => event.googleEventId && !seenGoogleEventIds.has(event.googleEventId))
-            .map(event => event.id);
+          preservedEventCount += existingEvents.filter(event => (
+            Boolean(event.googleEventId) && !seenGoogleEventIds.has(event.googleEventId!)
+          )).length;
 
-          if (eventsToRemove.length > 0) app.bulkRemoveCalendarEvents(eventsToRemove);
-          if (eventsToUpsert.length > 0) app.bulkUpsertCalendarEvents(eventsToUpsert);
+          if (eventsToUpsert.length > 0) {
+            currentApp.bulkUpsertCalendarEvents(eventsToUpsert);
+          }
         } catch (error) {
+          if (error instanceof GoogleApiError && (error.isAuthError || error.isForbidden)) {
+            throw error;
+          }
           console.warn(`Failed to sync calendar ${source.name}:`, error);
         }
       }
 
       const now = new Date().toISOString();
-      app.updateCalendarAccount(accountId, {
+      currentApp.updateCalendarAccount(accountId, {
         authProvider: token.authProvider,
         authStatus: 'connected',
         authEmail: account.email,
@@ -178,16 +375,30 @@ export function useGoogleSync(): GoogleSyncResult {
         ...prev,
         [accountId]: { state: 'idle', lastSync: now, error: null },
       }));
+      recordDiagnostic({
+        accountId,
+        email: account.email,
+        checkedAt: now,
+        triggerSource,
+        outcome: 'success',
+        message: createSuccessMessage(preservedSourceCount, preservedEventCount),
+        primaryCalendarEmail: ownership.primaryEmail,
+        preservedSourceCount,
+        preservedEventCount,
+        skippedDestructiveRemovals: preservedSourceCount > 0 || preservedEventCount > 0,
+      });
       return true;
     } catch (error) {
       const now = new Date().toISOString();
       let message = GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE;
       let authStatus = account.authStatus ?? 'error';
+      let outcome: GoogleSyncDiagnosticOutcome = 'error';
 
       if (error instanceof GoogleCalendarReconnectRequiredError) {
         message = error.message;
         authStatus = error.authStatus;
-        app.updateCalendarAccount(accountId, {
+        outcome = 'needs_reconnect';
+        currentApp.updateCalendarAccount(accountId, {
           authProvider: error.authProvider,
           authStatus,
           authEmail: account.email,
@@ -198,7 +409,8 @@ export function useGoogleSync(): GoogleSyncResult {
       } else if (error instanceof GoogleApiError && error.isForbidden) {
         message = GOOGLE_ACCESS_REVOKED_MESSAGE;
         authStatus = 'revoked';
-        app.updateCalendarAccount(accountId, {
+        outcome = 'revoked';
+        currentApp.updateCalendarAccount(accountId, {
           authStatus,
           authEmail: account.email,
           lastAuthCheckAt: now,
@@ -208,7 +420,8 @@ export function useGoogleSync(): GoogleSyncResult {
       } else if (error instanceof GoogleApiError && error.isAuthError) {
         message = GOOGLE_ACCESS_EXPIRED_MESSAGE;
         authStatus = 'needs_reconnect';
-        app.updateCalendarAccount(accountId, {
+        outcome = 'needs_reconnect';
+        currentApp.updateCalendarAccount(accountId, {
           authStatus,
           authEmail: account.email,
           lastAuthCheckAt: now,
@@ -217,7 +430,7 @@ export function useGoogleSync(): GoogleSyncResult {
         });
       } else {
         authStatus = 'error';
-        app.updateCalendarAccount(accountId, {
+        currentApp.updateCalendarAccount(accountId, {
           authStatus,
           authEmail: account.email,
           lastAuthCheckAt: now,
@@ -233,27 +446,53 @@ export function useGoogleSync(): GoogleSyncResult {
           error: message,
         },
       }));
+      recordDiagnostic({
+        accountId,
+        email: account.email,
+        checkedAt: now,
+        triggerSource,
+        outcome,
+        message,
+      });
 
       return false;
     }
-  }, [app, clientId]);
+  }, [recordDiagnostic]);
 
   const triggerSync = useCallback(async (manual = false) => {
+    const googleAccounts = appRef.current.calendarAccounts.filter(isGoogleCalendarAccount);
     if (syncingRef.current || googleAccounts.length === 0) return;
 
     syncingRef.current = true;
     setSyncState('syncing');
     setSyncError(null);
 
-    cleanupDuplicateSources(app);
-    cleanupDuplicateEvents(app);
+    const triggerSource: GoogleSyncTriggerSource = manual ? 'manual' : 'auto';
+    const triggeredAt = new Date().toISOString();
 
-    const syncableAccounts = googleAccounts.filter(account => getGoogleCalendarPassiveSyncEligibility(account, { manual }).eligible);
+    setDiagnostics(prev => ({
+      ...prev,
+      lastTriggerSource: triggerSource,
+      lastTriggerAt: triggeredAt,
+    }));
+
+    const syncableAccounts = googleAccounts.filter(account => {
+      const eligibility = getGoogleCalendarPassiveSyncEligibility(account, { manual });
+      if (!eligibility.eligible) {
+        recordDiagnostic(createBlockedDiagnostic(
+          account,
+          triggerSource,
+          triggeredAt,
+          eligibility.blockedReason || 'Passive sync is blocked for this account.',
+        ));
+      }
+      return eligibility.eligible;
+    });
     const blockedAccounts = googleAccounts.length - syncableAccounts.length;
 
     let hasError = blockedAccounts > 0;
     for (const account of syncableAccounts) {
-      const synced = await syncAccount(account.id);
+      const synced = await syncAccount(account.id, triggerSource);
       if (!synced) {
         hasError = true;
       }
@@ -262,19 +501,16 @@ export function useGoogleSync(): GoogleSyncResult {
     syncingRef.current = false;
     setSyncState(hasError ? 'error' : 'idle');
     setSyncError(hasError ? 'Some Google Calendar accounts need attention.' : null);
-  }, [app, googleAccounts, syncAccount]);
+  }, [recordDiagnostic, syncAccount]);
 
   useEffect(() => {
-    if (googleAccounts.length === 0) return;
-
-    const shouldAutoSync = googleAccounts.some(account => getGoogleCalendarPassiveSyncEligibility(account).eligible);
     if (shouldAutoSync) {
       const timer = window.setTimeout(() => {
         void triggerSync(false);
       }, 0);
       return () => window.clearTimeout(timer);
     }
-  }, [googleAccounts, triggerSync]);
+  }, [googleAccountsSignature, shouldAutoSync, triggerSync]);
 
   const lastSyncTime = googleAccounts.reduce<string | null>((latest, account) => {
     if (!account.lastSyncTime) return latest;
@@ -288,7 +524,22 @@ export function useGoogleSync(): GoogleSyncResult {
     syncError,
     triggerSync,
     accountSyncStates,
+    diagnostics,
   };
+}
+
+export function GoogleSyncProvider({ app, children }: { app: GoogleSyncApp; children: ReactNode }) {
+  const value = useGoogleSyncController(app);
+  return createElement(GoogleSyncContext.Provider, { value }, children);
+}
+
+/** Hook that exposes the long-lived Google Calendar sync controller. */
+export function useGoogleSync(): GoogleSyncResult {
+  const context = useContext(GoogleSyncContext);
+  if (!context) {
+    throw new Error('useGoogleSync must be used within GoogleSyncProvider');
+  }
+  return context;
 }
 
 /**

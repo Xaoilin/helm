@@ -8,7 +8,6 @@ import {
   localEventToGooglePayload,
 } from '../services/googleCalendarApi';
 import type { CalendarAccount, CalendarEvent } from '../types/domain';
-import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
 import {
   GoogleCalendarReconnectRequiredError,
   getGoogleCalendarPassiveAccessTokenWithRefresh,
@@ -214,12 +213,11 @@ export default function CalendarSurface() {
     const isGoogle = isGoogleSource(evtSourceId);
     const googleCalId = getGoogleCalendarId(evtSourceId);
     const account = getAccountForSource(evtSourceId);
-    const cId = GOOGLE_OAUTH_CLIENT_ID;
 
     if (isGoogle && googleCalId && account) {
       setSavingToGoogle(true);
       try {
-        const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, cId);
+        const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, '');
         const accessToken = token.accessToken;
         const payload = localEventToGooglePayload(eventData);
 
@@ -274,11 +272,10 @@ export default function CalendarSurface() {
     const isGoogle = isGoogleSource(editingEvent.sourceId);
     const googleCalId = getGoogleCalendarId(editingEvent.sourceId);
     const account = getAccountForSource(editingEvent.sourceId);
-    const cId = GOOGLE_OAUTH_CLIENT_ID;
 
     if (isGoogle && googleCalId && editingEvent.googleEventId && account) {
       try {
-        const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, cId);
+        const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, '');
         const accessToken = token.accessToken;
         await googleDeleteEvent(accessToken, googleCalId, editingEvent.googleEventId);
         app.updateCalendarAccount(account.id, {
@@ -377,7 +374,7 @@ export default function CalendarSurface() {
         </div>
         <div className="actions-row">
           {hasGoogleAccounts && (
-            <button className="btn btn-secondary btn-sm" onClick={() => triggerSync(true)} disabled={syncState === 'syncing'} title="Sync all Google accounts">
+            <button className="btn btn-secondary btn-sm" onClick={() => triggerSync(true)} disabled={syncState === 'syncing'} title="Sync cached Google data without opening Google sign-in">
               {syncState === 'syncing' ? <><span className="spinner" /> Syncing</> : '\u{21BB} Sync'}
             </button>
           )}

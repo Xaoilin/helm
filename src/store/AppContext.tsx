@@ -30,6 +30,7 @@ import { GamificationProvider, useGamificationContext } from './contexts/Gamific
 import { SettingsProvider, useSettingsContext } from './contexts/SettingsContext';
 import { AssistantProvider, useAssistantContext } from './contexts/AssistantContext';
 import { ClockProvider, useClockContext } from './contexts/ClockContext';
+import { GoogleSyncProvider } from '../hooks/useGoogleSync';
 
 // ── Context API (backward-compatible interface) ──
 interface AppContextAPI {
@@ -456,7 +457,25 @@ function ShellProvider({ children }: { children: ReactNode }) {
     return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#8b8fa3' }}>Loading HELM...</div>;
   }
 
-  return <AppContext.Provider value={api}>{children}</AppContext.Provider>;
+  const googleSyncApp = {
+    calendarAccounts: calendar.calendarAccounts,
+    calendarSources: calendar.calendarSources,
+    calendarEvents: calendar.calendarEvents,
+    updateCalendarAccount: calendar.updateCalendarAccount,
+    bulkUpsertCalendarSources: calendar.bulkUpsertCalendarSources,
+    bulkUpsertCalendarEvents: calendar.bulkUpsertCalendarEvents,
+    removeCalendarSource: calendar.removeCalendarSource,
+    updateCalendarEvent: calendar.updateCalendarEvent,
+    removeCalendarEvent: calendar.removeCalendarEvent,
+  };
+
+  return (
+    <AppContext.Provider value={api}>
+      <GoogleSyncProvider app={googleSyncApp}>
+        {children}
+      </GoogleSyncProvider>
+    </AppContext.Provider>
+  );
 }
 
 /**

@@ -1,5 +1,6 @@
 import { startTransition, useMemo, useState } from 'react';
 import { useApp } from '../../store/AppContext';
+import { useGoogleSync } from '../../hooks/useGoogleSync';
 import { GOOGLE_OAUTH_CLIENT_ID } from '../../config';
 import {
   getGoogleCalendarDebugSnapshot,
@@ -37,6 +38,7 @@ function getProbeTone(result?: GoogleCalendarPassiveProbeResult): string {
       return 'disconnected';
     case 'revoked':
     case 'needs_reconnect':
+    case 'ownership_mismatch':
       return 'needs-reconnect';
     case 'error':
       return 'error';
@@ -56,6 +58,7 @@ function DebugField({ label, value }: { label: string; value: string }) {
 
 export default function GoogleCalendarDebug() {
   const app = useApp();
+  const googleSync = useGoogleSync();
   const googleAccounts = useMemo(
     () => app.calendarAccounts.filter(isGoogleCalendarAccount),
     [app.calendarAccounts],
@@ -93,6 +96,9 @@ export default function GoogleCalendarDebug() {
             <div style={{ fontSize: 12, color: '#8b90a8', marginTop: 6 }}>
               Auth-state visibility for Calendar accounts. Tokens stay redacted; this panel only shows presence, expiry, scope, and passive auth outcomes.
             </div>
+            <div style={{ fontSize: 12, color: '#8b90a8', marginTop: 6 }}>
+              Last sync trigger: {googleSync.diagnostics.lastTriggerSource ? `${googleSync.diagnostics.lastTriggerSource} at ${formatTimestamp(googleSync.diagnostics.lastTriggerAt)}` : 'Not recorded'}
+            </div>
           </div>
           <button
             className="btn btn-secondary btn-sm"
@@ -125,6 +131,7 @@ export default function GoogleCalendarDebug() {
       ) : (
         snapshot.accounts.map(account => {
           const probeResult = probeResults[account.accountId];
+          const syncDiagnostic = googleSync.diagnostics.accounts[account.accountId];
           return (
             <div key={account.accountId} className="card" style={{ padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -164,6 +171,14 @@ export default function GoogleCalendarDebug() {
                 <DebugField label="Stored token expiry" value={account.storedToken.expiresAt ? formatTimestamp(account.storedToken.expiresAt) : 'Unknown'} />
                 <DebugField label="Passive sync" value={account.passiveSyncEligible ? 'Eligible' : 'Blocked'} />
                 <DebugField label="Blocked reason" value={account.passiveSyncBlockedReason || 'None'} />
+                <DebugField label="Last sync trigger" value={syncDiagnostic ? `${syncDiagnostic.triggerSource} at ${formatTimestamp(syncDiagnostic.checkedAt)}` : 'Not recorded'} />
+                <DebugField label="Last sync outcome" value={syncDiagnostic ? syncDiagnostic.outcome.replace('_', ' ') : 'Not recorded'} />
+                <DebugField label="Last sync note" value={syncDiagnostic?.message || 'None'} />
+                <DebugField label="Ownership email" value={syncDiagnostic?.primaryCalendarEmail || 'Not recorded'} />
+                <DebugField
+                  label="Skipped deletes"
+                  value={syncDiagnostic?.skippedDestructiveRemovals ? 'Yes' : 'No'}
+                />
                 <DebugField label="Last auth error" value={formatOptional(account.lastAuthError)} />
                 <DebugField label="Sync error" value={formatOptional(account.syncError)} />
                 {probeResult && (

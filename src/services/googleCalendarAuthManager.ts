@@ -6,10 +6,8 @@ import type {
 import {
   clearGoogleTokens,
   initiateOAuthFlow,
-  isTokenValid,
   loadGisScript,
   loadGoogleTokens,
-  refreshAccessToken,
   saveGoogleTokens,
   type GoogleTokens,
 } from './googleAuth';
@@ -30,6 +28,7 @@ export const GOOGLE_RECONNECT_REQUIRED_MESSAGE = 'Reconnect required';
 export const GOOGLE_ACCESS_EXPIRED_MESSAGE = 'Google access expired. Reconnect this account.';
 export const GOOGLE_PROFILE_RECONNECT_MESSAGE = 'Reconnect your HELM Google sign-in to restore Calendar access.';
 export const GOOGLE_ACCESS_REVOKED_MESSAGE = 'Google access was revoked. Reconnect this account.';
+export const GOOGLE_ACCOUNT_MISMATCH_MESSAGE = 'Google returned a different account. Reconnect this account explicitly.';
 export const GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE = 'Google Calendar temporarily unavailable.';
 
 export interface GoogleCalendarConnectionResult {
@@ -49,6 +48,12 @@ interface PassiveTokenResult {
 export interface GoogleCalendarPassiveSyncEligibility {
   eligible: boolean;
   blockedReason?: string;
+}
+
+export interface GoogleCalendarOwnershipResult {
+  matches: boolean;
+  primaryEmail?: string;
+  message?: string;
 }
 
 export class GoogleCalendarReconnectRequiredError extends Error {
@@ -73,6 +78,17 @@ function toAuthExpiry(tokens: GoogleTokens | null): string | undefined {
 
 function hasStoredGoogleTokens(tokens: GoogleTokens | null): boolean {
   return Boolean(tokens?.accessToken);
+}
+
+export function formatGoogleCalendarOwnershipMismatchMessage(
+  expectedEmail: string,
+  actualEmail?: string,
+): string {
+  if (actualEmail) {
+    return `Google returned ${actualEmail} while syncing ${expectedEmail}. Reconnect this account explicitly.`;
+  }
+
+  return `Google could not verify ${expectedEmail} from the current Google session. Reconnect this account explicitly.`;
 }
 
 export function isGoogleCalendarAccount(account: CalendarAccount): boolean {
@@ -116,10 +132,18 @@ export function getGoogleCalendarPassiveSyncEligibility(
   }
 
   const resolvedProvider = getResolvedGoogleAuthProvider(account);
+  const storedTokenPresent = hasStoredGoogleTokens(loadGoogleTokens(account.id));
   if (resolvedProvider === 'profile-google' && isSupabaseReady() && !isAuthSessionBootstrapped()) {
     return {
       eligible: false,
       blockedReason: 'Waiting for HELM Google sign-in status to finish loading.',
+    };
+  }
+
+  if (!manual && resolvedProvider !== 'profile-google' && !storedTokenPresent) {
+    return {
+      eligible: false,
+      blockedReason: 'Auto sync is paused until this account has cached Google access again.',
     };
   }
 
@@ -153,6 +177,29 @@ export function getGoogleCalendarPassiveSyncEligibility(
   };
 }
 
+export function getGoogleCalendarOwnershipResult(
+  account: CalendarAccount,
+  calendars: readonly GoogleCalendarListEntry[],
+): GoogleCalendarOwnershipResult {
+  const expectedEmail = normalizeEmail(account.email);
+  const primaryCalendar = calendars.find(calendar => calendar.primary)
+    ?? calendars.find(calendar => normalizeEmail(calendar.id) === expectedEmail);
+  const primaryEmail = normalizeEmail(primaryCalendar?.id);
+
+  if (primaryEmail && primaryEmail === expectedEmail) {
+    return {
+      matches: true,
+      primaryEmail,
+    };
+  }
+
+  return {
+    matches: false,
+    primaryEmail: primaryEmail || undefined,
+    message: formatGoogleCalendarOwnershipMismatchMessage(account.email, primaryEmail || undefined),
+  };
+}
+
 export function getGoogleCalendarAuthPatch(
   account: CalendarAccount,
   snapshot: AuthSessionSnapshot | null = getAuthSessionSnapshot(),
@@ -164,7 +211,6 @@ export function getGoogleCalendarAuthPatch(
   const authProvider = getResolvedGoogleAuthProvider(account, snapshot);
   const storedTokens = loadGoogleTokens(account.id);
   const storedTokenPresent = hasStoredGoogleTokens(storedTokens);
-  const storedTokenValid = isTokenValid(storedTokens);
   const profileToken = snapshot?.providerToken ?? null;
   const profileExpiry = snapshot?.expiresAt ? new Date(snapshot.expiresAt * 1000).toISOString() : undefined;
   const authBootstrapped = !isSupabaseReady() || isAuthSessionBootstrapped();
@@ -189,26 +235,19 @@ export function getGoogleCalendarAuthPatch(
       lastAuthError = GOOGLE_PROFILE_RECONNECT_MESSAGE;
       syncError = undefined;
     }
-  } else if (storedTokenValid) {
-    authStatus = 'connected';
-    authExpiresAt = toAuthExpiry(storedTokens);
-    lastAuthError = undefined;
-    syncError = undefined;
   } else {
-    authStatus = account.authStatus === 'revoked' ? 'revoked' : (account.authStatus ?? 'connected');
+    authStatus = account.authStatus === 'revoked'
+      ? 'revoked'
+      : (account.authStatus ?? 'connected');
+    authExpiresAt = toAuthExpiry(storedTokens) ?? account.authExpiresAt;
 
-    // Legacy reconnect states were derived from expired cached GIS tokens.
-    // If transport credentials still exist, allow passive revalidation instead
-    // of keeping the account latched in reconnect-required.
-    if (authStatus === 'needs_reconnect' && storedTokenPresent) {
-      authStatus = 'connected';
-      lastAuthError = undefined;
-      syncError = undefined;
-    } else if (authStatus === 'connected') {
+    if (authStatus === 'connected') {
       lastAuthError = undefined;
       syncError = undefined;
     } else if (authStatus === 'needs_reconnect' && !lastAuthError) {
-      lastAuthError = GOOGLE_ACCESS_EXPIRED_MESSAGE;
+      lastAuthError = storedTokenPresent
+        ? GOOGLE_ACCESS_EXPIRED_MESSAGE
+        : GOOGLE_RECONNECT_REQUIRED_MESSAGE;
       syncError = undefined;
     } else if (authStatus === 'revoked' && !lastAuthError) {
       lastAuthError = GOOGLE_ACCESS_REVOKED_MESSAGE;
@@ -246,7 +285,7 @@ export function getGoogleCalendarPassiveAccessToken(
   }
 
   const storedTokens = loadGoogleTokens(account.id);
-  if (storedTokens && isTokenValid(storedTokens)) {
+  if (storedTokens?.accessToken) {
     return {
       accessToken: storedTokens.accessToken,
       authProvider,
@@ -261,36 +300,8 @@ export async function getGoogleCalendarPassiveAccessTokenWithRefresh(
   account: CalendarAccount,
   clientId: string,
 ): Promise<PassiveTokenResult> {
-  try {
-    return getGoogleCalendarPassiveAccessToken(account);
-  } catch (error) {
-    if (!(error instanceof GoogleCalendarReconnectRequiredError)) {
-      throw error;
-    }
-
-    const authProvider = getResolvedGoogleAuthProvider(account);
-    if (authProvider === 'profile-google') {
-      throw error;
-    }
-
-    const existingTokens = loadGoogleTokens(account.id);
-    if (!existingTokens || !clientId) {
-      throw error;
-    }
-
-    try {
-      await loadGisScript();
-      const refreshed = await refreshAccessToken(clientId);
-      saveGoogleTokens(account.id, refreshed);
-      return {
-        accessToken: refreshed.accessToken,
-        authProvider,
-        authExpiresAt: toAuthExpiry(refreshed),
-      };
-    } catch {
-      throw new GoogleCalendarReconnectRequiredError(GOOGLE_ACCESS_EXPIRED_MESSAGE, authProvider);
-    }
-  }
+  void clientId;
+  return getGoogleCalendarPassiveAccessToken(account);
 }
 
 export async function connectGoogleCalendarOAuthAccount(clientId: string): Promise<GoogleCalendarConnectionResult & { tokens: GoogleTokens }> {

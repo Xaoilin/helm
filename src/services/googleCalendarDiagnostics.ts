@@ -8,6 +8,7 @@ import {
   GOOGLE_ACCESS_REVOKED_MESSAGE,
   GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
   GoogleCalendarReconnectRequiredError,
+  getGoogleCalendarOwnershipResult,
   getGoogleCalendarPassiveAccessTokenWithRefresh,
   getGoogleCalendarPassiveSyncEligibility,
   getResolvedGoogleAuthProvider,
@@ -28,7 +29,13 @@ import {
 } from '../store/supabase';
 
 export type GoogleCalendarStoredTokenState = 'missing' | 'valid' | 'expired';
-export type GoogleCalendarPassiveProbeStatus = 'success' | 'blocked' | 'needs_reconnect' | 'revoked' | 'error';
+export type GoogleCalendarPassiveProbeStatus =
+  | 'success'
+  | 'blocked'
+  | 'needs_reconnect'
+  | 'revoked'
+  | 'error'
+  | 'ownership_mismatch';
 
 export interface GoogleCalendarTokenDebugSnapshot {
   present: boolean;
@@ -139,6 +146,7 @@ export async function runGoogleCalendarPassiveProbe(
   account: CalendarAccount,
   clientId: string,
 ): Promise<GoogleCalendarPassiveProbeResult> {
+  void clientId;
   const checkedAt = new Date().toISOString();
   const resolvedAuthProvider = getResolvedGoogleAuthProvider(account);
   const eligibility = getGoogleCalendarPassiveSyncEligibility(account, { manual: true });
@@ -155,8 +163,21 @@ export async function runGoogleCalendarPassiveProbe(
   }
 
   try {
-    const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, clientId);
+    const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, '');
     const calendars = await fetchCalendarList(token.accessToken);
+    const ownership = getGoogleCalendarOwnershipResult(account, calendars);
+
+    if (!ownership.matches) {
+      return {
+        accountId: account.id,
+        email: account.email,
+        checkedAt,
+        resolvedAuthProvider: token.authProvider,
+        status: 'ownership_mismatch',
+        message: ownership.message || 'Google returned a different account.',
+        calendarCount: calendars.length,
+      };
+    }
 
     return {
       accountId: account.id,

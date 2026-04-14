@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import { AppProvider } from '../store/AppContext';
 import { useApp } from '../store/AppContext';
 import App from '../App';
@@ -14,6 +14,8 @@ import CredentialsSurface from '../surfaces/CredentialsSurface';
 import IntegrationsSurface from '../surfaces/IntegrationsSurface';
 import WorkspacesSurface from '../surfaces/WorkspacesSurface';
 import SettingsSurface from '../surfaces/SettingsSurface';
+import * as googleCalendarApi from '../services/googleCalendarApi';
+import * as googleCalendarAuthManager from '../services/googleCalendarAuthManager';
 import { defaultIntegrations } from '../store/contexts/SettingsContext';
 import { APP_RELEASE_VERSION } from '../config/release';
 import type { AssistantNavigationTarget } from '../services/assistantNavigation';
@@ -21,6 +23,93 @@ import type { AssistantNavigationTarget } from '../services/assistantNavigation'
 function renderWithProvider(ui: React.ReactElement) {
   return render(<AppProvider>{ui}</AppProvider>);
 }
+
+function installGoogleCalendarFetchMock() {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('api.aladhan.com/v1/timingsByCity')) {
+      return new Response(JSON.stringify({
+        data: {
+          timings: {
+            Fajr: '05:00',
+            Dhuhr: '13:00',
+            Asr: '16:30',
+            Maghrib: '20:15',
+            Isha: '21:45',
+          },
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (url.includes('localhost:11434/api/tags')) {
+      return new Response(JSON.stringify({ models: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (url.includes('/users/me/calendarList')) {
+      return new Response(JSON.stringify({
+        items: [
+          {
+            id: 'alisa@example.com',
+            summary: 'Primary',
+            accessRole: 'owner',
+            primary: true,
+          },
+        ],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (url.includes('/events?')) {
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    throw new Error(`Unexpected fetch in surfaces test: ${url}`);
+  });
+
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+function installGoogleAuthPopupSpy() {
+  const requestAccessTokenMock = vi.fn();
+  const initTokenClientMock = vi.fn(() => ({
+    requestAccessToken: requestAccessTokenMock,
+  }));
+
+  Object.defineProperty(window, 'google', {
+    value: {
+      accounts: {
+        oauth2: {
+          initTokenClient: initTokenClientMock,
+          revoke: vi.fn(),
+        },
+      },
+    },
+    configurable: true,
+  });
+
+  return {
+    initTokenClientMock,
+    requestAccessTokenMock,
+  };
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  Reflect.deleteProperty(window, 'google');
+});
 
 function TasksAssistantNavigationHarness({ target }: { target: AssistantNavigationTarget }) {
   const app = useApp();
@@ -388,6 +477,158 @@ describe('CalendarSurface', () => {
 
     expect(screen.getByText(/Access checked/i)).toBeInTheDocument();
     expect(screen.getByText(/Token expires/i)).toBeInTheDocument();
+  });
+
+  it('does not reopen Google auth when I switch back to Calendar with stale cached tokens', async () => {
+    const fetchMock = installGoogleCalendarFetchMock();
+    const { initTokenClientMock, requestAccessTokenMock } = installGoogleAuthPopupSpy();
+    const staleIso = new Date(Date.now() - (20 * 60 * 1000)).toISOString();
+
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'acc-google',
+      name: 'Google',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'connected',
+      lastAuthCheckAt: staleIso,
+      lastSyncTime: staleIso,
+    }]));
+    localStorage.setItem('helm:calendarSources', JSON.stringify([{
+      id: 'src-google',
+      accountId: 'acc-google',
+      name: 'Primary',
+      color: '#4f5bff',
+      visible: true,
+      googleCalendarId: 'alisa@example.com',
+    }]));
+    localStorage.setItem('helm:google-tokens:acc-google', JSON.stringify({
+      accessToken: 'expired-stored-token',
+      expiresAt: Date.now() - 60000,
+      scope: 'https://www.googleapis.com/auth/calendar',
+    }));
+
+    await act(async () => { renderWithProvider(<App />); });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    const googleCallsAfterInitialSync = fetchMock.mock.calls.filter(([input]) =>
+      String(input).includes('www.googleapis.com/calendar/v3/')
+    ).length;
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Navigate to Calendar' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Navigate to Settings' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Navigate to Calendar' })); });
+
+    expect(initTokenClientMock).not.toHaveBeenCalled();
+    expect(requestAccessTokenMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.filter(([input]) =>
+      String(input).includes('www.googleapis.com/calendar/v3/')
+    ).length).toBe(googleCallsAfterInitialSync);
+  });
+
+  it('keeps the Sync button non-interactive even when the cached Google token is stale', async () => {
+    const fetchMock = installGoogleCalendarFetchMock();
+    const { initTokenClientMock, requestAccessTokenMock } = installGoogleAuthPopupSpy();
+
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'acc-google',
+      name: 'Google',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'connected',
+      lastAuthCheckAt: new Date().toISOString(),
+      lastSyncTime: new Date().toISOString(),
+    }]));
+    localStorage.setItem('helm:calendarSources', JSON.stringify([{
+      id: 'src-google',
+      accountId: 'acc-google',
+      name: 'Primary',
+      color: '#4f5bff',
+      visible: true,
+      googleCalendarId: 'alisa@example.com',
+    }]));
+    localStorage.setItem('helm:google-tokens:acc-google', JSON.stringify({
+      accessToken: 'expired-stored-token',
+      expiresAt: Date.now() - 60000,
+      scope: 'https://www.googleapis.com/auth/calendar',
+    }));
+
+    await act(async () => { renderWithProvider(<CalendarSurface />); });
+
+    fireEvent.click(screen.getByRole('button', { name: /sync/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    expect(initTokenClientMock).not.toHaveBeenCalled();
+    expect(requestAccessTokenMock).not.toHaveBeenCalled();
+  });
+
+  it('still deletes a Google event locally and remotely when I explicitly confirm delete', async () => {
+    const now = new Date();
+    const start = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+    const end = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
+    const deleteEventSpy = vi.spyOn(googleCalendarApi, 'deleteEvent').mockResolvedValue(undefined);
+    vi.spyOn(googleCalendarAuthManager, 'getGoogleCalendarPassiveAccessTokenWithRefresh').mockResolvedValue({
+      accessToken: 'stored-token',
+      authProvider: 'calendar-oauth',
+      authExpiresAt: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
+    });
+
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'acc-google',
+      name: 'Google',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'connected',
+      lastAuthCheckAt: now.toISOString(),
+      lastSyncTime: now.toISOString(),
+    }]));
+    localStorage.setItem('helm:calendarSources', JSON.stringify([{
+      id: 'src-google',
+      accountId: 'acc-google',
+      name: 'Primary',
+      color: '#4f5bff',
+      visible: true,
+      googleCalendarId: 'alisa@example.com',
+    }]));
+    localStorage.setItem('helm:calendarEvents', JSON.stringify([{
+      id: 'evt-google',
+      sourceId: 'src-google',
+      title: 'Delete me from Google',
+      description: '',
+      start,
+      end,
+      allDay: false,
+      googleEventId: 'google-event-1',
+      googleCalendarId: 'alisa@example.com',
+    }]));
+
+    await act(async () => { renderWithProvider(<CalendarSurface />); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Agenda' })); });
+    await act(async () => { fireEvent.click(screen.getByText('Delete me from Google')); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Delete' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Confirm Delete' })); });
+
+    await waitFor(() => {
+      expect(deleteEventSpy).toHaveBeenCalledWith('stored-token', 'alisa@example.com', 'google-event-1');
+      expect(screen.queryByText('Delete me from Google')).not.toBeInTheDocument();
+    });
   });
 });
 
