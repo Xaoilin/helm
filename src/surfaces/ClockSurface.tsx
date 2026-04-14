@@ -11,6 +11,12 @@ import {
 } from '../services/clock';
 import type { ClockStopwatchState, ClockTimerSound, ClockTimerState } from '../types/domain';
 
+function getStopwatchLapSplitMs(laps: readonly number[], index: number): number {
+  const currentLap = laps[index] ?? 0;
+  const previousLap = laps[index + 1] ?? 0;
+  return Math.max(0, currentLap - previousLap);
+}
+
 export default function ClockSurface() {
   const app = useApp();
   const [now, setNow] = useState(() => Date.now());
@@ -479,6 +485,7 @@ function StopwatchCard({
     () => getStopwatchElapsedMs(stopwatch, now),
     [stopwatch, now],
   );
+  const lapCount = stopwatch.laps.length;
 
   return (
     <section className="card clock-card" aria-labelledby={`stopwatch-heading-${stopwatch.id}`}>
@@ -551,13 +558,21 @@ function StopwatchCard({
       </div>
 
       <div className="clock-laps" aria-live="polite">
-        {stopwatch.laps.length === 0 ? (
+        {lapCount === 0 ? (
           <div className="clock-empty-state">No laps yet.</div>
         ) : (
           stopwatch.laps.map((lap, index) => (
             <div key={`${lap}-${index}`} className="clock-lap-row">
-              <span>Lap {stopwatch.laps.length - index}</span>
-              <strong>{formatClockDuration(lap, { includeCentiseconds: true })}</strong>
+              <div className="clock-lap-copy">
+                <span>Lap {lapCount - index}</span>
+                <span className="clock-lap-split">
+                  Split {formatClockDuration(getStopwatchLapSplitMs(stopwatch.laps, index), { includeCentiseconds: true })}
+                </span>
+              </div>
+              <div className="clock-lap-total">
+                <strong>{formatClockDuration(lap, { includeCentiseconds: true })}</strong>
+                <span>Total</span>
+              </div>
             </div>
           ))
         )}

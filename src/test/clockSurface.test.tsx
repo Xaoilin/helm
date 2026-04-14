@@ -56,6 +56,32 @@ describe('ClockSurface interactions', () => {
     expect(screen.getByLabelText('Elapsed for Stopwatch 1')).toHaveTextContent('00:00.00');
   });
 
+  it('shows split times between recorded stopwatch laps', async () => {
+    await act(async () => {
+      renderClockSurface();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Stopwatch 1' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(2500);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add lap to Stopwatch 1' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(3500);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add lap to Stopwatch 1' }));
+
+    const latestLapRow = screen.getByText('Lap 2').closest('.clock-lap-row');
+    const firstLapRow = screen.getByText('Lap 1').closest('.clock-lap-row');
+
+    expect(latestLapRow).toHaveTextContent('00:06.00');
+    expect(latestLapRow).toHaveTextContent('Split 00:03.50');
+    expect(firstLapRow).toHaveTextContent('00:02.50');
+    expect(firstLapRow).toHaveTextContent('Split 00:02.50');
+  });
+
   it('creates additional timers and stopwatches that persist across remounts', async () => {
     let firstRender!: ReturnType<typeof renderClockSurface>;
 

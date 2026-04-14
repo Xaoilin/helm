@@ -2867,6 +2867,29 @@ textarea.form-input {
   font-size: 12px;
 }
 
+.clock-lap-copy,
+.clock-lap-total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.clock-lap-split,
+.clock-lap-total span {
+  color: #8b8fa3;
+  font-size: 11px;
+}
+
+.clock-lap-total {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.clock-lap-total strong {
+  color: #e8ebf5;
+}
+
 .clock-empty-state {
   justify-content: center;
   color: #6b6f85;
