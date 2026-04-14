@@ -1,8 +1,9 @@
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { AppProvider } from '../store/AppContext';
 import { useGoogleSync } from '../hooks/useGoogleSync';
+import { GoogleApiError } from '../services/googleCalendarApi';
 
 const {
   passiveTokenMock,
@@ -49,6 +50,15 @@ function setGoogleAccounts(rawAccounts: unknown) {
   localStorage.setItem('helm:calendarEvents', JSON.stringify([]));
 }
 
+function readGoogleAccounts() {
+  return JSON.parse(localStorage.getItem('helm:calendarAccounts') || '[]') as Array<{
+    id: string;
+    authStatus?: string;
+    lastAuthError?: string;
+    syncError?: string;
+  }>;
+}
+
 describe('useGoogleSync auth behavior', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -64,7 +74,7 @@ describe('useGoogleSync auth behavior', () => {
     fetchEventsMock.mockResolvedValue([]);
   });
 
-  it('does not passive-sync accounts already marked as needing reconnect', async () => {
+  it('does not auto-sync accounts already marked as needing reconnect', async () => {
     setGoogleAccounts([{
       id: 'acc-needs-reconnect',
       name: 'Personal',
@@ -86,7 +96,7 @@ describe('useGoogleSync auth behavior', () => {
     });
   });
 
-  it('auto-syncs stale connected accounts without interactive auth helpers', async () => {
+  it('auto-syncs stale connected accounts even when the cached calendar token is already expired', async () => {
     const staleIso = new Date(Date.now() - (TIMING.SYNC_THROTTLE + 60000)).toISOString();
     setGoogleAccounts([{
       id: 'acc-connected',
@@ -103,7 +113,7 @@ describe('useGoogleSync auth behavior', () => {
     }]);
     localStorage.setItem('helm:google-tokens:acc-connected', JSON.stringify({
       accessToken: 'stored-token',
-      expiresAt: Date.now() + 3600000,
+      expiresAt: Date.now() - 60000,
       scope: 'calendar',
     }));
 
@@ -112,6 +122,134 @@ describe('useGoogleSync auth behavior', () => {
     await waitFor(() => {
       expect(passiveTokenMock).toHaveBeenCalledTimes(1);
       expect(fetchCalendarListMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('lets a manual sync retry stale reconnect-required accounts and clear the status on success', async () => {
+    setGoogleAccounts([{
+      id: 'acc-retry',
+      name: 'Personal',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'needs_reconnect',
+      lastAuthError: 'Google access expired. Reconnect this account.',
+      lastAuthCheckAt: new Date().toISOString(),
+    }]);
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current).toBeTruthy();
+    });
+
+    await act(async () => {
+      await result.current.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      const [account] = readGoogleAccounts();
+      expect(account.authStatus).toBe('connected');
+      expect(account.lastAuthError).toBeUndefined();
+    });
+  });
+
+  it('marks confirmed 401 responses as reconnect-required', async () => {
+    setGoogleAccounts([{
+      id: 'acc-401',
+      name: 'Personal',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'connected',
+      lastAuthCheckAt: new Date().toISOString(),
+    }]);
+    fetchCalendarListMock.mockRejectedValueOnce(new GoogleApiError(401, 'expired', 'Google API 401: Unauthorized'));
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current).toBeTruthy();
+    });
+
+    await act(async () => {
+      await result.current.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      const [account] = readGoogleAccounts();
+      expect(account.authStatus).toBe('needs_reconnect');
+      expect(account.lastAuthError).toBe('Google access expired. Reconnect this account.');
+    });
+  });
+
+  it('marks confirmed 403 responses as revoked', async () => {
+    setGoogleAccounts([{
+      id: 'acc-403',
+      name: 'Personal',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'connected',
+      lastAuthCheckAt: new Date().toISOString(),
+    }]);
+    fetchCalendarListMock.mockRejectedValueOnce(new GoogleApiError(403, 'revoked', 'Google API 403: Forbidden'));
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current).toBeTruthy();
+    });
+
+    await act(async () => {
+      await result.current.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      const [account] = readGoogleAccounts();
+      expect(account.authStatus).toBe('revoked');
+      expect(account.lastAuthError).toBe('Google access was revoked. Reconnect this account.');
+    });
+  });
+
+  it('maps transient Google failures to a temporary error state', async () => {
+    setGoogleAccounts([{
+      id: 'acc-500',
+      name: 'Personal',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'connected',
+      lastAuthCheckAt: new Date().toISOString(),
+    }]);
+    fetchCalendarListMock.mockRejectedValueOnce(new GoogleApiError(500, 'down', 'Google API 500: Internal Server Error'));
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current).toBeTruthy();
+    });
+
+    await act(async () => {
+      await result.current.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      const [account] = readGoogleAccounts();
+      expect(account.authStatus).toBe('error');
+      expect(account.syncError).toBe('Google Calendar temporarily unavailable.');
     });
   });
 });

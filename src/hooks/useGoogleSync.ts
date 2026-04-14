@@ -12,10 +12,11 @@ import {
   GOOGLE_ACCESS_REVOKED_MESSAGE,
   GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
   GoogleCalendarReconnectRequiredError,
+  getGoogleCalendarPassiveSyncEligibility,
   getGoogleCalendarPassiveAccessTokenWithRefresh,
   isGoogleCalendarAccount,
 } from '../services/googleCalendarAuthManager';
-import { LIMITS, TIMING } from '../config/constants';
+import { LIMITS } from '../config/constants';
 
 export type SyncState = 'idle' | 'syncing' | 'error';
 
@@ -25,19 +26,6 @@ export interface GoogleSyncResult {
   syncError: string | null;
   triggerSync: (manual?: boolean) => Promise<void>;
   accountSyncStates: Record<string, { state: SyncState; lastSync: string | null; error: string | null }>;
-}
-
-function getAccountActivityTime(account: { lastSyncTime?: string; lastAuthCheckAt?: string }): number {
-  const lastSync = account.lastSyncTime ? new Date(account.lastSyncTime).getTime() : 0;
-  const lastAuthCheck = account.lastAuthCheckAt ? new Date(account.lastAuthCheckAt).getTime() : 0;
-  return Math.max(lastSync, lastAuthCheck);
-}
-
-function shouldAttemptPassiveSync(account: { authStatus?: string; lastSyncTime?: string; lastAuthCheckAt?: string }): boolean {
-  if (account.authStatus === 'needs_reconnect' || account.authStatus === 'revoked') {
-    return false;
-  }
-  return getAccountActivityTime(account) < Date.now() - TIMING.SYNC_THROTTLE;
 }
 
 /** Hook that orchestrates syncing all connected Google Calendar accounts without interactive auth. */
@@ -53,7 +41,7 @@ export function useGoogleSync(): GoogleSyncResult {
 
   const syncAccount = useCallback(async (accountId: string): Promise<boolean> => {
     const account = app.calendarAccounts.find(candidate => candidate.id === accountId);
-    if (!account || !clientId) return false;
+    if (!account) return false;
 
     setAccountSyncStates(prev => ({
       ...prev,
@@ -251,8 +239,7 @@ export function useGoogleSync(): GoogleSyncResult {
   }, [app, clientId]);
 
   const triggerSync = useCallback(async (manual = false) => {
-    void manual;
-    if (syncingRef.current || googleAccounts.length === 0 || !clientId) return;
+    if (syncingRef.current || googleAccounts.length === 0) return;
 
     syncingRef.current = true;
     setSyncState('syncing');
@@ -261,7 +248,7 @@ export function useGoogleSync(): GoogleSyncResult {
     cleanupDuplicateSources(app);
     cleanupDuplicateEvents(app);
 
-    const syncableAccounts = googleAccounts.filter(account => account.authStatus !== 'needs_reconnect' && account.authStatus !== 'revoked');
+    const syncableAccounts = googleAccounts.filter(account => getGoogleCalendarPassiveSyncEligibility(account, { manual }).eligible);
     const blockedAccounts = googleAccounts.length - syncableAccounts.length;
 
     let hasError = blockedAccounts > 0;
@@ -275,19 +262,19 @@ export function useGoogleSync(): GoogleSyncResult {
     syncingRef.current = false;
     setSyncState(hasError ? 'error' : 'idle');
     setSyncError(hasError ? 'Some Google Calendar accounts need attention.' : null);
-  }, [app, clientId, googleAccounts, syncAccount]);
+  }, [app, googleAccounts, syncAccount]);
 
   useEffect(() => {
-    if (!clientId || googleAccounts.length === 0) return;
+    if (googleAccounts.length === 0) return;
 
-    const shouldAutoSync = googleAccounts.some(shouldAttemptPassiveSync);
+    const shouldAutoSync = googleAccounts.some(account => getGoogleCalendarPassiveSyncEligibility(account).eligible);
     if (shouldAutoSync) {
       const timer = window.setTimeout(() => {
         void triggerSync(false);
       }, 0);
       return () => window.clearTimeout(timer);
     }
-  }, [clientId, googleAccounts, triggerSync]);
+  }, [googleAccounts, triggerSync]);
 
   const lastSyncTime = googleAccounts.reduce<string | null>((latest, account) => {
     if (!account.lastSyncTime) return latest;

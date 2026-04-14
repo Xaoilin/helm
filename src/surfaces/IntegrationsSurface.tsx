@@ -317,7 +317,8 @@ export default function IntegrationsSurface() {
                           {account.lastSyncTime
                             ? `Synced ${new Date(account.lastSyncTime).toLocaleString()}`
                             : 'Not yet synced'}
-                          {account.authExpiresAt && ` · Access checked ${new Date(account.authExpiresAt).toLocaleString()}`}
+                          {account.lastAuthCheckAt && ` · Access checked ${new Date(account.lastAuthCheckAt).toLocaleString()}`}
+                          {account.authExpiresAt && ` · Token expires ${new Date(account.authExpiresAt).toLocaleString()}`}
                         </div>
                         {(account.lastAuthError || account.syncError) && (
                           <div style={{ color: account.authStatus === 'error' ? '#f0c040' : '#ff6b6b', marginTop: 4, fontSize: 11 }}>

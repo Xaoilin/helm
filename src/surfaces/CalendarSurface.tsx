@@ -216,7 +216,7 @@ export default function CalendarSurface() {
     const account = getAccountForSource(evtSourceId);
     const cId = GOOGLE_OAUTH_CLIENT_ID;
 
-    if (isGoogle && googleCalId && account && cId) {
+    if (isGoogle && googleCalId && account) {
       setSavingToGoogle(true);
       try {
         const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, cId);
@@ -276,7 +276,7 @@ export default function CalendarSurface() {
     const account = getAccountForSource(editingEvent.sourceId);
     const cId = GOOGLE_OAUTH_CLIENT_ID;
 
-    if (isGoogle && googleCalId && editingEvent.googleEventId && account && cId) {
+    if (isGoogle && googleCalId && editingEvent.googleEventId && account) {
       try {
         const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, cId);
         const accessToken = token.accessToken;
@@ -615,6 +615,8 @@ export default function CalendarSurface() {
                           {acc.email} &middot; {acc.provider}
                           {acc.mocked && ' (local only)'}
                           {isGoogleAcc && acc.lastSyncTime && ` \u00b7 Synced ${new Date(acc.lastSyncTime).toLocaleString()}`}
+                          {isGoogleAcc && acc.lastAuthCheckAt && ` \u00b7 Access checked ${new Date(acc.lastAuthCheckAt).toLocaleString()}`}
+                          {isGoogleAcc && acc.authExpiresAt && ` \u00b7 Token expires ${new Date(acc.authExpiresAt).toLocaleString()}`}
                           {isGoogleAcc && acc.authProvider === 'profile-google' && ' \u00b7 Linked to HELM sign-in'}
                         </div>
                         {isGoogleAcc && (acc.lastAuthError || acc.syncError) && (

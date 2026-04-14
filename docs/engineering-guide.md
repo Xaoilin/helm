@@ -140,6 +140,8 @@ For every delivered feature, say clearly what you verified manually, include the
 - Keep multi-account Google Calendar behavior intact.
 - Passive Google Calendar sync must stay non-interactive. Reconnect or consent flows should only happen from an explicit user action.
 - Treat Google Calendar auth state as account data, not as an implicit side effect of whether a cached browser token still exists.
+- Do not mark a `calendar-oauth` account as reconnect-required just because a cached GIS token expired or disappeared. Only confirmed passive auth failures, 401s, revokes, or missing linked profile sessions after auth bootstrap should set reconnect-required.
+- Any Google auth diagnostics must keep tokens redacted. Presence, expiry, scope, and derived health are fine; raw token values are not.
 - Treat workspaces and credentials as first-class stored records even though their current product depth is lighter than other domains.
 
 ## Security Notes

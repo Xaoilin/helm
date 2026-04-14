@@ -4,7 +4,6 @@ import {
   getGoogleCalendarAuthPatch,
   getGoogleCalendarStatusLabel,
   getResolvedGoogleAuthProvider,
-  GOOGLE_ACCESS_EXPIRED_MESSAGE,
 } from '../services/googleCalendarAuthManager';
 import { saveGoogleTokens } from '../services/googleAuth';
 import type { AuthSessionSnapshot } from '../store/supabase';
@@ -46,7 +45,7 @@ describe('googleCalendarAuthManager', () => {
     expect(patch.lastAuthError).toBeUndefined();
   });
 
-  it('keeps non-matching accounts on calendar-oauth and marks expired credentials for reconnect', () => {
+  it('keeps non-matching accounts on calendar-oauth and leaves expired cached tokens passively re-checkable', () => {
     const snapshot: AuthSessionSnapshot = {
       userId: 'user-1',
       email: 'someone-else@example.com',
@@ -65,9 +64,9 @@ describe('googleCalendarAuthManager', () => {
 
     const patch = getGoogleCalendarAuthPatch(account, snapshot);
     expect(patch.authProvider).toBe('calendar-oauth');
-    expect(patch.authStatus).toBe('needs_reconnect');
-    expect(patch.lastAuthError).toBe(GOOGLE_ACCESS_EXPIRED_MESSAGE);
-    expect(getGoogleCalendarStatusLabel({ ...account, ...patch })).toBe('Needs reconnect');
+    expect(patch.authStatus).toBe('connected');
+    expect(patch.lastAuthError).toBeUndefined();
+    expect(getGoogleCalendarStatusLabel({ ...account, ...patch })).toBe('Connected');
   });
 
   it('treats valid stored tokens as a connected calendar-oauth account', () => {
@@ -80,6 +79,30 @@ describe('googleCalendarAuthManager', () => {
 
     const patch = getGoogleCalendarAuthPatch(account, null);
     expect(patch.authProvider).toBe('calendar-oauth');
+    expect(patch.authStatus).toBe('connected');
+    expect(patch.lastAuthError).toBeUndefined();
+  });
+
+  it('preserves linked profile-google accounts while auth bootstrap is still pending', () => {
+    const account = makeGoogleAccount({ authProvider: 'profile-google' });
+    expect(getResolvedGoogleAuthProvider(account, null)).toBe('profile-google');
+  });
+
+  it('clears legacy reconnect state when a calendar-oauth account still has cached transport credentials', () => {
+    const account = makeGoogleAccount({
+      email: 'work@example.com',
+      authProvider: 'calendar-oauth',
+      authStatus: 'needs_reconnect',
+      lastAuthError: 'Google access expired. Reconnect this account.',
+    });
+
+    saveGoogleTokens(account.id, {
+      accessToken: 'expired-token',
+      expiresAt: Date.now() - 60000,
+      scope: 'calendar',
+    });
+
+    const patch = getGoogleCalendarAuthPatch(account, null);
     expect(patch.authStatus).toBe('connected');
     expect(patch.lastAuthError).toBeUndefined();
   });
