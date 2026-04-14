@@ -41,6 +41,12 @@ test.describe('Clock', () => {
     await page.getByRole('button', { name: 'Start Stopwatch 1' }).click();
     await expect(page.getByRole('button', { name: 'Pause Stopwatch 1' })).toBeVisible();
 
+    await page.waitForTimeout(1100);
+    await page.getByRole('button', { name: 'Add lap to Stopwatch 1' }).click();
+    await page.waitForTimeout(1200);
+    await page.getByRole('button', { name: 'Add lap to Stopwatch 1' }).click();
+    await expect(page.locator('.clock-lap-row').first()).toContainText('Split');
+
     await page.getByRole('button', { name: 'Pause Stopwatch 1' }).click();
     await page.getByRole('button', { name: 'Reset Stopwatch 1' }).click();
     await expect(page.getByLabel('Elapsed for Stopwatch 1')).toContainText('00:00.00');
