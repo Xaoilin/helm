@@ -385,6 +385,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
         chat.recordAssistantConversationTurn(voiceConversationIdRef.current, {
           userContent: trimmed,
           assistantContent: result.assistantMessage,
+          assistantBilling: result.assistantBilling,
           dialogState: result.dialogState,
         });
       }

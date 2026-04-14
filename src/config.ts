@@ -50,6 +50,9 @@ export const DEFAULT_ASSISTANT_PROVIDER = getAssistantProviderEnv();
 /** Hosted assistant function name (Supabase Edge Function). */
 export const HOSTED_ASSISTANT_FUNCTION = getEnv('VITE_HOSTED_ASSISTANT_FUNCTION') || 'assistant-openai';
 
+/** Hosted assistant billing function name (Supabase Edge Function). */
+export const HOSTED_ASSISTANT_BILLING_FUNCTION = getEnv('VITE_HOSTED_ASSISTANT_BILLING_FUNCTION') || 'assistant-openai-billing';
+
 /** Hosted assistant model label for truthful UI copy. */
 export const HOSTED_ASSISTANT_MODEL = getEnv('VITE_HOSTED_ASSISTANT_MODEL') || 'gpt-5.4';
 

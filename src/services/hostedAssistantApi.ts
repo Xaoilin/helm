@@ -6,6 +6,7 @@ import {
 import { HOSTED_ASSISTANT_FUNCTION, SUPABASE_ANON_KEY } from '../config';
 import { API_TIMEOUT } from '../config/constants';
 import { getClient, isSupabaseReady } from '../store/supabase';
+import type { HostedAssistantUsageSnapshot } from './assistantBilling';
 import { CircuitOpenError } from './circuitBreaker';
 import {
   canUseHostedAssistantProjectAccess,
@@ -27,11 +28,7 @@ interface HostedAssistantChatResponse {
   provider: 'openai';
   model: string;
   text: string;
-  usage?: {
-    inputTokens?: number;
-    outputTokens?: number;
-    totalTokens?: number;
-  };
+  usage?: HostedAssistantUsageSnapshot;
 }
 
 interface HostedAssistantTurnToolCall {
@@ -50,7 +47,13 @@ interface HostedAssistantTurnResponse {
     toolCalls?: HostedAssistantTurnToolCall[];
   };
   rawResponse?: string;
-  usage?: HostedAssistantChatResponse['usage'];
+  usage?: HostedAssistantUsageSnapshot;
+}
+
+export interface HostedAssistantChatResult {
+  text: string;
+  model: string;
+  usage?: HostedAssistantUsageSnapshot;
 }
 
 export interface HostedAssistantTurnResult {
@@ -59,6 +62,7 @@ export interface HostedAssistantTurnResult {
   toolCalls: HostedAssistantTurnToolCall[];
   model: string;
   rawResponse?: string;
+  usage?: HostedAssistantUsageSnapshot;
 }
 
 export interface HostedAssistantConnectionStatus {
@@ -284,11 +288,11 @@ export async function testHostedAssistantConnection(
   }
 }
 
-export async function chatWithHostedAssistant(
+export async function chatWithHostedAssistantDetailed(
   messages: OllamaMessage[],
   format: unknown,
   options: HostedAssistantRequestOptions = {},
-): Promise<string> {
+): Promise<HostedAssistantChatResult> {
   const data = await invokeHostedAssistant<HostedAssistantChatResponse>('chat', {
     action: 'chat',
     messages,
@@ -301,7 +305,20 @@ export async function chatWithHostedAssistant(
   }
 
   lastHostedAssistantModel = data.model;
-  return data.text;
+  return {
+    text: data.text,
+    model: data.model,
+    usage: data.usage,
+  };
+}
+
+export async function chatWithHostedAssistant(
+  messages: OllamaMessage[],
+  format: unknown,
+  options: HostedAssistantRequestOptions = {},
+): Promise<string> {
+  const result = await chatWithHostedAssistantDetailed(messages, format, options);
+  return result.text;
 }
 
 export async function runHostedAssistantTurn(
@@ -331,5 +348,6 @@ export async function runHostedAssistantTurn(
     toolCalls: data.turn.toolCalls || [],
     model: data.model,
     rawResponse: data.rawResponse,
+    usage: data.usage,
   };
 }

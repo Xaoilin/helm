@@ -6,6 +6,11 @@ import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
 import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
 import { getHostedAssistantModelLabel, getHostedAssistantModelSetting } from '../services/assistantModels';
 import { downloadConversationAsMarkdown, formatConversationAsMarkdown } from '../services/chatExport';
+import {
+  formatAssistantTokenCount,
+  formatUsdEstimate,
+  summarizeConversationAssistantBilling,
+} from '../services/assistantBilling';
 
 interface ExportFeedback {
   tone: 'success' | 'error';
@@ -76,6 +81,10 @@ export default function ChatSurface() {
 
   const activeConv = app.conversations.find(c => c.id === app.activeConversationId);
   const canExportConversation = Boolean(activeConv && activeConv.messages.length > 0);
+  const billingSummary = summarizeConversationAssistantBilling(activeConv);
+  const billingTokenSummary = billingSummary
+    ? `${formatAssistantTokenCount(billingSummary.totals.inputTokens)} input · ${formatAssistantTokenCount(billingSummary.totals.cachedTokens)} cached · ${formatAssistantTokenCount(billingSummary.totals.outputTokens)} output · ${formatAssistantTokenCount(billingSummary.totals.totalTokens)} total tokens`
+    : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -277,6 +286,40 @@ export default function ChatSurface() {
                     ? `${activeConv.messages.length} message${activeConv.messages.length === 1 ? '' : 's'} · Updated ${formatConversationUpdatedAt(activeConv.updatedAt)} · Copy or export this chat as Markdown for Codex.`
                     : 'Add a message to copy or export this chat as Markdown for Codex.'}
                 </p>
+                {billingSummary && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: '12px 14px',
+                      borderRadius: 12,
+                      border: '1px solid #1e2030',
+                      background: 'rgba(10, 12, 18, 0.58)',
+                      display: 'grid',
+                      gap: 4,
+                      maxWidth: 760,
+                    }}
+                  >
+                    <div style={{ fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: '#6b6f85' }}>
+                      Estimated OpenAI conversation total
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#f5f7ff' }}>
+                      {formatUsdEstimate(billingSummary.totalEstimatedUsd)}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#cfd3e6' }}>
+                      Estimated from OpenAI usage. {billingSummary.requestCount} hosted OpenAI request{billingSummary.requestCount === 1 ? '' : 's'} across {billingSummary.openAITurnCount} assistant turn{billingSummary.openAITurnCount === 1 ? '' : 's'}.
+                    </div>
+                    {billingTokenSummary && (
+                      <div style={{ fontSize: 12, color: '#9ea4c5' }}>
+                        {billingTokenSummary}
+                      </div>
+                    )}
+                    {billingSummary.hasExcludedAssistantTurns && (
+                      <div style={{ fontSize: 12, color: '#ffcc80' }}>
+                        OpenAI-hosted turns only; other turns excluded.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="chat-main-actions">
                 {exportFeedback && (

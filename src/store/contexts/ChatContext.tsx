@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { CHAT, VOICE_SESSION } from '../../config/constants';
 import type {
   AssistantCorrection,
+  AssistantMessageBilling,
   ChatConversation,
   ChatMessage,
   CalendarAccount,
@@ -19,6 +20,7 @@ import type {
 } from '../../types/domain';
 import { loadStore, saveStore } from '../persistence';
 import { processAssistantCommand } from '../../services/assistantRuntime';
+import { buildProviderOnlyAssistantBilling } from '../../services/assistantBilling';
 import type { AssistantConversationMessage, AssistantDialogState } from '../../services/assistantTypes';
 
 interface CreateConversationOptions {
@@ -69,6 +71,7 @@ export interface ChatContextValue {
     turn: {
       userContent: string;
       assistantContent: string;
+      assistantBilling?: AssistantMessageBilling;
       dialogState?: AssistantDialogState;
     },
   ) => void;
@@ -78,12 +81,18 @@ export interface ChatContextValue {
 
 const ChatCtx = createContext<ChatContextValue | null>(null);
 
-function buildChatMessage(role: ChatMessage['role'], content: string, timestamp: string = new Date().toISOString()): ChatMessage {
+function buildChatMessage(
+  role: ChatMessage['role'],
+  content: string,
+  timestamp: string = new Date().toISOString(),
+  assistantBilling?: AssistantMessageBilling,
+): ChatMessage {
   return {
     id: uuid(),
     role,
     content,
     timestamp,
+    ...(assistantBilling ? { assistantBilling } : {}),
   };
 }
 
@@ -238,7 +247,12 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
 
     dialogStatesRef.current[conversationId] = result.dialogState;
 
-    const assistantMessage = buildChatMessage('assistant', result.assistantMessage);
+    const assistantMessage = buildChatMessage(
+      'assistant',
+      result.assistantMessage,
+      new Date().toISOString(),
+      result.assistantBilling || buildProviderOnlyAssistantBilling(result.source, result.planningModel),
+    );
 
     setConversations(prev =>
       prev.map(conversation =>
@@ -254,12 +268,18 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
     turn: {
       userContent: string;
       assistantContent: string;
+      assistantBilling?: AssistantMessageBilling;
       dialogState?: AssistantDialogState;
     },
   ) => {
     const now = new Date().toISOString();
     const userMessage = buildChatMessage('user', turn.userContent, now);
-    const assistantMessage = buildChatMessage('assistant', turn.assistantContent);
+    const assistantMessage = buildChatMessage(
+      'assistant',
+      turn.assistantContent,
+      new Date().toISOString(),
+      turn.assistantBilling,
+    );
 
     dialogStatesRef.current[conversationId] = turn.dialogState || dialogStatesRef.current[conversationId] || {
       currentSurface: 'chat',

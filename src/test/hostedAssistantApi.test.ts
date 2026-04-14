@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   chatWithHostedAssistant,
+  chatWithHostedAssistantDetailed,
   getHostedAssistantDiagnostics,
   resetHostedAssistantDiagnostics,
+  runHostedAssistantTurn,
   testHostedAssistantConnection,
 } from '../services/hostedAssistantApi';
 import { hostedAssistantBreaker } from '../services/serviceBreakers';
@@ -167,6 +169,60 @@ describe('hostedAssistantApi', () => {
     }));
   });
 
+  it('returns structured usage metadata from detailed hosted chat responses', async () => {
+    const client = makeClient({
+      invokeResult: {
+        data: {
+          ok: true,
+          provider: 'openai',
+          model: 'gpt-5.4-mini',
+          text: '{"answer":"READY"}',
+          usage: {
+            responseId: 'resp-chat-1',
+            model: 'gpt-5.4-mini',
+            serviceTier: 'default',
+            inputTokens: 1200,
+            cachedTokens: 100,
+            outputTokens: 320,
+            reasoningTokens: 180,
+            totalTokens: 1520,
+          },
+        },
+        error: null,
+      },
+    });
+    getClientMock.mockReturnValue(client);
+
+    const result = await chatWithHostedAssistantDetailed([
+      { role: 'system', content: 'Reply with JSON.' },
+      { role: 'user', content: 'Say READY.' },
+    ], {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        answer: { type: 'string' },
+      },
+      required: ['answer'],
+    }, {
+      model: 'gpt-5.4-mini',
+    });
+
+    expect(result).toEqual({
+      text: '{"answer":"READY"}',
+      model: 'gpt-5.4-mini',
+      usage: {
+        responseId: 'resp-chat-1',
+        model: 'gpt-5.4-mini',
+        serviceTier: 'default',
+        inputTokens: 1200,
+        cachedTokens: 100,
+        outputTokens: 320,
+        reasoningTokens: 180,
+        totalTokens: 1520,
+      },
+    });
+  });
+
   it('passes the selected hosted model through chat requests', async () => {
     const client = makeClient({
       invokeResult: {
@@ -201,6 +257,68 @@ describe('hostedAssistantApi', () => {
         model: 'gpt-5.4-mini',
       }),
     }));
+  });
+
+  it('returns usage metadata for hosted orchestration turns', async () => {
+    const client = makeClient({
+      invokeResult: {
+        data: {
+          ok: true,
+          provider: 'openai',
+          model: 'gpt-5.4',
+          turn: {
+            type: 'tool_calls',
+            toolCalls: [{
+              callId: 'call_1',
+              name: 'tasks_open_view',
+              arguments: '{"tab":"all"}',
+            }],
+          },
+          rawResponse: 'raw-turn',
+          usage: {
+            responseId: 'resp-turn-1',
+            model: 'gpt-5.4',
+            serviceTier: 'default',
+            inputTokens: 900,
+            cachedTokens: 50,
+            outputTokens: 210,
+            reasoningTokens: 120,
+            totalTokens: 1110,
+          },
+        },
+        error: null,
+      },
+    });
+    getClientMock.mockReturnValue(client);
+
+    const result = await runHostedAssistantTurn([
+      { role: 'system', content: 'Return tool calls.' },
+      { role: 'user', content: 'Open all tasks.' },
+    ], {
+      model: 'gpt-5.4',
+    });
+
+    expect(result).toEqual({
+      type: 'tool_calls',
+      text: undefined,
+      toolCalls: [{
+        callId: 'call_1',
+        name: 'tasks_open_view',
+        arguments: '{"tab":"all"}',
+      }],
+      model: 'gpt-5.4',
+      rawResponse: 'raw-turn',
+      usage: {
+        responseId: 'resp-turn-1',
+        model: 'gpt-5.4',
+        serviceTier: 'default',
+        inputTokens: 900,
+        cachedTokens: 50,
+        outputTokens: 210,
+        reasoningTokens: 120,
+        totalTokens: 1110,
+      },
+    });
   });
 
   it('preserves the last hosted chat failure when the circuit breaker opens', async () => {

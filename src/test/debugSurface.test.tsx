@@ -11,6 +11,7 @@ import {
 } from '../services/hostedAssistantApi';
 import { listOllamaModels, testOllamaConnection } from '../services/ollamaApi';
 import { ollamaBreaker } from '../services/serviceBreakers';
+import { fetchHostedAssistantProjectBilling } from '../services/hostedAssistantBillingApi';
 
 const {
   getAuthSessionSnapshotMock,
@@ -57,6 +58,10 @@ vi.mock('../services/ollamaApi', () => ({
   testOllamaConnection: vi.fn(),
 }));
 
+vi.mock('../services/hostedAssistantBillingApi', () => ({
+  fetchHostedAssistantProjectBilling: vi.fn(),
+}));
+
 vi.mock('../store/supabase', () => ({
   getAuthSessionSnapshot: getAuthSessionSnapshotMock,
   getCurrentUserId: getCurrentUserIdMock,
@@ -101,6 +106,36 @@ describe('DebugSurface AI diagnostics', () => {
     });
     vi.mocked(testOllamaConnection).mockResolvedValue(true);
     vi.mocked(listOllamaModels).mockResolvedValue(['qwen3:latest', 'llama3.2:latest']);
+    vi.mocked(fetchHostedAssistantProjectBilling).mockResolvedValue({
+      projectId: 'proj_helm_hosted',
+      fetchedAt: '2026-04-14T10:00:00.000Z',
+      costs: [
+        {
+          startTime: 1_775_606_400,
+          endTime: 1_775_692_800,
+          amount: {
+            currency: 'usd',
+            value: 1.25,
+          },
+        },
+      ],
+      usage: [
+        {
+          startTime: 1_775_606_400,
+          endTime: 1_775_692_800,
+          results: [
+            {
+              model: 'gpt-5.4',
+              serviceTier: 'default',
+              inputTokens: 1000,
+              cachedTokens: 100,
+              outputTokens: 250,
+              totalRequests: 3,
+            },
+          ],
+        },
+      ],
+    });
   });
 
   it('shows an AI Assistant tab with live runtime diagnostics', async () => {
@@ -116,6 +151,81 @@ describe('DebugSurface AI diagnostics', () => {
     expect((await screen.findAllByText('gpt-5.4')).length).toBeGreaterThan(0);
     expect(screen.getByText('Assistant Actions')).toBeInTheDocument();
     expect(screen.getByText('tasks.open_view')).toBeInTheDocument();
+  });
+
+  it('shows OpenAI billing diagnostics with latest-turn estimates and daily project buckets', async () => {
+    recordAssistantDebugTrace({
+      recordedAt: '2026-04-14T10:15:00.000Z',
+      transcript: 'show me my tasks',
+      effectiveTranscript: 'show me my tasks',
+      assistantMessage: 'Opening your tasks.',
+      assistantBilling: {
+        provider: 'openai',
+        model: 'gpt-5.4',
+        requestCount: 2,
+        requests: [
+          {
+            kind: 'planner',
+            responseId: 'resp-plan',
+            model: 'gpt-5.4',
+            serviceTier: 'default',
+            inputTokens: 1000,
+            cachedTokens: 100,
+            outputTokens: 200,
+            reasoningTokens: 120,
+            totalTokens: 1200,
+            estimatedUsd: 0.005275,
+          },
+          {
+            kind: 'narration',
+            responseId: 'resp-narration',
+            model: 'gpt-5.4',
+            serviceTier: 'default',
+            inputTokens: 600,
+            cachedTokens: 50,
+            outputTokens: 120,
+            reasoningTokens: 70,
+            totalTokens: 720,
+            estimatedUsd: 0.003188,
+          },
+        ],
+        totals: {
+          inputTokens: 1600,
+          cachedTokens: 150,
+          outputTokens: 320,
+          reasoningTokens: 190,
+          totalTokens: 1920,
+        },
+        estimatedUsd: 0.008463,
+        estimateStatus: 'estimated_from_openai_usage',
+        estimateLabel: 'Estimated from OpenAI usage',
+      },
+      source: 'openai',
+      planningSource: 'openai',
+      planningStatus: 'planned',
+      planningModel: 'gpt-5.4',
+      plan: {
+        mode: 'answer',
+        response: 'Opening your tasks.',
+        confidence: 1,
+        steps: [],
+      },
+    });
+
+    await act(async () => {
+      render(<DebugSurface />);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /AI Assistant/i }));
+
+    expect(await screen.findByText('OpenAI Billing')).toBeInTheDocument();
+    expect(await screen.findByText('OpenAI billing loaded')).toBeInTheDocument();
+    expect(screen.getByText('Latest Assistant Turn Estimate')).toBeInTheDocument();
+    expect(screen.getByText('$0.0085')).toBeInTheDocument();
+    expect(screen.getByText('proj_helm_hosted')).toBeInTheDocument();
+    expect(screen.getAllByText('2026-04-08 UTC').length).toBeGreaterThan(0);
+    expect(screen.getByText('$1.25')).toBeInTheDocument();
+    expect(screen.getByText(/3 requests · 1,000 input · 100 cached · 250 output/i)).toBeInTheDocument();
   });
 
   it('runs hosted health and smoke checks from the debug panel', async () => {
@@ -161,6 +271,20 @@ describe('DebugSurface AI diagnostics', () => {
 
     expect(await screen.findByText('Hosted smoke test passed')).toBeInTheDocument();
     expect(screen.getByText('READY')).toBeInTheDocument();
+  });
+
+  it('shows a truthful unavailable state when factual OpenAI billing cannot be loaded', async () => {
+    vi.mocked(fetchHostedAssistantProjectBilling).mockRejectedValue(
+      new Error('OpenAI project billing is unavailable in this build.'),
+    );
+
+    await act(async () => {
+      render(<DebugSurface />);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /AI Assistant/i }));
+
+    expect(await screen.findByText('OpenAI project billing is unavailable in this build')).toBeInTheDocument();
   });
 
   it('shows Ollama models after a successful local connectivity check', async () => {
@@ -234,6 +358,47 @@ describe('DebugSurface AI diagnostics', () => {
       transcript: 'show me all my tasks',
       effectiveTranscript: 'show me all my tasks',
       assistantMessage: "I've opened your full task list.",
+      assistantBilling: {
+        provider: 'openai',
+        model: 'gpt-5.4',
+        requestCount: 2,
+        requests: [
+          {
+            kind: 'planner',
+            responseId: 'resp-plan',
+            model: 'gpt-5.4',
+            serviceTier: 'default',
+            inputTokens: 1000,
+            cachedTokens: 100,
+            outputTokens: 200,
+            reasoningTokens: 120,
+            totalTokens: 1200,
+            estimatedUsd: 0.005275,
+          },
+          {
+            kind: 'narration',
+            responseId: 'resp-narration',
+            model: 'gpt-5.4',
+            serviceTier: 'default',
+            inputTokens: 600,
+            cachedTokens: 50,
+            outputTokens: 120,
+            reasoningTokens: 70,
+            totalTokens: 720,
+            estimatedUsd: 0.003188,
+          },
+        ],
+        totals: {
+          inputTokens: 1600,
+          cachedTokens: 150,
+          outputTokens: 320,
+          reasoningTokens: 190,
+          totalTokens: 1920,
+        },
+        estimatedUsd: 0.008463,
+        estimateStatus: 'estimated_from_openai_usage',
+        estimateLabel: 'Estimated from OpenAI usage',
+      },
       source: 'openai',
       planningSource: 'openai',
       planningStatus: 'planned',
@@ -364,5 +529,6 @@ describe('DebugSurface AI diagnostics', () => {
     expect(screen.getAllByText(/tasks\.open_view/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Navigation Payload/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/assistant-nav-test/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Estimated from OpenAI usage/i).length).toBeGreaterThan(0);
   });
 });

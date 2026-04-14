@@ -13,6 +13,10 @@ import {
   runAssistantInitialModelTurn,
 } from './orchestrator';
 import { resetOllamaAvailability, isOllamaAvailable } from './planner';
+import {
+  buildProviderOnlyAssistantBilling,
+  mergeAssistantMessageBilling,
+} from '../services/assistantBilling';
 import type { ActionPlan } from './plannerSchema';
 import { recordAssistantDebugTrace } from '../services/assistantDebug';
 import type {
@@ -103,6 +107,10 @@ function resolveTurnSource(
     : preferred;
 }
 
+function ensureAssistantBilling(result: AssistantCommandResult): AssistantCommandResult['assistantBilling'] {
+  return result.assistantBilling || buildProviderOnlyAssistantBilling(result.source, result.planningModel);
+}
+
 function toToolCallSummary(toolCalls: AssistantToolCall[]) {
   return toolCalls.map(toolCall => ({
     callId: toolCall.callId,
@@ -133,31 +141,36 @@ export async function runAssistantTurn(
   }
 
   const finalize = (result: AssistantCommandResult): AssistantCommandResult => {
+    const finalizedResult: AssistantCommandResult = {
+      ...result,
+      assistantBilling: ensureAssistantBilling(result),
+    };
     recordAssistantDebugTrace({
       recordedAt: new Date().toISOString(),
       transcript,
       effectiveTranscript,
-      assistantMessage: result.assistantMessage,
-      source: result.source,
-      planningSource: result.planningSource,
-      planningStatus: result.planningStatus,
-      planningModel: result.planningModel,
-      degradedReason: result.degradedReason,
-      planningBundle: result.planningBundle,
-      rawPlannerResponse: result.rawPlannerResponse,
-      rawNarrationResponse: result.rawNarrationResponse,
-      modelTurn: result.modelTurn,
-      parsedPlan: result.parsedPlan,
-      validatedPlan: result.validatedPlan,
-      plannerValidation: result.plannerValidation,
-      plan: result.plan,
-      toolCalls: result.toolCalls,
-      pendingConfirmation: result.dialogState.pendingConfirmation,
-      execution: result.execution,
-      referencedEntities: result.referencedEntities,
-      navigationRequests: result.execution?.navigationRequests,
+      assistantMessage: finalizedResult.assistantMessage,
+      assistantBilling: finalizedResult.assistantBilling,
+      source: finalizedResult.source,
+      planningSource: finalizedResult.planningSource,
+      planningStatus: finalizedResult.planningStatus,
+      planningModel: finalizedResult.planningModel,
+      degradedReason: finalizedResult.degradedReason,
+      planningBundle: finalizedResult.planningBundle,
+      rawPlannerResponse: finalizedResult.rawPlannerResponse,
+      rawNarrationResponse: finalizedResult.rawNarrationResponse,
+      modelTurn: finalizedResult.modelTurn,
+      parsedPlan: finalizedResult.parsedPlan,
+      validatedPlan: finalizedResult.validatedPlan,
+      plannerValidation: finalizedResult.plannerValidation,
+      plan: finalizedResult.plan,
+      toolCalls: finalizedResult.toolCalls,
+      pendingConfirmation: finalizedResult.dialogState.pendingConfirmation,
+      execution: finalizedResult.execution,
+      referencedEntities: finalizedResult.referencedEntities,
+      navigationRequests: finalizedResult.execution?.navigationRequests,
     });
-    return result;
+    return finalizedResult;
   };
 
   async function narrateFromFacts(
@@ -200,6 +213,7 @@ export async function runAssistantTurn(
         const updatedDialogState = rememberPlan(clearedDialogState, plan);
         return finalize({
           assistantMessage: narration.assistantMessage,
+          assistantBilling: narration.assistantBilling,
           message: narration.assistantMessage,
           plan,
           dialogState: updatedDialogState,
@@ -236,6 +250,7 @@ export async function runAssistantTurn(
         const updatedDialogState = rememberPlan(clearedDialogState, plan);
         return finalize({
           assistantMessage: narration.assistantMessage,
+          assistantBilling: narration.assistantBilling,
           message: narration.assistantMessage,
           plan,
           dialogState: updatedDialogState,
@@ -277,6 +292,7 @@ export async function runAssistantTurn(
 
       return finalize({
         assistantMessage: narration.assistantMessage,
+        assistantBilling: narration.assistantBilling,
         message: narration.assistantMessage,
         plan: pendingPlan,
         dialogState: updatedDialogState,
@@ -308,6 +324,7 @@ export async function runAssistantTurn(
       const updatedDialogState = rememberPlan(clearedDialogState, plan);
       return finalize({
         assistantMessage: narration.assistantMessage,
+        assistantBilling: narration.assistantBilling,
         message: narration.assistantMessage,
         plan,
         dialogState: updatedDialogState,
@@ -345,6 +362,7 @@ export async function runAssistantTurn(
     );
     return finalize({
       assistantMessage: planning.assistantMessage,
+      assistantBilling: planning.assistantBilling,
       message: planning.assistantMessage,
       plan: resultPlan,
       modelTurn: planning.modelTurn,
@@ -371,6 +389,7 @@ export async function runAssistantTurn(
     );
     return finalize({
       assistantMessage: planning.assistantMessage,
+      assistantBilling: planning.assistantBilling,
       message: planning.assistantMessage,
       plan: resultPlan,
       modelTurn: planning.modelTurn,
@@ -419,6 +438,10 @@ export async function runAssistantTurn(
 
     return finalize({
       assistantMessage: confirmationMessage,
+      assistantBilling: mergeAssistantMessageBilling(
+        planning.assistantBilling,
+        confirmationNarration?.assistantBilling,
+      ),
       message: confirmationMessage,
       plan: confirmationPlan,
       modelTurn: planning.modelTurn,
@@ -458,6 +481,7 @@ export async function runAssistantTurn(
     const nextDialogState = rememberPlan(withPendingConfirmation(dialogState, undefined), blockedPlan);
     return finalize({
       assistantMessage: narration.assistantMessage,
+      assistantBilling: mergeAssistantMessageBilling(planning.assistantBilling, narration.assistantBilling),
       message: narration.assistantMessage,
       plan: blockedPlan,
       modelTurn: planning.modelTurn,
@@ -503,6 +527,7 @@ export async function runAssistantTurn(
     const nextDialogState = rememberPlan(withPendingConfirmation(dialogState, undefined), clarifyPlan);
     return finalize({
       assistantMessage: narration.assistantMessage,
+      assistantBilling: mergeAssistantMessageBilling(planning.assistantBilling, narration.assistantBilling),
       message: narration.assistantMessage,
       plan: clarifyPlan,
       modelTurn: planning.modelTurn,
@@ -550,6 +575,7 @@ export async function runAssistantTurn(
 
   return finalize({
     assistantMessage: narration.assistantMessage,
+    assistantBilling: mergeAssistantMessageBilling(planning.assistantBilling, narration.assistantBilling),
     message: narration.assistantMessage,
     plan: resultPlan,
     modelTurn: planning.modelTurn,

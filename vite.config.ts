@@ -23,7 +23,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: true,
-    exclude: ['node_modules', 'e2e'],
+    exclude: ['node_modules', 'e2e', '.codex_tmp/**'],
     alias: {
       'openwakeword-wasm-browser': path.resolve(__dirname, 'src/test/__mocks__/openwakeword.ts'),
     },

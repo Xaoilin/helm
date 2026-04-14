@@ -44,9 +44,26 @@ function isToolDefinition(value: unknown): value is OpenAIToolDefinition {
 function extractUsage(data: unknown) {
   return typeof data === 'object' && data !== null && 'usage' in data && typeof data.usage === 'object' && data.usage !== null
     ? {
-        inputTokens: 'input_tokens' in data.usage && typeof data.usage.input_tokens === 'number' ? data.usage.input_tokens : undefined,
-        outputTokens: 'output_tokens' in data.usage && typeof data.usage.output_tokens === 'number' ? data.usage.output_tokens : undefined,
-        totalTokens: 'total_tokens' in data.usage && typeof data.usage.total_tokens === 'number' ? data.usage.total_tokens : undefined,
+        responseId: 'id' in data && typeof data.id === 'string' ? data.id : undefined,
+        model: 'model' in data && typeof data.model === 'string' ? data.model : undefined,
+        serviceTier: 'service_tier' in data && typeof data.service_tier === 'string' ? data.service_tier : undefined,
+        inputTokens: 'input_tokens' in data.usage && typeof data.usage.input_tokens === 'number' ? data.usage.input_tokens : 0,
+        cachedTokens: 'input_tokens_details' in data.usage
+          && typeof data.usage.input_tokens_details === 'object'
+          && data.usage.input_tokens_details !== null
+          && 'cached_tokens' in data.usage.input_tokens_details
+          && typeof data.usage.input_tokens_details.cached_tokens === 'number'
+          ? data.usage.input_tokens_details.cached_tokens
+          : 0,
+        outputTokens: 'output_tokens' in data.usage && typeof data.usage.output_tokens === 'number' ? data.usage.output_tokens : 0,
+        reasoningTokens: 'output_tokens_details' in data.usage
+          && typeof data.usage.output_tokens_details === 'object'
+          && data.usage.output_tokens_details !== null
+          && 'reasoning_tokens' in data.usage.output_tokens_details
+          && typeof data.usage.output_tokens_details.reasoning_tokens === 'number'
+          ? data.usage.output_tokens_details.reasoning_tokens
+          : 0,
+        totalTokens: 'total_tokens' in data.usage && typeof data.usage.total_tokens === 'number' ? data.usage.total_tokens : 0,
       }
     : undefined;
 }
@@ -166,7 +183,18 @@ Deno.serve(async (request) => {
     );
   }
 
-  const usage = extractUsage(data);
+  const resolvedModel = typeof data === 'object' && data !== null && 'model' in data && typeof data.model === 'string'
+    ? data.model
+    : requestedModel;
+  const usage = (() => {
+    const extracted = extractUsage(data);
+    return extracted
+      ? {
+          ...extracted,
+          model: extracted.model || resolvedModel,
+        }
+      : undefined;
+  })();
   const rawResponse = stringifyRawResponse(data);
 
   if (body.action === 'turn') {
@@ -175,7 +203,7 @@ Deno.serve(async (request) => {
       return jsonResponse({
         ok: true,
         provider: 'openai',
-        model: requestedModel,
+        model: resolvedModel,
         turn: {
           type: 'tool_calls',
           toolCalls,
@@ -193,7 +221,7 @@ Deno.serve(async (request) => {
     return jsonResponse({
       ok: true,
       provider: 'openai',
-      model: requestedModel,
+      model: resolvedModel,
       turn: {
         type: 'text',
         text,
@@ -211,7 +239,7 @@ Deno.serve(async (request) => {
   return jsonResponse({
     ok: true,
     provider: 'openai',
-    model: requestedModel,
+    model: resolvedModel,
     text,
     usage,
   });

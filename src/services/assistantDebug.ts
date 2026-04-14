@@ -8,12 +8,14 @@ import type {
   AssistantPlanningBundle,
 } from '../assistant/shared';
 import type { ActionPlan } from '../assistant/plannerSchema';
+import type { AssistantMessageBilling } from '../types/domain';
 
 export interface AssistantDebugTrace {
   recordedAt: string;
   transcript: string;
   effectiveTranscript: string;
   assistantMessage: string;
+  assistantBilling?: AssistantMessageBilling;
   source: AssistantCommandResult['source'];
   planningSource: AssistantCommandResult['planningSource'];
   planningStatus: AssistantCommandResult['planningStatus'];

@@ -1,5 +1,6 @@
 import type {
   AssistantCorrection,
+  AssistantMessageBilling,
   CalendarAccount,
   CalendarEvent,
   CalendarSource,
@@ -244,6 +245,7 @@ export interface AssistantCommandResult {
   plan: ActionPlan;
   modelTurn?: AssistantModelTurn | null;
   toolCalls?: AssistantToolCall[];
+  assistantBilling?: AssistantMessageBilling;
   dialogState: AssistantDialogState;
   execution?: AssistantExecutionResult;
   referencedEntities?: AssistantEntityReference[];
