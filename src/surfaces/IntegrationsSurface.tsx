@@ -3,6 +3,7 @@ import { useApp } from '../store/AppContext';
 import type { CalendarAccount, IntegrationStatus } from '../types/domain';
 import { useGoogleSync } from '../hooks/useGoogleSync';
 import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
+import { appendGoogleCalendarDiagnosticEvent } from '../services/googleCalendarDiagnosticEvents';
 import { getAuthSessionSnapshot } from '../store/supabase';
 import {
   GOOGLE_SIGN_IN_REQUIRED_MESSAGE,
@@ -61,6 +62,7 @@ export default function IntegrationsSurface() {
   const isSignedIn = Boolean(authSnapshot?.userId);
 
   const profileEmail = authSnapshot?.email ?? null;
+  const hostedGoogleIssue = googleSync.serverRuntimeStatus?.lastError ?? null;
   const linkedProfileAccount = useMemo(() => (
     profileEmail
       ? googleAccounts.find(account => normalizeEmail(account.email) === normalizeEmail(profileEmail))
@@ -256,12 +258,37 @@ export default function IntegrationsSurface() {
     const account = googleAccounts.find(candidate => candidate.id === accountId);
     if (!account) return;
 
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'disconnect',
+      phase: 'start',
+      outcome: 'info',
+      triggerSource: 'user_action',
+      accountId: account.id,
+      email: account.email,
+      resolvedAuthProvider: account.authProvider,
+      message: `Starting an explicit Google Calendar disconnect for ${account.email}.`,
+    });
+
     try {
       if (isSignedIn) {
         await revokeGoogleCalendarCredential(account.email);
       }
     } catch (error) {
       if (!(error instanceof GoogleCalendarOAuthFunctionError) || error.code !== 'missing_credential') {
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'disconnect',
+          phase: 'failure',
+          outcome: 'failure',
+          triggerSource: 'user_action',
+          accountId: account.id,
+          email: account.email,
+          resolvedAuthProvider: account.authProvider,
+          message: error instanceof Error ? error.message : 'Disconnect failed',
+          code: error instanceof GoogleCalendarOAuthFunctionError ? error.code : undefined,
+          requestId: error instanceof GoogleCalendarOAuthFunctionError ? error.requestId : undefined,
+          readiness: error instanceof GoogleCalendarOAuthFunctionError ? error.readiness : undefined,
+          httpStatus: error instanceof GoogleCalendarOAuthFunctionError ? error.httpStatus : undefined,
+        });
         setGoogleError(error instanceof Error ? error.message : 'Disconnect failed');
         return;
       }
@@ -281,6 +308,16 @@ export default function IntegrationsSurface() {
     }
 
     await googleSync.refreshCredentialStatuses();
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'disconnect',
+      phase: 'success',
+      outcome: 'success',
+      triggerSource: 'user_action',
+      accountId: account.id,
+      email: account.email,
+      resolvedAuthProvider: account.authProvider,
+      message: `Disconnected Google Calendar account ${account.email}.`,
+    });
     setConfirmDisconnect(null);
   };
 
@@ -305,6 +342,12 @@ export default function IntegrationsSurface() {
           Integrations connect HELM to external services. Google Calendar now uses server-backed browser credentials, so durable sync requires you to be signed into HELM.
           Other integrations can be simulated for development.
         </div>
+
+        {hostedGoogleIssue && (
+          <div className="info-box warning" style={{ marginTop: 8 }}>
+            Hosted Google Calendar status is degraded right now: {hostedGoogleIssue}
+          </div>
+        )}
 
         {app.integrations.map(integration => {
           const info = getInfo(integration.provider);

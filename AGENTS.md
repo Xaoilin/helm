@@ -58,6 +58,7 @@ Before calling a user-facing change live, shipped, or deployed, `npm run handoff
 - After a task branch is merged, delete that branch locally and on `origin` so stale merged branches do not accumulate. If a branch is still unmerged, call that out explicitly instead of leaving its status ambiguous.
 - Reproduce bugs before fixing them, then add a regression test.
 - For every bug, regression, or feature that did not behave as expected, perform a five-whys root-cause analysis before planning or implementing the fix. Keep asking "why" until the real failing layer is identified instead of stopping at the first visible symptom.
+- For integrations, auth, sync, backend-dependent features, or other opaque user-facing fixes, assume the first confident implementation may still fail in reality. Prepare explicitly for the scenario where you deliver a fix confidently and the real world proves it wrong. Ship observability in the same change by default, ideally by adding or extending a Debug surface for the affected feature. If a dedicated debug page is not appropriate, document the alternate diagnostics path explicitly in the handoff and the code comments or docs.
 - Do not swallow errors silently. Log failures consistently and surface user-facing failures in the UI where appropriate.
 - Prefer domain-context changes over growing the compatibility shell in `AppContext.tsx`.
 - Keep constants in `src/config/constants.ts` instead of adding unexplained literals.

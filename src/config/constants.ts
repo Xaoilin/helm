@@ -181,6 +181,8 @@ export const LIMITS = {
   LLM_HISTORY_MESSAGES: 10,
   /** Persist up to this many assistant transcript corrections */
   ASSISTANT_CORRECTION_MEMORY: 100,
+  /** Persist up to this many Google Calendar diagnostic timeline entries */
+  GOOGLE_CALENDAR_DIAGNOSTIC_EVENTS: 250,
   /** Default calendar event duration (ms = 1 hour) */
   DEFAULT_EVENT_DURATION: 3600000,
 } as const;

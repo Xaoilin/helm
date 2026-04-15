@@ -1,6 +1,7 @@
 // Google Identity Services integration for browser-based authorization-code flow.
 // Legacy token storage remains for migration diagnostics only.
 
+import { appendGoogleCalendarDiagnosticEvent } from './googleCalendarDiagnosticEvents';
 import { logWarn } from './logger';
 
 const GIS_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
@@ -38,10 +39,22 @@ export function loadGisScript(): Promise<void> {
     script.async = true;
     script.onload = () => {
       gisLoaded = true;
+      appendGoogleCalendarDiagnosticEvent({
+        operation: 'gis_script',
+        phase: 'success',
+        outcome: 'success',
+        message: 'Google Identity Services script loaded successfully.',
+      });
       resolve();
     };
     script.onerror = () => {
       gisLoading = null;
+      appendGoogleCalendarDiagnosticEvent({
+        operation: 'gis_script',
+        phase: 'failure',
+        outcome: 'failure',
+        message: 'Failed to load Google Identity Services script.',
+      });
       reject(new Error('Failed to load Google Identity Services script'));
     };
     document.head.appendChild(script);
@@ -63,9 +76,27 @@ export function requestGoogleAuthorizationCode(
 ): Promise<GoogleAuthorizationCode> {
   return new Promise((resolve, reject) => {
     if (!window.google?.accounts?.oauth2) {
+      appendGoogleCalendarDiagnosticEvent({
+        operation: 'gis_code_flow',
+        phase: 'failure',
+        outcome: 'failure',
+        message: 'Google Identity Services is not loaded in the browser.',
+        email: options.loginHint,
+      });
       reject(new Error('Google Identity Services not loaded'));
       return;
     }
+
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'gis_code_flow',
+      phase: 'start',
+      outcome: 'info',
+      triggerSource: 'user_action',
+      message: options.loginHint
+        ? `Starting Google authorization-code flow for ${options.loginHint}.`
+        : 'Starting Google authorization-code flow.',
+      email: options.loginHint,
+    });
 
     const client = window.google.accounts.oauth2.initCodeClient({
       client_id: clientId,
@@ -76,21 +107,55 @@ export function requestGoogleAuthorizationCode(
       select_account: options.selectAccount ?? true,
       callback: (response: GoogleCodeResponse) => {
         if (response.error) {
+          appendGoogleCalendarDiagnosticEvent({
+            operation: 'gis_code_flow',
+            phase: 'failure',
+            outcome: 'failure',
+            triggerSource: 'user_action',
+            message: response.error_description || response.error,
+            code: response.error,
+            email: options.loginHint,
+          });
           reject(new Error(response.error_description || response.error));
           return;
         }
 
         if (!response.code) {
+          appendGoogleCalendarDiagnosticEvent({
+            operation: 'gis_code_flow',
+            phase: 'failure',
+            outcome: 'failure',
+            triggerSource: 'user_action',
+            message: 'Google did not return an authorization code.',
+            email: options.loginHint,
+          });
           reject(new Error('Google did not return an authorization code.'));
           return;
         }
 
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'gis_code_flow',
+          phase: 'success',
+          outcome: 'success',
+          triggerSource: 'user_action',
+          message: 'Google returned an authorization code successfully.',
+          email: options.loginHint,
+        });
         resolve({
           code: response.code,
           scope: response.scope || SCOPES,
         });
       },
       error_callback: (error: GoogleErrorResponse) => {
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'gis_code_flow',
+          phase: 'failure',
+          outcome: 'failure',
+          triggerSource: 'user_action',
+          message: error.message || 'OAuth code flow failed',
+          code: error.type,
+          email: options.loginHint,
+        });
         reject(new Error(error.message || 'OAuth code flow failed'));
       },
     });

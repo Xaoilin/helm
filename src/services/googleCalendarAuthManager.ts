@@ -10,6 +10,7 @@ import {
   requestGoogleAuthorizationCode,
   type GoogleTokens,
 } from './googleAuth';
+import { appendGoogleCalendarDiagnosticEvent } from './googleCalendarDiagnosticEvents';
 import type { GoogleCalendarListEntry } from './googleCalendarApi';
 import {
   bootstrapGoogleCalendarProfileCredential,
@@ -504,9 +505,29 @@ async function tryBootstrapProfileGoogleCredential(
     );
   }
 
+  appendGoogleCalendarDiagnosticEvent({
+    operation: 'profile_bootstrap',
+    phase: 'start',
+    outcome: 'info',
+    triggerSource: 'system',
+    accountId: account.id,
+    email: account.email,
+    resolvedAuthProvider: 'profile-google',
+    message: 'Attempting to bootstrap a hosted Google Calendar credential from the signed-in HELM session.',
+  });
   await bootstrapGoogleCalendarProfileCredential({
     email: snapshot.email,
     providerRefreshToken: snapshot.providerRefreshToken,
+  });
+  appendGoogleCalendarDiagnosticEvent({
+    operation: 'profile_bootstrap',
+    phase: 'success',
+    outcome: 'success',
+    triggerSource: 'system',
+    accountId: account.id,
+    email: account.email,
+    resolvedAuthProvider: 'profile-google',
+    message: 'Bootstrapped a hosted Google Calendar credential from the signed-in HELM session.',
   });
 }
 
@@ -520,6 +541,17 @@ export async function getGoogleCalendarPassiveAccessTokenWithRefresh(
 
   try {
     const minted = await mintGoogleCalendarAccessToken(account.email);
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'access_token_mint',
+      phase: 'success',
+      outcome: 'success',
+      triggerSource: 'system',
+      accountId: account.id,
+      email: account.email,
+      resolvedAuthProvider: authProvider,
+      credentialSource: 'server',
+      message: 'Minted a hosted Google Calendar access token for passive sync.',
+    });
     return {
       accessToken: minted.accessToken,
       authProvider,
@@ -534,12 +566,39 @@ export async function getGoogleCalendarPassiveAccessTokenWithRefresh(
       try {
         await tryBootstrapProfileGoogleCredential(account, snapshot);
         const minted = await mintGoogleCalendarAccessToken(account.email);
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'access_token_mint',
+          phase: 'success',
+          outcome: 'success',
+          triggerSource: 'system',
+          accountId: account.id,
+          email: account.email,
+          resolvedAuthProvider: authProvider,
+          credentialSource: 'server',
+          message: 'Minted a hosted Google Calendar access token after bootstrapping the profile credential.',
+        });
         return {
           accessToken: minted.accessToken,
           authProvider,
           authExpiresAt: minted.credential.currentAccessTokenExpiresAt,
         };
       } catch (bootstrapError) {
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'profile_bootstrap',
+          phase: 'failure',
+          outcome: bootstrapError instanceof GoogleCalendarOAuthFunctionError && bootstrapError.code === 'needs_reconnect'
+            ? 'needs_reconnect'
+            : 'failure',
+          triggerSource: 'system',
+          accountId: account.id,
+          email: account.email,
+          resolvedAuthProvider: authProvider,
+          message: bootstrapError instanceof Error ? bootstrapError.message : GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
+          code: bootstrapError instanceof GoogleCalendarOAuthFunctionError ? bootstrapError.code : undefined,
+          requestId: bootstrapError instanceof GoogleCalendarOAuthFunctionError ? bootstrapError.requestId : undefined,
+          readiness: bootstrapError instanceof GoogleCalendarOAuthFunctionError ? bootstrapError.readiness : undefined,
+          httpStatus: bootstrapError instanceof GoogleCalendarOAuthFunctionError ? bootstrapError.httpStatus : undefined,
+        });
         if (bootstrapError instanceof GoogleCalendarOAuthFunctionError) {
           throw mapGoogleCalendarOAuthError(account, authProvider, bootstrapError);
         }
@@ -548,9 +607,39 @@ export async function getGoogleCalendarPassiveAccessTokenWithRefresh(
     }
 
     if (error instanceof GoogleCalendarOAuthFunctionError) {
+      appendGoogleCalendarDiagnosticEvent({
+        operation: 'access_token_mint',
+        phase: 'failure',
+        outcome: error.code === 'revoked'
+          ? 'revoked'
+          : error.code === 'needs_reconnect' || error.code === 'missing_credential' || error.code === 'missing_refresh_token'
+            ? 'needs_reconnect'
+            : error.code === 'temporary_unavailable'
+              ? 'temporary_unavailable'
+              : 'failure',
+        triggerSource: 'system',
+        accountId: account.id,
+        email: account.email,
+        resolvedAuthProvider: authProvider,
+        message: error.message,
+        code: error.code,
+        requestId: error.requestId,
+        readiness: error.readiness,
+        httpStatus: error.httpStatus,
+      });
       throw mapGoogleCalendarOAuthError(account, authProvider, error);
     }
 
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'access_token_mint',
+      phase: 'failure',
+      outcome: 'temporary_unavailable',
+      triggerSource: 'system',
+      accountId: account.id,
+      email: account.email,
+      resolvedAuthProvider: authProvider,
+      message: error instanceof Error ? error.message : GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
+    });
     throw error;
   }
 }
@@ -560,16 +649,51 @@ export async function connectGoogleCalendarOAuthAccount(clientId: string): Promi
     throw new Error(GOOGLE_SIGN_IN_REQUIRED_MESSAGE);
   }
 
-  await loadGisScript();
-  const result = await requestGoogleAuthorizationCode(clientId.trim(), {
-    selectAccount: true,
-  });
-  const connected = await exchangeGoogleCalendarAuthorizationCode({
-    code: result.code,
-    redirectUri: window.location.origin,
+  appendGoogleCalendarDiagnosticEvent({
+    operation: 'connect',
+    phase: 'start',
+    outcome: 'info',
+    triggerSource: 'user_action',
+    message: 'Starting a new Google Calendar account connection.',
   });
 
-  return createConnectionResult(connected, 'calendar-oauth');
+  try {
+    await loadGisScript();
+    const result = await requestGoogleAuthorizationCode(clientId.trim(), {
+      selectAccount: true,
+    });
+    const connected = await exchangeGoogleCalendarAuthorizationCode({
+      code: result.code,
+      redirectUri: window.location.origin,
+    });
+
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'connect',
+      phase: 'success',
+      outcome: 'success',
+      triggerSource: 'user_action',
+      email: connected.credential.accountEmail,
+      resolvedAuthProvider: 'calendar-oauth',
+      message: `Connected Google Calendar account ${connected.credential.accountEmail}.`,
+    });
+
+    return createConnectionResult(connected, 'calendar-oauth');
+  } catch (error) {
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'connect',
+      phase: 'failure',
+      outcome: error instanceof GoogleCalendarOAuthFunctionError && error.code === 'needs_reconnect'
+        ? 'needs_reconnect'
+        : 'failure',
+      triggerSource: 'user_action',
+      message: error instanceof Error ? error.message : GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
+      code: error instanceof GoogleCalendarOAuthFunctionError ? error.code : undefined,
+      requestId: error instanceof GoogleCalendarOAuthFunctionError ? error.requestId : undefined,
+      readiness: error instanceof GoogleCalendarOAuthFunctionError ? error.readiness : undefined,
+      httpStatus: error instanceof GoogleCalendarOAuthFunctionError ? error.httpStatus : undefined,
+    });
+    throw error;
+  }
 }
 
 export async function reconnectGoogleCalendarOAuthAccount(
@@ -580,19 +704,60 @@ export async function reconnectGoogleCalendarOAuthAccount(
     throw new Error(GOOGLE_SIGN_IN_REQUIRED_MESSAGE);
   }
 
-  await loadGisScript();
-  const result = await requestGoogleAuthorizationCode(clientId.trim(), {
-    loginHint: account.email,
-    selectAccount: true,
-  });
-  const connected = await exchangeGoogleCalendarAuthorizationCode({
-    code: result.code,
-    redirectUri: window.location.origin,
-    expectedEmail: account.email,
+  appendGoogleCalendarDiagnosticEvent({
+    operation: 'reconnect',
+    phase: 'start',
+    outcome: 'info',
+    triggerSource: 'user_action',
+    accountId: account.id,
+    email: account.email,
+    resolvedAuthProvider: 'calendar-oauth',
+    message: `Starting an explicit Google Calendar reconnect for ${account.email}.`,
   });
 
-  clearGoogleTokens(account.id);
-  return createConnectionResult(connected, 'calendar-oauth');
+  try {
+    await loadGisScript();
+    const result = await requestGoogleAuthorizationCode(clientId.trim(), {
+      loginHint: account.email,
+      selectAccount: true,
+    });
+    const connected = await exchangeGoogleCalendarAuthorizationCode({
+      code: result.code,
+      redirectUri: window.location.origin,
+      expectedEmail: account.email,
+    });
+
+    clearGoogleTokens(account.id);
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'reconnect',
+      phase: 'success',
+      outcome: 'success',
+      triggerSource: 'user_action',
+      accountId: account.id,
+      email: account.email,
+      resolvedAuthProvider: 'calendar-oauth',
+      message: `Reconnected Google Calendar account ${account.email}.`,
+    });
+    return createConnectionResult(connected, 'calendar-oauth');
+  } catch (error) {
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'reconnect',
+      phase: 'failure',
+      outcome: error instanceof GoogleCalendarOAuthFunctionError && error.code === 'needs_reconnect'
+        ? 'needs_reconnect'
+        : 'failure',
+      triggerSource: 'user_action',
+      accountId: account.id,
+      email: account.email,
+      resolvedAuthProvider: 'calendar-oauth',
+      message: error instanceof Error ? error.message : GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
+      code: error instanceof GoogleCalendarOAuthFunctionError ? error.code : undefined,
+      requestId: error instanceof GoogleCalendarOAuthFunctionError ? error.requestId : undefined,
+      readiness: error instanceof GoogleCalendarOAuthFunctionError ? error.readiness : undefined,
+      httpStatus: error instanceof GoogleCalendarOAuthFunctionError ? error.httpStatus : undefined,
+    });
+    throw error;
+  }
 }
 
 export async function connectProfileGoogleCalendar(): Promise<GoogleCalendarConnectionResult> {
@@ -606,8 +771,32 @@ export async function connectProfileGoogleCalendar(): Promise<GoogleCalendarConn
       email: snapshot.email,
       providerRefreshToken: snapshot.providerRefreshToken,
     });
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'connect',
+      phase: 'success',
+      outcome: 'success',
+      triggerSource: 'user_action',
+      email: snapshot.email,
+      resolvedAuthProvider: 'profile-google',
+      message: `Linked the signed-in HELM Google account ${snapshot.email} to Google Calendar.`,
+    });
     return createConnectionResult(connected, 'profile-google');
   } catch (error) {
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'connect',
+      phase: 'failure',
+      outcome: error instanceof GoogleCalendarOAuthFunctionError && error.code === 'needs_reconnect'
+        ? 'needs_reconnect'
+        : 'failure',
+      triggerSource: 'user_action',
+      email: snapshot.email,
+      resolvedAuthProvider: 'profile-google',
+      message: error instanceof Error ? error.message : GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
+      code: error instanceof GoogleCalendarOAuthFunctionError ? error.code : undefined,
+      requestId: error instanceof GoogleCalendarOAuthFunctionError ? error.requestId : undefined,
+      readiness: error instanceof GoogleCalendarOAuthFunctionError ? error.readiness : undefined,
+      httpStatus: error instanceof GoogleCalendarOAuthFunctionError ? error.httpStatus : undefined,
+    });
     if (error instanceof GoogleCalendarOAuthFunctionError) {
       throw mapGoogleCalendarOAuthError({
         id: 'profile-google',
@@ -625,6 +814,14 @@ export async function connectProfileGoogleCalendar(): Promise<GoogleCalendarConn
 }
 
 export async function triggerProfileGoogleReconnect(): Promise<void> {
+  appendGoogleCalendarDiagnosticEvent({
+    operation: 'reconnect',
+    phase: 'start',
+    outcome: 'info',
+    triggerSource: 'user_action',
+    resolvedAuthProvider: 'profile-google',
+    message: 'Starting a HELM Google sign-in reconnect for the linked profile account.',
+  });
   await signInWithGoogle();
 }
 
