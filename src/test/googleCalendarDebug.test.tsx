@@ -6,6 +6,7 @@ const {
   appState,
   fetchCalendarListMock,
   getAuthSessionSnapshotMock,
+  googleSyncState,
   isAuthSessionBootstrappedMock,
   isSupabaseReadyMock,
   passiveTokenMock,
@@ -15,6 +16,28 @@ const {
   },
   fetchCalendarListMock: vi.fn(),
   getAuthSessionSnapshotMock: vi.fn(),
+  googleSyncState: {
+    syncState: 'idle',
+    lastSyncTime: null,
+    syncError: null,
+    triggerSync: vi.fn(),
+    accountSyncStates: {},
+    diagnostics: {
+      lastTriggerSource: 'manual',
+      lastTriggerAt: '2026-04-14T08:30:00.000Z',
+      accounts: {
+        'acc-google': {
+          accountId: 'acc-google',
+          email: 'alisa@example.com',
+          checkedAt: '2026-04-14T08:30:00.000Z',
+          triggerSource: 'manual',
+          outcome: 'blocked',
+          message: 'Auto sync is paused until this account is rechecked or reconnected.',
+          skippedDestructiveRemovals: false,
+        },
+      },
+    },
+  },
   isAuthSessionBootstrappedMock: vi.fn(),
   isSupabaseReadyMock: vi.fn(),
   passiveTokenMock: vi.fn(),
@@ -38,6 +61,10 @@ vi.mock('../config', async () => {
 
 vi.mock('../store/AppContext', () => ({
   useApp: () => appState,
+}));
+
+vi.mock('../hooks/useGoogleSync', () => ({
+  useGoogleSync: () => googleSyncState,
 }));
 
 vi.mock('../services/googleCalendarApi', async () => {
@@ -104,7 +131,7 @@ describe('DebugSurface Google Calendar diagnostics', () => {
       authExpiresAt: '2026-04-14T12:00:00.000Z',
     });
     fetchCalendarListMock.mockResolvedValue([
-      { id: 'primary', summary: 'Primary', accessRole: 'owner' },
+      { id: 'alisa@example.com', summary: 'Primary', accessRole: 'owner', primary: true },
     ]);
   });
 
@@ -120,7 +147,8 @@ describe('DebugSurface Google Calendar diagnostics', () => {
     expect(screen.getAllByText('alisa@example.com').length).toBeGreaterThan(0);
     expect(screen.getByText('Stored token expired')).toBeInTheDocument();
     expect(screen.getByText('Passive sync blocked')).toBeInTheDocument();
-    expect(screen.getByText('Auto sync is paused until this account is rechecked or reconnected.')).toBeInTheDocument();
+    expect(screen.getAllByText('Auto sync is paused until this account is rechecked or reconnected.').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Last sync trigger: manual/i)).toBeInTheDocument();
     expect(screen.queryByText('stored-secret-token')).not.toBeInTheDocument();
   });
 

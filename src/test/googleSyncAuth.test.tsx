@@ -45,9 +45,21 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 function setGoogleAccounts(rawAccounts: unknown) {
-  localStorage.setItem('helm:calendarAccounts', JSON.stringify(rawAccounts));
-  localStorage.setItem('helm:calendarSources', JSON.stringify([]));
-  localStorage.setItem('helm:calendarEvents', JSON.stringify([]));
+  setGoogleCalendarState({ accounts: rawAccounts });
+}
+
+function setGoogleCalendarState({
+  accounts,
+  sources = [],
+  events = [],
+}: {
+  accounts: unknown;
+  sources?: unknown;
+  events?: unknown;
+}) {
+  localStorage.setItem('helm:calendarAccounts', JSON.stringify(accounts));
+  localStorage.setItem('helm:calendarSources', JSON.stringify(sources));
+  localStorage.setItem('helm:calendarEvents', JSON.stringify(events));
 }
 
 function readGoogleAccounts() {
@@ -56,6 +68,21 @@ function readGoogleAccounts() {
     authStatus?: string;
     lastAuthError?: string;
     syncError?: string;
+  }>;
+}
+
+function readCalendarSources() {
+  return JSON.parse(localStorage.getItem('helm:calendarSources') || '[]') as Array<{
+    id: string;
+    googleCalendarId?: string;
+  }>;
+}
+
+function readCalendarEvents() {
+  return JSON.parse(localStorage.getItem('helm:calendarEvents') || '[]') as Array<{
+    id: string;
+    googleEventId?: string;
+    sourceId: string;
   }>;
 }
 
@@ -70,7 +97,14 @@ describe('useGoogleSync auth behavior', () => {
       authProvider: 'calendar-oauth',
       authExpiresAt: new Date(Date.now() + 3600000).toISOString(),
     });
-    fetchCalendarListMock.mockResolvedValue([]);
+    fetchCalendarListMock.mockResolvedValue([
+      {
+        id: 'alisa@example.com',
+        summary: 'Primary',
+        accessRole: 'owner',
+        primary: true,
+      },
+    ]);
     fetchEventsMock.mockResolvedValue([]);
   });
 
@@ -250,6 +284,192 @@ describe('useGoogleSync auth behavior', () => {
       const [account] = readGoogleAccounts();
       expect(account.authStatus).toBe('error');
       expect(account.syncError).toBe('Google Calendar temporarily unavailable.');
+    });
+  });
+
+  it('aborts safely when Google returns the wrong account identity', async () => {
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-mismatch',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+      }],
+      sources: [{
+        id: 'src-primary',
+        accountId: 'acc-mismatch',
+        name: 'Primary',
+        color: '#4f5bff',
+        visible: true,
+        googleCalendarId: 'alisa@example.com',
+      }],
+      events: [{
+        id: 'evt-primary',
+        sourceId: 'src-primary',
+        title: 'Keep me',
+        description: '',
+        start: '2026-04-14T09:00:00.000Z',
+        end: '2026-04-14T10:00:00.000Z',
+        allDay: false,
+        googleEventId: 'evt-keep',
+        googleCalendarId: 'alisa@example.com',
+      }],
+    });
+    fetchCalendarListMock.mockResolvedValueOnce([
+      {
+        id: 'different@example.com',
+        summary: 'Different',
+        accessRole: 'owner',
+        primary: true,
+      },
+    ]);
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current).toBeTruthy();
+    });
+
+    await act(async () => {
+      await result.current.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      const [account] = readGoogleAccounts();
+      expect(account.authStatus).toBe('needs_reconnect');
+      expect(account.lastAuthError).toContain('different@example.com');
+      expect(readCalendarSources()).toHaveLength(1);
+      expect(readCalendarEvents()).toHaveLength(1);
+      expect(result.current.diagnostics.accounts['acc-mismatch']?.outcome).toBe('ownership_mismatch');
+    });
+  });
+
+  it('keeps cached calendars and events when Google omits a previously synced calendar', async () => {
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-cache',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+      }],
+      sources: [
+        {
+          id: 'src-primary',
+          accountId: 'acc-cache',
+          name: 'Primary',
+          color: '#4f5bff',
+          visible: true,
+          googleCalendarId: 'alisa@example.com',
+        },
+        {
+          id: 'src-shared',
+          accountId: 'acc-cache',
+          name: 'Shared',
+          color: '#22c55e',
+          visible: true,
+          googleCalendarId: 'shared-cal',
+        },
+      ],
+      events: [{
+        id: 'evt-shared',
+        sourceId: 'src-shared',
+        title: 'Cached shared event',
+        description: '',
+        start: '2026-04-14T09:00:00.000Z',
+        end: '2026-04-14T10:00:00.000Z',
+        allDay: false,
+        googleEventId: 'evt-shared',
+        googleCalendarId: 'shared-cal',
+      }],
+    });
+    fetchCalendarListMock.mockResolvedValueOnce([
+      {
+        id: 'alisa@example.com',
+        summary: 'Primary',
+        accessRole: 'owner',
+        primary: true,
+      },
+    ]);
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current).toBeTruthy();
+    });
+
+    await act(async () => {
+      await result.current.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      expect(readCalendarSources()).toHaveLength(2);
+      expect(readCalendarEvents()).toHaveLength(1);
+      expect(result.current.diagnostics.accounts['acc-cache']?.preservedSourceCount).toBe(1);
+      expect(result.current.diagnostics.accounts['acc-cache']?.preservedEventCount).toBe(1);
+    });
+  });
+
+  it('keeps cached events that fall outside the current Google fetch window', async () => {
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-window',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+      }],
+      sources: [{
+        id: 'src-window',
+        accountId: 'acc-window',
+        name: 'Primary',
+        color: '#4f5bff',
+        visible: true,
+        googleCalendarId: 'alisa@example.com',
+      }],
+      events: [{
+        id: 'evt-outside-window',
+        sourceId: 'src-window',
+        title: 'Old cached event',
+        description: '',
+        start: '2025-01-10T09:00:00.000Z',
+        end: '2025-01-10T10:00:00.000Z',
+        allDay: false,
+        googleEventId: 'evt-old',
+        googleCalendarId: 'alisa@example.com',
+      }],
+    });
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current).toBeTruthy();
+    });
+
+    await act(async () => {
+      await result.current.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      expect(readCalendarEvents()).toHaveLength(1);
+      expect(readCalendarEvents()[0]?.googleEventId).toBe('evt-old');
+      expect(result.current.diagnostics.accounts['acc-window']?.preservedEventCount).toBe(1);
     });
   });
 });

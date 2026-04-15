@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { CalendarAccount } from '../types/domain';
 import {
   getGoogleCalendarAuthPatch,
+  getGoogleCalendarOwnershipResult,
   getGoogleCalendarStatusLabel,
   getResolvedGoogleAuthProvider,
 } from '../services/googleCalendarAuthManager';
@@ -88,7 +89,7 @@ describe('googleCalendarAuthManager', () => {
     expect(getResolvedGoogleAuthProvider(account, null)).toBe('profile-google');
   });
 
-  it('clears legacy reconnect state when a calendar-oauth account still has cached transport credentials', () => {
+  it('preserves a confirmed reconnect-required state even when a stale cached token is still present', () => {
     const account = makeGoogleAccount({
       email: 'work@example.com',
       authProvider: 'calendar-oauth',
@@ -103,7 +104,24 @@ describe('googleCalendarAuthManager', () => {
     });
 
     const patch = getGoogleCalendarAuthPatch(account, null);
-    expect(patch.authStatus).toBe('connected');
-    expect(patch.lastAuthError).toBeUndefined();
+    expect(patch.authStatus).toBe('needs_reconnect');
+    expect(patch.lastAuthError).toBe('Google access expired. Reconnect this account.');
+  });
+
+  it('reports a wrong-account ownership mismatch before sync mutates cached data', () => {
+    const account = makeGoogleAccount({ authProvider: 'calendar-oauth' });
+
+    const ownership = getGoogleCalendarOwnershipResult(account, [
+      {
+        id: 'someone-else@example.com',
+        summary: 'Someone Else',
+        accessRole: 'owner',
+        primary: true,
+      },
+    ]);
+
+    expect(ownership.matches).toBe(false);
+    expect(ownership.primaryEmail).toBe('someone-else@example.com');
+    expect(ownership.message).toContain('someone-else@example.com');
   });
 });
