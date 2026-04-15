@@ -1,16 +1,17 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  saveGoogleTokens,
-  loadGoogleTokens,
   clearGoogleTokens,
   isTokenValid,
-  getValidAccessToken,
+  loadGoogleTokens,
+  requestGoogleAuthorizationCode,
+  saveGoogleTokens,
   type GoogleTokens,
 } from '../services/googleAuth';
 
-describe('googleAuth token management', () => {
+describe('googleAuth', () => {
   beforeEach(() => {
     localStorage.clear();
+    Reflect.deleteProperty(window, 'google');
   });
 
   const sampleTokens: GoogleTokens = {
@@ -19,103 +20,100 @@ describe('googleAuth token management', () => {
     scope: 'https://www.googleapis.com/auth/calendar',
   };
 
-  describe('saveGoogleTokens / loadGoogleTokens', () => {
-    it('should save and load tokens', () => {
-      saveGoogleTokens('acc1', sampleTokens);
-      const loaded = loadGoogleTokens('acc1');
-      expect(loaded).toEqual(sampleTokens);
-    });
-
-    it('should return null for non-existent account', () => {
-      expect(loadGoogleTokens('nonexistent')).toBeNull();
-    });
-
-    it('should isolate tokens per account', () => {
-      const tokens2: GoogleTokens = { ...sampleTokens, accessToken: 'ya29.other-token' };
-      saveGoogleTokens('acc1', sampleTokens);
-      saveGoogleTokens('acc2', tokens2);
-      expect(loadGoogleTokens('acc1')?.accessToken).toBe('ya29.test-token');
-      expect(loadGoogleTokens('acc2')?.accessToken).toBe('ya29.other-token');
-    });
+  it('saves and loads legacy browser tokens for migration diagnostics', () => {
+    saveGoogleTokens('acc1', sampleTokens);
+    expect(loadGoogleTokens('acc1')).toEqual(sampleTokens);
   });
 
-  describe('clearGoogleTokens', () => {
-    it('should remove tokens for an account', () => {
-      saveGoogleTokens('acc1', sampleTokens);
-      clearGoogleTokens('acc1');
-      expect(loadGoogleTokens('acc1')).toBeNull();
-    });
+  it('clears legacy browser tokens per account', () => {
+    saveGoogleTokens('acc1', sampleTokens);
+    saveGoogleTokens('acc2', { ...sampleTokens, accessToken: 'ya29.other-token' });
 
-    it('should not affect other accounts', () => {
-      saveGoogleTokens('acc1', sampleTokens);
-      saveGoogleTokens('acc2', sampleTokens);
-      clearGoogleTokens('acc1');
-      expect(loadGoogleTokens('acc2')).not.toBeNull();
-    });
+    clearGoogleTokens('acc1');
+
+    expect(loadGoogleTokens('acc1')).toBeNull();
+    expect(loadGoogleTokens('acc2')?.accessToken).toBe('ya29.other-token');
   });
 
-  describe('isTokenValid', () => {
-    it('should return true for fresh tokens', () => {
-      const tokens: GoogleTokens = {
-        accessToken: 'ya29.fresh',
-        expiresAt: Date.now() + 3600000, // 1 hour from now
-        scope: 'calendar',
-      };
-      expect(isTokenValid(tokens)).toBe(true);
-    });
-
-    it('should return false for expired tokens', () => {
-      const tokens: GoogleTokens = {
-        accessToken: 'ya29.expired',
-        expiresAt: Date.now() - 1000, // 1 second ago
-        scope: 'calendar',
-      };
-      expect(isTokenValid(tokens)).toBe(false);
-    });
-
-    it('should return false for tokens expiring within 60s', () => {
-      const tokens: GoogleTokens = {
-        accessToken: 'ya29.almost',
-        expiresAt: Date.now() + 30000, // 30 seconds from now
-        scope: 'calendar',
-      };
-      expect(isTokenValid(tokens)).toBe(false);
-    });
-
-    it('should return false for null tokens', () => {
-      expect(isTokenValid(null)).toBe(false);
-    });
+  it('treats near-expiry legacy tokens as invalid', () => {
+    expect(isTokenValid({
+      accessToken: 'ya29.almost-expired',
+      expiresAt: Date.now() + 30_000,
+      scope: 'calendar',
+    })).toBe(false);
   });
 
-  describe('getValidAccessToken (no-popup regression)', () => {
-    it('should return stored token even if expired when no GIS available', async () => {
-      const expiredTokens: GoogleTokens = {
-        accessToken: 'ya29.expired-but-stored',
-        expiresAt: Date.now() - 3600000, // 1 hour ago
-        scope: 'calendar',
-      };
-      saveGoogleTokens('acc-expired', expiredTokens);
-
-      // With empty clientId, skips refresh attempt and returns expired token as fallback
-      const token = await getValidAccessToken('acc-expired', '');
-      expect(token).toBe('ya29.expired-but-stored');
+  it('requests a Google authorization code through the GIS code client', async () => {
+    const requestCode = vi.fn(() => {
+      callback?.({
+        code: 'google-auth-code',
+        scope: 'https://www.googleapis.com/auth/calendar',
+      });
+    });
+    let callback: ((response: { code?: string; scope?: string; error?: string; error_description?: string }) => void) | undefined;
+    const initCodeClient = vi.fn((config: {
+      client_id: string;
+      scope: string;
+      callback: (response: { code?: string; scope?: string; error?: string; error_description?: string }) => void;
+      login_hint?: string;
+      select_account?: boolean;
+    }) => {
+      callback = config.callback;
+      return { requestCode };
     });
 
-    it('should return stored token when still valid', async () => {
-      const freshTokens: GoogleTokens = {
-        accessToken: 'ya29.fresh',
-        expiresAt: Date.now() + 3600000,
-        scope: 'calendar',
-      };
-      saveGoogleTokens('acc-fresh', freshTokens);
-
-      const token = await getValidAccessToken('acc-fresh', 'client-id');
-      expect(token).toBe('ya29.fresh');
+    Object.defineProperty(window, 'google', {
+      configurable: true,
+      value: {
+        accounts: {
+          oauth2: {
+            initCodeClient,
+            revoke: vi.fn(),
+          },
+        },
+      },
     });
 
-    it('should throw when no tokens exist at all', async () => {
-      await expect(getValidAccessToken('acc-none', 'client-id'))
-        .rejects.toThrow('No stored tokens');
+    await expect(requestGoogleAuthorizationCode('client-id', {
+      loginHint: 'alisa@example.com',
+      selectAccount: true,
+    })).resolves.toEqual({
+      code: 'google-auth-code',
+      scope: 'https://www.googleapis.com/auth/calendar',
     });
+
+    expect(initCodeClient).toHaveBeenCalledWith(expect.objectContaining({
+      client_id: 'client-id',
+      login_hint: 'alisa@example.com',
+      select_account: true,
+    }));
+    expect(requestCode).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces GIS code-flow errors to the caller', async () => {
+    const requestCode = vi.fn(() => {
+      callback?.({
+        error: 'access_denied',
+        error_description: 'The user cancelled the flow.',
+      });
+    });
+    let callback: ((response: { code?: string; scope?: string; error?: string; error_description?: string }) => void) | undefined;
+
+    Object.defineProperty(window, 'google', {
+      configurable: true,
+      value: {
+        accounts: {
+          oauth2: {
+            initCodeClient: vi.fn((config: { callback: typeof callback }) => {
+              callback = config.callback;
+              return { requestCode };
+            }),
+            revoke: vi.fn(),
+          },
+        },
+      },
+    });
+
+    await expect(requestGoogleAuthorizationCode('client-id')).rejects.toThrow('The user cancelled the flow.');
   });
 });

@@ -1,16 +1,16 @@
-import type {
-  CalendarAccount,
-  CalendarAuthProvider,
-  CalendarAuthStatus,
-} from '../types/domain';
+import type { CalendarAccount, CalendarAuthProvider, CalendarAuthStatus } from '../types/domain';
 import {
   GOOGLE_ACCESS_EXPIRED_MESSAGE,
   GOOGLE_ACCESS_REVOKED_MESSAGE,
   GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
+  type GoogleCalendarCredentialSource,
+  type GoogleCalendarRuntimeCredentialHealth,
+  type GoogleCalendarRuntimeCredentialState,
   GoogleCalendarReconnectRequiredError,
   getGoogleCalendarOwnershipResult,
   getGoogleCalendarPassiveAccessTokenWithRefresh,
   getGoogleCalendarPassiveSyncEligibility,
+  getGoogleCalendarRuntimeCredentialState,
   getResolvedGoogleAuthProvider,
   isGoogleCalendarAccount,
 } from './googleCalendarAuthManager';
@@ -51,11 +51,18 @@ export interface GoogleCalendarAccountDebugSnapshot {
   storedAuthStatus?: CalendarAuthStatus;
   lastSyncTime?: string;
   lastAuthCheckAt?: string;
-  authExpiresAt?: string;
   lastAuthError?: string;
   syncError?: string;
   passiveSyncEligible: boolean;
   passiveSyncBlockedReason?: string;
+  credentialSource: GoogleCalendarCredentialSource;
+  serverCredentialPresent: boolean;
+  credentialHealth: GoogleCalendarRuntimeCredentialHealth;
+  currentAccessTokenExpiresAt?: string;
+  lastRefreshAt?: string;
+  lastRefreshFailureReason?: string;
+  lastRefreshFailureAt?: string;
+  upgradeRequired: boolean;
   storedToken: GoogleCalendarTokenDebugSnapshot;
 }
 
@@ -80,7 +87,7 @@ export interface GoogleCalendarPassiveProbeResult {
   resolvedAuthProvider: CalendarAuthProvider;
   status: GoogleCalendarPassiveProbeStatus;
   message: string;
-  authExpiresAt?: string;
+  currentAccessTokenExpiresAt?: string;
   calendarCount?: number;
 }
 
@@ -106,7 +113,10 @@ export function getGoogleCalendarStoredTokenDebugSnapshot(accountId: string): Go
   };
 }
 
-export function getGoogleCalendarDebugSnapshot(accounts: CalendarAccount[]): GoogleCalendarDebugSnapshot {
+export function getGoogleCalendarDebugSnapshot(
+  accounts: CalendarAccount[],
+  credentialStates: Record<string, GoogleCalendarRuntimeCredentialState> = {},
+): GoogleCalendarDebugSnapshot {
   const snapshot = getAuthSessionSnapshot();
 
   return {
@@ -124,6 +134,9 @@ export function getGoogleCalendarDebugSnapshot(accounts: CalendarAccount[]): Goo
       .filter(isGoogleCalendarAccount)
       .map(account => {
         const passiveSync = getGoogleCalendarPassiveSyncEligibility(account);
+        const runtimeState = credentialStates[account.id]
+          ?? getGoogleCalendarRuntimeCredentialState(account, { snapshot });
+
         return {
           accountId: account.id,
           email: account.email,
@@ -131,11 +144,18 @@ export function getGoogleCalendarDebugSnapshot(accounts: CalendarAccount[]): Goo
           storedAuthStatus: account.authStatus,
           lastSyncTime: account.lastSyncTime,
           lastAuthCheckAt: account.lastAuthCheckAt,
-          authExpiresAt: account.authExpiresAt,
           lastAuthError: account.lastAuthError,
           syncError: account.syncError,
           passiveSyncEligible: passiveSync.eligible,
           passiveSyncBlockedReason: passiveSync.blockedReason,
+          credentialSource: runtimeState.credentialSource,
+          serverCredentialPresent: runtimeState.serverCredentialPresent,
+          credentialHealth: runtimeState.credentialHealth,
+          currentAccessTokenExpiresAt: runtimeState.currentAccessTokenExpiresAt ?? account.authExpiresAt,
+          lastRefreshAt: runtimeState.lastRefreshAt,
+          lastRefreshFailureReason: runtimeState.lastRefreshFailureReason,
+          lastRefreshFailureAt: runtimeState.lastRefreshFailureAt,
+          upgradeRequired: runtimeState.credentialHealth === 'upgrade_required',
           storedToken: getGoogleCalendarStoredTokenDebugSnapshot(account.id),
         };
       }),
@@ -146,7 +166,6 @@ export async function runGoogleCalendarPassiveProbe(
   account: CalendarAccount,
   clientId: string,
 ): Promise<GoogleCalendarPassiveProbeResult> {
-  void clientId;
   const checkedAt = new Date().toISOString();
   const resolvedAuthProvider = getResolvedGoogleAuthProvider(account);
   const eligibility = getGoogleCalendarPassiveSyncEligibility(account, { manual: true });
@@ -163,7 +182,7 @@ export async function runGoogleCalendarPassiveProbe(
   }
 
   try {
-    const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, '');
+    const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, clientId);
     const calendars = await fetchCalendarList(token.accessToken);
     const ownership = getGoogleCalendarOwnershipResult(account, calendars);
 
@@ -186,7 +205,7 @@ export async function runGoogleCalendarPassiveProbe(
       resolvedAuthProvider: token.authProvider,
       status: 'success',
       message: `Passive access confirmed. ${calendars.length} calendar${calendars.length === 1 ? '' : 's'} visible.`,
-      authExpiresAt: token.authExpiresAt,
+      currentAccessTokenExpiresAt: token.authExpiresAt,
       calendarCount: calendars.length,
     };
   } catch (error) {
@@ -196,7 +215,7 @@ export async function runGoogleCalendarPassiveProbe(
         email: account.email,
         checkedAt,
         resolvedAuthProvider: error.authProvider,
-        status: 'needs_reconnect',
+        status: error.authStatus === 'revoked' ? 'revoked' : 'needs_reconnect',
         message: error.message,
       };
     }

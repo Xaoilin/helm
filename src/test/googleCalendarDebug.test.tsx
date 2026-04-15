@@ -37,6 +37,19 @@ const {
         },
       },
     },
+    credentialStatuses: {
+      'acc-google': {
+        accountId: 'acc-google',
+        email: 'alisa@example.com',
+        resolvedAuthProvider: 'calendar-oauth',
+        credentialSource: 'legacy_browser_token',
+        serverCredentialPresent: false,
+        credentialHealth: 'upgrade_required',
+        message: 'Reconnect this Google account once to upgrade it to durable browser Calendar access.',
+        currentAccessTokenExpiresAt: '2026-04-14T12:00:00.000Z',
+      },
+    },
+    refreshCredentialStatuses: vi.fn(),
   },
   isAuthSessionBootstrappedMock: vi.fn(),
   isSupabaseReadyMock: vi.fn(),
@@ -106,7 +119,7 @@ describe('DebugSurface Google Calendar diagnostics', () => {
       lastSyncTime: '2026-04-14T08:00:00.000Z',
       lastAuthCheckAt: '2026-04-14T08:10:00.000Z',
       authExpiresAt: '2026-04-14T08:05:00.000Z',
-      lastAuthError: 'Google access expired. Reconnect this account.',
+      lastAuthError: 'Reconnect this Google account once to upgrade it to durable browser Calendar access.',
     }];
     localStorage.setItem('helm:google-tokens:acc-google', JSON.stringify({
       accessToken: 'stored-secret-token',
@@ -135,7 +148,7 @@ describe('DebugSurface Google Calendar diagnostics', () => {
     ]);
   });
 
-  it('shows redacted Google auth diagnostics in the network tab', async () => {
+  it('shows redacted hosted Google auth diagnostics in the network tab', async () => {
     await act(async () => {
       render(<DebugSurface />);
     });
@@ -145,8 +158,9 @@ describe('DebugSurface Google Calendar diagnostics', () => {
     expect(await screen.findByText('Google Calendar Diagnostics')).toBeInTheDocument();
     expect(screen.getByText('HELM Auth Context')).toBeInTheDocument();
     expect(screen.getAllByText('alisa@example.com').length).toBeGreaterThan(0);
-    expect(screen.getByText('Stored token expired')).toBeInTheDocument();
-    expect(screen.getByText('Passive sync blocked')).toBeInTheDocument();
+    expect(screen.getByText('Legacy token expired')).toBeInTheDocument();
+    expect(screen.getByText('No server credential')).toBeInTheDocument();
+    expect(screen.getByText('Credential upgrade required')).toBeInTheDocument();
     expect(screen.getAllByText('Auto sync is paused until this account is rechecked or reconnected.').length).toBeGreaterThan(0);
     expect(screen.getByText(/Last sync trigger: manual/i)).toBeInTheDocument();
     expect(screen.queryByText('stored-secret-token')).not.toBeInTheDocument();
@@ -168,5 +182,6 @@ describe('DebugSurface Google Calendar diagnostics', () => {
     expect(await screen.findByText('Passive access confirmed. 1 calendar visible.')).toBeInTheDocument();
     expect(screen.getByText('Probe: success')).toBeInTheDocument();
     expect(screen.queryByText('refreshed-token')).not.toBeInTheDocument();
+    expect(screen.getByText('Probe current access token expiry')).toBeInTheDocument();
   });
 });

@@ -141,10 +141,11 @@ For every delivered feature, say clearly what you verified manually, include the
 - Passive Google Calendar sync must stay non-interactive. Reconnect or consent flows should only happen from an explicit user action.
 - Calendar tab navigation must stay read-only with respect to Google auth. Surface remounts are not valid reasons to relaunch sync or GIS.
 - Treat Google Calendar auth state as account data, not as an implicit side effect of whether a cached browser token still exists.
-- Do not mark a `calendar-oauth` account as reconnect-required just because a cached GIS token expired or disappeared. Only confirmed passive auth failures, 401s, revokes, or missing linked profile sessions after auth bootstrap should set reconnect-required.
+- Durable browser Google Calendar transport must use the hosted refresh-token path. Do not reintroduce direct browser transport based on GIS access tokens or Supabase `provider_token`.
+- Do not mark a `calendar-oauth` account as reconnect-required just because a cached GIS token expired or disappeared. Only confirmed passive auth failures, 401s, revokes, missing hosted credentials, or missing linked profile sessions after auth bootstrap should set reconnect-required.
 - Passive Google Calendar sync must be cache-preserving. Windowed fetches and partial calendar-list responses are freshness signals, not proof that local sources or events should be deleted.
 - Validate Google account ownership before mutating a multi-account sync result. If Google returns the wrong account, preserve cached data and require an explicit reconnect instead of applying cross-account data.
-- Any Google auth diagnostics must keep tokens redacted. Presence, expiry, scope, and derived health are fine; raw token values are not.
+- Any Google auth diagnostics must keep tokens redacted. Presence, expiry, scope, credential health, and refresh-failure metadata are fine; raw token values are not.
 - Treat workspaces and credentials as first-class stored records even though their current product depth is lighter than other domains.
 
 ## Security Notes

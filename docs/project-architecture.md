@@ -121,18 +121,21 @@ When the authenticated write queue succeeds, the dirty-cache marker is cleared. 
 Google identity now has two cooperating layers:
 
 - Supabase Google sign-in for HELM account auth and cloud sync
-- Google Calendar account auth managed through `src/services/googleCalendarAuthManager.ts`
+- server-backed Google Calendar account auth managed through `src/services/googleCalendarAuthManager.ts`, `src/services/googleCalendarServerAuth.ts`, and `supabase/functions/google-calendar-oauth/`
 
 The auth manager links the matching signed-in Google profile to the same-email Calendar account when possible, while still preserving multi-account Google Calendar support for additional accounts.
 
 Important behavior:
 
 - Google Calendar accounts persist explicit auth metadata in the domain model.
+- Browser Google Calendar transport is now server-backed and refreshable. The browser only obtains Google authorization codes; refresh tokens stay on the hosted Supabase side in `google_calendar_credentials`.
+- Durable browser Google Calendar support now requires HELM sign-in. Signed-out browser mode is a truthful degraded state for connect or reconnect, while local calendars continue to work normally.
 - Passive sync is non-interactive. Opening Calendar or pressing `Sync` should never launch a consent or reconnect popup.
 - Reconnect-required is a confirmed failure state, not a shortcut for "cached GIS token expired". Calendar-OAuth accounts only move into reconnect-required after passive auth actually fails, a 401 comes back, or the user no longer has transport credentials to retry with.
-- Linked `profile-google` accounts stay tied to the HELM sign-in session. If that profile session is missing after auth bootstrap, the account shows a truthful HELM sign-in reconnect state instead of silently falling back to stale Calendar OAuth state.
+- Linked `profile-google` accounts stay tied to the HELM sign-in relationship, but the live Calendar transport is no longer the Supabase `provider_token`. Both linked and extra accounts use the same hosted refresh-token credential model.
+- Existing browser-token-only accounts are treated as legacy migration state. They keep their cached calendar data, but HELM asks for a one-time reconnect to upgrade them onto the durable hosted credential path.
 - Accounts that lose Calendar access move into account-level states such as reconnect-required or revoked instead of surfacing as a generic global outage.
-- GIS OAuth is still used for separately connected Calendar accounts, but those tokens are treated as cached transport credentials rather than the source of truth for account connection state.
+- Google Identity Services still starts the browser flow for separately connected Calendar accounts, but it now uses the authorization-code model and hands off token exchange to the hosted function.
 - Explicit Google auth UI is limited to user-initiated `Reconnect` or `+ Account` flows. Background sync and manual sync are both passive, account-bound checks.
 
 ### Calendar data model
@@ -145,10 +148,10 @@ Calendar state is hierarchical:
 
 Sources belong to accounts, and events belong to sources. Account removal must cascade cleanly. Primary-account promotion is handled automatically when needed.
 
-Google-backed calendar accounts also carry per-account auth metadata such as provider mode, auth status, expiry, and last auth error so the UI can distinguish reconnect problems from service outages.
+Google-backed calendar accounts also carry per-account auth metadata such as provider mode, auth status, the current hosted access-token expiry, and the last auth error so the UI can distinguish reconnect problems from service outages without confusing short-lived transport expiry for full account disconnection.
 The long-lived Google sync controller now sits above the surface layer inside `src/store/AppContext.tsx` through `GoogleSyncProvider`, so tab remounts do not restart sync work.
 Passive Google sync is additive and cache-preserving: it upserts fresher calendars and events, validates account ownership before mutation, and no longer treats "missing from this calendar list or fetch window" as delete evidence.
-The Debug surface's `Network / APIs` tab now exposes Google Calendar diagnostics as well: Supabase auth context, redacted token presence/expiry/scope, passive-sync eligibility, trigger source, blocked reasons, wrong-account detection, skipped destructive removals, and a manual passive auth probe that checks access without mutating calendar sources or events.
+The Debug surface's `Network / APIs` tab now exposes Google Calendar diagnostics as well: Supabase auth context, credential source, hosted credential presence and health, current hosted access-token expiry, last refresh failure metadata, legacy browser-token migration state, passive-sync eligibility, trigger source, blocked reasons, wrong-account detection, skipped destructive removals, and a manual passive auth probe that checks access without mutating calendar sources or events.
 
 ### Assistant and voice services
 

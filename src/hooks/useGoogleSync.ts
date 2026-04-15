@@ -21,13 +21,25 @@ import {
   GOOGLE_ACCESS_REVOKED_MESSAGE,
   GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
   type GoogleCalendarOwnershipResult,
+  type GoogleCalendarRuntimeCredentialState,
   GoogleCalendarReconnectRequiredError,
+  getGoogleCalendarAccountPatchForCredentialState,
   getGoogleCalendarOwnershipResult,
   getGoogleCalendarPassiveAccessTokenWithRefresh,
   getGoogleCalendarPassiveSyncEligibility,
+  getGoogleCalendarRuntimeCredentialState,
   isGoogleCalendarAccount,
 } from '../services/googleCalendarAuthManager';
+import {
+  bootstrapGoogleCalendarProfileCredential,
+  getGoogleCalendarCredentialStatuses,
+  GoogleCalendarOAuthFunctionError,
+} from '../services/googleCalendarServerAuth';
 import { LIMITS } from '../config/constants';
+import {
+  getAuthSessionSnapshot,
+  isAuthSessionBootstrapped,
+} from '../store/supabase';
 
 export type SyncState = 'idle' | 'syncing' | 'error';
 export type GoogleSyncTriggerSource = 'auto' | 'manual';
@@ -65,6 +77,8 @@ export interface GoogleSyncResult {
   triggerSync: (manual?: boolean) => Promise<void>;
   accountSyncStates: Record<string, { state: SyncState; lastSync: string | null; error: string | null }>;
   diagnostics: GoogleSyncDiagnostics;
+  credentialStatuses: Record<string, GoogleCalendarRuntimeCredentialState>;
+  refreshCredentialStatuses: () => Promise<void>;
 }
 
 interface GoogleSyncApp {
@@ -147,11 +161,28 @@ function createSuccessMessage(preservedSourceCount: number, preservedEventCount:
   return `Passive sync updated cached Google data and ${parts.join(' and ')} missing from this fetch window.`;
 }
 
+function shouldPreserveExplicitFailureState(account: CalendarAccount): boolean {
+  if (account.authStatus === 'revoked' || account.authStatus === 'error') {
+    return true;
+  }
+
+  if (account.lastAuthError === GOOGLE_ACCESS_EXPIRED_MESSAGE || account.lastAuthError === GOOGLE_ACCESS_REVOKED_MESSAGE) {
+    return true;
+  }
+
+  if (account.lastAuthError?.includes('Reconnect this account explicitly.')) {
+    return true;
+  }
+
+  return account.syncError === GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE;
+}
+
 function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
   const [syncState, setSyncState] = useState<SyncState>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
   const [accountSyncStates, setAccountSyncStates] = useState<Record<string, { state: SyncState; lastSync: string | null; error: string | null }>>({});
   const [diagnostics, setDiagnostics] = useState<GoogleSyncDiagnostics>({ accounts: {} });
+  const [credentialStatuses, setCredentialStatuses] = useState<Record<string, GoogleCalendarRuntimeCredentialState>>({});
   const syncingRef = useRef(false);
   const appRef = useRef(app);
 
@@ -163,6 +194,14 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
     () => app.calendarAccounts.filter(isGoogleCalendarAccount),
     [app.calendarAccounts],
   );
+  const authSnapshot = getAuthSessionSnapshot();
+  const authSessionSignature = [
+    authSnapshot?.userId ?? '',
+    authSnapshot?.email ?? '',
+    authSnapshot?.provider ?? '',
+    authSnapshot?.providerRefreshToken ? 'refresh' : 'no-refresh',
+    isAuthSessionBootstrapped() ? 'bootstrapped' : 'pending',
+  ].join(':');
   const googleAccountsSignature = useMemo(
     () => googleAccounts
       .map(account => [
@@ -191,6 +230,104 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
       },
     }));
   }, []);
+
+  const updateAccountIfChanged = useCallback((account: CalendarAccount, updates: Partial<CalendarAccount>) => {
+    const hasChange = Object.entries(updates).some(([key, value]) => {
+      const typedKey = key as keyof CalendarAccount;
+      return account[typedKey] !== value;
+    });
+
+    if (hasChange) {
+      appRef.current.updateCalendarAccount(account.id, updates);
+    }
+  }, []);
+
+  const refreshCredentialStatuses = useCallback(async () => {
+    const currentApp = appRef.current;
+    const accounts = currentApp.calendarAccounts.filter(isGoogleCalendarAccount);
+    if (accounts.length === 0) {
+      setCredentialStatuses({});
+      return;
+    }
+
+    const snapshot = getAuthSessionSnapshot();
+    let statusFetchError: string | null = null;
+    const statusByEmail = new Map<string, Awaited<ReturnType<typeof getGoogleCalendarCredentialStatuses>>[number]>();
+
+    if (snapshot?.userId) {
+      try {
+        const statuses = await getGoogleCalendarCredentialStatuses(accounts.map(account => account.email));
+        for (const status of statuses) {
+          statusByEmail.set(status.accountEmail.trim().toLowerCase(), status);
+        }
+      } catch (error) {
+        statusFetchError = error instanceof Error ? error.message : String(error);
+      }
+    }
+
+    const checkedAt = new Date().toISOString();
+    const nextStatuses: Record<string, GoogleCalendarRuntimeCredentialState> = {};
+
+    for (const account of accounts) {
+      let serverCredential = statusByEmail.get(account.email.trim().toLowerCase());
+
+      if (
+        !statusFetchError
+        && !serverCredential
+        && snapshot?.providerRefreshToken
+        && account.email.trim().toLowerCase() === (snapshot.email || '').trim().toLowerCase()
+      ) {
+        try {
+          const bootstrap = await bootstrapGoogleCalendarProfileCredential({
+            email: account.email,
+            providerRefreshToken: snapshot.providerRefreshToken,
+          });
+          serverCredential = bootstrap.credential;
+          statusByEmail.set(account.email.trim().toLowerCase(), bootstrap.credential);
+        } catch (error) {
+          if (!(error instanceof GoogleCalendarOAuthFunctionError) || error.code !== 'missing_refresh_token') {
+            statusFetchError = error instanceof Error ? error.message : String(error);
+          }
+        }
+      }
+
+      const runtimeState = statusFetchError
+        ? {
+            ...getGoogleCalendarRuntimeCredentialState(account, { snapshot }),
+            credentialHealth: 'temporary_unavailable' as const,
+            message: statusFetchError,
+          }
+        : getGoogleCalendarRuntimeCredentialState(account, {
+            serverCredential,
+            snapshot,
+          });
+
+      nextStatuses[account.id] = runtimeState;
+
+      if (!statusFetchError) {
+        const credentialPatch = getGoogleCalendarAccountPatchForCredentialState(account, runtimeState, checkedAt);
+        const accountPatch = (
+          runtimeState.credentialHealth === 'refreshable'
+          && shouldPreserveExplicitFailureState(account)
+        )
+          ? {
+              ...credentialPatch,
+              authStatus: account.authStatus,
+              lastAuthError: account.lastAuthError,
+              syncError: account.syncError,
+            }
+          : credentialPatch;
+
+        updateAccountIfChanged(account, accountPatch);
+      }
+    }
+
+    setCredentialStatuses(nextStatuses);
+  }, [updateAccountIfChanged]);
+
+  useEffect(() => {
+    void refreshCredentialStatuses();
+  }, [authSessionSignature, googleAccountsSignature, refreshCredentialStatuses]);
 
   const syncAccount = useCallback(async (accountId: string, triggerSource: GoogleSyncTriggerSource): Promise<boolean> => {
     const currentApp = appRef.current;
@@ -229,6 +366,14 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
             state: 'error',
             lastSync: prev[accountId]?.lastSync || account.lastSyncTime || null,
             error: message,
+          },
+        }));
+        setCredentialStatuses(prev => ({
+          ...prev,
+          [accountId]: {
+            ...(prev[accountId] || getGoogleCalendarRuntimeCredentialState(account, { snapshot: getAuthSessionSnapshot() })),
+            credentialHealth: 'needs_reconnect',
+            message,
           },
         }));
         recordDiagnostic(createOwnershipMismatchDiagnostic(account, triggerSource, checkedAt, ownership));
@@ -375,6 +520,17 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
         ...prev,
         [accountId]: { state: 'idle', lastSync: now, error: null },
       }));
+      setCredentialStatuses(prev => ({
+        ...prev,
+        [accountId]: {
+          ...(prev[accountId] || getGoogleCalendarRuntimeCredentialState(account, { snapshot: getAuthSessionSnapshot() })),
+          credentialSource: 'server',
+          serverCredentialPresent: true,
+          credentialHealth: 'refreshable',
+          message: undefined,
+          currentAccessTokenExpiresAt: token.authExpiresAt,
+        },
+      }));
       recordDiagnostic({
         accountId,
         email: account.email,
@@ -444,6 +600,14 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
           state: 'error',
           lastSync: prev[accountId]?.lastSync || account.lastSyncTime || null,
           error: message,
+        },
+      }));
+      setCredentialStatuses(prev => ({
+        ...prev,
+        [accountId]: {
+          ...(prev[accountId] || getGoogleCalendarRuntimeCredentialState(account, { snapshot: getAuthSessionSnapshot() })),
+          credentialHealth: outcome === 'revoked' ? 'revoked' : outcome === 'error' ? 'temporary_unavailable' : 'needs_reconnect',
+          message,
         },
       }));
       recordDiagnostic({
@@ -525,6 +689,8 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
     triggerSync,
     accountSyncStates,
     diagnostics,
+    credentialStatuses,
+    refreshCredentialStatuses,
   };
 }
 
