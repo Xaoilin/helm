@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  getGoogleCalendarCredentialStatusSnapshot,
   GoogleCalendarOAuthFunctionError,
   exchangeGoogleCalendarAuthorizationCode,
   mintGoogleCalendarAccessToken,
@@ -48,6 +49,16 @@ describe('googleCalendarServerAuth', () => {
             currentAccessTokenExpiresAt: '2026-04-15T10:00:00.000Z',
           },
         },
+        meta: {
+          requestId: 'req-mint-1',
+          checkedAt: '2026-04-15T09:00:00.000Z',
+          readiness: {
+            functionReachable: true,
+            oauthConfigured: true,
+            originAllowed: true,
+            signedIn: true,
+          },
+        },
       },
       error: null,
     });
@@ -78,6 +89,16 @@ describe('googleCalendarServerAuth', () => {
         error: 'needs_reconnect',
         message: 'Reconnect this account.',
         accountEmail: 'alisa@example.com',
+        meta: {
+          requestId: 'req-error-1',
+          checkedAt: '2026-04-15T09:10:00.000Z',
+          readiness: {
+            functionReachable: true,
+            oauthConfigured: true,
+            originAllowed: true,
+            signedIn: true,
+          },
+        },
       },
       error: null,
     });
@@ -90,7 +111,40 @@ describe('googleCalendarServerAuth', () => {
       name: 'GoogleCalendarOAuthFunctionError',
       code: 'needs_reconnect',
       accountEmail: 'alisa@example.com',
+      requestId: 'req-error-1',
     } satisfies Partial<GoogleCalendarOAuthFunctionError>);
+  });
+
+  it('returns hosted status snapshot metadata for debug readiness checks', async () => {
+    functionsInvokeMock.mockResolvedValue({
+      data: {
+        ok: true,
+        result: [],
+        meta: {
+          requestId: 'req-status-1',
+          checkedAt: '2026-04-15T10:10:00.000Z',
+          readiness: {
+            functionReachable: true,
+            oauthConfigured: false,
+            originAllowed: true,
+            signedIn: true,
+          },
+        },
+      },
+      error: null,
+    });
+
+    await expect(getGoogleCalendarCredentialStatusSnapshot(['alisa@example.com'])).resolves.toEqual({
+      statuses: [],
+      requestId: 'req-status-1',
+      checkedAt: '2026-04-15T10:10:00.000Z',
+      readiness: {
+        functionReachable: true,
+        oauthConfigured: false,
+        originAllowed: true,
+        signedIn: true,
+      },
+    });
   });
 
   it('fails truthfully when there is no signed-in Supabase session', async () => {

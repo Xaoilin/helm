@@ -50,7 +50,7 @@ vi.mock('../services/googleCalendarServerAuth', async () => {
   return {
     ...actual,
     bootstrapGoogleCalendarProfileCredential: bootstrapProfileCredentialMock,
-    getGoogleCalendarCredentialStatuses: getCredentialStatusesMock,
+    getGoogleCalendarCredentialStatusSnapshot: getCredentialStatusesMock,
   };
 });
 
@@ -144,16 +144,26 @@ describe('useGoogleSync durable auth behavior', () => {
       },
     ]);
     fetchEventsMock.mockResolvedValue([]);
-    getCredentialStatusesMock.mockResolvedValue([
-      {
-        accountEmail: 'alisa@example.com',
-        serverCredentialPresent: true,
-        credentialHealth: 'refreshable',
-        currentAccessTokenExpiresAt: new Date(Date.now() + 3600000).toISOString(),
-        lastRefreshAt: new Date().toISOString(),
-        credentialOrigin: 'oauth_code',
+    getCredentialStatusesMock.mockResolvedValue({
+      statuses: [
+        {
+          accountEmail: 'alisa@example.com',
+          serverCredentialPresent: true,
+          credentialHealth: 'refreshable',
+          currentAccessTokenExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+          lastRefreshAt: new Date().toISOString(),
+          credentialOrigin: 'oauth_code',
+        },
+      ],
+      requestId: 'req-status-1',
+      checkedAt: new Date().toISOString(),
+      readiness: {
+        functionReachable: true,
+        oauthConfigured: true,
+        originAllowed: true,
+        signedIn: true,
       },
-    ]);
+    });
     bootstrapProfileCredentialMock.mockResolvedValue({
       credential: {
         accountEmail: 'alisa@example.com',
@@ -233,9 +243,50 @@ describe('useGoogleSync durable auth behavior', () => {
     });
   });
 
+  it('does not loop hosted credential status refreshes when the refresh updates account timestamps', async () => {
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-status-refresh',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: '2026-04-15T07:00:00.000Z',
+        lastSyncTime: '2026-04-15T07:00:00.000Z',
+      }],
+    });
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
+    await waitFor(() => {
+      expect(getCredentialStatusesMock).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(getCredentialStatusesMock).toHaveBeenCalledTimes(1);
+  });
+
   it('marks legacy browser-token accounts as upgrade-required reconnects when no hosted credential exists yet', async () => {
     const freshIso = new Date().toISOString();
-    getCredentialStatusesMock.mockResolvedValue([]);
+    getCredentialStatusesMock.mockResolvedValue({
+      statuses: [],
+      requestId: 'req-status-2',
+      checkedAt: new Date().toISOString(),
+      readiness: {
+        functionReachable: true,
+        oauthConfigured: true,
+        originAllowed: true,
+        signedIn: true,
+      },
+    });
     setGoogleCalendarState({
       accounts: [{
         id: 'acc-upgrade',
@@ -269,7 +320,17 @@ describe('useGoogleSync durable auth behavior', () => {
   });
 
   it('bootstraps the linked profile account into a hosted credential when a Supabase refresh token is available', async () => {
-    getCredentialStatusesMock.mockResolvedValue([]);
+    getCredentialStatusesMock.mockResolvedValue({
+      statuses: [],
+      requestId: 'req-status-3',
+      checkedAt: new Date().toISOString(),
+      readiness: {
+        functionReachable: true,
+        oauthConfigured: true,
+        originAllowed: true,
+        signedIn: true,
+      },
+    });
     setGoogleCalendarState({
       accounts: [{
         id: 'acc-profile',

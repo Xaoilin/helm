@@ -1,4 +1,5 @@
 import type { CalendarAccount, CalendarAuthProvider, CalendarAuthStatus } from '../types/domain';
+import { appendGoogleCalendarDiagnosticEvent } from './googleCalendarDiagnosticEvents';
 import {
   GOOGLE_ACCESS_EXPIRED_MESSAGE,
   GOOGLE_ACCESS_REVOKED_MESSAGE,
@@ -170,7 +171,28 @@ export async function runGoogleCalendarPassiveProbe(
   const resolvedAuthProvider = getResolvedGoogleAuthProvider(account);
   const eligibility = getGoogleCalendarPassiveSyncEligibility(account, { manual: true });
 
+  appendGoogleCalendarDiagnosticEvent({
+    operation: 'manual_probe',
+    phase: 'start',
+    outcome: 'info',
+    triggerSource: 'debug',
+    accountId: account.id,
+    email: account.email,
+    resolvedAuthProvider,
+    message: `Running a manual Google Calendar passive probe for ${account.email}.`,
+  });
+
   if (!eligibility.eligible) {
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'manual_probe',
+      phase: 'blocked',
+      outcome: 'blocked',
+      triggerSource: 'debug',
+      accountId: account.id,
+      email: account.email,
+      resolvedAuthProvider,
+      message: eligibility.blockedReason || 'Passive auth check is blocked.',
+    });
     return {
       accountId: account.id,
       email: account.email,
@@ -187,6 +209,18 @@ export async function runGoogleCalendarPassiveProbe(
     const ownership = getGoogleCalendarOwnershipResult(account, calendars);
 
     if (!ownership.matches) {
+      appendGoogleCalendarDiagnosticEvent({
+        operation: 'manual_probe',
+        phase: 'failure',
+        outcome: 'ownership_mismatch',
+        triggerSource: 'debug',
+        accountId: account.id,
+        email: account.email,
+        resolvedAuthProvider: token.authProvider,
+        message: ownership.message || 'Google returned a different account.',
+        primaryCalendarEmail: ownership.primaryEmail,
+        calendarCount: calendars.length,
+      });
       return {
         accountId: account.id,
         email: account.email,
@@ -198,6 +232,17 @@ export async function runGoogleCalendarPassiveProbe(
       };
     }
 
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'manual_probe',
+      phase: 'success',
+      outcome: 'success',
+      triggerSource: 'debug',
+      accountId: account.id,
+      email: account.email,
+      resolvedAuthProvider: token.authProvider,
+      message: `Passive access confirmed. ${calendars.length} calendar${calendars.length === 1 ? '' : 's'} visible.`,
+      calendarCount: calendars.length,
+    });
     return {
       accountId: account.id,
       email: account.email,
@@ -210,6 +255,16 @@ export async function runGoogleCalendarPassiveProbe(
     };
   } catch (error) {
     if (error instanceof GoogleCalendarReconnectRequiredError) {
+      appendGoogleCalendarDiagnosticEvent({
+        operation: 'manual_probe',
+        phase: 'failure',
+        outcome: error.authStatus === 'revoked' ? 'revoked' : 'needs_reconnect',
+        triggerSource: 'debug',
+        accountId: account.id,
+        email: account.email,
+        resolvedAuthProvider: error.authProvider,
+        message: error.message,
+      });
       return {
         accountId: account.id,
         email: account.email,
@@ -221,6 +276,17 @@ export async function runGoogleCalendarPassiveProbe(
     }
 
     if (error instanceof GoogleApiError && error.isForbidden) {
+      appendGoogleCalendarDiagnosticEvent({
+        operation: 'manual_probe',
+        phase: 'failure',
+        outcome: 'revoked',
+        triggerSource: 'debug',
+        accountId: account.id,
+        email: account.email,
+        resolvedAuthProvider,
+        message: GOOGLE_ACCESS_REVOKED_MESSAGE,
+        httpStatus: error.status,
+      });
       return {
         accountId: account.id,
         email: account.email,
@@ -232,6 +298,17 @@ export async function runGoogleCalendarPassiveProbe(
     }
 
     if (error instanceof GoogleApiError && error.isAuthError) {
+      appendGoogleCalendarDiagnosticEvent({
+        operation: 'manual_probe',
+        phase: 'failure',
+        outcome: 'needs_reconnect',
+        triggerSource: 'debug',
+        accountId: account.id,
+        email: account.email,
+        resolvedAuthProvider,
+        message: GOOGLE_ACCESS_EXPIRED_MESSAGE,
+        httpStatus: error.status,
+      });
       return {
         accountId: account.id,
         email: account.email,
@@ -242,6 +319,16 @@ export async function runGoogleCalendarPassiveProbe(
       };
     }
 
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'manual_probe',
+      phase: 'failure',
+      outcome: 'failure',
+      triggerSource: 'debug',
+      accountId: account.id,
+      email: account.email,
+      resolvedAuthProvider,
+      message: error instanceof Error ? error.message : GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
+    });
     return {
       accountId: account.id,
       email: account.email,

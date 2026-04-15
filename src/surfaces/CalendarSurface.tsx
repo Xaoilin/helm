@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
 import { useGoogleSync } from '../hooks/useGoogleSync';
+import { appendGoogleCalendarDiagnosticEvent } from '../services/googleCalendarDiagnosticEvents';
 import {
   createEvent as googleCreateEvent,
   updateEvent as googleUpdateEvent,
   deleteEvent as googleDeleteEvent,
   localEventToGooglePayload,
 } from '../services/googleCalendarApi';
+import { logError } from '../services/logger';
 import type { CalendarAccount, CalendarEvent } from '../types/domain';
 import {
   GoogleCalendarReconnectRequiredError,
@@ -239,7 +241,17 @@ export default function CalendarSurface() {
           syncError: undefined,
         });
       } catch (err) {
-        console.error('Failed to sync event to Google:', err);
+        logError('CalendarSurface', err);
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'sync_account',
+          phase: 'failure',
+          outcome: err instanceof GoogleCalendarReconnectRequiredError ? 'needs_reconnect' : 'failure',
+          triggerSource: 'user_action',
+          accountId: account.id,
+          email: account.email,
+          resolvedAuthProvider: account.authProvider,
+          message: err instanceof Error ? `Google event write failed: ${err.message}` : 'Google event write failed.',
+        });
         if (err instanceof GoogleCalendarReconnectRequiredError) {
           app.updateCalendarAccount(account.id, {
             authProvider: err.authProvider,
@@ -289,7 +301,17 @@ export default function CalendarSurface() {
           syncError: undefined,
         });
       } catch (err) {
-        console.error('Failed to delete from Google:', err);
+        logError('CalendarSurface', err);
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'sync_account',
+          phase: 'failure',
+          outcome: err instanceof GoogleCalendarReconnectRequiredError ? 'needs_reconnect' : 'failure',
+          triggerSource: 'user_action',
+          accountId: account.id,
+          email: account.email,
+          resolvedAuthProvider: account.authProvider,
+          message: err instanceof Error ? `Google event delete failed: ${err.message}` : 'Google event delete failed.',
+        });
         if (err instanceof GoogleCalendarReconnectRequiredError) {
           app.updateCalendarAccount(account.id, {
             authProvider: err.authProvider,

@@ -126,11 +126,26 @@ interface FailurePayload {
   message: string;
   accountEmail?: string;
   credential?: GoogleCalendarCredentialStatus;
+  meta: ResponseMeta;
 }
 
 interface SuccessPayload<T> {
   ok: true;
   result: T;
+  meta: ResponseMeta;
+}
+
+interface BackendReadiness {
+  functionReachable: boolean;
+  oauthConfigured: boolean;
+  originAllowed: boolean;
+  signedIn: boolean;
+}
+
+interface ResponseMeta {
+  requestId: string;
+  checkedAt: string;
+  readiness: BackendReadiness;
 }
 
 function normalizeEmail(email: string): string {
@@ -139,6 +154,10 @@ function normalizeEmail(email: string): string {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function newRequestId(): string {
+  return crypto.randomUUID();
 }
 
 function expiryFromNow(expiresInSeconds: number | undefined): string | undefined {
@@ -177,8 +196,8 @@ function toCredentialStatus(row: GoogleCalendarCredentialRow): GoogleCalendarCre
   };
 }
 
-function success<T>(result: T): Response {
-  return jsonResponse({ ok: true, result } satisfies SuccessPayload<T>);
+function success<T>(result: T, meta: ResponseMeta): Response {
+  return jsonResponse({ ok: true, result, meta } satisfies SuccessPayload<T>);
 }
 
 function failure(
@@ -188,6 +207,7 @@ function failure(
     accountEmail?: string;
     credential?: GoogleCalendarCredentialStatus;
   } = {},
+  meta: ResponseMeta,
 ): Response {
   return jsonResponse({
     ok: false,
@@ -195,46 +215,70 @@ function failure(
     message,
     ...(options.accountEmail ? { accountEmail: options.accountEmail } : {}),
     ...(options.credential ? { credential: options.credential } : {}),
+    meta,
   } satisfies FailurePayload);
 }
 
-function unauthorizedOriginFailure(): Response {
+function createResponseMeta(
+  requestId: string,
+  readiness: Partial<BackendReadiness> = {},
+): ResponseMeta {
+  return {
+    requestId,
+    checkedAt: nowIso(),
+    readiness: {
+      functionReachable: true,
+      oauthConfigured: Boolean(GOOGLE_OAUTH_CLIENT_ID && GOOGLE_OAUTH_CLIENT_SECRET),
+      originAllowed: true,
+      signedIn: false,
+      ...readiness,
+    },
+  };
+}
+
+function unauthorizedOriginFailure(requestId: string): Response {
   return failure(
     'unauthorized_origin',
     'This browser origin is not allowed to use the hosted Google Calendar OAuth function.',
+    {},
+    createResponseMeta(requestId, { originAllowed: false }),
   );
 }
 
-function invalidRequest(message: string): Response {
-  return failure('invalid_request', message);
+function invalidRequest(message: string, meta: ResponseMeta): Response {
+  return failure('invalid_request', message, {}, meta);
 }
 
-function oauthNotConfiguredFailure(): Response {
+function oauthNotConfiguredFailure(requestId: string): Response {
   return failure(
     'oauth_not_configured',
     'Google Calendar OAuth is not configured on the hosted function. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.',
+    {},
+    createResponseMeta(requestId, { oauthConfigured: false }),
   );
 }
 
-function ensureOriginAllowed(request: Request): Response | null {
+function ensureOriginAllowed(request: Request, requestId: string): Response | null {
   if (GOOGLE_OAUTH_ALLOWED_ORIGINS.length === 0) return null;
   const origin = request.headers.get('origin');
-  if (!origin) return unauthorizedOriginFailure();
+  if (!origin) return unauthorizedOriginFailure(requestId);
   if (!GOOGLE_OAUTH_ALLOWED_ORIGINS.includes(origin)) {
-    return unauthorizedOriginFailure();
+    return unauthorizedOriginFailure(requestId);
   }
   return null;
 }
 
-function getEnvReadinessFailure(): Response | null {
+function getEnvReadinessFailure(requestId: string): Response | null {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
     return failure(
       'temporary_unavailable',
       'Supabase function secrets are incomplete for Google Calendar OAuth.',
+      {},
+      createResponseMeta(requestId, { functionReachable: true }),
     );
   }
   if (!GOOGLE_OAUTH_CLIENT_ID || !GOOGLE_OAUTH_CLIENT_SECRET) {
-    return oauthNotConfiguredFailure();
+    return oauthNotConfiguredFailure(requestId);
   }
   return null;
 }
@@ -256,16 +300,26 @@ function createServiceRoleClient() {
   });
 }
 
-async function getAuthenticatedUser(request: Request): Promise<AuthenticatedUser | Response> {
+async function getAuthenticatedUser(request: Request, requestId: string): Promise<AuthenticatedUser | Response> {
   const authHeader = request.headers.get('authorization');
   if (!authHeader) {
-    return failure('sign_in_required', 'Sign in to HELM to use durable Google Calendar sync in the browser.');
+    return failure(
+      'sign_in_required',
+      'Sign in to HELM to use durable Google Calendar sync in the browser.',
+      {},
+      createResponseMeta(requestId, { signedIn: false }),
+    );
   }
 
   const authClient = createAuthClient(authHeader);
   const { data, error } = await authClient.auth.getUser();
   if (error || !data.user) {
-    return failure('sign_in_required', 'Sign in to HELM to use durable Google Calendar sync in the browser.');
+    return failure(
+      'sign_in_required',
+      'Sign in to HELM to use durable Google Calendar sync in the browser.',
+      {},
+      createResponseMeta(requestId, { signedIn: false }),
+    );
   }
 
   return {
@@ -274,15 +328,15 @@ async function getAuthenticatedUser(request: Request): Promise<AuthenticatedUser
   };
 }
 
-async function parseBody(request: Request): Promise<ActionRequest | Response> {
+async function parseBody(request: Request, meta: ResponseMeta): Promise<ActionRequest | Response> {
   try {
     const body = await request.json();
     if (typeof body !== 'object' || body === null) {
-      return invalidRequest('Request body must be a JSON object.');
+      return invalidRequest('Request body must be a JSON object.', meta);
     }
     return body as ActionRequest;
   } catch {
-    return invalidRequest('Invalid JSON body.');
+    return invalidRequest('Invalid JSON body.', meta);
   }
 }
 
@@ -479,6 +533,7 @@ async function updateCredentialFailureState(
 
 async function handleConnectedCredential(
   serviceRoleClient: ReturnType<typeof createServiceRoleClient>,
+  meta: ResponseMeta,
   options: {
     userId: string;
     accessToken: string;
@@ -498,6 +553,7 @@ async function handleConnectedCredential(
       'account_mismatch',
       `Google returned ${resolved.accountEmail} instead of ${expectedEmail}. Reconnect this account explicitly.`,
       { accountEmail: resolved.accountEmail },
+      meta,
     );
   }
 
@@ -511,6 +567,7 @@ async function handleConnectedCredential(
         accountEmail: resolved.accountEmail,
         credential: existing ? toCredentialStatus(existing) : undefined,
       },
+      meta,
     );
   }
 
@@ -537,6 +594,7 @@ async function handleConnectedCredential(
 
 async function mintStoredAccessToken(
   serviceRoleClient: ReturnType<typeof createServiceRoleClient>,
+  meta: ResponseMeta,
   row: GoogleCalendarCredentialRow,
 ): Promise<GoogleCalendarMintedAccessToken | Response> {
   const existingExpiry = row.access_token_expires_at
@@ -567,6 +625,7 @@ async function mintStoredAccessToken(
         accountEmail: row.google_email,
         credential: toCredentialStatus(failedRow),
       },
+      meta,
     );
   }
 
@@ -590,18 +649,19 @@ async function mintStoredAccessToken(
 async function handleExchangeCode(
   serviceRoleClient: ReturnType<typeof createServiceRoleClient>,
   user: AuthenticatedUser,
+  meta: ResponseMeta,
   body: ActionRequest,
 ): Promise<Response> {
   if (!body.code || !body.redirectUri) {
-    return invalidRequest('exchange_code requires code and redirectUri.');
+    return invalidRequest('exchange_code requires code and redirectUri.', meta);
   }
 
   const exchanged = await exchangeAuthorizationCode(body.code, body.redirectUri);
   if (!exchanged.ok) {
-    return failure(exchanged.error, exchanged.message);
+    return failure(exchanged.error, exchanged.message, {}, meta);
   }
 
-  const connected = await handleConnectedCredential(serviceRoleClient, {
+  const connected = await handleConnectedCredential(serviceRoleClient, meta, {
     userId: user.id,
     accessToken: exchanged.data.access_token,
     expiresInSeconds: exchanged.data.expires_in,
@@ -611,22 +671,24 @@ async function handleExchangeCode(
     expectedEmail: body.expectedEmail,
   });
 
-  return connected instanceof Response ? connected : success(connected);
+  return connected instanceof Response ? connected : success(connected, meta);
 }
 
 async function handleBootstrapProfileSession(
   serviceRoleClient: ReturnType<typeof createServiceRoleClient>,
   user: AuthenticatedUser,
+  meta: ResponseMeta,
   body: ActionRequest,
 ): Promise<Response> {
   if (!body.email) {
-    return invalidRequest('bootstrap_profile_session requires email.');
+    return invalidRequest('bootstrap_profile_session requires email.', meta);
   }
   if (!body.providerRefreshToken) {
     return failure(
       'missing_refresh_token',
       'Your HELM Google sign-in is missing a Google refresh token. Reconnect your HELM Google sign-in once to upgrade Calendar access.',
       { accountEmail: normalizeEmail(body.email) },
+      meta,
     );
   }
 
@@ -634,10 +696,10 @@ async function handleBootstrapProfileSession(
   if (!refreshed.ok) {
     return failure(refreshed.error, refreshed.message, {
       accountEmail: normalizeEmail(body.email),
-    });
+    }, meta);
   }
 
-  const connected = await handleConnectedCredential(serviceRoleClient, {
+  const connected = await handleConnectedCredential(serviceRoleClient, meta, {
     userId: user.id,
     accessToken: refreshed.data.access_token,
     expiresInSeconds: refreshed.data.expires_in,
@@ -647,16 +709,17 @@ async function handleBootstrapProfileSession(
     expectedEmail: body.email,
   });
 
-  return connected instanceof Response ? connected : success(connected);
+  return connected instanceof Response ? connected : success(connected, meta);
 }
 
 async function handleMintAccessToken(
   serviceRoleClient: ReturnType<typeof createServiceRoleClient>,
   user: AuthenticatedUser,
+  meta: ResponseMeta,
   body: ActionRequest,
 ): Promise<Response> {
   if (!body.accountEmail) {
-    return invalidRequest('mint_access_token requires accountEmail.');
+    return invalidRequest('mint_access_token requires accountEmail.', meta);
   }
 
   const row = await loadCredentialRow(serviceRoleClient, user.id, body.accountEmail);
@@ -665,16 +728,18 @@ async function handleMintAccessToken(
       'missing_credential',
       'No hosted Google Calendar credential exists for this account yet.',
       { accountEmail: normalizeEmail(body.accountEmail) },
+      meta,
     );
   }
 
-  const minted = await mintStoredAccessToken(serviceRoleClient, row);
-  return minted instanceof Response ? minted : success(minted);
+  const minted = await mintStoredAccessToken(serviceRoleClient, meta, row);
+  return minted instanceof Response ? minted : success(minted, meta);
 }
 
 async function handleGetAccountStatus(
   serviceRoleClient: ReturnType<typeof createServiceRoleClient>,
   user: AuthenticatedUser,
+  meta: ResponseMeta,
   body: ActionRequest,
 ): Promise<Response> {
   let query = serviceRoleClient
@@ -689,20 +754,21 @@ async function handleGetAccountStatus(
 
   const { data, error } = await query;
   if (error) {
-    return failure('temporary_unavailable', error.message);
+    return failure('temporary_unavailable', error.message, {}, meta);
   }
 
   const statuses = (data as GoogleCalendarCredentialRow[] | null || []).map(toCredentialStatus);
-  return success(statuses);
+  return success(statuses, meta);
 }
 
 async function handleRevokeAccount(
   serviceRoleClient: ReturnType<typeof createServiceRoleClient>,
   user: AuthenticatedUser,
+  meta: ResponseMeta,
   body: ActionRequest,
 ): Promise<Response> {
   if (!body.accountEmail) {
-    return invalidRequest('revoke_account requires accountEmail.');
+    return invalidRequest('revoke_account requires accountEmail.', meta);
   }
 
   const row = await loadCredentialRow(serviceRoleClient, user.id, body.accountEmail);
@@ -711,6 +777,7 @@ async function handleRevokeAccount(
       'missing_credential',
       'No hosted Google Calendar credential exists for this account.',
       { accountEmail: normalizeEmail(body.accountEmail) },
+      meta,
     );
   }
 
@@ -729,10 +796,10 @@ async function handleRevokeAccount(
     return failure('temporary_unavailable', error.message, {
       accountEmail: row.google_email,
       credential: toCredentialStatus(row),
-    });
+    }, meta);
   }
 
-  return success({ revoked: true });
+  return success({ revoked: true }, meta);
 }
 
 Deno.serve(async request => {
@@ -740,18 +807,22 @@ Deno.serve(async request => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const envFailure = getEnvReadinessFailure();
+  const requestId = newRequestId();
+
+  const envFailure = getEnvReadinessFailure(requestId);
   if (envFailure) return envFailure;
 
-  const originFailure = ensureOriginAllowed(request);
+  const originFailure = ensureOriginAllowed(request, requestId);
   if (originFailure) return originFailure;
 
-  const user = await getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request, requestId);
   if (user instanceof Response) {
     return user;
   }
 
-  const body = await parseBody(request);
+  const meta = createResponseMeta(requestId, { signedIn: true });
+
+  const body = await parseBody(request, meta);
   if (body instanceof Response) {
     return body;
   }
@@ -761,26 +832,26 @@ Deno.serve(async request => {
   try {
     switch (body.action) {
       case 'exchange_code':
-        return await handleExchangeCode(serviceRoleClient, user, body);
+        return await handleExchangeCode(serviceRoleClient, user, meta, body);
       case 'bootstrap_profile_session':
-        return await handleBootstrapProfileSession(serviceRoleClient, user, body);
+        return await handleBootstrapProfileSession(serviceRoleClient, user, meta, body);
       case 'mint_access_token':
-        return await handleMintAccessToken(serviceRoleClient, user, body);
+        return await handleMintAccessToken(serviceRoleClient, user, meta, body);
       case 'get_account_status':
-        return await handleGetAccountStatus(serviceRoleClient, user, body);
+        return await handleGetAccountStatus(serviceRoleClient, user, meta, body);
       case 'revoke_account':
-        return await handleRevokeAccount(serviceRoleClient, user, body);
+        return await handleRevokeAccount(serviceRoleClient, user, meta, body);
       default:
-        return invalidRequest('Unsupported action.');
+        return invalidRequest('Unsupported action.', meta);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Google Calendar OAuth function failed.';
     if (message === 'needs_reconnect') {
-      return failure('needs_reconnect', 'Google access expired. Reconnect this account.');
+      return failure('needs_reconnect', 'Google access expired. Reconnect this account.', {}, meta);
     }
     if (message === 'revoked') {
-      return failure('revoked', 'Google access was revoked. Reconnect this account.');
+      return failure('revoked', 'Google access was revoked. Reconnect this account.', {}, meta);
     }
-    return failure('temporary_unavailable', message);
+    return failure('temporary_unavailable', message, {}, meta);
   }
 });

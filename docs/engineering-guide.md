@@ -10,6 +10,7 @@
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
 - For every bug, regression, or feature failure, do a five-whys pass before solution planning or implementation. Ask "why did this happen?" repeatedly until you identify the root cause at the correct layer, not just the first visible symptom.
+- For integrations, auth, sync, backend-dependent features, and other opaque user-facing fixes, assume the first confident implementation may still fail in reality. Prepare for the case where a fix looks correct locally, is handed off confidently, and still fails in live use. By default, ship a Debug surface or equivalent runtime diagnostics in the same change. If that is not appropriate, document the alternate observability path explicitly in the handoff and relevant docs.
 - Add a regression test for every bug fix that changes logic.
 - Keep changes scoped. If a task spans multiple domains, prefer small coherent commits over one broad sweep.
 
@@ -28,6 +29,7 @@ A change is not done until all of the following are true:
 - code behavior is complete
 - relevant checks are green
 - manual QA has been completed for the delivered feature before reporting back, with screenshot evidence for user-facing changes when practical, and the result is included in the handoff
+- risky integration or backend-dependent fixes include enough runtime observability to explain a post-release failure without guessing
 - docs are updated in the same change
 - user-facing copy matches the actual behavior
 - `docs/feature-status.md` is updated if feature status changed
@@ -113,6 +115,7 @@ For every delivered feature, say clearly what you verified manually, include the
 
 - Do not swallow errors silently. Use the shared logger helpers and keep the message source obvious.
 - User-visible failures should surface in the UI through an error state, inline message, or retry path.
+- For risky external integrations, prefer structured runtime diagnostics over ad hoc console output. The goal is to explain what failed in a live environment, not just to prove the happy path locally.
 - New remote integrations should use the existing resilience utilities where they fit:
   - `src/services/circuitBreaker.ts`
   - `src/services/retry.ts`

@@ -1,6 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DebugSurface from '../surfaces/DebugSurface';
+import {
+  appendGoogleCalendarDiagnosticEvent,
+  clearGoogleCalendarDiagnosticEvents,
+} from '../services/googleCalendarDiagnosticEvents';
 
 const {
   appState,
@@ -50,6 +54,19 @@ const {
       },
     },
     refreshCredentialStatuses: vi.fn(),
+    serverRuntimeStatus: {
+      checkedAt: '2026-04-14T08:31:00.000Z',
+      requestId: 'req-status-1',
+      readiness: {
+        functionReachable: true,
+        oauthConfigured: false,
+        originAllowed: true,
+        signedIn: true,
+      },
+      statusCount: 0,
+      lastError: 'Google Calendar OAuth is not configured on the hosted function.',
+      lastErrorCode: 'oauth_not_configured',
+    },
   },
   isAuthSessionBootstrappedMock: vi.fn(),
   isSupabaseReadyMock: vi.fn(),
@@ -105,6 +122,7 @@ vi.mock('../store/supabase', () => ({
 describe('DebugSurface Google Calendar diagnostics', () => {
   beforeEach(() => {
     localStorage.clear();
+    clearGoogleCalendarDiagnosticEvents();
     vi.clearAllMocks();
     appState.calendarAccounts = [{
       id: 'acc-google',
@@ -127,6 +145,21 @@ describe('DebugSurface Google Calendar diagnostics', () => {
       scope: 'https://www.googleapis.com/auth/calendar',
     }));
 
+    appendGoogleCalendarDiagnosticEvent({
+      operation: 'server_status_refresh',
+      phase: 'failure',
+      outcome: 'failure',
+      message: 'Google Calendar OAuth is not configured on the hosted function.',
+      code: 'oauth_not_configured',
+      requestId: 'req-status-1',
+      readiness: {
+        functionReachable: true,
+        oauthConfigured: false,
+        originAllowed: true,
+        signedIn: true,
+      },
+    });
+
     getAuthSessionSnapshotMock.mockReturnValue({
       userId: 'user-1',
       email: 'alisa@example.com',
@@ -148,7 +181,7 @@ describe('DebugSurface Google Calendar diagnostics', () => {
     ]);
   });
 
-  it('shows redacted hosted Google auth diagnostics in the network tab', async () => {
+  it('shows hosted auth readiness plus the persisted runtime timeline', async () => {
     await act(async () => {
       render(<DebugSurface />);
     });
@@ -156,14 +189,38 @@ describe('DebugSurface Google Calendar diagnostics', () => {
     fireEvent.click(screen.getByRole('button', { name: /Network \/ APIs/i }));
 
     expect(await screen.findByText('Google Calendar Diagnostics')).toBeInTheDocument();
-    expect(screen.getByText('HELM Auth Context')).toBeInTheDocument();
-    expect(screen.getAllByText('alisa@example.com').length).toBeGreaterThan(0);
-    expect(screen.getByText('Legacy token expired')).toBeInTheDocument();
+    expect(screen.getByText('Latest Runtime Summary')).toBeInTheDocument();
+    expect(screen.getByText('Hosted Backend Status')).toBeInTheDocument();
+    expect(screen.getByText('Recent Runtime Timeline')).toBeInTheDocument();
+    expect(screen.getAllByText('Google Calendar OAuth is not configured on the hosted function.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('oauth_not_configured').length).toBeGreaterThan(0);
+    expect(screen.getByText('Function reachable')).toBeInTheDocument();
+    expect(screen.getByText('OAuth configured')).toBeInTheDocument();
     expect(screen.getByText('No server credential')).toBeInTheDocument();
-    expect(screen.getByText('Credential upgrade required')).toBeInTheDocument();
-    expect(screen.getAllByText('Auto sync is paused until this account is rechecked or reconnected.').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Last sync trigger: manual/i)).toBeInTheDocument();
     expect(screen.queryByText('stored-secret-token')).not.toBeInTheDocument();
+  });
+
+  it('can copy and clear redacted diagnostics from the debug page', async () => {
+    await act(async () => {
+      render(<DebugSurface />);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Network \/ APIs/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy diagnostics' }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1);
+    });
+
+    const copied = vi.mocked(navigator.clipboard.writeText).mock.calls.at(-1)?.[0] || '';
+    expect(copied).toContain('oauth_not_configured');
+    expect(copied).toContain('serverRuntimeStatus');
+    expect(copied).not.toContain('stored-secret-token');
+    expect(await screen.findByText(/Copied 1 diagnostic event/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear diagnostics' }));
+
+    expect(await screen.findByText('No Google Calendar diagnostics have been recorded yet on this device.')).toBeInTheDocument();
   });
 
   it('runs a manual passive auth probe without exposing raw tokens', async () => {
@@ -179,7 +236,7 @@ describe('DebugSurface Google Calendar diagnostics', () => {
       expect(fetchCalendarListMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(await screen.findByText('Passive access confirmed. 1 calendar visible.')).toBeInTheDocument();
+    expect((await screen.findAllByText('Passive access confirmed. 1 calendar visible.')).length).toBeGreaterThan(0);
     expect(screen.getByText('Probe: success')).toBeInTheDocument();
     expect(screen.queryByText('refreshed-token')).not.toBeInTheDocument();
     expect(screen.getByText('Probe current access token expiry')).toBeInTheDocument();
