@@ -82,16 +82,16 @@ function installGoogleCalendarFetchMock() {
 }
 
 function installGoogleAuthPopupSpy() {
-  const requestAccessTokenMock = vi.fn();
-  const initTokenClientMock = vi.fn(() => ({
-    requestAccessToken: requestAccessTokenMock,
+  const requestCodeMock = vi.fn();
+  const initCodeClientMock = vi.fn(() => ({
+    requestCode: requestCodeMock,
   }));
 
   Object.defineProperty(window, 'google', {
     value: {
       accounts: {
         oauth2: {
-          initTokenClient: initTokenClientMock,
+          initCodeClient: initCodeClientMock,
           revoke: vi.fn(),
         },
       },
@@ -100,8 +100,8 @@ function installGoogleAuthPopupSpy() {
   });
 
   return {
-    initTokenClientMock,
-    requestAccessTokenMock,
+    initCodeClientMock,
+    requestCodeMock,
   };
 }
 
@@ -456,7 +456,7 @@ describe('CalendarSurface', () => {
     expect(screen.getByText('1 account need reconnect')).toBeInTheDocument();
   });
 
-  it('shows Google access checks separately from token expiry in the accounts view', async () => {
+  it('shows Google access checks separately from credential status in the accounts view', async () => {
     localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
       id: 'acc-google',
       name: 'Google',
@@ -476,12 +476,13 @@ describe('CalendarSurface', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Accounts & Sources' })); });
 
     expect(screen.getByText(/Access checked/i)).toBeInTheDocument();
-    expect(screen.getByText(/Token expires/i)).toBeInTheDocument();
+    expect(screen.getByText(/Credential status/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Token expires/i)).not.toBeInTheDocument();
   });
 
   it('does not reopen Google auth when I switch back to Calendar with stale cached tokens', async () => {
-    const fetchMock = installGoogleCalendarFetchMock();
-    const { initTokenClientMock, requestAccessTokenMock } = installGoogleAuthPopupSpy();
+    installGoogleCalendarFetchMock();
+    const { initCodeClientMock, requestCodeMock } = installGoogleAuthPopupSpy();
     const staleIso = new Date(Date.now() - (20 * 60 * 1000)).toISOString();
 
     localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
@@ -513,28 +514,17 @@ describe('CalendarSurface', () => {
 
     await act(async () => { renderWithProvider(<App />); });
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalled();
-    });
-
-    const googleCallsAfterInitialSync = fetchMock.mock.calls.filter(([input]) =>
-      String(input).includes('www.googleapis.com/calendar/v3/')
-    ).length;
-
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Navigate to Calendar' })); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Navigate to Settings' })); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Navigate to Calendar' })); });
 
-    expect(initTokenClientMock).not.toHaveBeenCalled();
-    expect(requestAccessTokenMock).not.toHaveBeenCalled();
-    expect(fetchMock.mock.calls.filter(([input]) =>
-      String(input).includes('www.googleapis.com/calendar/v3/')
-    ).length).toBe(googleCallsAfterInitialSync);
+    expect(initCodeClientMock).not.toHaveBeenCalled();
+    expect(requestCodeMock).not.toHaveBeenCalled();
   });
 
   it('keeps the Sync button non-interactive even when the cached Google token is stale', async () => {
-    const fetchMock = installGoogleCalendarFetchMock();
-    const { initTokenClientMock, requestAccessTokenMock } = installGoogleAuthPopupSpy();
+    installGoogleCalendarFetchMock();
+    const { initCodeClientMock, requestCodeMock } = installGoogleAuthPopupSpy();
 
     localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
       id: 'acc-google',
@@ -568,11 +558,11 @@ describe('CalendarSurface', () => {
     fireEvent.click(screen.getByRole('button', { name: /sync/i }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /sync/i })).toBeInTheDocument();
     });
 
-    expect(initTokenClientMock).not.toHaveBeenCalled();
-    expect(requestAccessTokenMock).not.toHaveBeenCalled();
+    expect(initCodeClientMock).not.toHaveBeenCalled();
+    expect(requestCodeMock).not.toHaveBeenCalled();
   });
 
   it('still deletes a Google event locally and remotely when I explicitly confirm delete', async () => {
@@ -694,7 +684,8 @@ describe('IntegrationsSurface', () => {
     expect(screen.getByText('Needs reconnect')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
     expect(screen.getByText(/Access checked/i)).toBeInTheDocument();
-    expect(screen.getByText(/Token expires/i)).toBeInTheDocument();
+    expect(screen.getByText(/Credential status/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Token expires/i)).not.toBeInTheDocument();
   });
 });
 

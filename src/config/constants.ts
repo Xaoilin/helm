@@ -138,6 +138,8 @@ export const CLOCK = {
 export const API_TIMEOUT = {
   /** Google Calendar API calls */
   GOOGLE_CALENDAR: 10_000,
+  /** Supabase Edge Function used for Google Calendar OAuth and token refresh */
+  GOOGLE_CALENDAR_OAUTH: 15_000,
   /** Monzo bank API calls */
   MONZO: 10_000,
   /** Deepgram speech-to-text transcription */

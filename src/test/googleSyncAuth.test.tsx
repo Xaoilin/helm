@@ -1,27 +1,32 @@
 import { createElement, type ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppProvider } from '../store/AppContext';
 import { useGoogleSync } from '../hooks/useGoogleSync';
 import { GoogleApiError } from '../services/googleCalendarApi';
+import {
+  GOOGLE_UPGRADE_REQUIRED_MESSAGE,
+} from '../services/googleCalendarAuthManager';
 
 const {
-  passiveTokenMock,
+  bootstrapProfileCredentialMock,
   fetchCalendarListMock,
   fetchEventsMock,
+  getAuthSessionSnapshotMock,
+  getCredentialStatusesMock,
+  isAuthSessionBootstrappedMock,
+  isSupabaseReadyMock,
+  passiveTokenMock,
 } = vi.hoisted(() => ({
-  passiveTokenMock: vi.fn(),
+  bootstrapProfileCredentialMock: vi.fn(),
   fetchCalendarListMock: vi.fn(),
   fetchEventsMock: vi.fn(),
+  getAuthSessionSnapshotMock: vi.fn(),
+  getCredentialStatusesMock: vi.fn(),
+  isAuthSessionBootstrappedMock: vi.fn(),
+  isSupabaseReadyMock: vi.fn(),
+  passiveTokenMock: vi.fn(),
 }));
-
-vi.mock('../config', async () => {
-  const actual = await vi.importActual<typeof import('../config')>('../config');
-  return {
-    ...actual,
-    GOOGLE_OAUTH_CLIENT_ID: 'test-client-id',
-  };
-});
 
 vi.mock('../services/googleCalendarApi', async () => {
   const actual = await vi.importActual<typeof import('../services/googleCalendarApi')>('../services/googleCalendarApi');
@@ -40,12 +45,27 @@ vi.mock('../services/googleCalendarAuthManager', async () => {
   };
 });
 
+vi.mock('../services/googleCalendarServerAuth', async () => {
+  const actual = await vi.importActual<typeof import('../services/googleCalendarServerAuth')>('../services/googleCalendarServerAuth');
+  return {
+    ...actual,
+    bootstrapGoogleCalendarProfileCredential: bootstrapProfileCredentialMock,
+    getGoogleCalendarCredentialStatuses: getCredentialStatusesMock,
+  };
+});
+
+vi.mock('../store/supabase', async () => {
+  const actual = await vi.importActual<typeof import('../store/supabase')>('../store/supabase');
+  return {
+    ...actual,
+    getAuthSessionSnapshot: getAuthSessionSnapshotMock,
+    isAuthSessionBootstrapped: isAuthSessionBootstrappedMock,
+    isSupabaseReady: isSupabaseReadyMock,
+  };
+});
+
 function wrapper({ children }: { children: ReactNode }) {
   return createElement(AppProvider, null, children);
-}
-
-function setGoogleAccounts(rawAccounts: unknown) {
-  setGoogleCalendarState({ accounts: rawAccounts });
 }
 
 function setGoogleCalendarState({
@@ -68,6 +88,7 @@ function readGoogleAccounts() {
     authStatus?: string;
     lastAuthError?: string;
     syncError?: string;
+    authProvider?: string;
   }>;
 }
 
@@ -86,14 +107,31 @@ function readCalendarEvents() {
   }>;
 }
 
-describe('useGoogleSync auth behavior', () => {
+async function waitForHookReady(result: { current: ReturnType<typeof useGoogleSync> | null }) {
+  await waitFor(() => {
+    expect(result.current).toBeTruthy();
+  });
+}
+
+describe('useGoogleSync durable auth behavior', () => {
   beforeEach(() => {
     localStorage.clear();
-    passiveTokenMock.mockReset();
-    fetchCalendarListMock.mockReset();
-    fetchEventsMock.mockReset();
+    vi.clearAllMocks();
+
+    getAuthSessionSnapshotMock.mockReturnValue({
+      userId: 'user-1',
+      email: 'alisa@example.com',
+      accessTokenPresent: true,
+      providerToken: 'provider-token',
+      providerRefreshToken: 'provider-refresh-token',
+      provider: 'google',
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    });
+    isAuthSessionBootstrappedMock.mockReturnValue(true);
+    isSupabaseReadyMock.mockReturnValue(true);
+
     passiveTokenMock.mockResolvedValue({
-      accessToken: 'test-access-token',
+      accessToken: 'server-minted-access-token',
       authProvider: 'calendar-oauth',
       authExpiresAt: new Date(Date.now() + 3600000).toISOString(),
     });
@@ -106,82 +144,180 @@ describe('useGoogleSync auth behavior', () => {
       },
     ]);
     fetchEventsMock.mockResolvedValue([]);
+    getCredentialStatusesMock.mockResolvedValue([
+      {
+        accountEmail: 'alisa@example.com',
+        serverCredentialPresent: true,
+        credentialHealth: 'refreshable',
+        currentAccessTokenExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+        lastRefreshAt: new Date().toISOString(),
+        credentialOrigin: 'oauth_code',
+      },
+    ]);
+    bootstrapProfileCredentialMock.mockResolvedValue({
+      credential: {
+        accountEmail: 'alisa@example.com',
+        serverCredentialPresent: true,
+        credentialHealth: 'refreshable',
+        currentAccessTokenExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+        lastRefreshAt: new Date().toISOString(),
+        credentialOrigin: 'profile_session',
+      },
+      accountName: 'Alisa London',
+      calendars: [
+        {
+          id: 'alisa@example.com',
+          summary: 'Primary',
+          accessRole: 'owner',
+          primary: true,
+        },
+      ],
+    });
   });
 
   it('does not auto-sync accounts already marked as needing reconnect', async () => {
-    setGoogleAccounts([{
-      id: 'acc-needs-reconnect',
-      name: 'Personal',
-      email: 'alisa@example.com',
-      provider: 'google',
-      isPrimary: true,
-      connected: true,
-      mocked: false,
-      authProvider: 'calendar-oauth',
-      authStatus: 'needs_reconnect',
-      lastAuthError: 'Reconnect required',
-      lastAuthCheckAt: new Date().toISOString(),
-    }]);
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-needs-reconnect',
+        name: 'Personal',
+        email: 'work@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'needs_reconnect',
+        lastAuthError: 'Reconnect required',
+        lastAuthCheckAt: new Date().toISOString(),
+      }],
+    });
 
-    renderHook(() => useGoogleSync(), { wrapper });
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
 
     await waitFor(() => {
       expect(passiveTokenMock).not.toHaveBeenCalled();
     });
   });
 
-  it('auto-syncs stale connected accounts even when the cached calendar token is already expired', async () => {
-    const staleIso = new Date(Date.now() - (TIMING.SYNC_THROTTLE + 60000)).toISOString();
-    setGoogleAccounts([{
-      id: 'acc-connected',
-      name: 'Personal',
-      email: 'alisa@example.com',
-      provider: 'google',
-      isPrimary: true,
-      connected: true,
-      mocked: false,
-      authProvider: 'calendar-oauth',
-      authStatus: 'connected',
-      lastAuthCheckAt: staleIso,
-      lastSyncTime: staleIso,
-    }]);
+  it('auto-syncs stale connected accounts when the hosted credential is refreshable, even if a legacy browser token is expired', async () => {
+    const staleIso = new Date(Date.now() - ((15 * 60 * 1000) + 60_000)).toISOString();
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-connected',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: staleIso,
+        lastSyncTime: staleIso,
+      }],
+    });
     localStorage.setItem('helm:google-tokens:acc-connected', JSON.stringify({
-      accessToken: 'stored-token',
-      expiresAt: Date.now() - 60000,
+      accessToken: 'expired-legacy-token',
+      expiresAt: Date.now() - 60_000,
       scope: 'calendar',
     }));
 
-    renderHook(() => useGoogleSync(), { wrapper });
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
 
     await waitFor(() => {
-      expect(passiveTokenMock).toHaveBeenCalledTimes(1);
-      expect(fetchCalendarListMock).toHaveBeenCalledTimes(1);
+      expect(getCredentialStatusesMock).toHaveBeenCalled();
+      expect(passiveTokenMock).toHaveBeenCalled();
+      expect(fetchCalendarListMock).toHaveBeenCalled();
+    });
+  });
+
+  it('marks legacy browser-token accounts as upgrade-required reconnects when no hosted credential exists yet', async () => {
+    const freshIso = new Date().toISOString();
+    getCredentialStatusesMock.mockResolvedValue([]);
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-upgrade',
+        name: 'Work',
+        email: 'work@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: freshIso,
+        lastSyncTime: freshIso,
+      }],
+    });
+    localStorage.setItem('helm:google-tokens:acc-upgrade', JSON.stringify({
+      accessToken: 'legacy-token',
+      expiresAt: Date.now() - 60_000,
+      scope: 'calendar',
+    }));
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
+    await waitFor(() => {
+      const [account] = readGoogleAccounts();
+      expect(account.authStatus).toBe('needs_reconnect');
+      expect(account.lastAuthError).toBe(GOOGLE_UPGRADE_REQUIRED_MESSAGE);
+      expect(passiveTokenMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it('bootstraps the linked profile account into a hosted credential when a Supabase refresh token is available', async () => {
+    getCredentialStatusesMock.mockResolvedValue([]);
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-profile',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'profile-google',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+      }],
+    });
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
+    await waitFor(() => {
+      expect(bootstrapProfileCredentialMock).toHaveBeenCalled();
+      const [account] = readGoogleAccounts();
+      expect(account.authStatus).toBe('connected');
+      expect(account.lastAuthError).toBeUndefined();
     });
   });
 
   it('lets a manual sync retry stale reconnect-required accounts and clear the status on success', async () => {
-    setGoogleAccounts([{
-      id: 'acc-retry',
-      name: 'Personal',
-      email: 'alisa@example.com',
-      provider: 'google',
-      isPrimary: true,
-      connected: true,
-      mocked: false,
-      authProvider: 'calendar-oauth',
-      authStatus: 'needs_reconnect',
-      lastAuthError: 'Google access expired. Reconnect this account.',
-      lastAuthCheckAt: new Date().toISOString(),
-    }]);
-
-    const { result } = renderHook(() => useGoogleSync(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current).toBeTruthy();
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-retry',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'needs_reconnect',
+        lastAuthError: 'Google access expired. Reconnect this account.',
+        lastAuthCheckAt: new Date().toISOString(),
+      }],
     });
 
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
     await act(async () => {
-      await result.current.triggerSync(true);
+      await result.current!.triggerSync(true);
     });
 
     await waitFor(() => {
@@ -192,28 +328,28 @@ describe('useGoogleSync auth behavior', () => {
   });
 
   it('marks confirmed 401 responses as reconnect-required', async () => {
-    setGoogleAccounts([{
-      id: 'acc-401',
-      name: 'Personal',
-      email: 'alisa@example.com',
-      provider: 'google',
-      isPrimary: true,
-      connected: true,
-      mocked: false,
-      authProvider: 'calendar-oauth',
-      authStatus: 'connected',
-      lastAuthCheckAt: new Date().toISOString(),
-    }]);
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-401',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
+      }],
+    });
     fetchCalendarListMock.mockRejectedValueOnce(new GoogleApiError(401, 'expired', 'Google API 401: Unauthorized'));
 
     const { result } = renderHook(() => useGoogleSync(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current).toBeTruthy();
-    });
+    await waitForHookReady(result);
 
     await act(async () => {
-      await result.current.triggerSync(true);
+      await result.current!.triggerSync(true);
     });
 
     await waitFor(() => {
@@ -224,28 +360,28 @@ describe('useGoogleSync auth behavior', () => {
   });
 
   it('marks confirmed 403 responses as revoked', async () => {
-    setGoogleAccounts([{
-      id: 'acc-403',
-      name: 'Personal',
-      email: 'alisa@example.com',
-      provider: 'google',
-      isPrimary: true,
-      connected: true,
-      mocked: false,
-      authProvider: 'calendar-oauth',
-      authStatus: 'connected',
-      lastAuthCheckAt: new Date().toISOString(),
-    }]);
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-403',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
+      }],
+    });
     fetchCalendarListMock.mockRejectedValueOnce(new GoogleApiError(403, 'revoked', 'Google API 403: Forbidden'));
 
     const { result } = renderHook(() => useGoogleSync(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current).toBeTruthy();
-    });
+    await waitForHookReady(result);
 
     await act(async () => {
-      await result.current.triggerSync(true);
+      await result.current!.triggerSync(true);
     });
 
     await waitFor(() => {
@@ -256,28 +392,28 @@ describe('useGoogleSync auth behavior', () => {
   });
 
   it('maps transient Google failures to a temporary error state', async () => {
-    setGoogleAccounts([{
-      id: 'acc-500',
-      name: 'Personal',
-      email: 'alisa@example.com',
-      provider: 'google',
-      isPrimary: true,
-      connected: true,
-      mocked: false,
-      authProvider: 'calendar-oauth',
-      authStatus: 'connected',
-      lastAuthCheckAt: new Date().toISOString(),
-    }]);
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-500',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
+      }],
+    });
     fetchCalendarListMock.mockRejectedValueOnce(new GoogleApiError(500, 'down', 'Google API 500: Internal Server Error'));
 
     const { result } = renderHook(() => useGoogleSync(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current).toBeTruthy();
-    });
+    await waitForHookReady(result);
 
     await act(async () => {
-      await result.current.triggerSync(true);
+      await result.current!.triggerSync(true);
     });
 
     await waitFor(() => {
@@ -300,6 +436,7 @@ describe('useGoogleSync auth behavior', () => {
         authProvider: 'calendar-oauth',
         authStatus: 'connected',
         lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
       }],
       sources: [{
         id: 'src-primary',
@@ -331,13 +468,10 @@ describe('useGoogleSync auth behavior', () => {
     ]);
 
     const { result } = renderHook(() => useGoogleSync(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current).toBeTruthy();
-    });
+    await waitForHookReady(result);
 
     await act(async () => {
-      await result.current.triggerSync(true);
+      await result.current!.triggerSync(true);
     });
 
     await waitFor(() => {
@@ -363,6 +497,7 @@ describe('useGoogleSync auth behavior', () => {
         authProvider: 'calendar-oauth',
         authStatus: 'connected',
         lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
       }],
       sources: [
         {
@@ -404,13 +539,10 @@ describe('useGoogleSync auth behavior', () => {
     ]);
 
     const { result } = renderHook(() => useGoogleSync(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current).toBeTruthy();
-    });
+    await waitForHookReady(result);
 
     await act(async () => {
-      await result.current.triggerSync(true);
+      await result.current!.triggerSync(true);
     });
 
     await waitFor(() => {
@@ -434,6 +566,7 @@ describe('useGoogleSync auth behavior', () => {
         authProvider: 'calendar-oauth',
         authStatus: 'connected',
         lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
       }],
       sources: [{
         id: 'src-window',
@@ -457,13 +590,10 @@ describe('useGoogleSync auth behavior', () => {
     });
 
     const { result } = renderHook(() => useGoogleSync(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current).toBeTruthy();
-    });
+    await waitForHookReady(result);
 
     await act(async () => {
-      await result.current.triggerSync(true);
+      await result.current!.triggerSync(true);
     });
 
     await waitFor(() => {
@@ -473,7 +603,3 @@ describe('useGoogleSync auth behavior', () => {
     });
   });
 });
-
-const TIMING = {
-  SYNC_THROTTLE: 15 * 60 * 1000,
-};

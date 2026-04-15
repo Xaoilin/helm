@@ -87,6 +87,10 @@ export function getAuthSessionSnapshot(): AuthSessionSnapshot | null {
   };
 }
 
+export function getCurrentAccessToken(): string | null {
+  return currentSession?.access_token ?? null;
+}
+
 export function isAuthSessionBootstrapped(): boolean {
   return authSessionBootstrapped;
 }

@@ -64,8 +64,8 @@ export default function GoogleCalendarDebug() {
     [app.calendarAccounts],
   );
   const snapshot = useMemo(
-    () => getGoogleCalendarDebugSnapshot(app.calendarAccounts),
-    [app.calendarAccounts],
+    () => getGoogleCalendarDebugSnapshot(app.calendarAccounts, googleSync.credentialStatuses),
+    [app.calendarAccounts, googleSync.credentialStatuses],
   );
   const [checking, setChecking] = useState(false);
   const [probeResults, setProbeResults] = useState<Record<string, GoogleCalendarPassiveProbeResult>>({});
@@ -94,7 +94,7 @@ export default function GoogleCalendarDebug() {
           <div>
             <h2 style={{ margin: 0, fontSize: 18 }}>Google Calendar Diagnostics</h2>
             <div style={{ fontSize: 12, color: '#8b90a8', marginTop: 6 }}>
-              Auth-state visibility for Calendar accounts. Tokens stay redacted; this panel only shows presence, expiry, scope, and passive auth outcomes.
+              Auth-state visibility for Calendar accounts. Tokens stay redacted; this panel only shows credential source, health, expiry, scope, and passive auth outcomes.
             </div>
             <div style={{ fontSize: 12, color: '#8b90a8', marginTop: 6 }}>
               Last sync trigger: {googleSync.diagnostics.lastTriggerSource ? `${googleSync.diagnostics.lastTriggerSource} at ${formatTimestamp(googleSync.diagnostics.lastTriggerAt)}` : 'Not recorded'}
@@ -118,7 +118,7 @@ export default function GoogleCalendarDebug() {
           <DebugField label="Session email" value={formatOptional(snapshot.session.email)} />
           <DebugField label="Session provider" value={formatOptional(snapshot.session.provider)} />
           <DebugField label="Access token present" value={snapshot.session.accessTokenPresent ? 'Yes' : 'No'} />
-          <DebugField label="Profile token present" value={snapshot.session.providerTokenPresent ? 'Yes' : 'No'} />
+          <DebugField label="Profile access token present" value={snapshot.session.providerTokenPresent ? 'Yes' : 'No'} />
           <DebugField label="Refresh token present" value={snapshot.session.providerRefreshTokenPresent ? 'Yes' : 'No'} />
           <DebugField label="Session expires" value={snapshot.session.expiresAt ? formatTimestamp(snapshot.session.expiresAt) : 'Not available'} />
         </div>
@@ -139,8 +139,17 @@ export default function GoogleCalendarDebug() {
                   <h3 style={{ margin: 0, fontSize: 16 }}>{account.email}</h3>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                     <span className="tag tag-connected" role="status">{account.resolvedAuthProvider}</span>
+                    <span className={`tag tag-${account.serverCredentialPresent ? 'connected' : 'disconnected'}`} role="status">
+                      {account.serverCredentialPresent ? 'Server credential present' : 'No server credential'}
+                    </span>
+                    <span className={`tag tag-${account.credentialHealth === 'refreshable' ? 'connected' : account.credentialHealth === 'temporary_unavailable' ? 'error' : 'needs-reconnect'}`} role="status">
+                      Credential {account.credentialHealth.replace('_', ' ')}
+                    </span>
+                    <span className={`tag tag-${account.credentialSource === 'server' ? 'connected' : account.credentialSource === 'legacy_browser_token' ? 'needs-reconnect' : 'disconnected'}`} role="status">
+                      Source: {account.credentialSource.replace('_', ' ')}
+                    </span>
                     <span className={`tag tag-${getTokenTone(account.storedToken.state)}`} role="status">
-                      Stored token {account.storedToken.state}
+                      Legacy token {account.storedToken.state}
                     </span>
                     <span className={`tag tag-${account.passiveSyncEligible ? 'connected' : 'disconnected'}`} role="status">
                       {account.passiveSyncEligible ? 'Passive sync eligible' : 'Passive sync blocked'}
@@ -163,12 +172,22 @@ export default function GoogleCalendarDebug() {
                 <DebugField label="Account ID" value={account.accountId} />
                 <DebugField label="Stored auth status" value={account.storedAuthStatus || 'Not set'} />
                 <DebugField label="Resolved provider" value={account.resolvedAuthProvider} />
+                <DebugField label="Credential source" value={account.credentialSource.replace('_', ' ')} />
+                <DebugField label="Server credential present" value={account.serverCredentialPresent ? 'Yes' : 'No'} />
+                <DebugField label="Credential health" value={account.credentialHealth.replace('_', ' ')} />
                 <DebugField label="Last sync" value={formatTimestamp(account.lastSyncTime)} />
                 <DebugField label="Access checked" value={formatTimestamp(account.lastAuthCheckAt)} />
-                <DebugField label="Token expires" value={account.authExpiresAt ? formatTimestamp(account.authExpiresAt) : 'Unknown'} />
-                <DebugField label="Stored token present" value={account.storedToken.present ? 'Yes' : 'No'} />
-                <DebugField label="Stored token scope" value={formatOptional(account.storedToken.scope)} />
-                <DebugField label="Stored token expiry" value={account.storedToken.expiresAt ? formatTimestamp(account.storedToken.expiresAt) : 'Unknown'} />
+                <DebugField
+                  label="Current access token expires"
+                  value={account.currentAccessTokenExpiresAt ? formatTimestamp(account.currentAccessTokenExpiresAt) : 'Unknown'}
+                />
+                <DebugField label="Last refresh at" value={formatTimestamp(account.lastRefreshAt)} />
+                <DebugField label="Last refresh failure" value={formatOptional(account.lastRefreshFailureReason)} />
+                <DebugField label="Last refresh failure at" value={formatTimestamp(account.lastRefreshFailureAt)} />
+                <DebugField label="Upgrade required" value={account.upgradeRequired ? 'Yes' : 'No'} />
+                <DebugField label="Legacy token present" value={account.storedToken.present ? 'Yes' : 'No'} />
+                <DebugField label="Legacy token scope" value={formatOptional(account.storedToken.scope)} />
+                <DebugField label="Legacy token expiry" value={account.storedToken.expiresAt ? formatTimestamp(account.storedToken.expiresAt) : 'Unknown'} />
                 <DebugField label="Passive sync" value={account.passiveSyncEligible ? 'Eligible' : 'Blocked'} />
                 <DebugField label="Blocked reason" value={account.passiveSyncBlockedReason || 'None'} />
                 <DebugField label="Last sync trigger" value={syncDiagnostic ? `${syncDiagnostic.triggerSource} at ${formatTimestamp(syncDiagnostic.checkedAt)}` : 'Not recorded'} />
@@ -186,8 +205,8 @@ export default function GoogleCalendarDebug() {
                     <DebugField label="Probe result" value={probeResult.message} />
                     <DebugField label="Probe calendars" value={typeof probeResult.calendarCount === 'number' ? String(probeResult.calendarCount) : 'Not available'} />
                     <DebugField
-                      label="Probe token expiry"
-                      value={probeResult.authExpiresAt ? formatTimestamp(probeResult.authExpiresAt) : 'Not available'}
+                      label="Probe current access token expiry"
+                      value={probeResult.currentAccessTokenExpiresAt ? formatTimestamp(probeResult.currentAccessTokenExpiresAt) : 'Not available'}
                     />
                   </>
                 )}

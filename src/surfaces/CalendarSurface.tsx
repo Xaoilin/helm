@@ -10,6 +10,7 @@ import {
 import type { CalendarAccount, CalendarEvent } from '../types/domain';
 import {
   GoogleCalendarReconnectRequiredError,
+  getGoogleCalendarCredentialStatusLabel,
   getGoogleCalendarPassiveAccessTokenWithRefresh,
   getGoogleCalendarStatusLabel,
   isGoogleCalendarAccount,
@@ -613,7 +614,7 @@ export default function CalendarSurface() {
                           {acc.mocked && ' (local only)'}
                           {isGoogleAcc && acc.lastSyncTime && ` \u00b7 Synced ${new Date(acc.lastSyncTime).toLocaleString()}`}
                           {isGoogleAcc && acc.lastAuthCheckAt && ` \u00b7 Access checked ${new Date(acc.lastAuthCheckAt).toLocaleString()}`}
-                          {isGoogleAcc && acc.authExpiresAt && ` \u00b7 Token expires ${new Date(acc.authExpiresAt).toLocaleString()}`}
+                          {isGoogleAcc && ` \u00b7 Credential status ${getGoogleCalendarCredentialStatusLabel(acc)}`}
                           {isGoogleAcc && acc.authProvider === 'profile-google' && ' \u00b7 Linked to HELM sign-in'}
                         </div>
                         {isGoogleAcc && (acc.lastAuthError || acc.syncError) && (

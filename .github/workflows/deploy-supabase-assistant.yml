@@ -18,15 +18,28 @@ jobs:
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_MODEL: gpt-5.4
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_OAUTH_ALLOWED_ORIGINS: ${{ secrets.GOOGLE_OAUTH_ALLOWED_ORIGINS }}
     steps:
       - id: preflight
         name: Check deploy secrets
         run: |
-          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_PROJECT_REF" ] || [ -z "$OPENAI_API_KEY" ]; then
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_PROJECT_REF" ]; then
             echo "should_deploy=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping Supabase function deploy because SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF, or OPENAI_API_KEY is missing."
+            echo "Skipping Supabase function deploy because SUPABASE_ACCESS_TOKEN or SUPABASE_PROJECT_REF is missing."
           else
             echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$OPENAI_API_KEY" ]; then
+            echo "deploy_assistant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy_assistant=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ] && [ -n "$GOOGLE_OAUTH_CLIENT_SECRET" ]; then
+            echo "deploy_google_calendar_oauth=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy_google_calendar_oauth=false" >> "$GITHUB_OUTPUT"
           fi
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' }}
@@ -37,10 +50,30 @@ jobs:
         with:
           node-version: 20
 
-      - if: ${{ steps.preflight.outputs.should_deploy == 'true' }}
+      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_assistant == 'true' }}
         name: Sync assistant function secrets
         run: npx supabase secrets set OPENAI_API_KEY="$OPENAI_API_KEY" OPENAI_MODEL="$OPENAI_MODEL" --project-ref "$SUPABASE_PROJECT_REF" --yes
 
-      - if: ${{ steps.preflight.outputs.should_deploy == 'true' }}
+      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_assistant == 'true' }}
         name: Deploy assistant-openai
         run: npx supabase functions deploy assistant-openai --project-ref "$SUPABASE_PROJECT_REF" --use-api --yes
+
+      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_google_calendar_oauth == 'true' }}
+        name: Sync Google Calendar OAuth function secrets
+        run: |
+          if [ -n "$GOOGLE_OAUTH_ALLOWED_ORIGINS" ]; then
+            npx supabase secrets set \
+              GOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID" \
+              GOOGLE_OAUTH_CLIENT_SECRET="$GOOGLE_OAUTH_CLIENT_SECRET" \
+              GOOGLE_OAUTH_ALLOWED_ORIGINS="$GOOGLE_OAUTH_ALLOWED_ORIGINS" \
+              --project-ref "$SUPABASE_PROJECT_REF" --yes
+          else
+            npx supabase secrets set \
+              GOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID" \
+              GOOGLE_OAUTH_CLIENT_SECRET="$GOOGLE_OAUTH_CLIENT_SECRET" \
+              --project-ref "$SUPABASE_PROJECT_REF" --yes
+          fi
+
+      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_google_calendar_oauth == 'true' }}
+        name: Deploy google-calendar-oauth
+        run: npx supabase functions deploy google-calendar-oauth --project-ref "$SUPABASE_PROJECT_REF" --use-api --yes

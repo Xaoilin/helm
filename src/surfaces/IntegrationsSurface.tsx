@@ -1,18 +1,25 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../store/AppContext';
 import type { CalendarAccount, IntegrationStatus } from '../types/domain';
-import { loadGoogleTokens, revokeAccess } from '../services/googleAuth';
+import { useGoogleSync } from '../hooks/useGoogleSync';
 import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
 import { getAuthSessionSnapshot } from '../store/supabase';
 import {
+  GOOGLE_SIGN_IN_REQUIRED_MESSAGE,
   connectGoogleCalendarOAuthAccount,
   connectProfileGoogleCalendar,
+  clearGoogleCalendarAuth,
+  getGoogleCalendarCredentialStatusLabel,
   getGoogleCalendarAuthPatch,
   getGoogleCalendarStatusLabel,
   isGoogleCalendarAccount,
   reconnectGoogleCalendarOAuthAccount,
   triggerProfileGoogleReconnect,
 } from '../services/googleCalendarAuthManager';
+import {
+  GoogleCalendarOAuthFunctionError,
+  revokeGoogleCalendarCredential,
+} from '../services/googleCalendarServerAuth';
 
 const PROVIDER_INFO: Record<string, { setupHint: string; mockable: boolean }> = {
   google: { setupHint: 'Requires a Google Cloud OAuth Client ID. Set it in Settings first.', mockable: false },
@@ -41,6 +48,7 @@ function getStatusTone(account: CalendarAccount): string {
 
 export default function IntegrationsSurface() {
   const app = useApp();
+  const googleSync = useGoogleSync();
   const [configuring, setConfiguring] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
   const [googleBusyAction, setGoogleBusyAction] = useState<'profile' | 'oauth' | `reconnect:${string}` | null>(null);
@@ -50,6 +58,7 @@ export default function IntegrationsSurface() {
   const googleAccounts = app.calendarAccounts.filter(isGoogleCalendarAccount);
   const clientId = GOOGLE_OAUTH_CLIENT_ID;
   const authSnapshot = getAuthSessionSnapshot();
+  const isSignedIn = Boolean(authSnapshot?.userId);
 
   const profileEmail = authSnapshot?.email ?? null;
   const linkedProfileAccount = useMemo(() => (
@@ -58,7 +67,7 @@ export default function IntegrationsSurface() {
       : undefined
   ), [googleAccounts, profileEmail]);
   const canLinkSignedInGoogle = Boolean(profileEmail && authSnapshot?.provider === 'google' && !linkedProfileAccount);
-  const needsProfileReconnect = Boolean(profileEmail && authSnapshot?.provider === 'google' && !authSnapshot?.providerToken);
+  const needsProfileReconnect = Boolean(profileEmail && authSnapshot?.provider === 'google' && !authSnapshot?.providerRefreshToken);
 
   const addSourcesIfMissing = (accountId: string, calendars: Awaited<ReturnType<typeof connectProfileGoogleCalendar>>['calendars']) => {
     const existingGoogleIds = new Set(
@@ -90,6 +99,11 @@ export default function IntegrationsSurface() {
     setGoogleError(null);
 
     try {
+      if (!isSignedIn) {
+        setGoogleError(GOOGLE_SIGN_IN_REQUIRED_MESSAGE);
+        return;
+      }
+
       if (needsProfileReconnect) {
         await triggerProfileGoogleReconnect();
         return;
@@ -130,6 +144,7 @@ export default function IntegrationsSurface() {
         configuredAt: new Date().toISOString(),
         lastError: undefined,
       });
+      await googleSync.refreshCredentialStatuses();
       setConfiguring(null);
     } catch (error) {
       setGoogleError(error instanceof Error ? error.message : 'Connection failed');
@@ -139,6 +154,11 @@ export default function IntegrationsSurface() {
   };
 
   const handleGoogleConnect = async () => {
+    if (!isSignedIn) {
+      setGoogleError(GOOGLE_SIGN_IN_REQUIRED_MESSAGE);
+      return;
+    }
+
     if (!clientId?.trim()) {
       setGoogleError('Please set your Google OAuth Client ID in Settings first.');
       return;
@@ -177,6 +197,7 @@ export default function IntegrationsSurface() {
         configuredAt: new Date().toISOString(),
         lastError: undefined,
       });
+      await googleSync.refreshCredentialStatuses();
       setConfiguring(null);
     } catch (error) {
       setGoogleError(error instanceof Error ? error.message : 'Connection failed');
@@ -191,6 +212,11 @@ export default function IntegrationsSurface() {
     setGoogleError(null);
 
     try {
+      if (!isSignedIn) {
+        setGoogleError(GOOGLE_SIGN_IN_REQUIRED_MESSAGE);
+        return;
+      }
+
       if (account.authProvider === 'profile-google') {
         await triggerProfileGoogleReconnect();
         return;
@@ -213,6 +239,7 @@ export default function IntegrationsSurface() {
         syncError: undefined,
       });
       addSourcesIfMissing(account.id, result.calendars);
+      await googleSync.refreshCredentialStatuses();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Reconnect failed';
       setGoogleError(message);
@@ -226,10 +253,21 @@ export default function IntegrationsSurface() {
   };
 
   const handleGoogleDisconnect = async (accountId: string) => {
-    const tokens = loadGoogleTokens(accountId);
-    if (tokens) {
-      await revokeAccess(tokens.accessToken);
+    const account = googleAccounts.find(candidate => candidate.id === accountId);
+    if (!account) return;
+
+    try {
+      if (isSignedIn) {
+        await revokeGoogleCalendarCredential(account.email);
+      }
+    } catch (error) {
+      if (!(error instanceof GoogleCalendarOAuthFunctionError) || error.code !== 'missing_credential') {
+        setGoogleError(error instanceof Error ? error.message : 'Disconnect failed');
+        return;
+      }
     }
+
+    clearGoogleCalendarAuth(accountId);
 
     app.removeCalendarAccount(accountId);
 
@@ -242,6 +280,7 @@ export default function IntegrationsSurface() {
       });
     }
 
+    await googleSync.refreshCredentialStatuses();
     setConfirmDisconnect(null);
   };
 
@@ -263,7 +302,7 @@ export default function IntegrationsSurface() {
       </div>
       <div className="surface-body">
         <div className="info-box">
-          Integrations connect HELM to external services. Google Calendar supports real OAuth connections with multiple accounts.
+          Integrations connect HELM to external services. Google Calendar now uses server-backed browser credentials, so durable sync requires you to be signed into HELM.
           Other integrations can be simulated for development.
         </div>
 
@@ -318,7 +357,7 @@ export default function IntegrationsSurface() {
                             ? `Synced ${new Date(account.lastSyncTime).toLocaleString()}`
                             : 'Not yet synced'}
                           {account.lastAuthCheckAt && ` · Access checked ${new Date(account.lastAuthCheckAt).toLocaleString()}`}
-                          {account.authExpiresAt && ` · Token expires ${new Date(account.authExpiresAt).toLocaleString()}`}
+                          {` · Credential status ${getGoogleCalendarCredentialStatusLabel(account)}`}
                         </div>
                         {(account.lastAuthError || account.syncError) && (
                           <div style={{ color: account.authStatus === 'error' ? '#f0c040' : '#ff6b6b', marginTop: 4, fontSize: 11 }}>
@@ -377,8 +416,14 @@ export default function IntegrationsSurface() {
                         {canLinkSignedInGoogle && (
                           <div className="info-box" style={{ marginBottom: 8 }}>
                             {needsProfileReconnect
-                              ? `You are signed into HELM as ${profileEmail}. Reconnect that Google sign-in once to grant Calendar access.`
+                              ? `You are signed into HELM as ${profileEmail}. Reconnect that Google sign-in once so HELM can store a durable Calendar credential.`
                               : `Link your signed-in Google profile (${profileEmail}) without adding a duplicate account.`}
+                          </div>
+                        )}
+
+                        {!isSignedIn && (
+                          <div className="info-box warning" style={{ marginBottom: 8 }}>
+                            {GOOGLE_SIGN_IN_REQUIRED_MESSAGE}
                           </div>
                         )}
 
@@ -391,11 +436,17 @@ export default function IntegrationsSurface() {
                               <li>Go to <strong>Google Cloud Console</strong> &rarr; APIs &amp; Services &rarr; Credentials</li>
                               <li>Create an OAuth 2.0 Client ID (Web application type)</li>
                               <li>Add <code>http://localhost:5174</code> as an Authorized JavaScript Origin</li>
+                              <li>Add <code>http://localhost:5174</code> as an Authorized redirect URI because the browser code flow exchanges against the app origin</li>
                               <li>Enable the <strong>Google Calendar API</strong> in your project</li>
                               <li>Copy the Client ID and paste it in HELM Settings</li>
+                              <li>Set the same Client ID plus the matching client secret as Supabase Edge Function secrets for <code>google-calendar-oauth</code></li>
                             </ol>
                           </div>
                         )}
+
+                        <div className="info-box" style={{ marginBottom: 8 }}>
+                          HELM keeps refreshable Google Calendar credentials on the server for browser sync. The one-hour Google access token lifetime shown in Debug is now just transport metadata, not your account connection lifetime.
+                        </div>
 
                         <div className="actions-row" style={{ flexWrap: 'wrap' }}>
                           {canLinkSignedInGoogle && (
@@ -412,7 +463,7 @@ export default function IntegrationsSurface() {
                           <button
                             className="btn btn-secondary btn-sm"
                             onClick={handleGoogleConnect}
-                            disabled={!clientId?.trim() || googleBusyAction === 'oauth'}
+                            disabled={!clientId?.trim() || !isSignedIn || googleBusyAction === 'oauth'}
                           >
                             {googleBusyAction === 'oauth'
                               ? <><span className="spinner" /> Connecting...</>
