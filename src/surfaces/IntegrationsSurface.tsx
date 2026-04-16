@@ -25,7 +25,6 @@ import {
 const PROVIDER_INFO: Record<string, { setupHint: string; mockable: boolean }> = {
   google: { setupHint: 'Requires a Google Cloud OAuth Client ID. Set it in Settings first.', mockable: false },
   github: { setupHint: 'Requires a GitHub personal access token or OAuth App.', mockable: true },
-  '1password': { setupHint: 'Requires 1Password CLI (op) to be installed and signed in.', mockable: false },
   slack: { setupHint: 'Requires a Slack app with bot token.', mockable: true },
   linear: { setupHint: 'Requires a Linear API key or OAuth flow.', mockable: true },
 };

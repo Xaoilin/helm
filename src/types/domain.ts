@@ -92,29 +92,30 @@ export interface CalendarEvent {
   pendingSync?: 'create' | 'update' | 'delete';
 }
 
-// ── Credentials ──
-export type CredentialSource = '1password' | 'local-vault';
+// ── Projects ──
+export type ProjectStatus = 'planning' | 'active' | 'blocked' | 'completed' | 'archived';
+export type ProjectWorkflowState = 'backlog' | 'next_up' | 'in_progress' | 'blocked';
 
-export interface Credential {
+export interface Project {
   id: string;
   name: string;
-  username: string;
-  password: string;
-  url?: string;
-  notes?: string;
-  source: CredentialSource;
+  localPath?: string;
+  summary: string;
+  status: ProjectStatus;
+  tags: string[];
+  isPinned: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-// ── Workspaces ──
-export interface Workspace {
+export interface ProjectPage {
   id: string;
-  name: string;
-  path: string;
-  description: string;
-  isPrimary: boolean;
+  projectId: string;
+  title: string;
+  content: string;
+  isOverview: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 // ── Integrations ──
@@ -152,6 +153,10 @@ export interface Task {
   recurring?: TaskRecurrence;
   goalTag?: string;
   emoji?: string;
+  projectId?: string;
+  workflowState?: ProjectWorkflowState;
+  blockedReason?: string;
+  boardOrder?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -310,7 +315,6 @@ export interface AssistantCorrection {
 export type AssistantProvider = 'auto' | 'ollama' | 'hosted';
 
 export interface Settings {
-  credentialSource: 'onepassword-first' | 'local-only';
   theme: 'dark' | 'light';
   dataRetentionDays: number;
   telemetry: boolean;
@@ -372,8 +376,7 @@ export type Surface =
   | 'chat'
   | 'calendar'
   | 'clock'
-  | 'credentials'
-  | 'workspaces'
+  | 'projects'
   | 'tasks'
   | 'finance'
   | 'knowledge'

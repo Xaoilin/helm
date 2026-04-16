@@ -1,7 +1,31 @@
+import { APP_RELEASE_VERSION } from '../config/release';
 import type { CalendarAuthProvider } from '../types/domain';
 import { LIMITS } from '../config/constants';
+import { logWarn } from './logger';
 
 const GOOGLE_CALENDAR_DIAGNOSTICS_KEY = 'helm:google-calendar-diagnostics';
+const GOOGLE_CALENDAR_DIAGNOSTICS_EXPORT_PREFIX = 'helm-google-calendar-diagnostics';
+
+interface SaveFilePickerWritable {
+  write(data: Blob | string): Promise<void>;
+  close(): Promise<void>;
+}
+
+interface SaveFilePickerHandle {
+  createWritable(): Promise<SaveFilePickerWritable>;
+}
+
+interface SaveFilePickerOptions {
+  suggestedName?: string;
+  types?: Array<{
+    description?: string;
+    accept: Record<string, string[]>;
+  }>;
+}
+
+type BrowserWindowWithSavePicker = Window & typeof globalThis & {
+  showSaveFilePicker?: (options?: SaveFilePickerOptions) => Promise<SaveFilePickerHandle>;
+};
 
 export type GoogleCalendarDiagnosticOperation =
   | 'sync_trigger'
@@ -79,6 +103,14 @@ export interface GoogleCalendarDiagnosticSummary {
   latestEvents: GoogleCalendarDiagnosticEvent[];
 }
 
+export type GoogleCalendarDiagnosticsExportMethod = 'download' | 'save_picker' | 'cancelled';
+
+export interface GoogleCalendarDiagnosticsExportArtifact {
+  fileName: string;
+  payload: string;
+  method: GoogleCalendarDiagnosticsExportMethod;
+}
+
 type DiagnosticListener = (events: GoogleCalendarDiagnosticEvent[]) => void;
 
 const listeners = new Set<DiagnosticListener>();
@@ -137,6 +169,24 @@ function notifyListeners(events: GoogleCalendarDiagnosticEvent[]): void {
   }
 }
 
+function coerceDate(value: Date | string): Date | null {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function padNumber(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+function formatFilenameTimestamp(value: Date | string): string {
+  const date = coerceDate(value) || new Date();
+  return [
+    date.getUTCFullYear(),
+    padNumber(date.getUTCMonth() + 1),
+    padNumber(date.getUTCDate()),
+  ].join('-') + `-${padNumber(date.getUTCHours())}${padNumber(date.getUTCMinutes())}${padNumber(date.getUTCSeconds())}`;
+}
+
 export function listGoogleCalendarDiagnosticEvents(): GoogleCalendarDiagnosticEvent[] {
   return readStoredEvents()
     .slice()
@@ -188,9 +238,81 @@ export function getGoogleCalendarDiagnosticSummary(
   };
 }
 
-export function buildGoogleCalendarDiagnosticsExport(payload: Record<string, unknown>): string {
+export function buildGoogleCalendarDiagnosticsExport(
+  payload: Record<string, unknown>,
+  exportedAt: Date | string = new Date(),
+): string {
   return JSON.stringify({
-    exportedAt: new Date().toISOString(),
+    exportType: 'google-calendar-diagnostics',
+    release: APP_RELEASE_VERSION,
+    exportedAt: (coerceDate(exportedAt) || new Date()).toISOString(),
     ...payload,
   }, null, 2);
+}
+
+export function buildGoogleCalendarDiagnosticsExportFilename(
+  exportedAt: Date | string = new Date(),
+): string {
+  return `${GOOGLE_CALENDAR_DIAGNOSTICS_EXPORT_PREFIX}-${APP_RELEASE_VERSION.replace(/^v/, '')}-${formatFilenameTimestamp(exportedAt)}.json`;
+}
+
+export async function downloadGoogleCalendarDiagnosticsExport(
+  payload: Record<string, unknown>,
+  exportedAt: Date | string = new Date(),
+): Promise<GoogleCalendarDiagnosticsExportArtifact> {
+  const normalizedExportedAt = coerceDate(exportedAt) || new Date();
+  const exportPayload = buildGoogleCalendarDiagnosticsExport(payload, normalizedExportedAt);
+  const fileName = buildGoogleCalendarDiagnosticsExportFilename(normalizedExportedAt);
+  const blob = new Blob([exportPayload], { type: 'application/json;charset=utf-8' });
+  const savePicker = (window as BrowserWindowWithSavePicker).showSaveFilePicker;
+
+  if (savePicker) {
+    try {
+      const handle = await savePicker({
+        suggestedName: fileName,
+        types: [{
+          description: 'HELM Google Calendar diagnostics report',
+          accept: {
+            'application/json': ['.json'],
+          },
+        }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return {
+        fileName,
+        payload: exportPayload,
+        method: 'save_picker',
+      };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return {
+          fileName,
+          payload: exportPayload,
+          method: 'cancelled',
+        };
+      }
+      logWarn('GoogleCalendarDiagnosticsExport', 'showSaveFilePicker failed, falling back to browser download.');
+    }
+  }
+
+  const blobUrl = URL.createObjectURL(blob);
+  const downloadLink = document.createElement('a');
+  downloadLink.href = blobUrl;
+  downloadLink.download = fileName;
+  downloadLink.rel = 'noopener';
+  downloadLink.style.display = 'none';
+
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  downloadLink.remove();
+
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+
+  return {
+    fileName,
+    payload: exportPayload,
+    method: 'download',
+  };
 }

@@ -203,21 +203,66 @@ describe('AppContext - Settings', () => {
   });
 });
 
-describe('AppContext - Workspaces', () => {
+describe('AppContext - Projects', () => {
   beforeEach(() => { localStorage.clear(); });
 
-  it('should add, update, and remove workspaces', async () => {
+  it('should add, update, and remove projects', async () => {
     const r = await renderWithApp();
-    let wsId = '';
-    act(() => { wsId = r.api!.addWorkspace({ name: 'Project', path: '/code/proj', description: 'Main project', isPrimary: false }); });
-    expect(r.api!.workspaces).toHaveLength(1);
-    expect(r.api!.workspaces[0].isPrimary).toBe(true);
+    let projectId = '';
+    act(() => {
+      projectId = r.api!.addProject({
+        name: 'Project',
+        localPath: '/code/proj',
+        summary: 'Main project',
+        status: 'active',
+        tags: ['frontend'],
+        isPinned: true,
+      });
+    });
+    expect(r.api!.projects).toHaveLength(1);
+    expect(r.api!.projects[0].isPinned).toBe(true);
+    expect(r.api!.projectPages.some(page => page.projectId === projectId && page.isOverview)).toBe(true);
 
-    act(() => { r.api!.updateWorkspace(wsId, { description: 'Updated' }); });
-    expect(r.api!.workspaces[0].description).toBe('Updated');
+    act(() => { r.api!.updateProject(projectId, { summary: 'Updated' }); });
+    expect(r.api!.projects[0].summary).toBe('Updated');
 
-    act(() => { r.api!.removeWorkspace(wsId); });
-    expect(r.api!.workspaces).toHaveLength(0);
+    act(() => { r.api!.removeProject(projectId); });
+    expect(r.api!.projects).toHaveLength(0);
+    expect(r.api!.projectPages).toHaveLength(0);
+  });
+
+  it('should unlink tasks when a project is removed', async () => {
+    const r = await renderWithApp();
+    let projectId = '';
+    let taskId = '';
+
+    act(() => {
+      projectId = r.api!.addProject({
+        name: 'Project',
+        localPath: '/code/proj',
+        summary: '',
+        status: 'active',
+        tags: [],
+        isPinned: false,
+      });
+      taskId = r.api!.addTask({
+        title: 'Linked task',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'task',
+        projectId,
+        workflowState: 'backlog',
+        boardOrder: 1,
+      });
+    });
+
+    act(() => { r.api!.removeProject(projectId); });
+
+    const task = r.api!.tasks.find(item => item.id === taskId);
+    expect(task?.projectId).toBeUndefined();
+    expect(task?.workflowState).toBeUndefined();
+    expect(task?.boardOrder).toBeUndefined();
   });
 });
 

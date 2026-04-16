@@ -5,7 +5,6 @@ import { loadStore, saveStore } from '../persistence';
 
 // ── Defaults ──
 const defaultSettings: Settings = {
-  credentialSource: 'onepassword-first',
   theme: 'dark',
   dataRetentionDays: 90,
   telemetry: false,
@@ -15,7 +14,6 @@ const defaultSettings: Settings = {
 const defaultIntegrations: Integration[] = [
   { id: 'int-google', name: 'Google Calendar', provider: 'google', description: 'Sync Google Calendar events', status: 'disconnected', icon: 'calendar' },
   { id: 'int-github', name: 'GitHub', provider: 'github', description: 'Repository and PR notifications', status: 'disconnected', icon: 'code' },
-  { id: 'int-1password', name: '1Password', provider: '1password', description: 'Credential management via 1Password CLI', status: 'disconnected', icon: 'key' },
   { id: 'int-slack', name: 'Slack', provider: 'slack', description: 'Team messaging notifications', status: 'disconnected', icon: 'message' },
   { id: 'int-linear', name: 'Linear', provider: 'linear', description: 'Issue tracking and project management', status: 'disconnected', icon: 'list' },
 ];

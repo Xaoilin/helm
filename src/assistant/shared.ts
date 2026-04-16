@@ -9,12 +9,12 @@ import type {
   KnowledgeEntry,
   KnowledgeTopic,
   LifestyleItem,
+  Project,
   Settings,
   AssistantProvider,
   Surface,
   Task,
   Transaction,
-  Workspace,
 } from '../types/domain';
 import type { AssistantNavigationHandler, AssistantNavigationRequest } from '../services/assistantNavigation';
 import type { CapabilityId } from './capabilities';
@@ -40,7 +40,7 @@ export type AssistantEntityKind =
   | 'finance_account'
   | 'knowledge_entry'
   | 'knowledge_topic'
-  | 'workspace'
+  | 'project'
   | 'surface';
 
 export interface AssistantEntityReference {
@@ -131,6 +131,7 @@ export interface AssistantPlanningBundle {
   capabilities: AssistantPlanningCapabilityCandidate[];
   entityCandidates: {
     surfaces: AssistantPlanningEntityCandidate[];
+    projects: AssistantPlanningEntityCandidate[];
     tasks: AssistantPlanningEntityCandidate[];
     calendarEvents: AssistantPlanningEntityCandidate[];
     calendarSources: AssistantPlanningEntityCandidate[];
@@ -172,7 +173,7 @@ export interface AssistantCommandContext {
   knowledgeEntries: KnowledgeEntry[];
   knowledgeTopics: KnowledgeTopic[];
   lifestyleItems: LifestyleItem[];
-  workspaces: Workspace[];
+  projects: Project[];
   gamification: GamificationProfile;
   prayerTimes?: PrayerTimeSnapshot[];
   goalTags?: Settings['goalTags'];

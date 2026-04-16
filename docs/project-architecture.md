@@ -2,7 +2,7 @@
 
 ## Overview
 
-HELM is a local-first desktop assistant for a solo operator. The in-app assistant is Lina. The product combines calendar, tasks and habits, a multi-clock timer and stopwatch workspace, finance tracking, Islamic knowledge and lifestyle tracking, prayer times, integrations, and chat and voice AI in one desktop app.
+HELM is a local-first desktop assistant for a solo operator. The in-app assistant is Lina. The product combines calendar, tasks and habits, a multi-clock timer and stopwatch workspace, project management, finance tracking, Islamic knowledge and lifestyle tracking, prayer times, integrations, and chat and voice AI in one desktop app.
 
 The current stack is:
 
@@ -34,11 +34,10 @@ The navigable surfaces are:
 - Calendar
 - Clock
 - Tasks
+- Projects
 - Finance
 - Knowledge
 - Profile
-- Credentials
-- Workspaces
 - Integrations
 - Settings
 - Debug
@@ -52,16 +51,19 @@ Provider stack:
 1. `SettingsProvider`
 2. `GamificationProvider`
 3. `CalendarProvider`
-4. `TaskProvider`
-5. `KnowledgeProvider`
-6. `FinanceProvider`
-7. `ClockProvider`
-8. `ChatProvider` through `ChatBridge`
-9. `ShellProvider`
+4. `ProjectProvider`
+5. `TaskProvider`
+6. `KnowledgeProvider`
+7. `FinanceProvider`
+8. `ClockProvider`
+9. `AssistantProvider`
+10. `ChatProvider` through `ChatBridge`
+11. `ShellProvider`
 
 State is split across:
 
 - `src/store/contexts/CalendarContext.tsx`
+- `src/store/contexts/ProjectContext.tsx`
 - `src/store/contexts/TaskContext.tsx`
 - `src/store/contexts/ChatContext.tsx`
 - `src/store/contexts/KnowledgeContext.tsx`
@@ -69,9 +71,14 @@ State is split across:
 - `src/store/contexts/ClockContext.tsx`
 - `src/store/contexts/GamificationContext.tsx`
 - `src/store/contexts/SettingsContext.tsx`
+- `src/store/contexts/AssistantContext.tsx`
 
-The shell layer keeps only cross-cutting UI state plus credentials and workspaces.
-It also carries one-shot assistant navigation requests so chat and voice can hand the UI enough context to open a specific Tasks tab, reset filters, and reveal or highlight a resolved task after a grounded assistant action.
+The shell layer keeps only cross-cutting UI state:
+
+- the active surface
+- one-shot assistant navigation requests
+
+That navigation payload lets chat and voice hand the UI enough context to open a specific Tasks tab, reset filters, reveal or highlight a resolved task, or reveal a resolved Project after a grounded assistant action.
 
 ### Domain model
 
@@ -80,11 +87,12 @@ It also carries one-shot assistant navigation requests so chat and voice can han
 - surfaces and navigation targets
 - chat conversations and messages
 - calendar accounts, sources, and events
-- tasks, goals, and habits
+- tasks, goals, habits, and project-linked workflow metadata
+- projects and project wiki pages
 - multi-timer and multi-stopwatch Clock state, including per-timer alarm sound selection
 - knowledge topics, entries, and lifestyle items
 - finance accounts, transactions, budgets, and savings goals
-- integrations, settings, credentials, and workspaces
+- integrations and settings
 
 ## Persistence And Sync
 
@@ -100,7 +108,7 @@ Authenticated writes now also mark a local dirty-cache timestamp so a just-creat
 
 ### Desktop boundary
 
-The Tauri side is intentionally thin. Rust commands handle app-data directory discovery and JSON store reads and writes. App behavior and business rules stay in the TypeScript layer.
+The Tauri side is intentionally thin. Rust commands handle app-data directory discovery, JSON store reads and writes, and a small number of desktop-only affordances such as project directory picking and opening a local project path. App behavior and business rules stay in the TypeScript layer.
 
 ### Supabase
 
@@ -176,7 +184,7 @@ Planning providers:
 - hosted GPT-5.4 through the `assistant-openai` Supabase Edge Function for web builds
 - local Ollama for desktop or local-first setups when a live Ollama model is available
 
-The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally. That shared runtime owns task-title normalization, recent-task reveal handling such as "show me that task", grounded ID validation for mutations, and the typed navigation handoff used by the Tasks surface to jump to `All Tasks` and highlight the resolved item.
+The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally. That shared runtime owns task-title normalization, recent-task reveal handling such as "show me that task", grounded ID validation for mutations, and the typed navigation handoff used by the Tasks and Projects surfaces to jump to the right view and reveal the resolved entity.
 The assistant action registry in `src/assistant/capabilities.ts` is the source of truth for which actions Lina may claim and execute. The model now decides whether a turn is `reply`, `clarify`, `confirm`, or `tool_calls`, HELM validates and executes locally, and the final visible assistant reply is narrated from verified results rather than coming from executor templates.
 The Debug surface renders the registry directly and also shows the latest planning bundle, raw planner response, model turn, validator verdict, validated plan, pending confirmation state, execution payloads, raw narration response, and final assistant message so action coverage stays inspectable.
 The assistant benchmark corpus and scorer now live under `src/assistant/evals/` plus `scripts/run-assistant-benchmark.ts`, and the hosted benchmark thresholds are enforced on `master` before deployment.
@@ -199,10 +207,10 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 - Chat is persistent and conversation-based.
 - Calendar is the most integration-heavy surface and depends on account/source/event integrity.
 - Tasks and gamification are tightly linked through XP, streaks, and badge logic.
+- Projects is a local-first project-management hub built on the shared Tasks domain. Project boards read and write task workflow fields directly, milestones reuse project-linked goals, and wiki pages are lightweight notes stored alongside the rest of local app data.
 - Clock is a local-first utility surface for timer and stopwatch workflows, and it persists multiple active cards plus per-timer alarm sound preferences through the shared store.
 - Knowledge contains both a topic-entry knowledge base and the lifestyle tracker.
 - Integrations is the operational hub for Google Calendar and placeholder external providers.
-- Credentials and Workspaces exist, but both are still lightweight compared with calendar, tasks, finance, and knowledge.
 
 ## Testing And Operational Reality
 
@@ -219,4 +227,4 @@ The Vite README is still the default template, so the docs in this folder and `A
 - Entity retrieval and benchmark example retrieval are still heuristic, so improvements should be measured before changing prompts or capability metadata.
 - Some integrations are real and some are still mock or placeholder paths, so docs must distinguish between them carefully.
 - Large surface components still exist, even though state has already been split into domain providers.
-- Security is MVP-grade for a single-user local-first app; credentials and API keys are not managed like a hardened multi-user product.
+- Security is MVP-grade for a single-user local-first app; this is not a general-purpose secret vault, and local project-path metadata should not be described as protected storage.

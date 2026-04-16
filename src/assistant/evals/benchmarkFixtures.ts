@@ -5,6 +5,7 @@ import type {
   CalendarSource,
   FinanceAccount,
   KnowledgeTopic,
+  Project,
   Surface,
   Task,
   Transaction,
@@ -183,6 +184,7 @@ const knowledgeTopics: KnowledgeTopic[] = [
 ];
 
 const transactions: Transaction[] = [];
+const projects: Project[] = [];
 
 const entityMap = new Map<string, AssistantEntityReference>();
 
@@ -213,7 +215,7 @@ export function buildAssistantBenchmarkContext(): AssistantCommandContext {
     knowledgeEntries: [],
     knowledgeTopics: [...knowledgeTopics],
     lifestyleItems: [],
-    workspaces: [],
+    projects: [...projects],
     gamification: DEFAULT_PROFILE,
     prayerTimes: [
       { name: 'Fajr', time: '05:10' },

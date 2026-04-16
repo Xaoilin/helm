@@ -47,9 +47,11 @@ export default function TasksSurface() {
   const [recurringFreq, setRecurringFreq] = useState<'daily' | 'weekdays' | 'weekly'>('daily');
   const [goalTag, setGoalTag] = useState('');
   const [habitEmoji, setHabitEmoji] = useState('');
+  const [taskProjectId, setTaskProjectId] = useState('');
 
   // Filters
   const [filterGoalTag, setFilterGoalTag] = useState<string>('all');
+  const [filterProjectId, setFilterProjectId] = useState<string>('all');
 
   // Filters for All Tasks tab
   const [filterCategory, setFilterCategory] = useState<'all' | 'daily' | 'task'>('all');
@@ -79,6 +81,7 @@ export default function TasksSurface() {
       setFilterPriority('all');
       setFilterStatus('all');
       setFilterGoalTag('all');
+      setFilterProjectId('all');
     }
     if (targetTask?.category === 'goal' && targetTask.completed) {
       setShowCompletedGoals(true);
@@ -145,21 +148,27 @@ export default function TasksSurface() {
   }, []);
 
   // ── Derived data ──
+  const projectFilteredTasks = useMemo(() => (
+    filterProjectId === 'all'
+      ? app.tasks
+      : app.tasks.filter(task => task.projectId === filterProjectId)
+  ), [app.tasks, filterProjectId]);
+
   const dailyHabits = useMemo(() =>
-    app.tasks
+    projectFilteredTasks
       .filter(t => t.category === 'daily')
       .sort((a, b) => (a.completed === b.completed ? 0 : a.completed ? 1 : -1)),
-    [app.tasks]
+    [projectFilteredTasks]
   );
 
   const dueTodayTasks = useMemo(() =>
-    app.tasks
+    projectFilteredTasks
       .filter(t => t.category === 'task' && t.dueDate && t.dueDate <= todayStr)
       .sort((a, b) => {
         if (a.completed !== b.completed) return a.completed ? 1 : -1;
         return (a.dueDate || '').localeCompare(b.dueDate || '');
       }),
-    [app.tasks, todayStr]
+    [projectFilteredTasks, todayStr]
   );
 
   const todayItems = useMemo(() => [...dailyHabits, ...dueTodayTasks], [dailyHabits, dueTodayTasks]);
@@ -167,7 +176,7 @@ export default function TasksSurface() {
   const todayTotal = todayItems.length;
 
   const allTasks = useMemo(() => {
-    let filtered = app.tasks.filter(t => t.category !== 'goal');
+    let filtered = projectFilteredTasks.filter(t => t.category !== 'goal');
     if (filterCategory !== 'all') filtered = filtered.filter(t => t.category === filterCategory);
     if (filterPriority !== 'all') filtered = filtered.filter(t => t.priority === filterPriority);
     if (filterStatus === 'active') filtered = filtered.filter(t => !t.completed);
@@ -180,22 +189,22 @@ export default function TasksSurface() {
       if (pDiff !== 0) return pDiff;
       return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
     });
-  }, [app.tasks, filterCategory, filterPriority, filterStatus]);
+  }, [projectFilteredTasks, filterCategory, filterPriority, filterStatus]);
 
   const goalTags = useMemo(() => app.settings.goalTags || [], [app.settings.goalTags]);
 
   const activeGoals = useMemo(() => {
-    let goals = app.tasks.filter(t => t.category === 'goal' && !t.completed);
+    let goals = projectFilteredTasks.filter(t => t.category === 'goal' && !t.completed);
     if (filterGoalTag === '') goals = goals.filter(g => !g.goalTag);
     else if (filterGoalTag !== 'all') goals = goals.filter(g => g.goalTag === filterGoalTag);
     return goals;
-  }, [app.tasks, filterGoalTag]);
+  }, [projectFilteredTasks, filterGoalTag]);
   const completedGoals = useMemo(() => {
-    let goals = app.tasks.filter(t => t.category === 'goal' && t.completed);
+    let goals = projectFilteredTasks.filter(t => t.category === 'goal' && t.completed);
     if (filterGoalTag === '') goals = goals.filter(g => !g.goalTag);
     else if (filterGoalTag !== 'all') goals = goals.filter(g => g.goalTag === filterGoalTag);
     return goals;
-  }, [app.tasks, filterGoalTag]);
+  }, [projectFilteredTasks, filterGoalTag]);
 
   // ── Actions ──
   const openAdd = (defaultCategory?: TaskCategory) => {
@@ -204,6 +213,7 @@ export default function TasksSurface() {
     setDueDate(tab === 'today' ? todayStr : '');
     setRecurringFreq('daily');
     setGoalTag(filterGoalTag !== 'all' ? filterGoalTag : '');
+    setTaskProjectId(filterProjectId !== 'all' ? filterProjectId : '');
     setHabitEmoji('');
     setEditing(null); setShowForm(true);
   };
@@ -214,12 +224,21 @@ export default function TasksSurface() {
     setDueDate(task.dueDate || '');
     setRecurringFreq(task.recurring?.frequency || 'daily');
     setGoalTag(task.goalTag || '');
+    setTaskProjectId(task.projectId || '');
     setHabitEmoji(task.emoji || '');
     setEditing(task); setShowForm(true);
   };
 
   const save = () => {
     if (!title.trim()) return;
+    const normalizedProjectId = category === 'daily' ? undefined : (taskProjectId || undefined);
+    const nextBoardOrder = category === 'task' && normalizedProjectId
+      ? (editing && editing.projectId === normalizedProjectId && typeof editing.boardOrder === 'number'
+        ? editing.boardOrder
+        : app.tasks
+          .filter(task => task.projectId === normalizedProjectId && task.category === 'task')
+          .reduce((max, task) => Math.max(max, task.boardOrder ?? 0), 0) + 1)
+      : undefined;
     const data: Omit<Task, 'id' | 'createdAt' | 'updatedAt'> = {
       title: title.trim(),
       description: description.trim(),
@@ -231,6 +250,10 @@ export default function TasksSurface() {
       recurring: category === 'daily' ? { frequency: recurringFreq, lastReset: editing?.recurring?.lastReset } : undefined,
       goalTag: category === 'goal' && goalTag ? goalTag : undefined,
       emoji: category === 'daily' && habitEmoji ? habitEmoji : undefined,
+      projectId: normalizedProjectId,
+      workflowState: category === 'task' && normalizedProjectId ? (editing?.workflowState || 'backlog') : undefined,
+      blockedReason: category === 'task' && normalizedProjectId ? editing?.blockedReason : undefined,
+      boardOrder: nextBoardOrder,
     };
     if (editing) {
       app.updateTask(editing.id, data);
@@ -322,6 +345,11 @@ export default function TasksSurface() {
         aria-label={`Mark "${task.title}" as ${task.completed ? 'incomplete' : 'complete'}`}
       />
       <div className="task-content">
+        {task.projectId && (
+          <div style={{ marginBottom: 6 }}>
+            <span className="tag tag-connected">{app.projects.find(project => project.id === task.projectId)?.name || 'Project'}</span>
+          </div>
+        )}
         <div className={`task-title ${task.completed ? 'task-title-done' : ''}`}>
           {task.title}
           {task.priority !== 'low' && <span className={`tag tag-${task.priority}`}>{task.priority}</span>}
@@ -467,6 +495,10 @@ export default function TasksSurface() {
         {tab === 'all' && (
           <>
             <div className="filter-bar">
+              <select className="form-select" value={filterProjectId} onChange={e => setFilterProjectId(e.target.value)}>
+                <option value="all">All projects</option>
+                {app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
               <select className="form-select" value={filterCategory} onChange={e => setFilterCategory(e.target.value as typeof filterCategory)}>
                 <option value="all">All types</option>
                 <option value="daily">Daily habits</option>
@@ -505,6 +537,10 @@ export default function TasksSurface() {
             {/* Goal tag filter */}
             {goalTags.length > 0 && (
               <div className="filter-bar">
+                <select className="form-select" value={filterProjectId} onChange={e => setFilterProjectId(e.target.value)}>
+                  <option value="all">All projects</option>
+                  {app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+                </select>
                 <button
                   className={`btn btn-sm ${filterGoalTag === 'all' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setFilterGoalTag('all')}
@@ -550,6 +586,7 @@ export default function TasksSurface() {
                       {goal.title}
                       <span className={`tag tag-${goal.priority}`}>{goal.priority}</span>
                       {goal.goalTag && <span className="tag tag-goal">{goal.goalTag}</span>}
+                      {goal.projectId && <span className="tag tag-connected">{app.projects.find(project => project.id === goal.projectId)?.name || 'Project'}</span>}
                     </div>
                     {goal.description && <div className="goal-desc">{goal.description}</div>}
                     <div className="goal-meta">
@@ -684,6 +721,15 @@ export default function TasksSurface() {
                 <select id="task-goaltag" className="form-select" value={goalTag} onChange={e => setGoalTag(e.target.value)}>
                   <option value="">None</option>
                   {goalTags.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            )}
+            {category !== 'daily' && app.projects.length > 0 && (
+              <div className="form-group">
+                <label htmlFor="task-project">Project (optional)</label>
+                <select id="task-project" className="form-select" value={taskProjectId} onChange={e => setTaskProjectId(e.target.value)}>
+                  <option value="">None</option>
+                  {app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
                 </select>
               </div>
             )}

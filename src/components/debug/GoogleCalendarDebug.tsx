@@ -4,6 +4,7 @@ import { useGoogleSync } from '../../hooks/useGoogleSync';
 import { GOOGLE_OAUTH_CLIENT_ID } from '../../config';
 import {
   buildGoogleCalendarDiagnosticsExport,
+  downloadGoogleCalendarDiagnosticsExport,
   clearGoogleCalendarDiagnosticEvents,
   getGoogleCalendarDiagnosticSummary,
   subscribeGoogleCalendarDiagnosticEvents,
@@ -127,7 +128,8 @@ export default function GoogleCalendarDebug() {
   );
   const [checking, setChecking] = useState(false);
   const [refreshingStatus, setRefreshingStatus] = useState(false);
-  const [copyState, setCopyState] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [actionState, setActionState] = useState<string | null>(null);
   const [probeResults, setProbeResults] = useState<Record<string, GoogleCalendarPassiveProbeResult>>({});
   const [timelineEvents, setTimelineEvents] = useState<GoogleCalendarDiagnosticEvent[]>([]);
 
@@ -139,6 +141,23 @@ export default function GoogleCalendarDebug() {
     () => getGoogleCalendarDiagnosticSummary(timelineEvents),
     [timelineEvents],
   );
+  const diagnosticsPayload = useMemo(() => ({
+    snapshot,
+    syncDiagnostics: googleSync.diagnostics,
+    serverRuntimeStatus: googleSync.serverRuntimeStatus,
+    latestFailure: summary.latestFailure,
+    latestSuccess: summary.latestSuccess,
+    timelineEvents,
+    probeResults,
+  }), [
+    googleSync.diagnostics,
+    googleSync.serverRuntimeStatus,
+    probeResults,
+    snapshot,
+    summary.latestFailure,
+    summary.latestSuccess,
+    timelineEvents,
+  ]);
 
   const runProbe = async () => {
     if (googleAccounts.length === 0 || checking) return;
@@ -168,23 +187,33 @@ export default function GoogleCalendarDebug() {
   };
 
   const copyDiagnostics = async () => {
-    const payload = buildGoogleCalendarDiagnosticsExport({
-      snapshot,
-      syncDiagnostics: googleSync.diagnostics,
-      serverRuntimeStatus: googleSync.serverRuntimeStatus,
-      latestFailure: summary.latestFailure,
-      latestSuccess: summary.latestSuccess,
-      timelineEvents,
-      probeResults,
-    });
+    const payload = buildGoogleCalendarDiagnosticsExport(diagnosticsPayload);
     await navigator.clipboard.writeText(payload);
-    setCopyState(`Copied ${timelineEvents.length} diagnostic event${timelineEvents.length === 1 ? '' : 's'}.`);
+    setActionState(`Copied diagnostics with ${timelineEvents.length} stored event${timelineEvents.length === 1 ? '' : 's'}.`);
+  };
+
+  const exportDiagnostics = async () => {
+    if (exporting) return;
+
+    setExporting(true);
+    try {
+      const artifact = await downloadGoogleCalendarDiagnosticsExport(diagnosticsPayload);
+      if (artifact.method === 'cancelled') {
+        setActionState('Export cancelled.');
+        return;
+      }
+
+      const exportedVia = artifact.method === 'save_picker' ? 'Saved' : 'Started download for';
+      setActionState(`${exportedVia} ${artifact.fileName}.`);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const clearDiagnostics = () => {
     clearGoogleCalendarDiagnosticEvents();
     setProbeResults({});
-    setCopyState('Cleared stored Google Calendar diagnostics.');
+    setActionState('Cleared stored Google Calendar diagnostics.');
   };
 
   return (
@@ -218,9 +247,15 @@ export default function GoogleCalendarDebug() {
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => { void copyDiagnostics(); }}
-              disabled={timelineEvents.length === 0}
             >
               Copy diagnostics
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => { void exportDiagnostics(); }}
+              disabled={exporting}
+            >
+              {exporting ? <><span className="spinner" /> Exporting...</> : 'Export diagnostics (.json)'}
             </button>
             <button
               className="btn btn-secondary btn-sm"
@@ -231,8 +266,8 @@ export default function GoogleCalendarDebug() {
             </button>
           </div>
         </div>
-        {copyState && (
-          <div style={{ marginTop: 10, fontSize: 12, color: '#8b90a8' }}>{copyState}</div>
+        {actionState && (
+          <div style={{ marginTop: 10, fontSize: 12, color: '#8b90a8' }}>{actionState}</div>
         )}
       </div>
 

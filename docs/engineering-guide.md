@@ -151,12 +151,14 @@ For every delivered feature, say clearly what you verified manually, include the
 - Passive Google Calendar sync must be cache-preserving. Windowed fetches and partial calendar-list responses are freshness signals, not proof that local sources or events should be deleted.
 - Validate Google account ownership before mutating a multi-account sync result. If Google returns the wrong account, preserve cached data and require an explicit reconnect instead of applying cross-account data.
 - Any Google auth diagnostics must keep tokens redacted. Presence, expiry, scope, credential health, and refresh-failure metadata are fine; raw token values are not.
-- Treat workspaces and credentials as first-class stored records even though their current product depth is lighter than other domains.
+- Keep project management state on the shared task model. Project boards must continue to use `Task.projectId`, `Task.workflowState`, `Task.blockedReason`, `Task.boardOrder`, and `Task.completed` instead of inventing a second parallel board record.
+- Project removal must safely unlink project-backed tasks and goals instead of deleting the underlying work items.
+- Each project should retain a lightweight overview wiki page; migrations and CRUD flows should not leave orphaned project pages behind.
 
 ## Security Notes
 
 - API keys are currently client-side configuration for a single-user MVP. Do not describe this as production-grade secret handling.
-- Credentials are stored locally and are not encrypted vault storage.
+- Do not imply HELM includes a secure general-purpose credential vault. Project local paths and other app metadata are plain local-first records, not hardened secret storage.
 - Hosted-assistant browser calls currently use the build's configured Supabase project access key. Keep the UI copy truthful about that architecture, and if tighter access control is needed later, move the OpenAI call behind a server-side auth boundary instead of implying the browser path is private.
 - Avoid `dangerouslySetInnerHTML` and preserve React's default escaping protections.
 - If the product ever moves beyond single-user local-first usage, secrets and privileged API calls need a server-side redesign.

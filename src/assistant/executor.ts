@@ -79,7 +79,7 @@ function cloneContext(context: AssistantCommandContext): AssistantCommandContext
     knowledgeEntries: [...context.knowledgeEntries],
     knowledgeTopics: [...context.knowledgeTopics],
     lifestyleItems: [...context.lifestyleItems],
-    workspaces: [...context.workspaces],
+    projects: [...context.projects],
     gamification: {
       ...context.gamification,
       badges: [...context.gamification.badges],
@@ -301,25 +301,49 @@ function executeSingleStep(
 
       const surface = surfaceValue as Surface;
       const navigate = handlers.navigate || requestAssistantNavigation;
-      const navigationRequest = normalizeAssistantNavigationRequest(surface);
+      const projectId = asString(step.args.projectId);
+      const navigationRequest = normalizeAssistantNavigationRequest(
+        surface === 'projects' && projectId
+          ? {
+            surface,
+            surfaceState: {
+              projects: {
+                revealProjectId: projectId,
+              },
+            },
+          }
+          : surface,
+      );
       navigate(navigationRequest);
 
-      const ref = makeEntityReference('surface', surface, SURFACE_LABELS[surface].en, surface, 1);
+      const ref = surface === 'projects' && projectId
+        ? (() => {
+          const project = context.projects.find(item => item.id === projectId);
+          return project
+            ? makeEntityReference('project', project.id, project.name, 'projects', 1)
+            : makeEntityReference('surface', surface, SURFACE_LABELS[surface].en, surface, 1);
+        })()
+        : makeEntityReference('surface', surface, SURFACE_LABELS[surface].en, surface, 1);
+      const summary = surface === 'projects' && projectId && ref.kind === 'project'
+        ? `Opened project "${ref.label}".`
+        : `Opened ${SURFACE_LABELS[surface].en}.`;
       return {
         stepResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Opened ${SURFACE_LABELS[surface].en}.`,
+          summary,
           entityRefs: [ref],
         },
         toolResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Opened ${SURFACE_LABELS[surface].en}.`,
+          summary,
           facts: [
-            `Navigated to the ${SURFACE_LABELS[surface].en} surface.`,
+            surface === 'projects' && projectId && ref.kind === 'project'
+              ? `Navigated to the Projects surface and selected "${ref.label}".`
+              : `Navigated to the ${SURFACE_LABELS[surface].en} surface.`,
           ],
           entityRefs: [ref],
           navigationRequest,

@@ -246,28 +246,6 @@ export default function SettingsSurface() {
           </div>
         </div>
 
-        {/* Credential source preference */}
-        <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Credential Source</h3>
-        <div className="card">
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label htmlFor="settings-cred-source">Primary credential source</label>
-            <select
-              id="settings-cred-source"
-              className="form-select"
-              value={settings.credentialSource}
-              onChange={e => app.updateSettings({ credentialSource: e.target.value as typeof settings.credentialSource })}
-            >
-              <option value="onepassword-first">1Password (preferred, local vault as fallback)</option>
-              <option value="local-only">Local vault only</option>
-            </select>
-            <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 6 }}>
-              {settings.credentialSource === 'onepassword-first'
-                ? 'HELM will try 1Password first. If unavailable, the local vault is used as fallback.'
-                : 'HELM will only use the local credential vault. 1Password integration is ignored.'}
-            </div>
-          </div>
-        </div>
-
         {/* Privacy */}
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Privacy</h3>
         <div className="card">
@@ -534,7 +512,7 @@ export default function SettingsSurface() {
           <div className="info-box" style={{ marginTop: 12 }}>
             Runtime status is reported where the feature actually lives:
             <br />
-            Chat shows the active assistant runtime state, Calendar labels local-only calendars, Integrations marks simulated providers, and Credentials explains the local vault security limits.
+            Chat shows the active assistant runtime state, Calendar labels local-only calendars, Integrations marks simulated providers, and Projects shows whether local-path actions are desktop-only or available in this build.
           </div>
         </div>
       </div>

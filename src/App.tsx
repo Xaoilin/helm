@@ -6,11 +6,10 @@ import ChatSurface from './surfaces/ChatSurface';
 import CalendarSurface from './surfaces/CalendarSurface';
 import ClockSurface from './surfaces/ClockSurface';
 import TasksSurface from './surfaces/TasksSurface';
+import ProjectsSurface from './surfaces/ProjectsSurface';
 import FinanceSurface from './surfaces/FinanceSurface';
 import KnowledgeSurface from './surfaces/KnowledgeSurface';
 import ProfileSurface from './surfaces/ProfileSurface';
-import CredentialsSurface from './surfaces/CredentialsSurface';
-import WorkspacesSurface from './surfaces/WorkspacesSurface';
 import IntegrationsSurface from './surfaces/IntegrationsSurface';
 import SettingsSurface from './surfaces/SettingsSurface';
 import DebugSurface from './surfaces/DebugSurface';
@@ -38,12 +37,11 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'chat', label: 'Chat', icon: '\u{1F4AC}' },
   { surface: 'calendar', label: 'Calendar', icon: '\u{1F4C5}' },
   { surface: 'clock', label: 'Clock', icon: '\u23F1\uFE0F' },
+  { surface: 'projects', label: 'Projects', icon: '\u{1F4CB}' },
   { surface: 'tasks', label: 'Tasks', icon: '\u2705' },
   { surface: 'finance', label: 'Finance', icon: '\u{1F4B7}' },
   { surface: 'knowledge', label: 'Knowledge', icon: '\u{1F4DA}' },
   { surface: 'profile', label: 'Profile', icon: '\u{1F3C6}' },
-  { surface: 'credentials', label: 'Credentials', icon: '\u{1F511}' },
-  { surface: 'workspaces', label: 'Workspaces', icon: '\u{1F4C1}' },
   { surface: 'integrations', label: 'Integrations', icon: '\u{1F50C}' },
   { surface: 'settings', label: 'Settings', icon: '\u2699\uFE0F' },
   { surface: 'debug', label: 'Debug', icon: '\u{1F41E}' },
@@ -140,12 +138,11 @@ function AppInner() {
         case 'chat': return <ChatSurface />;
         case 'calendar': return <CalendarSurface />;
         case 'clock': return <ClockSurface />;
+        case 'projects': return <ProjectsSurface />;
         case 'tasks': return <TasksSurface />;
         case 'finance': return <FinanceSurface />;
         case 'knowledge': return <KnowledgeSurface />;
         case 'profile': return <ProfileSurface />;
-        case 'credentials': return <CredentialsSurface />;
-        case 'workspaces': return <WorkspacesSurface />;
         case 'integrations': return <IntegrationsSurface />;
         case 'settings': return <SettingsSurface />;
         case 'debug': return <DebugSurface />;

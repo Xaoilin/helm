@@ -3,6 +3,7 @@ import type {
   CalendarSource,
   FinanceAccount,
   KnowledgeTopic,
+  Project,
   Surface,
   Task,
 } from '../types/domain';
@@ -18,11 +19,10 @@ export const SURFACE_KEYWORDS: Record<Surface, string[]> = {
   chat: ['chat', 'conversation', 'message', 'messages', 'محادثة', 'رسالة'],
   calendar: ['calendar', 'schedule', 'meetings', 'events', 'تقويم', 'اجتماع', 'مواعيد'],
   clock: ['clock', 'timer', 'stopwatch', 'countdown', 'timers', 'ساعة', 'مؤقت', 'عداد'],
+  projects: ['project', 'projects', 'portfolio', 'board', 'wiki', 'kanban', 'مشاريع', 'مشروع'],
   tasks: ['task', 'tasks', 'todo', 'to do', 'habits', 'مهام', 'مهمة', 'عادات'],
   knowledge: ['knowledge', 'islam', 'quran', 'learn', 'معرفة', 'إسلام', 'قرآن'],
   profile: ['profile', 'stats', 'achievements', 'badges', 'level', 'ملف', 'إنجازات', 'مستوى'],
-  credentials: ['credential', 'credentials', 'password', 'passwords', 'vault', 'كلمة سر', 'كلمات سر'],
-  workspaces: ['workspace', 'workspaces', 'project', 'projects', 'مشاريع', 'مشروع'],
   integrations: ['integration', 'integrations', 'connect', 'ربط', 'تكامل'],
   settings: ['setting', 'settings', 'preferences', 'config', 'إعدادات', 'تفضيلات'],
   finance: ['finance', 'money', 'budget', 'مالية', 'ميزانية', 'فلوس'],
@@ -34,11 +34,10 @@ export const SURFACE_LABELS: Record<Surface, { en: string; ar: string }> = {
   chat: { en: 'Chat', ar: 'المحادثة' },
   calendar: { en: 'Calendar', ar: 'التقويم' },
   clock: { en: 'Clock', ar: 'الساعة' },
+  projects: { en: 'Projects', ar: 'المشاريع' },
   tasks: { en: 'Tasks', ar: 'المهام' },
   knowledge: { en: 'Knowledge', ar: 'المعرفة' },
   profile: { en: 'Profile', ar: 'الملف الشخصي' },
-  credentials: { en: 'Credentials', ar: 'كلمات السر' },
-  workspaces: { en: 'Workspaces', ar: 'المشاريع' },
   integrations: { en: 'Integrations', ar: 'التكاملات' },
   settings: { en: 'Settings', ar: 'الإعدادات' },
   finance: { en: 'Finance', ar: 'المالية' },
@@ -111,7 +110,7 @@ function surfaceBias(kind: AssistantEntityKind, currentSurface: Surface | undefi
   if ((kind === 'calendar_event' || kind === 'calendar_source' || kind === 'calendar_account') && currentSurface === 'calendar') return 0.08;
   if (kind === 'finance_account' && currentSurface === 'finance') return 0.08;
   if ((kind === 'knowledge_entry' || kind === 'knowledge_topic') && currentSurface === 'knowledge') return 0.08;
-  if (kind === 'workspace' && currentSurface === 'workspaces') return 0.08;
+  if (kind === 'project' && currentSurface === 'projects') return 0.08;
   return 0;
 }
 
@@ -243,6 +242,39 @@ export function resolveTaskReference(
       };
     })
     .filter((match): match is ResolvedEntity<Task> => match !== null);
+
+  return buildResolution(matches);
+}
+
+export function resolveProjectReference(
+  query: string,
+  context: AssistantCommandContext,
+  dialogState?: AssistantDialogState,
+): EntityResolution<Project> {
+  if (pronounTargets(query)) {
+    return recentEntityByKind('project', dialogState, reference =>
+      context.projects.find(project => project.id === reference.id),
+    );
+  }
+
+  const matches = context.projects
+    .map(project => {
+      const score = scoreEntity(
+        query,
+        [project.name, project.summary, ...project.tags],
+        'project',
+        project.id,
+        dialogState,
+        context.currentSurface,
+      );
+      if (score < 0.55) return null;
+      return {
+        ...makeEntityReference('project', project.id, project.name, 'projects', score),
+        data: project,
+        score,
+      };
+    })
+    .filter((match): match is ResolvedEntity<Project> => match !== null);
 
   return buildResolution(matches);
 }

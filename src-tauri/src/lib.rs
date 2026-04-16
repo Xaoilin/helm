@@ -15,6 +15,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_app_data_dir,
+            commands::pick_directory,
+            commands::open_path,
             commands::read_store,
             commands::write_store,
         ])

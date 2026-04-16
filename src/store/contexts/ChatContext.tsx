@@ -14,6 +14,7 @@ import type {
   KnowledgeEntry,
   KnowledgeTopic,
   LifestyleItem,
+  Project,
   Settings,
   Task,
   Transaction,
@@ -33,6 +34,7 @@ export interface ChatCrossDomainData {
   calendarAccounts: CalendarAccount[];
   calendarSources: CalendarSource[];
   calendarEvents: CalendarEvent[];
+  projects: Project[];
   tasks: Task[];
   financeAccounts: FinanceAccount[];
   transactions: Transaction[];
@@ -212,13 +214,13 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
       calendarAccounts: crossDomain.calendarAccounts,
       calendarSources: crossDomain.calendarSources,
       calendarEvents: crossDomain.calendarEvents,
+      projects: crossDomain.projects,
       tasks: crossDomain.tasks,
       financeAccounts: crossDomain.financeAccounts,
       transactions: crossDomain.transactions,
       knowledgeEntries: crossDomain.knowledgeEntries,
       knowledgeTopics: crossDomain.knowledgeTopics,
       lifestyleItems: crossDomain.lifestyleItems,
-      workspaces: [],
       gamification: crossDomain.gamification,
       goalTags: crossDomain.settings.goalTags,
       currentSurface: 'chat',
