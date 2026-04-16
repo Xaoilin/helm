@@ -483,6 +483,7 @@ export default function IntegrationsSurface() {
                               <li>Enable the <strong>Google Calendar API</strong> in your project</li>
                               <li>Copy the Client ID and paste it in HELM Settings</li>
                               <li>Set the same Client ID plus the matching client secret as Supabase Edge Function secrets for <code>google-calendar-oauth</code></li>
+                              <li>Deploy <code>google-calendar-oauth</code> with <code>--no-verify-jwt</code> because HELM validates the Supabase session inside the function and production sessions may use ES256 tokens</li>
                             </ol>
                           </div>
                         )}

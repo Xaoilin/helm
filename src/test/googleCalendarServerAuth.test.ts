@@ -156,4 +156,45 @@ describe('googleCalendarServerAuth', () => {
     } satisfies Partial<GoogleCalendarOAuthFunctionError>);
     expect(functionsInvokeMock).not.toHaveBeenCalled();
   });
+
+  it('turns ES256 gateway JWT verification failures into an actionable hosted-auth error', async () => {
+    functionsInvokeMock.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'Edge Function returned a non-2xx status code',
+        context: {
+          status: 401,
+          statusText: 'Unauthorized',
+          headers: new Headers({
+            'content-type': 'text/plain',
+          }),
+          json: async () => {
+            throw new Error('not json');
+          },
+          text: async () => 'Unsupported JWT algorithm ES256',
+        },
+      },
+    });
+
+    let thrown: unknown;
+    try {
+      await mintGoogleCalendarAccessToken('alisa@example.com');
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toMatchObject({
+      name: 'GoogleCalendarOAuthFunctionError',
+      code: 'temporary_unavailable',
+      httpStatus: 401,
+      readiness: {
+        functionReachable: true,
+        oauthConfigured: true,
+        originAllowed: true,
+        signedIn: true,
+      },
+    } satisfies Partial<GoogleCalendarOAuthFunctionError>);
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toContain('--no-verify-jwt');
+  });
 });
