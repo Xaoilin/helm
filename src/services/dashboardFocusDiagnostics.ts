@@ -5,6 +5,8 @@ export interface DashboardFocusDiagnostics {
   status: 'ready' | 'fallback' | 'error';
   source: 'local' | 'openai';
   providerMode: 'auto' | 'hosted' | 'ollama';
+  hostedReviewCadence: 'once_per_day';
+  hostedReviewAttemptedToday: boolean;
   inputHash: string;
   selectedCandidateId?: string;
   queueCandidateIds: string[];

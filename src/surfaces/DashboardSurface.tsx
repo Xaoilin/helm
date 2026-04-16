@@ -335,6 +335,7 @@ export default function DashboardSurface() {
 
       <div className="surface-body">
         <FocusSnapshot
+          assistantProvider={app.settings.assistantProvider}
           dashboardFocus={app.dashboardFocus}
           onOpenCandidate={app.openDashboardFocusTarget}
           onSnoozeCandidate={(candidateId) => app.snoozeDashboardFocus(candidateId)}

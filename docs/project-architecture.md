@@ -203,7 +203,7 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 
 ## Surface Notes
 
-- Dashboard is the daily operating view and combines agenda, prayer, habits, goals, achievements, and a compact task snapshot. The `Up Next` hero now comes from a dedicated dashboard-focus domain that ranks grounded task, habit, and near-meeting candidates locally, lets the hosted GPT model choose among the top candidates when available, and falls back immediately to the local ranker when hosted AI is unavailable or invalid.
+- Dashboard is the daily operating view and combines agenda, prayer, habits, goals, achievements, and a compact task snapshot. The `Up Next` hero now comes from a dedicated dashboard-focus domain that ranks grounded task, habit, and near-meeting candidates locally, lets the hosted GPT model review that candidate pool once per local day when available, and falls back immediately to the local ranker when hosted AI is unavailable or invalid. The dashboard UI now distinguishes `GPT-reviewed`, `GPT unavailable`, and `Ollama mode`, and only shows duration chips when they come from grounded task or calendar data rather than heuristics.
 - Chat is persistent and conversation-based.
 - Calendar is the most integration-heavy surface and depends on account/source/event integrity.
 - Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, routine, and completed work for easier scanning, with collapsible section headers for long lists.
