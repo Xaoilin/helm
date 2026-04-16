@@ -1356,6 +1356,20 @@ textarea.form-input {
   cursor: pointer;
 }
 
+.all-task-section-toggle h3,
+.all-task-section-toggle p,
+.all-task-section-toggle .all-task-section-count {
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.all-task-section-toggle:hover h3 {
+  color: #f5f7ff;
+}
+
+.all-task-section-toggle:hover p {
+  color: #9499b0;
+}
+
 .all-task-section-toggle:hover .all-task-section-count {
   border-color: #313957;
   background: #1a1f2d;

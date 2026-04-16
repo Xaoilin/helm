@@ -30,6 +30,8 @@ interface AllTaskSection {
   items: Task[];
 }
 
+type AllTaskAccordionSectionId = AllTaskSection['id'] | 'completed';
+
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -53,6 +55,14 @@ function formatShortDate(dateStr: string): string {
   });
 }
 
+function getAllTaskSectionId(task: Task, todayStr: string): AllTaskSection['id'] {
+  if (task.category === 'daily') return 'routines';
+  if (!task.dueDate) return 'later';
+  if (task.dueDate < todayStr) return 'overdue';
+  if (task.dueDate === todayStr) return 'today';
+  return 'upcoming';
+}
+
 export default function TasksSurface() {
   const app = useApp();
   const [tab, setTab] = useState<Tab>('today');
@@ -60,7 +70,9 @@ export default function TasksSurface() {
   const [editing, setEditing] = useState<Task | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showCompletedGoals, setShowCompletedGoals] = useState(false);
-  const [showCompletedAllTasks, setShowCompletedAllTasks] = useState(false);
+  const [expandedAllTaskSections, setExpandedAllTaskSections] = useState<Partial<Record<AllTaskAccordionSectionId, boolean>>>({
+    completed: false,
+  });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showLevelFlash, setShowLevelFlash] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
@@ -219,12 +231,6 @@ export default function TasksSurface() {
     });
   }, [projectFilteredTasks, filterCategory, filterPriority, filterStatus]);
 
-  useEffect(() => {
-    if (allTasks.some(task => task.id === highlightedTaskId && task.completed)) {
-      setShowCompletedAllTasks(true);
-    }
-  }, [allTasks, highlightedTaskId]);
-
   const scopedAllTasks = useMemo(
     () => projectFilteredTasks.filter(task => task.category !== 'goal'),
     [projectFilteredTasks],
@@ -292,6 +298,50 @@ export default function TasksSurface() {
     () => allTasks.filter(task => task.completed),
     [allTasks],
   );
+
+  useEffect(() => {
+    setExpandedAllTaskSections(prev => {
+      let changed = false;
+      const next = { ...prev };
+
+      for (const section of allTaskSections) {
+        if (next[section.id] === undefined) {
+          next[section.id] = true;
+          changed = true;
+        }
+      }
+
+      if (completedAllTasks.length > 0 && next.completed === undefined) {
+        next.completed = filterStatus === 'completed';
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [allTaskSections, completedAllTasks.length, filterStatus]);
+
+  useEffect(() => {
+    if (filterStatus !== 'completed' || completedAllTasks.length === 0) return;
+
+    setExpandedAllTaskSections(prev => (
+      prev.completed ? prev : { ...prev, completed: true }
+    ));
+  }, [completedAllTasks.length, filterStatus]);
+
+  useEffect(() => {
+    if (!highlightedTaskId) return;
+
+    const highlightedTask = allTasks.find(task => task.id === highlightedTaskId);
+    if (!highlightedTask) return;
+
+    const targetSectionId: AllTaskAccordionSectionId = highlightedTask.completed
+      ? 'completed'
+      : getAllTaskSectionId(highlightedTask, todayStr);
+
+    setExpandedAllTaskSections(prev => (
+      prev[targetSectionId] === false ? { ...prev, [targetSectionId]: true } : prev
+    ));
+  }, [allTasks, highlightedTaskId, todayStr]);
 
   const hasAllTaskFilters = filterProjectId !== 'all'
     || filterCategory !== 'all'
@@ -442,6 +492,13 @@ export default function TasksSurface() {
     setFilterCategory('all');
     setFilterPriority('all');
     setFilterStatus('all');
+  }, []);
+
+  const toggleAllTaskSection = useCallback((sectionId: AllTaskAccordionSectionId) => {
+    setExpandedAllTaskSections(prev => ({
+      ...prev,
+      [sectionId]: !(prev[sectionId] ?? (sectionId === 'completed' ? false : true)),
+    }));
   }, []);
 
   // ── Render helpers ──
@@ -799,40 +856,63 @@ export default function TasksSurface() {
               </div>
             ) : (
               <div className="all-tasks-sections">
-                {allTaskSections.map(section => (
-                  <section key={section.id} className="all-task-section">
-                    <div className="all-task-section-header">
-                      <div>
-                        <h3>{section.title}</h3>
-                        <p>{section.description}</p>
-                      </div>
-                      <span className="all-task-section-count">{section.items.length}</span>
-                    </div>
-                    <div className="all-task-section-list">
-                      {section.items.map(renderAllTaskCard)}
-                    </div>
-                  </section>
-                ))}
+                {allTaskSections.map(section => {
+                  const isExpanded = expandedAllTaskSections[section.id] ?? true;
+
+                  return (
+                    <section key={section.id} className="all-task-section">
+                      <button
+                        className="all-task-section-header all-task-section-toggle"
+                        onClick={() => toggleAllTaskSection(section.id)}
+                        aria-expanded={isExpanded}
+                        aria-controls={`all-task-section-${section.id}`}
+                      >
+                        <div>
+                          <h3>{section.title}</h3>
+                          <p>{section.description}</p>
+                        </div>
+                        <span className="all-task-section-count">
+                          {isExpanded ? '\u25BE' : '\u25B8'} {section.items.length}
+                        </span>
+                      </button>
+                      {isExpanded && (
+                        <div className="all-task-section-list" id={`all-task-section-${section.id}`}>
+                          {section.items.map(renderAllTaskCard)}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
 
                 {completedAllTasks.length > 0 && (
                   <section className="all-task-section completed">
-                    <button
-                      className="all-task-section-header all-task-section-toggle"
-                      onClick={() => setShowCompletedAllTasks(current => !current)}
-                    >
-                      <div>
-                        <h3>Completed</h3>
-                        <p>Finished items stay here for reference and quick reopen.</p>
-                      </div>
-                      <span className="all-task-section-count">
-                        {showCompletedAllTasks || filterStatus === 'completed' ? '\u25BE' : '\u25B8'} {completedAllTasks.length}
-                      </span>
-                    </button>
-                    {(showCompletedAllTasks || filterStatus === 'completed') && (
-                      <div className="all-task-section-list">
-                        {completedAllTasks.map(renderAllTaskCard)}
-                      </div>
-                    )}
+                    {(() => {
+                      const isExpanded = expandedAllTaskSections.completed ?? false;
+
+                      return (
+                        <>
+                          <button
+                            className="all-task-section-header all-task-section-toggle"
+                            onClick={() => toggleAllTaskSection('completed')}
+                            aria-expanded={isExpanded}
+                            aria-controls="all-task-section-completed"
+                          >
+                            <div>
+                              <h3>Completed</h3>
+                              <p>Finished items stay here for reference and quick reopen.</p>
+                            </div>
+                            <span className="all-task-section-count">
+                              {isExpanded ? '\u25BE' : '\u25B8'} {completedAllTasks.length}
+                            </span>
+                          </button>
+                          {isExpanded && (
+                            <div className="all-task-section-list" id="all-task-section-completed">
+                              {completedAllTasks.map(renderAllTaskCard)}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </section>
                 )}
               </div>
