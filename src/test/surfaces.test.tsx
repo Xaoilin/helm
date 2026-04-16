@@ -754,14 +754,85 @@ describe('TasksSurface', () => {
     });
 
     fireEvent.change(screen.getByDisplayValue('All statuses'), { target: { value: 'completed' } });
-    expect(screen.getByText('1 task')).toBeInTheDocument();
+    expect(screen.getByText('1 matching item')).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByText('Trigger assistant navigation'));
     });
 
     expect(screen.getByDisplayValue('All statuses')).toBeInTheDocument();
-    expect(screen.getByText('2 tasks')).toBeInTheDocument();
+    expect(screen.getByText('2 matching items')).toBeInTheDocument();
+  });
+
+  it('should group all tasks into readable sections', async () => {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'task-overdue',
+        title: 'Pay invoice',
+        description: '',
+        completed: false,
+        priority: 'high',
+        category: 'task',
+        dueDate: yesterdayStr,
+        createdAt: '2026-04-10T09:00:00.000Z',
+        updatedAt: '2026-04-10T09:00:00.000Z',
+      },
+      {
+        id: 'task-upcoming',
+        title: 'Draft notes',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'task',
+        dueDate: tomorrowStr,
+        createdAt: '2026-04-10T09:00:00.000Z',
+        updatedAt: '2026-04-10T09:00:00.000Z',
+      },
+      {
+        id: 'habit-1',
+        title: 'Stretch',
+        description: '',
+        completed: false,
+        priority: 'low',
+        category: 'daily',
+        recurring: { frequency: 'daily', lastReset: todayStr },
+        createdAt: '2026-04-10T09:00:00.000Z',
+        updatedAt: '2026-04-10T09:00:00.000Z',
+      },
+      {
+        id: 'task-done',
+        title: 'Archive receipts',
+        description: '',
+        completed: true,
+        completedAt: '2026-04-10T10:00:00.000Z',
+        priority: 'low',
+        category: 'task',
+        createdAt: '2026-04-10T09:00:00.000Z',
+        updatedAt: '2026-04-10T10:00:00.000Z',
+      },
+    ]));
+
+    await act(async () => { renderWithProvider(<TasksSurface />); });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'All Tasks' }));
+    });
+
+    expect(screen.getByRole('heading', { name: 'Overdue' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Upcoming' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Routines' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Completed' })).toBeInTheDocument();
+    expect(screen.getByText('Pay invoice')).toBeInTheDocument();
+    expect(screen.getByText('Draft notes')).toBeInTheDocument();
+    expect(screen.getByText('Stretch')).toBeInTheDocument();
   });
 
   it('should highlight the resolved task when assistant navigation includes a task id', async () => {
