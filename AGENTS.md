@@ -34,9 +34,9 @@ Run the relevant checks before closing out meaningful code changes:
 
 Also do manual QA before reporting back on any delivered feature. Changes that touch UI, voice, OAuth, wake-word, or external integrations always require a direct manual validation pass, and user-facing changes should include screenshot evidence when practical.
 
-Run `npm run handoff:check` at the end of every completed feature handoff and report the result explicitly, even for branch-only work. Expect it to fail before merge/deploy for reasons like uncommitted changes, branch-only status, or the live site still serving an older version.
+Run `npm run handoff:check` at the end of every completed feature handoff. If it fails, the job is not done yet. Keep going until it passes unless the user explicitly asked to keep the work local/unmerged or an external access blocker makes completion impossible.
 
-Before calling a user-facing change live, shipped, or deployed, `npm run handoff:check` must also pass after merge and deploy. That command is the release gate for "no uncommitted non-generated changes, merged to master, deployed, live version verified, and merged topic branches cleaned up."
+Before reporting meaningful feature work back as completed, `npm run handoff:check` must pass after merge and deploy. That command is the release gate for "no uncommitted non-generated changes, merged to master, deployed, live version verified, and merged topic branches cleaned up."
 
 ## Definition Of Done
 
@@ -47,13 +47,14 @@ Before calling a user-facing change live, shipped, or deployed, `npm run handoff
 - User-facing copy reflects the real runtime state.
 - The task branch includes a release version bump.
 - `docs/feature-status.md` is updated when a feature moves between `real`, `local-only/degraded`, or `placeholder/simulated`.
+- `npm run handoff:check` passes unless the user explicitly chose a local-only or unmerged outcome.
 
 ## Working Rules
 
 - Use a dedicated branch per task. `codex/<short-description>` is the default branch style.
 - Every feature branch must bump the app version, keep the release files in sync, and report that version back in the handoff even if the work is still branch-only.
-- Every completed feature handoff must include the `npm run handoff:check` result, including branch-only work where failures are expected and should be explained plainly.
-- When meaningful work is complete and validation is green, land it through the normal branch -> commit -> merge -> deploy-verification flow unless the user explicitly wants it kept local or unmerged.
+- Every completed feature handoff must include the `npm run handoff:check` result, and that result must be passing unless the user explicitly wants a local-only or unmerged outcome.
+- When meaningful work is complete and validation is green, continue through the normal branch -> commit -> merge -> deploy-verification flow automatically unless the user explicitly wants it kept local or unmerged. Do not wait for a separate "release it" prompt to finish the job.
 - Do not describe a user-facing change as live, shipped, or on the website until it has been merged to `master`, the deployment has completed successfully, and `npm run handoff:check` has passed. If work is only local or branch-only, say that explicitly.
 - After a task branch is merged, delete that branch locally and on `origin` so stale merged branches do not accumulate. If a branch is still unmerged, call that out explicitly instead of leaving its status ambiguous.
 - Reproduce bugs before fixing them, then add a regression test.

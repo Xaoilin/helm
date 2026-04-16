@@ -4,8 +4,9 @@
 
 - Use a dedicated branch for each task. `codex/<short-description>` is the default.
 - When meaningful work is complete and relevant checks are green, use the normal branch -> commit -> PR/merge -> deploy-verification flow instead of leaving finished work only in a local checkout.
-- Run `npm run handoff:check` at the end of every completed feature handoff and report the result explicitly. If the change only exists locally or on a branch, say that explicitly in the handoff and explain any expected `handoff:check` failures.
-- Do not call a user-facing change live, shipped, or deployed until it is merged to `master`, the deployment has succeeded, and the deployed result has been verified directly. `npm run handoff:check` is the required proof point for that state.
+- Run `npm run handoff:check` at the end of every completed feature handoff. If it fails, the work is not done yet unless the user explicitly asked for a local-only or unmerged outcome or an external access blocker prevents completion.
+- Do not call a user-facing change live, shipped, or deployed until it is merged to `master`, the deployment has succeeded, and the deployed result has been verified directly. `npm run handoff:check` is the required proof point for that state, and meaningful feature work should not be handed off as complete before that proof exists.
+- When meaningful work is ready and the user did not ask to keep it local, continue through merge and deploy automatically instead of waiting for a separate release instruction.
 - After a task branch is merged, delete it locally and on `origin`. If any branch remains unmerged, call out its status explicitly instead of leaving stale topic branches around.
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
@@ -51,9 +52,9 @@ Use the repo scripts or local binaries directly:
 
 For small changes, run the most relevant checks first. Before landing broader code changes, run the full set above unless a dependency or environment blocker prevents it.
 
-Run `npm run handoff:check` for every completed feature handoff, even before merge. On branch-only work it is expected to fail if uncommitted non-generated changes remain, if the work is still branch-only, if the live GitHub Pages bundle is not yet serving the current version, or if the local topic branch still exists.
+Run `npm run handoff:check` for every completed feature handoff. If the result is failing because the work is still branch-only, undeployed, or unclean, keep going through release cleanup instead of handing the task back as complete.
 
-Before claiming a user-facing change is live or shipped, `npm run handoff:check` must also pass after merge and deploy. That command fails if uncommitted non-generated changes remain, if the work is still branch-only, if the `master` CI or deploy workflows have not succeeded for the deployed head, if the live GitHub Pages bundle is not serving the current version, or if merged `codex/` branches still exist.
+Before claiming a user-facing change is live or shipped, `npm run handoff:check` must pass after merge and deploy. That command fails if uncommitted non-generated changes remain, if the work is still branch-only, if the `master` CI or deploy workflows have not succeeded for the deployed head, if the live GitHub Pages bundle is not serving the current version, or if merged `codex/` branches still exist.
 
 For assistant-planning changes, the release bar is higher than generic unit coverage:
 
@@ -78,6 +79,7 @@ For assistant-planning changes, the release bar is higher than generic unit cove
 - `master` should stay protected with pull requests required and those five checks required before merge.
 - The non-required `assistant-benchmark` CI job now runs on pushes to `master` and blocks deployment if the live hosted benchmark thresholds fail.
 - The normal landing path is therefore a small branch and PR into `master`, not direct commits to `master` or long-lived finished changes sitting only locally.
+- If a Supabase change depends on a new migration, ship the migration rollout in the same release path as the code that depends on it. Prefer keeping `SUPABASE_DB_PASSWORD` configured so `supabase db push` can run non-interactively; when that secret is unavailable, provide an equally automatic fallback in the release workflow so production cannot end up with new hosted code but missing schema.
 - Deploy should continue to trigger only from a successful CI run on `master`, not from arbitrary pushes or partial workflows.
 
 ## Testing Expectations

@@ -237,7 +237,7 @@ describe('DebugSurface Google Calendar diagnostics', () => {
     });
 
     expect((await screen.findAllByText('Passive access confirmed. 1 calendar visible.')).length).toBeGreaterThan(0);
-    expect(screen.getByText('Probe: success')).toBeInTheDocument();
+    expect(await screen.findByText(/Probe:\s*success/i)).toBeInTheDocument();
     expect(screen.queryByText('refreshed-token')).not.toBeInTheDocument();
     expect(screen.getByText('Probe current access token expiry')).toBeInTheDocument();
   });

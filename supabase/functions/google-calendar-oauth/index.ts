@@ -15,6 +15,8 @@ const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const GOOGLE_CALENDAR_LIST_URL = 'https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader';
 const ACCESS_TOKEN_REFRESH_BUFFER_MS = 60_000;
+const GOOGLE_CREDENTIALS_SCHEMA_CACHE_ERROR_PATTERN = /could not find the table ['"]public\.google_calendar_credentials['"] in the schema cache/i;
+const GOOGLE_CREDENTIALS_SCHEMA_CACHE_ERROR_MESSAGE = 'Hosted Google Calendar database schema is missing the google_calendar_credentials table. Apply the Supabase migration for durable Google Calendar credentials, then retry reconnecting or syncing.';
 
 type CredentialOrigin = 'oauth_code' | 'profile_session';
 type CredentialHealth = 'refreshable' | 'needs_reconnect' | 'revoked';
@@ -283,6 +285,14 @@ function getEnvReadinessFailure(requestId: string): Response | null {
   return null;
 }
 
+function normalizeCredentialTableErrorMessage(message: string): string {
+  if (GOOGLE_CREDENTIALS_SCHEMA_CACHE_ERROR_PATTERN.test(message)) {
+    return GOOGLE_CREDENTIALS_SCHEMA_CACHE_ERROR_MESSAGE;
+  }
+
+  return message;
+}
+
 function createAuthClient(authHeader: string | null) {
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: {
@@ -482,7 +492,7 @@ async function loadCredentialRow(
     .maybeSingle();
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(normalizeCredentialTableErrorMessage(error.message));
   }
 
   return data as GoogleCalendarCredentialRow | null;
@@ -499,7 +509,7 @@ async function upsertCredentialRow(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || 'Failed to save Google Calendar credential.');
+    throw new Error(normalizeCredentialTableErrorMessage(error?.message || 'Failed to save Google Calendar credential.'));
   }
 
   return data as GoogleCalendarCredentialRow;
@@ -525,7 +535,7 @@ async function updateCredentialFailureState(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || 'Failed to update Google Calendar credential failure state.');
+    throw new Error(normalizeCredentialTableErrorMessage(error?.message || 'Failed to update Google Calendar credential failure state.'));
   }
 
   return data as GoogleCalendarCredentialRow;
@@ -754,7 +764,7 @@ async function handleGetAccountStatus(
 
   const { data, error } = await query;
   if (error) {
-    return failure('temporary_unavailable', error.message, {}, meta);
+    return failure('temporary_unavailable', normalizeCredentialTableErrorMessage(error.message), {}, meta);
   }
 
   const statuses = (data as GoogleCalendarCredentialRow[] | null || []).map(toCredentialStatus);
@@ -793,7 +803,7 @@ async function handleRevokeAccount(
     .eq('google_email', row.google_email);
 
   if (error) {
-    return failure('temporary_unavailable', error.message, {
+    return failure('temporary_unavailable', normalizeCredentialTableErrorMessage(error.message), {
       accountEmail: row.google_email,
       credential: toCredentialStatus(row),
     }, meta);
@@ -845,7 +855,7 @@ Deno.serve(async request => {
         return invalidRequest('Unsupported action.', meta);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Google Calendar OAuth function failed.';
+    const message = normalizeCredentialTableErrorMessage(error instanceof Error ? error.message : 'Google Calendar OAuth function failed.');
     if (message === 'needs_reconnect') {
       return failure('needs_reconnect', 'Google access expired. Reconnect this account.', {}, meta);
     }

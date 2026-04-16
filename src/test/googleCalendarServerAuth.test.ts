@@ -197,4 +197,40 @@ describe('googleCalendarServerAuth', () => {
     expect(thrown).toBeInstanceOf(Error);
     expect((thrown as Error).message).toContain('--no-verify-jwt');
   });
+
+  it('turns missing google_calendar_credentials schema errors into an actionable hosted-auth error', async () => {
+    functionsInvokeMock.mockResolvedValue({
+      data: {
+        ok: false,
+        error: 'temporary_unavailable',
+        message: "Could not find the table 'public.google_calendar_credentials' in the schema cache",
+        meta: {
+          requestId: 'req-schema-1',
+          checkedAt: '2026-04-16T11:29:02.912Z',
+          readiness: {
+            functionReachable: true,
+            oauthConfigured: true,
+            originAllowed: true,
+            signedIn: true,
+          },
+        },
+      },
+      error: null,
+    });
+
+    const promise = mintGoogleCalendarAccessToken('alisa@example.com');
+
+    await expect(promise).rejects.toMatchObject({
+      name: 'GoogleCalendarOAuthFunctionError',
+      code: 'temporary_unavailable',
+      requestId: 'req-schema-1',
+      readiness: {
+        functionReachable: true,
+        oauthConfigured: true,
+        originAllowed: true,
+        signedIn: true,
+      },
+    } satisfies Partial<GoogleCalendarOAuthFunctionError>);
+    await expect(promise).rejects.toThrow(/google_calendar_credentials/i);
+  });
 });

@@ -1,11 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import IntegrationsSurface from '../surfaces/IntegrationsSurface';
+import { GoogleCalendarOAuthFunctionError } from '../services/googleCalendarServerAuth';
 
 const {
   appState,
   authSnapshotMock,
   googleSyncState,
+  revokeGoogleCalendarCredentialMock,
 } = vi.hoisted(() => ({
   appState: {
     integrations: [{
@@ -35,6 +37,7 @@ const {
     addCalendarSource: vi.fn(),
     updateIntegration: vi.fn(),
     removeCalendarAccount: vi.fn(),
+    navigate: vi.fn(),
   },
   authSnapshotMock: vi.fn(),
   googleSyncState: {
@@ -53,6 +56,7 @@ const {
       lastErrorCode: 'unauthorized_origin',
     },
   },
+  revokeGoogleCalendarCredentialMock: vi.fn(),
 }));
 
 vi.mock('../store/AppContext', () => ({
@@ -75,9 +79,18 @@ vi.mock('../store/supabase', () => ({
   getAuthSessionSnapshot: authSnapshotMock,
 }));
 
+vi.mock('../services/googleCalendarServerAuth', async () => {
+  const actual = await vi.importActual<typeof import('../services/googleCalendarServerAuth')>('../services/googleCalendarServerAuth');
+  return {
+    ...actual,
+    revokeGoogleCalendarCredential: revokeGoogleCalendarCredentialMock,
+  };
+});
+
 describe('IntegrationsSurface degraded Google state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    revokeGoogleCalendarCredentialMock.mockResolvedValue(undefined);
     authSnapshotMock.mockReturnValue({
       userId: 'user-1',
       email: 'alisa@example.com',
@@ -92,5 +105,37 @@ describe('IntegrationsSurface degraded Google state', () => {
     expect(screen.getByText(/Hosted Google Calendar status is degraded right now/i)).toBeInTheDocument();
     expect(screen.getAllByText(/This browser origin is not allowed to use the hosted Google Calendar OAuth function\./i).length).toBeGreaterThan(0);
     expect(screen.getByText((content) => content.includes('Credential status Unavailable'))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+  });
+
+  it('still removes the local Google account when hosted revoke fails', async () => {
+    revokeGoogleCalendarCredentialMock.mockRejectedValue(new GoogleCalendarOAuthFunctionError(
+      'temporary_unavailable',
+      'Hosted Google Calendar database schema is missing the google_calendar_credentials table. Apply the Supabase migration for durable Google Calendar credentials, then retry reconnecting or syncing.',
+      {
+        requestId: 'req-disconnect-1',
+        readiness: {
+          functionReachable: true,
+          oauthConfigured: true,
+          originAllowed: true,
+          signedIn: true,
+        },
+      },
+    ));
+
+    render(<IntegrationsSurface />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+
+    await waitFor(() => {
+      expect(appState.removeCalendarAccount).toHaveBeenCalledWith('acc-google');
+      expect(appState.updateIntegration).toHaveBeenCalledWith('int-google', {
+        status: 'disconnected',
+        configuredAt: undefined,
+        lastError: undefined,
+      });
+      expect(googleSyncState.refreshCredentialStatuses).toHaveBeenCalled();
+    });
   });
 });

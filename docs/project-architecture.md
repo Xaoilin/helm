@@ -130,6 +130,7 @@ Important behavior:
 - Google Calendar accounts persist explicit auth metadata in the domain model.
 - Browser Google Calendar transport is now server-backed and refreshable. The browser only obtains Google authorization codes; refresh tokens stay on the hosted Supabase side in `google_calendar_credentials`.
 - The hosted `google-calendar-oauth` function validates the Supabase session inside the function and is deployed with JWT verification disabled. This avoids Supabase Edge gateway rejects when the project issues asymmetric `ES256` access tokens.
+- Production rollout for hosted Google Calendar auth requires the matching Supabase migration to be applied before or with the function deploy. The release workflow now prefers full `supabase db push` when `SUPABASE_DB_PASSWORD` is configured, and otherwise falls back to an idempotent Supabase Management API apply of the `google_calendar_credentials` schema before the function deploys.
 - Durable browser Google Calendar support now requires HELM sign-in. Signed-out browser mode is a truthful degraded state for connect or reconnect, while local calendars continue to work normally.
 - Passive sync is non-interactive. Opening Calendar or pressing `Sync` should never launch a consent or reconnect popup.
 - Reconnect-required is a confirmed failure state, not a shortcut for "cached GIS token expired". Calendar-OAuth accounts only move into reconnect-required after passive auth actually fails, a 401 comes back, or the user no longer has transport credentials to retry with.
