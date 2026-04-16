@@ -23,8 +23,34 @@ interface Toast {
   emoji?: string;
 }
 
+interface AllTaskSection {
+  id: 'overdue' | 'today' | 'upcoming' | 'routines' | 'later';
+  title: string;
+  description: string;
+  items: Task[];
+}
+
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function fromLocalDateStr(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function shiftLocalDate(dateStr: string, days: number): string {
+  const next = fromLocalDateStr(dateStr);
+  next.setDate(next.getDate() + days);
+  return toLocalDateStr(next);
+}
+
+function formatShortDate(dateStr: string): string {
+  return fromLocalDateStr(dateStr).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 export default function TasksSurface() {
@@ -34,6 +60,7 @@ export default function TasksSurface() {
   const [editing, setEditing] = useState<Task | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showCompletedGoals, setShowCompletedGoals] = useState(false);
+  const [showCompletedAllTasks, setShowCompletedAllTasks] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showLevelFlash, setShowLevelFlash] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
@@ -174,6 +201,7 @@ export default function TasksSurface() {
   const todayItems = useMemo(() => [...dailyHabits, ...dueTodayTasks], [dailyHabits, dueTodayTasks]);
   const todayDone = todayItems.filter(t => t.completed).length;
   const todayTotal = todayItems.length;
+  const tomorrowStr = useMemo(() => shiftLocalDate(todayStr, 1), [todayStr]);
 
   const allTasks = useMemo(() => {
     let filtered = projectFilteredTasks.filter(t => t.category !== 'goal');
@@ -190,6 +218,85 @@ export default function TasksSurface() {
       return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
     });
   }, [projectFilteredTasks, filterCategory, filterPriority, filterStatus]);
+
+  useEffect(() => {
+    if (allTasks.some(task => task.id === highlightedTaskId && task.completed)) {
+      setShowCompletedAllTasks(true);
+    }
+  }, [allTasks, highlightedTaskId]);
+
+  const scopedAllTasks = useMemo(
+    () => projectFilteredTasks.filter(task => task.category !== 'goal'),
+    [projectFilteredTasks],
+  );
+
+  const selectedProjectName = useMemo(
+    () => app.projects.find(project => project.id === filterProjectId)?.name,
+    [app.projects, filterProjectId],
+  );
+
+  const allTaskStats = useMemo(() => {
+    const active = scopedAllTasks.filter(task => !task.completed).length;
+    const completed = scopedAllTasks.filter(task => task.completed).length;
+    const overdue = scopedAllTasks.filter(task => !task.completed && task.category === 'task' && !!task.dueDate && task.dueDate < todayStr).length;
+    const dueToday = scopedAllTasks.filter(task => !task.completed && task.category === 'task' && task.dueDate === todayStr).length;
+    const routines = scopedAllTasks.filter(task => !task.completed && task.category === 'daily').length;
+    return { active, completed, overdue, dueToday, routines };
+  }, [scopedAllTasks, todayStr]);
+
+  const allTaskSections = useMemo<AllTaskSection[]>(() => {
+    const overdue: Task[] = [];
+    const dueToday: Task[] = [];
+    const upcoming: Task[] = [];
+    const routines: Task[] = [];
+    const later: Task[] = [];
+
+    allTasks
+      .filter(task => !task.completed)
+      .forEach(task => {
+        if (task.category === 'daily') {
+          routines.push(task);
+          return;
+        }
+
+        if (!task.dueDate) {
+          later.push(task);
+          return;
+        }
+
+        if (task.dueDate < todayStr) {
+          overdue.push(task);
+          return;
+        }
+
+        if (task.dueDate === todayStr) {
+          dueToday.push(task);
+          return;
+        }
+
+        upcoming.push(task);
+      });
+
+    const sections: AllTaskSection[] = [
+      { id: 'overdue', title: 'Overdue', description: 'Needs attention first.', items: overdue },
+      { id: 'today', title: 'Due today', description: 'Keep today moving without losing track.', items: dueToday },
+      { id: 'upcoming', title: 'Upcoming', description: 'Scheduled next so you can plan ahead.', items: upcoming },
+      { id: 'routines', title: 'Routines', description: 'Daily habits and repeating commitments.', items: routines },
+      { id: 'later', title: 'Later', description: 'Open tasks without a due date yet.', items: later },
+    ];
+
+    return sections.filter(section => section.items.length > 0);
+  }, [allTasks, todayStr]);
+
+  const completedAllTasks = useMemo(
+    () => allTasks.filter(task => task.completed),
+    [allTasks],
+  );
+
+  const hasAllTaskFilters = filterProjectId !== 'all'
+    || filterCategory !== 'all'
+    || filterPriority !== 'all'
+    || filterStatus !== 'all';
 
   const goalTags = useMemo(() => app.settings.goalTags || [], [app.settings.goalTags]);
 
@@ -330,6 +437,13 @@ export default function TasksSurface() {
 
   const isAssistantHighlighted = useCallback((taskId: string) => highlightedTaskId === taskId, [highlightedTaskId]);
 
+  const resetAllTaskFilters = useCallback(() => {
+    setFilterProjectId('all');
+    setFilterCategory('all');
+    setFilterPriority('all');
+    setFilterStatus('all');
+  }, []);
+
   // ── Render helpers ──
   const renderTaskRow = (task: Task) => (
     <div
@@ -378,6 +492,109 @@ export default function TasksSurface() {
       </div>
     </div>
   );
+
+  const renderAllTaskCard = (task: Task) => {
+    const projectName = task.projectId ? app.projects.find(project => project.id === task.projectId)?.name || 'Project' : undefined;
+    const completionDate = task.completedAt ? toLocalDateStr(new Date(task.completedAt)) : undefined;
+    const dueLabel = task.dueDate
+      ? task.dueDate < todayStr && !task.completed
+        ? `Overdue · ${formatShortDate(task.dueDate)}`
+        : task.dueDate === todayStr
+          ? 'Due today'
+          : task.dueDate === tomorrowStr
+            ? 'Due tomorrow'
+            : `Due ${formatShortDate(task.dueDate)}`
+      : undefined;
+    const dueTone = task.dueDate
+      ? task.dueDate < todayStr && !task.completed
+        ? 'danger'
+        : task.dueDate === todayStr
+          ? 'today'
+          : 'future'
+      : undefined;
+    const footerNote = task.completed
+      ? completionDate === todayStr
+        ? 'Completed today'
+        : completionDate
+          ? `Completed ${formatShortDate(completionDate)}`
+          : 'Completed'
+      : task.recurring
+        ? `Repeats ${task.recurring.frequency}`
+        : task.dueDate
+          ? `Scheduled for ${formatShortDate(task.dueDate)}`
+          : 'No due date yet';
+
+    return (
+      <div
+        key={task.id}
+        id={`task-item-${task.id}`}
+        className={`all-task-card ${task.completed ? 'completed' : ''} ${isAssistantHighlighted(task.id) ? 'assistant-focus' : ''}`}
+      >
+        <div className="all-task-card-header">
+          <div className="all-task-card-main">
+            <input
+              type="checkbox"
+              className="task-checkbox all-task-checkbox"
+              checked={task.completed}
+              onChange={() => toggleComplete(task)}
+              aria-label={`Mark "${task.title}" as ${task.completed ? 'incomplete' : 'complete'}`}
+            />
+            <div className="all-task-card-copy">
+              <div className="all-task-card-labels">
+                {task.category === 'daily' && (
+                  <span className="all-task-habit-emoji" aria-hidden="true">
+                    {getHabitEmoji(task.title, task.emoji)}
+                  </span>
+                )}
+                <span className={`all-task-type ${task.category}`}>
+                  {task.category === 'daily' ? 'Routine' : 'Task'}
+                </span>
+                <span className={`tag tag-${task.priority}`}>{task.priority}</span>
+                {projectName && <span className="tag tag-connected">{projectName}</span>}
+              </div>
+              <div className={`all-task-card-title ${task.completed ? 'done' : ''}`}>{task.title}</div>
+              {task.description && (
+                <p className="all-task-card-desc">
+                  {task.description.length > 110 ? `${task.description.slice(0, 110)}...` : task.description}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="all-task-card-side">
+            {dueLabel && (
+              <span className={`all-task-date-badge ${dueTone}`}>
+                {dueLabel}
+              </span>
+            )}
+            <div className="all-task-card-actions">
+              <button className="btn-icon btn-sm" onClick={() => openEdit(task)} aria-label={`Edit "${task.title}"`} style={{ fontSize: 11 }}>
+                Edit
+              </button>
+              <button
+                className="btn-icon btn-sm"
+                onClick={() => setDeletingId(current => current === task.id ? null : task.id)}
+                aria-label={`Delete "${task.title}"`}
+                style={{ fontSize: 11, color: '#ff6b6b' }}
+              >
+                {deletingId === task.id ? 'Close' : '\u00d7'}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="all-task-card-footer">
+          <span>{footerNote}</span>
+          {task.category === 'daily' && task.recurring && <span>Reset {task.recurring.lastReset ? `last on ${formatShortDate(task.recurring.lastReset)}` : 'automatically'}</span>}
+        </div>
+        {deletingId === task.id && (
+          <div className="confirm-bar all-task-confirm" role="alert">
+            <span>Delete this {task.category === 'daily' ? 'routine' : 'task'}?</span>
+            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(task.id)}>Delete</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setDeletingId(null)}>Cancel</button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const activeCount = app.tasks.filter(t => !t.completed && t.category !== 'goal').length;
   const goalCount = activeGoals.length;
@@ -494,39 +711,131 @@ export default function TasksSurface() {
         {/* ── All Tasks ── */}
         {tab === 'all' && (
           <>
-            <div className="filter-bar">
-              <select className="form-select" value={filterProjectId} onChange={e => setFilterProjectId(e.target.value)}>
-                <option value="all">All projects</option>
-                {app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-              </select>
-              <select className="form-select" value={filterCategory} onChange={e => setFilterCategory(e.target.value as typeof filterCategory)}>
-                <option value="all">All types</option>
-                <option value="daily">Daily habits</option>
-                <option value="task">One-off tasks</option>
-              </select>
-              <select className="form-select" value={filterPriority} onChange={e => setFilterPriority(e.target.value as typeof filterPriority)}>
-                <option value="all">All priorities</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-              <select className="form-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value as typeof filterStatus)}>
-                <option value="all">All statuses</option>
-                <option value="active">Active</option>
-                <option value="completed">Completed</option>
-              </select>
-              <span className="count">{allTasks.length} task{allTasks.length !== 1 ? 's' : ''}</span>
+            <div className="all-tasks-overview">
+              <div className="all-tasks-overview-copy">
+                <div className="all-tasks-eyebrow">Task workspace</div>
+                <h2>{allTaskStats.active} active item{allTaskStats.active !== 1 ? 's' : ''}</h2>
+                <p>
+                  {selectedProjectName
+                    ? `Focused on ${selectedProjectName}.`
+                    : 'Across every project and personal task.'}
+                  {' '}Overdue work stays pinned at the top, and completed items stay tucked away until you need them.
+                </p>
+              </div>
+              <div className="all-tasks-metrics" aria-label="All task summary">
+                <div className="all-tasks-metric">
+                  <span className="label">Overdue</span>
+                  <span className="value">{allTaskStats.overdue}</span>
+                </div>
+                <div className="all-tasks-metric">
+                  <span className="label">Due today</span>
+                  <span className="value">{allTaskStats.dueToday}</span>
+                </div>
+                <div className="all-tasks-metric">
+                  <span className="label">Routines</span>
+                  <span className="value">{allTaskStats.routines}</span>
+                </div>
+                <div className="all-tasks-metric">
+                  <span className="label">Completed</span>
+                  <span className="value">{allTaskStats.completed}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="all-tasks-filters">
+              <div className="all-tasks-filter-grid">
+                <label className="all-tasks-filter-field">
+                  <span>Project</span>
+                  <select className="form-select" value={filterProjectId} onChange={e => setFilterProjectId(e.target.value)}>
+                    <option value="all">All projects</option>
+                    {app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+                  </select>
+                </label>
+                <label className="all-tasks-filter-field">
+                  <span>Type</span>
+                  <select className="form-select" value={filterCategory} onChange={e => setFilterCategory(e.target.value as typeof filterCategory)}>
+                    <option value="all">All types</option>
+                    <option value="daily">Daily habits</option>
+                    <option value="task">One-off tasks</option>
+                  </select>
+                </label>
+                <label className="all-tasks-filter-field">
+                  <span>Priority</span>
+                  <select className="form-select" value={filterPriority} onChange={e => setFilterPriority(e.target.value as typeof filterPriority)}>
+                    <option value="all">All priorities</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </label>
+                <label className="all-tasks-filter-field">
+                  <span>Status</span>
+                  <select className="form-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value as typeof filterStatus)}>
+                    <option value="all">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </label>
+              </div>
+              <div className="all-tasks-filter-footer">
+                <span className="count">{allTasks.length} matching item{allTasks.length !== 1 ? 's' : ''}</span>
+                {hasAllTaskFilters && (
+                  <button className="btn btn-secondary btn-sm" onClick={resetAllTaskFilters}>
+                    Reset filters
+                  </button>
+                )}
+              </div>
             </div>
 
             {allTasks.length === 0 ? (
               <div className="empty-state" role="status">
                 <div className="empty-icon" style={{ fontSize: 36 }}>&#128203;</div>
-                <h3>No tasks match filters</h3>
-                <p>{app.tasks.filter(t => t.category !== 'goal').length === 0 ? 'Create your first task to get started.' : 'Try adjusting your filters.'}</p>
-                <button className="btn btn-primary" onClick={() => openAdd('task')}>+ Add Task</button>
+                <h3>No tasks match this view</h3>
+                <p>{scopedAllTasks.length === 0 ? 'Create your first task to get started.' : 'Try widening the filters or add a new task.'}</p>
+                <div className="actions-row" style={{ gap: 8 }}>
+                  {hasAllTaskFilters && <button className="btn btn-secondary" onClick={resetAllTaskFilters}>Reset Filters</button>}
+                  <button className="btn btn-primary" onClick={() => openAdd('task')}>+ Add Task</button>
+                </div>
               </div>
             ) : (
-              allTasks.map(renderTaskRow)
+              <div className="all-tasks-sections">
+                {allTaskSections.map(section => (
+                  <section key={section.id} className="all-task-section">
+                    <div className="all-task-section-header">
+                      <div>
+                        <h3>{section.title}</h3>
+                        <p>{section.description}</p>
+                      </div>
+                      <span className="all-task-section-count">{section.items.length}</span>
+                    </div>
+                    <div className="all-task-section-list">
+                      {section.items.map(renderAllTaskCard)}
+                    </div>
+                  </section>
+                ))}
+
+                {completedAllTasks.length > 0 && (
+                  <section className="all-task-section completed">
+                    <button
+                      className="all-task-section-header all-task-section-toggle"
+                      onClick={() => setShowCompletedAllTasks(current => !current)}
+                    >
+                      <div>
+                        <h3>Completed</h3>
+                        <p>Finished items stay here for reference and quick reopen.</p>
+                      </div>
+                      <span className="all-task-section-count">
+                        {showCompletedAllTasks || filterStatus === 'completed' ? '\u25BE' : '\u25B8'} {completedAllTasks.length}
+                      </span>
+                    </button>
+                    {(showCompletedAllTasks || filterStatus === 'completed') && (
+                      <div className="all-task-section-list">
+                        {completedAllTasks.map(renderAllTaskCard)}
+                      </div>
+                    )}
+                  </section>
+                )}
+              </div>
             )}
           </>
         )}

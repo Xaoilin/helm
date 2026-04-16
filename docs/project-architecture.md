@@ -206,7 +206,7 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 - Dashboard is the daily operating view and combines agenda, prayer, habits, goals, and achievements.
 - Chat is persistent and conversation-based.
 - Calendar is the most integration-heavy surface and depends on account/source/event integrity.
-- Tasks and gamification are tightly linked through XP, streaks, and badge logic.
+- Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, routine, and completed work for easier scanning.
 - Projects is a local-first project-management hub built on the shared Tasks domain. Project boards read and write task workflow fields directly, milestones reuse project-linked goals, and wiki pages are lightweight notes stored alongside the rest of local app data.
 - Clock is a local-first utility surface for timer and stopwatch workflows, and it persists multiple active cards plus per-timer alarm sound preferences through the shared store.
 - Knowledge contains both a topic-entry knowledge base and the lifestyle tracker.

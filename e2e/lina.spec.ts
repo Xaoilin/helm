@@ -477,7 +477,7 @@ test.describe('Lina Assistant', () => {
 
     await expect(page.locator('h1:has-text("Tasks")')).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole('button', { name: 'All Tasks' })).toHaveClass(/active/);
-    await expect(page.locator('.task-row.assistant-focus')).toContainText('put the mirror up on the office');
+    await expect(page.locator('.all-task-card.assistant-focus, .task-row.assistant-focus').first()).toContainText('put the mirror up on the office');
   });
 
   test('should keep undated assistant-created tasks out of Today but visible in All Tasks', async ({ page }) => {
