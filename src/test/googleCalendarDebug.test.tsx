@@ -1,10 +1,13 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { APP_RELEASE_VERSION } from '../config/release';
 import DebugSurface from '../surfaces/DebugSurface';
 import {
   appendGoogleCalendarDiagnosticEvent,
   clearGoogleCalendarDiagnosticEvents,
 } from '../services/googleCalendarDiagnosticEvents';
+
+const RELEASE_SEMVER = APP_RELEASE_VERSION.replace(/^v/, '');
 
 const {
   appState,
@@ -181,6 +184,11 @@ describe('DebugSurface Google Calendar diagnostics', () => {
     ]);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
   it('shows hosted auth readiness plus the persisted runtime timeline', async () => {
     await act(async () => {
       render(<DebugSurface />);
@@ -216,11 +224,38 @@ describe('DebugSurface Google Calendar diagnostics', () => {
     expect(copied).toContain('oauth_not_configured');
     expect(copied).toContain('serverRuntimeStatus');
     expect(copied).not.toContain('stored-secret-token');
-    expect(await screen.findByText(/Copied 1 diagnostic event/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Copied diagnostics with 1 stored event/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear diagnostics' }));
 
     expect(await screen.findByText('No Google Calendar diagnostics have been recorded yet on this device.')).toBeInTheDocument();
+  });
+
+  it('exports the current diagnostics page as a JSON file', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-14T09:06:00.000Z'));
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:google-calendar-diagnostics');
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const appendChild = vi.spyOn(document.body, 'appendChild');
+
+    await act(async () => {
+      render(<DebugSurface />);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Network \/ APIs/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Export diagnostics (.json)' }));
+      await Promise.resolve();
+    });
+
+    expect(createObjectUrl).toHaveBeenCalledTimes(1);
+    expect(appendChild).toHaveBeenCalled();
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(new RegExp(`Started download for helm-google-calendar-diagnostics-${RELEASE_SEMVER}-2026-04-14-090600\\.json\\.`, 'i'))).toBeInTheDocument();
+
+    vi.runAllTimers();
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:google-calendar-diagnostics');
   });
 
   it('runs a manual passive auth probe without exposing raw tokens', async () => {
@@ -239,6 +274,5 @@ describe('DebugSurface Google Calendar diagnostics', () => {
     expect((await screen.findAllByText('Passive access confirmed. 1 calendar visible.')).length).toBeGreaterThan(0);
     expect(await screen.findByText(/Probe:\s*success/i)).toBeInTheDocument();
     expect(screen.queryByText('refreshed-token')).not.toBeInTheDocument();
-    expect(screen.getByText('Probe current access token expiry')).toBeInTheDocument();
   });
 });

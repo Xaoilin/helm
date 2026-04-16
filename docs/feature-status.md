@@ -30,9 +30,7 @@ Use this matrix when updating docs or UI copy. The allowed states are:
 | Finance accounts, budgets, and savings goals | `real` | Local-first app data is implemented. |
 | Monzo import | `real` | Live API path exists when configured. |
 | Knowledge base and lifestyle tracker | `real` | Local-first CRUD is implemented. |
-| Workspaces | `local-only/degraded` | Metadata exists, but product depth is still limited. |
-| 1Password integration | `placeholder/simulated` | UI and preference model exist, but live CLI-backed integration is not implemented. |
+| Projects hub | `real` | Local-first project management is implemented. The Projects surface includes a portfolio rail, project overview, kanban board, milestone tracking via project-linked goals, lightweight wiki pages, and local project path references. Desktop builds can browse/open local paths directly; web builds fall back truthfully to manual path entry and copy-only behavior. |
 | GitHub integration | `placeholder/simulated` | Simulated connection flow only. |
 | Slack integration | `placeholder/simulated` | Simulated connection flow only. |
 | Linear integration | `placeholder/simulated` | Simulated connection flow only. |
-| Local credential vault | `local-only/degraded` | Works locally, but credentials are not encrypted at rest in this MVP. |

@@ -122,7 +122,7 @@ function makeContext(overrides: Partial<AssistantCommandContext> = {}): Assistan
     knowledgeEntries: [],
     knowledgeTopics: [makeTopic()],
     lifestyleItems: [],
-    workspaces: [],
+    projects: [],
     gamification: DEFAULT_PROFILE,
     prayerTimes: [],
     goalTags: ['Work', 'Health'],

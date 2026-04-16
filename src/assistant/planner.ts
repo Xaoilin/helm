@@ -18,6 +18,7 @@ import {
   resolveCalendarSourceReference,
   resolveFinanceAccountReference,
   resolveKnowledgeTopicReference,
+  resolveProjectReference,
   resolveSurfaceReference,
   resolveTaskReference,
 } from './entityResolver';
@@ -550,6 +551,33 @@ export function buildPlanningBundle(
     });
   }
 
+  const projects = context.projects.length > 0
+    ? resolveProjectReference(transcript, context, dialogState).matches
+      .slice(0, MAX_CANDIDATES)
+      .map(match => ({
+        kind: 'project' as const,
+        id: match.data.id,
+        label: match.data.name,
+        surface: 'projects' as const,
+        score: match.score,
+        detail: match.data.status,
+      }))
+    : [];
+  const recentProject = dialogState?.recentEntities.find(entity => entity.kind === 'project');
+  if (recentProject) {
+    const project = context.projects.find(item => item.id === recentProject.id);
+    pushUniqueCandidate(projects, project
+      ? {
+        kind: 'project',
+        id: project.id,
+        label: project.name,
+        surface: 'projects',
+        score: 1,
+        detail: `${project.status}, recent`,
+      }
+      : null);
+  }
+
   const temporalReference = extractTemporalReference(transcript, context).resolution;
   const capabilityIds = capabilities.map(capability => capability.id as CapabilityId);
 
@@ -564,6 +592,7 @@ export function buildPlanningBundle(
     capabilities: capabilities.map(capability => toPlanningCapabilityCandidate(capability, transcript)),
     entityCandidates: {
       surfaces,
+      projects,
       tasks,
       calendarEvents,
       calendarSources,
@@ -618,6 +647,7 @@ Planning rules:
 - For calendar.reschedule_event, pass eventId.
 - For calendar.create_event, pass calendarSourceId when a specific calendar is intended or the bundle makes a default clear.
 - For finance.record_transaction, pass accountId when a specific account is intended or the bundle makes a default clear.
+- For navigation.go_to_surface, pass projectId when opening a specific project inside the Projects surface.
 - For knowledge.create_entry, pass topicId when a specific topic is intended or the bundle makes a default clear.
 - Prefer clarify over guessing when the correct id, time, or target is uncertain.
 - If the user asks for an unsupported action, clarify truthfully and do not approximate it to another capability.

@@ -47,7 +47,7 @@ function makeContext(): AssistantCommandContext {
     knowledgeEntries: [],
     knowledgeTopics: [],
     lifestyleItems: [],
-    workspaces: [],
+    projects: [],
     gamification: DEFAULT_PROFILE,
     goalTags: [],
     currentSurface: 'chat',

@@ -1,16 +1,26 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { APP_RELEASE_VERSION } from '../config/release';
 import {
   appendGoogleCalendarDiagnosticEvent,
   buildGoogleCalendarDiagnosticsExport,
+  buildGoogleCalendarDiagnosticsExportFilename,
   clearGoogleCalendarDiagnosticEvents,
+  downloadGoogleCalendarDiagnosticsExport,
   getGoogleCalendarDiagnosticSummary,
   listGoogleCalendarDiagnosticEvents,
 } from '../services/googleCalendarDiagnosticEvents';
+
+const RELEASE_SEMVER = APP_RELEASE_VERSION.replace(/^v/, '');
 
 describe('googleCalendarDiagnosticEvents', () => {
   beforeEach(() => {
     localStorage.clear();
     clearGoogleCalendarDiagnosticEvents();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('persists a local-only timeline and returns latest events first', () => {
@@ -70,8 +80,44 @@ describe('googleCalendarDiagnosticEvents', () => {
 
     expect(exported).toContain('"timelineEvents"');
     expect(exported).toContain('"needs_reconnect"');
+    expect(exported).toContain(`"release": "${APP_RELEASE_VERSION}"`);
     expect(exported).not.toContain('accessToken');
     expect(exported).not.toContain('refreshToken');
+  });
+
+  it('builds a stable JSON filename for downloadable diagnostics reports', () => {
+    const fileName = buildGoogleCalendarDiagnosticsExportFilename('2026-04-16T11:49:31.000Z');
+
+    expect(fileName).toBe(`helm-google-calendar-diagnostics-${RELEASE_SEMVER}-2026-04-16-114931.json`);
+  });
+
+  it('downloads diagnostics as a JSON file when the save picker is unavailable', async () => {
+    vi.useFakeTimers();
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:google-diagnostics-export');
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const appendChild = vi.spyOn(document.body, 'appendChild');
+
+    const artifact = await downloadGoogleCalendarDiagnosticsExport({
+      timelineEvents: [{
+        id: 'diag-1',
+        timestamp: '2026-04-16T11:49:31.000Z',
+        operation: 'server_status_refresh',
+        phase: 'failure',
+        outcome: 'failure',
+        message: 'HTTP 401: Unsupported JWT algorithm ES256',
+      }],
+    }, '2026-04-16T11:49:31.000Z');
+
+    expect(artifact.fileName).toBe(`helm-google-calendar-diagnostics-${RELEASE_SEMVER}-2026-04-16-114931.json`);
+    expect(artifact.method).toBe('download');
+    expect(artifact.payload).toContain('Unsupported JWT algorithm ES256');
+    expect(createObjectUrl).toHaveBeenCalledTimes(1);
+    expect(appendChild).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+
+    vi.runAllTimers();
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:google-diagnostics-export');
   });
 
   it('derives latest success and failure summaries from the timeline', () => {

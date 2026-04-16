@@ -14,6 +14,16 @@ export interface TaskContextValue {
 
 const TaskCtx = createContext<TaskContextValue | null>(null);
 
+function normalizeTask(task: Task): Task {
+  return {
+    ...task,
+    projectId: task.projectId || undefined,
+    workflowState: task.workflowState || undefined,
+    blockedReason: task.blockedReason?.trim() || undefined,
+    boardOrder: typeof task.boardOrder === 'number' ? task.boardOrder : undefined,
+  };
+}
+
 export function useTaskContext(): TaskContextValue {
   const ctx = useContext(TaskCtx);
   if (!ctx) throw new Error('useTaskContext must be used within TaskProvider');
@@ -27,7 +37,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       const data = await loadStore<Task[]>('tasks');
-      setTasks(data ?? []);
+      setTasks((data ?? []).map(normalizeTask));
       setLoaded(true);
     })();
   }, []);
@@ -37,13 +47,15 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const addTask = useCallback((task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): string => {
     const id = uuid();
     const now = new Date().toISOString();
-    setTasks(prev => [...prev, { ...task, id, createdAt: now, updatedAt: now }]);
+    setTasks(prev => [...prev, normalizeTask({ ...task, id, createdAt: now, updatedAt: now })]);
     return id;
   }, []);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
     setTasks(prev =>
-      prev.map(t => t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t)
+      prev.map(t => (t.id === id
+        ? normalizeTask({ ...t, ...updates, updatedAt: new Date().toISOString() })
+        : t))
     );
   }, []);
 

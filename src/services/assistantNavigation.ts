@@ -9,8 +9,13 @@ export interface AssistantTasksNavigationState {
   highlightTaskId?: string;
 }
 
+export interface AssistantProjectsNavigationState {
+  revealProjectId?: string;
+}
+
 export interface AssistantSurfaceState {
   tasks?: AssistantTasksNavigationState;
+  projects?: AssistantProjectsNavigationState;
 }
 
 export interface AssistantNavigationRequest {
@@ -38,6 +43,14 @@ function normalizeTasksNavigationState(value: AssistantSurfaceState['tasks'] | u
   };
 }
 
+function normalizeProjectsNavigationState(value: AssistantSurfaceState['projects'] | undefined): AssistantProjectsNavigationState | undefined {
+  if (!value) return undefined;
+
+  return {
+    revealProjectId: value.revealProjectId,
+  };
+}
+
 export function normalizeAssistantNavigationRequest(target: AssistantNavigationTarget): AssistantNavigationRequest {
   if (typeof target === 'string') {
     return {
@@ -52,6 +65,7 @@ export function normalizeAssistantNavigationRequest(target: AssistantNavigationT
     surfaceState: target.surfaceState
       ? {
           tasks: normalizeTasksNavigationState(target.surfaceState.tasks),
+          projects: normalizeProjectsNavigationState(target.surfaceState.projects),
         }
       : undefined,
   };

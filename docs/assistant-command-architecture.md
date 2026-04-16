@@ -15,12 +15,12 @@ Implemented pieces:
 - a source-of-truth assistant action registry with per-action status, domain, args, examples, aliases, and executor metadata
 - schema-validated `ActionPlan` planning
 - a shared capability registry
-- entity resolution for surfaces, tasks, events, calendars, accounts, and knowledge topics
+- entity resolution for surfaces, tasks, projects, events, calendars, accounts, and knowledge topics
 - temporal resolution for relative dates, clock times, part-of-day phrases, and basic prayer-based references
 - normalized task-request parsing that strips conversational scaffolding before writes
 - deterministic execution for navigation, task creation/reveal/completion/deletion, calendar creation/rescheduling, finance logging, and knowledge entry creation
 - shared dialog state with confirmation handling for risky actions such as event rescheduling
-- typed assistant navigation requests so Lina can open the Tasks surface to `Today`, `All Tasks`, or `Goals`, optionally reset filters, and optionally reveal and highlight a specific task
+- typed assistant navigation requests so Lina can open the Tasks surface to `Today`, `All Tasks`, or `Goals`, optionally reset filters, optionally reveal and highlight a specific task, or open the Projects surface and reveal a specific project
 - model-first structured planning through hosted OpenAI or local Ollama instead of action-tag parsing
 - model-led conversational turns that return `reply`, `clarify`, `confirm`, or `tool_calls`
 - grounded ID-based validation for task reveal, task complete, task delete, calendar reschedule, finance account selection, and knowledge topic selection
@@ -119,8 +119,8 @@ The resolver should index:
 - calendars
 - accounts
 - goals
+- projects
 - knowledge entries
-- workspaces
 - currently visible UI items
 - recently mentioned entities
 
@@ -203,7 +203,7 @@ Execution should follow a deterministic pipeline:
 
 If confidence is low, the target is ambiguous, or the action is destructive, Lina should clarify or confirm before mutating state.
 
-For write actions, Lina should only describe success after the deterministic local mutation succeeds. For reveal actions, the executor should pass a typed navigation request that allows the UI to open the correct tab, clear restrictive filters, and highlight the resolved entity.
+For write actions, Lina should only describe success after the deterministic local mutation succeeds. For reveal actions, the executor should pass a typed navigation request that allows the UI to open the correct tab, clear restrictive filters, and reveal or highlight the resolved entity.
 For view-only task navigation, the executor should use the same typed Tasks surface-state payload even when no task id is involved so "show me all my tasks" is explicit and testable instead of being approximated to a generic surface jump.
 
 ### 6. Dialog state

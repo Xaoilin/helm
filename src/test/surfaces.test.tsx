@@ -8,11 +8,10 @@ import ChatSurface from '../surfaces/ChatSurface';
 import ClockSurface from '../surfaces/ClockSurface';
 import DashboardSurface from '../surfaces/DashboardSurface';
 import TasksSurface from '../surfaces/TasksSurface';
+import ProjectsSurface from '../surfaces/ProjectsSurface';
 import KnowledgeSurface from '../surfaces/KnowledgeSurface';
 import ProfileSurface from '../surfaces/ProfileSurface';
-import CredentialsSurface from '../surfaces/CredentialsSurface';
 import IntegrationsSurface from '../surfaces/IntegrationsSurface';
-import WorkspacesSurface from '../surfaces/WorkspacesSurface';
 import SettingsSurface from '../surfaces/SettingsSurface';
 import * as googleCalendarApi from '../services/googleCalendarApi';
 import * as googleCalendarAuthManager from '../services/googleCalendarAuthManager';
@@ -135,11 +134,10 @@ describe('App shell', () => {
     expect(screen.getByText('Calendar')).toBeInTheDocument();
     expect(screen.getByText('Clock')).toBeInTheDocument();
     expect(screen.getByText('Tasks')).toBeInTheDocument();
+    expect(screen.getByText('Projects')).toBeInTheDocument();
     expect(screen.getByText('Finance')).toBeInTheDocument();
     expect(screen.getByText('Knowledge')).toBeInTheDocument();
     expect(screen.getByText('Profile')).toBeInTheDocument();
-    expect(screen.getByText('Credentials')).toBeInTheDocument();
-    expect(screen.getByText('Workspaces')).toBeInTheDocument();
     expect(screen.getByText('Integrations')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
@@ -157,9 +155,8 @@ describe('App shell', () => {
   it('should navigate between surfaces', async () => {
     await act(async () => { renderWithProvider(<App />); });
 
-    await act(async () => { fireEvent.click(screen.getByText('Credentials')); });
-    // After navigating, "Credentials" appears in both sidebar and page header
-    expect(screen.getByText('No stored credentials')).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByText('Projects')); });
+    expect(screen.getByText('Turn HELM into your local project hub')).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Settings')); });
     expect(screen.getByText('About')).toBeInTheDocument();
@@ -330,42 +327,22 @@ describe('ChatSurface', () => {
   });
 });
 
-describe('CredentialsSurface', () => {
+describe('ProjectsSurface', () => {
   beforeEach(() => { localStorage.clear(); });
 
   it('should render empty state', async () => {
-    await act(async () => { renderWithProvider(<CredentialsSurface />); });
-    expect(screen.getByText('No credentials stored')).toBeInTheDocument();
+    await act(async () => { renderWithProvider(<ProjectsSurface />); });
+    expect(screen.getByText('Turn HELM into your local project hub')).toBeInTheDocument();
   });
 
-  it('should show 1Password preference info', async () => {
-    await act(async () => { renderWithProvider(<CredentialsSurface />); });
-    expect(screen.getByText(/1Password is the preferred credential source/)).toBeInTheDocument();
+  it('should describe the new project-management scope', async () => {
+    await act(async () => { renderWithProvider(<ProjectsSurface />); });
+    expect(screen.getByText(/kanban board/i)).toBeInTheDocument();
   });
 
-  it('should explain the local vault security limits truthfully', async () => {
-    await act(async () => { renderWithProvider(<CredentialsSurface />); });
-    expect(screen.getByText(/not encrypted at rest in this MVP/i)).toBeInTheDocument();
-  });
-
-  it('should have add credential button', async () => {
-    await act(async () => { renderWithProvider(<CredentialsSurface />); });
-    const buttons = screen.getAllByText('+ Add Credential');
-    expect(buttons.length).toBeGreaterThan(0);
-  });
-});
-
-describe('WorkspacesSurface', () => {
-  beforeEach(() => { localStorage.clear(); });
-
-  it('should render empty state', async () => {
-    await act(async () => { renderWithProvider(<WorkspacesSurface />); });
-    expect(screen.getByText('No workspaces')).toBeInTheDocument();
-  });
-
-  it('should have add workspace button', async () => {
-    await act(async () => { renderWithProvider(<WorkspacesSurface />); });
-    const buttons = screen.getAllByText('+ Add Workspace');
+  it('should have add project button', async () => {
+    await act(async () => { renderWithProvider(<ProjectsSurface />); });
+    const buttons = screen.getAllByText('+ Add Project');
     expect(buttons.length).toBeGreaterThan(0);
   });
 });
@@ -376,7 +353,6 @@ describe('SettingsSurface', () => {
   it('should render all settings sections', async () => {
     await act(async () => { renderWithProvider(<SettingsSurface />); });
     expect(screen.getByText('Calendar')).toBeInTheDocument();
-    expect(screen.getByText('Credential Source')).toBeInTheDocument();
     expect(screen.getByText('Privacy')).toBeInTheDocument();
     expect(screen.getByText('Appearance')).toBeInTheDocument();
     expect(screen.getByText('About')).toBeInTheDocument();
@@ -422,10 +398,6 @@ describe('SettingsSurface', () => {
     expect(screen.getByText(/Wake-word listening is currently inactive because Lina is turned off/i)).toBeInTheDocument();
   });
 
-  it('should have credential source selector', async () => {
-    await act(async () => { renderWithProvider(<SettingsSurface />); });
-    expect(screen.getByText('Primary credential source')).toBeInTheDocument();
-  });
 });
 
 describe('CalendarSurface', () => {
