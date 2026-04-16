@@ -26,6 +26,7 @@ import PrayerStatsCard from '../components/dashboard/PrayerStatsCard';
 import PrayerTimesCard from '../components/dashboard/PrayerTimesCard';
 import AdhanBanner from '../components/dashboard/AdhanBanner';
 import AgendaList from '../components/dashboard/AgendaList';
+import FocusSnapshot from '../components/dashboard/FocusSnapshot';
 import type { AgendaItem } from '../components/dashboard/AgendaList';
 
 function toLocalDateStr(d: Date): string {
@@ -163,18 +164,6 @@ export default function DashboardSurface() {
       .sort(compareEventStarts);
   }, [app.calendarEvents, visibleSourceIds, todayStr]);
 
-  // Next upcoming event (within 2 hours)
-  const nextEvent = useMemo(() => {
-    const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
-    return todayEvents.find(e => !e.allDay && e.start >= now.toISOString() && e.start <= twoHoursFromNow);
-  }, [todayEvents, now]);
-
-  // Imminent event (within 30 min)
-  const imminentEvent = useMemo(() => {
-    const thirtyMin = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
-    return todayEvents.find(e => !e.allDay && e.start >= now.toISOString() && e.start <= thirtyMin);
-  }, [todayEvents, now]);
-
   // Daily habits
   const dailyHabits = useMemo(() =>
     app.tasks.filter(t => t.category === 'daily').sort((a, b) => a.completed === b.completed ? 0 : a.completed ? 1 : -1),
@@ -193,7 +182,6 @@ export default function DashboardSurface() {
       }),
     [app.tasks, todayStr]
   );
-  const overdueTasks = dueTasks.filter(t => t.dueDate! < todayStr);
 
   // Active goals (top 2 by priority)
   const activeGoals = useMemo(() => {
@@ -203,40 +191,6 @@ export default function DashboardSurface() {
       .sort((a, b) => po[a.priority] - po[b.priority])
       .slice(0, 2);
   }, [app.tasks]);
-
-  // ── "Up Next" priority logic ──
-  const upNext = useMemo((): { type: 'event' | 'task' | 'habit' | 'clear'; item?: CalendarEvent | Task; label: string; sublabel: string } => {
-    if (imminentEvent) {
-      const mins = Math.round((new Date(imminentEvent.start).getTime() - now.getTime()) / 60000);
-      return {
-        type: 'event',
-        item: imminentEvent,
-        label: imminentEvent.title,
-        sublabel: mins <= 0 ? 'Starting now' : `Starts in ${mins} min${mins !== 1 ? 's' : ''}${imminentEvent.location ? ` \u00b7 ${imminentEvent.location}` : ''}`,
-      };
-    }
-    if (overdueTasks.length > 0) {
-      const task = overdueTasks[0];
-      return { type: 'task', item: task, label: task.title, sublabel: `Overdue since ${task.dueDate}` };
-    }
-    const pendingHabit = dailyHabits.find(h => !h.completed);
-    if (pendingHabit) {
-      return { type: 'habit', item: pendingHabit, label: pendingHabit.title, sublabel: `Daily habit \u00b7 ${habitsDone}/${habitsTotal} done` };
-    }
-    if (dueTasks.length > 0) {
-      const task = dueTasks[0];
-      return { type: 'task', item: task, label: task.title, sublabel: `Due today \u00b7 ${task.priority} priority` };
-    }
-    if (nextEvent) {
-      return {
-        type: 'event',
-        item: nextEvent,
-        label: nextEvent.title,
-        sublabel: `At ${new Date(nextEvent.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} – ${new Date(nextEvent.end).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}${nextEvent.location ? ` \u00b7 ${nextEvent.location}` : ''}`,
-      };
-    }
-    return { type: 'clear', label: "You're all caught up", sublabel: 'No urgent tasks or upcoming meetings. Nice work!' };
-  }, [imminentEvent, overdueTasks, dailyHabits, dueTasks, nextEvent, habitsDone, habitsTotal, now]);
 
   // ── Next milestone ──
   const nextMilestone = useMemo((): { label: string; progress: number; current: number; target: number; emoji: string } | null => {
@@ -309,7 +263,7 @@ export default function DashboardSurface() {
   }, [todayEvents, dueTasks, now]);
 
   // ── Task completion with gamification ──
-  const completeTask = (task: Task) => {
+  const completeTask = useCallback((task: Task) => {
     // Already completed — do nothing (locked)
     if (task.completed) return;
 
@@ -351,7 +305,15 @@ export default function DashboardSurface() {
     for (const badge of result.newBadges) {
       addToast({ type: 'badge', text: `${badge.name} unlocked!`, emoji: badge.emoji });
     }
-  };
+  }, [addToast, app, gam, todayStr]);
+
+  const completeFocusCandidate = useCallback((candidateId: string) => {
+    const candidate = app.dashboardFocus.candidates.find(item => item.id === candidateId);
+    if (!candidate?.taskId) return;
+    const task = app.tasks.find(item => item.id === candidate.taskId);
+    if (!task) return;
+    completeTask(task);
+  }, [app.dashboardFocus.candidates, app.tasks, completeTask]);
 
   return (
     <>
@@ -372,32 +334,22 @@ export default function DashboardSurface() {
       </div>
 
       <div className="surface-body">
-        {/* ── Up Next (hero card) ── */}
-        <div className={`dash-upnext ${upNext.type}`}>
-          <div className="dash-upnext-label">UP NEXT</div>
-          <div className="dash-upnext-title">{upNext.label}</div>
-          <div className="dash-upnext-sub">{upNext.sublabel}</div>
-          {upNext.type === 'habit' && upNext.item && (
-            <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={() => completeTask(upNext.item as Task)}>
-              Complete Habit
-            </button>
-          )}
-          {upNext.type === 'task' && upNext.item && (
-            <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={() => completeTask(upNext.item as Task)}>
-              Complete Task
-            </button>
-          )}
-          {upNext.type === 'event' && (
-            <button className="btn btn-secondary" style={{ marginTop: 10 }} onClick={() => app.navigate('calendar')}>
-              View in Calendar
-            </button>
-          )}
-          {upNext.type === 'clear' && (
-            <button className="btn btn-secondary" style={{ marginTop: 10 }} onClick={() => app.navigate('tasks')}>
-              Browse Tasks
-            </button>
-          )}
-        </div>
+        <FocusSnapshot
+          dashboardFocus={app.dashboardFocus}
+          onOpenCandidate={app.openDashboardFocusTarget}
+          onSnoozeCandidate={(candidateId) => app.snoozeDashboardFocus(candidateId)}
+          onShowAnother={() => app.dismissDashboardFocus()}
+          onQuickComplete={completeFocusCandidate}
+          onOpenAllTasks={() => app.requestAssistantNavigation({
+            surface: 'tasks',
+            surfaceState: {
+              tasks: {
+                tab: 'all',
+                resetFilters: true,
+              },
+            },
+          })}
+        />
 
         <div className="dash-grid">
           {/* ── Today's Agenda ── */}

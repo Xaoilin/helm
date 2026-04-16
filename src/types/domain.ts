@@ -161,6 +161,66 @@ export interface Task {
   updatedAt: string;
 }
 
+export type FocusCandidateKind = 'task' | 'habit' | 'meeting_prep' | 'break' | 'clear';
+export type FocusFeedbackAction = 'dismissed' | 'snoozed' | 'opened' | 'completed' | 'refreshed';
+
+export interface DashboardFocusStats {
+  overdueCount: number;
+  dueTodayCount: number;
+  routinesLeft: number;
+  activeTaskCount: number;
+}
+
+export interface FocusCandidate {
+  id: string;
+  kind: FocusCandidateKind;
+  title: string;
+  subtitle: string;
+  score: number;
+  localWhy: string;
+  reasoningTags: string[];
+  estimatedMinutes?: number;
+  taskId?: string;
+  eventId?: string;
+  projectId?: string;
+  dueDate?: string;
+  isUrgent?: boolean;
+}
+
+export interface FocusRecommendation {
+  selectedCandidateId: string;
+  why: string;
+  confidence: number;
+  reasoningTags: string[];
+  estimatedMinutes?: number;
+  alternativeIds: string[];
+  refreshAfterMinutes: number;
+  source: 'local' | 'openai';
+  model?: string;
+  generatedAt: string;
+  expiresAt: string;
+  inputHash: string;
+  fallbackReason?: string;
+}
+
+export interface FocusFeedback {
+  id: string;
+  candidateId: string;
+  action: FocusFeedbackAction;
+  createdAt: string;
+  snoozedUntil?: string;
+}
+
+export interface DashboardFocusState {
+  loaded: boolean;
+  status: 'idle' | 'refreshing' | 'ready';
+  recommendation: FocusRecommendation | null;
+  candidates: FocusCandidate[];
+  queueCandidateIds: string[];
+  stats: DashboardFocusStats;
+  lastError?: string;
+}
+
 // ── Lifestyle Tracker (Haram/Halal) ──
 export type LifestyleType = 'haram' | 'major-sin' | 'wajib-both' | 'wajib-women' | 'wajib-men' | 'halal';
 export type LifestyleStatus = 'struggling' | 'working-on-it' | 'avoiding' | 'mastered'    // haram statuses

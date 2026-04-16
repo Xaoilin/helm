@@ -186,7 +186,7 @@ Planning providers:
 
 The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally. That shared runtime owns task-title normalization, recent-task reveal handling such as "show me that task", grounded ID validation for mutations, and the typed navigation handoff used by the Tasks and Projects surfaces to jump to the right view and reveal the resolved entity.
 The assistant action registry in `src/assistant/capabilities.ts` is the source of truth for which actions Lina may claim and execute. The model now decides whether a turn is `reply`, `clarify`, `confirm`, or `tool_calls`, HELM validates and executes locally, and the final visible assistant reply is narrated from verified results rather than coming from executor templates.
-The Debug surface renders the registry directly and also shows the latest planning bundle, raw planner response, model turn, validator verdict, validated plan, pending confirmation state, execution payloads, raw narration response, and final assistant message so action coverage stays inspectable.
+The Debug surface renders the registry directly and also shows the latest planning bundle, raw planner response, model turn, validator verdict, validated plan, pending confirmation state, execution payloads, raw narration response, final assistant message, and the latest dashboard-focus trace so model-backed task recommendations can be inspected when GPT picks or falls back.
 The assistant benchmark corpus and scorer now live under `src/assistant/evals/` plus `scripts/run-assistant-benchmark.ts`, and the hosted benchmark thresholds are enforced on `master` before deployment.
 
 ### Other external services
@@ -203,7 +203,7 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 
 ## Surface Notes
 
-- Dashboard is the daily operating view and combines agenda, prayer, habits, goals, and achievements.
+- Dashboard is the daily operating view and combines agenda, prayer, habits, goals, achievements, and a compact task snapshot. The `Up Next` hero now comes from a dedicated dashboard-focus domain that ranks grounded task, habit, and near-meeting candidates locally, lets the hosted GPT model choose among the top candidates when available, and falls back immediately to the local ranker when hosted AI is unavailable or invalid.
 - Chat is persistent and conversation-based.
 - Calendar is the most integration-heavy surface and depends on account/source/event integrity.
 - Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, routine, and completed work for easier scanning, with collapsible section headers for long lists.

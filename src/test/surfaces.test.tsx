@@ -950,11 +950,12 @@ describe('DashboardSurface', () => {
   it('should render greeting and up next section', async () => {
     await act(async () => { renderWithProvider(<DashboardSurface />); });
     expect(screen.getByText('UP NEXT')).toBeInTheDocument();
-    expect(screen.getByText("You're all caught up")).toBeInTheDocument();
+    expect(screen.getAllByText("You're all caught up").length).toBeGreaterThan(0);
   });
 
   it('should render all dashboard sections', async () => {
     await act(async () => { renderWithProvider(<DashboardSurface />); });
+    expect(screen.getByText('Task Snapshot')).toBeInTheDocument();
     expect(screen.getByText("Today's Agenda")).toBeInTheDocument();
     expect(screen.getByText('Daily Habits')).toBeInTheDocument();
     expect(screen.getByText('Goals')).toBeInTheDocument();
@@ -1023,6 +1024,60 @@ describe('DashboardSurface', () => {
     const agendaTitles = Array.from(agendaCard!.querySelectorAll('.dash-agenda-title'))
       .map(node => node.textContent);
     expect(agendaTitles).toEqual(['Morning meeting', 'Afternoon meeting']);
+  });
+
+  it('opens a recommended task into the Tasks surface with assistant reveal highlighting', async () => {
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'task-open-me',
+        title: 'Send the invoice',
+        description: '',
+        completed: false,
+        priority: 'high',
+        category: 'task',
+        dueDate: '2026-04-15',
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+
+    await act(async () => {
+      renderWithProvider(<App />);
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Open task' }));
+    });
+
+    expect(await screen.findByText('All Tasks')).toBeInTheDocument();
+    expect(screen.getByText('Send the invoice').closest('.assistant-focus')).not.toBeNull();
+  });
+
+  it('quick completes a recommended task from the dashboard snapshot', async () => {
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'task-quick-complete',
+        title: 'Review launch copy',
+        description: '',
+        completed: false,
+        priority: 'high',
+        category: 'task',
+        dueDate: '2026-04-15',
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+
+    await act(async () => { renderWithProvider(<DashboardSurface />); });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Complete now' }));
+    });
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem('helm:tasks') || '[]');
+      expect(persisted[0]?.completed).toBe(true);
+    });
   });
 });
 
