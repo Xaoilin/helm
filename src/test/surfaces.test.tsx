@@ -835,6 +835,48 @@ describe('TasksSurface', () => {
     expect(screen.getByText('Stretch')).toBeInTheDocument();
   });
 
+  it('should let me collapse and reopen all-task sections from the title', async () => {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'habit-accordion',
+        title: 'Stretch',
+        description: '',
+        completed: false,
+        priority: 'low',
+        category: 'daily',
+        recurring: { frequency: 'daily', lastReset: todayStr },
+        createdAt: '2026-04-10T09:00:00.000Z',
+        updatedAt: '2026-04-10T09:00:00.000Z',
+      },
+    ]));
+
+    await act(async () => { renderWithProvider(<TasksSurface />); });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'All Tasks' }));
+    });
+
+    const routinesHeading = screen.getByRole('heading', { name: 'Routines' });
+    const routinesToggle = routinesHeading.closest('button');
+
+    expect(routinesToggle).not.toBeNull();
+    expect(screen.getByText('Stretch')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(routinesToggle!);
+    });
+
+    expect(screen.queryByText('Stretch')).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(routinesToggle!);
+    });
+
+    expect(screen.getByText('Stretch')).toBeInTheDocument();
+  });
+
   it('should highlight the resolved task when assistant navigation includes a task id', async () => {
     localStorage.setItem('helm:tasks', JSON.stringify([
       {
