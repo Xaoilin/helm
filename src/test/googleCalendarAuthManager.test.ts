@@ -4,6 +4,7 @@ import {
   GOOGLE_PROFILE_UPGRADE_REQUIRED_MESSAGE,
   GOOGLE_RECONNECT_REQUIRED_MESSAGE,
   GOOGLE_SIGN_IN_REQUIRED_MESSAGE,
+  GOOGLE_HOSTED_SCHEMA_MISSING_MESSAGE,
   GOOGLE_UPGRADE_REQUIRED_MESSAGE,
   getGoogleCalendarAccountPatchForCredentialState,
   getGoogleCalendarAuthPatch,
@@ -152,6 +153,27 @@ describe('googleCalendarAuthManager', () => {
     expect(patch.authStatus).toBe('connected');
     expect(getGoogleCalendarStatusLabel({ ...account, ...patch })).toBe('Connected');
     expect(getGoogleCalendarCredentialStatusLabel({ ...account, ...patch })).toBe('Refreshable');
+  });
+
+  it('clears stale auth errors when the hosted Google backend is temporarily unavailable', () => {
+    const account = makeGoogleAccount({
+      authStatus: 'needs_reconnect',
+      lastAuthError: GOOGLE_SIGN_IN_REQUIRED_MESSAGE,
+    });
+
+    const patch = getGoogleCalendarAccountPatchForCredentialState(account, {
+      accountId: account.id,
+      email: account.email,
+      resolvedAuthProvider: 'calendar-oauth',
+      credentialSource: 'legacy_browser_token',
+      serverCredentialPresent: false,
+      credentialHealth: 'temporary_unavailable',
+      message: GOOGLE_HOSTED_SCHEMA_MISSING_MESSAGE,
+    }, '2026-04-16T11:29:02.912Z');
+
+    expect(patch.authStatus).toBe('error');
+    expect(patch.lastAuthError).toBeUndefined();
+    expect(patch.syncError).toBe(GOOGLE_HOSTED_SCHEMA_MISSING_MESSAGE);
   });
 
   it('preserves a confirmed reconnect-required state when auth status already says reconnect', () => {

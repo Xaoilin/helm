@@ -39,6 +39,7 @@ export const GOOGLE_SIGN_IN_REQUIRED_MESSAGE = 'Sign in to HELM to use durable G
 export const GOOGLE_ACCESS_REVOKED_MESSAGE = 'Google access was revoked. Reconnect this account.';
 export const GOOGLE_ACCOUNT_MISMATCH_MESSAGE = 'Google returned a different account. Reconnect this account explicitly.';
 export const GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE = 'Google Calendar temporarily unavailable.';
+export const GOOGLE_HOSTED_SCHEMA_MISSING_MESSAGE = 'Hosted Google Calendar credentials are not ready yet. Apply the Supabase migration for google_calendar_credentials, then retry reconnecting or syncing.';
 
 export interface GoogleCalendarConnectionResult {
   email: string;
@@ -472,6 +473,7 @@ export function getGoogleCalendarAccountPatchForCredentialState(
       return {
         ...base,
         authStatus: 'error',
+        lastAuthError: undefined,
         syncError: credentialState.message || GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
       };
     case 'needs_reconnect':

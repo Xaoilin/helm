@@ -269,6 +269,7 @@ export default function IntegrationsSurface() {
       message: `Starting an explicit Google Calendar disconnect for ${account.email}.`,
     });
 
+    let revokeFailureMessage: string | null = null;
     try {
       if (isSignedIn) {
         await revokeGoogleCalendarCredential(account.email);
@@ -289,8 +290,7 @@ export default function IntegrationsSurface() {
           readiness: error instanceof GoogleCalendarOAuthFunctionError ? error.readiness : undefined,
           httpStatus: error instanceof GoogleCalendarOAuthFunctionError ? error.httpStatus : undefined,
         });
-        setGoogleError(error instanceof Error ? error.message : 'Disconnect failed');
-        return;
+        revokeFailureMessage = error instanceof Error ? error.message : 'Disconnect failed';
       }
     }
 
@@ -316,7 +316,9 @@ export default function IntegrationsSurface() {
       accountId: account.id,
       email: account.email,
       resolvedAuthProvider: account.authProvider,
-      message: `Disconnected Google Calendar account ${account.email}.`,
+      message: revokeFailureMessage
+        ? `Disconnected Google Calendar account ${account.email} locally, but hosted credential cleanup failed: ${revokeFailureMessage}`
+        : `Disconnected Google Calendar account ${account.email}.`,
     });
     setConfirmDisconnect(null);
   };
@@ -409,7 +411,7 @@ export default function IntegrationsSurface() {
                         )}
                       </div>
                       <div className="actions-row" style={{ flexShrink: 0 }}>
-                        {(account.authStatus === 'needs_reconnect' || account.authStatus === 'revoked') && (
+                        {(account.authStatus === 'needs_reconnect' || account.authStatus === 'revoked' || account.authStatus === 'error') && (
                           <button
                             className="btn btn-secondary btn-sm"
                             onClick={() => handleGoogleReconnect(account)}
@@ -483,6 +485,8 @@ export default function IntegrationsSurface() {
                               <li>Enable the <strong>Google Calendar API</strong> in your project</li>
                               <li>Copy the Client ID and paste it in HELM Settings</li>
                               <li>Set the same Client ID plus the matching client secret as Supabase Edge Function secrets for <code>google-calendar-oauth</code></li>
+                              <li>Keep the <code>google_calendar_credentials</code> migration in the repo so the release workflow can apply the hosted Google Calendar schema before durable browser sync goes live</li>
+                              <li>Prefer keeping <code>SUPABASE_DB_PASSWORD</code> in GitHub Actions so broader Supabase migrations can still use <code>supabase db push</code>; if it is missing, the release workflow now falls back to the targeted hosted Google Calendar schema apply</li>
                               <li>Deploy <code>google-calendar-oauth</code> with <code>--no-verify-jwt</code> because HELM validates the Supabase session inside the function and production sessions may use ES256 tokens</li>
                             </ol>
                           </div>
