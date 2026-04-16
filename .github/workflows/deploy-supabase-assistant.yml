@@ -76,4 +76,4 @@ jobs:
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_google_calendar_oauth == 'true' }}
         name: Deploy google-calendar-oauth
-        run: npx supabase functions deploy google-calendar-oauth --project-ref "$SUPABASE_PROJECT_REF" --use-api --yes
+        run: npx supabase functions deploy google-calendar-oauth --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes

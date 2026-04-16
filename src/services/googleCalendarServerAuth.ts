@@ -86,6 +86,9 @@ type GoogleCalendarFunctionResponse<T> =
   | GoogleCalendarFunctionFailure
   | GoogleCalendarFunctionSuccess<T>;
 
+const ES256_JWT_GATEWAY_ERROR_PATTERN = /unsupported jwt algorithm es256/i;
+const ES256_JWT_GATEWAY_ERROR_MESSAGE = 'Hosted Google Calendar auth rejected the HELM session token before the function ran (HTTP 401: Unsupported JWT algorithm ES256). Redeploy google-calendar-oauth with --no-verify-jwt so the function can validate Supabase auth internally.';
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -183,6 +186,10 @@ async function extractFunctionErrorDetails(error: unknown): Promise<{ message: s
   }
 
   return { message: error instanceof Error ? error.message : String(error) };
+}
+
+function isEs256GatewayJwtVerificationError(errorDetails: { message: string; httpStatus?: number }): boolean {
+  return errorDetails.httpStatus === 401 && ES256_JWT_GATEWAY_ERROR_PATTERN.test(errorDetails.message);
 }
 
 export class GoogleCalendarOAuthFunctionError extends Error {
@@ -305,15 +312,18 @@ async function invokeGoogleCalendarOAuthFunction<T>(
 
   if (error) {
     const errorDetails = await extractFunctionErrorDetails(error);
+    const isEs256JwtGatewayFailure = isEs256GatewayJwtVerificationError(errorDetails);
     const functionError = new GoogleCalendarOAuthFunctionError(
       'temporary_unavailable',
-      errorDetails.message,
+      isEs256JwtGatewayFailure ? ES256_JWT_GATEWAY_ERROR_MESSAGE : errorDetails.message,
       {
         httpStatus: errorDetails.httpStatus,
-        readiness: {
-          ...defaultBackendReadiness(),
-          functionReachable: false,
-        },
+        readiness: isEs256JwtGatewayFailure
+          ? defaultBackendReadiness()
+          : {
+              ...defaultBackendReadiness(),
+              functionReachable: false,
+            },
       },
     );
     appendGoogleCalendarDiagnosticEvent({
