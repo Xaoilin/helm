@@ -69,6 +69,12 @@ export const TIMING = {
   HOSTED_ASSISTANT_CACHE_EXPIRY: 60000,
   /** Hosted assistant unavailable cooldown after failure */
   HOSTED_ASSISTANT_UNAVAILABLE_COOLDOWN: 30000,
+  /** Dashboard focus expiry cap before a refresh is allowed */
+  DASHBOARD_FOCUS_CACHE_TTL: 15 * 60 * 1000,
+  /** Default dashboard focus snooze window */
+  DASHBOARD_FOCUS_SNOOZE: 60 * 60 * 1000,
+  /** Dashboard focus clock tick for time-sensitive recommendations */
+  DASHBOARD_FOCUS_TICK: 60 * 1000,
   /** Google Calendar auto-sync throttle */
   SYNC_THROTTLE: 15 * 60 * 1000,
   /** Level-up flash animation duration */
@@ -185,6 +191,12 @@ export const LIMITS = {
   GOOGLE_CALENDAR_DIAGNOSTIC_EVENTS: 250,
   /** Default calendar event duration (ms = 1 hour) */
   DEFAULT_EVENT_DURATION: 3600000,
+  /** Dashboard focus candidate pool before GPT chooses among them */
+  DASHBOARD_FOCUS_CANDIDATE_POOL: 8,
+  /** Dashboard focus queue length shown on the dashboard */
+  DASHBOARD_FOCUS_QUEUE: 3,
+  /** Dashboard focus feedback retention window in days */
+  DASHBOARD_FOCUS_FEEDBACK_DAYS: 30,
 } as const;
 
 export const ASSISTANT_BENCHMARK = {

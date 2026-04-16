@@ -295,6 +295,7 @@ test.describe('Lina Assistant', () => {
         theme: 'dark',
         dataRetentionDays: 90,
         telemetry: false,
+        prayerEnabled: false,
         assistantProvider: 'hosted',
         assistantLanguage: 'en',
         supabaseUrl: 'https://helm.test.supabase.co',

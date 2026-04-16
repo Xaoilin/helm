@@ -4,6 +4,7 @@ import type {
   CalendarAccount, CalendarSource, CalendarEvent,
   Project, ProjectPage, Integration, Settings,
   Task, GamificationProfile,
+  DashboardFocusState,
   KnowledgeTopic, KnowledgeEntry,
   LifestyleItem,
   FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
@@ -28,6 +29,7 @@ import { GamificationProvider, useGamificationContext } from './contexts/Gamific
 import { SettingsProvider, useSettingsContext } from './contexts/SettingsContext';
 import { AssistantProvider, useAssistantContext } from './contexts/AssistantContext';
 import { ClockProvider, useClockContext } from './contexts/ClockContext';
+import { DashboardFocusProvider, useDashboardFocusContext } from './contexts/DashboardFocusContext';
 import { GoogleSyncProvider } from '../hooks/useGoogleSync';
 
 interface AppContextAPI {
@@ -50,6 +52,7 @@ interface AppContextAPI {
   integrations: Integration[];
   assistantCorrections: AssistantCorrection[];
   gamification: GamificationProfile;
+  dashboardFocus: DashboardFocusState;
   settings: Settings;
   clock: ClockState;
   loaded: boolean;
@@ -117,6 +120,10 @@ interface AppContextAPI {
 
   updateGamification: (profile: GamificationProfile) => void;
   backfillPrayerLog: (taskId: string, dateStr: string, completed: boolean) => void;
+  refreshDashboardFocus: () => void;
+  dismissDashboardFocus: (candidateId?: string) => void;
+  snoozeDashboardFocus: (candidateId?: string, minutes?: number) => void;
+  openDashboardFocusTarget: (candidateId?: string) => void;
 
   createStopwatch: () => string;
   setStopwatchLabel: (id: string, label: string) => void;
@@ -177,6 +184,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   const settingsCtx = useSettingsContext();
   const assistantCtx = useAssistantContext();
   const clockCtx = useClockContext();
+  const dashboardFocusCtx = useDashboardFocusContext();
 
   const navigate = useCallback((surface: Surface) => setState(current => ({
     ...current,
@@ -232,7 +240,62 @@ function ShellProvider({ children }: { children: ReactNode }) {
     && gamificationCtx.loaded
     && settingsCtx.loaded
     && assistantCtx.loaded
-    && clockCtx.loaded;
+    && clockCtx.loaded
+    && dashboardFocusCtx.loaded;
+
+  const openDashboardFocusTarget = useCallback((candidateId?: string) => {
+    const resolvedCandidateId = candidateId || dashboardFocusCtx.dashboardFocus.recommendation?.selectedCandidateId;
+    const candidate = dashboardFocusCtx.dashboardFocus.candidates.find(item => item.id === resolvedCandidateId);
+
+    if (!candidate) {
+      requestAssistantNavigation({
+        surface: 'tasks',
+        surfaceState: {
+          tasks: {
+            tab: 'all',
+            resetFilters: true,
+          },
+        },
+      });
+      return;
+    }
+
+    dashboardFocusCtx.noteDashboardFocusOpened(candidate.id);
+
+    if (candidate.taskId) {
+      requestAssistantNavigation({
+        surface: 'tasks',
+        surfaceState: {
+          tasks: {
+            tab: candidate.kind === 'habit' ? 'today' : 'all',
+            resetFilters: true,
+            revealTaskId: candidate.taskId,
+            highlightTaskId: candidate.taskId,
+          },
+        },
+      });
+      return;
+    }
+
+    if (candidate.kind === 'meeting_prep') {
+      navigate('calendar');
+      return;
+    }
+
+    requestAssistantNavigation({
+      surface: 'tasks',
+      surfaceState: {
+        tasks: {
+          tab: 'all',
+          resetFilters: true,
+        },
+      },
+    });
+  }, [
+    dashboardFocusCtx,
+    navigate,
+    requestAssistantNavigation,
+  ]);
 
   const api: AppContextAPI = useMemo(() => ({
     surface: state.surface,
@@ -257,6 +320,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     integrations: settingsCtx.integrations,
     assistantCorrections: assistantCtx.corrections,
     gamification: gamificationCtx.gamification,
+    dashboardFocus: dashboardFocusCtx.dashboardFocus,
     settings: settingsCtx.settings,
     clock: clockCtx.clock,
 
@@ -321,6 +385,10 @@ function ShellProvider({ children }: { children: ReactNode }) {
 
     updateGamification: gamificationCtx.updateGamification,
     backfillPrayerLog: gamificationCtx.backfillPrayerLog,
+    refreshDashboardFocus: dashboardFocusCtx.refreshDashboardFocus,
+    dismissDashboardFocus: dashboardFocusCtx.dismissDashboardFocus,
+    snoozeDashboardFocus: dashboardFocusCtx.snoozeDashboardFocus,
+    openDashboardFocusTarget,
 
     createStopwatch: clockCtx.createStopwatch,
     setStopwatchLabel: clockCtx.setStopwatchLabel,
@@ -357,11 +425,13 @@ function ShellProvider({ children }: { children: ReactNode }) {
     settingsCtx,
     assistantCtx,
     gamificationCtx,
+    dashboardFocusCtx,
     clockCtx,
     navigate,
     requestAssistantNavigation,
     dismissAssistantNavigationRequest,
     removeProject,
+    openDashboardFocusTarget,
   ]);
 
   if (!allLoaded) {
@@ -459,17 +529,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         <CalendarProvider>
           <ProjectProvider>
             <TaskProvider>
-              <KnowledgeProvider>
-                <FinanceProvider>
-                  <ClockProvider>
-                    <AssistantProvider>
-                      <ChatBridge>
-                        <ShellProvider>{children}</ShellProvider>
-                      </ChatBridge>
-                    </AssistantProvider>
-                  </ClockProvider>
-                </FinanceProvider>
-              </KnowledgeProvider>
+              <DashboardFocusProvider>
+                <KnowledgeProvider>
+                  <FinanceProvider>
+                    <ClockProvider>
+                      <AssistantProvider>
+                        <ChatBridge>
+                          <ShellProvider>{children}</ShellProvider>
+                        </ChatBridge>
+                      </AssistantProvider>
+                    </ClockProvider>
+                  </FinanceProvider>
+                </KnowledgeProvider>
+              </DashboardFocusProvider>
             </TaskProvider>
           </ProjectProvider>
         </CalendarProvider>

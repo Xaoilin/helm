@@ -20,6 +20,11 @@ import {
   type AssistantDebugTrace,
 } from '../../services/assistantDebug';
 import {
+  getDashboardFocusDiagnostics,
+  subscribeDashboardFocusDiagnostics,
+  type DashboardFocusDiagnostics,
+} from '../../services/dashboardFocusDiagnostics';
+import {
   formatAssistantTokenCount,
   formatCurrencyAmount,
   formatUsdEstimate,
@@ -127,6 +132,7 @@ export default function AiDebug() {
   const [openAIBillingSummary, setOpenAIBillingSummary] = useState<HostedAssistantProjectBillingSummary | null>(null);
   const [copyState, setCopyState] = useState<DiagnosticState>('idle');
   const [assistantTrace, setAssistantTrace] = useState<AssistantDebugTrace | null>(() => getAssistantDebugTrace());
+  const [dashboardFocusTrace, setDashboardFocusTrace] = useState<DashboardFocusDiagnostics | null>(() => getDashboardFocusDiagnostics());
 
   const providerSetting = getAssistantProviderSetting(app.settings);
   const selectedHostedModel = getHostedAssistantModelSetting(app.settings);
@@ -163,6 +169,7 @@ export default function AiDebug() {
   }, [refreshRuntime]);
 
   useEffect(() => subscribeAssistantDebugTrace(setAssistantTrace), []);
+  useEffect(() => subscribeDashboardFocusDiagnostics(setDashboardFocusTrace), []);
 
   const refreshOpenAIBilling = useCallback(async () => {
     setOpenAIBillingResult({
@@ -691,6 +698,50 @@ export default function AiDebug() {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#f5f7ff', marginBottom: 8 }}>Dashboard Focus Trace</div>
+        <div style={{ fontSize: 13, color: '#9ea4c5' }}>
+          This shows the latest dashboard recommendation run, including whether GPT selected it or HELM fell back to the local ranker.
+        </div>
+
+        {!dashboardFocusTrace ? (
+          <div style={{ marginTop: 14, color: '#6b6f85', fontSize: 13 }}>
+            No dashboard focus trace captured yet.
+          </div>
+        ) : (
+          <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
+            <DataRow label="Recorded" value={formatCheckedAt(dashboardFocusTrace.recordedAt)} />
+            <DataRow label="Status" value={dashboardFocusTrace.status} />
+            <DataRow label="Source" value={dashboardFocusTrace.source} />
+            <DataRow label="Provider mode" value={dashboardFocusTrace.providerMode} />
+            <DataRow label="Model" value={dashboardFocusTrace.model || 'none'} />
+            <DataRow label="Selected candidate" value={dashboardFocusTrace.selectedCandidateId || 'none'} />
+            <DataRow label="Candidate count" value={String(dashboardFocusTrace.candidateCount)} />
+            <DataRow label="Queue" value={dashboardFocusTrace.queueCandidateIds.join(' | ') || 'none'} />
+            <DataRow label="Fallback reason" value={dashboardFocusTrace.fallbackReason || 'none'} />
+            <DataRow label="Error" value={dashboardFocusTrace.errorMessage || 'none'} />
+            <DataRow label="Latency" value={dashboardFocusTrace.latencyMs ? `${dashboardFocusTrace.latencyMs} ms` : 'n/a'} />
+            <DataRow
+              label="Snapshot stats"
+              value={`Overdue ${dashboardFocusTrace.stats.overdueCount} · Due today ${dashboardFocusTrace.stats.dueTodayCount} · Routines ${dashboardFocusTrace.stats.routinesLeft}`}
+            />
+            {dashboardFocusTrace.recommendation && (
+              <PayloadBlock label="Recommendation JSON">
+                {JSON.stringify(dashboardFocusTrace.recommendation, null, 2)}
+              </PayloadBlock>
+            )}
+            {dashboardFocusTrace.rawModelResponse && (
+              <PayloadBlock label="Raw Focus Model Response">
+                {dashboardFocusTrace.rawModelResponse}
+              </PayloadBlock>
+            )}
+            <PayloadBlock label="Top Candidates">
+              {JSON.stringify(dashboardFocusTrace.topCandidates, null, 2)}
+            </PayloadBlock>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ padding: 20 }}>
