@@ -208,6 +208,71 @@ describe('dashboardFocus', () => {
     expect(result.candidates[0].id).toBe('task:task-backup');
   });
 
+  it('parses explicit duration from the task title and keeps it user-visible', () => {
+    const result = buildDashboardFocusCandidates({
+      tasks: [
+        makeTask({
+          id: 'habit-walk',
+          title: 'Walk 1 hour',
+          category: 'daily',
+          recurring: {
+            frequency: 'daily',
+          },
+        }),
+      ],
+      calendarSources: [],
+      calendarEvents: [],
+      projects: [],
+      gamification: {
+        totalXp: 0,
+        level: 1,
+        currentStreak: 1,
+        longestStreak: 1,
+        totalTasksCompleted: 0,
+        badges: [],
+      },
+      feedback: [],
+      now: new Date('2026-04-16T09:00:00.000Z'),
+    });
+
+    expect(result.candidates[0]).toEqual(expect.objectContaining({
+      id: 'daily:habit-walk',
+      estimatedMinutes: 60,
+      estimatedMinutesSource: 'task_title',
+    }));
+  });
+
+  it('keeps heuristic task durations out of the user-facing candidate metadata', () => {
+    const result = buildDashboardFocusCandidates({
+      tasks: [
+        makeTask({
+          id: 'habit-pushups',
+          title: '25 Push Ups',
+          category: 'daily',
+          recurring: {
+            frequency: 'daily',
+          },
+        }),
+      ],
+      calendarSources: [],
+      calendarEvents: [],
+      projects: [],
+      gamification: {
+        totalXp: 0,
+        level: 1,
+        currentStreak: 0,
+        longestStreak: 0,
+        totalTasksCompleted: 0,
+        badges: [],
+      },
+      feedback: [],
+      now: new Date('2026-04-16T09:00:00.000Z'),
+    });
+
+    expect(result.candidates[0].estimatedMinutes).toBeUndefined();
+    expect(result.candidates[0].estimatedMinutesSource).toBe('heuristic');
+  });
+
   it('falls back locally when hosted focus returns invalid JSON', async () => {
     chatWithHostedAssistantDetailedMock.mockResolvedValueOnce({
       text: '{"selectedCandidateId":42}',
@@ -296,6 +361,47 @@ describe('dashboardFocus', () => {
     expect(result.source).toBe('openai');
     expect(result.recommendation.selectedCandidateId).toBe('task:task-overdue');
     expect(result.recommendation.why).toContain('overdue');
+    expect(result.recommendation.estimatedMinutes).toBeUndefined();
     expect(result.queueCandidateIds[0]).toBe('task:task-overdue');
+  });
+
+  it('skips hosted review after the daily GPT pass has already run', async () => {
+    const buildResult = buildDashboardFocusCandidates({
+      tasks: [
+        makeTask({
+          id: 'task-overdue',
+          title: 'Send the invoice',
+          dueDate: '2026-04-15',
+          priority: 'high',
+        }),
+      ],
+      calendarSources: [],
+      calendarEvents: [],
+      projects: [],
+      gamification: {
+        totalXp: 0,
+        level: 1,
+        currentStreak: 0,
+        longestStreak: 0,
+        totalTasksCompleted: 0,
+        badges: [],
+      },
+      feedback: [],
+      now: new Date('2026-04-16T09:00:00.000Z'),
+    });
+
+    const result = await selectDashboardFocusRecommendation(buildResult, {
+      allowHostedReview: false,
+      now: new Date('2026-04-16T09:00:00.000Z'),
+      settings: {
+        assistantProvider: 'hosted',
+        hostedModel: 'gpt-5.4-mini',
+      },
+    });
+
+    expect(result.source).toBe('local');
+    expect(result.fallbackReason).toBeUndefined();
+    expect(testHostedAssistantConnectionMock).not.toHaveBeenCalled();
+    expect(chatWithHostedAssistantDetailedMock).not.toHaveBeenCalled();
   });
 });

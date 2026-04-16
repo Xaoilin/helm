@@ -15,6 +15,7 @@ import IntegrationsSurface from '../surfaces/IntegrationsSurface';
 import SettingsSurface from '../surfaces/SettingsSurface';
 import * as googleCalendarApi from '../services/googleCalendarApi';
 import * as googleCalendarAuthManager from '../services/googleCalendarAuthManager';
+import * as hostedAssistantApi from '../services/hostedAssistantApi';
 import { defaultIntegrations } from '../store/contexts/SettingsContext';
 import { APP_RELEASE_VERSION } from '../config/release';
 import type { AssistantNavigationTarget } from '../services/assistantNavigation';
@@ -1078,6 +1079,61 @@ describe('DashboardSurface', () => {
       const persisted = JSON.parse(localStorage.getItem('helm:tasks') || '[]');
       expect(persisted[0]?.completed).toBe(true);
     });
+  });
+
+  it('shows a truthful GPT unavailable state when dashboard focus falls back locally', async () => {
+    vi.spyOn(hostedAssistantApi, 'testHostedAssistantConnection').mockResolvedValue({
+      status: 'unavailable',
+      message: 'Hosted AI could not be reached.',
+    });
+    localStorage.setItem('helm:settings', JSON.stringify({
+      assistantProvider: 'hosted',
+      prayerEnabled: false,
+    }));
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'habit-walk-hour',
+        title: 'Walk 1 hour',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'daily',
+        recurring: { frequency: 'daily' },
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+
+    await act(async () => { renderWithProvider(<DashboardSurface />); });
+
+    expect(await screen.findByText('GPT unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Hosted AI could not be reached.')).toBeInTheDocument();
+    expect(screen.getAllByText('60 min').length).toBeGreaterThan(0);
+  });
+
+  it('hides heuristic dashboard durations instead of showing made-up minutes', async () => {
+    localStorage.setItem('helm:settings', JSON.stringify({
+      assistantProvider: 'ollama',
+      prayerEnabled: false,
+    }));
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'habit-pushups',
+        title: '25 Push Ups',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'daily',
+        recurring: { frequency: 'daily' },
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+
+    await act(async () => { renderWithProvider(<DashboardSurface />); });
+
+    expect((await screen.findAllByText('25 Push Ups')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('10 min')).not.toBeInTheDocument();
   });
 });
 

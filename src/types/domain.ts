@@ -163,6 +163,7 @@ export interface Task {
 
 export type FocusCandidateKind = 'task' | 'habit' | 'meeting_prep' | 'break' | 'clear';
 export type FocusFeedbackAction = 'dismissed' | 'snoozed' | 'opened' | 'completed' | 'refreshed';
+export type FocusDurationSource = 'task_title' | 'task_description' | 'event_window' | 'system' | 'heuristic' | 'openai';
 
 export interface DashboardFocusStats {
   overdueCount: number;
@@ -180,6 +181,7 @@ export interface FocusCandidate {
   localWhy: string;
   reasoningTags: string[];
   estimatedMinutes?: number;
+  estimatedMinutesSource?: FocusDurationSource;
   taskId?: string;
   eventId?: string;
   projectId?: string;
@@ -193,6 +195,7 @@ export interface FocusRecommendation {
   confidence: number;
   reasoningTags: string[];
   estimatedMinutes?: number;
+  estimatedMinutesSource?: FocusDurationSource;
   alternativeIds: string[];
   refreshAfterMinutes: number;
   source: 'local' | 'openai';

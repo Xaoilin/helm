@@ -716,6 +716,8 @@ export default function AiDebug() {
             <DataRow label="Status" value={dashboardFocusTrace.status} />
             <DataRow label="Source" value={dashboardFocusTrace.source} />
             <DataRow label="Provider mode" value={dashboardFocusTrace.providerMode} />
+            <DataRow label="Hosted cadence" value="once per local day" />
+            <DataRow label="Hosted review attempted today" value={formatBoolean(dashboardFocusTrace.hostedReviewAttemptedToday)} />
             <DataRow label="Model" value={dashboardFocusTrace.model || 'none'} />
             <DataRow label="Selected candidate" value={dashboardFocusTrace.selectedCandidateId || 'none'} />
             <DataRow label="Candidate count" value={String(dashboardFocusTrace.candidateCount)} />

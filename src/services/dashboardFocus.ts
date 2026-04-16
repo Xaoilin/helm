@@ -3,6 +3,7 @@ import type {
   CalendarSource,
   DashboardFocusStats,
   FocusCandidate,
+  FocusDurationSource,
   FocusFeedback,
   FocusRecommendation,
   GamificationProfile,
@@ -29,6 +30,12 @@ const PREP_PRESSURE_PATTERN = /\b(call|meeting|interview|review|sync|standup|dem
 interface ScoreSignal {
   label: string;
   value: number;
+}
+
+interface CandidateTimeEstimate {
+  rankingMinutes: number;
+  estimatedMinutes?: number;
+  estimatedMinutesSource?: FocusDurationSource;
 }
 
 interface FocusCandidateDraft extends FocusCandidate {
@@ -74,6 +81,16 @@ interface DashboardFocusResponseSchema {
   refreshAfterMinutes: number;
 }
 
+interface DashboardFocusHostedReviewRecord {
+  reviewDate: string;
+  attemptedAt: string;
+  source: 'local' | 'openai';
+  fallbackReason?: string;
+}
+
+const DASHBOARD_FOCUS_CACHE_KEY = 'helm:dashboardFocusCache:v1';
+const DASHBOARD_FOCUS_HOSTED_REVIEW_KEY = 'helm:dashboardFocusHostedReview:v1';
+
 function toLocalDateStr(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
@@ -115,6 +132,50 @@ function estimateTaskMinutes(task: Task): number {
   return 12;
 }
 
+function parseExplicitDurationMinutes(text: string): number | null {
+  if (!text.trim()) return null;
+
+  const matcher = /(\d+(?:\.\d+)?)\s*(hours?|hrs?|hr|h|minutes?|mins?|min|m)\b/gi;
+  let totalMinutes = 0;
+  let matched = false;
+
+  for (const match of text.matchAll(matcher)) {
+    const value = Number.parseFloat(match[1] || '');
+    const unit = (match[2] || '').toLowerCase();
+    if (!Number.isFinite(value)) continue;
+
+    matched = true;
+    totalMinutes += unit.startsWith('h') ? value * 60 : value;
+  }
+
+  return matched ? Math.max(1, Math.round(totalMinutes)) : null;
+}
+
+function getTaskTimeEstimate(task: Task): CandidateTimeEstimate {
+  const titleMinutes = parseExplicitDurationMinutes(task.title);
+  if (titleMinutes) {
+    return {
+      rankingMinutes: titleMinutes,
+      estimatedMinutes: titleMinutes,
+      estimatedMinutesSource: 'task_title',
+    };
+  }
+
+  const descriptionMinutes = parseExplicitDurationMinutes(task.description);
+  if (descriptionMinutes) {
+    return {
+      rankingMinutes: descriptionMinutes,
+      estimatedMinutes: descriptionMinutes,
+      estimatedMinutesSource: 'task_description',
+    };
+  }
+
+  return {
+    rankingMinutes: estimateTaskMinutes(task),
+    estimatedMinutesSource: 'heuristic',
+  };
+}
+
 function scoreCandidate(draft: Omit<FocusCandidateDraft, 'score'>): FocusCandidateDraft {
   const score = draft.scoreSignals.reduce((total, signal) => total + signal.value, 0);
   return { ...draft, score };
@@ -136,6 +197,7 @@ function finalizeCandidate(draft: FocusCandidateDraft): FocusCandidate {
       : draft.localWhy,
     reasoningTags: draft.reasoningTags,
     estimatedMinutes: draft.estimatedMinutes,
+    estimatedMinutesSource: draft.estimatedMinutesSource,
     taskId: draft.taskId,
     eventId: draft.eventId,
     projectId: draft.projectId,
@@ -230,7 +292,7 @@ function buildTaskCandidate(
   const now = input.now;
   const todayStr = toLocalDateStr(now);
   const candidateId = `${task.category}:${task.id}`;
-  const estimatedMinutes = estimateTaskMinutes(task);
+  const timeEstimate = getTaskTimeEstimate(task);
   const scoreSignals: ScoreSignal[] = [];
   const reasoningTags = new Set<string>();
   let subtitle = task.category === 'daily'
@@ -285,7 +347,7 @@ function buildTaskCandidate(
     subtitle = `Blocked · ${task.blockedReason}`;
   }
 
-  if (estimatedMinutes <= freeWindowMinutes || freeWindowMinutes === 0) {
+  if (timeEstimate.rankingMinutes <= freeWindowMinutes || freeWindowMinutes === 0) {
     scoreSignals.push({ label: 'Fits the current runway', value: 14 });
     reasoningTags.add('fits_window');
   } else {
@@ -326,7 +388,8 @@ function buildTaskCandidate(
     subtitle,
     localWhy: task.category === 'daily' ? 'Routine left for today.' : 'Best available task to move right now.',
     reasoningTags: Array.from(reasoningTags),
-    estimatedMinutes,
+    estimatedMinutes: timeEstimate.estimatedMinutes,
+    estimatedMinutesSource: timeEstimate.estimatedMinutesSource,
     taskId: task.id,
     projectId: task.projectId,
     dueDate,
@@ -364,6 +427,7 @@ function buildMeetingPrepCandidate(
     localWhy: 'This meeting is close enough that prep beats switching into new work.',
     reasoningTags: Array.from(reasoningTags),
     estimatedMinutes: clamp(minutesUntil > 0 ? minutesUntil : 5, 5, 15),
+    estimatedMinutesSource: 'event_window',
     eventId: event.id,
     isUrgent: minutesUntil <= 15,
     scoreSignals,
@@ -445,6 +509,7 @@ function buildLocalRecommendation(
     confidence: Number(confidence.toFixed(2)),
     reasoningTags: selected.reasoningTags,
     estimatedMinutes: selected.estimatedMinutes,
+    estimatedMinutesSource: selected.estimatedMinutesSource,
     alternativeIds: alternatives,
     refreshAfterMinutes,
     source: 'local',
@@ -653,14 +718,16 @@ export function buildDashboardFocusCandidates(input: DashboardFocusEngineInput):
 export async function selectDashboardFocusRecommendation(
   buildResult: DashboardFocusBuildResult,
   options: {
+    allowHostedReview?: boolean;
     now: Date;
     settings: Pick<Settings, 'assistantProvider' | 'hostedModel'>;
   },
 ): Promise<DashboardFocusSelectionResult> {
   const { candidates, inputHash, recommendedRefreshMinutes } = buildResult;
   const providerMode = options.settings.assistantProvider || 'auto';
+  const allowHostedReview = options.allowHostedReview ?? true;
 
-  if (providerMode === 'ollama' || candidates.length === 1 && candidates[0].kind === 'clear') {
+  if (!allowHostedReview || providerMode === 'ollama' || candidates.length === 1 && candidates[0].kind === 'clear') {
     return buildLocalRecommendation(candidates, inputHash, recommendedRefreshMinutes);
   }
 
@@ -707,7 +774,8 @@ export async function selectDashboardFocusRecommendation(
       why: parsed.why || selectedCandidate.localWhy,
       confidence: Number(parsed.confidence.toFixed(2)),
       reasoningTags: parsed.reasoningTags.length > 0 ? parsed.reasoningTags : selectedCandidate.reasoningTags,
-      estimatedMinutes: parsed.estimatedMinutes ?? selectedCandidate.estimatedMinutes,
+      estimatedMinutes: selectedCandidate.estimatedMinutes,
+      estimatedMinutesSource: selectedCandidate.estimatedMinutesSource,
       alternativeIds,
       refreshAfterMinutes,
       source: 'openai',
@@ -737,7 +805,7 @@ export async function selectDashboardFocusRecommendation(
 
 export function readDashboardFocusCache(): DashboardFocusSelectionResult | null {
   try {
-    const raw = localStorage.getItem('helm:dashboardFocusCache:v1');
+    const raw = localStorage.getItem(DASHBOARD_FOCUS_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as DashboardFocusSelectionResult | null;
     if (!parsed?.recommendation) return null;
@@ -748,11 +816,11 @@ export function readDashboardFocusCache(): DashboardFocusSelectionResult | null 
 }
 
 export function writeDashboardFocusCache(result: DashboardFocusSelectionResult): void {
-  localStorage.setItem('helm:dashboardFocusCache:v1', JSON.stringify(result));
+  localStorage.setItem(DASHBOARD_FOCUS_CACHE_KEY, JSON.stringify(result));
 }
 
 export function clearDashboardFocusCache(): void {
-  localStorage.removeItem('helm:dashboardFocusCache:v1');
+  localStorage.removeItem(DASHBOARD_FOCUS_CACHE_KEY);
 }
 
 export function isDashboardFocusCacheValid(
@@ -773,4 +841,35 @@ export function getDashboardFocusExpiryDelay(
   const delay = new Date(recommendation.expiresAt).getTime() - now.getTime();
   if (delay <= 0) return 0;
   return Math.min(delay, TIMING.DASHBOARD_FOCUS_CACHE_TTL);
+}
+
+export function readDashboardFocusHostedReview(): DashboardFocusHostedReviewRecord | null {
+  try {
+    const raw = localStorage.getItem(DASHBOARD_FOCUS_HOSTED_REVIEW_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DashboardFocusHostedReviewRecord | null;
+    if (!parsed?.reviewDate || !parsed.attemptedAt || !parsed.source) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function hasDashboardFocusHostedReviewToday(now: Date): boolean {
+  const record = readDashboardFocusHostedReview();
+  if (!record) return false;
+  return record.reviewDate === toLocalDateStr(now);
+}
+
+export function writeDashboardFocusHostedReview(result: DashboardFocusSelectionResult, now: Date): void {
+  localStorage.setItem(DASHBOARD_FOCUS_HOSTED_REVIEW_KEY, JSON.stringify({
+    reviewDate: toLocalDateStr(now),
+    attemptedAt: now.toISOString(),
+    source: result.source,
+    fallbackReason: result.fallbackReason,
+  } satisfies DashboardFocusHostedReviewRecord));
+}
+
+export function clearDashboardFocusHostedReview(): void {
+  localStorage.removeItem(DASHBOARD_FOCUS_HOSTED_REVIEW_KEY);
 }

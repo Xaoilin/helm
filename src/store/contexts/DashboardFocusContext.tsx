@@ -19,9 +19,11 @@ import { LIMITS, TIMING } from '../../config/constants';
 import {
   buildDashboardFocusCandidates,
   clearDashboardFocusCache,
+  hasDashboardFocusHostedReviewToday,
   getDashboardFocusExpiryDelay,
   isDashboardFocusCacheValid,
   readDashboardFocusCache,
+  writeDashboardFocusHostedReview,
   selectDashboardFocusRecommendation,
   writeDashboardFocusCache,
 } from '../../services/dashboardFocus';
@@ -225,8 +227,14 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
     const sequence = refreshSequenceRef.current + 1;
     refreshSequenceRef.current = sequence;
     const cached = readDashboardFocusCache();
+    const hostedReviewAlreadyRanToday = hasDashboardFocusHostedReviewToday(now);
 
     if (isDashboardFocusCacheValid(cached, buildResult.inputHash, now)) {
+      const cachedHostedReviewAttempted = cached?.source === 'openai' || Boolean(cached?.fallbackReason);
+      if (!hostedReviewAlreadyRanToday && cachedHostedReviewAttempted) {
+        writeDashboardFocusHostedReview(cached!, now);
+      }
+
       startTransition(() => {
         setDashboardFocus({
           loaded: true,
@@ -244,6 +252,8 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
         status: cached?.fallbackReason ? 'fallback' : 'ready',
         source: cached?.source || 'local',
         providerMode: settingsCtx.settings.assistantProvider || 'auto',
+        hostedReviewCadence: 'once_per_day',
+        hostedReviewAttemptedToday: hostedReviewAlreadyRanToday || cachedHostedReviewAttempted,
         inputHash: buildResult.inputHash,
         selectedCandidateId: cached?.recommendation.selectedCandidateId,
         queueCandidateIds: cached?.queueCandidateIds || fallbackQueueIds(buildResult.candidates),
@@ -277,10 +287,15 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       const selection = await selectDashboardFocusRecommendation(buildResult, {
+        allowHostedReview: !hostedReviewAlreadyRanToday,
         now,
         settings: settingsCtx.settings,
       });
       if (refreshSequenceRef.current !== sequence) return;
+
+      if (selection.source === 'openai' || Boolean(selection.fallbackReason)) {
+        writeDashboardFocusHostedReview(selection, now);
+      }
 
       writeDashboardFocusCache(selection);
 
@@ -303,6 +318,8 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
         status: selection.status === 'fallback' ? 'fallback' : 'ready',
         source: selection.source,
         providerMode: settingsCtx.settings.assistantProvider || 'auto',
+        hostedReviewCadence: 'once_per_day',
+        hostedReviewAttemptedToday: hostedReviewAlreadyRanToday || selection.source === 'openai' || Boolean(selection.fallbackReason),
         inputHash: buildResult.inputHash,
         selectedCandidateId: selection.recommendation.selectedCandidateId,
         queueCandidateIds: selection.queueCandidateIds,
