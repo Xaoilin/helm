@@ -134,7 +134,8 @@ export interface Integration {
 
 // ── Tasks ──
 export type TaskPriority = 'low' | 'medium' | 'high';
-export type TaskCategory = 'daily' | 'task' | 'goal';
+export type PrayerName = 'Fajr' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha';
+export type TaskCategory = 'daily' | 'prayer' | 'task' | 'goal';
 
 export interface TaskRecurrence {
   frequency: 'daily' | 'weekdays' | 'weekly';
@@ -151,6 +152,7 @@ export interface Task {
   category: TaskCategory;
   dueDate?: string;
   recurring?: TaskRecurrence;
+  prayerName?: PrayerName;
   goalTag?: string;
   emoji?: string;
   projectId?: string;
@@ -161,7 +163,7 @@ export interface Task {
   updatedAt: string;
 }
 
-export type FocusCandidateKind = 'task' | 'habit' | 'meeting_prep' | 'break' | 'clear';
+export type FocusCandidateKind = 'task' | 'habit' | 'prayer' | 'meeting_prep' | 'break' | 'clear';
 export type FocusFeedbackAction = 'dismissed' | 'snoozed' | 'opened' | 'completed' | 'refreshed';
 export type FocusDurationSource = 'task_title' | 'task_description' | 'event_window' | 'system' | 'heuristic' | 'openai';
 
@@ -169,6 +171,7 @@ export interface DashboardFocusStats {
   overdueCount: number;
   dueTodayCount: number;
   routinesLeft: number;
+  prayersLeft: number;
   activeTaskCount: number;
 }
 

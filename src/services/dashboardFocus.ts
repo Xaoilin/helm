@@ -12,11 +12,18 @@ import type {
   Task,
 } from '../types/domain';
 import { LIMITS, TIMING } from '../config/constants';
+import {
+  getActivePrayerWindow,
+  getPrayerTaskName,
+  getRemainingPrayerNames,
+  isPrayerTask,
+} from './prayerTasks';
 import { getHostedAssistantModelSetting } from './assistantModels';
 import {
   chatWithHostedAssistantDetailed,
   testHostedAssistantConnection,
 } from './hostedAssistantApi';
+import type { PrayerTime } from './prayerTimes';
 
 const TASK_PRIORITY_SCORE = {
   high: 30,
@@ -50,6 +57,7 @@ export interface DashboardFocusEngineInput {
   gamification: GamificationProfile;
   feedback: FocusFeedback[];
   now: Date;
+  prayerTimes?: PrayerTime[];
 }
 
 export interface DashboardFocusBuildResult {
@@ -126,6 +134,7 @@ function hasActionableNextStep(task: Task): boolean {
 }
 
 function estimateTaskMinutes(task: Task): number {
+  if (task.category === 'prayer') return 10;
   if (task.category === 'daily') return 10;
   if (task.priority === 'high') return 35;
   if (task.priority === 'medium') return 20;
@@ -266,16 +275,24 @@ function getRecentProjectMomentum(tasks: Task[], now: Date): {
   };
 }
 
-function buildStats(tasks: Task[], todayStr: string): DashboardFocusStats {
+function buildStats(tasks: Task[], todayStr: string, prayerTimes: PrayerTime[] | undefined, now: Date): DashboardFocusStats {
   const activeTasks = tasks.filter(task => task.category !== 'goal' && !task.completed);
   const overdueCount = activeTasks.filter(task => task.category === 'task' && Boolean(task.dueDate) && task.dueDate! < todayStr).length;
   const dueTodayCount = activeTasks.filter(task => task.category === 'task' && task.dueDate === todayStr).length;
   const routinesLeft = activeTasks.filter(task => task.category === 'daily').length;
+  const remainingPrayerNames = prayerTimes ? new Set(getRemainingPrayerNames(prayerTimes, now)) : null;
+  const prayersLeft = activeTasks.filter(task => {
+    if (!isPrayerTask(task)) return false;
+    if (!remainingPrayerNames) return true;
+    const prayerName = getPrayerTaskName(task);
+    return prayerName ? remainingPrayerNames.has(prayerName) : false;
+  }).length;
 
   return {
     overdueCount,
     dueTodayCount,
     routinesLeft,
+    prayersLeft,
     activeTaskCount: activeTasks.length,
   };
 }
@@ -300,6 +317,59 @@ function buildTaskCandidate(
     : task.dueDate
       ? `Due ${task.dueDate}`
       : 'No due date yet';
+
+  if (isPrayerTask(task)) {
+    if (!input.prayerTimes) return null;
+
+    const prayerName = getPrayerTaskName(task);
+    const activePrayerWindow = getActivePrayerWindow(input.prayerTimes, now);
+    if (!prayerName || !activePrayerWindow || activePrayerWindow.prayerName !== prayerName) {
+      return null;
+    }
+
+    const windowClosesAt = activePrayerWindow.endsAt.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    scoreSignals.push({ label: 'Current prayer window is open', value: 108 });
+    scoreSignals.push({ label: 'Prayer order is time-locked', value: 28 });
+    reasoningTags.add('prayer');
+    reasoningTags.add('prayer_window');
+
+    if (activePrayerWindow.minutesRemaining <= 25) {
+      scoreSignals.push({ label: `Prayer window closes in ${activePrayerWindow.minutesRemaining} min`, value: 24 });
+      reasoningTags.add('window_ending');
+    }
+
+    subtitle = `Prayer window open until ${windowClosesAt}`;
+
+    const dismissPenalty = dismissCounts.get(candidateId) || 0;
+    if (dismissPenalty > 0) {
+      scoreSignals.push({ label: 'You recently pushed this prayer back', value: -dismissPenalty * 22 });
+      reasoningTags.add('recently_dismissed');
+    }
+
+    if (recentOpens.has(candidateId)) {
+      scoreSignals.push({ label: 'Already opened recently', value: -10 });
+    }
+
+    return scoreCandidate({
+      id: candidateId,
+      kind: 'prayer',
+      title: task.title,
+      subtitle,
+      localWhy: 'This is the current prayer window, and earlier prayers have already dropped out.',
+      reasoningTags: Array.from(reasoningTags),
+      estimatedMinutes: undefined,
+      estimatedMinutesSource: 'heuristic',
+      taskId: task.id,
+      dueDate: undefined,
+      isUrgent: activePrayerWindow.minutesRemaining <= 25,
+      scoreSignals,
+    });
+  }
 
   if (task.category === 'task') {
     if (task.dueDate) {
@@ -623,7 +693,7 @@ function buildFocusMessages(candidates: FocusCandidate[], now: Date) {
 
 export function buildDashboardFocusCandidates(input: DashboardFocusEngineInput): DashboardFocusBuildResult {
   const todayStr = toLocalDateStr(input.now);
-  const stats = buildStats(input.tasks, todayStr);
+  const stats = buildStats(input.tasks, todayStr, input.prayerTimes, input.now);
   const { dismissCounts, recentOpens, snoozedUntil, recent } = buildFeedbackMaps(input.feedback, input.now);
   const upcomingEvents = getVisibleUpcomingEvents(input.calendarSources, input.calendarEvents, input.now);
   const nextEvent = upcomingEvents[0];

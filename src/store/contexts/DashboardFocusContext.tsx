@@ -28,6 +28,7 @@ import {
   writeDashboardFocusCache,
 } from '../../services/dashboardFocus';
 import { recordDashboardFocusDiagnostics } from '../../services/dashboardFocusDiagnostics';
+import { getPrayerTimes, type PrayerTime } from '../../services/prayerTimes';
 import { loadStore, saveStore } from '../persistence';
 import { useCalendar } from './CalendarContext';
 import { useGamificationContext } from './GamificationContext';
@@ -39,6 +40,7 @@ const EMPTY_STATS = {
   overdueCount: 0,
   dueTodayCount: 0,
   routinesLeft: 0,
+  prayersLeft: 0,
   activeTaskCount: 0,
 } as const;
 
@@ -88,9 +90,16 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const [dashboardFocus, setDashboardFocus] = useState<DashboardFocusState>(INITIAL_STATE);
   const [now, setNow] = useState(() => new Date());
+  const [prayerTimes, setPrayerTimes] = useState<PrayerTime[] | undefined>(undefined);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const refreshSequenceRef = useRef(0);
   const previousTaskCompletionRef = useRef<Map<string, boolean>>(new Map());
+  const hasPrayerTasks = useMemo(
+    () => taskCtx.tasks.some(task => task.category === 'prayer'),
+    [taskCtx.tasks],
+  );
+  const shouldLoadPrayerTimes = hasPrayerTasks || settingsCtx.settings.prayerEnabled !== false;
+  const activePrayerTimes = shouldLoadPrayerTimes ? prayerTimes : undefined;
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(new Date()), TIMING.DASHBOARD_FOCUS_TICK);
@@ -110,6 +119,36 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
     if (!loaded) return;
     void saveStore('dashboardFocusFeedback', pruneFeedback(feedback, new Date()));
   }, [feedback, loaded]);
+
+  useEffect(() => {
+    if (!shouldLoadPrayerTimes) {
+      return;
+    }
+
+    let cancelled = false;
+    const city = settingsCtx.settings.prayerCity || 'Bedford';
+    const country = settingsCtx.settings.prayerCountry || 'United Kingdom';
+
+    void getPrayerTimes(city, country)
+      .then(data => {
+        if (!cancelled) {
+          setPrayerTimes(data.prayers);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPrayerTimes(undefined);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    settingsCtx.settings.prayerCity,
+    settingsCtx.settings.prayerCountry,
+    shouldLoadPrayerTimes,
+  ]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -150,6 +189,7 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
     gamification: gamificationCtx.gamification,
     feedback,
     now,
+    prayerTimes: activePrayerTimes,
   }), [
     taskCtx.tasks,
     calendar.calendarSources,
@@ -158,6 +198,7 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
     gamificationCtx.gamification,
     feedback,
     now,
+    activePrayerTimes,
   ]);
 
   const recordFeedback = useCallback((entry: Omit<FocusFeedback, 'id' | 'createdAt'>) => {

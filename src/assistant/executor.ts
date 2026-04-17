@@ -9,6 +9,7 @@ import {
   processTaskCompletion,
   recordHabitCompletion,
 } from '../services/gamification';
+import { isHabitTask } from '../services/prayerTasks';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, formatGBP, parseToPence, toLocalDateStr } from '../services/financeHelpers';
 import type {
   CalendarEvent,
@@ -98,7 +99,7 @@ function asBoolean(value: unknown): boolean | undefined {
 }
 
 function asTaskCategory(value: unknown): Task['category'] | 'any' {
-  return value === 'daily' || value === 'task' || value === 'goal' ? value : 'any';
+  return value === 'daily' || value === 'prayer' || value === 'task' || value === 'goal' ? value : 'any';
 }
 
 function asTaskTab(value: unknown): AssistantTaskTab | undefined {
@@ -404,7 +405,7 @@ function executeSingleStep(
       }
 
       const priority = step.args.priority === 'high' || step.args.priority === 'low' ? step.args.priority : 'medium';
-      const category = step.args.category === 'daily' || step.args.category === 'goal' ? step.args.category : 'task';
+      const category = step.args.category === 'daily' || step.args.category === 'prayer' || step.args.category === 'goal' ? step.args.category : 'task';
       const dueDate = asString(step.args.dueDate);
       const id = handlers.addTask({
         title,
@@ -413,7 +414,7 @@ function executeSingleStep(
         priority,
         category,
         dueDate: dueDate || undefined,
-        recurring: category === 'daily' ? { frequency: 'daily' } : undefined,
+        recurring: category === 'daily' || category === 'prayer' ? { frequency: 'daily' } : undefined,
       });
       const now = getNow(context).toISOString();
       context.tasks = [...context.tasks, {
@@ -424,7 +425,7 @@ function executeSingleStep(
         priority,
         category,
         dueDate: dueDate || undefined,
-        recurring: category === 'daily' ? { frequency: 'daily' } : undefined,
+        recurring: category === 'daily' || category === 'prayer' ? { frequency: 'daily' } : undefined,
         createdAt: now,
         updatedAt: now,
       }];
@@ -490,7 +491,7 @@ function executeSingleStep(
 
       if (handlers.updateGamification) {
         const todayLog = context.gamification.dailyLog?.[today] || [];
-        const alreadyRewarded = resolvedTask.category === 'daily' && todayLog.includes(resolvedTask.id);
+        const alreadyRewarded = isHabitTask(resolvedTask) && todayLog.includes(resolvedTask.id);
         if (!alreadyRewarded) {
           const completionsToday = context.tasks.filter(item => item.completed && item.completedAt?.startsWith(today)).length;
           const extCtx = buildCompletionContext(context.tasks, context.goalTags, today, context.gamification, {
@@ -501,7 +502,7 @@ function executeSingleStep(
             lifestyleTotal: context.lifestyleItems.length,
           });
           let profile = processTaskCompletion(context.gamification, resolvedTask, completionsToday, now, extCtx).updatedProfile;
-          if (resolvedTask.category === 'daily') {
+          if (isHabitTask(resolvedTask)) {
             profile = recordHabitCompletion(profile, resolvedTask.id, today);
           }
           handlers.updateGamification(profile);
@@ -524,7 +525,7 @@ function executeSingleStep(
           status: 'completed',
           summary: `Completed "${resolvedTask.title}".`,
           facts: [
-            `${resolvedTask.category === 'daily' ? 'Marked the habit' : 'Marked the task'} "${resolvedTask.title}" as complete.`,
+            `${isHabitTask(resolvedTask) ? 'Marked the habit' : 'Marked the task'} "${resolvedTask.title}" as complete.`,
           ],
           entityRefs: [ref],
         },

@@ -45,7 +45,7 @@ const SURFACE_VALUES: readonly Surface[] = [
 
 const TASK_TAB_VALUES = ['today', 'all', 'goals'] as const;
 const TASK_PRIORITY_VALUES: readonly TaskPriority[] = ['high', 'medium', 'low'];
-const TASK_CATEGORY_VALUES: readonly TaskCategory[] = ['daily', 'task', 'goal'];
+const TASK_CATEGORY_VALUES: readonly TaskCategory[] = ['daily', 'prayer', 'task', 'goal'];
 export const ASSISTANT_ACTIONS = [
   {
     id: 'navigation.go_to_surface',

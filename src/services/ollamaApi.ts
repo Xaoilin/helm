@@ -12,6 +12,7 @@ import type { CalendarEvent, Task, GamificationProfile } from '../types/domain';
 import type { AssistantLang } from './assistantTypes';
 import { API_TIMEOUT, LIMITS, TIMING } from '../config/constants';
 import { ollamaBreaker } from './serviceBreakers';
+import { isPrayerTask, isStandardDailyTask } from './prayerTasks';
 
 const DEFAULT_ENDPOINT = 'http://localhost:11434';
 const DEFAULT_MODEL = 'qwen3';
@@ -153,7 +154,8 @@ export function buildSystemPrompt(context: LLMContext, lang: AssistantLang = 'en
   // Daily habits done today
   const dailyLog = context.gamification.dailyLog || {};
   const todayLog = dailyLog[today] || [];
-  const dailyHabits = context.tasks.filter(t => t.category === 'daily' && !t.completed);
+  const dailyHabits = context.tasks.filter(t => isStandardDailyTask(t) && !t.completed);
+  const prayerTasks = context.tasks.filter(t => isPrayerTask(t) && !t.completed);
   const habitsTotal = dailyHabits.length + todayLog.length;
   const habitsDone = todayLog.length;
 
@@ -185,6 +187,7 @@ ${tasksStr}
 ${goalsStr ? `\nGoals:\n${goalsStr}` : ''}
 
 Daily habits: ${habitsDone}/${habitsTotal} done today
+${prayerTasks.length > 0 ? `Prayer tasks pending: ${prayerTasks.map(task => task.title).join(', ')}` : ''}
 ${prayerStr ? `Prayer times: ${prayerStr}` : ''}
 
 Use the live data above when answering. Stay grounded in the app state and do not invent tasks, meetings, or other objects that are not present in the context.`;

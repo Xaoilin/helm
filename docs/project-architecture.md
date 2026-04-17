@@ -87,7 +87,7 @@ That navigation payload lets chat and voice hand the UI enough context to open a
 - surfaces and navigation targets
 - chat conversations and messages
 - calendar accounts, sources, and events
-- tasks, goals, habits, and project-linked workflow metadata
+- tasks, goals, daily habits, first-class prayer tasks, and project-linked workflow metadata
 - projects and project wiki pages
 - multi-timer and multi-stopwatch Clock state, including per-timer alarm sound selection
 - knowledge topics, entries, and lifestyle items
@@ -203,10 +203,10 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 
 ## Surface Notes
 
-- Dashboard is the daily operating view and combines agenda, prayer, habits, goals, achievements, and a compact task snapshot. The `Up Next` hero now comes from a dedicated dashboard-focus domain that ranks grounded task, habit, and near-meeting candidates locally, lets the hosted GPT model review that candidate pool once per local day when available, and falls back immediately to the local ranker when hosted AI is unavailable or invalid. The dashboard UI now distinguishes `GPT-reviewed`, `GPT unavailable`, and `Ollama mode`, and only shows duration chips when they come from grounded task or calendar data rather than heuristics.
+- Dashboard is the daily operating view and combines agenda, prayer, habits, goals, achievements, and a compact task snapshot. The `Up Next` hero now comes from a dedicated dashboard-focus domain that ranks grounded task, habit, prayer, and near-meeting candidates locally, lets the hosted GPT model review that candidate pool once per local day when available, and falls back immediately to the local ranker when hosted AI is unavailable or invalid. Prayer tasks are driven by the live prayer schedule, so the snapshot only recommends the active prayer window and never mixes expired or later prayers into the queue. The dashboard UI now distinguishes `GPT-reviewed`, `GPT unavailable`, and `Ollama mode`, and only shows duration chips when they come from grounded task or calendar data rather than heuristics.
 - Chat is persistent and conversation-based.
 - Calendar is the most integration-heavy surface and depends on account/source/event integrity.
-- Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, routine, and completed work for easier scanning, with collapsible section headers for long lists.
+- Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, Islamic prayer tasks, routine habits, and completed work for easier scanning, with collapsible section headers for long lists. Legacy prayer habits are normalized into first-class prayer tasks on load so prayer logs and streak data continue to work without manual migration.
 - Projects is a local-first project-management hub built on the shared Tasks domain. Project boards read and write task workflow fields directly, milestones reuse project-linked goals, and wiki pages are lightweight notes stored alongside the rest of local app data.
 - Clock is a local-first utility surface for timer and stopwatch workflows, and it persists multiple active cards plus per-timer alarm sound preferences through the shared store.
 - Knowledge contains both a topic-entry knowledge base and the lifestyle tracker.

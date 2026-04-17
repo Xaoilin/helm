@@ -267,7 +267,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
         surface: 'tasks',
         surfaceState: {
           tasks: {
-            tab: candidate.kind === 'habit' ? 'today' : 'all',
+            tab: candidate.kind === 'habit' || candidate.kind === 'prayer' ? 'today' : 'all',
             resetFilters: true,
             revealTaskId: candidate.taskId,
             highlightTaskId: candidate.taskId,
