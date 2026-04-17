@@ -15,6 +15,8 @@ function getKindLabel(candidate: FocusCandidate): string {
   switch (candidate.kind) {
     case 'habit':
       return 'Routine';
+    case 'prayer':
+      return 'Prayer';
     case 'meeting_prep':
       return 'Meeting prep';
     case 'break':
@@ -28,6 +30,8 @@ function getKindLabel(candidate: FocusCandidate): string {
 
 function getPrimaryLabel(candidate: FocusCandidate): string {
   switch (candidate.kind) {
+    case 'prayer':
+      return 'Open prayer';
     case 'meeting_prep':
       return 'Open calendar';
     case 'break':
@@ -40,7 +44,7 @@ function getPrimaryLabel(candidate: FocusCandidate): string {
 }
 
 function canQuickComplete(candidate: FocusCandidate): boolean {
-  return Boolean(candidate.taskId) && (candidate.kind === 'task' || candidate.kind === 'habit');
+  return Boolean(candidate.taskId) && (candidate.kind === 'task' || candidate.kind === 'habit' || candidate.kind === 'prayer');
 }
 
 function getSourceLabel(dashboardFocus: DashboardFocusState, assistantProvider: Settings['assistantProvider']): string {
@@ -172,19 +176,23 @@ export default function FocusSnapshot({
           </div>
         </div>
 
-        <div className="dash-focus-stats">
-          <div className="dash-focus-stat">
-            <div className="dash-focus-stat-label">Overdue</div>
-            <div className="dash-focus-stat-value">{dashboardFocus.stats.overdueCount}</div>
-          </div>
+          <div className="dash-focus-stats">
+            <div className="dash-focus-stat">
+              <div className="dash-focus-stat-label">Overdue</div>
+              <div className="dash-focus-stat-value">{dashboardFocus.stats.overdueCount}</div>
+            </div>
           <div className="dash-focus-stat">
             <div className="dash-focus-stat-label">Due today</div>
             <div className="dash-focus-stat-value">{dashboardFocus.stats.dueTodayCount}</div>
           </div>
-          <div className="dash-focus-stat">
-            <div className="dash-focus-stat-label">Routines left</div>
-            <div className="dash-focus-stat-value">{dashboardFocus.stats.routinesLeft}</div>
-          </div>
+            <div className="dash-focus-stat">
+              <div className="dash-focus-stat-label">Prayers left</div>
+              <div className="dash-focus-stat-value">{dashboardFocus.stats.prayersLeft}</div>
+            </div>
+            <div className="dash-focus-stat">
+              <div className="dash-focus-stat-label">Routines left</div>
+              <div className="dash-focus-stat-value">{dashboardFocus.stats.routinesLeft}</div>
+            </div>
         </div>
       </div>
 

@@ -727,7 +727,7 @@ export default function AiDebug() {
             <DataRow label="Latency" value={dashboardFocusTrace.latencyMs ? `${dashboardFocusTrace.latencyMs} ms` : 'n/a'} />
             <DataRow
               label="Snapshot stats"
-              value={`Overdue ${dashboardFocusTrace.stats.overdueCount} · Due today ${dashboardFocusTrace.stats.dueTodayCount} · Routines ${dashboardFocusTrace.stats.routinesLeft}`}
+              value={`Overdue ${dashboardFocusTrace.stats.overdueCount} · Due today ${dashboardFocusTrace.stats.dueTodayCount} · Prayers ${dashboardFocusTrace.stats.prayersLeft} · Routines ${dashboardFocusTrace.stats.routinesLeft}`}
             />
             {dashboardFocusTrace.recommendation && (
               <PayloadBlock label="Recommendation JSON">

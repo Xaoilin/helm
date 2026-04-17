@@ -7,6 +7,7 @@ import {
   STREAK_MILESTONES,
   calculatePrayerStats,
 } from '../services/gamification';
+import { isStandardDailyTask } from '../services/prayerTasks';
 
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -22,7 +23,7 @@ export default function ProfileSurface() {
 
   // Stats
   const tasksToday = app.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
-  const habitsToday = app.tasks.filter(t => t.category === 'daily' && t.completed).length;
+  const habitsToday = app.tasks.filter(t => isStandardDailyTask(t) && t.completed).length;
   const goalsCompleted = app.tasks.filter(t => t.category === 'goal' && t.completed).length;
 
   const daysSinceFirst = useMemo(() => {
@@ -187,7 +188,7 @@ export default function ProfileSurface() {
 
         {/* ── Habit Tallies ── */}
         {(() => {
-          const dailyHabits = app.tasks.filter(t => t.category === 'daily');
+          const dailyHabits = app.tasks.filter(isStandardDailyTask);
           const tallies = gam.habitTallies || {};
           if (dailyHabits.length === 0) return null;
           return (

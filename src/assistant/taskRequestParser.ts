@@ -56,6 +56,9 @@ function sanitizeTitle(value: string): string {
 
 function detectTaskCategory(transcript: string): Task['category'] {
   const normalized = normaliseText(transcript);
+  if (/\b(fajr|dhuhr|asr|maghrib|isha|prayer|salah|namaz)\b/i.test(normalized) || /(?:صلاة|فجر|ظهر|عصر|مغرب|عشاء)/.test(transcript)) {
+    return 'prayer';
+  }
   if (
     normalized.includes('daily')
     || normalized.includes('habit')

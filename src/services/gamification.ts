@@ -4,6 +4,10 @@
  */
 
 import type { Task, TaskPriority, GamificationProfile } from '../types/domain';
+import {
+  isHabitCategory,
+  isPrayerTask,
+} from './prayerTasks';
 
 // ── XP System ──
 
@@ -20,7 +24,7 @@ export function getStreakMultiplier(streak: number): number {
 
 export function calculateTaskXp(task: Pick<Task, 'priority' | 'category'>, currentStreak: number): number {
   let xp = BASE_XP[task.priority];
-  if (task.category === 'daily') xp += DAILY_BONUS;
+  if (isHabitCategory(task.category)) xp += DAILY_BONUS;
   if (task.category === 'goal') xp += GOAL_BONUS;
   return Math.round(xp * getStreakMultiplier(currentStreak));
 }
@@ -552,7 +556,7 @@ export function buildCompletionContext(
   profile: GamificationProfile,
   islamic?: { knowledgeEntries: number; knowledgeTopics: number; lifestyleHaramMastered: number; lifestyleHalalConsistent: number; lifestyleTotal: number },
 ): CompletionContext {
-  const dailyHabits = tasks.filter(t => t.category === 'daily');
+  const dailyHabits = tasks.filter(t => isHabitCategory(t.category));
   const allHabitsDone = dailyHabits.length > 0 && dailyHabits.every(t => t.completed);
   const completedToday = tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr));
 
@@ -562,17 +566,14 @@ export function buildCompletionContext(
   const uniqueGoalTags = new Set(tasks.filter(t => t.category === 'goal' && t.goalTag).map(t => t.goalTag));
 
   // Count prayer-related habits completed today
-  const prayerKeywords = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'salah', 'prayer', 'pray', 'namaz'];
-  const prayerHabitsCompleted = completedToday.filter(t =>
-    t.category === 'daily' && prayerKeywords.some(kw => t.title.toLowerCase().includes(kw))
-  ).length;
+  const prayerHabitsCompleted = completedToday.filter(task => isPrayerTask(task)).length;
 
   return {
     totalHabits: dailyHabits.length,
     totalGoalsCreated: tasks.filter(t => t.category === 'goal').length,
     totalGoalsCompleted: tasks.filter(t => t.category === 'goal' && t.completed).length,
     totalHighPriorityCompleted: tasks.filter(t => t.priority === 'high' && t.completed).length,
-    completedHabitToday: completedToday.some(t => t.category === 'daily'),
+    completedHabitToday: completedToday.some(t => isHabitCategory(t.category)),
     completedTaskToday: completedToday.some(t => t.category === 'task'),
     completedGoalToday: completedToday.some(t => t.category === 'goal'),
     allHabitsDoneToday: allHabitsDone,
@@ -653,16 +654,13 @@ export function backfillPrayerLog(
 /** Calculate prayer completion stats from daily log. */
 export function calculatePrayerStats(
   profile: GamificationProfile,
-  tasks: { id: string; title: string; category: string }[],
+  tasks: { id: string; title: string; category: string; prayerName?: string }[],
 ): {
   overall: { completed: number; total: number; percentage: number };
   perPrayer: { name: string; completed: number; total: number; percentage: number }[];
   last30Days: { date: string; count: number }[];
 } {
-  const prayerKeywords = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-  const prayerHabits = tasks.filter(t =>
-    t.category === 'daily' && prayerKeywords.some(kw => t.title.toLowerCase().includes(kw))
-  );
+  const prayerHabits = tasks.filter(task => isPrayerTask(task as Pick<Task, 'category' | 'title' | 'prayerName'>));
 
   if (prayerHabits.length === 0) {
     return { overall: { completed: 0, total: 0, percentage: 0 }, perPrayer: [], last30Days: [] };
@@ -674,7 +672,7 @@ export function calculatePrayerStats(
 
   // Per prayer stats
   const perPrayer = prayerHabits.map(habit => {
-    const prayerName = prayerKeywords.find(kw => habit.title.toLowerCase().includes(kw)) || habit.title;
+    const prayerName = habit.prayerName || habit.title;
     const completed = dates.filter(d => log[d]?.includes(habit.id)).length;
     return {
       name: prayerName.charAt(0).toUpperCase() + prayerName.slice(1),
@@ -782,7 +780,7 @@ export function processTaskCompletion(
     totalGoalsCreated: extCtx?.totalGoalsCreated ?? 0,
     totalGoalsCompleted: extCtx?.totalGoalsCompleted ?? (task.category === 'goal' ? 1 : 0),
     totalHighPriorityCompleted: extCtx?.totalHighPriorityCompleted ?? (task.priority === 'high' ? 1 : 0),
-    completedHabitToday: extCtx?.completedHabitToday ?? task.category === 'daily',
+    completedHabitToday: extCtx?.completedHabitToday ?? isHabitCategory(task.category),
     completedTaskToday: extCtx?.completedTaskToday ?? task.category === 'task',
     completedGoalToday: extCtx?.completedGoalToday ?? task.category === 'goal',
     allHabitsDoneToday: extCtx?.allHabitsDoneToday ?? false,

@@ -28,6 +28,12 @@ import AdhanBanner from '../components/dashboard/AdhanBanner';
 import AgendaList from '../components/dashboard/AgendaList';
 import FocusSnapshot from '../components/dashboard/FocusSnapshot';
 import type { AgendaItem } from '../components/dashboard/AgendaList';
+import {
+  comparePrayerTasks,
+  isHabitTask,
+  isPrayerTask,
+  isStandardDailyTask,
+} from '../services/prayerTasks';
 
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -70,7 +76,7 @@ export default function DashboardSurface() {
   useEffect(() => {
     const isWeekday = () => { const d = new Date().getDay(); return d >= 1 && d <= 5; };
     const habitsToReset = app.tasks.filter(t => {
-      if (t.category !== 'daily' || !t.recurring || !t.completed) return false;
+      if (!isHabitTask(t) || !t.recurring || !t.completed) return false;
       if (t.recurring.lastReset === todayStr) return false;
       if (t.recurring.frequency === 'weekdays' && !isWeekday()) return false;
       return true;
@@ -166,11 +172,21 @@ export default function DashboardSurface() {
 
   // Daily habits
   const dailyHabits = useMemo(() =>
-    app.tasks.filter(t => t.category === 'daily').sort((a, b) => a.completed === b.completed ? 0 : a.completed ? 1 : -1),
+    app.tasks
+      .filter(isStandardDailyTask)
+      .sort((a, b) => a.completed === b.completed ? 0 : a.completed ? 1 : -1),
+    [app.tasks]
+  );
+  const prayerTasks = useMemo(() =>
+    app.tasks
+      .filter(isPrayerTask)
+      .sort((a, b) => (a.completed === b.completed ? comparePrayerTasks(a, b) : a.completed ? 1 : -1)),
     [app.tasks]
   );
   const habitsTotal = dailyHabits.length;
   const habitsDone = dailyHabits.filter(t => t.completed).length;
+  const prayersTotal = prayerTasks.length;
+  const prayersDone = prayerTasks.filter(task => task.completed).length;
 
   // Overdue + due today tasks
   const dueTasks = useMemo(() =>
@@ -276,7 +292,7 @@ export default function DashboardSurface() {
 
     // Check if this habit already got XP today
     const todayLog = gam.dailyLog?.[todayStr] || [];
-    if (task.category === 'daily' && todayLog.includes(task.id)) return;
+    if (isHabitTask(task) && todayLog.includes(task.id)) return;
 
     const completionsToday = app.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
     const extCtx = buildCompletionContext(app.tasks, app.settings.goalTags, todayStr, gam, {
@@ -288,7 +304,7 @@ export default function DashboardSurface() {
     });
     const result = processTaskCompletion(gam, task, completionsToday, nowDate, extCtx);
     let profile = result.updatedProfile;
-    if (task.category === 'daily') {
+    if (isHabitTask(task)) {
       profile = recordHabitCompletion(profile, task.id, todayStr);
     }
     app.updateGamification(profile);
@@ -362,24 +378,41 @@ export default function DashboardSurface() {
             onCompleteTask={completeTask}
           />
 
-          {/* ── Habits Progress ── */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <span>Daily Habits</span>
-              <span style={{ fontSize: 11, color: habitsTotal > 0 && habitsDone === habitsTotal ? '#3ab553' : '#6b6f85' }}>
-                {habitsTotal > 0 ? `${habitsDone}/${habitsTotal}` : 'None set'}
-              </span>
-            </div>
-            {habitsTotal === 0 ? (
-              <div style={{ padding: '16px 0', color: '#6b6f85', fontSize: 13, textAlign: 'center' }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => app.navigate('tasks')}>+ Add a daily habit</button>
+          <div style={{ display: 'grid', gap: 16 }}>
+            {prayersTotal > 0 && (
+              <div className="dash-card">
+                <div className="dash-card-header">
+                  <span>Islamic</span>
+                  <span style={{ fontSize: 11, color: prayersDone === prayersTotal ? '#3ab553' : '#6b6f85' }}>
+                    {prayersDone}/{prayersTotal}
+                  </span>
+                </div>
+                <HabitCards
+                  habits={prayerTasks}
+                  onComplete={completeTask}
+                />
               </div>
-            ) : (
-              <HabitCards
-                habits={dailyHabits}
-                onComplete={completeTask}
-              />
             )}
+
+            {/* ── Habits Progress ── */}
+            <div className="dash-card">
+              <div className="dash-card-header">
+                <span>Daily Habits</span>
+                <span style={{ fontSize: 11, color: habitsTotal > 0 && habitsDone === habitsTotal ? '#3ab553' : '#6b6f85' }}>
+                  {habitsTotal > 0 ? `${habitsDone}/${habitsTotal}` : 'None set'}
+                </span>
+              </div>
+              {habitsTotal === 0 ? (
+                <div style={{ padding: '16px 0', color: '#6b6f85', fontSize: 13, textAlign: 'center' }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => app.navigate('tasks')}>+ Add a daily habit</button>
+                </div>
+              ) : (
+                <HabitCards
+                  habits={dailyHabits}
+                  onComplete={completeTask}
+                />
+              )}
+            </div>
           </div>
         </div>
 
@@ -465,10 +498,7 @@ export default function DashboardSurface() {
 
         {/* ── Prayer Stats ── */}
         {(() => {
-          const prayerKeywords = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-          const prayerHabits = app.tasks.filter(t =>
-            t.category === 'daily' && prayerKeywords.some(kw => t.title.toLowerCase().includes(kw))
-          );
+          const prayerHabits = app.tasks.filter(isPrayerTask).sort(comparePrayerTasks);
           const prayerStats = calculatePrayerStats(gam, app.tasks);
           return (
             <PrayerStatsCard

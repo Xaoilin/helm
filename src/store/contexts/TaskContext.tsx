@@ -2,6 +2,11 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { v4 as uuid } from 'uuid';
 import type { Task } from '../../types/domain';
 import { loadStore, saveStore } from '../persistence';
+import {
+  getPrayerTaskName,
+  getPrayerTaskTitle,
+  isPrayerTask,
+} from '../../services/prayerTasks';
 
 export interface TaskContextValue {
   tasks: Task[];
@@ -15,8 +20,18 @@ export interface TaskContextValue {
 const TaskCtx = createContext<TaskContextValue | null>(null);
 
 function normalizeTask(task: Task): Task {
+  const prayerName = getPrayerTaskName(task);
+  const recurring = task.category === 'prayer'
+    ? task.recurring || { frequency: 'daily' }
+    : task.recurring;
+
   return {
     ...task,
+    category: isPrayerTask(task) ? 'prayer' : task.category,
+    title: prayerName && task.category === 'prayer' ? getPrayerTaskTitle(prayerName) : task.title,
+    prayerName: prayerName || undefined,
+    recurring,
+    dueDate: isPrayerTask(task) ? undefined : task.dueDate,
     projectId: task.projectId || undefined,
     workflowState: task.workflowState || undefined,
     blockedReason: task.blockedReason?.trim() || undefined,

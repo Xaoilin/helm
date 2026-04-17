@@ -810,6 +810,18 @@ describe('TasksSurface', () => {
         updatedAt: '2026-04-10T09:00:00.000Z',
       },
       {
+        id: 'prayer-dhuhr',
+        title: 'Dhuhr Prayer',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'prayer',
+        prayerName: 'Dhuhr',
+        recurring: { frequency: 'daily', lastReset: todayStr },
+        createdAt: '2026-04-10T09:00:00.000Z',
+        updatedAt: '2026-04-10T09:00:00.000Z',
+      },
+      {
         id: 'task-done',
         title: 'Archive receipts',
         description: '',
@@ -829,10 +841,12 @@ describe('TasksSurface', () => {
 
     expect(screen.getByRole('heading', { name: 'Overdue' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Upcoming' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Islamic' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Routines' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Completed' })).toBeInTheDocument();
     expect(screen.getByText('Pay invoice')).toBeInTheDocument();
     expect(screen.getByText('Draft notes')).toBeInTheDocument();
+    expect(screen.getByText('Dhuhr Prayer')).toBeInTheDocument();
     expect(screen.getByText('Stretch')).toBeInTheDocument();
   });
 
@@ -961,6 +975,46 @@ describe('DashboardSurface', () => {
     expect(screen.getByText('Daily Habits')).toBeInTheDocument();
     expect(screen.getByText('Goals')).toBeInTheDocument();
     expect(screen.getByText('Next Milestone')).toBeInTheDocument();
+  });
+
+  it('separates prayer tasks into an Islamic dashboard section', async () => {
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'prayer-fajr',
+        title: 'Fajr Prayer',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'prayer',
+        prayerName: 'Fajr',
+        recurring: { frequency: 'daily' },
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+      {
+        id: 'habit-water',
+        title: 'Drink 1L Water',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'daily',
+        recurring: { frequency: 'daily' },
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+
+    await act(async () => { renderWithProvider(<DashboardSurface />); });
+
+    const islamicCard = screen.getByText('Islamic').closest('.dash-card');
+    const habitsCard = screen.getByText('Daily Habits').closest('.dash-card');
+
+    expect(islamicCard).not.toBeNull();
+    expect(habitsCard).not.toBeNull();
+    expect(islamicCard).toHaveTextContent('Fajr Prayer');
+    expect(islamicCard).not.toHaveTextContent('Drink 1L Water');
+    expect(habitsCard).toHaveTextContent('Drink 1L Water');
+    expect(habitsCard).not.toHaveTextContent('Fajr Prayer');
   });
 
   it('should show gamification stats in header', async () => {

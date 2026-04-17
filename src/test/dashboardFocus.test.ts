@@ -18,6 +18,7 @@ import {
   selectDashboardFocusRecommendation,
 } from '../services/dashboardFocus';
 import type { CalendarEvent, CalendarSource, FocusFeedback, Task } from '../types/domain';
+import type { PrayerTime } from '../services/prayerTimes';
 
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -55,6 +56,19 @@ function makeEvent(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
     allDay: false,
     ...overrides,
   };
+}
+
+function makePrayerTimes(): PrayerTime[] {
+  return [
+    { name: 'Fajr', nameArabic: 'الفجر', time: '05:00', type: 'prayer' },
+    { name: 'Sunrise', nameArabic: 'الشروق', time: '06:15', type: 'event' },
+    { name: 'Dhuhr', nameArabic: 'الظهر', time: '13:00', type: 'prayer' },
+    { name: 'Asr', nameArabic: 'العصر', time: '16:30', type: 'prayer' },
+    { name: 'Sunset', nameArabic: 'غروب', time: '20:05', type: 'event' },
+    { name: 'Maghrib', nameArabic: 'المغرب', time: '20:15', type: 'prayer' },
+    { name: 'Isha', nameArabic: 'العشاء', time: '21:45', type: 'prayer' },
+    { name: 'Midnight', nameArabic: 'نصف الليل', time: '23:59', type: 'event' },
+  ];
 }
 
 describe('dashboardFocus', () => {
@@ -117,9 +131,67 @@ describe('dashboardFocus', () => {
     expect(result.stats).toEqual({
       overdueCount: 1,
       dueTodayCount: 0,
+      prayersLeft: 0,
       routinesLeft: 1,
       activeTaskCount: 2,
     });
+  });
+
+  it('only recommends the current prayer window and drops expired prayers', () => {
+    const result = buildDashboardFocusCandidates({
+      tasks: [
+        makeTask({
+          id: 'prayer-fajr',
+          title: 'Fajr Prayer',
+          category: 'prayer',
+          prayerName: 'Fajr',
+          recurring: {
+            frequency: 'daily',
+          },
+        }),
+        makeTask({
+          id: 'prayer-dhuhr',
+          title: 'Dhuhr Prayer',
+          category: 'prayer',
+          prayerName: 'Dhuhr',
+          recurring: {
+            frequency: 'daily',
+          },
+        }),
+        makeTask({
+          id: 'prayer-asr',
+          title: 'Asr Prayer',
+          category: 'prayer',
+          prayerName: 'Asr',
+          recurring: {
+            frequency: 'daily',
+          },
+        }),
+      ],
+      calendarSources: [],
+      calendarEvents: [],
+      projects: [],
+      gamification: {
+        totalXp: 0,
+        level: 1,
+        currentStreak: 3,
+        longestStreak: 3,
+        totalTasksCompleted: 0,
+        badges: [],
+      },
+      feedback: [],
+      now: new Date('2026-04-16T13:20:00.000Z'),
+      prayerTimes: makePrayerTimes(),
+    });
+
+    expect(result.candidates[0]).toEqual(expect.objectContaining({
+      id: 'prayer:prayer-dhuhr',
+      kind: 'prayer',
+      title: 'Dhuhr Prayer',
+    }));
+    expect(result.candidates.some(candidate => candidate.id === 'prayer:prayer-fajr')).toBe(false);
+    expect(result.candidates.some(candidate => candidate.id === 'prayer:prayer-asr')).toBe(false);
+    expect(result.stats.prayersLeft).toBe(2);
   });
 
   it('creates a meeting prep candidate when a visible event starts within 15 minutes', () => {

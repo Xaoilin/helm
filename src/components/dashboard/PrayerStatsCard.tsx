@@ -15,8 +15,6 @@ interface PrayerStatsCardProps {
   onBackfillPrayerLog: (taskId: string, dateStr: string, completed: boolean) => void;
 }
 
-const PRAYER_KEYWORDS = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-
 export default function PrayerStatsCard({
   prayerStats,
   prayerHabits,
@@ -72,7 +70,7 @@ export default function PrayerStatsCard({
                 <tr>
                   <th style={{ textAlign: 'left', padding: '4px 8px', color: '#6b6f85', fontWeight: 500 }}>Day</th>
                   {prayerHabits.map(h => {
-                    const name = PRAYER_KEYWORDS.find(kw => h.title.toLowerCase().includes(kw)) || '';
+                    const name = h.prayerName || h.title;
                     return (
                       <th key={h.id} style={{ textAlign: 'center', padding: '4px 6px', color: '#8b8fa3', fontWeight: 500, fontSize: 11 }}>
                         {name.charAt(0).toUpperCase() + name.slice(1)}

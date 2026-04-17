@@ -70,6 +70,28 @@ describe('Tasks CRUD', () => {
     expect(r.api!.tasks[0].recurring?.frequency).toBe('daily');
   });
 
+  it('should normalize legacy prayer habits into prayer tasks', async () => {
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'legacy-fajr',
+        title: 'Fajr Prayer',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'daily',
+        recurring: { frequency: 'daily' },
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+
+    const r = await renderWithApp();
+
+    expect(r.api!.tasks[0].category).toBe('prayer');
+    expect(r.api!.tasks[0].prayerName).toBe('Fajr');
+    expect(r.api!.tasks[0].recurring?.frequency).toBe('daily');
+  });
+
   it('should create goals with due dates', async () => {
     const r = await renderWithApp();
     act(() => {

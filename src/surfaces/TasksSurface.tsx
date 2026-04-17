@@ -3,7 +3,7 @@ import { useApp } from '../store/AppContext';
 import HabitCards from '../components/HabitCards';
 import { TIMING } from '../config/constants';
 import { EMOJI_PALETTE, getHabitEmoji } from '../services/habitEmoji';
-import type { Task, TaskCategory, TaskPriority } from '../types/domain';
+import type { PrayerName, Task, TaskCategory, TaskPriority } from '../types/domain';
 import {
   processTaskCompletion,
   buildCompletionContext,
@@ -13,6 +13,14 @@ import {
   titleForLevel,
   getBadgeDef,
 } from '../services/gamification';
+import {
+  comparePrayerTasks,
+  getPrayerTaskTitle,
+  isHabitTask,
+  isPrayerTask,
+  isStandardDailyTask,
+  PRAYER_TASK_ORDER,
+} from '../services/prayerTasks';
 
 type Tab = 'today' | 'all' | 'goals';
 
@@ -24,7 +32,7 @@ interface Toast {
 }
 
 interface AllTaskSection {
-  id: 'overdue' | 'today' | 'upcoming' | 'routines' | 'later';
+  id: 'overdue' | 'today' | 'upcoming' | 'prayers' | 'routines' | 'later';
   title: string;
   description: string;
   items: Task[];
@@ -56,6 +64,7 @@ function formatShortDate(dateStr: string): string {
 }
 
 function getAllTaskSectionId(task: Task, todayStr: string): AllTaskSection['id'] {
+  if (isPrayerTask(task)) return 'prayers';
   if (task.category === 'daily') return 'routines';
   if (!task.dueDate) return 'later';
   if (task.dueDate < todayStr) return 'overdue';
@@ -82,6 +91,7 @@ export default function TasksSurface() {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [category, setCategory] = useState<TaskCategory>('task');
+  const [prayerName, setPrayerName] = useState<PrayerName>('Fajr');
   const [dueDate, setDueDate] = useState('');
   const [recurringFreq, setRecurringFreq] = useState<'daily' | 'weekdays' | 'weekly'>('daily');
   const [goalTag, setGoalTag] = useState('');
@@ -93,7 +103,7 @@ export default function TasksSurface() {
   const [filterProjectId, setFilterProjectId] = useState<string>('all');
 
   // Filters for All Tasks tab
-  const [filterCategory, setFilterCategory] = useState<'all' | 'daily' | 'task'>('all');
+  const [filterCategory, setFilterCategory] = useState<'all' | 'daily' | 'prayer' | 'task'>('all');
   const [filterPriority, setFilterPriority] = useState<'all' | TaskPriority>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'completed'>('all');
 
@@ -135,7 +145,7 @@ export default function TasksSurface() {
   // ── Recurring reset ──
   useEffect(() => {
     const habitsToReset = app.tasks.filter(t => {
-      if (t.category !== 'daily' || !t.recurring || !t.completed) return false;
+      if (!isHabitTask(t) || !t.recurring || !t.completed) return false;
       if (t.recurring.lastReset === todayStr) return false;
       // Weekday-only habits: don't reset on weekends
       if (t.recurring.frequency === 'weekdays' && !isWeekday()) return false;
@@ -193,9 +203,15 @@ export default function TasksSurface() {
       : app.tasks.filter(task => task.projectId === filterProjectId)
   ), [app.tasks, filterProjectId]);
 
+  const prayerTasks = useMemo(() =>
+    projectFilteredTasks
+      .filter(isPrayerTask)
+      .sort((a, b) => (a.completed === b.completed ? comparePrayerTasks(a, b) : a.completed ? 1 : -1)),
+    [projectFilteredTasks]
+  );
   const dailyHabits = useMemo(() =>
     projectFilteredTasks
-      .filter(t => t.category === 'daily')
+      .filter(isStandardDailyTask)
       .sort((a, b) => (a.completed === b.completed ? 0 : a.completed ? 1 : -1)),
     [projectFilteredTasks]
   );
@@ -210,7 +226,7 @@ export default function TasksSurface() {
     [projectFilteredTasks, todayStr]
   );
 
-  const todayItems = useMemo(() => [...dailyHabits, ...dueTodayTasks], [dailyHabits, dueTodayTasks]);
+  const todayItems = useMemo(() => [...prayerTasks, ...dailyHabits, ...dueTodayTasks], [prayerTasks, dailyHabits, dueTodayTasks]);
   const todayDone = todayItems.filter(t => t.completed).length;
   const todayTotal = todayItems.length;
   const tomorrowStr = useMemo(() => shiftLocalDate(todayStr, 1), [todayStr]);
@@ -246,20 +262,27 @@ export default function TasksSurface() {
     const completed = scopedAllTasks.filter(task => task.completed).length;
     const overdue = scopedAllTasks.filter(task => !task.completed && task.category === 'task' && !!task.dueDate && task.dueDate < todayStr).length;
     const dueToday = scopedAllTasks.filter(task => !task.completed && task.category === 'task' && task.dueDate === todayStr).length;
+    const prayers = scopedAllTasks.filter(task => !task.completed && isPrayerTask(task)).length;
     const routines = scopedAllTasks.filter(task => !task.completed && task.category === 'daily').length;
-    return { active, completed, overdue, dueToday, routines };
+    return { active, completed, overdue, dueToday, prayers, routines };
   }, [scopedAllTasks, todayStr]);
 
   const allTaskSections = useMemo<AllTaskSection[]>(() => {
     const overdue: Task[] = [];
     const dueToday: Task[] = [];
     const upcoming: Task[] = [];
+    const prayers: Task[] = [];
     const routines: Task[] = [];
     const later: Task[] = [];
 
     allTasks
       .filter(task => !task.completed)
       .forEach(task => {
+        if (isPrayerTask(task)) {
+          prayers.push(task);
+          return;
+        }
+
         if (task.category === 'daily') {
           routines.push(task);
           return;
@@ -287,6 +310,7 @@ export default function TasksSurface() {
       { id: 'overdue', title: 'Overdue', description: 'Needs attention first.', items: overdue },
       { id: 'today', title: 'Due today', description: 'Keep today moving without losing track.', items: dueToday },
       { id: 'upcoming', title: 'Upcoming', description: 'Scheduled next so you can plan ahead.', items: upcoming },
+      { id: 'prayers', title: 'Islamic', description: 'Prayer commitments tracked in their own lane.', items: prayers },
       { id: 'routines', title: 'Routines', description: 'Daily habits and repeating commitments.', items: routines },
       { id: 'later', title: 'Later', description: 'Open tasks without a due date yet.', items: later },
     ];
@@ -367,6 +391,7 @@ export default function TasksSurface() {
   const openAdd = (defaultCategory?: TaskCategory) => {
     setTitle(''); setDescription(''); setPriority('medium');
     setCategory(defaultCategory || (tab === 'goals' ? 'goal' : 'task'));
+    setPrayerName('Fajr');
     setDueDate(tab === 'today' ? todayStr : '');
     setRecurringFreq('daily');
     setGoalTag(filterGoalTag !== 'all' ? filterGoalTag : '');
@@ -378,6 +403,7 @@ export default function TasksSurface() {
   const openEdit = (task: Task) => {
     setTitle(task.title); setDescription(task.description);
     setPriority(task.priority); setCategory(task.category);
+    setPrayerName(task.prayerName || 'Fajr');
     setDueDate(task.dueDate || '');
     setRecurringFreq(task.recurring?.frequency || 'daily');
     setGoalTag(task.goalTag || '');
@@ -387,8 +413,9 @@ export default function TasksSurface() {
   };
 
   const save = () => {
-    if (!title.trim()) return;
-    const normalizedProjectId = category === 'daily' ? undefined : (taskProjectId || undefined);
+    const resolvedTitle = category === 'prayer' ? getPrayerTaskTitle(prayerName) : title.trim();
+    if (!resolvedTitle) return;
+    const normalizedProjectId = category === 'daily' || category === 'prayer' ? undefined : (taskProjectId || undefined);
     const nextBoardOrder = category === 'task' && normalizedProjectId
       ? (editing && editing.projectId === normalizedProjectId && typeof editing.boardOrder === 'number'
         ? editing.boardOrder
@@ -397,14 +424,19 @@ export default function TasksSurface() {
           .reduce((max, task) => Math.max(max, task.boardOrder ?? 0), 0) + 1)
       : undefined;
     const data: Omit<Task, 'id' | 'createdAt' | 'updatedAt'> = {
-      title: title.trim(),
+      title: resolvedTitle,
       description: description.trim(),
       priority,
       category,
       completed: editing?.completed ?? false,
       completedAt: editing?.completedAt,
-      dueDate: category === 'daily' ? undefined : (dueDate || undefined),
-      recurring: category === 'daily' ? { frequency: recurringFreq, lastReset: editing?.recurring?.lastReset } : undefined,
+      dueDate: category === 'daily' || category === 'prayer' ? undefined : (dueDate || undefined),
+      recurring: category === 'daily'
+        ? { frequency: recurringFreq, lastReset: editing?.recurring?.lastReset }
+        : category === 'prayer'
+          ? { frequency: 'daily', lastReset: editing?.recurring?.lastReset }
+          : undefined,
+      prayerName: category === 'prayer' ? prayerName : undefined,
       goalTag: category === 'goal' && goalTag ? goalTag : undefined,
       emoji: category === 'daily' && habitEmoji ? habitEmoji : undefined,
       projectId: normalizedProjectId,
@@ -425,8 +457,8 @@ export default function TasksSurface() {
     const now = nowDate.toISOString();
     const completing = !task.completed;
 
-    // Daily habits cannot be unchecked once completed
-    if (task.category === 'daily' && !completing) return;
+    // Habit-like items stay locked for the day once completed
+    if (isHabitTask(task) && !completing) return;
 
     app.updateTask(task.id, {
       completed: completing,
@@ -438,7 +470,7 @@ export default function TasksSurface() {
     if (completing) {
       // Check if this habit already got XP today (prevent farming)
       const todayLog = app.gamification.dailyLog?.[todayStr] || [];
-      const alreadyRewarded = task.category === 'daily' && todayLog.includes(task.id);
+      const alreadyRewarded = isHabitTask(task) && todayLog.includes(task.id);
 
       if (alreadyRewarded) return; // no duplicate XP
 
@@ -452,7 +484,7 @@ export default function TasksSurface() {
       });
       const result = processTaskCompletion(app.gamification, task, completionsToday, nowDate, extCtx);
       let profile = result.updatedProfile;
-      if (task.category === 'daily') {
+      if (isHabitTask(task)) {
         profile = recordHabitCompletion(profile, task.id, todayStr);
       }
       app.updateGamification(profile);
@@ -525,6 +557,7 @@ export default function TasksSurface() {
           {task.title}
           {task.priority !== 'low' && <span className={`tag tag-${task.priority}`}>{task.priority}</span>}
           {task.category === 'daily' && <span className="tag tag-daily">daily</span>}
+          {task.category === 'prayer' && <span className="tag tag-daily">prayer</span>}
         </div>
         <div className="task-meta">
           {task.dueDate && (
@@ -532,7 +565,9 @@ export default function TasksSurface() {
               {task.dueDate < todayStr && !task.completed ? 'Overdue' : `Due ${task.dueDate}`}
             </span>
           )}
-          {task.recurring && <span>Repeats {task.recurring.frequency}</span>}
+          {task.category === 'prayer'
+            ? <span>Islamic prayer</span>
+            : task.recurring && <span>Repeats {task.recurring.frequency}</span>}
           {task.description && <span>{task.description.slice(0, 60)}{task.description.length > 60 ? '...' : ''}</span>}
         </div>
       </div>
@@ -603,8 +638,13 @@ export default function TasksSurface() {
                     {getHabitEmoji(task.title, task.emoji)}
                   </span>
                 )}
+                {task.category === 'prayer' && (
+                  <span className="all-task-habit-emoji" aria-hidden="true">
+                    {'\u{1F54C}'}
+                  </span>
+                )}
                 <span className={`all-task-type ${task.category}`}>
-                  {task.category === 'daily' ? 'Routine' : 'Task'}
+                  {task.category === 'daily' ? 'Routine' : task.category === 'prayer' ? 'Prayer' : 'Task'}
                 </span>
                 <span className={`tag tag-${task.priority}`}>{task.priority}</span>
                 {projectName && <span className="tag tag-connected">{projectName}</span>}
@@ -640,11 +680,11 @@ export default function TasksSurface() {
         </div>
         <div className="all-task-card-footer">
           <span>{footerNote}</span>
-          {task.category === 'daily' && task.recurring && <span>Reset {task.recurring.lastReset ? `last on ${formatShortDate(task.recurring.lastReset)}` : 'automatically'}</span>}
+          {isHabitTask(task) && task.recurring && <span>Reset {task.recurring.lastReset ? `last on ${formatShortDate(task.recurring.lastReset)}` : 'automatically'}</span>}
         </div>
         {deletingId === task.id && (
           <div className="confirm-bar all-task-confirm" role="alert">
-            <span>Delete this {task.category === 'daily' ? 'routine' : 'task'}?</span>
+            <span>Delete this {task.category === 'daily' ? 'routine' : task.category === 'prayer' ? 'prayer task' : 'task'}?</span>
             <button className="btn btn-danger btn-sm" onClick={() => handleDelete(task.id)}>Delete</button>
             <button className="btn btn-secondary btn-sm" onClick={() => setDeletingId(null)}>Cancel</button>
           </div>
@@ -740,14 +780,21 @@ export default function TasksSurface() {
               <div className="empty-state" role="status">
                 <div className="empty-icon" style={{ fontSize: 36 }}>&#9745;</div>
                 <h3>Nothing for today</h3>
-                <p>Add a daily habit or create a task with today's due date to see it here.</p>
+                <p>Add an Islamic prayer task, a daily habit, or a task with today's due date to see it here.</p>
                 <div className="actions-row" style={{ gap: 8 }}>
+                  <button className="btn btn-primary" onClick={() => openAdd('prayer')}>+ Prayer Task</button>
                   <button className="btn btn-primary" onClick={() => openAdd('daily')}>+ Daily Habit</button>
                   <button className="btn btn-secondary" onClick={() => openAdd('task')}>+ Task</button>
                 </div>
               </div>
             ) : (
               <>
+                {prayerTasks.length > 0 && (
+                  <>
+                    <div className="section-heading">Islamic</div>
+                    <HabitCards habits={prayerTasks} onComplete={toggleComplete} />
+                  </>
+                )}
                 {dailyHabits.length > 0 && (
                   <>
                     <div className="section-heading">Daily Habits</div>
@@ -789,6 +836,10 @@ export default function TasksSurface() {
                   <span className="value">{allTaskStats.dueToday}</span>
                 </div>
                 <div className="all-tasks-metric">
+                  <span className="label">Islamic</span>
+                  <span className="value">{allTaskStats.prayers}</span>
+                </div>
+                <div className="all-tasks-metric">
                   <span className="label">Routines</span>
                   <span className="value">{allTaskStats.routines}</span>
                 </div>
@@ -813,6 +864,7 @@ export default function TasksSurface() {
                   <select className="form-select" value={filterCategory} onChange={e => setFilterCategory(e.target.value as typeof filterCategory)}>
                     <option value="all">All types</option>
                     <option value="daily">Daily habits</option>
+                    <option value="prayer">Prayer tasks</option>
                     <option value="task">One-off tasks</option>
                   </select>
                 </label>
@@ -1039,8 +1091,20 @@ export default function TasksSurface() {
           <div className="modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={editing ? 'Edit Task' : 'Add Task'}>
             <h2>{editing ? 'Edit Task' : 'Add Task'}</h2>
             <div className="form-group">
-              <label htmlFor="task-title">Title</label>
-              <input id="task-title" className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="What needs to be done?" autoFocus />
+              <label htmlFor={category === 'prayer' ? 'task-prayer-name' : 'task-title'}>{category === 'prayer' ? 'Prayer' : 'Title'}</label>
+              {category === 'prayer' ? (
+                <select
+                  id="task-prayer-name"
+                  className="form-select"
+                  value={prayerName}
+                  onChange={e => setPrayerName(e.target.value as PrayerName)}
+                  autoFocus
+                >
+                  {PRAYER_TASK_ORDER.map(name => <option key={name} value={name}>{name}</option>)}
+                </select>
+              ) : (
+                <input id="task-title" className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="What needs to be done?" autoFocus />
+              )}
             </div>
             <div className="form-group">
               <label htmlFor="task-desc">Description (optional)</label>
@@ -1051,6 +1115,7 @@ export default function TasksSurface() {
                 <label htmlFor="task-category">Type</label>
                 <select id="task-category" className="form-select" value={category} onChange={e => setCategory(e.target.value as TaskCategory)}>
                   <option value="task">One-off Task</option>
+                  <option value="prayer">Prayer Task</option>
                   <option value="daily">Daily Habit</option>
                   <option value="goal">Long-term Goal</option>
                 </select>
@@ -1064,7 +1129,7 @@ export default function TasksSurface() {
                 </select>
               </div>
             </div>
-            {category !== 'daily' && (
+            {category !== 'daily' && category !== 'prayer' && (
               <div className="form-group">
                 <label htmlFor="task-due">{category === 'goal' ? 'Target Date' : 'Due Date'} (optional)</label>
                 <input id="task-due" className="form-input" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
@@ -1113,7 +1178,7 @@ export default function TasksSurface() {
                 </select>
               </div>
             )}
-            {category !== 'daily' && app.projects.length > 0 && (
+            {category !== 'daily' && category !== 'prayer' && app.projects.length > 0 && (
               <div className="form-group">
                 <label htmlFor="task-project">Project (optional)</label>
                 <select id="task-project" className="form-select" value={taskProjectId} onChange={e => setTaskProjectId(e.target.value)}>
@@ -1124,7 +1189,7 @@ export default function TasksSurface() {
             )}
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={save} disabled={!title.trim()}>
+              <button className="btn btn-primary" onClick={save} disabled={category !== 'prayer' && !title.trim()}>
                 {editing ? 'Save' : 'Add'}
               </button>
             </div>
