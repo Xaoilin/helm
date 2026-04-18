@@ -32,6 +32,7 @@ Use this matrix when updating docs or UI copy. The allowed states are:
 | Monzo import | `real` | Live API path exists when configured. |
 | Knowledge base and lifestyle tracker | `real` | Local-first CRUD is implemented. |
 | Projects hub | `real` | Local-first project management is implemented. The Projects surface includes a portfolio rail, project overview, kanban board, milestone tracking via project-linked goals, lightweight wiki pages, and local project path references. Desktop builds can browse/open local paths directly; web builds fall back truthfully to manual path entry and copy-only behavior. |
+| Trips planner | `real` | Local-first multi-country trip planning is implemented with guided trip creation, ordered destination legs, per-day itinerary items, transport and stay bookings, and explicit one-off calendar import when calendar sources are available. |
 | GitHub integration | `placeholder/simulated` | Simulated connection flow only. |
 | Slack integration | `placeholder/simulated` | Simulated connection flow only. |
 | Linear integration | `placeholder/simulated` | Simulated connection flow only. |

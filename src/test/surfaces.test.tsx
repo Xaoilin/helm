@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, act, fireEvent, waitFor, within } from '@testing-library/react';
 import { AppProvider } from '../store/AppContext';
 import { useApp } from '../store/AppContext';
 import App from '../App';
@@ -7,6 +7,7 @@ import CalendarSurface from '../surfaces/CalendarSurface';
 import ChatSurface from '../surfaces/ChatSurface';
 import ClockSurface from '../surfaces/ClockSurface';
 import DashboardSurface from '../surfaces/DashboardSurface';
+import TripsSurface from '../surfaces/TripsSurface';
 import TasksSurface from '../surfaces/TasksSurface';
 import ProjectsSurface from '../surfaces/ProjectsSurface';
 import KnowledgeSurface from '../surfaces/KnowledgeSurface';
@@ -122,6 +123,17 @@ function TasksAssistantNavigationHarness({ target }: { target: AssistantNavigati
   );
 }
 
+function AppAssistantNavigationHarness({ target }: { target: AssistantNavigationTarget }) {
+  const app = useApp();
+
+  return (
+    <>
+      <button onClick={() => app.requestAssistantNavigation(target)}>Trigger assistant navigation</button>
+      <App />
+    </>
+  );
+}
+
 describe('App shell', () => {
   beforeEach(() => { localStorage.clear(); });
 
@@ -134,6 +146,7 @@ describe('App shell', () => {
     expect(screen.getByText('Chat')).toBeInTheDocument();
     expect(screen.getByText('Calendar')).toBeInTheDocument();
     expect(screen.getByText('Clock')).toBeInTheDocument();
+    expect(screen.getByText('Trips')).toBeInTheDocument();
     expect(screen.getByText('Tasks')).toBeInTheDocument();
     expect(screen.getByText('Projects')).toBeInTheDocument();
     expect(screen.getByText('Finance')).toBeInTheDocument();
@@ -155,6 +168,9 @@ describe('App shell', () => {
 
   it('should navigate between surfaces', async () => {
     await act(async () => { renderWithProvider(<App />); });
+
+    await act(async () => { fireEvent.click(screen.getByText('Trips')); });
+    expect(screen.getByRole('button', { name: 'Plan your first trip' })).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Projects')); });
     expect(screen.getByText('Turn HELM into your local project hub')).toBeInTheDocument();
@@ -1188,6 +1204,586 @@ describe('DashboardSurface', () => {
 
     expect((await screen.findAllByText('25 Push Ups')).length).toBeGreaterThan(0);
     expect(screen.queryByText('10 min')).not.toBeInTheDocument();
+  });
+});
+
+describe('TripsSurface', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('shows the empty state CTA', async () => {
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+    expect(screen.getByRole('heading', { name: 'Plan your first trip' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Plan your first trip' })).toBeInTheDocument();
+  });
+
+  it('creates a trip from the guided wizard and derives the trip date range', async () => {
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Plan your first trip' }));
+    });
+
+    fireEvent.change(screen.getByLabelText('Trip Name'), { target: { value: 'Euro Sprint' } });
+    fireEvent.change(screen.getByLabelText('Short Summary'), { target: { value: 'Two fast city stops.' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Next'));
+    });
+
+    const countryInputs = screen.getAllByPlaceholderText('Country');
+    const cityInputs = screen.getAllByPlaceholderText('City');
+    const routeDateInputs = Array.from(document.querySelectorAll('.trip-wizard-modal input[type="date"]')) as HTMLInputElement[];
+
+    fireEvent.change(countryInputs[0], { target: { value: 'France' } });
+    fireEvent.change(cityInputs[0], { target: { value: 'Paris' } });
+    fireEvent.change(routeDateInputs[0], { target: { value: '2026-07-01' } });
+    fireEvent.change(routeDateInputs[1], { target: { value: '2026-07-03' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('+ Add Destination'));
+    });
+
+    const nextCountryInputs = screen.getAllByPlaceholderText('Country');
+    const nextCityInputs = screen.getAllByPlaceholderText('City');
+    const nextRouteDateInputs = Array.from(document.querySelectorAll('.trip-wizard-modal input[type="date"]')) as HTMLInputElement[];
+
+    fireEvent.change(nextCountryInputs[1], { target: { value: 'Italy' } });
+    fireEvent.change(nextCityInputs[1], { target: { value: 'Rome' } });
+    fireEvent.change(nextRouteDateInputs[2], { target: { value: '2026-07-04' } });
+    fireEvent.change(nextRouteDateInputs[3], { target: { value: '2026-07-06' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Next'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Next'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create Trip'));
+    });
+
+    await waitFor(() => {
+      const trips = JSON.parse(localStorage.getItem('helm:trips') || '[]');
+      expect(trips).toHaveLength(1);
+      expect(trips[0]).toMatchObject({
+        name: 'Euro Sprint',
+        startDate: '2026-07-01',
+        endDate: '2026-07-06',
+      });
+    });
+
+    expect((await screen.findAllByText('Euro Sprint')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Paris, France/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Rome, Italy/).length).toBeGreaterThan(0);
+  });
+
+  it('renders all trip days in order and sorts itinerary items by time', async () => {
+    localStorage.setItem('helm:trips', JSON.stringify([{
+      id: 'trip-1',
+      name: 'Summer Route',
+      summary: 'Paris then Rome',
+      notes: '',
+      status: 'planning',
+      startDate: '2026-07-01',
+      endDate: '2026-07-03',
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:tripLegs', JSON.stringify([
+      {
+        id: 'leg-1',
+        tripId: 'trip-1',
+        country: 'France',
+        city: 'Paris',
+        startDate: '2026-07-01',
+        endDate: '2026-07-02',
+        sortOrder: 0,
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+      {
+        id: 'leg-2',
+        tripId: 'trip-1',
+        country: 'Italy',
+        city: 'Rome',
+        startDate: '2026-07-03',
+        endDate: '2026-07-03',
+        sortOrder: 1,
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+    localStorage.setItem('helm:tripItineraryItems', JSON.stringify([
+      {
+        id: 'item-2',
+        tripId: 'trip-1',
+        legId: 'leg-1',
+        date: '2026-07-01',
+        title: 'Museum visit',
+        startTime: '11:00',
+        notes: '',
+        sortOrder: 1,
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+      {
+        id: 'item-1',
+        tripId: 'trip-1',
+        legId: 'leg-1',
+        date: '2026-07-01',
+        title: 'Morning coffee',
+        startTime: '08:00',
+        notes: '',
+        sortOrder: 0,
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    });
+
+    expect(screen.getAllByText('+ Add Plan')).toHaveLength(3);
+    const timelineSection = screen.getByText('Morning coffee').closest('.card');
+    expect(timelineSection).not.toBeNull();
+    expect(timelineSection?.textContent?.indexOf('Morning coffee')).toBeLessThan(timelineSection?.textContent?.indexOf('Museum visit') ?? 0);
+    expect(screen.getByText('2 days in this destination.')).toBeInTheDocument();
+    expect(screen.getByText('1 day in this destination.')).toBeInTheDocument();
+  });
+
+  it('creates, edits, deletes, and sorts bookings', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    localStorage.setItem('helm:trips', JSON.stringify([{
+      id: 'trip-1',
+      name: 'Italy Week',
+      summary: '',
+      notes: '',
+      status: 'planning',
+      startDate: '2026-08-01',
+      endDate: '2026-08-08',
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:tripLegs', JSON.stringify([{
+      id: 'leg-1',
+      tripId: 'trip-1',
+      country: 'Italy',
+      city: 'Rome',
+      startDate: '2026-08-01',
+      endDate: '2026-08-08',
+      sortOrder: 0,
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:tripBookings', JSON.stringify([{
+      id: 'booking-old',
+      tripId: 'trip-1',
+      legId: 'leg-1',
+      kind: 'transport',
+      mode: 'ferry',
+      title: 'Old ferry',
+      fromLabel: 'Naples',
+      toLabel: 'Palermo',
+      departAt: '2020-07-20T09:00',
+      arriveAt: '2020-07-20T13:00',
+      notes: '',
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Bookings' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('+ Transport'));
+    });
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Flight to Rome' } });
+    fireEvent.change(screen.getByLabelText('Depart'), { target: { value: '2026-08-02T09:00' } });
+    fireEvent.change(screen.getByLabelText('Arrive'), { target: { value: '2026-08-02T11:30' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create Booking'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('+ Stay'));
+    });
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Rome Hotel' } });
+    fireEvent.change(screen.getByLabelText('Property'), { target: { value: 'Hotel Roma' } });
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Rome' } });
+    fireEvent.change(screen.getByLabelText('Country'), { target: { value: 'Italy' } });
+    fireEvent.change(screen.getByLabelText('Check In'), { target: { value: '2026-08-02' } });
+    fireEvent.change(screen.getByLabelText('Check Out'), { target: { value: '2026-08-05' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create Booking'));
+    });
+
+    const transportCard = screen.getByText('Transport').closest('.card') as HTMLElement;
+    expect(transportCard.textContent?.indexOf('Flight to Rome')).toBeLessThan(transportCard.textContent?.indexOf('Old ferry') ?? 0);
+
+    await act(async () => {
+      fireEvent.click(within(transportCard).getAllByText('Edit')[0]);
+    });
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Flight to Rome - Updated' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Save Booking'));
+    });
+
+    expect(screen.getByText('Flight to Rome - Updated')).toBeInTheDocument();
+
+    const stayCard = screen.getByText('Stay').closest('.card') as HTMLElement;
+    await act(async () => {
+      fireEvent.click(within(stayCard as HTMLElement).getByText('Delete'));
+    });
+
+    expect(screen.queryByText('Rome Hotel')).not.toBeInTheDocument();
+  });
+
+  it('cascades trip deletion to legs, itinerary items, and bookings only for that trip', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    localStorage.setItem('helm:trips', JSON.stringify([
+      {
+        id: 'trip-delete',
+        name: 'Delete Me',
+        summary: '',
+        notes: '',
+        status: 'planning',
+        startDate: '2026-07-01',
+        endDate: '2026-07-02',
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+      {
+        id: 'trip-keep',
+        name: 'Keep Me',
+        summary: '',
+        notes: '',
+        status: 'planning',
+        startDate: '2026-08-01',
+        endDate: '2026-08-02',
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+    localStorage.setItem('helm:tripLegs', JSON.stringify([
+      {
+        id: 'leg-delete',
+        tripId: 'trip-delete',
+        country: 'France',
+        city: 'Paris',
+        startDate: '2026-07-01',
+        endDate: '2026-07-02',
+        sortOrder: 0,
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+      {
+        id: 'leg-keep',
+        tripId: 'trip-keep',
+        country: 'Italy',
+        city: 'Rome',
+        startDate: '2026-08-01',
+        endDate: '2026-08-02',
+        sortOrder: 0,
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+    localStorage.setItem('helm:tripItineraryItems', JSON.stringify([
+      {
+        id: 'item-delete',
+        tripId: 'trip-delete',
+        legId: 'leg-delete',
+        date: '2026-07-01',
+        title: 'Delete item',
+        notes: '',
+        sortOrder: 0,
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+      {
+        id: 'item-keep',
+        tripId: 'trip-keep',
+        legId: 'leg-keep',
+        date: '2026-08-01',
+        title: 'Keep item',
+        notes: '',
+        sortOrder: 0,
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+    localStorage.setItem('helm:tripBookings', JSON.stringify([
+      {
+        id: 'booking-delete',
+        tripId: 'trip-delete',
+        legId: 'leg-delete',
+        kind: 'stay',
+        title: 'Delete stay',
+        propertyName: 'Delete hotel',
+        city: 'Paris',
+        country: 'France',
+        checkInDate: '2026-07-01',
+        checkOutDate: '2026-07-02',
+        notes: '',
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+      {
+        id: 'booking-keep',
+        tripId: 'trip-keep',
+        legId: 'leg-keep',
+        kind: 'stay',
+        title: 'Keep stay',
+        propertyName: 'Keep hotel',
+        city: 'Rome',
+        country: 'Italy',
+        checkInDate: '2026-08-01',
+        checkOutDate: '2026-08-02',
+        notes: '',
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
+
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Delete'));
+    });
+
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem('helm:trips') || '[]')).toEqual([
+        expect.objectContaining({ id: 'trip-keep' }),
+      ]);
+      expect(JSON.parse(localStorage.getItem('helm:tripLegs') || '[]')).toEqual([
+        expect.objectContaining({ id: 'leg-keep' }),
+      ]);
+      expect(JSON.parse(localStorage.getItem('helm:tripItineraryItems') || '[]')).toEqual([
+        expect.objectContaining({ id: 'item-keep' }),
+      ]);
+      expect(JSON.parse(localStorage.getItem('helm:tripBookings') || '[]')).toEqual([
+        expect.objectContaining({ id: 'booking-keep' }),
+      ]);
+    });
+  });
+
+  it('imports trip plans into calendar when a source exists', async () => {
+    localStorage.setItem('helm:trips', JSON.stringify([{
+      id: 'trip-1',
+      name: 'City Break',
+      summary: '',
+      notes: '',
+      status: 'planning',
+      startDate: '2026-09-01',
+      endDate: '2026-09-01',
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:tripLegs', JSON.stringify([{
+      id: 'leg-1',
+      tripId: 'trip-1',
+      country: 'Spain',
+      city: 'Madrid',
+      startDate: '2026-09-01',
+      endDate: '2026-09-01',
+      sortOrder: 0,
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:tripItineraryItems', JSON.stringify([{
+      id: 'item-1',
+      tripId: 'trip-1',
+      legId: 'leg-1',
+      date: '2026-09-01',
+      title: 'Museum visit',
+      startTime: '10:00',
+      endTime: '12:00',
+      notes: 'Buy tickets first.',
+      sortOrder: 0,
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'acc-1',
+      name: 'Personal',
+      email: 'alisa@example.com',
+      provider: 'local',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+    }]));
+    localStorage.setItem('helm:calendarSources', JSON.stringify([{
+      id: 'src-1',
+      accountId: 'acc-1',
+      name: 'Personal',
+      color: '#4285f4',
+      visible: true,
+    }]));
+
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('Add to Calendar')[0]);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Add Event'));
+    });
+
+    await waitFor(() => {
+      const events = JSON.parse(localStorage.getItem('helm:calendarEvents') || '[]');
+      expect(events[0]).toMatchObject({
+        sourceId: 'src-1',
+        title: 'Museum visit',
+      });
+    });
+  });
+
+  it('shows a truthful inline notice when no calendar source exists', async () => {
+    localStorage.setItem('helm:trips', JSON.stringify([{
+      id: 'trip-1',
+      name: 'Solo Day',
+      summary: '',
+      notes: '',
+      status: 'planning',
+      startDate: '2026-10-01',
+      endDate: '2026-10-01',
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:tripLegs', JSON.stringify([{
+      id: 'leg-1',
+      tripId: 'trip-1',
+      country: 'Portugal',
+      city: 'Lisbon',
+      startDate: '2026-10-01',
+      endDate: '2026-10-01',
+      sortOrder: 0,
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:tripItineraryItems', JSON.stringify([{
+      id: 'item-1',
+      tripId: 'trip-1',
+      legId: 'leg-1',
+      date: '2026-10-01',
+      title: 'River walk',
+      notes: '',
+      sortOrder: 0,
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('Add to Calendar')[0]);
+    });
+
+    expect(screen.getByText('Add a calendar source first, then you can import trip items into Calendar.')).toBeInTheDocument();
+    expect(screen.getByText('Open Calendar')).toBeInTheDocument();
+  });
+
+  it('loads persisted trips, itinerary items, and bookings from storage', async () => {
+    localStorage.setItem('helm:trips', JSON.stringify([{
+      id: 'trip-1',
+      name: 'Loaded Trip',
+      summary: 'From storage',
+      notes: 'Packed and ready.',
+      status: 'booked',
+      startDate: '2026-11-01',
+      endDate: '2026-11-03',
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:tripLegs', JSON.stringify([{
+      id: 'leg-1',
+      tripId: 'trip-1',
+      country: 'Germany',
+      city: 'Berlin',
+      startDate: '2026-11-01',
+      endDate: '2026-11-03',
+      sortOrder: 0,
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:tripBookings', JSON.stringify([{
+      id: 'booking-1',
+      tripId: 'trip-1',
+      legId: 'leg-1',
+      kind: 'stay',
+      title: 'Berlin stay',
+      propertyName: 'Hotel Mitte',
+      city: 'Berlin',
+      country: 'Germany',
+      checkInDate: '2026-11-01',
+      checkOutDate: '2026-11-03',
+      notes: '',
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:tripItineraryItems', JSON.stringify([{
+      id: 'item-1',
+      tripId: 'trip-1',
+      legId: 'leg-1',
+      date: '2026-11-02',
+      title: 'Gallery day',
+      notes: '',
+      sortOrder: 0,
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    expect(screen.getAllByText('Loaded Trip').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Berlin, Germany/).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Bookings' }));
+    });
+    expect(screen.getByText('Berlin stay')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    });
+    expect(screen.getByText('Gallery day')).toBeInTheDocument();
+  });
+
+  it('supports assistant navigation to the Trips surface', async () => {
+    await act(async () => {
+      renderWithProvider(<AppAssistantNavigationHarness target="trips" />);
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByText('Trigger assistant navigation'));
+    });
+
+    expect(screen.getByRole('button', { name: 'Plan your first trip' })).toBeInTheDocument();
   });
 });
 

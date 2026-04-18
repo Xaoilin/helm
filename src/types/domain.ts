@@ -118,6 +118,89 @@ export interface ProjectPage {
   updatedAt: string;
 }
 
+// ── Trips ──
+export type TripStatus = 'planning' | 'booked' | 'in_trip' | 'completed' | 'archived';
+export type TripBookingKind = 'transport' | 'stay';
+export type TripTransportMode = 'flight' | 'train' | 'bus' | 'ferry' | 'car' | 'other';
+
+export interface Trip {
+  id: string;
+  name: string;
+  summary: string;
+  notes: string;
+  status: TripStatus;
+  startDate: string;
+  endDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TripLeg {
+  id: string;
+  tripId: string;
+  country: string;
+  city: string;
+  startDate: string;
+  endDate: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TripItineraryItem {
+  id: string;
+  tripId: string;
+  legId: string;
+  date: string;
+  title: string;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+  notes: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TripBookingBase {
+  id: string;
+  tripId: string;
+  legId?: string;
+  kind: TripBookingKind;
+  provider?: string;
+  confirmationCode?: string;
+  link?: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TripTransportBooking extends TripBookingBase {
+  kind: 'transport';
+  mode: TripTransportMode;
+  title: string;
+  fromLabel: string;
+  toLabel: string;
+  departAt: string;
+  arriveAt: string;
+}
+
+export interface TripStayBooking extends TripBookingBase {
+  kind: 'stay';
+  title: string;
+  propertyName: string;
+  address?: string;
+  city: string;
+  country: string;
+  checkInDate: string;
+  checkOutDate: string;
+}
+
+export type TripBooking = TripTransportBooking | TripStayBooking;
+export type TripBookingInput =
+  | Omit<TripTransportBooking, 'id' | 'createdAt' | 'updatedAt'>
+  | Omit<TripStayBooking, 'id' | 'createdAt' | 'updatedAt'>;
+
 // ── Integrations ──
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error' | 'mocked';
 
@@ -442,6 +525,7 @@ export type Surface =
   | 'chat'
   | 'calendar'
   | 'clock'
+  | 'trips'
   | 'projects'
   | 'tasks'
   | 'finance'

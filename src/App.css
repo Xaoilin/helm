@@ -3770,9 +3770,40 @@ textarea.form-input {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+.trips-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.trip-detail-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.trip-days-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.trip-bookings-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.trip-wizard-modal,
+.trip-booking-modal {
+  max-width: 820px;
+}
+
 @media (max-width: 900px) {
   .projects-layout,
-  .project-wiki-layout {
+  .project-wiki-layout,
+  .trips-layout {
     grid-template-columns: 1fr;
   }
 }
