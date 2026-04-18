@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback, t
 import type {
   Surface, ChatConversation,
   CalendarAccount, CalendarSource, CalendarEvent,
+  Trip, TripBooking, TripBookingInput, TripItineraryItem, TripLeg,
   Project, ProjectPage, Integration, Settings,
   Task, GamificationProfile,
   DashboardFocusState,
@@ -20,6 +21,7 @@ import {
 } from '../services/assistantNavigation';
 
 import { CalendarProvider, useCalendar } from './contexts/CalendarContext';
+import { TripProvider, useTripContext } from './contexts/TripContext';
 import { ProjectProvider, useProjectContext } from './contexts/ProjectContext';
 import { TaskProvider, useTaskContext } from './contexts/TaskContext';
 import { ChatProvider, useChatContext, type ChatCrossDomainData } from './contexts/ChatContext';
@@ -39,6 +41,10 @@ interface AppContextAPI {
   calendarAccounts: CalendarAccount[];
   calendarSources: CalendarSource[];
   calendarEvents: CalendarEvent[];
+  trips: Trip[];
+  tripLegs: TripLeg[];
+  tripItineraryItems: TripItineraryItem[];
+  tripBookings: TripBooking[];
   projects: Project[];
   projectPages: ProjectPage[];
   tasks: Task[];
@@ -81,6 +87,19 @@ interface AppContextAPI {
   bulkUpsertCalendarSources: (sources: Array<Partial<CalendarSource> & { accountId: string; name: string; color: string; visible: boolean }>) => void;
   bulkUpsertCalendarEvents: (events: Array<Partial<CalendarEvent> & { sourceId: string; title: string; description: string; start: string; end: string; allDay: boolean }>) => void;
   bulkRemoveCalendarEvents: (ids: string[]) => void;
+
+  addTrip: (trip: Omit<Trip, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateTrip: (id: string, updates: Partial<Trip>) => void;
+  removeTrip: (id: string) => void;
+  addTripLeg: (leg: Omit<TripLeg, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateTripLeg: (id: string, updates: Partial<TripLeg>) => void;
+  removeTripLeg: (id: string) => void;
+  addTripItineraryItem: (item: Omit<TripItineraryItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateTripItineraryItem: (id: string, updates: Partial<TripItineraryItem>) => void;
+  removeTripItineraryItem: (id: string) => void;
+  addTripBooking: (booking: TripBookingInput) => string;
+  updateTripBooking: (id: string, updates: Partial<TripBooking>) => void;
+  removeTripBooking: (id: string) => void;
 
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProject: (id: string, updates: Partial<Project>) => void;
@@ -175,6 +194,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   });
 
   const calendar = useCalendar();
+  const tripCtx = useTripContext();
   const projectCtx = useProjectContext();
   const taskCtx = useTaskContext();
   const chat = useChatContext();
@@ -232,6 +252,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   }, [projectCtx, taskCtx]);
 
   const allLoaded = calendar.loaded
+    && tripCtx.loaded
     && projectCtx.loaded
     && taskCtx.loaded
     && chat.loaded
@@ -307,6 +328,10 @@ function ShellProvider({ children }: { children: ReactNode }) {
     calendarAccounts: calendar.calendarAccounts,
     calendarSources: calendar.calendarSources,
     calendarEvents: calendar.calendarEvents,
+    trips: tripCtx.trips,
+    tripLegs: tripCtx.tripLegs,
+    tripItineraryItems: tripCtx.tripItineraryItems,
+    tripBookings: tripCtx.tripBookings,
     projects: projectCtx.projects,
     projectPages: projectCtx.projectPages,
     tasks: taskCtx.tasks,
@@ -347,6 +372,19 @@ function ShellProvider({ children }: { children: ReactNode }) {
     bulkUpsertCalendarSources: calendar.bulkUpsertCalendarSources,
     bulkUpsertCalendarEvents: calendar.bulkUpsertCalendarEvents,
     bulkRemoveCalendarEvents: calendar.bulkRemoveCalendarEvents,
+
+    addTrip: tripCtx.addTrip,
+    updateTrip: tripCtx.updateTrip,
+    removeTrip: tripCtx.removeTrip,
+    addTripLeg: tripCtx.addTripLeg,
+    updateTripLeg: tripCtx.updateTripLeg,
+    removeTripLeg: tripCtx.removeTripLeg,
+    addTripItineraryItem: tripCtx.addTripItineraryItem,
+    updateTripItineraryItem: tripCtx.updateTripItineraryItem,
+    removeTripItineraryItem: tripCtx.removeTripItineraryItem,
+    addTripBooking: tripCtx.addTripBooking,
+    updateTripBooking: tripCtx.updateTripBooking,
+    removeTripBooking: tripCtx.removeTripBooking,
 
     addProject: projectCtx.addProject,
     updateProject: projectCtx.updateProject,
@@ -418,6 +456,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     allLoaded,
     chat,
     calendar,
+    tripCtx,
     projectCtx,
     taskCtx,
     knowledge,
@@ -527,23 +566,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <SettingsProvider>
       <GamificationProvider>
         <CalendarProvider>
-          <ProjectProvider>
-            <TaskProvider>
-              <DashboardFocusProvider>
-                <KnowledgeProvider>
-                  <FinanceProvider>
-                    <ClockProvider>
-                      <AssistantProvider>
-                        <ChatBridge>
-                          <ShellProvider>{children}</ShellProvider>
-                        </ChatBridge>
-                      </AssistantProvider>
-                    </ClockProvider>
-                  </FinanceProvider>
-                </KnowledgeProvider>
-              </DashboardFocusProvider>
-            </TaskProvider>
-          </ProjectProvider>
+          <TripProvider>
+            <ProjectProvider>
+              <TaskProvider>
+                <DashboardFocusProvider>
+                  <KnowledgeProvider>
+                    <FinanceProvider>
+                      <ClockProvider>
+                        <AssistantProvider>
+                          <ChatBridge>
+                            <ShellProvider>{children}</ShellProvider>
+                          </ChatBridge>
+                        </AssistantProvider>
+                      </ClockProvider>
+                    </FinanceProvider>
+                  </KnowledgeProvider>
+                </DashboardFocusProvider>
+              </TaskProvider>
+            </ProjectProvider>
+          </TripProvider>
         </CalendarProvider>
       </GamificationProvider>
     </SettingsProvider>

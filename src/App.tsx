@@ -5,6 +5,7 @@ import DashboardSurface from './surfaces/DashboardSurface';
 import ChatSurface from './surfaces/ChatSurface';
 import CalendarSurface from './surfaces/CalendarSurface';
 import ClockSurface from './surfaces/ClockSurface';
+import TripsSurface from './surfaces/TripsSurface';
 import TasksSurface from './surfaces/TasksSurface';
 import ProjectsSurface from './surfaces/ProjectsSurface';
 import FinanceSurface from './surfaces/FinanceSurface';
@@ -37,6 +38,7 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'chat', label: 'Chat', icon: '\u{1F4AC}' },
   { surface: 'calendar', label: 'Calendar', icon: '\u{1F4C5}' },
   { surface: 'clock', label: 'Clock', icon: '\u23F1\uFE0F' },
+  { surface: 'trips', label: 'Trips', icon: '\u{1F6EB}' },
   { surface: 'projects', label: 'Projects', icon: '\u{1F4CB}' },
   { surface: 'tasks', label: 'Tasks', icon: '\u2705' },
   { surface: 'finance', label: 'Finance', icon: '\u{1F4B7}' },
@@ -138,6 +140,7 @@ function AppInner() {
         case 'chat': return <ChatSurface />;
         case 'calendar': return <CalendarSurface />;
         case 'clock': return <ClockSurface />;
+        case 'trips': return <TripsSurface />;
         case 'projects': return <ProjectsSurface />;
         case 'tasks': return <TasksSurface />;
         case 'finance': return <FinanceSurface />;

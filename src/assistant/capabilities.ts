@@ -33,6 +33,7 @@ const SURFACE_VALUES: readonly Surface[] = [
   'chat',
   'calendar',
   'clock',
+  'trips',
   'projects',
   'tasks',
   'finance',
