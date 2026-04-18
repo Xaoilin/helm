@@ -1454,6 +1454,38 @@ describe('TripsSurface', () => {
     expect(screen.queryByText('Rome Hotel')).not.toBeInTheDocument();
   });
 
+  it('shows booking validation feedback instead of failing silently', async () => {
+    localStorage.setItem('helm:trips', JSON.stringify([{
+      id: 'trip-booking-validation',
+      name: 'Validation Trip',
+      summary: '',
+      notes: '',
+      status: 'planning',
+      startDate: '2026-08-01',
+      endDate: '2026-08-03',
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Bookings' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('+ Transport'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create Booking'));
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Add a title, a departure time, and an arrival time before saving this booking.');
+    expect(screen.getByText('Add Booking')).toBeInTheDocument();
+    expect(screen.queryByText('Transport booking')).not.toBeInTheDocument();
+  });
+
   it('cascades trip deletion to legs, itinerary items, and bookings only for that trip', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     localStorage.setItem('helm:trips', JSON.stringify([
