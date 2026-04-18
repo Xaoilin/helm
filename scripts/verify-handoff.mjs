@@ -92,7 +92,7 @@ async function main() {
     '--limit',
     '10',
     '--json',
-    'databaseId,workflowName,displayTitle,headSha,headBranch,status,conclusion,url,event',
+    'databaseId,name,headSha,headBranch,status,conclusion,url,event',
   ])
 
   const pagesRuns = runJson('gh', [
@@ -105,7 +105,7 @@ async function main() {
     '--limit',
     '10',
     '--json',
-    'databaseId,workflowName,displayTitle,headSha,headBranch,status,conclusion,url,event',
+    'databaseId,name,headSha,headBranch,status,conclusion,url,event',
   ])
 
   const supabaseRuns = runJson('gh', [
@@ -118,7 +118,7 @@ async function main() {
     '--limit',
     '10',
     '--json',
-    'databaseId,workflowName,displayTitle,headSha,headBranch,status,conclusion,url,event',
+    'databaseId,name,headSha,headBranch,status,conclusion,url,event',
   ])
 
   const ciRun = findSuccessfulRunForHead(ciRuns, masterHead)
