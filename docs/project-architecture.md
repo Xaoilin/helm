@@ -25,7 +25,7 @@ The current stack is:
 - auth controls for Supabase-backed sign-in
 
 The shell release badge reads from the build version exposed through `src/config/release.ts`, so the visible UI version stays aligned with the packaged application version when the release files are kept in sync.
-For web builds, `src/hooks/useReleaseRefresh.ts` also polls the synced `public/release.json` manifest and forces a one-time browser reload when a newer deployed semver is detected, so open tabs move onto the new release automatically after deployment.
+For web builds, `src/hooks/useReleaseRefresh.ts` also polls the synced `public/release.json` manifest and forces a one-time browser reload when a newer deployed semver is detected, so open tabs move onto the new release automatically after deployment. The shell now restores the last active surface from `sessionStorage` after a browser reload so a refresh does not dump the user back onto Dashboard by default.
 
 The navigable surfaces are:
 
@@ -78,6 +78,8 @@ The shell layer keeps only cross-cutting UI state:
 - the active surface
 - one-shot assistant navigation requests
 
+The active shell surface is also mirrored into `sessionStorage` so legitimate browser reloads can restore the current section instead of resetting to the default Dashboard view.
+
 That navigation payload lets chat and voice hand the UI enough context to open a specific Tasks tab, reset filters, reveal or highlight a resolved task, or reveal a resolved Project after a grounded assistant action.
 
 ### Domain model
@@ -120,6 +122,7 @@ The Tauri side is intentionally thin. Rust commands handle app-data directory di
 - a debounced remote write queue
 
 Supabase sync is optional. The app still works in local-first mode without it.
+The app shell only forces a browser reload for real identity transitions such as sign-in or sign-out. Background Supabase auth events like token refreshes now update session state without restarting the UI.
 When the authenticated write queue succeeds, the dirty-cache marker is cleared. Exit and background transitions also trigger best-effort queue flushes so cloud sync is less likely to lag behind the most recent local write.
 
 ## Integrations And External Services

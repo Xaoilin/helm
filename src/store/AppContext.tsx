@@ -33,6 +33,7 @@ import { AssistantProvider, useAssistantContext } from './contexts/AssistantCont
 import { ClockProvider, useClockContext } from './contexts/ClockContext';
 import { DashboardFocusProvider, useDashboardFocusContext } from './contexts/DashboardFocusContext';
 import { GoogleSyncProvider } from '../hooks/useGoogleSync';
+import { STORAGE_KEYS } from '../config/constants';
 
 interface AppContextAPI {
   surface: Surface;
@@ -191,11 +192,41 @@ interface ShellState {
   assistantNavigationRequest: AssistantNavigationRequest | null;
 }
 
+function isShellSurface(value: string | null): value is Surface {
+  switch (value) {
+    case 'dashboard':
+    case 'chat':
+    case 'calendar':
+    case 'clock':
+    case 'trips':
+    case 'projects':
+    case 'tasks':
+    case 'finance':
+    case 'knowledge':
+    case 'profile':
+    case 'integrations':
+    case 'settings':
+    case 'debug':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function getInitialShellSurface(): Surface {
+  try {
+    const storedSurface = window.sessionStorage.getItem(STORAGE_KEYS.SHELL_SURFACE);
+    return isShellSurface(storedSurface) ? storedSurface : 'dashboard';
+  } catch {
+    return 'dashboard';
+  }
+}
+
 function ShellProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<ShellState>({
-    surface: 'dashboard',
+  const [state, setState] = useState<ShellState>(() => ({
+    surface: getInitialShellSurface(),
     assistantNavigationRequest: null,
-  });
+  }));
 
   const calendar = useCalendar();
   const tripCtx = useTripContext();
@@ -237,6 +268,14 @@ function ShellProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => subscribeAssistantNavigation(requestAssistantNavigation), [requestAssistantNavigation]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(STORAGE_KEYS.SHELL_SURFACE, state.surface);
+    } catch {
+      // Session storage is best-effort; the shell still works without it.
+    }
+  }, [state.surface]);
 
   const removeProject = useCallback((id: string) => {
     projectCtx.removeProject(id);

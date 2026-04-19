@@ -109,6 +109,8 @@ function installGoogleAuthPopupSpy() {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  localStorage.clear();
+  sessionStorage.clear();
   Reflect.deleteProperty(window, 'google');
 });
 
@@ -135,7 +137,10 @@ function AppAssistantNavigationHarness({ target }: { target: AssistantNavigation
 }
 
 describe('App shell', () => {
-  beforeEach(() => { localStorage.clear(); });
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
 
   it('should render the sidebar with all nav items', async () => {
     await act(async () => { renderWithProvider(<App />); });
@@ -177,6 +182,27 @@ describe('App shell', () => {
 
     await act(async () => { fireEvent.click(screen.getByText('Settings')); });
     expect(screen.getByText('About')).toBeInTheDocument();
+  });
+
+  it('restores the active surface after the shell remounts', async () => {
+    let firstRender: ReturnType<typeof renderWithProvider>;
+
+    await act(async () => {
+      firstRender = renderWithProvider(<App />);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Trips'));
+    });
+
+    expect(screen.getByRole('button', { name: 'Plan your first trip' })).toBeInTheDocument();
+    expect(sessionStorage.getItem('helm:shell-surface')).toBe('trips');
+
+    firstRender!.unmount();
+
+    await act(async () => { renderWithProvider(<App />); });
+
+    expect(screen.getByRole('button', { name: 'Plan your first trip' })).toBeInTheDocument();
   });
 });
 

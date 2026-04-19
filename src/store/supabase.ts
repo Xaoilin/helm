@@ -15,7 +15,7 @@
  *     FOR ALL USING (auth.uid()::text = user_id);
  */
 
-import { createClient, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
+import { createClient, type AuthChangeEvent, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { logError, logWarn } from '../services/logger';
 import { TIMING } from '../config/constants';
 
@@ -39,6 +39,11 @@ export interface AuthSessionSnapshot {
   providerRefreshToken: string | null;
   provider: string | null;
   expiresAt: number | null;
+}
+
+export interface AuthStateChange {
+  event: AuthChangeEvent;
+  user: User | null;
 }
 
 /** Initialize or re-initialize the Supabase client. */
@@ -167,14 +172,14 @@ export async function getSessionUser(): Promise<User | null> {
 }
 
 /** Subscribe to auth state changes. Returns unsubscribe function. */
-export function onAuthStateChange(callback: (user: User | null) => void): () => void {
+export function onAuthStateChange(callback: (change: AuthStateChange) => void): () => void {
   if (!client) return () => {};
-  const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+  const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
     const user = session?.user || null;
     currentUserId = user?.id || null;
     currentSession = session ?? null;
     authSessionBootstrapped = true;
-    callback(user);
+    callback({ event, user });
   });
   return () => subscription.unsubscribe();
 }
