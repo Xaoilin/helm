@@ -171,6 +171,9 @@ interface TripBookingBase {
   tripId: string;
   legId?: string;
   kind: TripBookingKind;
+  budgetAmount?: number; // minor units, e.g. pence
+  budgetStatus?: TripBudgetEntryStatus;
+  budgetDate?: string; // YYYY-MM-DD
   provider?: string;
   confirmationCode?: string;
   link?: string;

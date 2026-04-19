@@ -109,6 +109,11 @@ function normalizeTripItineraryItem(item: TripItineraryItem, index: number): Tri
 function normalizeTransportBooking(booking: Partial<TripTransportBooking>, base: Pick<TripBooking, 'tripId' | 'notes'>): TripTransportBooking {
   const createdAt = typeof booking.createdAt === 'string' && booking.createdAt ? booking.createdAt : new Date().toISOString();
   const updatedAt = typeof booking.updatedAt === 'string' && booking.updatedAt ? booking.updatedAt : createdAt;
+  const budgetAmount = Number.isFinite(booking.budgetAmount) ? Math.max(0, Math.round(booking.budgetAmount as number)) : undefined;
+  const budgetStatus = VALID_TRIP_BUDGET_STATUSES.has(booking.budgetStatus as TripBudgetEntryStatus)
+    ? booking.budgetStatus as TripBudgetEntryStatus
+    : undefined;
+  const budgetDate = typeof booking.budgetDate === 'string' && booking.budgetDate ? booking.budgetDate : undefined;
   return {
     id: typeof booking.id === 'string' && booking.id ? booking.id : uuid(),
     tripId: booking.tripId || base.tripId,
@@ -120,6 +125,9 @@ function normalizeTransportBooking(booking: Partial<TripTransportBooking>, base:
     toLabel: booking.toLabel?.trim() || '',
     departAt: booking.departAt || '',
     arriveAt: booking.arriveAt || booking.departAt || '',
+    budgetAmount,
+    budgetStatus,
+    budgetDate,
     provider: booking.provider?.trim() || undefined,
     confirmationCode: booking.confirmationCode?.trim() || undefined,
     link: booking.link?.trim() || undefined,
@@ -132,6 +140,11 @@ function normalizeTransportBooking(booking: Partial<TripTransportBooking>, base:
 function normalizeStayBooking(booking: Partial<TripBooking> & { kind: 'stay' }, tripId: string): TripBooking {
   const createdAt = typeof booking.createdAt === 'string' && booking.createdAt ? booking.createdAt : new Date().toISOString();
   const updatedAt = typeof booking.updatedAt === 'string' && booking.updatedAt ? booking.updatedAt : createdAt;
+  const budgetAmount = Number.isFinite(booking.budgetAmount) ? Math.max(0, Math.round(booking.budgetAmount as number)) : undefined;
+  const budgetStatus = VALID_TRIP_BUDGET_STATUSES.has(booking.budgetStatus as TripBudgetEntryStatus)
+    ? booking.budgetStatus as TripBudgetEntryStatus
+    : undefined;
+  const budgetDate = typeof booking.budgetDate === 'string' && booking.budgetDate ? booking.budgetDate : undefined;
   return {
     id: typeof booking.id === 'string' && booking.id ? booking.id : uuid(),
     tripId: booking.tripId || tripId,
@@ -144,6 +157,9 @@ function normalizeStayBooking(booking: Partial<TripBooking> & { kind: 'stay' }, 
     country: typeof booking.country === 'string' && booking.country.trim() ? booking.country.trim() : '',
     checkInDate: typeof booking.checkInDate === 'string' ? booking.checkInDate : '',
     checkOutDate: typeof booking.checkOutDate === 'string' && booking.checkOutDate ? booking.checkOutDate : (typeof booking.checkInDate === 'string' ? booking.checkInDate : ''),
+    budgetAmount,
+    budgetStatus,
+    budgetDate,
     provider: booking.provider?.trim() || undefined,
     confirmationCode: booking.confirmationCode?.trim() || undefined,
     link: booking.link?.trim() || undefined,
