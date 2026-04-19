@@ -122,6 +122,8 @@ export interface ProjectPage {
 export type TripStatus = 'planning' | 'booked' | 'in_trip' | 'completed' | 'archived';
 export type TripBookingKind = 'transport' | 'stay';
 export type TripTransportMode = 'flight' | 'train' | 'bus' | 'ferry' | 'car' | 'other';
+export type TripBudgetCategory = 'transport' | 'food' | 'events' | 'rent' | 'shopping' | 'fees' | 'other';
+export type TripBudgetEntryStatus = 'planned' | 'paid';
 
 export interface Trip {
   id: string;
@@ -131,6 +133,8 @@ export interface Trip {
   status: TripStatus;
   startDate: string;
   endDate: string;
+  budgetCurrency?: string;
+  budgetTotal?: number; // minor units, e.g. pence
   createdAt: string;
   updatedAt: string;
 }
@@ -200,6 +204,21 @@ export type TripBooking = TripTransportBooking | TripStayBooking;
 export type TripBookingInput =
   | Omit<TripTransportBooking, 'id' | 'createdAt' | 'updatedAt'>
   | Omit<TripStayBooking, 'id' | 'createdAt' | 'updatedAt'>;
+
+export interface TripBudgetEntry {
+  id: string;
+  tripId: string;
+  title: string;
+  category: TripBudgetCategory;
+  amount: number; // minor units, e.g. pence
+  status: TripBudgetEntryStatus;
+  date: string; // YYYY-MM-DD
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TripBudgetEntryInput = Omit<TripBudgetEntry, 'id' | 'createdAt' | 'updatedAt'>;
 
 // ── Integrations ──
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error' | 'mocked';

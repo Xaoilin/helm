@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback, t
 import type {
   Surface, ChatConversation,
   CalendarAccount, CalendarSource, CalendarEvent,
-  Trip, TripBooking, TripBookingInput, TripItineraryItem, TripLeg,
+  Trip, TripBooking, TripBookingInput, TripBudgetEntry, TripBudgetEntryInput, TripItineraryItem, TripLeg,
   Project, ProjectPage, Integration, Settings,
   Task, GamificationProfile,
   DashboardFocusState,
@@ -45,6 +45,7 @@ interface AppContextAPI {
   tripLegs: TripLeg[];
   tripItineraryItems: TripItineraryItem[];
   tripBookings: TripBooking[];
+  tripBudgetEntries: TripBudgetEntry[];
   projects: Project[];
   projectPages: ProjectPage[];
   tasks: Task[];
@@ -100,6 +101,9 @@ interface AppContextAPI {
   addTripBooking: (booking: TripBookingInput) => string;
   updateTripBooking: (id: string, updates: Partial<TripBooking>) => void;
   removeTripBooking: (id: string) => void;
+  addTripBudgetEntry: (entry: TripBudgetEntryInput) => string;
+  updateTripBudgetEntry: (id: string, updates: Partial<TripBudgetEntry>) => void;
+  removeTripBudgetEntry: (id: string) => void;
 
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProject: (id: string, updates: Partial<Project>) => void;
@@ -332,6 +336,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     tripLegs: tripCtx.tripLegs,
     tripItineraryItems: tripCtx.tripItineraryItems,
     tripBookings: tripCtx.tripBookings,
+    tripBudgetEntries: tripCtx.tripBudgetEntries,
     projects: projectCtx.projects,
     projectPages: projectCtx.projectPages,
     tasks: taskCtx.tasks,
@@ -385,6 +390,9 @@ function ShellProvider({ children }: { children: ReactNode }) {
     addTripBooking: tripCtx.addTripBooking,
     updateTripBooking: tripCtx.updateTripBooking,
     removeTripBooking: tripCtx.removeTripBooking,
+    addTripBudgetEntry: tripCtx.addTripBudgetEntry,
+    updateTripBudgetEntry: tripCtx.updateTripBudgetEntry,
+    removeTripBudgetEntry: tripCtx.removeTripBudgetEntry,
 
     addProject: projectCtx.addProject,
     updateProject: projectCtx.updateProject,

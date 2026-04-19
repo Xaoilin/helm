@@ -1227,6 +1227,8 @@ describe('TripsSurface', () => {
 
     fireEvent.change(screen.getByLabelText('Trip Name'), { target: { value: 'Euro Sprint' } });
     fireEvent.change(screen.getByLabelText('Short Summary'), { target: { value: 'Two fast city stops.' } });
+    fireEvent.change(screen.getByLabelText('Budget Currency'), { target: { value: 'usd' } });
+    fireEvent.change(screen.getByLabelText('Trip Budget'), { target: { value: '1500' } });
 
     await act(async () => {
       fireEvent.click(screen.getByText('Next'));
@@ -1273,6 +1275,8 @@ describe('TripsSurface', () => {
         name: 'Euro Sprint',
         startDate: '2026-07-01',
         endDate: '2026-07-06',
+        budgetCurrency: 'USD',
+        budgetTotal: 150000,
       });
     });
 
@@ -1609,7 +1613,101 @@ describe('TripsSurface', () => {
     expect(screen.queryByText('Transport booking')).not.toBeInTheDocument();
   });
 
-  it('cascades trip deletion to legs, itinerary items, and bookings only for that trip', async () => {
+  it('saves and manages trip budget settings and items from the budget tab', async () => {
+    localStorage.setItem('helm:trips', JSON.stringify([{
+      id: 'trip-budget',
+      name: 'Budget Trip',
+      summary: '',
+      notes: '',
+      status: 'planning',
+      startDate: '2026-09-10',
+      endDate: '2026-09-15',
+      budgetCurrency: 'GBP',
+      budgetTotal: 150000,
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Budget' }));
+    });
+
+    fireEvent.change(screen.getByLabelText('Currency'), { target: { value: 'usd' } });
+    fireEvent.change(screen.getByLabelText('Total Budget'), { target: { value: '1800' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save Budget' }));
+    });
+
+    await waitFor(() => {
+      const trips = JSON.parse(localStorage.getItem('helm:trips') || '[]');
+      expect(trips).toEqual([
+        expect.objectContaining({
+          id: 'trip-budget',
+          budgetCurrency: 'USD',
+          budgetTotal: 180000,
+        }),
+      ]);
+    });
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Airport train' } });
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '22.50' } });
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Round trip into the city.' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add Budget Item' }));
+    });
+
+    await waitFor(() => {
+      const entries = JSON.parse(localStorage.getItem('helm:tripBudgetEntries') || '[]');
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        tripId: 'trip-budget',
+        title: 'Airport train',
+        category: 'transport',
+        amount: 2250,
+        status: 'planned',
+        date: '2026-09-10',
+        notes: 'Round trip into the city.',
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Mark Paid' }));
+    });
+
+    await waitFor(() => {
+      const entries = JSON.parse(localStorage.getItem('helm:tripBudgetEntries') || '[]');
+      expect(entries[0]).toMatchObject({
+        title: 'Airport train',
+        status: 'paid',
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    });
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Airport express' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save Budget Item' }));
+    });
+
+    await waitFor(() => {
+      const entries = JSON.parse(localStorage.getItem('helm:tripBudgetEntries') || '[]');
+      expect(entries[0]).toMatchObject({
+        title: 'Airport express',
+        status: 'paid',
+      });
+    });
+
+    expect(screen.getByText('Airport express')).toBeInTheDocument();
+  });
+
+  it('cascades trip deletion to legs, itinerary items, bookings, and budget items only for that trip', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     localStorage.setItem('helm:trips', JSON.stringify([
       {
@@ -1715,6 +1813,32 @@ describe('TripsSurface', () => {
         updatedAt: '2026-04-16T08:00:00.000Z',
       },
     ]));
+    localStorage.setItem('helm:tripBudgetEntries', JSON.stringify([
+      {
+        id: 'budget-delete',
+        tripId: 'trip-delete',
+        title: 'Delete transport',
+        category: 'transport',
+        amount: 12000,
+        status: 'planned',
+        date: '2026-07-01',
+        notes: '',
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+      {
+        id: 'budget-keep',
+        tripId: 'trip-keep',
+        title: 'Keep food',
+        category: 'food',
+        amount: 4500,
+        status: 'paid',
+        date: '2026-08-01',
+        notes: '',
+        createdAt: '2026-04-16T08:00:00.000Z',
+        updatedAt: '2026-04-16T08:00:00.000Z',
+      },
+    ]));
 
     await act(async () => { renderWithProvider(<TripsSurface />); });
 
@@ -1734,6 +1858,9 @@ describe('TripsSurface', () => {
       ]);
       expect(JSON.parse(localStorage.getItem('helm:tripBookings') || '[]')).toEqual([
         expect.objectContaining({ id: 'booking-keep' }),
+      ]);
+      expect(JSON.parse(localStorage.getItem('helm:tripBudgetEntries') || '[]')).toEqual([
+        expect.objectContaining({ id: 'budget-keep' }),
       ]);
     });
   });
@@ -1872,6 +1999,8 @@ describe('TripsSurface', () => {
       status: 'booked',
       startDate: '2026-11-01',
       endDate: '2026-11-03',
+      budgetCurrency: 'EUR',
+      budgetTotal: 60000,
       createdAt: '2026-04-16T08:00:00.000Z',
       updatedAt: '2026-04-16T08:00:00.000Z',
     }]));
@@ -1912,6 +2041,18 @@ describe('TripsSurface', () => {
       createdAt: '2026-04-16T08:00:00.000Z',
       updatedAt: '2026-04-16T08:00:00.000Z',
     }]));
+    localStorage.setItem('helm:tripBudgetEntries', JSON.stringify([{
+      id: 'budget-1',
+      tripId: 'trip-1',
+      title: 'Museum tickets',
+      category: 'events',
+      amount: 3200,
+      status: 'planned',
+      date: '2026-11-02',
+      notes: 'Book ahead.',
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
 
     await act(async () => { renderWithProvider(<TripsSurface />); });
 
@@ -1927,6 +2068,11 @@ describe('TripsSurface', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
     });
     expect(screen.getByText('Gallery day')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Budget' }));
+    });
+    expect(screen.getByText('Museum tickets')).toBeInTheDocument();
   });
 
   it('supports assistant navigation to the Trips surface', async () => {
