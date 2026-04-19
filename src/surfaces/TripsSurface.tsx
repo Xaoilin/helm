@@ -36,6 +36,9 @@ interface TransportBookingDraft {
   toLabel: string;
   departAt: string;
   arriveAt: string;
+  budgetAmount: string;
+  budgetStatus: TripBudgetEntryStatus;
+  budgetDate: string;
   provider: string;
   confirmationCode: string;
   link: string;
@@ -53,6 +56,9 @@ interface StayBookingDraft {
   country: string;
   checkInDate: string;
   checkOutDate: string;
+  budgetAmount: string;
+  budgetStatus: TripBudgetEntryStatus;
+  budgetDate: string;
   provider: string;
   confirmationCode: string;
   link: string;
@@ -77,6 +83,23 @@ interface BudgetCategorySummary {
   forecast: number;
   paid: number;
   count: number;
+  uncostedCount: number;
+}
+
+interface BudgetLedgerEntry {
+  id: string;
+  tripId: string;
+  title: string;
+  category: TripBudgetCategory;
+  amount: number | null;
+  status: TripBudgetEntryStatus;
+  date: string;
+  notes: string;
+  source: 'booking' | 'manual';
+  createdAt: string;
+  bookingId?: string;
+  bookingKind?: TripBooking['kind'];
+  manualEntry?: TripBudgetEntry;
 }
 
 interface BookingSeed {
@@ -209,6 +232,75 @@ function getTripBudgetCategoryDef(category: TripBudgetCategory): { value: TripBu
   return TRIP_BUDGET.CATEGORIES.find(item => item.value === category) || TRIP_BUDGET.CATEGORIES[TRIP_BUDGET.CATEGORIES.length - 1];
 }
 
+function getTripBudgetStatusLabel(status: TripBudgetEntryStatus): string {
+  return status === 'paid' ? 'Paid' : 'Planned';
+}
+
+function getBookingBudgetCategory(kind: BookingDraft['kind'] | TripBooking['kind']): TripBudgetCategory {
+  return kind === 'transport' ? 'transport' : 'rent';
+}
+
+function getDestinationLabel(seed: BookingSeed): string {
+  if (!seed.city && !seed.country) return '';
+  if (!seed.city) return seed.country || '';
+  if (!seed.country) return seed.city;
+  return `${seed.city}, ${seed.country}`;
+}
+
+function getLegLabel(leg?: BookingSeedableLeg): string {
+  if (!leg) return 'Not tied to one destination';
+  return `${leg.city}, ${leg.country}`;
+}
+
+function toTitleCase(value: string): string {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function getDraftBudgetDate(draft: BookingDraft): string {
+  return draft.kind === 'transport' ? draft.departAt.slice(0, 10) : draft.checkInDate;
+}
+
+function getBookingBudgetDate(booking: TripBooking): string {
+  return booking.budgetDate || (booking.kind === 'transport' ? booking.departAt.slice(0, 10) : booking.checkInDate);
+}
+
+function hasBudgetAmount(amount?: number | null): amount is number {
+  return typeof amount === 'number' && Number.isFinite(amount);
+}
+
+function buildTransportDisplayTitle(booking: Pick<TransportBookingDraft, 'title' | 'mode' | 'toLabel'>, seed: BookingSeed = {}): string {
+  if (booking.title.trim() && booking.title.trim() !== 'Transport booking') return booking.title.trim();
+  const destination = booking.toLabel.trim() || getDestinationLabel(seed);
+  if (destination) return `${toTitleCase(booking.mode)} to ${destination.split(',')[0]}`;
+  return 'Transport booking';
+}
+
+function buildStayDisplayTitle(booking: Pick<StayBookingDraft, 'title' | 'propertyName' | 'city'>, seed: BookingSeed = {}): string {
+  if (booking.title.trim() && booking.title.trim() !== 'Stay booking') return booking.title.trim();
+  if (booking.propertyName.trim() && booking.propertyName.trim() !== 'Accommodation') return booking.propertyName.trim();
+  const city = booking.city.trim() || seed.city || '';
+  if (city) return `Stay in ${city}`;
+  return 'Stay booking';
+}
+
+function getBookingDisplayTitle(booking: TripBooking, seed: BookingSeed = {}): string {
+  if (booking.kind === 'transport') {
+    return buildTransportDisplayTitle(booking, seed);
+  }
+  return buildStayDisplayTitle(booking, seed);
+}
+
+function getBookingRouteLabel(booking: TripBooking, seed: BookingSeed = {}): string {
+  if (booking.kind === 'transport') {
+    const destination = booking.toLabel.trim() || getDestinationLabel(seed) || 'Destination TBD';
+    const origin = booking.fromLabel.trim() || 'Origin TBD';
+    return `${origin} -> ${destination}`;
+  }
+  const location = getDestinationLabel({ city: booking.city, country: booking.country }) || getDestinationLabel(seed) || 'Destination TBD';
+  return `${booking.propertyName.trim() || 'Accommodation'} · ${location}`;
+}
+
 function buildBudgetEntryDraft(seedDate?: string): BudgetEntryDraft {
   return {
     title: '',
@@ -226,6 +318,10 @@ function formatTimeLabel(value?: string): string {
 }
 
 function getBookingValidationMessage(draft: BookingDraft): string | null {
+  if (draft.budgetAmount.trim() && parseBudgetAmountInput(draft.budgetAmount) === null) {
+    return 'Enter a valid booking cost or leave the cost blank for now.';
+  }
+
   if (draft.kind === 'transport') {
     if (new Date(draft.arriveAt).getTime() < new Date(draft.departAt).getTime()) {
       return 'Arrival needs to be after the departure time.';
@@ -331,6 +427,9 @@ function buildTransportDraft(seed: BookingSeed = {}): TransportBookingDraft {
     toLabel: '',
     departAt,
     arriveAt: addHoursToLocalDateTime(departAt, 2),
+    budgetAmount: '',
+    budgetStatus: 'planned',
+    budgetDate: startDate,
     provider: '',
     confirmationCode: '',
     link: '',
@@ -351,6 +450,9 @@ function buildStayDraft(seed: BookingSeed = {}): StayBookingDraft {
     country: seed.country || '',
     checkInDate: startDate,
     checkOutDate: endDate,
+    budgetAmount: '',
+    budgetStatus: 'planned',
+    budgetDate: startDate,
     provider: '',
     confirmationCode: '',
     link: '',
@@ -368,6 +470,7 @@ function materializeBookingDraft(draft: BookingDraft, seed: BookingSeed = {}): B
       legId: draft.legId || seed.legId,
       departAt,
       arriveAt: draft.arriveAt || addHoursToLocalDateTime(departAt, 2),
+      budgetDate: departAt.slice(0, 10),
     };
   }
 
@@ -381,6 +484,7 @@ function materializeBookingDraft(draft: BookingDraft, seed: BookingSeed = {}): B
     country: draft.country || seededDraft.country,
     checkInDate,
     checkOutDate: draft.checkOutDate || checkInDate || seededDraft.checkOutDate,
+    budgetDate: checkInDate || seededDraft.checkInDate,
   };
 }
 
@@ -393,6 +497,7 @@ function applySeedToExistingBookingDraft(draft: BookingDraft, previousSeed: Book
       legId: nextSeed.legId,
       departAt: !draft.departAt || draft.departAt === previousDefaults.departAt ? nextDefaults.departAt : draft.departAt,
       arriveAt: !draft.arriveAt || draft.arriveAt === previousDefaults.arriveAt ? nextDefaults.arriveAt : draft.arriveAt,
+      budgetDate: (!draft.budgetDate || draft.budgetDate === previousDefaults.budgetDate) ? nextDefaults.budgetDate : draft.budgetDate,
     };
   }
 
@@ -405,6 +510,7 @@ function applySeedToExistingBookingDraft(draft: BookingDraft, previousSeed: Book
     country: !draft.country || draft.country === previousDefaults.country ? nextDefaults.country : draft.country,
     checkInDate: !draft.checkInDate || draft.checkInDate === previousDefaults.checkInDate ? nextDefaults.checkInDate : draft.checkInDate,
     checkOutDate: !draft.checkOutDate || draft.checkOutDate === previousDefaults.checkOutDate ? nextDefaults.checkOutDate : draft.checkOutDate,
+    budgetDate: (!draft.budgetDate || draft.budgetDate === previousDefaults.budgetDate) ? nextDefaults.budgetDate : draft.budgetDate,
   };
 }
 
@@ -425,16 +531,31 @@ function syncBookingDependentFields(previous: BookingDraft, next: BookingDraft, 
     const previousDefaultArrival = previous.departAt ? addHoursToLocalDateTime(previous.departAt, 2) : '';
     const arrivalWasDefault = !previous.arriveAt || previous.arriveAt === previousDefaultArrival;
     if (!next.arriveAt || (arrivalWasDefault && previous.departAt !== next.departAt) || (arrivalWasDefault && new Date(next.arriveAt).getTime() < new Date(next.departAt).getTime())) {
-      return { ...next, arriveAt: addHoursToLocalDateTime(next.departAt, 2) };
+      return {
+        ...next,
+        arriveAt: addHoursToLocalDateTime(next.departAt, 2),
+        budgetDate: next.departAt.slice(0, 10),
+      };
     }
-    return next;
+    return {
+      ...next,
+      budgetDate: next.departAt.slice(0, 10),
+    };
   }
 
   if (next.kind === 'stay' && previous.kind === 'stay') {
     if ('checkOutDate' in updates) return next;
     if (next.checkInDate && (!next.checkOutDate || next.checkOutDate < next.checkInDate)) {
-      return { ...next, checkOutDate: next.checkInDate };
+      return {
+        ...next,
+        checkOutDate: next.checkInDate,
+        budgetDate: next.checkInDate,
+      };
     }
+    return {
+      ...next,
+      budgetDate: next.checkInDate,
+    };
   }
 
   return next;
@@ -458,6 +579,9 @@ function mapBookingToDraft(booking: TripBooking): BookingDraft {
       toLabel: booking.toLabel,
       departAt: booking.departAt.slice(0, 16),
       arriveAt: booking.arriveAt.slice(0, 16),
+      budgetAmount: booking.budgetAmount ? formatBudgetAmountInput(booking.budgetAmount) : '',
+      budgetStatus: booking.budgetStatus || 'planned',
+      budgetDate: getBookingBudgetDate(booking),
       provider: booking.provider || '',
       confirmationCode: booking.confirmationCode || '',
       link: booking.link || '',
@@ -476,10 +600,61 @@ function mapBookingToDraft(booking: TripBooking): BookingDraft {
     country: booking.country,
     checkInDate: booking.checkInDate,
     checkOutDate: booking.checkOutDate,
+    budgetAmount: booking.budgetAmount ? formatBudgetAmountInput(booking.budgetAmount) : '',
+    budgetStatus: booking.budgetStatus || 'planned',
+    budgetDate: getBookingBudgetDate(booking),
     provider: booking.provider || '',
     confirmationCode: booking.confirmationCode || '',
     link: booking.link || '',
     notes: booking.notes,
+  };
+}
+
+function buildTransportBookingPayload(draft: TransportBookingDraft, tripId: string, seed: BookingSeed = {}) {
+  const budgetAmount = draft.budgetAmount.trim() ? parseBudgetAmountInput(draft.budgetAmount) : null;
+  const destinationLabel = draft.toLabel.trim() || getDestinationLabel(seed);
+  return {
+    kind: 'transport' as const,
+    tripId,
+    legId: draft.legId || undefined,
+    mode: draft.mode,
+    title: buildTransportDisplayTitle(draft, seed),
+    fromLabel: draft.fromLabel.trim(),
+    toLabel: destinationLabel,
+    departAt: draft.departAt,
+    arriveAt: draft.arriveAt,
+    budgetAmount: budgetAmount === null ? undefined : budgetAmount,
+    budgetStatus: draft.budgetStatus,
+    budgetDate: draft.budgetDate || getDraftBudgetDate(draft),
+    provider: draft.provider.trim() || undefined,
+    confirmationCode: draft.confirmationCode.trim() || undefined,
+    link: draft.link.trim() || undefined,
+    notes: draft.notes,
+  };
+}
+
+function buildStayBookingPayload(draft: StayBookingDraft, tripId: string, seed: BookingSeed = {}) {
+  const budgetAmount = draft.budgetAmount.trim() ? parseBudgetAmountInput(draft.budgetAmount) : null;
+  const city = draft.city.trim() || seed.city || '';
+  const country = draft.country.trim() || seed.country || '';
+  return {
+    kind: 'stay' as const,
+    tripId,
+    legId: draft.legId || undefined,
+    title: buildStayDisplayTitle(draft, seed),
+    propertyName: draft.propertyName.trim() || 'Accommodation',
+    address: draft.address.trim() || undefined,
+    city,
+    country,
+    checkInDate: draft.checkInDate,
+    checkOutDate: draft.checkOutDate,
+    budgetAmount: budgetAmount === null ? undefined : budgetAmount,
+    budgetStatus: draft.budgetStatus,
+    budgetDate: draft.budgetDate || getDraftBudgetDate(draft),
+    provider: draft.provider.trim() || undefined,
+    confirmationCode: draft.confirmationCode.trim() || undefined,
+    link: draft.link.trim() || undefined,
+    notes: draft.notes,
   };
 }
 
@@ -515,6 +690,251 @@ function StatusPill({ status }: { status: TripStatus }) {
   );
 }
 
+function BookingFormFields({
+  draft,
+  onChange,
+  legs,
+  idPrefix,
+  autoFocus,
+}: {
+  draft: BookingDraft;
+  onChange: (updates: Partial<BookingDraft>) => void;
+  legs: BookingSeedableLeg[];
+  idPrefix: string;
+  autoFocus?: boolean;
+}) {
+  const selectedLeg = draft.legId ? legs.find(leg => leg.id === draft.legId) : undefined;
+  const destinationHint = selectedLeg ? getLegLabel(selectedLeg) : 'Not tied to one destination';
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <div className="form-group">
+        <label htmlFor={`${idPrefix}-destination`}>Destination</label>
+        <select
+          id={`${idPrefix}-destination`}
+          className="form-select"
+          value={draft.legId || ''}
+          onChange={event => onChange({ legId: event.target.value || undefined })}
+        >
+          <option value="">Not tied to one destination</option>
+          {legs.map(leg => (
+            <option key={leg.id} value={leg.id}>{leg.city}, {leg.country}</option>
+          ))}
+        </select>
+        <div style={{ fontSize: 12, color: '#8b8fa3', marginTop: 6 }}>{destinationHint}</div>
+      </div>
+
+      {draft.kind === 'transport' ? (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label htmlFor={`${idPrefix}-mode`}>Mode</label>
+              <select
+                id={`${idPrefix}-mode`}
+                className="form-select"
+                value={draft.mode}
+                onChange={event => onChange({ mode: event.target.value as TripTransportMode })}
+                autoFocus={autoFocus}
+              >
+                {TRANSPORT_MODE_OPTIONS.map(mode => (
+                  <option key={mode} value={mode}>{toTitleCase(mode)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor={`${idPrefix}-cost`}>Cost</label>
+              <input
+                id={`${idPrefix}-cost`}
+                className="form-input"
+                inputMode="decimal"
+                placeholder="120.00"
+                value={draft.budgetAmount}
+                onChange={event => onChange({ budgetAmount: event.target.value })}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label htmlFor={`${idPrefix}-depart`}>Depart</label>
+              <input
+                id={`${idPrefix}-depart`}
+                className="form-input"
+                type="datetime-local"
+                value={draft.departAt}
+                onChange={event => onChange({ departAt: event.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor={`${idPrefix}-arrive`}>Arrive</label>
+              <input
+                id={`${idPrefix}-arrive`}
+                className="form-input"
+                type="datetime-local"
+                value={draft.arriveAt}
+                onChange={event => onChange({ arriveAt: event.target.value })}
+              />
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label htmlFor={`${idPrefix}-property`}>Property</label>
+              <input
+                id={`${idPrefix}-property`}
+                className="form-input"
+                value={draft.propertyName}
+                placeholder="Hotel, apartment, riad"
+                onChange={event => onChange({ propertyName: event.target.value })}
+                autoFocus={autoFocus}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor={`${idPrefix}-cost`}>Cost</label>
+              <input
+                id={`${idPrefix}-cost`}
+                className="form-input"
+                inputMode="decimal"
+                placeholder="480.00"
+                value={draft.budgetAmount}
+                onChange={event => onChange({ budgetAmount: event.target.value })}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label htmlFor={`${idPrefix}-check-in`}>Check In</label>
+              <input
+                id={`${idPrefix}-check-in`}
+                className="form-input"
+                type="date"
+                value={draft.checkInDate}
+                onChange={event => onChange({ checkInDate: event.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor={`${idPrefix}-check-out`}>Check Out</label>
+              <input
+                id={`${idPrefix}-check-out`}
+                className="form-input"
+                type="date"
+                value={draft.checkOutDate}
+                onChange={event => onChange({ checkOutDate: event.target.value })}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="form-group">
+        <label htmlFor={`${idPrefix}-status`}>Payment Status</label>
+        <select
+          id={`${idPrefix}-status`}
+          className="form-select"
+          value={draft.budgetStatus}
+          onChange={event => onChange({ budgetStatus: event.target.value as TripBudgetEntryStatus })}
+        >
+          {TRIP_BUDGET.STATUSES.map(status => (
+            <option key={status.value} value={status.value}>{status.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <details style={{ display: 'grid', gap: 12 }}>
+        <summary style={{ cursor: 'pointer', color: '#cfd6f6', fontWeight: 600 }}>More details</summary>
+        <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+          <div className="form-group">
+            <label htmlFor={`${idPrefix}-title`}>Title</label>
+            <input
+              id={`${idPrefix}-title`}
+              className="form-input"
+              value={draft.title}
+              onChange={event => onChange({ title: event.target.value })}
+            />
+          </div>
+
+          {draft.kind === 'transport' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group">
+                <label htmlFor={`${idPrefix}-from`}>From</label>
+                <input
+                  id={`${idPrefix}-from`}
+                  className="form-input"
+                  value={draft.fromLabel}
+                  onChange={event => onChange({ fromLabel: event.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor={`${idPrefix}-to`}>To</label>
+                <input
+                  id={`${idPrefix}-to`}
+                  className="form-input"
+                  value={draft.toLabel}
+                  onChange={event => onChange({ toLabel: event.target.value })}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label htmlFor={`${idPrefix}-address`}>Address</label>
+              <input
+                id={`${idPrefix}-address`}
+                className="form-input"
+                value={draft.address}
+                onChange={event => onChange({ address: event.target.value })}
+              />
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label htmlFor={`${idPrefix}-provider`}>Provider</label>
+              <input
+                id={`${idPrefix}-provider`}
+                className="form-input"
+                value={draft.provider}
+                onChange={event => onChange({ provider: event.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor={`${idPrefix}-confirmation`}>Confirmation Code</label>
+              <input
+                id={`${idPrefix}-confirmation`}
+                className="form-input"
+                value={draft.confirmationCode}
+                onChange={event => onChange({ confirmationCode: event.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor={`${idPrefix}-link`}>Link</label>
+            <input
+              id={`${idPrefix}-link`}
+              className="form-input"
+              value={draft.link}
+              onChange={event => onChange({ link: event.target.value })}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor={`${idPrefix}-notes`}>Notes</label>
+            <textarea
+              id={`${idPrefix}-notes`}
+              className="form-input"
+              value={draft.notes}
+              onChange={event => onChange({ notes: event.target.value })}
+            />
+          </div>
+        </div>
+      </details>
+    </div>
+  );
+}
+
 function BudgetTabPanel({
   trip,
   entries,
@@ -524,25 +944,29 @@ function BudgetTabPanel({
   paidTotal,
   remaining,
   categoryBreakdown,
+  uncostedCount,
   todayStr,
   updateTrip,
   addTripBudgetEntry,
   updateTripBudgetEntry,
   removeTripBudgetEntry,
+  editBooking,
 }: {
   trip: Trip;
-  entries: TripBudgetEntry[];
+  entries: BudgetLedgerEntry[];
   currency: string;
   total: number;
   forecastTotal: number;
   paidTotal: number;
   remaining: number;
   categoryBreakdown: BudgetCategorySummary[];
+  uncostedCount: number;
   todayStr: string;
   updateTrip: (id: string, updates: Partial<Trip>) => void;
   addTripBudgetEntry: (entry: TripBudgetEntryInput) => void;
   updateTripBudgetEntry: (id: string, updates: Partial<TripBudgetEntry>) => void;
   removeTripBudgetEntry: (id: string) => void;
+  editBooking: (bookingId: string) => void;
 }) {
   const [budgetCurrencyDraft, setBudgetCurrencyDraft] = useState<string>(trip.budgetCurrency || TRIP_BUDGET.DEFAULT_CURRENCY);
   const [budgetTotalDraft, setBudgetTotalDraft] = useState(() => formatBudgetAmountInput(trip.budgetTotal || 0));
@@ -623,16 +1047,17 @@ function BudgetTabPanel({
       <div className="card" style={{ padding: 18, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700 }}>Trip Budget</div>
-          <div style={{ fontSize: 13, color: '#8b8fa3' }}>Track your budget, then log transport, food, events, rent or stay costs, and anything else you expect to spend.</div>
+          <div style={{ fontSize: 13, color: '#8b8fa3' }}>Bookings feed this view automatically, and manual items cover everything else like food, events, fees, and extras.</div>
         </div>
         <button className="btn btn-secondary" onClick={() => resetBudgetEntryForm(trip.startDate || todayStr)}>+ Budget Item</button>
       </div>
 
       <div className="projects-metrics-grid">
         <MetricCard label="Budget" value={total > 0 ? formatBudgetMoney(total, currency) : 'Not set'} note={`${currency} trip budget`} />
-        <MetricCard label="Forecast" value={formatBudgetMoney(forecastTotal, currency)} note="Everything you expect to spend on this trip." />
+        <MetricCard label="Forecast" value={formatBudgetMoney(forecastTotal, currency)} note="Everything already priced across bookings and manual items." />
         <MetricCard label="Paid" value={formatBudgetMoney(paidTotal, currency)} note="Costs already paid or locked in." />
         <MetricCard label="Remaining" value={total > 0 ? formatBudgetMoney(remaining, currency) : 'Set a budget'} note={total > 0 ? 'What is left if your plan holds.' : 'Add a total budget to unlock the remaining view.'} />
+        <MetricCard label="Needs Cost" value={String(uncostedCount)} note={uncostedCount === 0 ? 'Every booking has a linked cost or is intentionally free.' : 'Bookings that appear in Budget but still need a price.'} />
       </div>
 
       <div className="trip-bookings-grid">
@@ -793,7 +1218,7 @@ function BudgetTabPanel({
 
         <div className="card" style={{ padding: 18, display: 'grid', gap: 12, alignContent: 'start' }}>
           <div style={{ fontSize: 16, fontWeight: 700 }}>Category Breakdown</div>
-          <div style={{ fontSize: 13, color: '#8b8fa3' }}>See where the trip money is going before you leave.</div>
+          <div style={{ fontSize: 13, color: '#8b8fa3' }}>Linked bookings and manual items roll up together here.</div>
           <div style={{ display: 'grid', gap: 10 }}>
             {categoryBreakdown.map(category => (
               <div key={category.value} style={{ padding: 14, borderRadius: 14, background: '#141926', border: '1px solid #23283c', display: 'grid', gap: 10 }}>
@@ -802,7 +1227,11 @@ function BudgetTabPanel({
                     <span style={{ fontSize: 20 }} aria-hidden="true">{category.icon}</span>
                     <div>
                       <div style={{ fontWeight: 700 }}>{category.label}</div>
-                      <div style={{ fontSize: 12, color: '#8b8fa3' }}>{category.count === 0 ? 'No items yet' : `${category.count} item${category.count === 1 ? '' : 's'}`}</div>
+                      <div style={{ fontSize: 12, color: '#8b8fa3' }}>
+                        {category.count === 0
+                          ? 'No items yet'
+                          : `${category.count} item${category.count === 1 ? '' : 's'}${category.uncostedCount > 0 ? ` · ${category.uncostedCount} need${category.uncostedCount === 1 ? 's' : ''} cost` : ''}`}
+                      </div>
                     </div>
                   </div>
                   <span className={`tag ${category.forecast > 0 ? 'tag-primary' : 'tag-disconnected'}`}>{formatBudgetMoney(category.forecast, currency)}</span>
@@ -824,9 +1253,9 @@ function BudgetTabPanel({
       </div>
 
       <div className="card" style={{ padding: 18, display: 'grid', gap: 12 }}>
-        <div style={{ fontSize: 16, fontWeight: 700 }}>Budget Items</div>
+        <div style={{ fontSize: 16, fontWeight: 700 }}>Budget Ledger</div>
         {entries.length === 0 ? (
-          <div style={{ fontSize: 13, color: '#8b8fa3' }}>No budget items yet. Add transport, food, events, rent or stay, and other trip costs here.</div>
+          <div style={{ fontSize: 13, color: '#8b8fa3' }}>No linked booking costs or manual budget items yet.</div>
         ) : (
           entries.map(entry => {
             const category = getTripBudgetCategoryDef(entry.category);
@@ -838,26 +1267,45 @@ function BudgetTabPanel({
                       <span style={{ fontSize: 18 }} aria-hidden="true">{category.icon}</span>
                       <div style={{ fontWeight: 700 }}>{entry.title}</div>
                       <span className="tag tag-disconnected">{category.label}</span>
-                      <span className={`tag ${entry.status === 'paid' ? 'tag-connected' : 'tag-primary'}`}>{entry.status === 'paid' ? 'Paid' : 'Planned'}</span>
+                      <span className={`tag ${entry.source === 'booking' ? 'tag-connected' : 'tag-disconnected'}`}>{entry.source === 'booking' ? 'Booking' : 'Manual'}</span>
+                      <span className={`tag ${hasBudgetAmount(entry.amount) ? (entry.status === 'paid' ? 'tag-connected' : 'tag-primary') : 'tag-disconnected'}`}>
+                        {hasBudgetAmount(entry.amount) ? getTripBudgetStatusLabel(entry.status) : 'Needs cost'}
+                      </span>
                     </div>
                     <div style={{ fontSize: 12, color: '#8b8fa3' }}>{formatDate(entry.date)}</div>
+                    {entry.source === 'booking' && (
+                      <div style={{ fontSize: 12, color: '#8b8fa3' }}>This row stays linked to the booking.</div>
+                    )}
                     {entry.notes && <div style={{ fontSize: 12, color: '#9ea4c5' }}>{entry.notes}</div>}
                   </div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#f5f7ff' }}>{formatBudgetMoney(entry.amount, currency)}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#f5f7ff' }}>
+                    {hasBudgetAmount(entry.amount) ? formatBudgetMoney(entry.amount, currency) : 'Needs cost'}
+                  </div>
                 </div>
                 <div className="actions-row" style={{ margin: 0, flexWrap: 'wrap' }}>
-                  <button className="btn btn-secondary btn-sm" onClick={() => openBudgetEntryEdit(entry)}>Edit</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => toggleBudgetEntryStatus(entry)}>
-                    {entry.status === 'paid' ? 'Mark Planned' : 'Mark Paid'}
-                  </button>
-                  <button className="btn btn-danger btn-sm" onClick={() => {
-                    if (window.confirm(`Delete budget item "${entry.title}"?`)) {
-                      removeTripBudgetEntry(entry.id);
-                      if (editingBudgetEntryId === entry.id) {
-                        resetBudgetEntryForm(trip.startDate || todayStr);
-                      }
-                    }
-                  }}>Delete</button>
+                  {entry.source === 'booking' && entry.bookingId ? (
+                    <button className="btn btn-secondary btn-sm" onClick={() => editBooking(entry.bookingId as string)}>Edit Booking</button>
+                  ) : (
+                    <>
+                      <button className="btn btn-secondary btn-sm" onClick={() => openBudgetEntryEdit(entry.manualEntry as TripBudgetEntry)}>Edit</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => toggleBudgetEntryStatus(entry.manualEntry as TripBudgetEntry)}>
+                        {entry.status === 'paid' ? 'Mark Planned' : 'Mark Paid'}
+                      </button>
+                      <button className="btn btn-danger btn-sm" onClick={() => {
+                        if (window.confirm(`Delete budget item "${entry.title}"?`)) {
+                          removeTripBudgetEntry((entry.manualEntry as TripBudgetEntry).id);
+                          if (editingBudgetEntryId === (entry.manualEntry as TripBudgetEntry).id) {
+                            resetBudgetEntryForm(trip.startDate || todayStr);
+                          }
+                        }
+                      }}>Delete</button>
+                    </>
+                  )}
+                  {entry.source === 'booking' && (
+                    <button className="btn btn-secondary btn-sm" onClick={() => resetBudgetEntryForm(trip.startDate || todayStr)}>
+                      + Manual Item
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -969,6 +1417,10 @@ export default function TripsSurface() {
     () => app.tripLegs.filter(leg => leg.tripId === selectedTripId).sort(compareLegs),
     [app.tripLegs, selectedTripId],
   );
+  const selectedLegLookup = useMemo(
+    () => new Map(selectedLegs.map(leg => [leg.id, leg])),
+    [selectedLegs],
+  );
 
   const selectedItinerary = useMemo(
     () => app.tripItineraryItems.filter(item => item.tripId === selectedTripId).sort((left, right) => {
@@ -991,7 +1443,7 @@ export default function TripsSurface() {
     [app.tripBookings, selectedTripId],
   );
 
-  const selectedBudgetEntries = useMemo(
+  const selectedManualBudgetEntries = useMemo(
     () => app.tripBudgetEntries
       .filter(entry => entry.tripId === selectedTripId)
       .sort((left, right) => right.date.localeCompare(left.date) || right.createdAt.localeCompare(left.createdAt)),
@@ -1037,28 +1489,77 @@ export default function TripsSurface() {
   const stayBookings = selectedBookings.filter(booking => booking.kind === 'stay');
   const selectedBudgetCurrency = selectedTrip?.budgetCurrency || TRIP_BUDGET.DEFAULT_CURRENCY;
   const selectedBudgetTotal = selectedTrip?.budgetTotal || 0;
-  const budgetForecastTotal = useMemo(
-    () => selectedBudgetEntries.reduce((sum, entry) => sum + entry.amount, 0),
-    [selectedBudgetEntries],
+  const budgetLedgerEntries = useMemo<BudgetLedgerEntry[]>(
+    () => {
+      const bookingEntries = selectedBookings.map(booking => {
+        const seed = booking.legId ? buildBookingSeedFromLeg(selectedLegLookup.get(booking.legId)) : {
+          startDate: selectedTrip?.startDate,
+          endDate: selectedTrip?.endDate,
+        };
+        return {
+          id: `booking-${booking.id}`,
+          tripId: booking.tripId,
+          title: getBookingDisplayTitle(booking, seed),
+          category: getBookingBudgetCategory(booking.kind),
+          amount: hasBudgetAmount(booking.budgetAmount) ? booking.budgetAmount : null,
+          status: booking.budgetStatus || 'planned',
+          date: getBookingBudgetDate(booking) || selectedTrip?.startDate || todayStr,
+          notes: booking.notes,
+          source: 'booking' as const,
+          createdAt: booking.createdAt,
+          bookingId: booking.id,
+          bookingKind: booking.kind,
+        };
+      });
+
+      const manualEntries = selectedManualBudgetEntries.map(entry => ({
+        id: entry.id,
+        tripId: entry.tripId,
+        title: entry.title,
+        category: entry.category,
+        amount: entry.amount,
+        status: entry.status,
+        date: entry.date,
+        notes: entry.notes,
+        source: 'manual' as const,
+        createdAt: entry.createdAt,
+        manualEntry: entry,
+      }));
+
+      return [...bookingEntries, ...manualEntries]
+        .sort((left, right) => right.date.localeCompare(left.date) || right.createdAt.localeCompare(left.createdAt));
+    },
+    [selectedBookings, selectedLegLookup, selectedTrip?.endDate, selectedTrip?.startDate, selectedManualBudgetEntries, todayStr],
   );
   const budgetPaidTotal = useMemo(
-    () => selectedBudgetEntries.filter(entry => entry.status === 'paid').reduce((sum, entry) => sum + entry.amount, 0),
-    [selectedBudgetEntries],
+    () => budgetLedgerEntries
+      .filter(entry => hasBudgetAmount(entry.amount) && entry.status === 'paid')
+      .reduce((sum, entry) => sum + (entry.amount || 0), 0),
+    [budgetLedgerEntries],
+  );
+  const budgetForecastTotal = useMemo(
+    () => budgetLedgerEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0),
+    [budgetLedgerEntries],
   );
   const budgetRemaining = selectedBudgetTotal - budgetForecastTotal;
+  const uncostedBookingCount = useMemo(
+    () => selectedBookings.filter(booking => !hasBudgetAmount(booking.budgetAmount)).length,
+    [selectedBookings],
+  );
   const budgetByCategory = useMemo<BudgetCategorySummary[]>(
     () => TRIP_BUDGET.CATEGORIES.map(category => {
-      const entries = selectedBudgetEntries.filter(entry => entry.category === category.value);
-      const forecast = entries.reduce((sum, entry) => sum + entry.amount, 0);
-      const paid = entries.filter(entry => entry.status === 'paid').reduce((sum, entry) => sum + entry.amount, 0);
+      const entries = budgetLedgerEntries.filter(entry => entry.category === category.value);
+      const forecast = entries.reduce((sum, entry) => sum + (entry.amount || 0), 0);
+      const paid = entries.filter(entry => hasBudgetAmount(entry.amount) && entry.status === 'paid').reduce((sum, entry) => sum + (entry.amount || 0), 0);
       return {
         ...category,
         forecast,
         paid,
         count: entries.length,
+        uncostedCount: entries.filter(entry => !hasBudgetAmount(entry.amount)).length,
       };
     }),
-    [selectedBudgetEntries],
+    [budgetLedgerEntries],
   );
 
   function getSelectedTripBookingSeed(legId?: string): BookingSeed {
@@ -1163,38 +1664,15 @@ export default function TripsSurface() {
     preparedBookings.forEach(booking => {
       if (booking.kind === 'transport') {
         app.addTripBooking({
-          kind: 'transport',
-          tripId,
+          ...buildTransportBookingPayload(booking, tripId, getWizardBookingSeed(booking.legId)),
           legId: booking.legId ? legIdMap.get(booking.legId) : undefined,
-          mode: booking.mode,
-          title: booking.title.trim() || 'Transport booking',
-          fromLabel: booking.fromLabel.trim(),
-          toLabel: booking.toLabel.trim(),
-          departAt: booking.departAt,
-          arriveAt: booking.arriveAt,
-          provider: booking.provider.trim() || undefined,
-          confirmationCode: booking.confirmationCode.trim() || undefined,
-          link: booking.link.trim() || undefined,
-          notes: booking.notes,
         });
         return;
       }
 
       app.addTripBooking({
-        kind: 'stay',
-        tripId,
+        ...buildStayBookingPayload(booking, tripId, getWizardBookingSeed(booking.legId)),
         legId: booking.legId ? legIdMap.get(booking.legId) : undefined,
-        title: booking.title.trim() || 'Stay booking',
-        propertyName: booking.propertyName.trim() || 'Accommodation',
-        address: booking.address.trim() || undefined,
-        city: booking.city.trim(),
-        country: booking.country.trim(),
-        checkInDate: booking.checkInDate,
-        checkOutDate: booking.checkOutDate,
-        provider: booking.provider.trim() || undefined,
-        confirmationCode: booking.confirmationCode.trim() || undefined,
-        link: booking.link.trim() || undefined,
-        notes: booking.notes,
       });
     });
 
@@ -1365,11 +1843,18 @@ export default function TripsSurface() {
   }
 
   function openBookingModal(kind: 'transport' | 'stay', booking?: TripBooking, legId?: string): void {
-    const seed = getSelectedTripBookingSeed(legId || booking?.legId);
+    const seedLegId = booking ? booking.legId : (legId || selectedLegs[0]?.id);
+    const seed = getSelectedTripBookingSeed(seedLegId);
     setEditingBookingId(booking?.id || null);
     setBookingDraft(booking ? materializeBookingDraft(mapBookingToDraft(booking), seed) : (kind === 'transport' ? buildTransportDraft(seed) : buildStayDraft(seed)));
     setBookingFeedback(null);
     setShowBookingModal(true);
+  }
+
+  function openBookingById(bookingId: string): void {
+    const booking = selectedBookings.find(item => item.id === bookingId);
+    if (!booking) return;
+    openBookingModal(booking.kind, booking);
   }
 
   function replaceBookingDraft(nextDraft: BookingDraft): void {
@@ -1398,7 +1883,8 @@ export default function TripsSurface() {
       return;
     }
 
-    const preparedDraft = materializeBookingDraft(bookingDraft, getSelectedTripBookingSeed(bookingDraft.legId));
+    const seed = getSelectedTripBookingSeed(bookingDraft.legId);
+    const preparedDraft = materializeBookingDraft(bookingDraft, seed);
     setBookingDraft(preparedDraft);
     const validationMessage = getBookingValidationMessage(preparedDraft);
     if (validationMessage) {
@@ -1408,43 +1894,14 @@ export default function TripsSurface() {
 
     try {
       if (preparedDraft.kind === 'transport') {
-        const payload = {
-          kind: 'transport' as const,
-          tripId: selectedTrip.id,
-          legId: preparedDraft.legId || undefined,
-          mode: preparedDraft.mode,
-          title: preparedDraft.title.trim() || 'Transport booking',
-          fromLabel: preparedDraft.fromLabel.trim(),
-          toLabel: preparedDraft.toLabel.trim(),
-          departAt: preparedDraft.departAt,
-          arriveAt: preparedDraft.arriveAt,
-          provider: preparedDraft.provider.trim() || undefined,
-          confirmationCode: preparedDraft.confirmationCode.trim() || undefined,
-          link: preparedDraft.link.trim() || undefined,
-          notes: preparedDraft.notes,
-        };
+        const payload = buildTransportBookingPayload(preparedDraft, selectedTrip.id, seed);
         if (editingBookingId) {
           app.updateTripBooking(editingBookingId, payload);
         } else {
           app.addTripBooking(payload);
         }
       } else {
-        const payload = {
-          kind: 'stay' as const,
-          tripId: selectedTrip.id,
-          legId: preparedDraft.legId || undefined,
-          title: preparedDraft.title.trim() || 'Stay booking',
-          propertyName: preparedDraft.propertyName.trim() || 'Accommodation',
-          address: preparedDraft.address.trim() || undefined,
-          city: preparedDraft.city.trim(),
-          country: preparedDraft.country.trim(),
-          checkInDate: preparedDraft.checkInDate,
-          checkOutDate: preparedDraft.checkOutDate,
-          provider: preparedDraft.provider.trim() || undefined,
-          confirmationCode: preparedDraft.confirmationCode.trim() || undefined,
-          link: preparedDraft.link.trim() || undefined,
-          notes: preparedDraft.notes,
-        };
+        const payload = buildStayBookingPayload(preparedDraft, selectedTrip.id, seed);
         if (editingBookingId) {
           app.updateTripBooking(editingBookingId, payload);
         } else {
@@ -1499,15 +1956,18 @@ export default function TripsSurface() {
   }
 
   function buildCalendarPayloadForBooking(booking: TripBooking) {
+    const seed = booking.legId ? buildBookingSeedFromLeg(selectedLegLookup.get(booking.legId)) : {
+      startDate: selectedTrip?.startDate,
+      endDate: selectedTrip?.endDate,
+    };
     if (booking.kind === 'transport') {
       openCalendarImport({
-        title: booking.title,
+        title: getBookingDisplayTitle(booking, seed),
         start: booking.departAt,
         end: booking.arriveAt,
         allDay: false,
         description: [
-          booking.fromLabel || null,
-          booking.toLabel || null,
+          getBookingRouteLabel(booking, seed),
           booking.provider ? `Provider: ${booking.provider}` : null,
           booking.confirmationCode ? `Confirmation: ${booking.confirmationCode}` : null,
           booking.notes || null,
@@ -1517,7 +1977,7 @@ export default function TripsSurface() {
     }
 
     openCalendarImport({
-      title: booking.title,
+      title: getBookingDisplayTitle(booking, seed),
       start: `${booking.checkInDate}T00:00`,
       end: `${booking.checkOutDate}T23:59`,
       allDay: true,
@@ -1662,11 +2122,12 @@ export default function TripsSurface() {
                         <MetricCard label="Destinations" value={String(destinationCount)} note="Ordered country and city stops in the route." />
                         <MetricCard label="Bookings" value={String(bookingCount)} note="Transport and stay reservations linked to this trip." />
                         <MetricCard label="Plans" value={String(selectedItinerary.length)} note="Itinerary items across the trip timeline." />
+                        <MetricCard label="Needs Cost" value={String(uncostedBookingCount)} note={uncostedBookingCount === 0 ? 'Every booking is already priced.' : 'Bookings that already show up in Budget but still need a cost.'} />
                         <MetricCard
                           label="Budget Left"
                           value={selectedBudgetTotal > 0 ? formatBudgetMoney(budgetRemaining, selectedBudgetCurrency) : 'Not set'}
                           note={selectedBudgetTotal > 0
-                            ? `${formatBudgetMoney(budgetForecastTotal, selectedBudgetCurrency)} forecast across ${selectedBudgetEntries.length} budget item${selectedBudgetEntries.length === 1 ? '' : 's'}.`
+                            ? `${formatBudgetMoney(budgetForecastTotal, selectedBudgetCurrency)} forecast across ${budgetLedgerEntries.length} linked item${budgetLedgerEntries.length === 1 ? '' : 's'}${uncostedBookingCount > 0 ? ` · ${uncostedBookingCount} still need cost` : ''}.`
                             : 'Set a trip budget to track transport, food, events, and stay costs.'}
                         />
                       </div>
@@ -1692,12 +2153,33 @@ export default function TripsSurface() {
                           <div style={{ fontSize: 16, fontWeight: 700 }}>Next Booking</div>
                           {nextBooking ? (
                             <div style={{ padding: 12, borderRadius: 12, background: '#141926', border: '1px solid #23283c' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                                <div style={{ fontWeight: 600 }}>{nextBooking.title}</div>
-                                <span className="tag tag-connected">{nextBooking.kind === 'transport' ? 'Transport' : 'Stay'}</span>
-                              </div>
-                              <div style={{ fontSize: 12, color: '#9ea4c5', marginTop: 6 }}>{getBookingTimelineLabel(nextBooking)}</div>
-                              <div style={{ fontSize: 12, color: '#8b8fa3', marginTop: 6 }}>{nextBooking.notes || 'No extra notes recorded.'}</div>
+                              {(() => {
+                                const seed = nextBooking.legId ? buildBookingSeedFromLeg(selectedLegLookup.get(nextBooking.legId)) : {
+                                  startDate: selectedTrip.startDate,
+                                  endDate: selectedTrip.endDate,
+                                };
+                                return (
+                                  <>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                                      <div style={{ fontWeight: 600 }}>{getBookingDisplayTitle(nextBooking, seed)}</div>
+                                      <span className="tag tag-connected">{nextBooking.kind === 'transport' ? 'Transport' : 'Stay'}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                                      <span className={`tag ${hasBudgetAmount(nextBooking.budgetAmount) ? 'tag-primary' : 'tag-disconnected'}`}>
+                                        {hasBudgetAmount(nextBooking.budgetAmount) ? formatBudgetMoney(nextBooking.budgetAmount, selectedBudgetCurrency) : 'Needs cost'}
+                                      </span>
+                                      {hasBudgetAmount(nextBooking.budgetAmount) && (
+                                        <span className={`tag ${nextBooking.budgetStatus === 'paid' ? 'tag-connected' : 'tag-primary'}`}>
+                                          {getTripBudgetStatusLabel(nextBooking.budgetStatus || 'planned')}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: '#9ea4c5', marginTop: 6 }}>{getBookingRouteLabel(nextBooking, seed)}</div>
+                                    <div style={{ fontSize: 12, color: '#9ea4c5', marginTop: 6 }}>{getBookingTimelineLabel(nextBooking)}</div>
+                                    <div style={{ fontSize: 12, color: '#8b8fa3', marginTop: 6 }}>{nextBooking.notes || 'No extra notes recorded.'}</div>
+                                  </>
+                                );
+                              })()}
                             </div>
                           ) : (
                             <div style={{ fontSize: 13, color: '#8b8fa3' }}>No bookings yet. Add flights, trains, or stays in the Bookings tab.</div>
@@ -1775,11 +2257,27 @@ export default function TripsSurface() {
                                           <div style={{ display: 'grid', gap: 8 }}>
                                             {bookingRefs.map(booking => (
                                               <div key={booking.id} style={{ padding: 10, borderRadius: 10, background: '#161b29', border: '1px solid #293046' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                                                  <div style={{ fontWeight: 600, fontSize: 13 }}>{booking.title}</div>
-                                                  <span className="tag tag-connected">{booking.kind === 'transport' ? 'Booking' : 'Stay'}</span>
-                                                </div>
-                                                <div style={{ fontSize: 12, color: '#8b8fa3', marginTop: 6 }}>{getBookingTimelineLabel(booking)}</div>
+                                                {(() => {
+                                                  const seed = booking.legId ? buildBookingSeedFromLeg(selectedLegLookup.get(booking.legId)) : {
+                                                    startDate: selectedTrip.startDate,
+                                                    endDate: selectedTrip.endDate,
+                                                  };
+                                                  return (
+                                                    <>
+                                                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                                        <div style={{ fontWeight: 600, fontSize: 13 }}>{getBookingDisplayTitle(booking, seed)}</div>
+                                                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                          <span className="tag tag-connected">{booking.kind === 'transport' ? 'Booking' : 'Stay'}</span>
+                                                          <span className={`tag ${hasBudgetAmount(booking.budgetAmount) ? 'tag-primary' : 'tag-disconnected'}`}>
+                                                            {hasBudgetAmount(booking.budgetAmount) ? formatBudgetMoney(booking.budgetAmount, selectedBudgetCurrency) : 'Needs cost'}
+                                                          </span>
+                                                        </div>
+                                                      </div>
+                                                      <div style={{ fontSize: 12, color: '#9ea4c5', marginTop: 6 }}>{getBookingRouteLabel(booking, seed)}</div>
+                                                      <div style={{ fontSize: 12, color: '#8b8fa3', marginTop: 6 }}>{getBookingTimelineLabel(booking)}</div>
+                                                    </>
+                                                  );
+                                                })()}
                                               </div>
                                             ))}
                                           </div>
@@ -1829,7 +2327,7 @@ export default function TripsSurface() {
                       <div className="card" style={{ padding: 18, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                         <div>
                           <div style={{ fontSize: 16, fontWeight: 700 }}>Bookings</div>
-                          <div style={{ fontSize: 13, color: '#8b8fa3' }}>Track transport and accommodation details without auto-syncing anything to external tools.</div>
+                          <div style={{ fontSize: 13, color: '#8b8fa3' }}>Each booking can carry its own cost, payment state, and timeline details, and the Budget tab stays linked automatically.</div>
                         </div>
                         <div className="actions-row" style={{ margin: 0, flexWrap: 'wrap' }}>
                           <button className="btn btn-secondary" onClick={() => openBookingModal('transport')}>+ Transport</button>
@@ -1843,26 +2341,43 @@ export default function TripsSurface() {
                           {transportBookings.length === 0 ? (
                             <div style={{ fontSize: 13, color: '#8b8fa3' }}>No transport bookings yet.</div>
                           ) : (
-                            transportBookings.map(booking => (
-                              <div key={booking.id} style={{ padding: 14, borderRadius: 14, background: '#141926', border: '1px solid #23283c', display: 'grid', gap: 8 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                                  <div style={{ fontWeight: 700 }}>{booking.title}</div>
-                                  <span className={`tag ${isUpcomingBooking(booking) ? 'tag-primary' : 'tag-disconnected'}`}>{isUpcomingBooking(booking) ? 'Upcoming' : 'Past'}</span>
+                            transportBookings.map(booking => {
+                              const seed = booking.legId ? buildBookingSeedFromLeg(selectedLegLookup.get(booking.legId)) : {
+                                startDate: selectedTrip.startDate,
+                                endDate: selectedTrip.endDate,
+                              };
+                              return (
+                                <div key={booking.id} style={{ padding: 14, borderRadius: 14, background: '#141926', border: '1px solid #23283c', display: 'grid', gap: 8 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <div style={{ fontWeight: 700 }}>{getBookingDisplayTitle(booking, seed)}</div>
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                      <span className={`tag ${isUpcomingBooking(booking) ? 'tag-primary' : 'tag-disconnected'}`}>{isUpcomingBooking(booking) ? 'Upcoming' : 'Past'}</span>
+                                      <span className={`tag ${hasBudgetAmount(booking.budgetAmount) ? 'tag-primary' : 'tag-disconnected'}`}>
+                                        {hasBudgetAmount(booking.budgetAmount) ? formatBudgetMoney(booking.budgetAmount, selectedBudgetCurrency) : 'Needs cost'}
+                                      </span>
+                                      {hasBudgetAmount(booking.budgetAmount) && (
+                                        <span className={`tag ${booking.budgetStatus === 'paid' ? 'tag-connected' : 'tag-primary'}`}>
+                                          {getTripBudgetStatusLabel(booking.budgetStatus || 'planned')}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div style={{ fontSize: 12, color: '#9ea4c5' }}>{getBookingRouteLabel(booking, seed)}</div>
+                                  <div style={{ fontSize: 12, color: '#8b8fa3' }}>{getBookingTimelineLabel(booking)}</div>
+                                  {booking.confirmationCode && <div style={{ fontSize: 12, color: '#8b8fa3' }}>Confirmation {booking.confirmationCode}</div>}
+                                  <div className="actions-row" style={{ margin: 0, flexWrap: 'wrap' }}>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => openBookingModal('transport', booking)}>Edit</button>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab('budget')}>Budget</button>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => buildCalendarPayloadForBooking(booking)}>Add to Calendar</button>
+                                    <button className="btn btn-danger btn-sm" onClick={() => {
+                                      if (window.confirm(`Delete booking "${getBookingDisplayTitle(booking, seed)}"?`)) {
+                                        app.removeTripBooking(booking.id);
+                                      }
+                                    }}>Delete</button>
+                                  </div>
                                 </div>
-                                <div style={{ fontSize: 12, color: '#9ea4c5' }}>{`${booking.fromLabel || 'Origin TBD'} -> ${booking.toLabel || 'Destination TBD'}`}</div>
-                                <div style={{ fontSize: 12, color: '#8b8fa3' }}>{getBookingTimelineLabel(booking)}</div>
-                                {booking.confirmationCode && <div style={{ fontSize: 12, color: '#8b8fa3' }}>Confirmation {booking.confirmationCode}</div>}
-                                <div className="actions-row" style={{ margin: 0, flexWrap: 'wrap' }}>
-                                  <button className="btn btn-secondary btn-sm" onClick={() => openBookingModal('transport', booking)}>Edit</button>
-                                  <button className="btn btn-secondary btn-sm" onClick={() => buildCalendarPayloadForBooking(booking)}>Add to Calendar</button>
-                                  <button className="btn btn-danger btn-sm" onClick={() => {
-                                    if (window.confirm(`Delete booking "${booking.title}"?`)) {
-                                      app.removeTripBooking(booking.id);
-                                    }
-                                  }}>Delete</button>
-                                </div>
-                              </div>
-                            ))
+                              );
+                            })
                           )}
                         </div>
 
@@ -1871,26 +2386,42 @@ export default function TripsSurface() {
                           {stayBookings.length === 0 ? (
                             <div style={{ fontSize: 13, color: '#8b8fa3' }}>No stay bookings yet.</div>
                           ) : (
-                            stayBookings.map(booking => (
-                              <div key={booking.id} style={{ padding: 14, borderRadius: 14, background: '#141926', border: '1px solid #23283c', display: 'grid', gap: 8 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                                  <div style={{ fontWeight: 700 }}>{booking.title}</div>
-                                  <span className={`tag ${isUpcomingBooking(booking) ? 'tag-primary' : 'tag-disconnected'}`}>{isUpcomingBooking(booking) ? 'Upcoming' : 'Past'}</span>
+                            stayBookings.map(booking => {
+                              const seed = booking.legId ? buildBookingSeedFromLeg(selectedLegLookup.get(booking.legId)) : {
+                                startDate: selectedTrip.startDate,
+                                endDate: selectedTrip.endDate,
+                              };
+                              return (
+                                <div key={booking.id} style={{ padding: 14, borderRadius: 14, background: '#141926', border: '1px solid #23283c', display: 'grid', gap: 8 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <div style={{ fontWeight: 700 }}>{getBookingDisplayTitle(booking, seed)}</div>
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                      <span className={`tag ${isUpcomingBooking(booking) ? 'tag-primary' : 'tag-disconnected'}`}>{isUpcomingBooking(booking) ? 'Upcoming' : 'Past'}</span>
+                                      <span className={`tag ${hasBudgetAmount(booking.budgetAmount) ? 'tag-primary' : 'tag-disconnected'}`}>
+                                        {hasBudgetAmount(booking.budgetAmount) ? formatBudgetMoney(booking.budgetAmount, selectedBudgetCurrency) : 'Needs cost'}
+                                      </span>
+                                      {hasBudgetAmount(booking.budgetAmount) && (
+                                        <span className={`tag ${booking.budgetStatus === 'paid' ? 'tag-connected' : 'tag-primary'}`}>
+                                          {getTripBudgetStatusLabel(booking.budgetStatus || 'planned')}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div style={{ fontSize: 12, color: '#9ea4c5' }}>{getBookingRouteLabel(booking, seed)}</div>
+                                  <div style={{ fontSize: 12, color: '#8b8fa3' }}>{getBookingTimelineLabel(booking)}</div>
+                                  <div className="actions-row" style={{ margin: 0, flexWrap: 'wrap' }}>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => openBookingModal('stay', booking)}>Edit</button>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab('budget')}>Budget</button>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => buildCalendarPayloadForBooking(booking)}>Add to Calendar</button>
+                                    <button className="btn btn-danger btn-sm" onClick={() => {
+                                      if (window.confirm(`Delete booking "${getBookingDisplayTitle(booking, seed)}"?`)) {
+                                        app.removeTripBooking(booking.id);
+                                      }
+                                    }}>Delete</button>
+                                  </div>
                                 </div>
-                                <div style={{ fontSize: 12, color: '#9ea4c5' }}>{booking.propertyName}</div>
-                                <div style={{ fontSize: 12, color: '#8b8fa3' }}>{booking.city}, {booking.country}</div>
-                                <div style={{ fontSize: 12, color: '#8b8fa3' }}>{getBookingTimelineLabel(booking)}</div>
-                                <div className="actions-row" style={{ margin: 0, flexWrap: 'wrap' }}>
-                                  <button className="btn btn-secondary btn-sm" onClick={() => openBookingModal('stay', booking)}>Edit</button>
-                                  <button className="btn btn-secondary btn-sm" onClick={() => buildCalendarPayloadForBooking(booking)}>Add to Calendar</button>
-                                  <button className="btn btn-danger btn-sm" onClick={() => {
-                                    if (window.confirm(`Delete booking "${booking.title}"?`)) {
-                                      app.removeTripBooking(booking.id);
-                                    }
-                                  }}>Delete</button>
-                                </div>
-                              </div>
-                            ))
+                              );
+                            })
                           )}
                         </div>
                       </div>
@@ -1901,18 +2432,20 @@ export default function TripsSurface() {
                     <BudgetTabPanel
                       key={selectedTrip.id}
                       trip={selectedTrip}
-                      entries={selectedBudgetEntries}
+                      entries={budgetLedgerEntries}
                       currency={selectedBudgetCurrency}
                       total={selectedBudgetTotal}
                       forecastTotal={budgetForecastTotal}
                       paidTotal={budgetPaidTotal}
                       remaining={budgetRemaining}
                       categoryBreakdown={budgetByCategory}
+                      uncostedCount={uncostedBookingCount}
                       todayStr={todayStr}
                       updateTrip={app.updateTrip}
                       addTripBudgetEntry={app.addTripBudgetEntry}
                       updateTripBudgetEntry={app.updateTripBudgetEntry}
                       removeTripBudgetEntry={app.removeTripBudgetEntry}
+                      editBooking={openBookingById}
                     />
                   )}
                 </>
@@ -2008,7 +2541,7 @@ export default function TripsSurface() {
 
             {wizardStep === 'bookings' && (
               <div style={{ display: 'grid', gap: 12 }}>
-                <div style={{ fontSize: 13, color: '#8b8fa3' }}>Optional: add any bookings you already know. You can skip this and manage bookings later.</div>
+                <div style={{ fontSize: 13, color: '#8b8fa3' }}>Optional: add any bookings you already know. These will already show up in the Budget tab when the trip is created.</div>
                 <div className="actions-row" style={{ margin: 0, flexWrap: 'wrap' }}>
                   <button className="btn btn-secondary" onClick={() => addWizardBooking('transport')}>+ Transport</button>
                   <button className="btn btn-primary" onClick={() => addWizardBooking('stay')}>+ Stay</button>
@@ -2019,45 +2552,12 @@ export default function TripsSurface() {
                       <div style={{ fontWeight: 700 }}>{booking.kind === 'transport' ? 'Transport Booking' : 'Stay Booking'}</div>
                       <button className="btn btn-danger btn-sm" onClick={() => removeWizardBooking(booking.id)}>Remove</button>
                     </div>
-                    <select className="form-select" value={booking.legId || ''} onChange={event => updateWizardBooking(booking.id, { legId: event.target.value || undefined })}>
-                      <option value="">Not tied to one destination</option>
-                      {routeDrafts.map(leg => (
-                        <option key={leg.id} value={leg.id}>{leg.city || 'City'} · {leg.country || 'Country'}</option>
-                      ))}
-                    </select>
-                    {booking.kind === 'transport' ? (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                          <input className="form-input" value={booking.title} onChange={event => updateWizardBooking(booking.id, { title: event.target.value })} placeholder="Title" />
-                          <select className="form-select" value={booking.mode} onChange={event => updateWizardBooking(booking.id, { mode: event.target.value as TripTransportMode })}>
-                            {TRANSPORT_MODE_OPTIONS.map(mode => <option key={mode} value={mode}>{mode}</option>)}
-                          </select>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                          <input className="form-input" value={booking.fromLabel} onChange={event => updateWizardBooking(booking.id, { fromLabel: event.target.value })} placeholder="From" />
-                          <input className="form-input" value={booking.toLabel} onChange={event => updateWizardBooking(booking.id, { toLabel: event.target.value })} placeholder="To" />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                          <input className="form-input" type="datetime-local" value={booking.departAt} onChange={event => updateWizardBooking(booking.id, { departAt: event.target.value })} />
-                          <input className="form-input" type="datetime-local" value={booking.arriveAt} onChange={event => updateWizardBooking(booking.id, { arriveAt: event.target.value })} />
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                          <input className="form-input" value={booking.title} onChange={event => updateWizardBooking(booking.id, { title: event.target.value })} placeholder="Title" />
-                          <input className="form-input" value={booking.propertyName} onChange={event => updateWizardBooking(booking.id, { propertyName: event.target.value })} placeholder="Hotel / Airbnb" />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                          <input className="form-input" value={booking.city} onChange={event => updateWizardBooking(booking.id, { city: event.target.value })} placeholder="City" />
-                          <input className="form-input" value={booking.country} onChange={event => updateWizardBooking(booking.id, { country: event.target.value })} placeholder="Country" />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                          <input className="form-input" type="date" value={booking.checkInDate} onChange={event => updateWizardBooking(booking.id, { checkInDate: event.target.value })} />
-                          <input className="form-input" type="date" value={booking.checkOutDate} onChange={event => updateWizardBooking(booking.id, { checkOutDate: event.target.value })} />
-                        </div>
-                      </>
-                    )}
+                    <BookingFormFields
+                      draft={booking}
+                      onChange={updates => updateWizardBooking(booking.id, updates)}
+                      legs={routeDrafts}
+                      idPrefix={`wizard-booking-${booking.id}`}
+                    />
                   </div>
                 ))}
               </div>
@@ -2279,110 +2779,13 @@ export default function TripsSurface() {
                 <option value="stay">Stay</option>
               </select>
             </div>
-            <div className="form-group">
-              <label htmlFor="booking-leg">Destination</label>
-              <select id="booking-leg" className="form-select" value={bookingDraft.legId || ''} onChange={event => updateBookingDraft({ legId: event.target.value || undefined })}>
-                <option value="">Not tied to one destination</option>
-                {selectedLegs.map(leg => (
-                  <option key={leg.id} value={leg.id}>{leg.city}, {leg.country}</option>
-                ))}
-              </select>
-            </div>
-
-            {bookingDraft.kind === 'transport' ? (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div className="form-group">
-                    <label htmlFor="booking-transport-title">Title</label>
-                    <input id="booking-transport-title" className="form-input" value={bookingDraft.title} onChange={event => updateBookingDraft({ title: event.target.value })} autoFocus />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="booking-transport-mode">Mode</label>
-                    <select id="booking-transport-mode" className="form-select" value={bookingDraft.mode} onChange={event => updateBookingDraft({ mode: event.target.value as TripTransportMode })}>
-                      {TRANSPORT_MODE_OPTIONS.map(mode => (
-                        <option key={mode} value={mode}>{mode}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div className="form-group">
-                    <label htmlFor="booking-from">From</label>
-                    <input id="booking-from" className="form-input" value={bookingDraft.fromLabel} onChange={event => updateBookingDraft({ fromLabel: event.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="booking-to">To</label>
-                    <input id="booking-to" className="form-input" value={bookingDraft.toLabel} onChange={event => updateBookingDraft({ toLabel: event.target.value })} />
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div className="form-group">
-                    <label htmlFor="booking-depart">Depart</label>
-                    <input id="booking-depart" className="form-input" type="datetime-local" value={bookingDraft.departAt} onChange={event => updateBookingDraft({ departAt: event.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="booking-arrive">Arrive</label>
-                    <input id="booking-arrive" className="form-input" type="datetime-local" value={bookingDraft.arriveAt} onChange={event => updateBookingDraft({ arriveAt: event.target.value })} />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div className="form-group">
-                    <label htmlFor="booking-stay-title">Title</label>
-                    <input id="booking-stay-title" className="form-input" value={bookingDraft.title} onChange={event => updateBookingDraft({ title: event.target.value })} autoFocus />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="booking-property">Property</label>
-                    <input id="booking-property" className="form-input" value={bookingDraft.propertyName} onChange={event => updateBookingDraft({ propertyName: event.target.value })} />
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div className="form-group">
-                    <label htmlFor="booking-city">City</label>
-                    <input id="booking-city" className="form-input" value={bookingDraft.city} onChange={event => updateBookingDraft({ city: event.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="booking-country">Country</label>
-                    <input id="booking-country" className="form-input" value={bookingDraft.country} onChange={event => updateBookingDraft({ country: event.target.value })} />
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div className="form-group">
-                    <label htmlFor="booking-check-in">Check In</label>
-                    <input id="booking-check-in" className="form-input" type="date" value={bookingDraft.checkInDate} onChange={event => updateBookingDraft({ checkInDate: event.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="booking-check-out">Check Out</label>
-                    <input id="booking-check-out" className="form-input" type="date" value={bookingDraft.checkOutDate} onChange={event => updateBookingDraft({ checkOutDate: event.target.value })} />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="booking-address">Address</label>
-                  <input id="booking-address" className="form-input" value={bookingDraft.address} onChange={event => updateBookingDraft({ address: event.target.value })} />
-                </div>
-              </>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div className="form-group">
-                <label htmlFor="booking-provider">Provider</label>
-                <input id="booking-provider" className="form-input" value={bookingDraft.provider} onChange={event => updateBookingDraft({ provider: event.target.value })} />
-              </div>
-              <div className="form-group">
-                <label htmlFor="booking-confirmation">Confirmation Code</label>
-                <input id="booking-confirmation" className="form-input" value={bookingDraft.confirmationCode} onChange={event => updateBookingDraft({ confirmationCode: event.target.value })} />
-              </div>
-            </div>
-            <div className="form-group">
-              <label htmlFor="booking-link">Link</label>
-              <input id="booking-link" className="form-input" value={bookingDraft.link} onChange={event => updateBookingDraft({ link: event.target.value })} />
-            </div>
-            <div className="form-group">
-              <label htmlFor="booking-notes">Notes</label>
-              <textarea id="booking-notes" className="form-input" value={bookingDraft.notes} onChange={event => updateBookingDraft({ notes: event.target.value })} />
-            </div>
+            <BookingFormFields
+              draft={bookingDraft}
+              onChange={updateBookingDraft}
+              legs={selectedLegs}
+              idPrefix="booking"
+              autoFocus
+            />
             {bookingFeedback && (
               <div className="info-box error" role="alert" aria-live="polite" style={{ marginBottom: 0 }}>
                 {bookingFeedback}

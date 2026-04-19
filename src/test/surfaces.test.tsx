@@ -1328,13 +1328,13 @@ describe('TripsSurface', () => {
       fireEvent.click(screen.getByText('+ Stay'));
     });
 
-    const destinationSelect = screen.getByDisplayValue('Paris · France');
+    const destinationSelect = screen.getByLabelText('Destination');
     fireEvent.change(destinationSelect, { target: { value: (destinationSelect as HTMLSelectElement).options[2].value } });
 
-    expect(screen.getByDisplayValue('Rome')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Italy')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('2026-07-04')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('2026-07-06')).toBeInTheDocument();
+    expect(screen.getAllByText('Rome, Italy').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Check In')).toHaveValue('2026-07-04');
+    expect(screen.getByLabelText('Check Out')).toHaveValue('2026-07-06');
+    expect(screen.getByLabelText('Payment Status')).toHaveValue('planned');
 
     await act(async () => {
       fireEvent.click(screen.getByText('Next'));
@@ -1349,12 +1349,14 @@ describe('TripsSurface', () => {
       expect(bookings).toHaveLength(1);
       expect(bookings[0]).toMatchObject({
         kind: 'stay',
-        title: 'Stay booking',
+        title: 'Stay in Rome',
         propertyName: 'Accommodation',
         city: 'Rome',
         country: 'Italy',
         checkInDate: '2026-07-04',
         checkOutDate: '2026-07-06',
+        budgetStatus: 'planned',
+        budgetDate: '2026-07-04',
       });
     });
   });
@@ -1486,7 +1488,9 @@ describe('TripsSurface', () => {
       fireEvent.click(screen.getByText('+ Transport'));
     });
 
-    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Flight to Rome' } });
+    expect(screen.getByLabelText('Destination')).toHaveValue('leg-1');
+    fireEvent.change(screen.getByLabelText('Cost'), { target: { value: '125.50' } });
+    fireEvent.change(screen.getByLabelText('Payment Status'), { target: { value: 'paid' } });
     fireEvent.change(screen.getByLabelText('Depart'), { target: { value: '2026-08-02T09:00' } });
     fireEvent.change(screen.getByLabelText('Arrive'), { target: { value: '2026-08-02T11:30' } });
 
@@ -1498,10 +1502,8 @@ describe('TripsSurface', () => {
       fireEvent.click(screen.getByText('+ Stay'));
     });
 
-    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Rome Hotel' } });
     fireEvent.change(screen.getByLabelText('Property'), { target: { value: 'Hotel Roma' } });
-    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Rome' } });
-    fireEvent.change(screen.getByLabelText('Country'), { target: { value: 'Italy' } });
+    fireEvent.change(screen.getByLabelText('Cost'), { target: { value: '480' } });
     fireEvent.change(screen.getByLabelText('Check In'), { target: { value: '2026-08-02' } });
     fireEvent.change(screen.getByLabelText('Check Out'), { target: { value: '2026-08-05' } });
 
@@ -1514,6 +1516,10 @@ describe('TripsSurface', () => {
 
     await act(async () => {
       fireEvent.click(within(transportCard).getAllByText('Edit')[0]);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('More details'));
     });
 
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Flight to Rome - Updated' } });
@@ -1529,7 +1535,98 @@ describe('TripsSurface', () => {
       fireEvent.click(within(stayCard as HTMLElement).getByText('Delete'));
     });
 
-    expect(screen.queryByText('Rome Hotel')).not.toBeInTheDocument();
+    expect(screen.queryByText('Hotel Roma')).not.toBeInTheDocument();
+  });
+
+  it('derives linked budget rows from bookings without creating duplicate manual entries', async () => {
+    localStorage.setItem('helm:trips', JSON.stringify([{
+      id: 'trip-linked-budget',
+      name: 'Linked Budget Trip',
+      summary: '',
+      notes: '',
+      status: 'planning',
+      startDate: '2026-08-01',
+      endDate: '2026-08-05',
+      budgetCurrency: 'GBP',
+      budgetTotal: 100000,
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:tripLegs', JSON.stringify([{
+      id: 'leg-linked',
+      tripId: 'trip-linked-budget',
+      country: 'Italy',
+      city: 'Rome',
+      startDate: '2026-08-01',
+      endDate: '2026-08-05',
+      sortOrder: 0,
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Bookings' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('+ Transport'));
+    });
+
+    fireEvent.change(screen.getByLabelText('Cost'), { target: { value: '120.50' } });
+    fireEvent.change(screen.getByLabelText('Payment Status'), { target: { value: 'paid' } });
+    fireEvent.change(screen.getByLabelText('Depart'), { target: { value: '2026-08-02T09:00' } });
+    fireEvent.change(screen.getByLabelText('Arrive'), { target: { value: '2026-08-02T11:30' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create Booking'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('+ Stay'));
+    });
+
+    fireEvent.change(screen.getByLabelText('Property'), { target: { value: 'Hotel Roma' } });
+    fireEvent.change(screen.getByLabelText('Check In'), { target: { value: '2026-08-02' } });
+    fireEvent.change(screen.getByLabelText('Check Out'), { target: { value: '2026-08-05' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create Booking'));
+    });
+
+    await waitFor(() => {
+      const bookings = JSON.parse(localStorage.getItem('helm:tripBookings') || '[]');
+      expect(bookings).toHaveLength(2);
+
+      const flight = bookings.find((booking: { title: string }) => booking.title === 'Flight to Rome');
+      const stay = bookings.find((booking: { title: string }) => booking.title === 'Hotel Roma');
+
+      expect(flight).toMatchObject({
+        budgetAmount: 12050,
+        budgetStatus: 'paid',
+        budgetDate: '2026-08-02',
+      });
+      expect(stay?.budgetAmount).toBeUndefined();
+      expect(stay?.budgetStatus).toBe('planned');
+      expect(stay?.budgetDate).toBe('2026-08-02');
+      expect(JSON.parse(localStorage.getItem('helm:tripBudgetEntries') || '[]')).toEqual([]);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Budget' })[0]);
+    });
+
+    expect(screen.getByText('Flight to Rome')).toBeInTheDocument();
+    expect(screen.getByText('Hotel Roma')).toBeInTheDocument();
+    expect(screen.getAllByText('Booking').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Needs cost').length).toBeGreaterThan(0);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
+    });
+
+    expect(screen.getByText('Bookings that already show up in Budget but still need a cost.')).toBeInTheDocument();
   });
 
   it('creates a booking with sensible default times when date fields are left blank', async () => {
@@ -2070,8 +2167,10 @@ describe('TripsSurface', () => {
     expect(screen.getByText('Gallery day')).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Budget' }));
+      fireEvent.click(screen.getAllByRole('button', { name: 'Budget' })[0]);
     });
+    expect(screen.getByText('Berlin stay')).toBeInTheDocument();
+    expect(screen.getAllByText('Needs cost').length).toBeGreaterThan(0);
     expect(screen.getByText('Museum tickets')).toBeInTheDocument();
   });
 
