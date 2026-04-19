@@ -118,6 +118,46 @@ function formatTimeLabel(value?: string): string {
   return value;
 }
 
+function formatLabelList(labels: string[]): string {
+  if (labels.length === 0) return '';
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+}
+
+function getBookingValidationMessage(draft: BookingDraft): string | null {
+  if (draft.kind === 'transport') {
+    const missing: string[] = [];
+    if (!draft.title.trim()) missing.push('a title');
+    if (!draft.departAt) missing.push('a departure time');
+    if (!draft.arriveAt) missing.push('an arrival time');
+    if (missing.length > 0) {
+      return `Add ${formatLabelList(missing)} before saving this booking.`;
+    }
+
+    if (new Date(draft.arriveAt).getTime() < new Date(draft.departAt).getTime()) {
+      return 'Arrival needs to be after the departure time.';
+    }
+
+    return null;
+  }
+
+  const missing: string[] = [];
+  if (!draft.title.trim()) missing.push('a title');
+  if (!draft.propertyName.trim()) missing.push('a property name');
+  if (!draft.checkInDate) missing.push('a check-in date');
+  if (!draft.checkOutDate) missing.push('a check-out date');
+  if (missing.length > 0) {
+    return `Add ${formatLabelList(missing)} before saving this booking.`;
+  }
+
+  if (draft.checkOutDate < draft.checkInDate) {
+    return 'Check-out needs to be on or after the check-in date.';
+  }
+
+  return null;
+}
+
 function compareLegs(left: TripLeg, right: TripLeg): number {
   if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder;
   if (left.startDate !== right.startDate) return left.startDate.localeCompare(right.startDate);
@@ -341,6 +381,7 @@ export default function TripsSurface() {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>(buildTransportDraft());
+  const [bookingFeedback, setBookingFeedback] = useState<string | null>(null);
 
   const [calendarTarget, setCalendarTarget] = useState<{ title: string; start: string; end: string; description: string; allDay: boolean; location?: string } | null>(null);
   const [calendarSourceId, setCalendarSourceId] = useState('');
@@ -700,58 +741,81 @@ export default function TripsSurface() {
   function openBookingModal(kind: 'transport' | 'stay', booking?: TripBooking, legId?: string): void {
     setEditingBookingId(booking?.id || null);
     setBookingDraft(booking ? mapBookingToDraft(booking) : (kind === 'transport' ? buildTransportDraft(legId) : buildStayDraft(legId)));
+    setBookingFeedback(null);
     setShowBookingModal(true);
   }
 
+  function replaceBookingDraft(nextDraft: BookingDraft): void {
+    setBookingFeedback(null);
+    setBookingDraft(nextDraft);
+  }
+
+  function updateBookingDraft(updates: Partial<BookingDraft>): void {
+    setBookingFeedback(null);
+    setBookingDraft(previous => ({ ...previous, ...updates } as BookingDraft));
+  }
+
   function saveBooking(): void {
-    if (!selectedTrip) return;
-    if (bookingDraft.kind === 'transport') {
-      if (!bookingDraft.title.trim() || !bookingDraft.departAt || !bookingDraft.arriveAt) return;
-      const payload = {
-        kind: 'transport' as const,
-        tripId: selectedTrip.id,
-        legId: bookingDraft.legId || undefined,
-        mode: bookingDraft.mode,
-        title: bookingDraft.title.trim(),
-        fromLabel: bookingDraft.fromLabel.trim(),
-        toLabel: bookingDraft.toLabel.trim(),
-        departAt: bookingDraft.departAt,
-        arriveAt: bookingDraft.arriveAt,
-        provider: bookingDraft.provider.trim() || undefined,
-        confirmationCode: bookingDraft.confirmationCode.trim() || undefined,
-        link: bookingDraft.link.trim() || undefined,
-        notes: bookingDraft.notes,
-      };
-      if (editingBookingId) {
-        app.updateTripBooking(editingBookingId, payload);
-      } else {
-        app.addTripBooking(payload);
-      }
-    } else {
-      if (!bookingDraft.title.trim() || !bookingDraft.propertyName.trim() || !bookingDraft.checkInDate || !bookingDraft.checkOutDate) return;
-      const payload = {
-        kind: 'stay' as const,
-        tripId: selectedTrip.id,
-        legId: bookingDraft.legId || undefined,
-        title: bookingDraft.title.trim(),
-        propertyName: bookingDraft.propertyName.trim(),
-        address: bookingDraft.address.trim() || undefined,
-        city: bookingDraft.city.trim(),
-        country: bookingDraft.country.trim(),
-        checkInDate: bookingDraft.checkInDate,
-        checkOutDate: bookingDraft.checkOutDate,
-        provider: bookingDraft.provider.trim() || undefined,
-        confirmationCode: bookingDraft.confirmationCode.trim() || undefined,
-        link: bookingDraft.link.trim() || undefined,
-        notes: bookingDraft.notes,
-      };
-      if (editingBookingId) {
-        app.updateTripBooking(editingBookingId, payload);
-      } else {
-        app.addTripBooking(payload);
-      }
+    if (!selectedTrip) {
+      setBookingFeedback('Select a trip before saving a booking.');
+      return;
     }
-    setShowBookingModal(false);
+
+    const validationMessage = getBookingValidationMessage(bookingDraft);
+    if (validationMessage) {
+      setBookingFeedback(validationMessage);
+      return;
+    }
+
+    try {
+      if (bookingDraft.kind === 'transport') {
+        const payload = {
+          kind: 'transport' as const,
+          tripId: selectedTrip.id,
+          legId: bookingDraft.legId || undefined,
+          mode: bookingDraft.mode,
+          title: bookingDraft.title.trim(),
+          fromLabel: bookingDraft.fromLabel.trim(),
+          toLabel: bookingDraft.toLabel.trim(),
+          departAt: bookingDraft.departAt,
+          arriveAt: bookingDraft.arriveAt,
+          provider: bookingDraft.provider.trim() || undefined,
+          confirmationCode: bookingDraft.confirmationCode.trim() || undefined,
+          link: bookingDraft.link.trim() || undefined,
+          notes: bookingDraft.notes,
+        };
+        if (editingBookingId) {
+          app.updateTripBooking(editingBookingId, payload);
+        } else {
+          app.addTripBooking(payload);
+        }
+      } else {
+        const payload = {
+          kind: 'stay' as const,
+          tripId: selectedTrip.id,
+          legId: bookingDraft.legId || undefined,
+          title: bookingDraft.title.trim(),
+          propertyName: bookingDraft.propertyName.trim(),
+          address: bookingDraft.address.trim() || undefined,
+          city: bookingDraft.city.trim(),
+          country: bookingDraft.country.trim(),
+          checkInDate: bookingDraft.checkInDate,
+          checkOutDate: bookingDraft.checkOutDate,
+          provider: bookingDraft.provider.trim() || undefined,
+          confirmationCode: bookingDraft.confirmationCode.trim() || undefined,
+          link: bookingDraft.link.trim() || undefined,
+          notes: bookingDraft.notes,
+        };
+        if (editingBookingId) {
+          app.updateTripBooking(editingBookingId, payload);
+        } else {
+          app.addTripBooking(payload);
+        }
+      }
+      setShowBookingModal(false);
+    } catch (error) {
+      setBookingFeedback(error instanceof Error ? error.message : 'Booking could not be saved. Please try again.');
+    }
   }
 
   function openCalendarImport(target: { title: string; start: string; end: string; description: string; allDay: boolean; location?: string }): void {
@@ -1477,7 +1541,7 @@ export default function TripsSurface() {
                 id="booking-kind"
                 className="form-select"
                 value={bookingDraft.kind}
-                onChange={event => setBookingDraft(event.target.value === 'transport' ? buildTransportDraft(bookingDraft.legId) : buildStayDraft(bookingDraft.legId))}
+                onChange={event => replaceBookingDraft(event.target.value === 'transport' ? buildTransportDraft(bookingDraft.legId) : buildStayDraft(bookingDraft.legId))}
                 disabled={Boolean(editingBookingId)}
               >
                 <option value="transport">Transport</option>
@@ -1486,7 +1550,7 @@ export default function TripsSurface() {
             </div>
             <div className="form-group">
               <label htmlFor="booking-leg">Destination</label>
-              <select id="booking-leg" className="form-select" value={bookingDraft.legId || ''} onChange={event => setBookingDraft({ ...bookingDraft, legId: event.target.value || undefined })}>
+              <select id="booking-leg" className="form-select" value={bookingDraft.legId || ''} onChange={event => updateBookingDraft({ legId: event.target.value || undefined })}>
                 <option value="">Not tied to one destination</option>
                 {selectedLegs.map(leg => (
                   <option key={leg.id} value={leg.id}>{leg.city}, {leg.country}</option>
@@ -1499,11 +1563,11 @@ export default function TripsSurface() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="form-group">
                     <label htmlFor="booking-transport-title">Title</label>
-                    <input id="booking-transport-title" className="form-input" value={bookingDraft.title} onChange={event => setBookingDraft({ ...bookingDraft, title: event.target.value })} autoFocus />
+                    <input id="booking-transport-title" className="form-input" value={bookingDraft.title} onChange={event => updateBookingDraft({ title: event.target.value })} autoFocus />
                   </div>
                   <div className="form-group">
                     <label htmlFor="booking-transport-mode">Mode</label>
-                    <select id="booking-transport-mode" className="form-select" value={bookingDraft.mode} onChange={event => setBookingDraft({ ...bookingDraft, mode: event.target.value as TripTransportMode })}>
+                    <select id="booking-transport-mode" className="form-select" value={bookingDraft.mode} onChange={event => updateBookingDraft({ mode: event.target.value as TripTransportMode })}>
                       {TRANSPORT_MODE_OPTIONS.map(mode => (
                         <option key={mode} value={mode}>{mode}</option>
                       ))}
@@ -1513,21 +1577,21 @@ export default function TripsSurface() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="form-group">
                     <label htmlFor="booking-from">From</label>
-                    <input id="booking-from" className="form-input" value={bookingDraft.fromLabel} onChange={event => setBookingDraft({ ...bookingDraft, fromLabel: event.target.value })} />
+                    <input id="booking-from" className="form-input" value={bookingDraft.fromLabel} onChange={event => updateBookingDraft({ fromLabel: event.target.value })} />
                   </div>
                   <div className="form-group">
                     <label htmlFor="booking-to">To</label>
-                    <input id="booking-to" className="form-input" value={bookingDraft.toLabel} onChange={event => setBookingDraft({ ...bookingDraft, toLabel: event.target.value })} />
+                    <input id="booking-to" className="form-input" value={bookingDraft.toLabel} onChange={event => updateBookingDraft({ toLabel: event.target.value })} />
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="form-group">
                     <label htmlFor="booking-depart">Depart</label>
-                    <input id="booking-depart" className="form-input" type="datetime-local" value={bookingDraft.departAt} onChange={event => setBookingDraft({ ...bookingDraft, departAt: event.target.value })} />
+                    <input id="booking-depart" className="form-input" type="datetime-local" value={bookingDraft.departAt} onChange={event => updateBookingDraft({ departAt: event.target.value })} />
                   </div>
                   <div className="form-group">
                     <label htmlFor="booking-arrive">Arrive</label>
-                    <input id="booking-arrive" className="form-input" type="datetime-local" value={bookingDraft.arriveAt} onChange={event => setBookingDraft({ ...bookingDraft, arriveAt: event.target.value })} />
+                    <input id="booking-arrive" className="form-input" type="datetime-local" value={bookingDraft.arriveAt} onChange={event => updateBookingDraft({ arriveAt: event.target.value })} />
                   </div>
                 </div>
               </>
@@ -1536,36 +1600,36 @@ export default function TripsSurface() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="form-group">
                     <label htmlFor="booking-stay-title">Title</label>
-                    <input id="booking-stay-title" className="form-input" value={bookingDraft.title} onChange={event => setBookingDraft({ ...bookingDraft, title: event.target.value })} autoFocus />
+                    <input id="booking-stay-title" className="form-input" value={bookingDraft.title} onChange={event => updateBookingDraft({ title: event.target.value })} autoFocus />
                   </div>
                   <div className="form-group">
                     <label htmlFor="booking-property">Property</label>
-                    <input id="booking-property" className="form-input" value={bookingDraft.propertyName} onChange={event => setBookingDraft({ ...bookingDraft, propertyName: event.target.value })} />
+                    <input id="booking-property" className="form-input" value={bookingDraft.propertyName} onChange={event => updateBookingDraft({ propertyName: event.target.value })} />
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="form-group">
                     <label htmlFor="booking-city">City</label>
-                    <input id="booking-city" className="form-input" value={bookingDraft.city} onChange={event => setBookingDraft({ ...bookingDraft, city: event.target.value })} />
+                    <input id="booking-city" className="form-input" value={bookingDraft.city} onChange={event => updateBookingDraft({ city: event.target.value })} />
                   </div>
                   <div className="form-group">
                     <label htmlFor="booking-country">Country</label>
-                    <input id="booking-country" className="form-input" value={bookingDraft.country} onChange={event => setBookingDraft({ ...bookingDraft, country: event.target.value })} />
+                    <input id="booking-country" className="form-input" value={bookingDraft.country} onChange={event => updateBookingDraft({ country: event.target.value })} />
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="form-group">
                     <label htmlFor="booking-check-in">Check In</label>
-                    <input id="booking-check-in" className="form-input" type="date" value={bookingDraft.checkInDate} onChange={event => setBookingDraft({ ...bookingDraft, checkInDate: event.target.value })} />
+                    <input id="booking-check-in" className="form-input" type="date" value={bookingDraft.checkInDate} onChange={event => updateBookingDraft({ checkInDate: event.target.value })} />
                   </div>
                   <div className="form-group">
                     <label htmlFor="booking-check-out">Check Out</label>
-                    <input id="booking-check-out" className="form-input" type="date" value={bookingDraft.checkOutDate} onChange={event => setBookingDraft({ ...bookingDraft, checkOutDate: event.target.value })} />
+                    <input id="booking-check-out" className="form-input" type="date" value={bookingDraft.checkOutDate} onChange={event => updateBookingDraft({ checkOutDate: event.target.value })} />
                   </div>
                 </div>
                 <div className="form-group">
                   <label htmlFor="booking-address">Address</label>
-                  <input id="booking-address" className="form-input" value={bookingDraft.address} onChange={event => setBookingDraft({ ...bookingDraft, address: event.target.value })} />
+                  <input id="booking-address" className="form-input" value={bookingDraft.address} onChange={event => updateBookingDraft({ address: event.target.value })} />
                 </div>
               </>
             )}
@@ -1573,21 +1637,26 @@ export default function TripsSurface() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="form-group">
                 <label htmlFor="booking-provider">Provider</label>
-                <input id="booking-provider" className="form-input" value={bookingDraft.provider} onChange={event => setBookingDraft({ ...bookingDraft, provider: event.target.value })} />
+                <input id="booking-provider" className="form-input" value={bookingDraft.provider} onChange={event => updateBookingDraft({ provider: event.target.value })} />
               </div>
               <div className="form-group">
                 <label htmlFor="booking-confirmation">Confirmation Code</label>
-                <input id="booking-confirmation" className="form-input" value={bookingDraft.confirmationCode} onChange={event => setBookingDraft({ ...bookingDraft, confirmationCode: event.target.value })} />
+                <input id="booking-confirmation" className="form-input" value={bookingDraft.confirmationCode} onChange={event => updateBookingDraft({ confirmationCode: event.target.value })} />
               </div>
             </div>
             <div className="form-group">
               <label htmlFor="booking-link">Link</label>
-              <input id="booking-link" className="form-input" value={bookingDraft.link} onChange={event => setBookingDraft({ ...bookingDraft, link: event.target.value })} />
+              <input id="booking-link" className="form-input" value={bookingDraft.link} onChange={event => updateBookingDraft({ link: event.target.value })} />
             </div>
             <div className="form-group">
               <label htmlFor="booking-notes">Notes</label>
-              <textarea id="booking-notes" className="form-input" value={bookingDraft.notes} onChange={event => setBookingDraft({ ...bookingDraft, notes: event.target.value })} />
+              <textarea id="booking-notes" className="form-input" value={bookingDraft.notes} onChange={event => updateBookingDraft({ notes: event.target.value })} />
             </div>
+            {bookingFeedback && (
+              <div className="info-box error" role="alert" aria-live="polite" style={{ marginBottom: 0 }}>
+                {bookingFeedback}
+              </div>
+            )}
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowBookingModal(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={saveBooking}>
