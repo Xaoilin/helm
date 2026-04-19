@@ -1,16 +1,21 @@
 import { useMemo, useState } from 'react';
+import { TRIP_BUDGET } from '../config/constants';
 import { useApp } from '../store/AppContext';
 import type {
   CalendarSource,
   Trip,
   TripBooking,
+  TripBudgetCategory,
+  TripBudgetEntry,
+  TripBudgetEntryInput,
+  TripBudgetEntryStatus,
   TripItineraryItem,
   TripLeg,
   TripStatus,
   TripTransportMode,
 } from '../types/domain';
 
-type TripsTab = 'overview' | 'timeline' | 'bookings';
+type TripsTab = 'overview' | 'timeline' | 'bookings' | 'budget';
 type WizardStep = 'basics' | 'route' | 'bookings' | 'review';
 
 interface LegDraft {
@@ -56,6 +61,24 @@ interface StayBookingDraft {
 
 type BookingDraft = TransportBookingDraft | StayBookingDraft;
 
+interface BudgetEntryDraft {
+  title: string;
+  category: TripBudgetCategory;
+  amount: string;
+  status: TripBudgetEntryStatus;
+  date: string;
+  notes: string;
+}
+
+interface BudgetCategorySummary {
+  value: TripBudgetCategory;
+  label: string;
+  icon: string;
+  forecast: number;
+  paid: number;
+  count: number;
+}
+
 interface BookingSeed {
   legId?: string;
   city?: string;
@@ -74,6 +97,10 @@ interface BookingSeedableLeg {
 
 const TRIP_STATUS_OPTIONS: TripStatus[] = ['planning', 'booked', 'in_trip', 'completed', 'archived'];
 const TRANSPORT_MODE_OPTIONS: TripTransportMode[] = ['flight', 'train', 'bus', 'ferry', 'car', 'other'];
+
+function normalizeCurrencyCode(value: string): string {
+  return value.trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+}
 
 function createDraftId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -150,6 +177,47 @@ function formatTripRange(startDate: string, endDate: string): string {
   if (!startDate && !endDate) return 'Dates not set';
   if (!startDate || startDate === endDate) return formatDate(startDate || endDate);
   return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+}
+
+function formatBudgetMoney(amount: number, currency: string): string {
+  const normalizedCurrency = normalizeCurrencyCode(currency) || TRIP_BUDGET.DEFAULT_CURRENCY;
+  const majorUnits = amount / 100;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: normalizedCurrency,
+    }).format(majorUnits);
+  } catch {
+    return `${normalizedCurrency} ${majorUnits.toFixed(2)}`;
+  }
+}
+
+function parseBudgetAmountInput(value: string): number | null {
+  const normalized = value.replace(/,/g, '').trim();
+  if (!normalized) return null;
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.round(parsed * 100);
+}
+
+function formatBudgetAmountInput(amount: number): string {
+  if (!amount) return '';
+  return (amount / 100).toFixed(2);
+}
+
+function getTripBudgetCategoryDef(category: TripBudgetCategory): { value: TripBudgetCategory; label: string; icon: string } {
+  return TRIP_BUDGET.CATEGORIES.find(item => item.value === category) || TRIP_BUDGET.CATEGORIES[TRIP_BUDGET.CATEGORIES.length - 1];
+}
+
+function buildBudgetEntryDraft(seedDate?: string): BudgetEntryDraft {
+  return {
+    title: '',
+    category: 'transport',
+    amount: '',
+    status: 'planned',
+    date: seedDate || toLocalDateStr(new Date()),
+    notes: '',
+  };
 }
 
 function formatTimeLabel(value?: string): string {
@@ -447,6 +515,359 @@ function StatusPill({ status }: { status: TripStatus }) {
   );
 }
 
+function BudgetTabPanel({
+  trip,
+  entries,
+  currency,
+  total,
+  forecastTotal,
+  paidTotal,
+  remaining,
+  categoryBreakdown,
+  todayStr,
+  updateTrip,
+  addTripBudgetEntry,
+  updateTripBudgetEntry,
+  removeTripBudgetEntry,
+}: {
+  trip: Trip;
+  entries: TripBudgetEntry[];
+  currency: string;
+  total: number;
+  forecastTotal: number;
+  paidTotal: number;
+  remaining: number;
+  categoryBreakdown: BudgetCategorySummary[];
+  todayStr: string;
+  updateTrip: (id: string, updates: Partial<Trip>) => void;
+  addTripBudgetEntry: (entry: TripBudgetEntryInput) => void;
+  updateTripBudgetEntry: (id: string, updates: Partial<TripBudgetEntry>) => void;
+  removeTripBudgetEntry: (id: string) => void;
+}) {
+  const [budgetCurrencyDraft, setBudgetCurrencyDraft] = useState<string>(trip.budgetCurrency || TRIP_BUDGET.DEFAULT_CURRENCY);
+  const [budgetTotalDraft, setBudgetTotalDraft] = useState(() => formatBudgetAmountInput(trip.budgetTotal || 0));
+  const [budgetEntryDraft, setBudgetEntryDraft] = useState<BudgetEntryDraft>(() => buildBudgetEntryDraft(trip.startDate || todayStr));
+  const [budgetFeedback, setBudgetFeedback] = useState<string | null>(null);
+  const [editingBudgetEntryId, setEditingBudgetEntryId] = useState<string | null>(null);
+
+  function resetBudgetEntryForm(seedDate?: string): void {
+    setEditingBudgetEntryId(null);
+    setBudgetEntryDraft(buildBudgetEntryDraft(seedDate || trip.startDate || todayStr));
+    setBudgetFeedback(null);
+  }
+
+  function saveBudgetSettings(): void {
+    const nextCurrency = normalizeCurrencyCode(budgetCurrencyDraft) || TRIP_BUDGET.DEFAULT_CURRENCY;
+    const totalAmount = budgetTotalDraft.trim() ? parseBudgetAmountInput(budgetTotalDraft) : 0;
+    if (budgetTotalDraft.trim() && totalAmount === null) {
+      setBudgetFeedback('Enter a valid total budget amount.');
+      return;
+    }
+
+    updateTrip(trip.id, {
+      budgetCurrency: nextCurrency,
+      budgetTotal: totalAmount || 0,
+    });
+    setBudgetCurrencyDraft(nextCurrency);
+    setBudgetTotalDraft(formatBudgetAmountInput(totalAmount || 0));
+    setBudgetFeedback(null);
+  }
+
+  function openBudgetEntryEdit(entry: TripBudgetEntry): void {
+    setEditingBudgetEntryId(entry.id);
+    setBudgetEntryDraft({
+      title: entry.title,
+      category: entry.category,
+      amount: formatBudgetAmountInput(entry.amount),
+      status: entry.status,
+      date: entry.date,
+      notes: entry.notes,
+    });
+    setBudgetFeedback(null);
+  }
+
+  function saveBudgetEntry(): void {
+    const amount = parseBudgetAmountInput(budgetEntryDraft.amount);
+    if (amount === null || amount <= 0) {
+      setBudgetFeedback('Enter a valid amount before saving this budget item.');
+      return;
+    }
+
+    const payload: TripBudgetEntryInput = {
+      tripId: trip.id,
+      title: budgetEntryDraft.title.trim() || `${getTripBudgetCategoryDef(budgetEntryDraft.category).label} item`,
+      category: budgetEntryDraft.category,
+      amount,
+      status: budgetEntryDraft.status,
+      date: budgetEntryDraft.date || trip.startDate || todayStr,
+      notes: budgetEntryDraft.notes,
+    };
+
+    if (editingBudgetEntryId) {
+      updateTripBudgetEntry(editingBudgetEntryId, payload);
+    } else {
+      addTripBudgetEntry(payload);
+    }
+
+    resetBudgetEntryForm(trip.startDate || todayStr);
+  }
+
+  function toggleBudgetEntryStatus(entry: TripBudgetEntry): void {
+    updateTripBudgetEntry(entry.id, {
+      status: entry.status === 'paid' ? 'planned' : 'paid',
+    });
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div className="card" style={{ padding: 18, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>Trip Budget</div>
+          <div style={{ fontSize: 13, color: '#8b8fa3' }}>Track your budget, then log transport, food, events, rent or stay costs, and anything else you expect to spend.</div>
+        </div>
+        <button className="btn btn-secondary" onClick={() => resetBudgetEntryForm(trip.startDate || todayStr)}>+ Budget Item</button>
+      </div>
+
+      <div className="projects-metrics-grid">
+        <MetricCard label="Budget" value={total > 0 ? formatBudgetMoney(total, currency) : 'Not set'} note={`${currency} trip budget`} />
+        <MetricCard label="Forecast" value={formatBudgetMoney(forecastTotal, currency)} note="Everything you expect to spend on this trip." />
+        <MetricCard label="Paid" value={formatBudgetMoney(paidTotal, currency)} note="Costs already paid or locked in." />
+        <MetricCard label="Remaining" value={total > 0 ? formatBudgetMoney(remaining, currency) : 'Set a budget'} note={total > 0 ? 'What is left if your plan holds.' : 'Add a total budget to unlock the remaining view.'} />
+      </div>
+
+      <div className="trip-bookings-grid">
+        <div className="card" style={{ padding: 18, display: 'grid', gap: 16, alignContent: 'start' }}>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>Budget Settings</div>
+            <div style={{ fontSize: 13, color: '#8b8fa3' }}>Keep everything in one home currency so your trip budget is easy to read at a glance.</div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label htmlFor="trip-budget-currency">Currency</label>
+              <input
+                id="trip-budget-currency"
+                className="form-input"
+                maxLength={3}
+                value={budgetCurrencyDraft}
+                onChange={event => {
+                  setBudgetFeedback(null);
+                  setBudgetCurrencyDraft(normalizeCurrencyCode(event.target.value));
+                }}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="trip-budget-total">Total Budget</label>
+              <input
+                id="trip-budget-total"
+                className="form-input"
+                inputMode="decimal"
+                placeholder="2500"
+                value={budgetTotalDraft}
+                onChange={event => {
+                  setBudgetFeedback(null);
+                  setBudgetTotalDraft(event.target.value);
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="modal-actions" style={{ justifyContent: 'flex-start' }}>
+            <button className="btn btn-primary" onClick={saveBudgetSettings}>Save Budget</button>
+          </div>
+
+          <div style={{ height: 1, background: '#23283c' }} />
+
+          <div style={{ display: 'grid', gap: 6 }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{editingBudgetEntryId ? 'Edit Budget Item' : 'Quick Add Budget Item'}</div>
+            <div style={{ fontSize: 13, color: '#8b8fa3' }}>Add the big costs first, then keep a running list of food, events, and extras as the trip comes together.</div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="trip-budget-title">Title</label>
+            <input
+              id="trip-budget-title"
+              className="form-input"
+              value={budgetEntryDraft.title}
+              placeholder="Airport transfer, museum tickets, hotel deposit"
+              onChange={event => {
+                setBudgetFeedback(null);
+                setBudgetEntryDraft(prev => ({ ...prev, title: event.target.value }));
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label htmlFor="trip-budget-category">Category</label>
+              <select
+                id="trip-budget-category"
+                className="form-select"
+                value={budgetEntryDraft.category}
+                onChange={event => {
+                  setBudgetFeedback(null);
+                  setBudgetEntryDraft(prev => ({ ...prev, category: event.target.value as TripBudgetCategory }));
+                }}
+              >
+                {TRIP_BUDGET.CATEGORIES.map(category => (
+                  <option key={category.value} value={category.value}>{category.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="trip-budget-status">Status</label>
+              <select
+                id="trip-budget-status"
+                className="form-select"
+                value={budgetEntryDraft.status}
+                onChange={event => {
+                  setBudgetFeedback(null);
+                  setBudgetEntryDraft(prev => ({ ...prev, status: event.target.value as TripBudgetEntryStatus }));
+                }}
+              >
+                {TRIP_BUDGET.STATUSES.map(status => (
+                  <option key={status.value} value={status.value}>{status.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label htmlFor="trip-budget-amount">Amount</label>
+              <input
+                id="trip-budget-amount"
+                className="form-input"
+                inputMode="decimal"
+                placeholder="120.00"
+                value={budgetEntryDraft.amount}
+                onChange={event => {
+                  setBudgetFeedback(null);
+                  setBudgetEntryDraft(prev => ({ ...prev, amount: event.target.value }));
+                }}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="trip-budget-date">Date</label>
+              <input
+                id="trip-budget-date"
+                className="form-input"
+                type="date"
+                value={budgetEntryDraft.date}
+                onChange={event => {
+                  setBudgetFeedback(null);
+                  setBudgetEntryDraft(prev => ({ ...prev, date: event.target.value }));
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="trip-budget-notes">Notes</label>
+            <textarea
+              id="trip-budget-notes"
+              className="form-input"
+              value={budgetEntryDraft.notes}
+              onChange={event => {
+                setBudgetFeedback(null);
+                setBudgetEntryDraft(prev => ({ ...prev, notes: event.target.value }));
+              }}
+            />
+          </div>
+
+          {budgetFeedback && (
+            <div className="info-box error" role="alert" aria-live="polite" style={{ marginBottom: 0 }}>
+              {budgetFeedback}
+            </div>
+          )}
+
+          <div className="modal-actions" style={{ justifyContent: 'flex-start' }}>
+            {editingBudgetEntryId && (
+              <button className="btn btn-secondary" onClick={() => resetBudgetEntryForm(trip.startDate || todayStr)}>Cancel Edit</button>
+            )}
+            <button className="btn btn-primary" onClick={saveBudgetEntry}>
+              {editingBudgetEntryId ? 'Save Budget Item' : 'Add Budget Item'}
+            </button>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 18, display: 'grid', gap: 12, alignContent: 'start' }}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>Category Breakdown</div>
+          <div style={{ fontSize: 13, color: '#8b8fa3' }}>See where the trip money is going before you leave.</div>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {categoryBreakdown.map(category => (
+              <div key={category.value} style={{ padding: 14, borderRadius: 14, background: '#141926', border: '1px solid #23283c', display: 'grid', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 20 }} aria-hidden="true">{category.icon}</span>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{category.label}</div>
+                      <div style={{ fontSize: 12, color: '#8b8fa3' }}>{category.count === 0 ? 'No items yet' : `${category.count} item${category.count === 1 ? '' : 's'}`}</div>
+                    </div>
+                  </div>
+                  <span className={`tag ${category.forecast > 0 ? 'tag-primary' : 'tag-disconnected'}`}>{formatBudgetMoney(category.forecast, currency)}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div style={{ padding: 10, borderRadius: 10, background: '#10141d' }}>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, color: '#6b6f85', marginBottom: 4 }}>Forecast</div>
+                    <div style={{ fontWeight: 600 }}>{formatBudgetMoney(category.forecast, currency)}</div>
+                  </div>
+                  <div style={{ padding: 10, borderRadius: 10, background: '#10141d' }}>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, color: '#6b6f85', marginBottom: 4 }}>Paid</div>
+                    <div style={{ fontWeight: 600 }}>{formatBudgetMoney(category.paid, currency)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 18, display: 'grid', gap: 12 }}>
+        <div style={{ fontSize: 16, fontWeight: 700 }}>Budget Items</div>
+        {entries.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#8b8fa3' }}>No budget items yet. Add transport, food, events, rent or stay, and other trip costs here.</div>
+        ) : (
+          entries.map(entry => {
+            const category = getTripBudgetCategoryDef(entry.category);
+            return (
+              <div key={entry.id} style={{ padding: 14, borderRadius: 14, background: '#141926', border: '1px solid #23283c', display: 'grid', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 18 }} aria-hidden="true">{category.icon}</span>
+                      <div style={{ fontWeight: 700 }}>{entry.title}</div>
+                      <span className="tag tag-disconnected">{category.label}</span>
+                      <span className={`tag ${entry.status === 'paid' ? 'tag-connected' : 'tag-primary'}`}>{entry.status === 'paid' ? 'Paid' : 'Planned'}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#8b8fa3' }}>{formatDate(entry.date)}</div>
+                    {entry.notes && <div style={{ fontSize: 12, color: '#9ea4c5' }}>{entry.notes}</div>}
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#f5f7ff' }}>{formatBudgetMoney(entry.amount, currency)}</div>
+                </div>
+                <div className="actions-row" style={{ margin: 0, flexWrap: 'wrap' }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => openBudgetEntryEdit(entry)}>Edit</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => toggleBudgetEntryStatus(entry)}>
+                    {entry.status === 'paid' ? 'Mark Planned' : 'Mark Paid'}
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => {
+                    if (window.confirm(`Delete budget item "${entry.title}"?`)) {
+                      removeTripBudgetEntry(entry.id);
+                      if (editingBudgetEntryId === entry.id) {
+                        resetBudgetEntryForm(trip.startDate || todayStr);
+                      }
+                    }
+                  }}>Delete</button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function TripsSurface() {
   const app = useApp();
   const todayStr = toLocalDateStr(new Date());
@@ -461,6 +882,8 @@ export default function TripsSurface() {
   const [tripSummary, setTripSummary] = useState('');
   const [tripNotes, setTripNotes] = useState('');
   const [tripStatus, setTripStatus] = useState<TripStatus>('planning');
+  const [tripBudgetCurrency, setTripBudgetCurrency] = useState<string>(TRIP_BUDGET.DEFAULT_CURRENCY);
+  const [tripBudgetTotal, setTripBudgetTotal] = useState('');
   const [routeDrafts, setRouteDrafts] = useState<LegDraft[]>([]);
   const [wizardBookings, setWizardBookings] = useState<BookingDraft[]>([]);
 
@@ -568,6 +991,13 @@ export default function TripsSurface() {
     [app.tripBookings, selectedTripId],
   );
 
+  const selectedBudgetEntries = useMemo(
+    () => app.tripBudgetEntries
+      .filter(entry => entry.tripId === selectedTripId)
+      .sort((left, right) => right.date.localeCompare(left.date) || right.createdAt.localeCompare(left.createdAt)),
+    [app.tripBudgetEntries, selectedTripId],
+  );
+
   const itineraryByDay = useMemo(() => {
     const map = new Map<string, TripItineraryItem[]>();
     selectedItinerary.forEach(item => {
@@ -605,6 +1035,31 @@ export default function TripsSurface() {
 
   const transportBookings = selectedBookings.filter(booking => booking.kind === 'transport');
   const stayBookings = selectedBookings.filter(booking => booking.kind === 'stay');
+  const selectedBudgetCurrency = selectedTrip?.budgetCurrency || TRIP_BUDGET.DEFAULT_CURRENCY;
+  const selectedBudgetTotal = selectedTrip?.budgetTotal || 0;
+  const budgetForecastTotal = useMemo(
+    () => selectedBudgetEntries.reduce((sum, entry) => sum + entry.amount, 0),
+    [selectedBudgetEntries],
+  );
+  const budgetPaidTotal = useMemo(
+    () => selectedBudgetEntries.filter(entry => entry.status === 'paid').reduce((sum, entry) => sum + entry.amount, 0),
+    [selectedBudgetEntries],
+  );
+  const budgetRemaining = selectedBudgetTotal - budgetForecastTotal;
+  const budgetByCategory = useMemo<BudgetCategorySummary[]>(
+    () => TRIP_BUDGET.CATEGORIES.map(category => {
+      const entries = selectedBudgetEntries.filter(entry => entry.category === category.value);
+      const forecast = entries.reduce((sum, entry) => sum + entry.amount, 0);
+      const paid = entries.filter(entry => entry.status === 'paid').reduce((sum, entry) => sum + entry.amount, 0);
+      return {
+        ...category,
+        forecast,
+        paid,
+        count: entries.length,
+      };
+    }),
+    [selectedBudgetEntries],
+  );
 
   function getSelectedTripBookingSeed(legId?: string): BookingSeed {
     if (legId) {
@@ -637,6 +1092,8 @@ export default function TripsSurface() {
     setTripSummary('');
     setTripNotes('');
     setTripStatus('planning');
+    setTripBudgetCurrency(TRIP_BUDGET.DEFAULT_CURRENCY);
+    setTripBudgetTotal('');
     setRouteDrafts([{ id: createDraftId('leg'), country: '', city: '', startDate: '', endDate: '' }]);
     setWizardBookings([]);
     setWizardFeedback(null);
@@ -677,6 +1134,8 @@ export default function TripsSurface() {
       sortOrder: index,
     }));
     const range = deriveTripRange(preparedLegs);
+    const budgetCurrency = normalizeCurrencyCode(tripBudgetCurrency) || TRIP_BUDGET.DEFAULT_CURRENCY;
+    const budgetTotal = parseBudgetAmountInput(tripBudgetTotal) || 0;
     const tripId = app.addTrip({
       name: tripName.trim(),
       summary: tripSummary.trim(),
@@ -684,6 +1143,8 @@ export default function TripsSurface() {
       status: tripStatus,
       startDate: range.startDate,
       endDate: range.endDate,
+      budgetCurrency,
+      budgetTotal,
     });
 
     const legIdMap = new Map<string, string>();
@@ -748,16 +1209,22 @@ export default function TripsSurface() {
     setTripSummary(trip.summary);
     setTripNotes(trip.notes);
     setTripStatus(trip.status);
+    setTripBudgetCurrency(trip.budgetCurrency || TRIP_BUDGET.DEFAULT_CURRENCY);
+    setTripBudgetTotal(formatBudgetAmountInput(trip.budgetTotal || 0));
     setShowTripEdit(true);
   }
 
   function saveTripEdit(): void {
     if (!editingTripId || !tripName.trim()) return;
+    const budgetCurrency = normalizeCurrencyCode(tripBudgetCurrency) || TRIP_BUDGET.DEFAULT_CURRENCY;
+    const budgetTotal = parseBudgetAmountInput(tripBudgetTotal) || 0;
     app.updateTrip(editingTripId, {
       name: tripName.trim(),
       summary: tripSummary.trim(),
       notes: tripNotes,
       status: tripStatus,
+      budgetCurrency,
+      budgetTotal,
     });
     setShowTripEdit(false);
   }
@@ -1175,6 +1642,7 @@ export default function TripsSurface() {
                       <button className={`tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>Overview</button>
                       <button className={`tab ${activeTab === 'timeline' ? 'active' : ''}`} onClick={() => setActiveTab('timeline')}>Timeline</button>
                       <button className={`tab ${activeTab === 'bookings' ? 'active' : ''}`} onClick={() => setActiveTab('bookings')}>Bookings</button>
+                      <button className={`tab ${activeTab === 'budget' ? 'active' : ''}`} onClick={() => setActiveTab('budget')}>Budget</button>
                     </div>
                   </div>
 
@@ -1194,6 +1662,13 @@ export default function TripsSurface() {
                         <MetricCard label="Destinations" value={String(destinationCount)} note="Ordered country and city stops in the route." />
                         <MetricCard label="Bookings" value={String(bookingCount)} note="Transport and stay reservations linked to this trip." />
                         <MetricCard label="Plans" value={String(selectedItinerary.length)} note="Itinerary items across the trip timeline." />
+                        <MetricCard
+                          label="Budget Left"
+                          value={selectedBudgetTotal > 0 ? formatBudgetMoney(budgetRemaining, selectedBudgetCurrency) : 'Not set'}
+                          note={selectedBudgetTotal > 0
+                            ? `${formatBudgetMoney(budgetForecastTotal, selectedBudgetCurrency)} forecast across ${selectedBudgetEntries.length} budget item${selectedBudgetEntries.length === 1 ? '' : 's'}.`
+                            : 'Set a trip budget to track transport, food, events, and stay costs.'}
+                        />
                       </div>
 
                       <div className="trip-detail-grid">
@@ -1421,6 +1896,25 @@ export default function TripsSurface() {
                       </div>
                     </div>
                   )}
+
+                  {activeTab === 'budget' && (
+                    <BudgetTabPanel
+                      key={selectedTrip.id}
+                      trip={selectedTrip}
+                      entries={selectedBudgetEntries}
+                      currency={selectedBudgetCurrency}
+                      total={selectedBudgetTotal}
+                      forecastTotal={budgetForecastTotal}
+                      paidTotal={budgetPaidTotal}
+                      remaining={budgetRemaining}
+                      categoryBreakdown={budgetByCategory}
+                      todayStr={todayStr}
+                      updateTrip={app.updateTrip}
+                      addTripBudgetEntry={app.addTripBudgetEntry}
+                      updateTripBudgetEntry={app.updateTripBudgetEntry}
+                      removeTripBudgetEntry={app.removeTripBudgetEntry}
+                    />
+                  )}
                 </>
               ) : (
                 <div className="card" style={{ padding: 20, color: '#8b8fa3' }}>
@@ -1463,6 +1957,29 @@ export default function TripsSurface() {
                       <option key={status} value={status}>{getTripStatusLabel(status)}</option>
                     ))}
                   </select>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
+                  <div className="form-group">
+                    <label htmlFor="trip-budget-currency-wizard">Budget Currency</label>
+                    <input
+                      id="trip-budget-currency-wizard"
+                      className="form-input"
+                      maxLength={3}
+                      value={tripBudgetCurrency}
+                      onChange={event => setTripBudgetCurrency(normalizeCurrencyCode(event.target.value))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="trip-budget-total-wizard">Trip Budget</label>
+                    <input
+                      id="trip-budget-total-wizard"
+                      className="form-input"
+                      inputMode="decimal"
+                      placeholder="2500"
+                      value={tripBudgetTotal}
+                      onChange={event => setTripBudgetTotal(event.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -1566,6 +2083,14 @@ export default function TripsSurface() {
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Initial bookings</div>
                   <div style={{ fontSize: 13, color: '#8b8fa3' }}>{wizardBookings.length === 0 ? 'No initial bookings. You can add them later.' : `${wizardBookings.length} booking${wizardBookings.length === 1 ? '' : 's'} ready to save.`}</div>
                 </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Budget</div>
+                  <div style={{ fontSize: 13, color: '#8b8fa3' }}>
+                    {(parseBudgetAmountInput(tripBudgetTotal) || 0) > 0
+                      ? `${formatBudgetMoney(parseBudgetAmountInput(tripBudgetTotal) || 0, tripBudgetCurrency || TRIP_BUDGET.DEFAULT_CURRENCY)} in ${normalizeCurrencyCode(tripBudgetCurrency) || TRIP_BUDGET.DEFAULT_CURRENCY}`
+                      : 'No trip budget set yet. You can add one now or later in the Budget tab.'}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1625,6 +2150,29 @@ export default function TripsSurface() {
                   <option key={status} value={status}>{getTripStatusLabel(status)}</option>
                 ))}
               </select>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
+              <div className="form-group">
+                <label htmlFor="edit-trip-budget-currency">Budget Currency</label>
+                <input
+                  id="edit-trip-budget-currency"
+                  className="form-input"
+                  maxLength={3}
+                  value={tripBudgetCurrency}
+                  onChange={event => setTripBudgetCurrency(normalizeCurrencyCode(event.target.value))}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-trip-budget-total">Trip Budget</label>
+                <input
+                  id="edit-trip-budget-total"
+                  className="form-input"
+                  inputMode="decimal"
+                  placeholder="2500"
+                  value={tripBudgetTotal}
+                  onChange={event => setTripBudgetTotal(event.target.value)}
+                />
+              </div>
             </div>
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowTripEdit(false)}>Cancel</button>

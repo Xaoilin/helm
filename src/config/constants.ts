@@ -139,6 +139,23 @@ export const CLOCK = {
   PRESET_MINUTES: [1, 5, 15, 25] as const,
 } as const;
 
+export const TRIP_BUDGET = {
+  DEFAULT_CURRENCY: 'GBP',
+  CATEGORIES: [
+    { value: 'transport', label: 'Transport', icon: '\u{1F6EB}' },
+    { value: 'food', label: 'Food', icon: '\u{1F37D}\uFE0F' },
+    { value: 'events', label: 'Events', icon: '\u{1F39F}\uFE0F' },
+    { value: 'rent', label: 'Rent / Stay', icon: '\u{1F3E8}' },
+    { value: 'shopping', label: 'Shopping', icon: '\u{1F6CD}\uFE0F' },
+    { value: 'fees', label: 'Fees', icon: '\u{1F9FE}' },
+    { value: 'other', label: 'Other', icon: '\u{1F4DD}' },
+  ] as const,
+  STATUSES: [
+    { value: 'planned', label: 'Planned' },
+    { value: 'paid', label: 'Paid' },
+  ] as const,
+} as const;
+
 // ── API Timeouts (milliseconds) ──
 
 export const API_TIMEOUT = {
