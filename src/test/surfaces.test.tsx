@@ -1281,6 +1281,80 @@ describe('TripsSurface', () => {
     expect(screen.getAllByText(/Rome, Italy/).length).toBeGreaterThan(0);
   });
 
+  it('creates wizard bookings with destination defaults and fallback values', async () => {
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Plan your first trip' }));
+    });
+
+    fireEvent.change(screen.getByLabelText('Trip Name'), { target: { value: 'Italy Escape' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Next'));
+    });
+
+    const countryInputs = screen.getAllByPlaceholderText('Country');
+    const cityInputs = screen.getAllByPlaceholderText('City');
+    const routeDateInputs = Array.from(document.querySelectorAll('.trip-wizard-modal input[type="date"]')) as HTMLInputElement[];
+
+    fireEvent.change(countryInputs[0], { target: { value: 'France' } });
+    fireEvent.change(cityInputs[0], { target: { value: 'Paris' } });
+    fireEvent.change(routeDateInputs[0], { target: { value: '2026-07-01' } });
+    fireEvent.change(routeDateInputs[1], { target: { value: '2026-07-03' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('+ Add Destination'));
+    });
+
+    const nextCountryInputs = screen.getAllByPlaceholderText('Country');
+    const nextCityInputs = screen.getAllByPlaceholderText('City');
+    const nextRouteDateInputs = Array.from(document.querySelectorAll('.trip-wizard-modal input[type="date"]')) as HTMLInputElement[];
+
+    fireEvent.change(nextCountryInputs[1], { target: { value: 'Italy' } });
+    fireEvent.change(nextCityInputs[1], { target: { value: 'Rome' } });
+    fireEvent.change(nextRouteDateInputs[2], { target: { value: '2026-07-04' } });
+    fireEvent.change(nextRouteDateInputs[3], { target: { value: '2026-07-06' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Next'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('+ Stay'));
+    });
+
+    const destinationSelect = screen.getByDisplayValue('Paris · France');
+    fireEvent.change(destinationSelect, { target: { value: (destinationSelect as HTMLSelectElement).options[2].value } });
+
+    expect(screen.getByDisplayValue('Rome')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Italy')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('2026-07-04')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('2026-07-06')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Next'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create Trip'));
+    });
+
+    await waitFor(() => {
+      const bookings = JSON.parse(localStorage.getItem('helm:tripBookings') || '[]');
+      expect(bookings).toHaveLength(1);
+      expect(bookings[0]).toMatchObject({
+        kind: 'stay',
+        title: 'Stay booking',
+        propertyName: 'Accommodation',
+        city: 'Rome',
+        country: 'Italy',
+        checkInDate: '2026-07-04',
+        checkOutDate: '2026-07-06',
+      });
+    });
+  });
+
   it('renders all trip days in order and sorts itinerary items by time', async () => {
     localStorage.setItem('helm:trips', JSON.stringify([{
       id: 'trip-1',
@@ -1454,7 +1528,54 @@ describe('TripsSurface', () => {
     expect(screen.queryByText('Rome Hotel')).not.toBeInTheDocument();
   });
 
-  it('shows booking validation feedback instead of failing silently', async () => {
+  it('creates a booking with sensible default times when date fields are left blank', async () => {
+    localStorage.setItem('helm:trips', JSON.stringify([{
+      id: 'trip-booking-defaults',
+      name: 'Default Times Trip',
+      summary: '',
+      notes: '',
+      status: 'planning',
+      startDate: '2026-08-01',
+      endDate: '2026-08-03',
+      createdAt: '2026-04-16T08:00:00.000Z',
+      updatedAt: '2026-04-16T08:00:00.000Z',
+    }]));
+
+    await act(async () => { renderWithProvider(<TripsSurface />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Bookings' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('+ Transport'));
+    });
+
+    expect(screen.getByLabelText('Depart')).toHaveValue('2026-08-01T09:00');
+    expect(screen.getByLabelText('Arrive')).toHaveValue('2026-08-01T11:00');
+
+    fireEvent.change(screen.getByLabelText('Depart'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Arrive'), { target: { value: '' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create Booking'));
+    });
+
+    await waitFor(() => {
+      const bookings = JSON.parse(localStorage.getItem('helm:tripBookings') || '[]');
+      expect(bookings).toHaveLength(1);
+      expect(bookings[0]).toMatchObject({
+        kind: 'transport',
+        title: 'Transport booking',
+        departAt: '2026-08-01T09:00',
+        arriveAt: '2026-08-01T11:00',
+      });
+    });
+
+    expect(screen.getByText('Transport booking')).toBeInTheDocument();
+  });
+
+  it('shows booking validation feedback for contradictory transport times', async () => {
     localStorage.setItem('helm:trips', JSON.stringify([{
       id: 'trip-booking-validation',
       name: 'Validation Trip',
@@ -1477,11 +1598,13 @@ describe('TripsSurface', () => {
       fireEvent.click(screen.getByText('+ Transport'));
     });
 
+    fireEvent.change(screen.getByLabelText('Arrive'), { target: { value: '2026-08-01T08:30' } });
+
     await act(async () => {
       fireEvent.click(screen.getByText('Create Booking'));
     });
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Add a title, a departure time, and an arrival time before saving this booking.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Arrival needs to be after the departure time.');
     expect(screen.getByText('Add Booking')).toBeInTheDocument();
     expect(screen.queryByText('Transport booking')).not.toBeInTheDocument();
   });

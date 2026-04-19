@@ -56,6 +56,22 @@ interface StayBookingDraft {
 
 type BookingDraft = TransportBookingDraft | StayBookingDraft;
 
+interface BookingSeed {
+  legId?: string;
+  city?: string;
+  country?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+interface BookingSeedableLeg {
+  id: string;
+  city: string;
+  country: string;
+  startDate: string;
+  endDate: string;
+}
+
 const TRIP_STATUS_OPTIONS: TripStatus[] = ['planning', 'booked', 'in_trip', 'completed', 'archived'];
 const TRANSPORT_MODE_OPTIONS: TripTransportMode[] = ['flight', 'train', 'bus', 'ferry', 'car', 'other'];
 
@@ -71,6 +87,29 @@ function addDays(value: string, days: number): string {
   const next = new Date(`${value}T00:00:00`);
   next.setDate(next.getDate() + days);
   return toLocalDateStr(next);
+}
+
+function toLocalDateTimeInput(date: Date): string {
+  return `${toLocalDateStr(date)}T${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function buildLocalDateTime(value: string, hours: number, minutes = 0): string {
+  const next = new Date(`${value}T00:00:00`);
+  next.setHours(hours, minutes, 0, 0);
+  return toLocalDateTimeInput(next);
+}
+
+function addHoursToLocalDateTime(value: string, hours: number): string {
+  const next = new Date(value);
+  next.setHours(next.getHours() + hours);
+  return toLocalDateTimeInput(next);
+}
+
+function getBookingDateRange(seed: BookingSeed): { startDate: string; endDate: string } {
+  const todayStr = toLocalDateStr(new Date());
+  const startDate = seed.startDate || seed.endDate || todayStr;
+  const endDate = seed.endDate || seed.startDate || startDate;
+  return { startDate, endDate };
 }
 
 function expandDateRange(startDate: string, endDate: string): string[] {
@@ -118,37 +157,13 @@ function formatTimeLabel(value?: string): string {
   return value;
 }
 
-function formatLabelList(labels: string[]): string {
-  if (labels.length === 0) return '';
-  if (labels.length === 1) return labels[0];
-  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
-}
-
 function getBookingValidationMessage(draft: BookingDraft): string | null {
   if (draft.kind === 'transport') {
-    const missing: string[] = [];
-    if (!draft.title.trim()) missing.push('a title');
-    if (!draft.departAt) missing.push('a departure time');
-    if (!draft.arriveAt) missing.push('an arrival time');
-    if (missing.length > 0) {
-      return `Add ${formatLabelList(missing)} before saving this booking.`;
-    }
-
     if (new Date(draft.arriveAt).getTime() < new Date(draft.departAt).getTime()) {
       return 'Arrival needs to be after the departure time.';
     }
 
     return null;
-  }
-
-  const missing: string[] = [];
-  if (!draft.title.trim()) missing.push('a title');
-  if (!draft.propertyName.trim()) missing.push('a property name');
-  if (!draft.checkInDate) missing.push('a check-in date');
-  if (!draft.checkOutDate) missing.push('a check-out date');
-  if (missing.length > 0) {
-    return `Add ${formatLabelList(missing)} before saving this booking.`;
   }
 
   if (draft.checkOutDate < draft.checkInDate) {
@@ -235,17 +250,19 @@ function getBookingTimelineLabel(booking: TripBooking): string {
   return `${formatDate(booking.checkInDate)} -> ${formatDate(booking.checkOutDate)}`;
 }
 
-function buildTransportDraft(legId?: string): TransportBookingDraft {
+function buildTransportDraft(seed: BookingSeed = {}): TransportBookingDraft {
+  const { startDate } = getBookingDateRange(seed);
+  const departAt = buildLocalDateTime(startDate, 9);
   return {
     id: createDraftId('transport'),
     kind: 'transport',
-    legId,
+    legId: seed.legId,
     mode: 'flight',
     title: '',
     fromLabel: '',
     toLabel: '',
-    departAt: '',
-    arriveAt: '',
+    departAt,
+    arriveAt: addHoursToLocalDateTime(departAt, 2),
     provider: '',
     confirmationCode: '',
     link: '',
@@ -253,23 +270,112 @@ function buildTransportDraft(legId?: string): TransportBookingDraft {
   };
 }
 
-function buildStayDraft(legId?: string): StayBookingDraft {
+function buildStayDraft(seed: BookingSeed = {}): StayBookingDraft {
+  const { startDate, endDate } = getBookingDateRange(seed);
   return {
     id: createDraftId('stay'),
     kind: 'stay',
-    legId,
+    legId: seed.legId,
     title: '',
     propertyName: '',
     address: '',
-    city: '',
-    country: '',
-    checkInDate: '',
-    checkOutDate: '',
+    city: seed.city || '',
+    country: seed.country || '',
+    checkInDate: startDate,
+    checkOutDate: endDate,
     provider: '',
     confirmationCode: '',
     link: '',
     notes: '',
   };
+}
+
+function materializeBookingDraft(draft: BookingDraft, seed: BookingSeed = {}): BookingDraft {
+  if (draft.kind === 'transport') {
+    const seededDraft = buildTransportDraft({ ...seed, legId: draft.legId || seed.legId });
+    const departAt = draft.departAt || seededDraft.departAt;
+    return {
+      ...seededDraft,
+      ...draft,
+      legId: draft.legId || seed.legId,
+      departAt,
+      arriveAt: draft.arriveAt || addHoursToLocalDateTime(departAt, 2),
+    };
+  }
+
+  const seededDraft = buildStayDraft({ ...seed, legId: draft.legId || seed.legId });
+  const checkInDate = draft.checkInDate || seededDraft.checkInDate;
+  return {
+    ...seededDraft,
+    ...draft,
+    legId: draft.legId || seed.legId,
+    city: draft.city || seededDraft.city,
+    country: draft.country || seededDraft.country,
+    checkInDate,
+    checkOutDate: draft.checkOutDate || checkInDate || seededDraft.checkOutDate,
+  };
+}
+
+function applySeedToExistingBookingDraft(draft: BookingDraft, previousSeed: BookingSeed, nextSeed: BookingSeed): BookingDraft {
+  if (draft.kind === 'transport') {
+    const previousDefaults = buildTransportDraft({ ...previousSeed, legId: draft.legId || previousSeed.legId });
+    const nextDefaults = buildTransportDraft(nextSeed);
+    return {
+      ...draft,
+      legId: nextSeed.legId,
+      departAt: !draft.departAt || draft.departAt === previousDefaults.departAt ? nextDefaults.departAt : draft.departAt,
+      arriveAt: !draft.arriveAt || draft.arriveAt === previousDefaults.arriveAt ? nextDefaults.arriveAt : draft.arriveAt,
+    };
+  }
+
+  const previousDefaults = buildStayDraft({ ...previousSeed, legId: draft.legId || previousSeed.legId });
+  const nextDefaults = buildStayDraft(nextSeed);
+  return {
+    ...draft,
+    legId: nextSeed.legId,
+    city: !draft.city || draft.city === previousDefaults.city ? nextDefaults.city : draft.city,
+    country: !draft.country || draft.country === previousDefaults.country ? nextDefaults.country : draft.country,
+    checkInDate: !draft.checkInDate || draft.checkInDate === previousDefaults.checkInDate ? nextDefaults.checkInDate : draft.checkInDate,
+    checkOutDate: !draft.checkOutDate || draft.checkOutDate === previousDefaults.checkOutDate ? nextDefaults.checkOutDate : draft.checkOutDate,
+  };
+}
+
+function buildBookingSeedFromLeg(leg?: BookingSeedableLeg): BookingSeed {
+  if (!leg) return {};
+  return {
+    legId: leg.id,
+    city: leg.city.trim(),
+    country: leg.country.trim(),
+    startDate: leg.startDate,
+    endDate: leg.endDate || leg.startDate,
+  };
+}
+
+function syncBookingDependentFields(previous: BookingDraft, next: BookingDraft, updates: Partial<BookingDraft>): BookingDraft {
+  if (next.kind === 'transport' && previous.kind === 'transport') {
+    if ('arriveAt' in updates || !next.departAt) return next;
+    const previousDefaultArrival = previous.departAt ? addHoursToLocalDateTime(previous.departAt, 2) : '';
+    const arrivalWasDefault = !previous.arriveAt || previous.arriveAt === previousDefaultArrival;
+    if (!next.arriveAt || (arrivalWasDefault && previous.departAt !== next.departAt) || (arrivalWasDefault && new Date(next.arriveAt).getTime() < new Date(next.departAt).getTime())) {
+      return { ...next, arriveAt: addHoursToLocalDateTime(next.departAt, 2) };
+    }
+    return next;
+  }
+
+  if (next.kind === 'stay' && previous.kind === 'stay') {
+    if ('checkOutDate' in updates) return next;
+    if (next.checkInDate && (!next.checkOutDate || next.checkOutDate < next.checkInDate)) {
+      return { ...next, checkOutDate: next.checkInDate };
+    }
+  }
+
+  return next;
+}
+
+function buildWizardBookingValidationMessage(booking: BookingDraft, index: number): string | null {
+  const validationMessage = getBookingValidationMessage(booking);
+  if (!validationMessage) return null;
+  return `${booking.kind === 'transport' ? 'Transport' : 'Stay'} booking ${index + 1}: ${validationMessage}`;
 }
 
 function mapBookingToDraft(booking: TripBooking): BookingDraft {
@@ -382,6 +488,7 @@ export default function TripsSurface() {
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>(buildTransportDraft());
   const [bookingFeedback, setBookingFeedback] = useState<string | null>(null);
+  const [wizardFeedback, setWizardFeedback] = useState<string | null>(null);
 
   const [calendarTarget, setCalendarTarget] = useState<{ title: string; start: string; end: string; description: string; allDay: boolean; location?: string } | null>(null);
   const [calendarSourceId, setCalendarSourceId] = useState('');
@@ -499,6 +606,31 @@ export default function TripsSurface() {
   const transportBookings = selectedBookings.filter(booking => booking.kind === 'transport');
   const stayBookings = selectedBookings.filter(booking => booking.kind === 'stay');
 
+  function getSelectedTripBookingSeed(legId?: string): BookingSeed {
+    if (legId) {
+      return buildBookingSeedFromLeg(selectedLegs.find(leg => leg.id === legId));
+    }
+    return {
+      startDate: selectedTrip?.startDate,
+      endDate: selectedTrip?.endDate,
+    };
+  }
+
+  function getWizardBookingSeed(legId?: string): BookingSeed {
+    if (legId) {
+      return buildBookingSeedFromLeg(routeDrafts.find(leg => leg.id === legId));
+    }
+    const range = deriveTripRange(routeDrafts.map((leg, index) => ({
+      startDate: leg.startDate || leg.endDate,
+      endDate: leg.endDate || leg.startDate,
+      sortOrder: index,
+    })));
+    return {
+      startDate: range.startDate,
+      endDate: range.endDate,
+    };
+  }
+
   function resetWizard(): void {
     setWizardStep('basics');
     setTripName('');
@@ -507,6 +639,7 @@ export default function TripsSurface() {
     setTripStatus('planning');
     setRouteDrafts([{ id: createDraftId('leg'), country: '', city: '', startDate: '', endDate: '' }]);
     setWizardBookings([]);
+    setWizardFeedback(null);
   }
 
   function openCreateWizard(): void {
@@ -525,6 +658,17 @@ export default function TripsSurface() {
   }
 
   function saveWizard(): void {
+    const preparedBookings = wizardBookings.map(booking => materializeBookingDraft(booking, getWizardBookingSeed(booking.legId)));
+    setWizardBookings(preparedBookings);
+    const bookingValidationMessage = preparedBookings
+      .map((booking, index) => buildWizardBookingValidationMessage(booking, index))
+      .find((message): message is string => Boolean(message));
+    if (bookingValidationMessage) {
+      setWizardFeedback(bookingValidationMessage);
+      return;
+    }
+    setWizardFeedback(null);
+
     const preparedLegs = routeDrafts.map((leg, index) => ({
       country: leg.country.trim(),
       city: leg.city.trim(),
@@ -555,7 +699,7 @@ export default function TripsSurface() {
       legIdMap.set(draft.id, createdId);
     });
 
-    wizardBookings.forEach(booking => {
+    preparedBookings.forEach(booking => {
       if (booking.kind === 'transport') {
         app.addTripBooking({
           kind: 'transport',
@@ -566,7 +710,7 @@ export default function TripsSurface() {
           fromLabel: booking.fromLabel.trim(),
           toLabel: booking.toLabel.trim(),
           departAt: booking.departAt,
-          arriveAt: booking.arriveAt || booking.departAt,
+          arriveAt: booking.arriveAt,
           provider: booking.provider.trim() || undefined,
           confirmationCode: booking.confirmationCode.trim() || undefined,
           link: booking.link.trim() || undefined,
@@ -585,7 +729,7 @@ export default function TripsSurface() {
         city: booking.city.trim(),
         country: booking.country.trim(),
         checkInDate: booking.checkInDate,
-        checkOutDate: booking.checkOutDate || booking.checkInDate,
+        checkOutDate: booking.checkOutDate,
         provider: booking.provider.trim() || undefined,
         confirmationCode: booking.confirmationCode.trim() || undefined,
         link: booking.link.trim() || undefined,
@@ -631,14 +775,29 @@ export default function TripsSurface() {
   }
 
   function addWizardBooking(kind: 'transport' | 'stay'): void {
-    setWizardBookings(prev => [...prev, kind === 'transport' ? buildTransportDraft(routeDrafts[0]?.id) : buildStayDraft(routeDrafts[0]?.id)]);
+    setWizardFeedback(null);
+    const seed = getWizardBookingSeed(routeDrafts[0]?.id);
+    setWizardBookings(prev => [...prev, kind === 'transport' ? buildTransportDraft(seed) : buildStayDraft(seed)]);
   }
 
   function updateWizardBooking(id: string, updates: Partial<BookingDraft>): void {
-    setWizardBookings(prev => prev.map(booking => booking.id === id ? ({ ...booking, ...updates } as BookingDraft) : booking));
+    setWizardFeedback(null);
+    setWizardBookings(prev => prev.map(booking => {
+      if (booking.id !== id) return booking;
+      const nextDraft = { ...booking, ...updates } as BookingDraft;
+      if ('legId' in updates) {
+        return syncBookingDependentFields(
+          booking,
+          applySeedToExistingBookingDraft(nextDraft, getWizardBookingSeed(booking.legId), getWizardBookingSeed(updates.legId)),
+          updates,
+        );
+      }
+      return syncBookingDependentFields(booking, nextDraft, updates);
+    }));
   }
 
   function removeWizardBooking(id: string): void {
+    setWizardFeedback(null);
     setWizardBookings(prev => prev.filter(booking => booking.id !== id));
   }
 
@@ -739,8 +898,9 @@ export default function TripsSurface() {
   }
 
   function openBookingModal(kind: 'transport' | 'stay', booking?: TripBooking, legId?: string): void {
+    const seed = getSelectedTripBookingSeed(legId || booking?.legId);
     setEditingBookingId(booking?.id || null);
-    setBookingDraft(booking ? mapBookingToDraft(booking) : (kind === 'transport' ? buildTransportDraft(legId) : buildStayDraft(legId)));
+    setBookingDraft(booking ? materializeBookingDraft(mapBookingToDraft(booking), seed) : (kind === 'transport' ? buildTransportDraft(seed) : buildStayDraft(seed)));
     setBookingFeedback(null);
     setShowBookingModal(true);
   }
@@ -752,7 +912,17 @@ export default function TripsSurface() {
 
   function updateBookingDraft(updates: Partial<BookingDraft>): void {
     setBookingFeedback(null);
-    setBookingDraft(previous => ({ ...previous, ...updates } as BookingDraft));
+    setBookingDraft(previous => {
+      const nextDraft = { ...previous, ...updates } as BookingDraft;
+      if ('legId' in updates) {
+        return syncBookingDependentFields(
+          previous,
+          applySeedToExistingBookingDraft(nextDraft, getSelectedTripBookingSeed(previous.legId), getSelectedTripBookingSeed(updates.legId)),
+          updates,
+        );
+      }
+      return syncBookingDependentFields(previous, nextDraft, updates);
+    });
   }
 
   function saveBooking(): void {
@@ -761,28 +931,30 @@ export default function TripsSurface() {
       return;
     }
 
-    const validationMessage = getBookingValidationMessage(bookingDraft);
+    const preparedDraft = materializeBookingDraft(bookingDraft, getSelectedTripBookingSeed(bookingDraft.legId));
+    setBookingDraft(preparedDraft);
+    const validationMessage = getBookingValidationMessage(preparedDraft);
     if (validationMessage) {
       setBookingFeedback(validationMessage);
       return;
     }
 
     try {
-      if (bookingDraft.kind === 'transport') {
+      if (preparedDraft.kind === 'transport') {
         const payload = {
           kind: 'transport' as const,
           tripId: selectedTrip.id,
-          legId: bookingDraft.legId || undefined,
-          mode: bookingDraft.mode,
-          title: bookingDraft.title.trim(),
-          fromLabel: bookingDraft.fromLabel.trim(),
-          toLabel: bookingDraft.toLabel.trim(),
-          departAt: bookingDraft.departAt,
-          arriveAt: bookingDraft.arriveAt,
-          provider: bookingDraft.provider.trim() || undefined,
-          confirmationCode: bookingDraft.confirmationCode.trim() || undefined,
-          link: bookingDraft.link.trim() || undefined,
-          notes: bookingDraft.notes,
+          legId: preparedDraft.legId || undefined,
+          mode: preparedDraft.mode,
+          title: preparedDraft.title.trim() || 'Transport booking',
+          fromLabel: preparedDraft.fromLabel.trim(),
+          toLabel: preparedDraft.toLabel.trim(),
+          departAt: preparedDraft.departAt,
+          arriveAt: preparedDraft.arriveAt,
+          provider: preparedDraft.provider.trim() || undefined,
+          confirmationCode: preparedDraft.confirmationCode.trim() || undefined,
+          link: preparedDraft.link.trim() || undefined,
+          notes: preparedDraft.notes,
         };
         if (editingBookingId) {
           app.updateTripBooking(editingBookingId, payload);
@@ -793,18 +965,18 @@ export default function TripsSurface() {
         const payload = {
           kind: 'stay' as const,
           tripId: selectedTrip.id,
-          legId: bookingDraft.legId || undefined,
-          title: bookingDraft.title.trim(),
-          propertyName: bookingDraft.propertyName.trim(),
-          address: bookingDraft.address.trim() || undefined,
-          city: bookingDraft.city.trim(),
-          country: bookingDraft.country.trim(),
-          checkInDate: bookingDraft.checkInDate,
-          checkOutDate: bookingDraft.checkOutDate,
-          provider: bookingDraft.provider.trim() || undefined,
-          confirmationCode: bookingDraft.confirmationCode.trim() || undefined,
-          link: bookingDraft.link.trim() || undefined,
-          notes: bookingDraft.notes,
+          legId: preparedDraft.legId || undefined,
+          title: preparedDraft.title.trim() || 'Stay booking',
+          propertyName: preparedDraft.propertyName.trim() || 'Accommodation',
+          address: preparedDraft.address.trim() || undefined,
+          city: preparedDraft.city.trim(),
+          country: preparedDraft.country.trim(),
+          checkInDate: preparedDraft.checkInDate,
+          checkOutDate: preparedDraft.checkOutDate,
+          provider: preparedDraft.provider.trim() || undefined,
+          confirmationCode: preparedDraft.confirmationCode.trim() || undefined,
+          link: preparedDraft.link.trim() || undefined,
+          notes: preparedDraft.notes,
         };
         if (editingBookingId) {
           app.updateTripBooking(editingBookingId, payload);
@@ -812,6 +984,7 @@ export default function TripsSurface() {
           app.addTripBooking(payload);
         }
       }
+      setBookingFeedback(null);
       setShowBookingModal(false);
     } catch (error) {
       setBookingFeedback(error instanceof Error ? error.message : 'Booking could not be saved. Please try again.');
@@ -1396,8 +1569,15 @@ export default function TripsSurface() {
               </div>
             )}
 
+            {wizardFeedback && (
+              <div className="info-box error" role="alert" aria-live="polite" style={{ marginBottom: 0 }}>
+                {wizardFeedback}
+              </div>
+            )}
+
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => {
+                setWizardFeedback(null);
                 if (wizardStep === 'basics') {
                   setShowWizard(false);
                   return;
@@ -1409,6 +1589,7 @@ export default function TripsSurface() {
               {wizardStep !== 'review' ? (
                 <button className="btn btn-primary" onClick={() => {
                   if (!canAdvanceWizard()) return;
+                  setWizardFeedback(null);
                   setWizardStep(wizardStep === 'basics' ? 'route' : wizardStep === 'route' ? 'bookings' : 'review');
                 }} disabled={!canAdvanceWizard()}>
                   Next
@@ -1541,7 +1722,9 @@ export default function TripsSurface() {
                 id="booking-kind"
                 className="form-select"
                 value={bookingDraft.kind}
-                onChange={event => replaceBookingDraft(event.target.value === 'transport' ? buildTransportDraft(bookingDraft.legId) : buildStayDraft(bookingDraft.legId))}
+                onChange={event => replaceBookingDraft(event.target.value === 'transport'
+                  ? buildTransportDraft(getSelectedTripBookingSeed(bookingDraft.legId))
+                  : buildStayDraft(getSelectedTripBookingSeed(bookingDraft.legId)))}
                 disabled={Boolean(editingBookingId)}
               >
                 <option value="transport">Transport</option>
