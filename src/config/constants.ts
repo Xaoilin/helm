@@ -227,6 +227,11 @@ export const ASSISTANT_BENCHMARK = {
   MAX_FAILURES_IN_SUMMARY: 12,
 } as const;
 
+export const STORAGE_KEYS = {
+  /** Keep the last open shell surface when the browser reloads. */
+  SHELL_SURFACE: 'helm:shell-surface',
+} as const;
+
 // ── Environment ──
 
 export const LOCALHOST_HOSTNAMES = ['localhost', '127.0.0.1', '::1', '[::1]'] as const;

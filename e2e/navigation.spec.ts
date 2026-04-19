@@ -29,6 +29,17 @@ test.describe('Navigation', () => {
     await expect(page.locator('text=Good morning').or(page.locator('text=Good afternoon').or(page.locator('text=Good evening')))).toBeVisible();
   });
 
+  test('should restore the Trips surface after a browser reload', async ({ page }) => {
+    await page.getByRole('button', { name: 'Navigate to Trips' }).click();
+    await expect(page.locator('main[aria-label="trips surface"]')).toBeVisible();
+
+    await page.reload();
+    await page.waitForSelector('.sidebar');
+
+    await expect(page.locator('main[aria-label="trips surface"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Navigate to Trips' })).toHaveAttribute('aria-current', 'page');
+  });
+
   test('should keep the current release visible in the sidebar', async ({ page }) => {
     await expect(page.locator('.sidebar-release')).toContainText('Current release');
     await expect(page.locator('.sidebar-release')).toContainText(/v\d+\.\d+\.\d+/);

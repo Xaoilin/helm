@@ -1,5 +1,5 @@
 import './App.css';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from './store/AppContext';
 import DashboardSurface from './surfaces/DashboardSurface';
 import ChatSurface from './surfaces/ChatSurface';
@@ -32,6 +32,8 @@ import {
   isGoogleCalendarAccount,
 } from './services/googleCalendarAuthManager';
 import { useReleaseRefresh } from './hooks/useReleaseRefresh';
+import { logInfo } from './services/logger';
+import { shouldReloadForAuthStateChange } from './services/authStateReload';
 
 const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'dashboard', label: 'Dashboard', icon: '\u{1F3E0}' },
@@ -49,13 +51,20 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'debug', label: 'Debug', icon: '\u{1F41E}' },
 ];
 
+const AUTH_RELOAD_SOURCE = 'AppAuth';
+
 function AppInner() {
   const app = useApp();
   const supabaseReady = isSupabaseReady();
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(supabaseReady);
+  const authUserRef = useRef<User | null>(null);
 
   useReleaseRefresh();
+
+  useEffect(() => {
+    authUserRef.current = authUser;
+  }, [authUser]);
 
   useEffect(() => {
     for (const account of app.calendarAccounts) {
@@ -108,14 +117,24 @@ function AppInner() {
       setTimeout(() => { initialLoad = false; }, TIMING.AUTH_LOAD_DEBOUNCE);
     });
 
-    const unsub = onAuthStateChange(user => {
+    const unsub = onAuthStateChange(({ event, user }) => {
       if (initialLoad) {
         // Skip the initial auth event (session restore on page load)
         setAuthUser(user);
         return;
       }
-      // Real auth transition (user clicked sign in/out) — reload to fetch correct data
-      window.location.reload();
+
+      const previousUserId = authUserRef.current?.id ?? null;
+      const nextUserId = user?.id ?? null;
+
+      if (shouldReloadForAuthStateChange(event, previousUserId, nextUserId)) {
+        logInfo(AUTH_RELOAD_SOURCE, `Reloading after auth event ${event}.`);
+        window.location.reload();
+        return;
+      }
+
+      logInfo(AUTH_RELOAD_SOURCE, `Ignoring auth event ${event}; keeping the current shell state.`);
+      setAuthUser(user);
     });
     return unsub;
   }, [supabaseReady]);
