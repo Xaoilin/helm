@@ -499,10 +499,10 @@ export default function DashboardSurface() {
         {/* ── Prayer Stats ── */}
         {(() => {
           const prayerHabits = app.tasks.filter(isPrayerTask).sort(comparePrayerTasks);
-          const prayerStats = calculatePrayerStats(gam, app.tasks);
+          const prayerStats = calculatePrayerStats(gam, app.tasks, now);
           return (
             <PrayerStatsCard
-              prayerStats={prayerStats}
+              prayerStats={prayerStats.currentMonth}
               prayerHabits={prayerHabits}
               gam={gam}
               todayStr={todayStr}

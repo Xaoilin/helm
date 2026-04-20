@@ -1937,6 +1937,55 @@ textarea.form-input {
   color: #4a4e62;
 }
 
+.profile-month-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.profile-month-history-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) 1fr auto;
+  gap: 12px;
+  align-items: center;
+  background: #13151c;
+  border: 1px solid #242740;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.profile-month-history-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e1e4ea;
+}
+.profile-month-history-meta {
+  font-size: 10px;
+  color: #6b6f85;
+  margin-top: 2px;
+}
+.profile-month-history-bar {
+  height: 8px;
+  background: #1e2030;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.profile-month-history-fill {
+  height: 100%;
+  border-radius: inherit;
+}
+.profile-month-history-value {
+  min-width: 88px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e1e4ea;
+}
+.profile-month-history-value span {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  color: #6b6f85;
+}
+
 /* Badges */
 .profile-badges-grid {
   display: grid;

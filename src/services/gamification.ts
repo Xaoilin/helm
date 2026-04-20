@@ -69,6 +69,25 @@ function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function toMonthStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatMonthLabel(monthStr: string): string {
+  const [yearStr, monthStrPart] = monthStr.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStrPart);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month)) {
+    return monthStr;
+  }
+
+  return new Date(year, month - 1, 1).toLocaleDateString('en-GB', {
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 export function updateStreak(
   profile: GamificationProfile,
   completionDate: Date = new Date(),
@@ -652,45 +671,120 @@ export function backfillPrayerLog(
 }
 
 /** Calculate prayer completion stats from daily log. */
+export interface PrayerStatsSummary {
+  completed: number;
+  total: number;
+  percentage: number;
+}
+
+export interface PrayerStatsPerPrayer extends PrayerStatsSummary {
+  name: string;
+}
+
+export interface PrayerStatsPeriod {
+  month: string;
+  label: string;
+  trackedDays: number;
+  overall: PrayerStatsSummary;
+  perPrayer: PrayerStatsPerPrayer[];
+}
+
+export interface PrayerStatsResult {
+  overall: PrayerStatsSummary;
+  perPrayer: PrayerStatsPerPrayer[];
+  trackedDays: number;
+  last30Days: { date: string; count: number }[];
+  currentMonth: PrayerStatsPeriod;
+  monthlyHistory: PrayerStatsPeriod[];
+}
+
+function buildPrayerStatsPeriod(
+  prayerHabits: { id: string; title: string; prayerName?: string }[],
+  log: Record<string, string[]>,
+  dates: string[],
+  month: string,
+  label: string,
+): PrayerStatsPeriod {
+  const trackedDays = dates.length;
+  const perPrayer = prayerHabits.map(habit => {
+    const prayerName = habit.prayerName || habit.title;
+    const completed = dates.filter(date => log[date]?.includes(habit.id)).length;
+
+    return {
+      name: prayerName.charAt(0).toUpperCase() + prayerName.slice(1),
+      completed,
+      total: trackedDays,
+      percentage: trackedDays > 0 ? Math.round((completed / trackedDays) * 100) : 0,
+    };
+  });
+
+  const totalPossible = prayerHabits.length * trackedDays;
+  const totalCompleted = perPrayer.reduce((sum, prayer) => sum + prayer.completed, 0);
+
+  return {
+    month,
+    label,
+    trackedDays,
+    overall: {
+      completed: totalCompleted,
+      total: totalPossible,
+      percentage: totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0,
+    },
+    perPrayer,
+  };
+}
+
 export function calculatePrayerStats(
   profile: GamificationProfile,
   tasks: { id: string; title: string; category: string; prayerName?: string }[],
-): {
-  overall: { completed: number; total: number; percentage: number };
-  perPrayer: { name: string; completed: number; total: number; percentage: number }[];
-  last30Days: { date: string; count: number }[];
-} {
+  referenceDate: Date = new Date(),
+): PrayerStatsResult {
   const prayerHabits = tasks.filter(task => isPrayerTask(task as Pick<Task, 'category' | 'title' | 'prayerName'>));
+  const currentMonthKey = toMonthStr(referenceDate);
+  const currentMonthLabel = formatMonthLabel(currentMonthKey);
+  const emptyCurrentMonth: PrayerStatsPeriod = {
+    month: currentMonthKey,
+    label: currentMonthLabel,
+    trackedDays: 0,
+    overall: { completed: 0, total: 0, percentage: 0 },
+    perPrayer: [],
+  };
 
   if (prayerHabits.length === 0) {
-    return { overall: { completed: 0, total: 0, percentage: 0 }, perPrayer: [], last30Days: [] };
+    return {
+      overall: { completed: 0, total: 0, percentage: 0 },
+      perPrayer: [],
+      trackedDays: 0,
+      last30Days: [],
+      currentMonth: emptyCurrentMonth,
+      monthlyHistory: [emptyCurrentMonth],
+    };
   }
 
   const log = profile.dailyLog || {};
   const dates = Object.keys(log).sort();
-  const totalDays = dates.length || 1;
+  const allTime = buildPrayerStatsPeriod(prayerHabits, log, dates, 'all-time', 'All time');
+  const currentMonthDates = dates.filter(date => date.startsWith(currentMonthKey));
+  const currentMonth = buildPrayerStatsPeriod(prayerHabits, log, currentMonthDates, currentMonthKey, currentMonthLabel);
 
-  // Per prayer stats
-  const perPrayer = prayerHabits.map(habit => {
-    const prayerName = habit.prayerName || habit.title;
-    const completed = dates.filter(d => log[d]?.includes(habit.id)).length;
-    return {
-      name: prayerName.charAt(0).toUpperCase() + prayerName.slice(1),
-      completed,
-      total: totalDays,
-      percentage: Math.round((completed / totalDays) * 100),
-    };
-  });
-
-  // Overall
-  const totalPossible = prayerHabits.length * totalDays;
-  const totalCompleted = perPrayer.reduce((sum, p) => sum + p.completed, 0);
+  const monthKeys = Array.from(new Set([...dates.map(date => date.slice(0, 7)), currentMonthKey]))
+    .sort((left, right) => right.localeCompare(left));
+  const monthlyHistory = monthKeys.map(month =>
+    buildPrayerStatsPeriod(
+      prayerHabits,
+      log,
+      dates.filter(date => date.startsWith(month)),
+      month,
+      formatMonthLabel(month),
+    )
+  );
 
   // Last 30 days
   const last30Days: { date: string; count: number }[] = [];
+  const baseDate = new Date(referenceDate);
   for (let i = 29; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
+    const d = new Date(baseDate);
+    d.setDate(baseDate.getDate() - i);
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const dayEntries = log[dateStr] || [];
     const count = prayerHabits.filter(h => dayEntries.includes(h.id)).length;
@@ -698,13 +792,12 @@ export function calculatePrayerStats(
   }
 
   return {
-    overall: {
-      completed: totalCompleted,
-      total: totalPossible,
-      percentage: totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0,
-    },
-    perPrayer,
+    overall: allTime.overall,
+    perPrayer: allTime.perPrayer,
+    trackedDays: allTime.trackedDays,
     last30Days,
+    currentMonth,
+    monthlyHistory,
   };
 }
 

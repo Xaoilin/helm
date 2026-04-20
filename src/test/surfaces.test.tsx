@@ -17,6 +17,7 @@ import SettingsSurface from '../surfaces/SettingsSurface';
 import * as googleCalendarApi from '../services/googleCalendarApi';
 import * as googleCalendarAuthManager from '../services/googleCalendarAuthManager';
 import * as hostedAssistantApi from '../services/hostedAssistantApi';
+import { DEFAULT_PROFILE } from '../services/gamification';
 import { defaultIntegrations } from '../store/contexts/SettingsContext';
 import { APP_RELEASE_VERSION } from '../config/release';
 import type { AssistantNavigationTarget } from '../services/assistantNavigation';
@@ -999,6 +1000,52 @@ describe('ProfileSurface', () => {
     expect(screen.getByText('0 XP')).toBeInTheDocument();
     expect(screen.getByText('No active streak')).toBeInTheDocument();
   });
+
+  it('shows month-by-month prayer rate history', async () => {
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'prayer-fajr',
+        title: 'Fajr Prayer',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'prayer',
+        prayerName: 'Fajr',
+        recurring: { frequency: 'daily' },
+        createdAt: '2026-03-31T08:00:00.000Z',
+        updatedAt: '2026-04-02T08:00:00.000Z',
+      },
+      {
+        id: 'prayer-dhuhr',
+        title: 'Dhuhr Prayer',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'prayer',
+        prayerName: 'Dhuhr',
+        recurring: { frequency: 'daily' },
+        createdAt: '2026-03-31T08:00:00.000Z',
+        updatedAt: '2026-04-02T08:00:00.000Z',
+      },
+    ]));
+    localStorage.setItem('helm:gamification', JSON.stringify({
+      ...DEFAULT_PROFILE,
+      dailyLog: {
+        '2026-03-31': ['prayer-fajr'],
+        '2026-04-01': ['prayer-fajr', 'prayer-dhuhr'],
+        '2026-04-02': ['prayer-dhuhr'],
+      },
+    }));
+
+    await act(async () => { renderWithProvider(<ProfileSurface />); });
+
+    expect(screen.getByText('Month-by-month rate history')).toBeInTheDocument();
+    const history = screen.getByLabelText('Prayer rate history by month');
+    expect(within(history).getByText('April 2026')).toBeInTheDocument();
+    expect(within(history).getByText('March 2026')).toBeInTheDocument();
+    expect(within(history).getByText('75%')).toBeInTheDocument();
+    expect(within(history).getByText('50%')).toBeInTheDocument();
+  });
 });
 
 describe('DashboardSurface', () => {
@@ -1017,6 +1064,61 @@ describe('DashboardSurface', () => {
     expect(screen.getByText('Daily Habits')).toBeInTheDocument();
     expect(screen.getByText('Goals')).toBeInTheDocument();
     expect(screen.getByText('Next Milestone')).toBeInTheDocument();
+  });
+
+  it('scopes the prayer rate card to the current month', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 3, 20, 10, 0, 0));
+
+    localStorage.setItem('helm:settings', JSON.stringify({ prayerEnabled: false }));
+    localStorage.setItem('helm:tasks', JSON.stringify([
+      {
+        id: 'prayer-fajr',
+        title: 'Fajr Prayer',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'prayer',
+        prayerName: 'Fajr',
+        recurring: { frequency: 'daily' },
+        createdAt: '2026-03-31T08:00:00.000Z',
+        updatedAt: '2026-04-02T08:00:00.000Z',
+      },
+      {
+        id: 'prayer-dhuhr',
+        title: 'Dhuhr Prayer',
+        description: '',
+        completed: false,
+        priority: 'medium',
+        category: 'prayer',
+        prayerName: 'Dhuhr',
+        recurring: { frequency: 'daily' },
+        createdAt: '2026-03-31T08:00:00.000Z',
+        updatedAt: '2026-04-02T08:00:00.000Z',
+      },
+    ]));
+    localStorage.setItem('helm:gamification', JSON.stringify({
+      ...DEFAULT_PROFILE,
+      dailyLog: {
+        '2026-03-31': ['prayer-fajr'],
+        '2026-04-01': ['prayer-fajr', 'prayer-dhuhr'],
+        '2026-04-02': ['prayer-dhuhr'],
+      },
+    }));
+
+    try {
+      await act(async () => { renderWithProvider(<DashboardSurface />); });
+
+      const prayerCard = screen.getByText(/Prayer Rate/).closest('.dash-card');
+      expect(prayerCard).not.toBeNull();
+      expect(prayerCard).toHaveTextContent('75%');
+      expect(prayerCard).toHaveTextContent('This month only');
+      expect(prayerCard).toHaveTextContent('April 2026');
+      expect(prayerCard).toHaveTextContent('2 tracked days');
+      expect(prayerCard).not.toHaveTextContent('67%');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('separates prayer tasks into an Islamic dashboard section', async () => {

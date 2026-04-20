@@ -37,6 +37,10 @@ export default function ProfileSurface() {
   }, [app.tasks, gam.totalTasksCompleted, referenceTime]);
 
   const avgPerDay = gam.totalTasksCompleted > 0 ? (gam.totalTasksCompleted / daysSinceFirst).toFixed(1) : '0';
+  const prayerStats = useMemo(
+    () => calculatePrayerStats(gam, app.tasks, new Date(referenceTime)),
+    [app.tasks, gam, referenceTime],
+  );
 
   // Streak heatmap: last 30 days
   const heatmapDays = useMemo(() => {
@@ -214,7 +218,6 @@ export default function ProfileSurface() {
 
         {/* ── Prayer Rate ── */}
         {(() => {
-          const prayerStats = calculatePrayerStats(gam, app.tasks);
           if (prayerStats.perPrayer.length === 0) return null;
           return (
             <div className="profile-section">
@@ -236,7 +239,7 @@ export default function ProfileSurface() {
                 ))}
               </div>
               <div style={{ fontSize: 11, color: '#6b6f85' }}>
-                {prayerStats.overall.completed} / {prayerStats.overall.total} total prayers tracked over {Object.keys(gam.dailyLog || {}).length} days
+                {prayerStats.overall.completed} / {prayerStats.overall.total} total prayers tracked over {prayerStats.trackedDays} day{prayerStats.trackedDays === 1 ? '' : 's'}
               </div>
               {/* 30-day heatmap for prayers */}
               <div style={{ marginTop: 12 }}>
@@ -258,6 +261,35 @@ export default function ProfileSurface() {
                     <span><span style={{ display: 'inline-block', width: 8, height: 8, background: '#f59e0b', borderRadius: 2, marginRight: 3 }} />Partial</span>
                     <span><span style={{ display: 'inline-block', width: 8, height: 8, background: '#22c55e', borderRadius: 2, marginRight: 3 }} />All 5</span>
                   </div>
+                </div>
+              </div>
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontSize: 11, color: '#6b6f85', marginBottom: 8 }}>Month-by-month rate history</div>
+                <div className="profile-month-history" aria-label="Prayer rate history by month">
+                  {prayerStats.monthlyHistory.map(period => (
+                    <div key={period.month} className="profile-month-history-row">
+                      <div>
+                        <div className="profile-month-history-label">{period.label}</div>
+                        <div className="profile-month-history-meta">
+                          {period.trackedDays > 0 ? `${period.trackedDays} tracked day${period.trackedDays === 1 ? '' : 's'}` : 'No prayer logs'}
+                          {period.month === prayerStats.currentMonth.month ? ' · Current month' : ''}
+                        </div>
+                      </div>
+                      <div className="profile-month-history-bar">
+                        <div
+                          className="profile-month-history-fill"
+                          style={{
+                            width: `${period.overall.percentage}%`,
+                            background: period.overall.percentage >= 80 ? '#22c55e' : period.overall.percentage >= 50 ? '#f59e0b' : '#ff6b6b',
+                          }}
+                        />
+                      </div>
+                      <div className="profile-month-history-value">
+                        {period.overall.percentage}%
+                        <span>{period.overall.completed}/{period.overall.total}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
