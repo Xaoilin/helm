@@ -44,7 +44,9 @@ function getPrimaryLabel(candidate: FocusCandidate): string {
 }
 
 function canQuickComplete(candidate: FocusCandidate): boolean {
-  return Boolean(candidate.taskId) && (candidate.kind === 'task' || candidate.kind === 'habit' || candidate.kind === 'prayer');
+  return Boolean(candidate.taskId)
+    && (candidate.kind === 'task' || candidate.kind === 'habit' || candidate.kind === 'prayer')
+    && !candidate.reasoningTags.includes('prayer_pair');
 }
 
 function getSourceLabel(dashboardFocus: DashboardFocusState, assistantProvider: Settings['assistantProvider']): string {
