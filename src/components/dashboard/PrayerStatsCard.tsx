@@ -6,7 +6,7 @@ function toLocalDateStr(d: Date): string {
 }
 
 interface PrayerStatsCardProps {
-  prayerStats: ReturnType<typeof calculatePrayerStats>;
+  prayerStats: ReturnType<typeof calculatePrayerStats>['currentMonth'];
   prayerHabits: Task[];
   gam: GamificationProfile;
   todayStr: string;
@@ -36,9 +36,6 @@ export default function PrayerStatsCard({
     const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday' : dayNames[d.getDay()];
     last7Days.push({ dateStr: ds, label });
   }
-
-  const logDates = Object.keys(gam.dailyLog || {}).sort();
-  const startDate = logDates.length > 0 ? logDates[0] : null;
 
   return (
     <div className="dash-card" style={{ marginBottom: 16 }}>
@@ -126,7 +123,9 @@ export default function PrayerStatsCard({
         ))}
       </div>
       <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 8 }}>
-        Based on {logDates.length} days of tracking{startDate && ` \u00b7 Since ${new Date(startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+        {prayerStats.trackedDays > 0
+          ? `This month only \u00b7 ${prayerStats.label} \u00b7 ${prayerStats.trackedDays} tracked day${prayerStats.trackedDays === 1 ? '' : 's'}`
+          : `This month only \u00b7 ${prayerStats.label} \u00b7 No prayer logs yet`}
       </div>
     </div>
   );

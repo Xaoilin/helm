@@ -13,6 +13,7 @@ import {
   processTaskCompletion,
   DEFAULT_PROFILE,
   BADGES,
+  calculatePrayerStats,
 } from '../services/gamification';
 
 describe('XP calculation', () => {
@@ -278,6 +279,75 @@ describe('Badges', () => {
     for (const id of islamicIds) {
       expect(BADGES.some(b => b.id === id)).toBe(true);
     }
+  });
+});
+
+describe('Prayer stats', () => {
+  const prayerTasks = [
+    {
+      id: 'prayer-fajr',
+      title: 'Fajr Prayer',
+      category: 'prayer',
+      prayerName: 'Fajr' as const,
+    },
+    {
+      id: 'prayer-dhuhr',
+      title: 'Dhuhr Prayer',
+      category: 'prayer',
+      prayerName: 'Dhuhr' as const,
+    },
+  ];
+
+  it('scopes the current month snapshot without losing all-time totals', () => {
+    const profile = {
+      ...DEFAULT_PROFILE,
+      dailyLog: {
+        '2026-03-31': ['prayer-fajr'],
+        '2026-04-01': ['prayer-fajr', 'prayer-dhuhr'],
+        '2026-04-02': ['prayer-dhuhr'],
+      },
+    };
+
+    const result = calculatePrayerStats(profile, prayerTasks, new Date(2026, 3, 20));
+
+    expect(result.trackedDays).toBe(3);
+    expect(result.overall).toEqual({
+      completed: 4,
+      total: 6,
+      percentage: 67,
+    });
+    expect(result.currentMonth.trackedDays).toBe(2);
+    expect(result.currentMonth.overall).toEqual({
+      completed: 3,
+      total: 4,
+      percentage: 75,
+    });
+    expect(result.currentMonth.perPrayer).toEqual([
+      { name: 'Fajr', completed: 1, total: 2, percentage: 50 },
+      { name: 'Dhuhr', completed: 2, total: 2, percentage: 100 },
+    ]);
+    expect(result.monthlyHistory.map(period => period.month)).toEqual(['2026-04', '2026-03']);
+  });
+
+  it('keeps the current month in history even before any logs exist for it', () => {
+    const profile = {
+      ...DEFAULT_PROFILE,
+      dailyLog: {
+        '2026-03-31': ['prayer-fajr'],
+      },
+    };
+
+    const result = calculatePrayerStats(profile, prayerTasks, new Date(2026, 3, 20));
+
+    expect(result.currentMonth.month).toBe('2026-04');
+    expect(result.currentMonth.label).toBe('April 2026');
+    expect(result.currentMonth.trackedDays).toBe(0);
+    expect(result.currentMonth.overall).toEqual({
+      completed: 0,
+      total: 0,
+      percentage: 0,
+    });
+    expect(result.monthlyHistory.map(period => period.month)).toEqual(['2026-04', '2026-03']);
   });
 });
 
