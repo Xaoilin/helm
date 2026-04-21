@@ -33,6 +33,7 @@ Run the relevant checks before closing out meaningful code changes:
 - `npm run check`
 
 Also do manual QA before reporting back on any delivered feature. Changes that touch UI, voice, OAuth, wake-word, or external integrations always require a direct manual validation pass, and user-facing changes should include screenshot evidence when practical.
+For user-facing changes, add a post-implementation UI design review pass before handoff. Check rendered spacing, text wrapping, visual hierarchy, responsive fit, and obvious focus or hover state regressions, then capture the screenshot evidence from the reviewed UI.
 
 Run `npm run handoff:check` at the end of every completed feature handoff. If it fails, the job is not done yet. Keep going until it passes unless the user explicitly asked to keep the work local/unmerged or an external access blocker makes completion impossible.
 

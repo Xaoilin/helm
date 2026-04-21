@@ -11,6 +11,7 @@
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
 - For every bug, regression, or feature failure, do a five-whys pass before solution planning or implementation. Ask "why did this happen?" repeatedly until you identify the root cause at the correct layer, not just the first visible symptom.
+- For any visible feature work, run a dedicated UI design review pass after implementation and before the final handoff. Treat this as a separate step from functional QA so spacing, wrapping, balance, and hierarchy get reviewed deliberately instead of incidentally.
 - For integrations, auth, sync, backend-dependent features, and other opaque user-facing fixes, assume the first confident implementation may still fail in reality. Prepare for the case where a fix looks correct locally, is handed off confidently, and still fails in live use. By default, ship a Debug surface or equivalent runtime diagnostics in the same change. If that is not appropriate, document the alternate observability path explicitly in the handoff and relevant docs.
 - Add a regression test for every bug fix that changes logic.
 - Keep changes scoped. If a task spans multiple domains, prefer small coherent commits over one broad sweep.
@@ -112,6 +113,17 @@ Changes that touch the following areas always require a direct manual verificati
 For user-facing changes, capture screenshot evidence when practical as part of the manual QA pass.
 
 For every delivered feature, say clearly what you verified manually, include the relevant screenshot evidence when practical, and call out what still needs a follow-up pass, if anything.
+
+### Post-feature UI design review
+
+After the feature works end to end, do one more rendered review that focuses on design quality rather than raw correctness.
+
+- Check text wrapping, truncation, overflow, and any labels or buttons that feel squashed at the widths the surface actually uses.
+- Check spacing, alignment, visual balance, card heights, and hierarchy so the feature looks intentional instead of merely functional.
+- Check the most relevant responsive width for the surface, not just the default desktop viewport.
+- Check hover, focus, disabled, empty, loading, and error states when the change touches them.
+- Capture screenshot evidence after this pass so the screenshot reflects the reviewed UI, not a pre-review build.
+- If the design review finds an issue, fix it and repeat the pass before handoff.
 
 ## Error Handling And Resilience
 
