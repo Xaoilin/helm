@@ -22,4 +22,20 @@ test.describe('Health fast food log', () => {
     await expect(page.locator('.health-entry-card')).toContainText('Nauseous for the entire day. Bad experience.');
     await expect(page.locator('.health-entry-tag')).toContainText('Nauseous');
   });
+
+  test('keeps the severity cards wide enough to stay readable', async ({ page }) => {
+    const dateField = page.locator('.health-field').filter({ hasText: 'When was it?' });
+    const ratingField = page.locator('.health-rating-field');
+    const mixedCard = page.getByRole('button', { name: /Mixed/i });
+
+    const [dateBox, ratingBox, mixedCardBox] = await Promise.all([
+      dateField.boundingBox(),
+      ratingField.boundingBox(),
+      mixedCard.boundingBox(),
+    ]);
+
+    expect(dateBox?.width ?? 0).toBeGreaterThan(0);
+    expect(ratingBox?.width ?? 0).toBeGreaterThan((dateBox?.width ?? 0) * 1.75);
+    expect(mixedCardBox?.width ?? 0).toBeGreaterThan(150);
+  });
 });

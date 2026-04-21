@@ -4089,25 +4089,33 @@ textarea.form-input {
 .health-rating-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  align-items: stretch;
 }
 
 .health-rating-card {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 12px;
   padding: 12px 14px;
   border-radius: 16px;
   text-align: left;
+  min-width: 0;
+  min-height: 72px;
 }
 
 .health-rating-card .emoji {
   font-size: 20px;
+  line-height: 1.2;
+  flex-shrink: 0;
 }
 
 .health-rating-card .title {
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.25;
+  min-width: 0;
+  text-wrap: balance;
 }
 
 .health-rating-card.active.rating-good {
@@ -4167,10 +4175,21 @@ textarea.form-input {
 
 .health-form-footer {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+.health-form-hint {
+  flex: 1 1 220px;
+}
+
+.health-form-footer .btn {
+  flex: 0 0 auto;
+  min-width: 176px;
+  white-space: nowrap;
 }
 
 .health-pattern-list {

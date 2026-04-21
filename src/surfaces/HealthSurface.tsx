@@ -282,12 +282,14 @@ export default function HealthSurface() {
                   </div>
                 </label>
 
-                <div className="health-field">
+                <div className="health-field health-field-wide health-rating-field">
                   <span>How bad was it?</span>
                   <div className="health-rating-grid">
                     {HEALTH_FAST_FOOD.RATINGS.map(option => (
                       <button
                         key={option.value}
+                        type="button"
+                        aria-pressed={draft.rating === option.value}
                         className={`health-rating-card ${draft.rating === option.value ? 'active' : ''} rating-${option.value}`}
                         onClick={() => setDraft(current => ({ ...current, rating: option.value }))}
                       >
