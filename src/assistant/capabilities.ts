@@ -37,6 +37,7 @@ const SURFACE_VALUES: readonly Surface[] = [
   'projects',
   'tasks',
   'finance',
+  'health',
   'knowledge',
   'profile',
   'integrations',

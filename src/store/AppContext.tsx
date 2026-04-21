@@ -8,6 +8,7 @@ import type {
   DashboardFocusState,
   KnowledgeTopic, KnowledgeEntry,
   LifestyleItem,
+  FastFoodLogEntry,
   FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
   AssistantCorrection,
   ClockState,
@@ -26,6 +27,7 @@ import { ProjectProvider, useProjectContext } from './contexts/ProjectContext';
 import { TaskProvider, useTaskContext } from './contexts/TaskContext';
 import { ChatProvider, useChatContext, type ChatCrossDomainData } from './contexts/ChatContext';
 import { KnowledgeProvider, useKnowledgeContext } from './contexts/KnowledgeContext';
+import { HealthProvider, useHealthContext } from './contexts/HealthContext';
 import { FinanceProvider, useFinanceContext } from './contexts/FinanceContext';
 import { GamificationProvider, useGamificationContext } from './contexts/GamificationContext';
 import { SettingsProvider, useSettingsContext } from './contexts/SettingsContext';
@@ -53,6 +55,7 @@ interface AppContextAPI {
   knowledgeTopics: KnowledgeTopic[];
   knowledgeEntries: KnowledgeEntry[];
   lifestyleItems: LifestyleItem[];
+  fastFoodEntries: FastFoodLogEntry[];
   financeAccounts: FinanceAccount[];
   transactions: Transaction[];
   financeBudgets: FinanceBudget[];
@@ -129,6 +132,10 @@ interface AppContextAPI {
   removeLifestyleItem: (id: string) => void;
   reorderLifestyleItems: (reorderedIds: string[]) => void;
 
+  addFastFoodEntry: (entry: Omit<FastFoodLogEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateFastFoodEntry: (id: string, updates: Partial<FastFoodLogEntry>) => void;
+  removeFastFoodEntry: (id: string) => void;
+
   addFinanceAccount: (acc: Omit<FinanceAccount, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateFinanceAccount: (id: string, updates: Partial<FinanceAccount>) => void;
   removeFinanceAccount: (id: string) => void;
@@ -202,6 +209,7 @@ function isShellSurface(value: string | null): value is Surface {
     case 'projects':
     case 'tasks':
     case 'finance':
+    case 'health':
     case 'knowledge':
     case 'profile':
     case 'integrations':
@@ -234,6 +242,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   const taskCtx = useTaskContext();
   const chat = useChatContext();
   const knowledge = useKnowledgeContext();
+  const health = useHealthContext();
   const finance = useFinanceContext();
   const gamificationCtx = useGamificationContext();
   const settingsCtx = useSettingsContext();
@@ -300,6 +309,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     && taskCtx.loaded
     && chat.loaded
     && knowledge.loaded
+    && health.loaded
     && finance.loaded
     && gamificationCtx.loaded
     && settingsCtx.loaded
@@ -382,6 +392,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     knowledgeTopics: knowledge.knowledgeTopics,
     knowledgeEntries: knowledge.knowledgeEntries,
     lifestyleItems: knowledge.lifestyleItems,
+    fastFoodEntries: health.fastFoodEntries,
     financeAccounts: finance.financeAccounts,
     transactions: finance.transactions,
     financeBudgets: finance.financeBudgets,
@@ -455,6 +466,10 @@ function ShellProvider({ children }: { children: ReactNode }) {
     removeLifestyleItem: knowledge.removeLifestyleItem,
     reorderLifestyleItems: knowledge.reorderLifestyleItems,
 
+    addFastFoodEntry: health.addFastFoodEntry,
+    updateFastFoodEntry: health.updateFastFoodEntry,
+    removeFastFoodEntry: health.removeFastFoodEntry,
+
     addFinanceAccount: finance.addFinanceAccount,
     updateFinanceAccount: finance.updateFinanceAccount,
     removeFinanceAccount: finance.removeFinanceAccount,
@@ -507,6 +522,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     projectCtx,
     taskCtx,
     knowledge,
+    health,
     finance,
     settingsCtx,
     assistantCtx,
@@ -618,15 +634,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
               <TaskProvider>
                 <DashboardFocusProvider>
                   <KnowledgeProvider>
-                    <FinanceProvider>
-                      <ClockProvider>
-                        <AssistantProvider>
-                          <ChatBridge>
-                            <ShellProvider>{children}</ShellProvider>
-                          </ChatBridge>
-                        </AssistantProvider>
-                      </ClockProvider>
-                    </FinanceProvider>
+                    <HealthProvider>
+                      <FinanceProvider>
+                        <ClockProvider>
+                          <AssistantProvider>
+                            <ChatBridge>
+                              <ShellProvider>{children}</ShellProvider>
+                            </ChatBridge>
+                          </AssistantProvider>
+                        </ClockProvider>
+                      </FinanceProvider>
+                    </HealthProvider>
                   </KnowledgeProvider>
                 </DashboardFocusProvider>
               </TaskProvider>

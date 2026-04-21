@@ -384,6 +384,30 @@ export interface KnowledgeTopic {
   updatedAt: string;
 }
 
+// ── Health ──
+export type FastFoodExperienceRating = 'good' | 'mixed' | 'bad' | 'awful';
+export type FastFoodSymptom =
+  | 'fine'
+  | 'bloated'
+  | 'sluggish'
+  | 'nauseous'
+  | 'headache'
+  | 'thirsty'
+  | 'brain-fog'
+  | 'cravings';
+
+export interface FastFoodLogEntry {
+  id: string;
+  venue: string;
+  date: string; // YYYY-MM-DD
+  order?: string;
+  rating: FastFoodExperienceRating;
+  symptoms: FastFoodSymptom[];
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Finance ──
 export type TransactionType = 'income' | 'expense' | 'transfer';
 
@@ -551,6 +575,7 @@ export type Surface =
   | 'projects'
   | 'tasks'
   | 'finance'
+  | 'health'
   | 'knowledge'
   | 'profile'
   | 'integrations'

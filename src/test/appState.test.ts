@@ -356,3 +356,40 @@ describe('AppContext - Knowledge', () => {
     expect(r.api!.knowledgeEntries).toHaveLength(0);
   });
 });
+
+describe('AppContext - Health', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('should add, update, and remove fast food entries', async () => {
+    const r = await renderWithApp();
+    let entryId = '';
+
+    act(() => {
+      entryId = r.api!.addFastFoodEntry({
+        venue: 'McDonald\'s',
+        date: '2026-04-20',
+        order: 'Cheeseburger meal',
+        rating: 'bad',
+        symptoms: ['nauseous', 'sluggish'],
+        notes: 'Felt nauseous for the rest of the day.',
+      });
+    });
+
+    expect(r.api!.fastFoodEntries).toHaveLength(1);
+    expect(r.api!.fastFoodEntries[0].venue).toBe('McDonald\'s');
+    expect(r.api!.fastFoodEntries[0].rating).toBe('bad');
+
+    act(() => {
+      r.api!.updateFastFoodEntry(entryId, {
+        rating: 'awful',
+        notes: 'Still felt awful all afternoon.',
+      });
+    });
+
+    expect(r.api!.fastFoodEntries[0].rating).toBe('awful');
+    expect(r.api!.fastFoodEntries[0].notes).toBe('Still felt awful all afternoon.');
+
+    act(() => { r.api!.removeFastFoodEntry(entryId); });
+    expect(r.api!.fastFoodEntries).toHaveLength(0);
+  });
+});

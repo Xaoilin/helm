@@ -139,6 +139,28 @@ export const CLOCK = {
   PRESET_MINUTES: [1, 5, 15, 25] as const,
 } as const;
 
+export const HEALTH_FAST_FOOD = {
+  MAX_VENUE_LENGTH: 60,
+  MAX_ORDER_LENGTH: 80,
+  MAX_NOTES_LENGTH: 240,
+  RATINGS: [
+    { value: 'good', label: 'Felt fine', emoji: '\u{1F642}' },
+    { value: 'mixed', label: 'Mixed', emoji: '\u{1F610}' },
+    { value: 'bad', label: 'Bad', emoji: '\u{1F615}' },
+    { value: 'awful', label: 'Awful', emoji: '\u{1F922}' },
+  ] as const,
+  SYMPTOMS: [
+    { value: 'nauseous', label: 'Nauseous' },
+    { value: 'bloated', label: 'Bloated' },
+    { value: 'sluggish', label: 'Sluggish' },
+    { value: 'headache', label: 'Headache' },
+    { value: 'thirsty', label: 'Thirsty' },
+    { value: 'brain-fog', label: 'Brain fog' },
+    { value: 'cravings', label: 'Cravings' },
+    { value: 'fine', label: 'Actually fine' },
+  ] as const,
+} as const;
+
 export const TRIP_BUDGET = {
   DEFAULT_CURRENCY: 'GBP',
   CATEGORIES: [
