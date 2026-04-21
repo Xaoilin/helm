@@ -2,7 +2,7 @@
 
 ## Overview
 
-HELM is a local-first desktop assistant for a solo operator. The in-app assistant is Lina. The product combines calendar, tasks and habits, a multi-clock timer and stopwatch workspace, project management, finance tracking, Islamic knowledge and lifestyle tracking, prayer times, integrations, and chat and voice AI in one desktop app.
+HELM is a local-first desktop assistant for a solo operator. The in-app assistant is Lina. The product combines calendar, tasks and habits, a multi-clock timer and stopwatch workspace, project management, finance tracking, personal health journaling, Islamic knowledge and lifestyle tracking, prayer times, integrations, and chat and voice AI in one desktop app.
 
 The current stack is:
 
@@ -36,6 +36,7 @@ The navigable surfaces are:
 - Tasks
 - Projects
 - Finance
+- Health
 - Knowledge
 - Profile
 - Integrations
@@ -54,11 +55,12 @@ Provider stack:
 4. `ProjectProvider`
 5. `TaskProvider`
 6. `KnowledgeProvider`
-7. `FinanceProvider`
-8. `ClockProvider`
-9. `AssistantProvider`
-10. `ChatProvider` through `ChatBridge`
-11. `ShellProvider`
+7. `HealthProvider`
+8. `FinanceProvider`
+9. `ClockProvider`
+10. `AssistantProvider`
+11. `ChatProvider` through `ChatBridge`
+12. `ShellProvider`
 
 State is split across:
 
@@ -67,6 +69,7 @@ State is split across:
 - `src/store/contexts/TaskContext.tsx`
 - `src/store/contexts/ChatContext.tsx`
 - `src/store/contexts/KnowledgeContext.tsx`
+- `src/store/contexts/HealthContext.tsx`
 - `src/store/contexts/FinanceContext.tsx`
 - `src/store/contexts/ClockContext.tsx`
 - `src/store/contexts/GamificationContext.tsx`
@@ -93,6 +96,7 @@ That navigation payload lets chat and voice hand the UI enough context to open a
 - projects and project wiki pages
 - multi-timer and multi-stopwatch Clock state, including per-timer alarm sound selection
 - knowledge topics, entries, and lifestyle items
+- fast-food health log entries
 - finance accounts, transactions, budgets, and savings goals
 - integrations and settings
 
@@ -212,6 +216,7 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 - Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, Islamic prayer tasks, routine habits, and completed work for easier scanning, with collapsible section headers for long lists. Legacy prayer habits are normalized into first-class prayer tasks on load so prayer logs and streak data continue to work without manual migration.
 - Projects is a local-first project-management hub built on the shared Tasks domain. Project boards read and write task workflow fields directly, milestones reuse project-linked goals, and wiki pages are lightweight notes stored alongside the rest of local app data.
 - Clock is a local-first utility surface for timer and stopwatch workflows, and it persists multiple active cards plus per-timer alarm sound preferences through the shared store.
+- Health is a local-first reflection surface for logging fast-food experiences, keeping a quick-entry form and recent reminder history in the same view so the pattern stays visible.
 - Knowledge contains both a topic-entry knowledge base and the lifestyle tracker.
 - Integrations is the operational hub for Google Calendar and placeholder external providers.
 

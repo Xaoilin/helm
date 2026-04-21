@@ -20,6 +20,9 @@ test.describe('Navigation', () => {
 
     await page.getByRole('button', { name: 'Navigate to Finance' }).click();
     await expect(page.locator('h1:has-text("Finance")')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Navigate to Health' }).click();
+    await expect(page.locator('h1:has-text("Health")')).toBeVisible();
   });
 
   test('should navigate back to dashboard', async ({ page }) => {

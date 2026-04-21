@@ -9,6 +9,7 @@ import TripsSurface from './surfaces/TripsSurface';
 import TasksSurface from './surfaces/TasksSurface';
 import ProjectsSurface from './surfaces/ProjectsSurface';
 import FinanceSurface from './surfaces/FinanceSurface';
+import HealthSurface from './surfaces/HealthSurface';
 import KnowledgeSurface from './surfaces/KnowledgeSurface';
 import ProfileSurface from './surfaces/ProfileSurface';
 import IntegrationsSurface from './surfaces/IntegrationsSurface';
@@ -44,6 +45,7 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'projects', label: 'Projects', icon: '\u{1F4CB}' },
   { surface: 'tasks', label: 'Tasks', icon: '\u2705' },
   { surface: 'finance', label: 'Finance', icon: '\u{1F4B7}' },
+  { surface: 'health', label: 'Health', icon: '\u{1F34E}' },
   { surface: 'knowledge', label: 'Knowledge', icon: '\u{1F4DA}' },
   { surface: 'profile', label: 'Profile', icon: '\u{1F3C6}' },
   { surface: 'integrations', label: 'Integrations', icon: '\u{1F50C}' },
@@ -163,6 +165,7 @@ function AppInner() {
         case 'projects': return <ProjectsSurface />;
         case 'tasks': return <TasksSurface />;
         case 'finance': return <FinanceSurface />;
+        case 'health': return <HealthSurface />;
         case 'knowledge': return <KnowledgeSurface />;
         case 'profile': return <ProfileSurface />;
         case 'integrations': return <IntegrationsSurface />;

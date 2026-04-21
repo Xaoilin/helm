@@ -10,6 +10,7 @@ import DashboardSurface from '../surfaces/DashboardSurface';
 import TripsSurface from '../surfaces/TripsSurface';
 import TasksSurface from '../surfaces/TasksSurface';
 import ProjectsSurface from '../surfaces/ProjectsSurface';
+import HealthSurface from '../surfaces/HealthSurface';
 import KnowledgeSurface from '../surfaces/KnowledgeSurface';
 import ProfileSurface from '../surfaces/ProfileSurface';
 import IntegrationsSurface from '../surfaces/IntegrationsSurface';
@@ -156,6 +157,7 @@ describe('App shell', () => {
     expect(screen.getByText('Tasks')).toBeInTheDocument();
     expect(screen.getByText('Projects')).toBeInTheDocument();
     expect(screen.getByText('Finance')).toBeInTheDocument();
+    expect(screen.getByText('Health')).toBeInTheDocument();
     expect(screen.getByText('Knowledge')).toBeInTheDocument();
     expect(screen.getByText('Profile')).toBeInTheDocument();
     expect(screen.getByText('Integrations')).toBeInTheDocument();
@@ -180,6 +182,9 @@ describe('App shell', () => {
 
     await act(async () => { fireEvent.click(screen.getByText('Projects')); });
     expect(screen.getByText('Turn HELM into your local project hub')).toBeInTheDocument();
+
+    await act(async () => { fireEvent.click(screen.getByText('Health')); });
+    expect(screen.getByText('Fast food journal')).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Settings')); });
     expect(screen.getByText('About')).toBeInTheDocument();
@@ -2329,5 +2334,42 @@ describe('KnowledgeSurface', () => {
   it('should have create topic button', async () => {
     await act(async () => { renderWithProvider(<KnowledgeSurface />); });
     expect(screen.getByText('+ Create First Topic')).toBeInTheDocument();
+  });
+});
+
+describe('HealthSurface', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('renders the quick-entry health log', async () => {
+    await act(async () => { renderWithProvider(<HealthSurface />); });
+    expect(screen.getByText('Fast food journal')).toBeInTheDocument();
+    expect(screen.getByText('Save fast food log')).toBeInTheDocument();
+  });
+
+  it('creates a fast food log entry from the quick-entry form', async () => {
+    await act(async () => { renderWithProvider(<HealthSurface />); });
+
+    fireEvent.change(screen.getByPlaceholderText("McDonald's, KFC, Burger King..."), {
+      target: { value: 'McDonald\'s' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Yesterday' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bad' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nauseous' }));
+    fireEvent.change(
+      screen.getByPlaceholderText('Example: nauseous for the entire day, felt heavy, not worth the convenience.'),
+      { target: { value: 'Nauseous for the entire day. Bad experience.' } },
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save fast food log' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'McDonald\'s' })).toBeInTheDocument();
+    });
+    const entryCard = screen.getByRole('heading', { name: 'McDonald\'s' }).closest('.health-entry-card');
+    expect(entryCard).not.toBeNull();
+    expect(within(entryCard as HTMLElement).getByText('Nauseous for the entire day. Bad experience.')).toBeInTheDocument();
+    expect(screen.getAllByText('Nauseous').length).toBeGreaterThan(0);
   });
 });

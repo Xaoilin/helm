@@ -29,6 +29,7 @@ Use this matrix when updating docs or UI copy. The allowed states are:
 | Prayer times and adhan notifications | `real` | Backed by AlAdhan plus browser notifications. |
 | Clock surface (multi-timer and stopwatch workspace) | `real` | Local-first timers and stopwatches persist through the shared store so in-progress sessions survive navigation and reloads. The Clock surface supports multiple on-demand timer and stopwatch cards, custom per-card names, stopwatch lap totals plus per-lap split times, selectable built-in alarm sounds, and completion alerts that keep pulsing until acknowledged. |
 | Finance accounts, budgets, and savings goals | `real` | Local-first app data is implemented. |
+| Health fast food log | `real` | Local-first fast-food tracking is implemented through the Health surface, with a quick-entry journal for venue, date, symptoms, and an overall experience rating plus a recent-history reminder view. |
 | Monzo import | `real` | Live API path exists when configured. |
 | Knowledge base and lifestyle tracker | `real` | Local-first CRUD is implemented. |
 | Projects hub | `real` | Local-first project management is implemented. The Projects surface includes a portfolio rail, project overview, kanban board, milestone tracking via project-linked goals, lightweight wiki pages, and local project path references. Desktop builds can browse/open local paths directly; web builds fall back truthfully to manual path entry and copy-only behavior. |
