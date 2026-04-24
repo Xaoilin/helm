@@ -279,6 +279,18 @@ export interface RemoteWriteSettledResult {
   updatedAt: string;
 }
 
+export interface SupabaseWriteQueueSnapshot {
+  queuedCount: number;
+  queuedKeys: string[];
+  lastQueuedAt: string | null;
+  lastFlushStartedAt: string | null;
+  lastFlushSuccessAt: string | null;
+  lastFlushFailureAt: string | null;
+  lastFlushError: string | null;
+  lastFlushKeys: string[];
+  lastFailureKeys: string[];
+}
+
 interface QueuedWrite {
   namespace: string;
   key: string;
@@ -289,6 +301,57 @@ interface QueuedWrite {
 
 const writeQueue = new Map<string, QueuedWrite>();
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
+let writeQueueSnapshot: SupabaseWriteQueueSnapshot = {
+  queuedCount: 0,
+  queuedKeys: [],
+  lastQueuedAt: null,
+  lastFlushStartedAt: null,
+  lastFlushSuccessAt: null,
+  lastFlushFailureAt: null,
+  lastFlushError: null,
+  lastFlushKeys: [],
+  lastFailureKeys: [],
+};
+const writeQueueSubscribers = new Set<(snapshot: SupabaseWriteQueueSnapshot) => void>();
+
+function getQueuedWriteKeys(): string[] {
+  return Array.from(writeQueue.keys()).sort();
+}
+
+function copyWriteQueueSnapshot(): SupabaseWriteQueueSnapshot {
+  return {
+    ...writeQueueSnapshot,
+    queuedKeys: [...writeQueueSnapshot.queuedKeys],
+    lastFlushKeys: [...writeQueueSnapshot.lastFlushKeys],
+    lastFailureKeys: [...writeQueueSnapshot.lastFailureKeys],
+  };
+}
+
+function publishWriteQueueSnapshot(patch: Partial<SupabaseWriteQueueSnapshot> = {}): void {
+  writeQueueSnapshot = {
+    ...writeQueueSnapshot,
+    ...patch,
+    queuedCount: writeQueue.size,
+    queuedKeys: getQueuedWriteKeys(),
+  };
+
+  const snapshot = copyWriteQueueSnapshot();
+  writeQueueSubscribers.forEach(listener => listener(snapshot));
+}
+
+export function getSupabaseWriteQueueSnapshot(): SupabaseWriteQueueSnapshot {
+  return copyWriteQueueSnapshot();
+}
+
+export function subscribeSupabaseWriteQueueSnapshot(
+  listener: (snapshot: SupabaseWriteQueueSnapshot) => void,
+): () => void {
+  writeQueueSubscribers.add(listener);
+  listener(copyWriteQueueSnapshot());
+  return () => {
+    writeQueueSubscribers.delete(listener);
+  };
+}
 
 export function queueRemoteWrite<T>(
   namespace: string,
@@ -306,6 +369,7 @@ export function queueRemoteWrite<T>(
     updatedAt: options.updatedAt || new Date().toISOString(),
     onSettled: options.onSettled,
   });
+  publishWriteQueueSnapshot({ lastQueuedAt: new Date().toISOString() });
   if (writeTimer) clearTimeout(writeTimer);
   writeTimer = setTimeout(flushWriteQueue, TIMING.SUPABASE_DEBOUNCE);
 }
@@ -313,8 +377,14 @@ export function queueRemoteWrite<T>(
 export async function flushWriteQueue(): Promise<void> {
   if (!client || writeQueue.size === 0) return;
   const entries = Array.from(writeQueue.values());
+  const flushKeys = entries.map(entry => `${entry.namespace}:${entry.key}`).sort();
   writeQueue.clear();
   if (writeTimer) { clearTimeout(writeTimer); writeTimer = null; }
+  publishWriteQueueSnapshot({
+    lastFlushStartedAt: new Date().toISOString(),
+    lastFlushKeys: flushKeys,
+    lastFlushError: null,
+  });
 
   const rows = entries.map(e => ({
     user_id: getUserId(),
@@ -329,14 +399,26 @@ export async function flushWriteQueue(): Promise<void> {
     const { error } = await client.from('kv_store').upsert(rows, { onConflict: 'user_id,namespace,key' });
     if (error) throw error;
     success = true;
+    publishWriteQueueSnapshot({
+      lastFlushSuccessAt: new Date().toISOString(),
+      lastFlushError: null,
+      lastFailureKeys: [],
+    });
   } catch (err) {
-    console.warn('[Supabase] Flush failed, will retry next cycle:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    logWarn('Supabase', `Flush failed, will retry next cycle: ${message}`);
     for (const entry of entries) {
       writeQueue.set(`${entry.namespace}:${entry.key}`, entry);
     }
+    publishWriteQueueSnapshot({
+      lastFlushFailureAt: new Date().toISOString(),
+      lastFlushError: message,
+      lastFailureKeys: flushKeys,
+    });
   } finally {
     for (const entry of entries) {
       entry.onSettled?.({ success, updatedAt: entry.updatedAt });
     }
+    publishWriteQueueSnapshot();
   }
 }
