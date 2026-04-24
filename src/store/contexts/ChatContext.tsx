@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, useCallback, ty
 import { v4 as uuid } from 'uuid';
 import { CHAT, VOICE_SESSION } from '../../config/constants';
 import type {
+  AssistantActivityDraft,
   AssistantCorrection,
   AssistantMessageBilling,
   ChatConversation,
@@ -44,6 +45,7 @@ export interface ChatCrossDomainData {
   assistantCorrections: AssistantCorrection[];
   gamification: GamificationProfile;
   settings: Settings;
+  recordAssistantActivity: (activity: AssistantActivityDraft) => string;
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateTask: (id: string, updates: Partial<Task>) => void;
   removeTask: (id: string) => void;
@@ -233,6 +235,12 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
       hostedModel: crossDomain.settings.hostedModel,
       endpoint: crossDomain.settings.ollamaEndpoint,
       ollamaModel: crossDomain.settings.ollamaModel,
+      activity: {
+        actor: 'chat',
+        surface: 'chat',
+        sourceTranscript: content,
+        conversationId,
+      },
       handlers: {
         addTask: crossDomain.addTask,
         updateTask: crossDomain.updateTask,
@@ -244,6 +252,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
         addTransaction: crossDomain.addTransaction,
         addKnowledgeEntry: crossDomain.addKnowledgeEntry,
         updateGamification: crossDomain.updateGamification,
+        recordAssistantActivity: crossDomain.recordAssistantActivity,
       },
     });
 

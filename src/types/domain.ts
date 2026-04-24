@@ -491,6 +491,63 @@ export interface GamificationProfile {
   dailyLog?: Record<string, string[]>;
 }
 
+// ── Assistant Activity ──
+export type AssistantActivityActor = 'chat' | 'voice' | 'system';
+export type AssistantActivityDomain = 'assistant' | 'calendar' | 'finance' | 'knowledge' | 'tasks' | 'trips';
+export type AssistantActivityAction = 'completed' | 'created' | 'deleted' | 'recorded' | 'saved' | 'updated';
+export type AssistantActivityStatus = 'applied' | 'undone' | 'undo_failed';
+
+export interface AssistantActivityEntityReference {
+  kind: string;
+  id: string;
+  label: string;
+  surface?: Surface;
+}
+
+export type AssistantUndoOperation =
+  | { type: 'task.delete'; id: string }
+  | { type: 'task.restore'; tasks: Task[] }
+  | { type: 'task.replace'; task: Task; gamification?: GamificationProfile }
+  | { type: 'calendar.delete'; id: string }
+  | { type: 'calendar.replace'; event: CalendarEvent }
+  | { type: 'finance.delete_transaction'; id: string }
+  | { type: 'knowledge.delete_entry'; id: string };
+
+export interface AssistantActivityEntry {
+  id: string;
+  actor: AssistantActivityActor;
+  domain: AssistantActivityDomain;
+  action: AssistantActivityAction;
+  summary: string;
+  details: string[];
+  entityRefs: AssistantActivityEntityReference[];
+  status: AssistantActivityStatus;
+  createdAt: string;
+  sourceSurface?: Surface;
+  sourceTranscript?: string;
+  conversationId?: string;
+  undoOperation?: AssistantUndoOperation;
+  undoneAt?: string;
+  undoError?: string;
+}
+
+export type AssistantActivityDraft = Omit<AssistantActivityEntry, 'id' | 'createdAt' | 'status' | 'undoneAt' | 'undoError'> & {
+  createdAt?: string;
+  status?: AssistantActivityStatus;
+};
+
+export interface AssistantActivitySource {
+  actor: AssistantActivityActor;
+  surface?: Surface;
+  sourceTranscript?: string;
+  conversationId?: string;
+}
+
+export interface AssistantUndoResult {
+  ok: boolean;
+  message: string;
+}
+
 // ── Assistant Memory ──
 export type AssistantCorrectionScope = 'utterance' | 'phrase';
 
@@ -579,5 +636,6 @@ export type Surface =
   | 'knowledge'
   | 'profile'
   | 'integrations'
+  | 'activity'
   | 'settings'
   | 'debug';

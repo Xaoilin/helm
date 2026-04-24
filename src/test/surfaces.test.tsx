@@ -161,6 +161,7 @@ describe('App shell', () => {
     expect(screen.getByText('Knowledge')).toBeInTheDocument();
     expect(screen.getByText('Profile')).toBeInTheDocument();
     expect(screen.getByText('Integrations')).toBeInTheDocument();
+    expect(screen.getByText('Activity')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 
@@ -185,6 +186,9 @@ describe('App shell', () => {
 
     await act(async () => { fireEvent.click(screen.getByText('Health')); });
     expect(screen.getByText('Fast food journal')).toBeInTheDocument();
+
+    await act(async () => { fireEvent.click(screen.getByText('Activity')); });
+    expect(screen.getByText('No Lina actions logged yet')).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Settings')); });
     expect(screen.getByText('About')).toBeInTheDocument();

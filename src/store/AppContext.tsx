@@ -11,6 +11,9 @@ import type {
   FastFoodLogEntry,
   FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
   AssistantCorrection,
+  AssistantActivityDraft,
+  AssistantActivityEntry,
+  AssistantUndoResult,
   ClockState,
   ClockTimerSound,
 } from '../types/domain';
@@ -32,10 +35,12 @@ import { FinanceProvider, useFinanceContext } from './contexts/FinanceContext';
 import { GamificationProvider, useGamificationContext } from './contexts/GamificationContext';
 import { SettingsProvider, useSettingsContext } from './contexts/SettingsContext';
 import { AssistantProvider, useAssistantContext } from './contexts/AssistantContext';
+import { AssistantActivityProvider, useAssistantActivityContext } from './contexts/AssistantActivityContext';
 import { ClockProvider, useClockContext } from './contexts/ClockContext';
 import { DashboardFocusProvider, useDashboardFocusContext } from './contexts/DashboardFocusContext';
 import { GoogleSyncProvider } from '../hooks/useGoogleSync';
 import { STORAGE_KEYS } from '../config/constants';
+import { logError } from '../services/logger';
 
 interface AppContextAPI {
   surface: Surface;
@@ -62,6 +67,7 @@ interface AppContextAPI {
   savingsGoals: SavingsGoal[];
   integrations: Integration[];
   assistantCorrections: AssistantCorrection[];
+  assistantActivityLog: AssistantActivityEntry[];
   gamification: GamificationProfile;
   dashboardFocus: DashboardFocusState;
   settings: Settings;
@@ -181,6 +187,8 @@ interface AppContextAPI {
     scope: AssistantCorrection['scope'];
   }) => string | null;
   noteAssistantCorrectionApplied: (id: string) => void;
+  recordAssistantActivity: (activity: AssistantActivityDraft) => string;
+  undoAssistantActivity: (id: string) => AssistantUndoResult;
 
   updateIntegration: (id: string, updates: Partial<Integration>) => void;
   updateSettings: (updates: Partial<Settings>) => void;
@@ -213,6 +221,7 @@ function isShellSurface(value: string | null): value is Surface {
     case 'knowledge':
     case 'profile':
     case 'integrations':
+    case 'activity':
     case 'settings':
     case 'debug':
       return true;
@@ -247,6 +256,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   const gamificationCtx = useGamificationContext();
   const settingsCtx = useSettingsContext();
   const assistantCtx = useAssistantContext();
+  const activityCtx = useAssistantActivityContext();
   const clockCtx = useClockContext();
   const dashboardFocusCtx = useDashboardFocusContext();
 
@@ -314,6 +324,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     && gamificationCtx.loaded
     && settingsCtx.loaded
     && assistantCtx.loaded
+    && activityCtx.loaded
     && clockCtx.loaded
     && dashboardFocusCtx.loaded;
 
@@ -371,6 +382,79 @@ function ShellProvider({ children }: { children: ReactNode }) {
     requestAssistantNavigation,
   ]);
 
+  const undoAssistantActivity = useCallback((id: string): AssistantUndoResult => {
+    const entry = activityCtx.assistantActivityLog.find(item => item.id === id);
+    if (!entry) {
+      return { ok: false, message: 'That Lina activity entry was not found.' };
+    }
+    if (entry.status === 'undone') {
+      return { ok: false, message: 'That Lina action has already been undone.' };
+    }
+    if (!entry.undoOperation) {
+      return { ok: false, message: 'This Lina action does not have an undo operation.' };
+    }
+
+    try {
+      const operation = entry.undoOperation;
+      switch (operation.type) {
+        case 'task.delete':
+          taskCtx.removeTask(operation.id);
+          break;
+        case 'task.restore':
+          taskCtx.setTasks(prev => {
+            const existingIds = new Set(prev.map(task => task.id));
+            const restored = operation.tasks.filter(task => !existingIds.has(task.id));
+            return restored.length > 0 ? [...prev, ...restored] : prev;
+          });
+          break;
+        case 'task.replace':
+          taskCtx.setTasks(prev => {
+            const exists = prev.some(task => task.id === operation.task.id);
+            return exists
+              ? prev.map(task => task.id === operation.task.id ? operation.task : task)
+              : [...prev, operation.task];
+          });
+          if (operation.gamification) {
+            gamificationCtx.updateGamification(operation.gamification);
+          }
+          break;
+        case 'calendar.delete':
+          calendar.removeCalendarEvent(operation.id);
+          break;
+        case 'calendar.replace':
+          if (!calendar.calendarEvents.some(event => event.id === operation.event.id)) {
+            throw new Error('The calendar event no longer exists.');
+          }
+          calendar.updateCalendarEvent(operation.event.id, operation.event);
+          break;
+        case 'finance.delete_transaction':
+          if (!finance.transactions.some(transaction => transaction.id === operation.id)) {
+            throw new Error('The transaction was already removed.');
+          }
+          finance.removeTransaction(operation.id);
+          break;
+        case 'knowledge.delete_entry':
+          knowledge.removeKnowledgeEntry(operation.id);
+          break;
+      }
+
+      activityCtx.markAssistantActivityUndone(id);
+      return { ok: true, message: `Undid: ${entry.summary}` };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      activityCtx.markAssistantActivityUndoFailed(id, message);
+      logError('AssistantActivityUndo', error);
+      return { ok: false, message };
+    }
+  }, [
+    activityCtx,
+    calendar,
+    finance,
+    gamificationCtx,
+    knowledge,
+    taskCtx,
+  ]);
+
   const api: AppContextAPI = useMemo(() => ({
     surface: state.surface,
     loaded: allLoaded,
@@ -399,6 +483,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     savingsGoals: finance.savingsGoals,
     integrations: settingsCtx.integrations,
     assistantCorrections: assistantCtx.corrections,
+    assistantActivityLog: activityCtx.assistantActivityLog,
     gamification: gamificationCtx.gamification,
     dashboardFocus: dashboardFocusCtx.dashboardFocus,
     settings: settingsCtx.settings,
@@ -510,6 +595,8 @@ function ShellProvider({ children }: { children: ReactNode }) {
 
     upsertAssistantCorrection: assistantCtx.upsertCorrection,
     noteAssistantCorrectionApplied: assistantCtx.noteCorrectionApplied,
+    recordAssistantActivity: activityCtx.recordAssistantActivity,
+    undoAssistantActivity,
 
     updateIntegration: settingsCtx.updateIntegration,
     updateSettings: settingsCtx.updateSettings,
@@ -526,6 +613,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     finance,
     settingsCtx,
     assistantCtx,
+    activityCtx,
     gamificationCtx,
     dashboardFocusCtx,
     clockCtx,
@@ -534,6 +622,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     dismissAssistantNavigationRequest,
     removeProject,
     openDashboardFocusTarget,
+    undoAssistantActivity,
   ]);
 
   if (!allLoaded) {
@@ -570,6 +659,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
   const knowledge = useKnowledgeContext();
   const finance = useFinanceContext();
   const assistantCtx = useAssistantContext();
+  const activityCtx = useAssistantActivityContext();
 
   const crossDomain: ChatCrossDomainData = useMemo(() => ({
     calendarAccounts: calendar.calendarAccounts,
@@ -585,6 +675,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
     assistantCorrections: assistantCtx.corrections,
     gamification: gamificationCtx.gamification,
     settings: settingsCtx.settings,
+    recordAssistantActivity: activityCtx.recordAssistantActivity,
     addTask: taskCtx.addTask,
     updateTask: taskCtx.updateTask,
     removeTask: taskCtx.removeTask,
@@ -616,6 +707,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
     assistantCtx.corrections,
     assistantCtx.upsertCorrection,
     assistantCtx.noteCorrectionApplied,
+    activityCtx.recordAssistantActivity,
     gamificationCtx.gamification,
     gamificationCtx.updateGamification,
     settingsCtx.settings,
@@ -638,9 +730,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
                       <FinanceProvider>
                         <ClockProvider>
                           <AssistantProvider>
-                            <ChatBridge>
-                              <ShellProvider>{children}</ShellProvider>
-                            </ChatBridge>
+                            <AssistantActivityProvider>
+                              <ChatBridge>
+                                <ShellProvider>{children}</ShellProvider>
+                              </ChatBridge>
+                            </AssistantActivityProvider>
                           </AssistantProvider>
                         </ClockProvider>
                       </FinanceProvider>

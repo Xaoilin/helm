@@ -13,6 +13,7 @@ import HealthSurface from './surfaces/HealthSurface';
 import KnowledgeSurface from './surfaces/KnowledgeSurface';
 import ProfileSurface from './surfaces/ProfileSurface';
 import IntegrationsSurface from './surfaces/IntegrationsSurface';
+import ActivitySurface from './surfaces/ActivitySurface';
 import SettingsSurface from './surfaces/SettingsSurface';
 import DebugSurface from './surfaces/DebugSurface';
 import VoiceAssistant from './components/VoiceAssistant';
@@ -49,6 +50,7 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'knowledge', label: 'Knowledge', icon: '\u{1F4DA}' },
   { surface: 'profile', label: 'Profile', icon: '\u{1F3C6}' },
   { surface: 'integrations', label: 'Integrations', icon: '\u{1F50C}' },
+  { surface: 'activity', label: 'Activity', icon: '\u{1F4DD}' },
   { surface: 'settings', label: 'Settings', icon: '\u2699\uFE0F' },
   { surface: 'debug', label: 'Debug', icon: '\u{1F41E}' },
 ];
@@ -169,6 +171,7 @@ function AppInner() {
         case 'knowledge': return <KnowledgeSurface />;
         case 'profile': return <ProfileSurface />;
         case 'integrations': return <IntegrationsSurface />;
+        case 'activity': return <ActivitySurface />;
         case 'settings': return <SettingsSurface />;
         case 'debug': return <DebugSurface />;
       }
@@ -190,7 +193,7 @@ function AppInner() {
               aria-label={`Navigate to ${item.label}`}
             >
               <span className="icon" aria-hidden="true">{item.icon}</span>
-              {item.label}
+              <span className="sidebar-item-label">{item.label}</span>
             </button>
           ))}
         </div>

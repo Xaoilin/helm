@@ -228,6 +228,8 @@ export const LIMITS = {
   ASSISTANT_CORRECTION_MEMORY: 100,
   /** Persist up to this many Google Calendar diagnostic timeline entries */
   GOOGLE_CALENDAR_DIAGNOSTIC_EVENTS: 250,
+  /** Persist up to this many Lina assistant activity log entries */
+  ASSISTANT_ACTIVITY_LOG: 250,
   /** Default calendar event duration (ms = 1 hour) */
   DEFAULT_EVENT_DURATION: 3600000,
   /** Dashboard focus candidate pool before GPT chooses among them */
