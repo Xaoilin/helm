@@ -41,6 +41,7 @@ const SURFACE_VALUES: readonly Surface[] = [
   'knowledge',
   'profile',
   'integrations',
+  'activity',
   'settings',
   'debug',
 ];

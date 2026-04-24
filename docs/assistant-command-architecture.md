@@ -26,6 +26,7 @@ Implemented pieces:
 - grounded ID-based validation for task reveal, task complete, task delete, calendar reschedule, finance account selection, and knowledge topic selection
 - structured pending confirmations stored as validated tool-call batches plus grounded entity references
 - final assistant replies narrated from verified execution results instead of surfacing executor templates directly
+- local-first assistant activity entries for chat and voice mutations, with actor/source transcript, execution details, and undo metadata where the executor can provide a grounded inverse operation
 - benchmark example retrieval from a 200-plus command corpus
 - expanded debug traces that capture the planning bundle, raw planner response, model turn, validator verdict, validated plan, pending confirmation state, raw narration response, and execution payloads
 
@@ -199,12 +200,14 @@ Execution should follow a deterministic pipeline:
 4. check preconditions and confirmation rules
 5. execute the capability steps
 6. verify postconditions
-7. return a final result and undo metadata where feasible
+7. record an audit entry for each mutation
+8. return a final result and undo metadata where feasible
 
 If confidence is low, the target is ambiguous, or the action is destructive, Lina should clarify or confirm before mutating state.
 
 For write actions, Lina should only describe success after the deterministic local mutation succeeds. For reveal actions, the executor should pass a typed navigation request that allows the UI to open the correct tab, clear restrictive filters, and reveal or highlight the resolved entity.
 For view-only task navigation, the executor should use the same typed Tasks surface-state payload even when no task id is involved so "show me all my tasks" is explicit and testable instead of being approximated to a generic surface jump.
+Activity entries are persisted through the same local-first store as other app data. The Activity surface is the user-facing audit trail; the floating Lina panel also surfaces the latest recent action with an Undo shortcut when the entry is still undoable.
 
 ### 6. Dialog state
 
@@ -325,6 +328,7 @@ The model-first cutover is now shipped:
 - model-first planning with local deterministic validation and execution
 - confirmation for risky actions
 - undo where practical
+- audit every assistant mutation
 - benchmark-driven iteration
 
 ## Final Recommendation

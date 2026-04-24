@@ -128,14 +128,43 @@ export async function runAssistantTurn(
   const dialogState = normaliseDialogState(options.dialogState, context.currentSurface);
   const correctionIntent = parseCorrectionIntent(transcript, lang, options.conversationHistory);
   const correctionDrafts = correctionIntent?.learnedCorrections || [];
-
-  for (const correction of correctionDrafts) {
-    options.handlers?.upsertAssistantCorrection?.(correction);
-  }
-
   const correctedTranscript = correctionIntent?.correctedTranscript || transcript;
   const correctionApplication = applyStoredCorrections(correctedTranscript, options.corrections, lang);
   const effectiveTranscript = correctionApplication.transcript;
+  const activity = options.activity
+    ? {
+        ...options.activity,
+        surface: options.activity.surface || context.currentSurface,
+        sourceTranscript: options.activity.sourceTranscript || effectiveTranscript,
+      }
+    : undefined;
+
+  for (const correction of correctionDrafts) {
+    const correctionId = options.handlers?.upsertAssistantCorrection?.(correction);
+    if (correctionId && activity && options.handlers?.recordAssistantActivity) {
+      options.handlers.recordAssistantActivity({
+        actor: activity.actor,
+        domain: 'assistant',
+        action: 'updated',
+        summary: 'Learned a Lina correction.',
+        details: [
+          `Heard: ${correction.sourceText}.`,
+          `Use instead: ${correction.targetText}.`,
+          `Language: ${correction.lang}.`,
+        ],
+        entityRefs: [{
+          kind: 'assistant_correction',
+          id: correctionId,
+          label: correction.targetText,
+          surface: 'settings',
+        }],
+        sourceSurface: activity.surface,
+        sourceTranscript: activity.sourceTranscript,
+        conversationId: activity.conversationId,
+      });
+    }
+  }
+
   for (const id of correctionApplication.appliedCorrectionIds) {
     options.handlers?.noteAssistantCorrectionApplied?.(id);
   }
@@ -232,6 +261,7 @@ export async function runAssistantTurn(
         lang,
         clearedDialogState,
         pending.toolCalls,
+        activity,
       );
 
       if (execution.kind === 'clarify') {
@@ -509,6 +539,7 @@ export async function runAssistantTurn(
     lang,
     dialogState,
     resolvedToolCalls,
+    activity,
   );
 
   if (execution.kind === 'clarify') {

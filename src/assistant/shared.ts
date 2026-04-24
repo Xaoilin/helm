@@ -1,5 +1,7 @@
 import type {
   AssistantCorrection,
+  AssistantActivityDraft,
+  AssistantActivitySource,
   AssistantMessageBilling,
   CalendarAccount,
   CalendarEvent,
@@ -199,6 +201,7 @@ export interface AssistantActionHandlers {
   addTransaction?: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => string;
   addKnowledgeEntry?: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateGamification?: (profile: GamificationProfile) => void;
+  recordAssistantActivity?: (activity: AssistantActivityDraft) => void;
 }
 
 export interface AssistantCommandOptions {
@@ -211,6 +214,7 @@ export interface AssistantCommandOptions {
   ollamaModel?: string;
   model?: string;
   dialogState?: AssistantDialogState;
+  activity?: AssistantActivitySource;
   handlers?: AssistantActionHandlers;
 }
 
@@ -268,3 +272,5 @@ export interface AssistantCommandResult {
   validatedPlan?: ActionPlan | null;
   plannerValidation?: AssistantPlannerValidation;
 }
+
+export type { AssistantActivitySource };

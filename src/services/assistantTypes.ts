@@ -5,6 +5,7 @@ export type {
   AssistantCommandResult,
   AssistantConversationMessage,
   AssistantDialogState,
+  AssistantActivitySource,
   AssistantExecutionResult,
   AssistantExecutionStep,
   AssistantLang,

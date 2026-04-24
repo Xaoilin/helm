@@ -354,6 +354,12 @@ export default function VoiceAssistant({ prayerData }: Props) {
         hostedModel,
         endpoint: ollamaEndpoint,
         ollamaModel,
+        activity: {
+          actor: inputMode === 'voice' ? 'voice' : 'chat',
+          surface: app.surface,
+          sourceTranscript: trimmed,
+          conversationId: voiceConversationIdRef.current || undefined,
+        },
         handlers: {
           navigate: app.requestAssistantNavigation,
           addTask: app.addTask,
@@ -366,6 +372,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
           addTransaction: app.addTransaction,
           addKnowledgeEntry: app.addKnowledgeEntry,
           updateGamification: app.updateGamification,
+          recordAssistantActivity: app.recordAssistantActivity,
         },
       });
 
@@ -549,6 +556,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
     clearScheduledListening();
   }, [clearScheduledListening]);
 
+  const latestActivity = app.assistantActivityLog[0] || null;
+
   if (!enabled) return null;
 
   const isOpen = state !== 'idle';
@@ -573,6 +582,19 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const listeningPrompt = listeningMode === 'followup'
     ? isArabic ? '\u0623\u0633\u062A\u0645\u0639 \u0644\u0644\u0645\u062A\u0627\u0628\u0639\u0629... \u062A\u0643\u0644\u0645 \u0627\u0644\u0622\u0646' : 'Listening for follow-up... speak now'
     : isArabic ? '\u0623\u0633\u062A\u0645\u0639... \u062A\u0643\u0644\u0645 \u0627\u0644\u0622\u0646' : 'Listening... speak now';
+  const showLatestActivity = Boolean(latestActivity);
+  const canUndoLatestActivity = Boolean(latestActivity?.undoOperation && latestActivity.status === 'applied');
+
+  const handleUndoLatestActivity = () => {
+    if (!latestActivity) return;
+    const result = app.undoAssistantActivity(latestActivity.id);
+    if (result.ok) {
+      setResponse(result.message);
+      setError('');
+      return;
+    }
+    setError(result.message);
+  };
 
   return (
     <>
@@ -603,6 +625,33 @@ export default function VoiceAssistant({ prayerData }: Props) {
           )}
           {error && (
             <div style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 8, lineHeight: 1.4 }}>{error}</div>
+          )}
+
+          {showLatestActivity && latestActivity && (
+            <div className="va-activity" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+              <div className="va-activity-copy">
+                <span className="va-activity-label">{isArabic ? '\u0622\u062E\u0631 \u0625\u062C\u0631\u0627\u0621' : 'Last action'}</span>
+                <span className="va-activity-summary">{latestActivity.summary}</span>
+              </div>
+              <div className="va-activity-actions">
+                {canUndoLatestActivity && (
+                  <button
+                    type="button"
+                    className="va-activity-button"
+                    onClick={handleUndoLatestActivity}
+                  >
+                    {isArabic ? '\u062A\u0631\u0627\u062C\u0639' : 'Undo'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="va-activity-button"
+                  onClick={() => app.navigate('activity')}
+                >
+                  {isArabic ? '\u0627\u0644\u0633\u062C\u0644' : 'Log'}
+                </button>
+              </div>
+            </div>
           )}
 
           {state !== 'processing' && state !== 'speaking' && (

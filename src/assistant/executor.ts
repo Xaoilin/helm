@@ -15,10 +15,14 @@ import type {
   CalendarEvent,
   CalendarSource,
   FinanceAccount,
+  GamificationProfile,
   KnowledgeTopic,
   Surface,
   Task,
   Transaction,
+  AssistantActivityDomain,
+  AssistantActivityEntityReference,
+  AssistantUndoOperation,
 } from '../types/domain';
 import { getCapabilityDefinition } from './capabilities';
 import {
@@ -33,6 +37,7 @@ import {
 import type { ActionPlan } from './plannerSchema';
 import type {
   AssistantActionHandlers,
+  AssistantActivitySource,
   AssistantCommandContext,
   AssistantDialogState,
   AssistantEntityReference,
@@ -88,6 +93,54 @@ function cloneContext(context: AssistantCommandContext): AssistantCommandContext
       dailyLog: { ...(context.gamification.dailyLog || {}) },
     },
   };
+}
+
+function cloneGamification(profile: GamificationProfile): GamificationProfile {
+  return {
+    ...profile,
+    badges: [...profile.badges],
+    habitTallies: { ...(profile.habitTallies || {}) },
+    dailyLog: Object.fromEntries(
+      Object.entries(profile.dailyLog || {}).map(([date, ids]) => [date, [...ids]]),
+    ),
+  };
+}
+
+function toActivityEntityRefs(refs: AssistantEntityReference[]): AssistantActivityEntityReference[] {
+  return refs.map(ref => ({
+    kind: ref.kind,
+    id: ref.id,
+    label: ref.label,
+    surface: ref.surface,
+  }));
+}
+
+function recordAssistantActivity(
+  handlers: AssistantActionHandlers,
+  activity: AssistantActivitySource | undefined,
+  entry: {
+    domain: AssistantActivityDomain;
+    action: 'completed' | 'created' | 'deleted' | 'recorded' | 'saved' | 'updated';
+    summary: string;
+    details: string[];
+    refs: AssistantEntityReference[];
+    undoOperation?: AssistantUndoOperation;
+  },
+): void {
+  if (!activity || !handlers.recordAssistantActivity) return;
+
+  handlers.recordAssistantActivity({
+    actor: activity.actor,
+    domain: entry.domain,
+    action: entry.action,
+    summary: entry.summary,
+    details: entry.details,
+    entityRefs: toActivityEntityRefs(entry.refs),
+    sourceSurface: activity.surface,
+    sourceTranscript: activity.sourceTranscript,
+    conversationId: activity.conversationId,
+    undoOperation: entry.undoOperation,
+  });
 }
 
 function asString(value: unknown): string {
@@ -292,6 +345,7 @@ function executeSingleStep(
   handlers: AssistantActionHandlers,
   _lang: AssistantLang,
   dialogState?: AssistantDialogState,
+  activity?: AssistantActivitySource,
 ): ClarifyOutcome | ExecutedStepOutcome {
   switch (step.capability) {
     case 'navigation.go_to_surface': {
@@ -417,7 +471,7 @@ function executeSingleStep(
         recurring: category === 'daily' || category === 'prayer' ? { frequency: 'daily' } : undefined,
       });
       const now = getNow(context).toISOString();
-      context.tasks = [...context.tasks, {
+      const createdTask: Task = {
         id,
         title,
         description: '',
@@ -428,28 +482,39 @@ function executeSingleStep(
         recurring: category === 'daily' || category === 'prayer' ? { frequency: 'daily' } : undefined,
         createdAt: now,
         updatedAt: now,
-      }];
+      };
+      context.tasks = [...context.tasks, createdTask];
 
       const ref = makeEntityReference('task', id, title, 'tasks', 1);
+      const summary = `Created task "${title}".`;
+      const facts = [
+        `Created the task "${title}".`,
+        `Priority: ${priority}.`,
+        `Category: ${category}.`,
+        ...(dueDate ? [`Due date: ${dueDate}.`] : []),
+      ];
+      recordAssistantActivity(handlers, activity, {
+        domain: 'tasks',
+        action: 'created',
+        summary,
+        details: facts,
+        refs: [ref],
+        undoOperation: { type: 'task.delete', id },
+      });
       return {
         stepResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Created task "${title}".`,
+          summary,
           entityRefs: [ref],
         },
         toolResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Created task "${title}".`,
-          facts: [
-            `Created the task "${title}".`,
-            `Priority: ${priority}.`,
-            `Category: ${category}.`,
-            ...(dueDate ? [`Due date: ${dueDate}.`] : []),
-          ],
+          summary,
+          facts,
           entityRefs: [ref],
         },
         refs: [ref],
@@ -477,6 +542,11 @@ function executeSingleStep(
       if (!resolvedTask) {
         return { kind: 'clarify', reason: 'Which task should I complete?' };
       }
+      const taskBefore: Task = {
+        ...resolvedTask,
+        recurring: resolvedTask.recurring ? { ...resolvedTask.recurring } : undefined,
+      };
+      const gamificationBefore = handlers.updateGamification ? cloneGamification(context.gamification) : undefined;
       const now = getNow(context);
       const today = toLocalDateStr(now);
       const completedAt = now.toISOString();
@@ -511,22 +581,36 @@ function executeSingleStep(
       }
 
       const ref = makeEntityReference('task', resolvedTask.id, resolvedTask.title, 'tasks', 1);
+      const summary = `Completed "${resolvedTask.title}".`;
+      const facts = [
+        `${isHabitTask(resolvedTask) ? 'Marked the habit' : 'Marked the task'} "${resolvedTask.title}" as complete.`,
+      ];
+      recordAssistantActivity(handlers, activity, {
+        domain: 'tasks',
+        action: 'completed',
+        summary,
+        details: facts,
+        refs: [ref],
+        undoOperation: {
+          type: 'task.replace',
+          task: taskBefore,
+          ...(gamificationBefore ? { gamification: gamificationBefore } : {}),
+        },
+      });
       return {
         stepResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Completed "${resolvedTask.title}".`,
+          summary,
           entityRefs: [ref],
         },
         toolResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Completed "${resolvedTask.title}".`,
-          facts: [
-            `${isHabitTask(resolvedTask) ? 'Marked the habit' : 'Marked the task'} "${resolvedTask.title}" as complete.`,
-          ],
+          summary,
+          facts,
           entityRefs: [ref],
         },
         refs: [ref],
@@ -565,6 +649,10 @@ function executeSingleStep(
         return { kind: 'clarify', reason: 'Which task should I delete?' };
       }
 
+      const deletedTaskSnapshots = tasksToDelete.map(task => ({
+        ...task,
+        recurring: task.recurring ? { ...task.recurring } : undefined,
+      }));
       for (const task of tasksToDelete) {
         handlers.removeTask(task.id);
       }
@@ -572,29 +660,37 @@ function executeSingleStep(
       context.tasks = context.tasks.filter(task => !deletedIds.has(task.id));
 
       const refs = tasksToDelete.map(task => makeEntityReference('task', task.id, task.title, 'tasks', 1));
+      const summary = tasksToDelete.length === 1
+        ? `Deleted "${tasksToDelete[0].title}".`
+        : `Deleted ${tasksToDelete.length} tasks.`;
+      const facts = tasksToDelete.length === 1
+        ? [`Deleted the task "${tasksToDelete[0].title}".`]
+        : [
+            `Deleted ${tasksToDelete.length} tasks.`,
+            `Deleted titles: ${tasksToDelete.map(task => `"${task.title}"`).join(', ')}.`,
+          ];
+      recordAssistantActivity(handlers, activity, {
+        domain: 'tasks',
+        action: 'deleted',
+        summary,
+        details: facts,
+        refs,
+        undoOperation: { type: 'task.restore', tasks: deletedTaskSnapshots },
+      });
       return {
         stepResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: tasksToDelete.length === 1
-            ? `Deleted "${tasksToDelete[0].title}".`
-            : `Deleted ${tasksToDelete.length} tasks.`,
+          summary,
           entityRefs: refs,
         },
         toolResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: tasksToDelete.length === 1
-            ? `Deleted "${tasksToDelete[0].title}".`
-            : `Deleted ${tasksToDelete.length} tasks.`,
-          facts: tasksToDelete.length === 1
-            ? [`Deleted the task "${tasksToDelete[0].title}".`]
-            : [
-                `Deleted ${tasksToDelete.length} tasks.`,
-                `Deleted titles: ${tasksToDelete.map(task => `"${task.title}"`).join(', ')}.`,
-              ],
+          summary,
+          facts,
           entityRefs: refs,
         },
         refs,
@@ -694,7 +790,7 @@ function executeSingleStep(
         allDay: false,
         location: asString(step.args.location) || undefined,
       });
-      context.calendarEvents = [...context.calendarEvents, {
+      const createdEvent: CalendarEvent = {
         id,
         sourceId: calendarChoice.source.id,
         title,
@@ -703,29 +799,40 @@ function executeSingleStep(
         end,
         allDay: false,
         location: asString(step.args.location) || undefined,
-      }];
+      };
+      context.calendarEvents = [...context.calendarEvents, createdEvent];
 
       const ref = makeEntityReference('calendar_event', id, title, 'calendar', 1);
+      const summary = `Created event "${title}".`;
+      const facts = [
+        `Created the calendar event "${title}".`,
+        `Calendar: ${calendarChoice.source.name}.`,
+        `Start: ${start}.`,
+        `End: ${end}.`,
+        ...(asString(step.args.location) ? [`Location: ${asString(step.args.location)}.`] : []),
+      ];
+      recordAssistantActivity(handlers, activity, {
+        domain: 'calendar',
+        action: 'created',
+        summary,
+        details: facts,
+        refs: [ref],
+        undoOperation: { type: 'calendar.delete', id },
+      });
       return {
         stepResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Created event "${title}".`,
+          summary,
           entityRefs: [ref],
         },
         toolResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Created event "${title}".`,
-          facts: [
-            `Created the calendar event "${title}".`,
-            `Calendar: ${calendarChoice.source.name}.`,
-            `Start: ${start}.`,
-            `End: ${end}.`,
-            ...(asString(step.args.location) ? [`Location: ${asString(step.args.location)}.`] : []),
-          ],
+          summary,
+          facts,
           entityRefs: [ref],
         },
         refs: [ref],
@@ -760,32 +867,43 @@ function executeSingleStep(
       }
 
       const resolvedEvent = eventResolution.event;
+      const eventBefore: CalendarEvent = { ...resolvedEvent };
       handlers.updateCalendarEvent(resolvedEvent.id, { start, end, allDay: false });
       context.calendarEvents = context.calendarEvents.map(item =>
         item.id === resolvedEvent.id ? { ...item, start, end, allDay: false } : item
       );
 
       const ref = makeEntityReference('calendar_event', resolvedEvent.id, resolvedEvent.title, 'calendar', 1);
+      const summary = `Moved "${resolvedEvent.title}".`;
+      const facts = [
+        `Moved the event "${resolvedEvent.title}".`,
+        `Previous start: ${resolvedEvent.start}.`,
+        `Previous end: ${resolvedEvent.end}.`,
+        `New start: ${start}.`,
+        `New end: ${end}.`,
+      ];
+      recordAssistantActivity(handlers, activity, {
+        domain: 'calendar',
+        action: 'updated',
+        summary,
+        details: facts,
+        refs: [ref],
+        undoOperation: { type: 'calendar.replace', event: eventBefore },
+      });
       return {
         stepResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Moved "${resolvedEvent.title}".`,
+          summary,
           entityRefs: [ref],
         },
         toolResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Moved "${resolvedEvent.title}".`,
-          facts: [
-            `Moved the event "${resolvedEvent.title}".`,
-            `Previous start: ${resolvedEvent.start}.`,
-            `Previous end: ${resolvedEvent.end}.`,
-            `New start: ${start}.`,
-            `New end: ${end}.`,
-          ],
+          summary,
+          facts,
           entityRefs: [ref],
         },
         refs: [ref],
@@ -833,7 +951,7 @@ function executeSingleStep(
         date,
       });
       const now = getNow(context).toISOString();
-      context.transactions = [{
+      const transaction: Transaction = {
         id,
         type,
         amount,
@@ -843,29 +961,40 @@ function executeSingleStep(
         date,
         createdAt: now,
         updatedAt: now,
-      }, ...context.transactions];
+      };
+      context.transactions = [transaction, ...context.transactions];
 
       const ref = makeEntityReference('finance_account', accountChoice.account.id, accountChoice.account.name, 'finance', 1);
+      const summary = `Recorded ${type} of ${formatGBP(amount)}.`;
+      const facts = [
+        `Recorded a ${type} transaction.`,
+        `Amount: ${formatGBP(amount)}.`,
+        `Account: ${accountChoice.account.name}.`,
+        `Description: ${description}.`,
+        `Date: ${date}.`,
+      ];
+      recordAssistantActivity(handlers, activity, {
+        domain: 'finance',
+        action: 'recorded',
+        summary,
+        details: facts,
+        refs: [ref],
+        undoOperation: { type: 'finance.delete_transaction', id },
+      });
       return {
         stepResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Recorded ${type} of ${formatGBP(amount)}.`,
+          summary,
           entityRefs: [ref],
         },
         toolResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Recorded ${type} of ${formatGBP(amount)}.`,
-          facts: [
-            `Recorded a ${type} transaction.`,
-            `Amount: ${formatGBP(amount)}.`,
-            `Account: ${accountChoice.account.name}.`,
-            `Description: ${description}.`,
-            `Date: ${date}.`,
-          ],
+          summary,
+          facts,
           entityRefs: [ref],
         },
         refs: [ref],
@@ -902,7 +1031,7 @@ function executeSingleStep(
         tags: [],
       });
       const now = getNow(context).toISOString();
-      context.knowledgeEntries = [...context.knowledgeEntries, {
+      const entry = {
         id,
         topicId: topicChoice.topic.id,
         title,
@@ -911,26 +1040,37 @@ function executeSingleStep(
         tags: [],
         createdAt: now,
         updatedAt: now,
-      }];
+      };
+      context.knowledgeEntries = [...context.knowledgeEntries, entry];
 
       const ref = makeEntityReference('knowledge_entry', id, title, 'knowledge', 1);
+      const summary = `Saved note "${title}".`;
+      const facts = [
+        `Saved the note "${title}".`,
+        `Topic: ${topicChoice.topic.name}.`,
+      ];
+      recordAssistantActivity(handlers, activity, {
+        domain: 'knowledge',
+        action: 'saved',
+        summary,
+        details: facts,
+        refs: [ref],
+        undoOperation: { type: 'knowledge.delete_entry', id },
+      });
       return {
         stepResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Saved note "${title}".`,
+          summary,
           entityRefs: [ref],
         },
         toolResult: {
           callId,
           capability: step.capability,
           status: 'completed',
-          summary: `Saved note "${title}".`,
-          facts: [
-            `Saved the note "${title}".`,
-            `Topic: ${topicChoice.topic.name}.`,
-          ],
+          summary,
+          facts,
           entityRefs: [ref],
         },
         refs: [ref],
@@ -946,6 +1086,7 @@ export function executeActionPlan(
   _lang: AssistantLang,
   dialogState?: AssistantDialogState,
   toolCalls?: Array<{ callId: string }>,
+  activity?: AssistantActivitySource,
 ): ExecutionOutcome {
   const workingContext = cloneContext(context);
   const steps: AssistantExecutionStep[] = [];
@@ -957,7 +1098,7 @@ export function executeActionPlan(
   for (const [index, step] of plan.steps.entries()) {
     const capability = getCapabilityDefinition(step.capability);
     const callId = toolCalls?.[index]?.callId || `call_${index + 1}`;
-    const result = executeSingleStep(step, callId, workingContext, handlers, _lang, dialogState);
+    const result = executeSingleStep(step, callId, workingContext, handlers, _lang, dialogState, activity);
     if ('kind' in result) {
       return result;
     }
