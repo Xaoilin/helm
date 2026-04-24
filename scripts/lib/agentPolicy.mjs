@@ -90,7 +90,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
     "github.event.pull_request.base.ref == 'master'",
     "startsWith(github.event.pull_request.head.ref, 'codex/')",
     'gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash --delete-branch',
-    'gh workflow run "CI" --ref master',
+    'gh workflow run "CI" --repo "$GITHUB_REPOSITORY" --ref master',
   ]
 
   for (const snippet of requiredAutoPromoteSnippets) {

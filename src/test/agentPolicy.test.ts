@@ -40,7 +40,7 @@ describe('agent policy helpers', () => {
     if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'master' && startsWith(github.event.pull_request.head.ref, 'codex/')
     steps:
       - run: gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash --delete-branch
-      - run: gh workflow run "CI" --ref master
+      - run: gh workflow run "CI" --repo "$GITHUB_REPOSITORY" --ref master
 `
 
     expect(evaluateCiWorkflow(workflow).ok).toBe(true)
