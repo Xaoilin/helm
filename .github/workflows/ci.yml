@@ -271,8 +271,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash --delete-branch
-      - name: Trigger master CI for deployment chain
+      - name: Trigger master verification and deploy workflows
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run "CI" --repo "$GITHUB_REPOSITORY" --ref master
+        run: |
+          workflows=(
+            "CI"
+            "Deploy to GitHub Pages"
+            "Deploy Supabase Assistant Function"
+          )
+          for workflow in "${workflows[@]}"; do
+            for attempt in 1 2 3; do
+              if gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref master; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                exit 1
+              fi
+              sleep 10
+            done
+          done
 

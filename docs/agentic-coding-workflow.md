@@ -21,7 +21,7 @@ HELM uses a branch-to-production flow for personal use:
 4. CI runs `agent-policy`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and `codex-review`.
 5. `codex-review` fails the PR for P0 or P1 findings when a review completes, allows P2/P3 findings to remain advisory, and treats missing keys, quota exhaustion, or provider failures as advisory unavailable instead of blocking release.
 6. `auto-promote` squash-merges non-draft same-repo `codex/*` PRs into `master` when every gate passes.
-7. The merge explicitly dispatches `CI` on `master` so the existing deploy workflows continue through GitHub Pages and Supabase.
+7. The merge explicitly dispatches `CI`, `Deploy to GitHub Pages`, and `Deploy Supabase Assistant Function` on `master`. This avoids relying on token-triggered `workflow_run` cascades while still requiring `npm run handoff:check` to verify the deployed head before handoff.
 8. `npm run handoff:check` remains the proof that the release is truly live.
 
 This is intentionally no-human-review for now. It is appropriate because HELM is a personal app, the checks are broad, and the release gate verifies the deployed version before work is called shipped.

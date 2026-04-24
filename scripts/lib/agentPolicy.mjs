@@ -90,7 +90,10 @@ export function evaluateCiWorkflow(rawWorkflow) {
     "github.event.pull_request.base.ref == 'master'",
     "startsWith(github.event.pull_request.head.ref, 'codex/')",
     'gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash --delete-branch',
-    'gh workflow run "CI" --repo "$GITHUB_REPOSITORY" --ref master',
+    'gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref master',
+    '"CI"',
+    '"Deploy to GitHub Pages"',
+    '"Deploy Supabase Assistant Function"',
   ]
 
   for (const snippet of requiredAutoPromoteSnippets) {
@@ -128,6 +131,29 @@ export function evaluateCiWorkflow(rawWorkflow) {
   }
 }
 
+export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
+  const failures = []
+  const passes = []
+
+  if (!rawWorkflow.includes('workflow_dispatch:')) {
+    failures.push(`${workflowName} workflow must support workflow_dispatch for auto-promote.`)
+  } else {
+    passes.push(`${workflowName} workflow supports direct auto-promote dispatch.`)
+  }
+
+  if (!rawWorkflow.includes('workflow_run:')) {
+    failures.push(`${workflowName} workflow must keep its successful-CI workflow_run trigger.`)
+  } else {
+    passes.push(`${workflowName} workflow keeps the successful-CI workflow_run trigger.`)
+  }
+
+  return {
+    failures,
+    passes,
+    ok: failures.length === 0,
+  }
+}
+
 export function evaluateAgentPolicy(rootDir) {
   const failures = []
   const passes = []
@@ -149,6 +175,20 @@ export function evaluateAgentPolicy(rootDir) {
   const ciResult = evaluateCiWorkflow(readFileSync(ciWorkflowPath, 'utf8'))
   failures.push(...ciResult.failures)
   passes.push(...ciResult.passes)
+
+  const deployWorkflows = [
+    ['Deploy to GitHub Pages', resolve(rootDir, '.github', 'workflows', 'deploy.yml')],
+    [
+      'Deploy Supabase Assistant Function',
+      resolve(rootDir, '.github', 'workflows', 'deploy-supabase-assistant.yml'),
+    ],
+  ]
+
+  for (const [workflowName, workflowPath] of deployWorkflows) {
+    const deployResult = evaluateDeployWorkflow(readFileSync(workflowPath, 'utf8'), workflowName)
+    failures.push(...deployResult.failures)
+    passes.push(...deployResult.passes)
+  }
 
   return {
     failures,
