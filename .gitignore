@@ -7,6 +7,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Codex local artifacts
+.codex/runlogs/
+.codex/pr-*.md
+
 node_modules
 dist
 dist-ssr
@@ -26,6 +30,9 @@ dist-ssr
 # Tauri build output
 src-tauri/target/
 src-tauri/gen/
+
+# Supabase CLI local cache
+supabase/.temp/
 
 # Environment (secrets)
 .env
