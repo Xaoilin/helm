@@ -55,6 +55,9 @@ describe('agent policy helpers', () => {
   workflow_dispatch:
   workflow_run:
     workflows: ["CI"]
+jobs:
+  deploy:
+    if: ${"${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}"}
 `
 
     expect(evaluateDeployWorkflow(workflow, 'Deploy to GitHub Pages').ok).toBe(true)
