@@ -147,6 +147,12 @@ export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
     passes.push(`${workflowName} workflow keeps the successful-CI workflow_run trigger.`)
   }
 
+  if (!rawWorkflow.includes("github.event_name == 'workflow_dispatch'")) {
+    failures.push(`${workflowName} workflow jobs must run when auto-promote dispatches the workflow.`)
+  } else {
+    passes.push(`${workflowName} workflow jobs run for direct auto-promote dispatch.`)
+  }
+
   return {
     failures,
     passes,
