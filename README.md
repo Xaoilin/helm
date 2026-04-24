@@ -103,6 +103,6 @@ The function is intended for signed-in HELM users. If hosted AI is not configure
 - Pull requests should satisfy `agent-policy`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, and `build`.
 - `codex-review` is useful extra review coverage, but OpenAI quota or provider availability is not a release dependency; unavailable review output is reported as a warning.
 - Non-draft same-repo `codex/*` pull requests into `master` auto-promote after those automated gates pass. Manual PR approval is intentionally not required for this personal-app workflow.
-- GitHub Pages deploys only after the CI workflow succeeds on `master`, and that build defaults the website to hosted GPT-5.4 mode.
+- GitHub Pages and Supabase deploys run for `master` after successful CI or by the guarded `auto-promote` dispatch path, and the Pages build defaults the website to hosted GPT-5.4 mode.
 - `master` is protected to require pull requests plus the automated checks before merge.
 - Before calling a web-facing change live in a handoff, run `npm run handoff:check` after the merge and deploy complete.

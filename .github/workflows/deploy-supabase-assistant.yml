@@ -1,6 +1,7 @@
 name: Deploy Supabase Assistant Function
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["CI"]
     types: [completed]

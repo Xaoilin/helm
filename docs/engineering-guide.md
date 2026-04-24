@@ -83,12 +83,12 @@ For assistant-planning changes, the release bar is higher than generic unit cove
 
 - The CI workflow job names are part of the contract with GitHub branch protection. Keep them as `lint`, `typecheck`, `unit`, `e2e`, `build`, `agent-policy`, and `codex-review`.
 - `master` should stay protected with pull requests required, zero required human approvals for the personal-app flow, and those seven checks required before merge. The `codex-review` check must degrade to a passing advisory-unavailable result when OpenAI quota or service availability prevents review output.
-- `auto-promote` must stay limited to non-draft, same-repo `codex/*` pull requests targeting `master`. It should squash-merge, delete the branch, and explicitly dispatch `CI` on `master` so the existing deploy workflow chain runs for the merged head.
+- `auto-promote` must stay limited to non-draft, same-repo `codex/*` pull requests targeting `master`. It should squash-merge, delete the branch, and explicitly dispatch `CI`, `Deploy to GitHub Pages`, and `Deploy Supabase Assistant Function` on `master` so GitHub token recursion rules cannot leave the merged head undeployed.
 - `codex-review` is a blocking automated review gate only when it successfully returns P0/P1 findings. Missing `OPENAI_API_KEY`, quota exhaustion, provider failures, or malformed review output should produce warnings and must not block the release cycle.
 - The non-required `assistant-benchmark` CI job now runs on pushes to `master` and blocks deployment if the live hosted benchmark thresholds fail.
 - The normal landing path is therefore a small branch and PR into `master`, not direct commits to `master` or long-lived finished changes sitting only locally.
 - If a Supabase change depends on a new migration, ship the migration rollout in the same release path as the code that depends on it. Prefer keeping `SUPABASE_DB_PASSWORD` configured so `supabase db push` can run non-interactively; when that secret is unavailable, provide an equally automatic fallback in the release workflow so production cannot end up with new hosted code but missing schema.
-- Deploy should continue to trigger only from a successful CI run on `master`, not from arbitrary pushes or partial workflows.
+- Deploy should continue to run only for `master`. The deploy workflows support both the normal successful-`CI` `workflow_run` path and the `auto-promote` direct `workflow_dispatch` path; final handoff is still gated by `npm run handoff:check` verifying successful CI, deploys, and the live bundle version for the same `origin/master` head.
 
 ## Testing Expectations
 
