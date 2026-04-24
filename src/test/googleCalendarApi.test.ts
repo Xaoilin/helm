@@ -114,6 +114,21 @@ describe('googleCalendarApi', () => {
       expect(payload.end.dateTime).toBeUndefined();
     });
 
+    it('should use the local calendar date for all-day exclusive ends', () => {
+      const event = {
+        title: 'Local day',
+        description: '',
+        start: '2026-04-01T00:00:00.000+01:00',
+        end: '2026-04-01T23:59:59.000+01:00',
+        allDay: true,
+      };
+
+      const payload = localEventToGooglePayload(event);
+
+      expect(payload.start.date).toBe('2026-04-01');
+      expect(payload.end.date).toBe('2026-04-02');
+    });
+
     it('should omit empty description and location', () => {
       const event = {
         title: 'Quick call',

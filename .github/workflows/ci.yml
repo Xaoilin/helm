@@ -1,7 +1,9 @@
 name: CI
 
 on:
+  workflow_dispatch:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
       - master
@@ -21,6 +23,20 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+
+  agent-policy:
+    name: agent-policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run agent:policy
 
   typecheck:
     name: typecheck
@@ -70,4 +86,193 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+
+  codex-review:
+    name: codex-review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - name: Pre-fetch pull request refs
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags origin \
+            "$PR_BASE_REF" \
+            "+refs/pull/$PR_NUMBER/head"
+      - name: Check Codex review availability
+        id: codex_review_secret
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::warning::OPENAI_API_KEY is not configured; skipping advisory Codex review."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Prepare review output directory
+        run: mkdir -p test-results
+      - name: Run Codex review gate
+        id: run_codex_review
+        if: steps.codex_review_secret.outputs.available == 'true'
+        continue-on-error: true
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5.4-mini
+          effort: low
+          sandbox: read-only
+          safety-strategy: read-only
+          output-file: test-results/codex-review.json
+          output-schema: |
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "priority": {
+                        "type": "string",
+                        "enum": ["P0", "P1", "P2", "P3"]
+                      },
+                      "file": {
+                        "type": "string"
+                      },
+                      "line": {
+                        "type": "integer"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "body": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["priority", "file", "line", "title", "body"]
+                  }
+                }
+              },
+              "required": ["findings"]
+            }
+          prompt: |
+            This is PR #${{ github.event.pull_request.number }} for ${{ github.repository }}.
+            Review only the changes introduced by this pull request.
+
+            Base SHA: ${{ github.event.pull_request.base.sha }}
+            Head SHA: ${{ github.event.pull_request.head.sha }}
+
+            Use these commands for context:
+            - git diff --stat ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}
+            - git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}
+
+            Apply HELM's AGENTS.md and docs/engineering-guide.md review rules.
+            Flag only actionable issues introduced by the PR.
+            Use priorities:
+            - P0: must not merge; data loss, secret leak, severe security issue, or broken release automation.
+            - P1: should not merge; likely runtime break, broken tests, unsafe persistence/auth/sync behavior, or incorrect deployment gate.
+            - P2: non-blocking but important improvement.
+            - P3: minor maintainability issue.
+
+            Return JSON matching the requested schema. If there are no findings, return {"findings":[]}.
+      - name: Summarize advisory Codex review result
+        if: always()
+        env:
+          CODEX_ACTION_OUTCOME: ${{ steps.run_codex_review.outcome }}
+          CODEX_SECRET_AVAILABLE: ${{ steps.codex_review_secret.outputs.available }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+
+          const reviewPath = 'test-results/codex-review.json'
+          const secretAvailable = process.env.CODEX_SECRET_AVAILABLE === 'true'
+          const actionOutcome = process.env.CODEX_ACTION_OUTCOME || 'skipped'
+
+          if (!secretAvailable) {
+            console.log('Codex review skipped because OPENAI_API_KEY is not configured.')
+            process.exit(0)
+          }
+
+          if (!fs.existsSync(reviewPath)) {
+            console.warn(`::warning::Codex review did not produce output (action outcome: ${actionOutcome}); treating review as advisory unavailable.`)
+            process.exit(0)
+          }
+
+          const raw = fs.readFileSync(reviewPath, 'utf8').trim()
+          const withoutFence = raw
+            .replace(/^```(?:json)?\s*/u, '')
+            .replace(/\s*```$/u, '')
+            .trim()
+
+          let parsed
+          try {
+            parsed = JSON.parse(withoutFence)
+          } catch {
+            const start = withoutFence.indexOf('{')
+            const end = withoutFence.lastIndexOf('}')
+            if (start === -1 || end === -1 || end <= start) {
+              console.warn('::warning::Codex review did not produce parseable JSON; treating review as advisory unavailable.')
+              process.exit(0)
+            }
+            try {
+              parsed = JSON.parse(withoutFence.slice(start, end + 1))
+            } catch {
+              console.warn('::warning::Codex review JSON parse fallback failed; treating review as advisory unavailable.')
+              process.exit(0)
+            }
+          }
+
+          const findings = Array.isArray(parsed.findings) ? parsed.findings : []
+          const blocking = findings.filter((finding) => finding.priority === 'P0' || finding.priority === 'P1')
+
+          if (blocking.length > 0) {
+            console.error('Codex review found blocking issues:')
+            for (const finding of blocking) {
+              console.error(`- ${finding.priority} ${finding.file}:${finding.line} ${finding.title}`)
+              console.error(`  ${finding.body}`)
+            }
+            process.exit(1)
+          }
+
+          console.log(`Codex review passed with ${findings.length} non-blocking finding(s).`)
+          NODE
+
+  auto-promote:
+    name: auto-promote
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'master' && startsWith(github.event.pull_request.head.ref, 'codex/')
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - agent-policy
+      - typecheck
+      - unit
+      - e2e
+      - build
+      - codex-review
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Squash merge validated codex branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash --delete-branch
+      - name: Trigger master CI for deployment chain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run "CI" --ref master
 
