@@ -2,6 +2,7 @@
 // No SDK dependency — uses native fetch
 
 import { API_TIMEOUT } from '../config/constants';
+import { toLocalDateStr } from './financeHelpers';
 import { googleCalendarBreaker } from './serviceBreakers';
 import { withRetry } from './retry';
 
@@ -262,7 +263,7 @@ export function localEventToGooglePayload(event: {
     // Google all-day end is exclusive, so add a day
     const endD = new Date(event.end);
     endD.setDate(endD.getDate() + 1);
-    const endDate = endD.toISOString().split('T')[0];
+    const endDate = toLocalDateStr(endD);
     return {
       summary: event.title,
       description: event.description || undefined,

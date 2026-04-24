@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+echo "Running HELM pre-push gate..."
+npm run check

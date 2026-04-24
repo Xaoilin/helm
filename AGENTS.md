@@ -13,7 +13,7 @@ HELM is a local-first desktop assistant app called Lina. The stack is Tauri 2, R
 
 ## Must-Follow Invariants
 
-- Do not use `toISOString().split('T')[0]` for local date comparisons. Use the local-date helpers already established in the codebase.
+- Do not derive local dates by slicing UTC ISO strings. Use the local-date helpers already established in the codebase.
 - Preserve the local-first persistence model and the signed-in Supabase precedence rules.
 - Calendar data is hierarchical: account -> source -> event. Removing an account must continue to cascade cleanly.
 - Multi-account Google Calendar support is intentional. Do not collapse it back to a single-account model.
@@ -30,6 +30,8 @@ Run the relevant checks before closing out meaningful code changes:
 - `npm run test`
 - `npm run test:e2e`
 - `npm run build`
+- `npm run agent:policy`
+- `npm run agent:local-gate`
 - `npm run check`
 
 Also do manual QA before reporting back on any delivered feature. Changes that touch UI, voice, OAuth, wake-word, or external integrations always require a direct manual validation pass, and user-facing changes should include screenshot evidence when practical.
@@ -56,6 +58,8 @@ Before reporting meaningful feature work back as completed, `npm run handoff:che
 - Every feature branch must bump the app version, keep the release files in sync, and report that version back in the handoff even if the work is still branch-only.
 - Every completed feature handoff must include the `npm run handoff:check` result, and that result must be passing unless the user explicitly wants a local-only or unmerged outcome.
 - When meaningful work is complete and validation is green, continue through the normal branch -> commit -> merge -> deploy-verification flow automatically unless the user explicitly wants it kept local or unmerged. Do not wait for a separate "release it" prompt to finish the job.
+- Same-repo, non-draft `codex/*` PRs into `master` are expected to auto-promote after the required automated gates pass. Do not add a manual review requirement unless the user explicitly asks for a human-gated release.
+- OpenAI quota, credentials, or provider availability for `codex-review` are not release blockers. Treat unavailable automated review as an advisory warning, while still blocking on P0/P1 findings if a review completes successfully.
 - Do not describe a user-facing change as live, shipped, or on the website until it has been merged to `master`, the deployment has completed successfully, and `npm run handoff:check` has passed. If work is only local or branch-only, say that explicitly.
 - After a task branch is merged, delete that branch locally and on `origin` so stale merged branches do not accumulate. If a branch is still unmerged, call that out explicitly instead of leaving its status ambiguous.
 - Reproduce bugs before fixing them, then add a regression test.
@@ -72,3 +76,4 @@ Before reporting meaningful feature work back as completed, `npm run handoff:che
 - `docs/engineering-guide.md`
 - `docs/feature-status.md`
 - `docs/assistant-command-architecture.md`
+- `docs/agentic-coding-workflow.md`

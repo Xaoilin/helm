@@ -1,13 +1,16 @@
 {
   "name": "helm",
   "private": true,
-  "version": "0.2.50",
+  "version": "0.2.51",
   "type": "module",
   "scripts": {
     "benchmark:assistant": "tsx ./scripts/run-assistant-benchmark.ts",
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "agent:local-gate": "npm run agent:policy && npm run lint && npm run typecheck && npm run test",
+    "agent:policy": "npm run version:check && node ./scripts/verify-agent-policy.mjs",
     "handoff:check": "node ./scripts/verify-handoff.mjs",
+    "hooks:install": "node ./scripts/install-git-hooks.mjs",
     "lint": "eslint .",
     "llm-compare": "node ./scripts/compare-assistant-models.mjs",
     "postversion": "npm run version:sync",

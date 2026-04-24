@@ -3,10 +3,11 @@
 ## Workflow
 
 - Use a dedicated branch for each task. `codex/<short-description>` is the default.
-- When meaningful work is complete and relevant checks are green, use the normal branch -> commit -> PR/merge -> deploy-verification flow instead of leaving finished work only in a local checkout.
+- When meaningful work is complete and relevant checks are green, use the normal branch -> commit -> PR/auto-merge -> deploy-verification flow instead of leaving finished work only in a local checkout.
 - Run `npm run handoff:check` at the end of every completed feature handoff. If it fails, the work is not done yet unless the user explicitly asked for a local-only or unmerged outcome or an external access blocker prevents completion.
 - Do not call a user-facing change live, shipped, or deployed until it is merged to `master`, the deployment has succeeded, and the deployed result has been verified directly. `npm run handoff:check` is the required proof point for that state, and meaningful feature work should not be handed off as complete before that proof exists.
-- When meaningful work is ready and the user did not ask to keep it local, continue through merge and deploy automatically instead of waiting for a separate release instruction.
+- When meaningful work is ready and the user did not ask to keep it local, continue through PR creation, automated gates, merge, deploy, and verification instead of waiting for a separate release instruction.
+- For personal-app feature delivery, non-draft same-repo `codex/*` PRs into `master` auto-promote after `agent-policy`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, and `build` pass. `codex-review` must not block solely because OpenAI quota, credentials, or provider availability are unavailable. Manual human PR approval is not required unless the user explicitly asks for it.
 - After a task branch is merged, delete it locally and on `origin`. If any branch remains unmerged, call out its status explicitly instead of leaving stale topic branches around.
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
@@ -41,6 +42,8 @@ A change is not done until all of the following are true:
 Use the repo scripts or local binaries directly:
 
 - `npm run version:check`
+- `npm run agent:policy`
+- `npm run agent:local-gate`
 - `npm run lint`
 - `npm run typecheck`
 - `.\node_modules\.bin\tsc.cmd -b`
@@ -52,6 +55,8 @@ Use the repo scripts or local binaries directly:
 - `npm run release:check` when you want the local release gate plus the hosted benchmark in one command
 
 For small changes, run the most relevant checks first. Before landing broader code changes, run the full set above unless a dependency or environment blocker prevents it.
+
+Install local git hooks with `npm run hooks:install` when setting up a checkout. The pre-commit hook runs the fast policy and lint gate; the pre-push hook runs `npm run check`. These hooks are convenience feedback only. CI and branch protection remain the authoritative gates.
 
 Run `npm run handoff:check` for every completed feature handoff. If the result is failing because the work is still branch-only, undeployed, or unclean, keep going through release cleanup instead of handing the task back as complete.
 
@@ -76,8 +81,10 @@ For assistant-planning changes, the release bar is higher than generic unit cove
 
 ## CI And Branch Protection
 
-- The CI workflow job names are part of the contract with GitHub branch protection. Keep them as `lint`, `typecheck`, `unit`, `e2e`, and `build`.
-- `master` should stay protected with pull requests required and those five checks required before merge.
+- The CI workflow job names are part of the contract with GitHub branch protection. Keep them as `lint`, `typecheck`, `unit`, `e2e`, `build`, `agent-policy`, and `codex-review`.
+- `master` should stay protected with pull requests required, zero required human approvals for the personal-app flow, and those seven checks required before merge. The `codex-review` check must degrade to a passing advisory-unavailable result when OpenAI quota or service availability prevents review output.
+- `auto-promote` must stay limited to non-draft, same-repo `codex/*` pull requests targeting `master`. It should squash-merge, delete the branch, and explicitly dispatch `CI` on `master` so the existing deploy workflow chain runs for the merged head.
+- `codex-review` is a blocking automated review gate only when it successfully returns P0/P1 findings. Missing `OPENAI_API_KEY`, quota exhaustion, provider failures, or malformed review output should produce warnings and must not block the release cycle.
 - The non-required `assistant-benchmark` CI job now runs on pushes to `master` and blocks deployment if the live hosted benchmark thresholds fail.
 - The normal landing path is therefore a small branch and PR into `master`, not direct commits to `master` or long-lived finished changes sitting only locally.
 - If a Supabase change depends on a new migration, ship the migration rollout in the same release path as the code that depends on it. Prefer keeping `SUPABASE_DB_PASSWORD` configured so `supabase db push` can run non-interactively; when that secret is unavailable, provide an equally automatic fallback in the release workflow so production cannot end up with new hosted code but missing schema.
@@ -190,4 +197,5 @@ After the feature works end to end, do one more rendered review that focuses on 
 - Long-form architecture and process material belongs under `docs/`.
 - When behavior changes materially, update the relevant doc in the same change instead of letting instructions drift.
 - `README.md`, `AGENTS.md`, `docs/project-architecture.md`, `docs/engineering-guide.md`, and `docs/feature-status.md` are the active source-of-truth docs.
+- `docs/agentic-coding-workflow.md` records the current research-backed agent automation policy and should be updated when the workflow changes materially.
 - Status language is limited to `real`, `local-only/degraded`, and `placeholder/simulated`.

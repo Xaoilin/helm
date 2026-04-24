@@ -23,6 +23,8 @@ Open the app in the browser for web development, or run the Tauri shell separate
 ## Core Commands
 
 ```bash
+npm run agent:policy
+npm run agent:local-gate
 npm run lint
 npm run handoff:check
 npm run llm-compare
@@ -35,6 +37,10 @@ npm run check
 
 `npm run check` is the full local validation gate and runs lint, typecheck, unit tests, E2E, and build in sequence.
 
+`npm run agent:policy` is the fast agent workflow policy gate. It verifies release version sync, enforces the required CI automation shape, and scans tracked source/docs for HELM-specific forbidden patterns.
+
+`npm run agent:local-gate` runs policy, lint, typecheck, and unit tests for a faster pre-PR confidence pass.
+
 `npm run handoff:check` is the shipped-release gate. It fails unless there are no uncommitted non-generated changes, the current work is merged into `origin/master`, the `CI`, `Deploy to GitHub Pages`, and `Deploy Supabase Assistant Function` workflows have all succeeded for the deployed `master` head, the live GitHub Pages bundle is serving the current package version, and merged `codex/` branches have been cleaned up.
 
 `npm run llm-compare` compares `gpt-5.4` and `claude-sonnet-4-6` on HELM-style prompts using your local `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`, then writes a Markdown report to `test-results/`.
@@ -44,6 +50,7 @@ npm run check
 - [AGENTS.md](C:/Users/alisa/Documents/Claude/pa-test/helm/AGENTS.md): short operational instructions for Codex
 - [docs/project-architecture.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/project-architecture.md): app structure, provider graph, persistence, and integration boundaries
 - [docs/engineering-guide.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/engineering-guide.md): workflow, Definition of Done, testing, resilience, and documentation rules
+- [docs/agentic-coding-workflow.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/agentic-coding-workflow.md): researched agentic coding workflow, local hooks, automated review, and prod automation policy
 - [docs/feature-status.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/feature-status.md): truthful feature matrix
 - [docs/assistant-command-architecture.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/assistant-command-architecture.md): long-term assistant design direction
 
@@ -92,7 +99,10 @@ The function is intended for signed-in HELM users. If hosted AI is not configure
 
 ## Deployment And CI
 
-- Pull requests should satisfy `lint`, `typecheck`, `unit`, `e2e`, and `build`.
+- Install local Git hooks with `npm run hooks:install` if you want the pre-commit and pre-push gates in this checkout.
+- Pull requests should satisfy `agent-policy`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, and `build`.
+- `codex-review` is useful extra review coverage, but OpenAI quota or provider availability is not a release dependency; unavailable review output is reported as a warning.
+- Non-draft same-repo `codex/*` pull requests into `master` auto-promote after those automated gates pass. Manual PR approval is intentionally not required for this personal-app workflow.
 - GitHub Pages deploys only after the CI workflow succeeds on `master`, and that build defaults the website to hosted GPT-5.4 mode.
-- `master` is protected to require pull requests plus the `lint`, `typecheck`, `unit`, `e2e`, and `build` checks before merge.
+- `master` is protected to require pull requests plus the automated checks before merge.
 - Before calling a web-facing change live in a handoff, run `npm run handoff:check` after the merge and deploy complete.
