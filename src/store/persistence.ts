@@ -1,5 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
-import { flushWriteQueue, isAuthenticated, isSupabaseReady, loadRemote, queueRemoteWrite } from './supabase';
+import {
+  flushWriteQueue,
+  getSupabaseWriteQueueSnapshot,
+  isAuthenticated,
+  isSupabaseReady,
+  loadRemote,
+  queueRemoteWrite,
+  subscribeSupabaseWriteQueueSnapshot,
+  type SupabaseWriteQueueSnapshot,
+} from './supabase';
 import { logWarn } from '../services/logger';
 
 const NAMESPACE = 'helm';
@@ -7,6 +16,10 @@ const META_PREFIX = `${NAMESPACE}:meta:`;
 
 let tauriAvailable: boolean | null = null;
 let remoteFlushHandlersRegistered = false;
+let lastLocalWriteAt: string | null = null;
+let lastLocalWriteKey: string | null = null;
+let lastLocalWriteError: string | null = null;
+const persistenceHealthSubscribers = new Set<(snapshot: PersistenceHealthSnapshot) => void>();
 
 interface LocalCacheMeta {
   updatedAt: string | null;
@@ -16,6 +29,14 @@ interface LocalCacheMeta {
 interface LocalCacheSnapshot<T> {
   value: T | null;
   hasValue: boolean;
+}
+
+export interface PersistenceHealthSnapshot {
+  lastLocalWriteAt: string | null;
+  lastLocalWriteKey: string | null;
+  lastLocalWriteError: string | null;
+  dirtyKeys: string[];
+  supabaseQueue: SupabaseWriteQueueSnapshot;
 }
 
 async function isTauri(): Promise<boolean> {
@@ -90,6 +111,67 @@ function writeLocalCacheValue<T>(key: string, value: T): void {
   localStorage.setItem(getDataKey(key), JSON.stringify(value));
 }
 
+function readDirtyKeys(): string[] {
+  const dirtyKeys: string[] = [];
+
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const storageKey = localStorage.key(index);
+      if (!storageKey?.startsWith(META_PREFIX)) continue;
+      const key = storageKey.slice(META_PREFIX.length);
+      if (readLocalCacheMeta(key).dirty) {
+        dirtyKeys.push(key);
+      }
+    }
+  } catch {
+    logWarn('Persistence', 'Local cache metadata scan failed');
+  }
+
+  return dirtyKeys.sort();
+}
+
+function buildPersistenceHealthSnapshot(): PersistenceHealthSnapshot {
+  return {
+    lastLocalWriteAt,
+    lastLocalWriteKey,
+    lastLocalWriteError,
+    dirtyKeys: readDirtyKeys(),
+    supabaseQueue: getSupabaseWriteQueueSnapshot(),
+  };
+}
+
+function notifyPersistenceHealthSubscribers(): void {
+  const snapshot = buildPersistenceHealthSnapshot();
+  persistenceHealthSubscribers.forEach(listener => listener(snapshot));
+}
+
+function rememberLocalWrite(key: string, error: string | null): void {
+  lastLocalWriteKey = key;
+  lastLocalWriteAt = error ? lastLocalWriteAt : new Date().toISOString();
+  lastLocalWriteError = error;
+  notifyPersistenceHealthSubscribers();
+}
+
+export function getPersistenceHealthSnapshot(): PersistenceHealthSnapshot {
+  return buildPersistenceHealthSnapshot();
+}
+
+export function subscribePersistenceHealth(
+  listener: (snapshot: PersistenceHealthSnapshot) => void,
+): () => void {
+  persistenceHealthSubscribers.add(listener);
+  listener(buildPersistenceHealthSnapshot());
+
+  const unsubscribeQueue = subscribeSupabaseWriteQueueSnapshot(() => {
+    notifyPersistenceHealthSubscribers();
+  });
+
+  return () => {
+    persistenceHealthSubscribers.delete(listener);
+    unsubscribeQueue();
+  };
+}
+
 function ensureRemoteFlushHandlers(): void {
   if (remoteFlushHandlersRegistered || typeof window === 'undefined') return;
 
@@ -142,6 +224,7 @@ export async function loadStore<T>(key: string): Promise<T | null> {
           updatedAt: remote.updatedAt,
           dirty: false,
         });
+        notifyPersistenceHealthSubscribers();
         return remote.value;
       }
     } catch { logWarn('Persistence', 'Supabase load failed, using local cache'); }
@@ -189,11 +272,19 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
   } catch { logWarn('Persistence', 'Tauri write failed'); }
 
   // 2. Always write to localStorage (fast cache)
-  localStorage.setItem(getDataKey(key), json);
-  writeLocalCacheMeta(key, {
-    updatedAt,
-    dirty: authenticated,
-  });
+  try {
+    localStorage.setItem(getDataKey(key), json);
+    writeLocalCacheMeta(key, {
+      updatedAt,
+      dirty: authenticated,
+    });
+    rememberLocalWrite(key, null);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    rememberLocalWrite(key, message);
+    logWarn('Persistence', `Local cache write failed: ${message}`);
+    throw error;
+  }
 
   // 3. Write to Supabase (debounced, background)
   if (authenticated) {
@@ -201,7 +292,10 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
     queueRemoteWrite(NAMESPACE, key, value, {
       updatedAt,
       onSettled: ({ success, updatedAt: settledAt }) => {
-        if (!success) return;
+        if (!success) {
+          notifyPersistenceHealthSubscribers();
+          return;
+        }
         const meta = readLocalCacheMeta(key);
         if (meta.updatedAt === settledAt) {
           writeLocalCacheMeta(key, {
@@ -209,6 +303,7 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
             dirty: false,
           });
         }
+        notifyPersistenceHealthSubscribers();
       },
     });
   }

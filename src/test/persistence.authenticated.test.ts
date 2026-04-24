@@ -2,24 +2,30 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   flushWriteQueueMock,
+  getSupabaseWriteQueueSnapshotMock,
   isAuthenticatedMock,
   isSupabaseReadyMock,
   loadRemoteMock,
   queueRemoteWriteMock,
+  subscribeSupabaseWriteQueueSnapshotMock,
 } = vi.hoisted(() => ({
   flushWriteQueueMock: vi.fn(),
+  getSupabaseWriteQueueSnapshotMock: vi.fn(),
   isAuthenticatedMock: vi.fn(),
   isSupabaseReadyMock: vi.fn(),
   loadRemoteMock: vi.fn(),
   queueRemoteWriteMock: vi.fn(),
+  subscribeSupabaseWriteQueueSnapshotMock: vi.fn(),
 }));
 
 vi.mock('../store/supabase', () => ({
   flushWriteQueue: flushWriteQueueMock,
+  getSupabaseWriteQueueSnapshot: getSupabaseWriteQueueSnapshotMock,
   isAuthenticated: isAuthenticatedMock,
   isSupabaseReady: isSupabaseReadyMock,
   loadRemote: loadRemoteMock,
   queueRemoteWrite: queueRemoteWriteMock,
+  subscribeSupabaseWriteQueueSnapshot: subscribeSupabaseWriteQueueSnapshotMock,
 }));
 
 import { loadStore, saveStore } from '../store/persistence';
@@ -33,6 +39,18 @@ describe('Persistence layer in authenticated mode', () => {
     loadRemoteMock.mockResolvedValue(null);
     queueRemoteWriteMock.mockImplementation(() => {});
     flushWriteQueueMock.mockResolvedValue(undefined);
+    getSupabaseWriteQueueSnapshotMock.mockReturnValue({
+      queuedCount: 0,
+      queuedKeys: [],
+      lastQueuedAt: null,
+      lastFlushStartedAt: null,
+      lastFlushSuccessAt: null,
+      lastFlushFailureAt: null,
+      lastFlushError: null,
+      lastFlushKeys: [],
+      lastFailureKeys: [],
+    });
+    subscribeSupabaseWriteQueueSnapshotMock.mockImplementation(() => () => {});
   });
 
   it('keeps a dirty local cache when the remote copy is stale', async () => {

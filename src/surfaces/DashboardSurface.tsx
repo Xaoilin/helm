@@ -27,6 +27,7 @@ import PrayerTimesCard from '../components/dashboard/PrayerTimesCard';
 import AdhanBanner from '../components/dashboard/AdhanBanner';
 import AgendaList from '../components/dashboard/AgendaList';
 import FocusSnapshot from '../components/dashboard/FocusSnapshot';
+import SystemStatusPanel from '../components/dashboard/SystemStatusPanel';
 import type { AgendaItem } from '../components/dashboard/AgendaList';
 import {
   comparePrayerTasks,
@@ -367,6 +368,8 @@ export default function DashboardSurface() {
             },
           })}
         />
+
+        <SystemStatusPanel />
 
         <div className="dash-grid">
           {/* ── Today's Agenda ── */}
