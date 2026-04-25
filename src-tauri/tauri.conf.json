@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "HELM",
-  "version": "0.2.55",
+  "version": "0.2.56",
   "identifier": "com.helm.app",
   "build": {
     "frontendDist": "../dist",
