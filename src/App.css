@@ -3082,6 +3082,30 @@ textarea.form-input {
 .kb-entry-content { font-size: 13px; color: #c4c8db; line-height: 1.6; white-space: pre-wrap; }
 .kb-entry-tags { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
 .kb-entry-meta { margin-top: 8px; font-size: 11px; color: #4a4e62; }
+.kb-entry-controls {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.kb-entry-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: min(100%, 260px);
+}
+.kb-entry-move span {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #9499b0;
+}
+.kb-entry-move .form-select {
+  min-width: 180px;
+  font-size: 12px;
+  padding: 5px 8px;
+}
 
 /* Source input row */
 .kb-source-row {

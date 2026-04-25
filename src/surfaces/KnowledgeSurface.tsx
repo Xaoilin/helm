@@ -147,6 +147,11 @@ export default function KnowledgeSurface() {
 
   const selectedTopic = app.knowledgeTopics.find(t => t.id === selectedTopicId);
 
+  const sortedKnowledgeTopics = useMemo(
+    () => [...app.knowledgeTopics].sort((a, b) => a.sortOrder - b.sortOrder),
+    [app.knowledgeTopics]
+  );
+
   const topicEntries = useMemo(() => {
     if (!selectedTopicId) return [];
     let entries = app.knowledgeEntries.filter(e => e.topicId === selectedTopicId);
@@ -326,6 +331,14 @@ export default function KnowledgeSurface() {
     setEntrySources([...entry.sources]); setEntryTags([...entry.tags]); setEditingEntry(entry);
     setTab('add');
   };
+  const moveEntryToTopic = (entry: KnowledgeEntry, targetTopicId: string) => {
+    if (!targetTopicId || targetTopicId === entry.topicId) return;
+    if (!app.knowledgeTopics.some(topic => topic.id === targetTopicId)) return;
+    app.updateKnowledgeEntry(entry.id, { topicId: targetTopicId });
+    setLastTopicId(targetTopicId);
+    setSelectedTopicId(targetTopicId);
+    setExpandedEntryId(entry.id);
+  };
   const saveEntry = (addAnother: boolean) => {
     if (!entryTitle.trim() || !entryTopicId) return;
     const data = { topicId: entryTopicId, title: entryTitle.trim(), content: entryContent.trim(), sources: entrySources, tags: entryTags };
@@ -389,17 +402,38 @@ export default function KnowledgeSurface() {
             <div className="kb-entry-meta">
               Added {new Date(entry.createdAt).toLocaleDateString()} &middot; Updated {new Date(entry.updatedAt).toLocaleDateString()}
             </div>
-            <div className="actions-row" style={{ marginTop: 8 }}>
-              <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); openEditEntry(entry); }}>Edit</button>
-              {deletingEntryId === entry.id ? (
-                <div className="confirm-bar" role="alert" style={{ margin: 0 }}>
-                  Delete entry?
-                  <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); app.removeKnowledgeEntry(entry.id); setDeletingEntryId(null); setExpandedEntryId(null); }}>Delete</button>
-                  <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setDeletingEntryId(null); }}>Cancel</button>
-                </div>
-              ) : (
-                <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); setDeletingEntryId(entry.id); }}>Delete</button>
+            <div className="kb-entry-controls">
+              {sortedKnowledgeTopics.length > 1 && (
+                <label className="kb-entry-move">
+                  <span>Move to</span>
+                  <select
+                    className="form-select"
+                    value={entry.topicId}
+                    aria-label={`Move ${entry.title} to topic`}
+                    onClick={e => e.stopPropagation()}
+                    onChange={e => {
+                      e.stopPropagation();
+                      moveEntryToTopic(entry, e.target.value);
+                    }}
+                  >
+                    {sortedKnowledgeTopics.map(topic => (
+                      <option key={topic.id} value={topic.id}>{topic.icon} {topic.name}</option>
+                    ))}
+                  </select>
+                </label>
               )}
+              <div className="actions-row">
+                <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); openEditEntry(entry); }}>Edit</button>
+                {deletingEntryId === entry.id ? (
+                  <div className="confirm-bar" role="alert" style={{ margin: 0 }}>
+                    Delete entry?
+                    <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); app.removeKnowledgeEntry(entry.id); setDeletingEntryId(null); setExpandedEntryId(null); }}>Delete</button>
+                    <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setDeletingEntryId(null); }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); setDeletingEntryId(entry.id); }}>Delete</button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -444,7 +478,7 @@ export default function KnowledgeSurface() {
             ) : (
               <>
                 <div className="kb-topic-grid">
-                  {app.knowledgeTopics.sort((a, b) => a.sortOrder - b.sortOrder).map(topic => {
+                  {sortedKnowledgeTopics.map(topic => {
                     const count = getEntryCountForTopic(topic.id);
                     const comp = getSourceComposition(topic.id);
                     return (
@@ -534,7 +568,7 @@ export default function KnowledgeSurface() {
               <label htmlFor="kb-topic">Topic</label>
               <select id="kb-topic" className="form-select" value={entryTopicId} onChange={e => setEntryTopicId(e.target.value)}>
                 <option value="">Select a topic...</option>
-                {app.knowledgeTopics.map(t => <option key={t.id} value={t.id}>{t.icon} {t.name}</option>)}
+                {sortedKnowledgeTopics.map(t => <option key={t.id} value={t.id}>{t.icon} {t.name}</option>)}
               </select>
               {app.knowledgeTopics.length === 0 && (
                 <button className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={openAddTopic}>+ Create Topic First</button>
@@ -652,7 +686,7 @@ export default function KnowledgeSurface() {
               ))}
               <select className="form-select" style={{ minWidth: 140 }} value={searchTopicFilter} onChange={e => setSearchTopicFilter(e.target.value)}>
                 <option value="all">All Topics</option>
-                {app.knowledgeTopics.map(t => <option key={t.id} value={t.id}>{t.icon} {t.name}</option>)}
+                {sortedKnowledgeTopics.map(t => <option key={t.id} value={t.id}>{t.icon} {t.name}</option>)}
               </select>
               {(searchQuery || searchSourceFilter !== 'all' || searchTopicFilter !== 'all') && (
                 <span className="count" style={{ marginLeft: 'auto' }}>{searchResults.length} result{searchResults.length !== 1 ? 's' : ''}</span>
