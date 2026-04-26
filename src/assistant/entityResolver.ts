@@ -17,6 +17,7 @@ import type {
 export const SURFACE_KEYWORDS: Record<Surface, string[]> = {
   dashboard: ['dashboard', 'home', 'main', 'لوحة', 'الرئيسية'],
   chat: ['chat', 'conversation', 'message', 'messages', 'محادثة', 'رسالة'],
+  inbox: ['inbox', 'capture', 'captures', 'capture inbox', 'quick capture', 'dump', 'التقاط', 'صندوق'],
   calendar: ['calendar', 'schedule', 'meetings', 'events', 'تقويم', 'اجتماع', 'مواعيد'],
   clock: ['clock', 'timer', 'stopwatch', 'countdown', 'timers', 'ساعة', 'مؤقت', 'عداد'],
   trips: ['trip', 'trips', 'travel', 'itinerary', 'journey', 'vacation', 'travel planner', 'رحلة', 'رحلات', 'سفر'],
@@ -35,6 +36,7 @@ export const SURFACE_KEYWORDS: Record<Surface, string[]> = {
 export const SURFACE_LABELS: Record<Surface, { en: string; ar: string }> = {
   dashboard: { en: 'Dashboard', ar: 'لوحة التحكم' },
   chat: { en: 'Chat', ar: 'المحادثة' },
+  inbox: { en: 'Inbox', ar: 'صندوق الالتقاط' },
   calendar: { en: 'Calendar', ar: 'التقويم' },
   clock: { en: 'Clock', ar: 'الساعة' },
   trips: { en: 'Trips', ar: 'الرحلات' },

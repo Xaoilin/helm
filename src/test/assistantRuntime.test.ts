@@ -239,6 +239,9 @@ function defaultNarrationMessage(payload: Record<string, unknown>): string {
   }
 
   if (turnState === 'executed') {
+    if (firstCapability === 'capture.add_item') {
+      return 'Captured that in your Inbox.';
+    }
     if (firstCapability === 'tasks.open_view') {
       return "I've opened your full task list.";
     }
@@ -366,6 +369,61 @@ describe('assistant runtime', () => {
     expect(result.assistantMessage).toBe('Here they are. I opened every task for you.');
     expect(result.assistantMessage).not.toBe('Opened the All Tasks task view.');
     expect(result.message).toBe(result.assistantMessage);
+  });
+
+  it('captures raw items through the shared assistant runtime', async () => {
+    mockHostedAssistant(transcript => {
+      expect(transcript).toBe('capture this: research Lisbon day trips before booking flights');
+      return makeHostedToolTurn([{
+        callId: 'call_capture',
+        capability: 'capture.add_item',
+        args: {
+          content: 'research Lisbon day trips before booking flights',
+          classification: 'trip_item',
+        },
+      }]);
+    });
+
+    const addCaptureItem = vi.fn(() => 'capture-1');
+    const recordAssistantActivity = vi.fn();
+    const result = await processAssistantCommand(
+      'capture this: research Lisbon day trips before booking flights',
+      makeContext(),
+      {
+        lang: 'en',
+        provider: 'hosted',
+        activity: {
+          actor: 'chat',
+          surface: 'chat',
+          sourceTranscript: 'capture this: research Lisbon day trips before booking flights',
+          conversationId: 'conv-1',
+        },
+        handlers: {
+          addTask: vi.fn(() => 'unused'),
+          updateTask: vi.fn(),
+          addCaptureItem,
+          recordAssistantActivity,
+        },
+      },
+    );
+
+    expect(result.execution?.toolResults[0]).toEqual(expect.objectContaining({
+      capability: 'capture.add_item',
+      status: 'completed',
+    }));
+    expect(addCaptureItem).toHaveBeenCalledWith(expect.objectContaining({
+      content: 'research Lisbon day trips before booking flights',
+      classification: 'trip_item',
+      status: 'classified',
+      source: 'chat',
+      conversationId: 'conv-1',
+    }));
+    expect(recordAssistantActivity).toHaveBeenCalledWith(expect.objectContaining({
+      domain: 'capture',
+      action: 'saved',
+      undoOperation: { type: 'capture.delete', id: 'capture-1' },
+    }));
+    expect(result.assistantMessage).toBe('Captured that in your Inbox.');
   });
 
   it('passes the selected hosted model through planning and narration', async () => {

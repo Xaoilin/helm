@@ -1,8 +1,8 @@
-import type { Surface, TaskCategory, TaskPriority } from '../types/domain';
+import type { CaptureClassification, Surface, TaskCategory, TaskPriority } from '../types/domain';
 
 export type ConfirmationRule = 'never' | 'always' | 'on_ambiguity';
 export type AssistantActionStatus = 'live' | 'planned' | 'disabled';
-export type AssistantActionDomain = 'navigation' | 'tasks' | 'calendar' | 'finance' | 'knowledge';
+export type AssistantActionDomain = 'navigation' | 'capture' | 'tasks' | 'calendar' | 'finance' | 'knowledge';
 export type AssistantActionArgType = 'string' | 'string_array' | 'boolean' | 'enum';
 
 export interface AssistantActionArgDefinition {
@@ -31,6 +31,7 @@ export interface AssistantActionDefinition {
 const SURFACE_VALUES: readonly Surface[] = [
   'dashboard',
   'chat',
+  'inbox',
   'calendar',
   'clock',
   'trips',
@@ -49,7 +50,45 @@ const SURFACE_VALUES: readonly Surface[] = [
 const TASK_TAB_VALUES = ['today', 'all', 'goals'] as const;
 const TASK_PRIORITY_VALUES: readonly TaskPriority[] = ['high', 'medium', 'low'];
 const TASK_CATEGORY_VALUES: readonly TaskCategory[] = ['daily', 'prayer', 'task', 'goal'];
+const CAPTURE_CLASSIFICATION_VALUES: readonly CaptureClassification[] = [
+  'unknown',
+  'task',
+  'project_note',
+  'calendar_idea',
+  'trip_item',
+  'health_log',
+  'knowledge_entry',
+];
 export const ASSISTANT_ACTIONS = [
+  {
+    id: 'capture.add_item',
+    title: 'Capture Inbox Item',
+    description: 'Save an unstructured thought, reminder, idea, log, note, or link into the universal Capture Inbox for later classification.',
+    domain: 'capture',
+    status: 'live',
+    examples: ['Capture this: book a visa appointment', 'Dump this in my inbox: research Lisbon day trips'],
+    aliases: ['capture this', 'dump this', 'remember this', 'jot this down', 'save to inbox', 'quick capture'],
+    confirmationRule: 'never',
+    executorKey: 'capture_add_item',
+    debugSummary: 'Stores raw user-provided content in the local-first Capture Inbox without converting it into another domain item.',
+    args: [
+      {
+        key: 'content',
+        label: 'Content',
+        description: 'The exact raw capture text to save.',
+        type: 'string',
+        required: true,
+      },
+      {
+        key: 'classification',
+        label: 'Classification',
+        description: 'Optional lightweight classification for later triage.',
+        type: 'enum',
+        required: false,
+        values: CAPTURE_CLASSIFICATION_VALUES,
+      },
+    ],
+  },
   {
     id: 'navigation.go_to_surface',
     title: 'Go To Surface',
