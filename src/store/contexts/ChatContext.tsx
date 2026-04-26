@@ -10,6 +10,7 @@ import type {
   CalendarAccount,
   CalendarEvent,
   CalendarSource,
+  CaptureItem,
   FinanceAccount,
   GamificationProfile,
   KnowledgeEntry,
@@ -37,6 +38,7 @@ export interface ChatCrossDomainData {
   calendarEvents: CalendarEvent[];
   projects: Project[];
   tasks: Task[];
+  captureItems: CaptureItem[];
   financeAccounts: FinanceAccount[];
   transactions: Transaction[];
   knowledgeEntries: KnowledgeEntry[];
@@ -60,6 +62,7 @@ export interface ChatCrossDomainData {
   updateCalendarEvent: (id: string, updates: Partial<CalendarEvent>) => void;
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => string;
   addKnowledgeEntry: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  addCaptureItem: (item: Omit<CaptureItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateGamification: (profile: GamificationProfile) => void;
 }
 
@@ -218,6 +221,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
       calendarEvents: crossDomain.calendarEvents,
       projects: crossDomain.projects,
       tasks: crossDomain.tasks,
+      captureItems: crossDomain.captureItems,
       financeAccounts: crossDomain.financeAccounts,
       transactions: crossDomain.transactions,
       knowledgeEntries: crossDomain.knowledgeEntries,
@@ -251,6 +255,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
         updateCalendarEvent: crossDomain.updateCalendarEvent,
         addTransaction: crossDomain.addTransaction,
         addKnowledgeEntry: crossDomain.addKnowledgeEntry,
+        addCaptureItem: crossDomain.addCaptureItem,
         updateGamification: crossDomain.updateGamification,
         recordAssistantActivity: crossDomain.recordAssistantActivity,
       },

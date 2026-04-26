@@ -6,6 +6,7 @@ import type {
   CalendarAccount,
   CalendarEvent,
   CalendarSource,
+  CaptureItem,
   FinanceAccount,
   GamificationProfile,
   KnowledgeEntry,
@@ -39,6 +40,7 @@ export type AssistantEntityKind =
   | 'calendar_event'
   | 'calendar_source'
   | 'calendar_account'
+  | 'capture_item'
   | 'finance_account'
   | 'knowledge_entry'
   | 'knowledge_topic'
@@ -169,6 +171,7 @@ export interface AssistantCommandContext {
   calendarAccounts: CalendarAccount[];
   calendarSources: CalendarSource[];
   calendarEvents: CalendarEvent[];
+  captureItems?: CaptureItem[];
   tasks: Task[];
   financeAccounts: FinanceAccount[];
   transactions: Transaction[];
@@ -198,6 +201,7 @@ export interface AssistantActionHandlers {
   noteAssistantCorrectionApplied?: (id: string) => void;
   addCalendarEvent?: (event: Omit<CalendarEvent, 'id'>) => string;
   updateCalendarEvent?: (id: string, updates: Partial<CalendarEvent>) => void;
+  addCaptureItem?: (item: Omit<CaptureItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
   addTransaction?: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => string;
   addKnowledgeEntry?: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateGamification?: (profile: GamificationProfile) => void;

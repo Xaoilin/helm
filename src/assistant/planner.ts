@@ -59,6 +59,7 @@ export interface PlannerResult {
 
 type PlannerProvider = 'hosted' | 'ollama';
 type GuardrailIntent =
+  | 'capture_item'
   | 'delete_task'
   | 'complete_task'
   | 'reveal_task'
@@ -141,6 +142,10 @@ const RESPONSES = {
   financeClarify: {
     en: 'Which finance account should I use?',
     ar: 'أي حساب مالي تريدين أن أستخدمه؟',
+  },
+  captureClarify: {
+    en: 'What should I capture?',
+    ar: 'ماذا تريدين أن أحفظ في صندوق الالتقاط؟',
   },
   validatorRejected: {
     en: 'I did not get a safe grounded action plan for that request, so I need to clarify first.',
@@ -225,6 +230,7 @@ function derivePlannerHintIntent(transcript: string): GuardrailIntent {
   if (/(?:\bmove\b|\bpush\b|\breschedule\b)/i.test(lower)) return 'reschedule_event';
   if (/(?:\bschedule\b|\bcreate\b|\bbook\b|\badd\b).+\b(?:meeting|event|appointment|call|calendar)\b/i.test(lower)) return 'create_event';
   if (/(?:\bspent\b|\bpaid\b|\brecord\b|\blog\b|\bincome\b|\bexpense\b|\bearned\b|\breceived\b)/i.test(lower)) return 'record_transaction';
+  if (/(?:\bcapture\b|\bdump\b|\bremember\b|\bjot\b|\bnote this\b|\bsave to inbox\b|\binbox this\b)/i.test(lower)) return 'capture_item';
   if (/(?:\bsave\b|\bknowledge entry\b|\bknowledge note\b|\bcreate note\b|\badd note\b).+\b(?:topic|knowledge|note)\b/i.test(lower)) return 'create_knowledge';
   if (/(?:\badd task\b|\bcreate task\b|\bnew task\b|\bhabit\b|\bgoal\b)/i.test(lower)) return 'create_task';
   if (/(?:\bopen\b|\bgo to\b|\bswitch to\b|\btake me to\b|\bshow\b)/i.test(lower)) return 'navigate';
@@ -246,6 +252,8 @@ function deriveUnsupportedGuardrail(transcript: string): UnsupportedGuardrail {
 
 function guardrailCapabilityIds(intent: GuardrailIntent): CapabilityId[] {
   switch (intent) {
+    case 'capture_item':
+      return ['capture.add_item'];
     case 'delete_task':
       return ['tasks.delete_matching'];
     case 'complete_task':
@@ -285,6 +293,8 @@ function guardrailClarifyMessage(intent: GuardrailIntent, lang: AssistantLang): 
       return RESPONSES.rescheduleClarify[lang];
     case 'record_transaction':
       return RESPONSES.financeClarify[lang];
+    case 'capture_item':
+      return RESPONSES.captureClarify[lang];
     case 'create_knowledge':
       return RESPONSES.knowledgeClarify[lang];
     default:
@@ -305,7 +315,7 @@ function looksLikeImperativeActionRequest(transcript: string): boolean {
   const lower = normaliseText(transcript);
   if (lower.endsWith('?')) return false;
 
-  return /^(?:open|show|take|go|switch|add|create|make|delete|remove|trash|complete|finish|mark|check off|schedule|book|move|push|reschedule|record|log|save|email|text|call|post|send|order|reply|transfer|write|publish|sync|turn|start)\b/i.test(lower);
+  return /^(?:open|show|take|go|switch|add|create|make|delete|remove|trash|complete|finish|mark|check off|schedule|book|move|push|reschedule|record|log|save|capture|dump|remember|jot|email|text|call|post|send|order|reply|transfer|write|publish|sync|turn|start)\b/i.test(lower);
 }
 
 function capabilityScore(transcript: string, capability: CapabilityDefinition): number {
@@ -649,6 +659,7 @@ Planning rules:
 - For finance.record_transaction, pass accountId when a specific account is intended or the bundle makes a default clear.
 - For navigation.go_to_surface, pass projectId when opening a specific project inside the Projects surface.
 - For knowledge.create_entry, pass topicId when a specific topic is intended or the bundle makes a default clear.
+- For capture.add_item, pass the raw user content as content and only use classification when the user states or strongly implies a target bucket.
 - Prefer clarify over guessing when the correct id, time, or target is uncertain.
 - If the user asks for an unsupported action, clarify truthfully and do not approximate it to another capability.
 - For unsupported requests that ask Lina to perform work, use mode "clarify", not "answer".
@@ -860,6 +871,22 @@ export function validateModelPlan(
 
   for (const step of plan.steps) {
     switch (step.capability) {
+      case 'capture.add_item': {
+        const content = typeof step.args.content === 'string' ? step.args.content.trim() : '';
+        if (!content) {
+          return validationReject('Capture plan is missing content.', RESPONSES.captureClarify[lang]);
+        }
+
+        normalizedSteps.push({
+          ...step,
+          args: {
+            ...step.args,
+            content,
+          },
+        });
+        break;
+      }
+
       case 'navigation.go_to_surface': {
         const surfaceId = typeof step.args.surface === 'string' ? step.args.surface : '';
         if (!(surfaceId in SURFACE_LABELS)) {

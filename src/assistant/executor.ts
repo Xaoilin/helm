@@ -14,6 +14,9 @@ import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, formatGBP, parseToPence, toLocal
 import type {
   CalendarEvent,
   CalendarSource,
+  CaptureClassification,
+  CaptureItem,
+  CaptureItemSource,
   FinanceAccount,
   GamificationProfile,
   KnowledgeTopic,
@@ -79,6 +82,7 @@ function cloneContext(context: AssistantCommandContext): AssistantCommandContext
     calendarAccounts: [...context.calendarAccounts],
     calendarSources: [...context.calendarSources],
     calendarEvents: [...context.calendarEvents],
+    captureItems: [...(context.captureItems || [])],
     tasks: [...context.tasks],
     financeAccounts: [...context.financeAccounts],
     transactions: [...context.transactions],
@@ -149,6 +153,27 @@ function asString(value: unknown): string {
 
 function asBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
+}
+
+function asCaptureClassification(value: unknown): CaptureClassification {
+  switch (value) {
+    case 'task':
+    case 'project_note':
+    case 'calendar_idea':
+    case 'trip_item':
+    case 'health_log':
+    case 'knowledge_entry':
+      return value;
+    case 'unknown':
+    default:
+      return 'unknown';
+  }
+}
+
+function activityToCaptureSource(activity: AssistantActivitySource | undefined): CaptureItemSource {
+  if (activity?.actor === 'voice') return 'voice';
+  if (activity?.actor === 'chat') return 'chat';
+  return 'manual';
 }
 
 function asTaskCategory(value: unknown): Task['category'] | 'any' {
@@ -348,6 +373,80 @@ function executeSingleStep(
   activity?: AssistantActivitySource,
 ): ClarifyOutcome | ExecutedStepOutcome {
   switch (step.capability) {
+    case 'capture.add_item': {
+      if (!handlers.addCaptureItem) {
+        return { kind: 'clarify', reason: 'Capture Inbox is not available in this surface.' };
+      }
+
+      const content = asString(step.args.content);
+      if (!content) {
+        return { kind: 'clarify', reason: 'What should I capture?' };
+      }
+
+      const classification = asCaptureClassification(step.args.classification);
+      const status: CaptureItem['status'] = classification === 'unknown' ? 'unprocessed' : 'classified';
+      const id = handlers.addCaptureItem({
+        content,
+        source: activityToCaptureSource(activity),
+        classification,
+        status,
+        sourceSurface: activity?.surface || context.currentSurface,
+        conversationId: activity?.conversationId,
+        processedAt: status === 'classified' ? getNow(context).toISOString() : undefined,
+      });
+      const now = getNow(context).toISOString();
+      const item: CaptureItem = {
+        id,
+        content,
+        source: activityToCaptureSource(activity),
+        classification,
+        status,
+        sourceSurface: activity?.surface || context.currentSurface,
+        conversationId: activity?.conversationId,
+        processedAt: status === 'classified' ? now : undefined,
+        createdAt: now,
+        updatedAt: now,
+      };
+      context.captureItems = [item, ...(context.captureItems || [])];
+
+      const label = content.length > 48 ? `${content.slice(0, 45)}...` : content;
+      const ref = makeEntityReference('capture_item', id, label, 'inbox', 1);
+      const summary = 'Captured item in Inbox.';
+      const facts = [
+        `Captured: ${label}.`,
+        `Classification: ${classification}.`,
+        `Source: ${item.source}.`,
+      ];
+      recordAssistantActivity(handlers, activity, {
+        domain: 'capture',
+        action: 'saved',
+        summary,
+        details: facts,
+        refs: [ref],
+        undoOperation: { type: 'capture.delete', id },
+      });
+
+      return {
+        stepResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary,
+          entityRefs: [ref],
+        },
+        toolResult: {
+          callId,
+          capability: step.capability,
+          status: 'completed',
+          summary,
+          facts,
+          entityRefs: [ref],
+        },
+        refs: [ref],
+        undoToken: JSON.stringify({ type: 'capture.delete', id }),
+      };
+    }
+
     case 'navigation.go_to_surface': {
       const surfaceValue = step.args.surface;
       if (typeof surfaceValue !== 'string') {
