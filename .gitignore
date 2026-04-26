@@ -10,6 +10,7 @@ lerna-debug.log*
 # Codex local artifacts
 .codex/runlogs/
 .codex/pr-*.md
+test-results/
 
 node_modules
 dist
