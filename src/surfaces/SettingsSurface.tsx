@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { isSupabaseReady, isAuthenticated, getCurrentUserId } from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
@@ -14,6 +14,12 @@ import {
 import { canUseHostedAssistantProjectAccess, isLocalhostRuntime } from '../services/hostedAssistantAccess';
 import { testOllamaConnection, listOllamaModels } from '../services/ollamaApi';
 import { APP_RELEASE_VERSION } from '../config/release';
+import {
+  clearLocalStoreCopy,
+  importLocalStoreCandidate,
+  listLocalImportCandidates,
+  type LocalImportCandidate,
+} from '../store/persistence';
 
 export default function SettingsSurface() {
   const app = useApp();
@@ -21,6 +27,9 @@ export default function SettingsSurface() {
   const linaEnabled = settings.assistantEnabled !== false;
   const [confirmReset, setConfirmReset] = useState(false);
   const [testAdhan, setTestAdhan] = useState<string | null>(null);
+  const [localImportCandidates, setLocalImportCandidates] = useState<LocalImportCandidate[]>([]);
+  const [localImportLoading, setLocalImportLoading] = useState(false);
+  const [localImportStatus, setLocalImportStatus] = useState<string | null>(null);
 
   // Goal tags
   const [newTag, setNewTag] = useState('');
@@ -34,6 +43,7 @@ export default function SettingsSurface() {
   const selectedHostedModel = getHostedAssistantModelSetting(settings);
   const selectedHostedModelOption = getHostedAssistantModelOption(selectedHostedModel);
   const authSyncKey = `${isSupabaseReady()}:${isAuthenticated()}:${getCurrentUserId() || ''}`;
+  const databaseSyncActive = isSupabaseReady() && isAuthenticated();
   const hostedProjectAccessAvailable = canUseHostedAssistantProjectAccess();
   const localhostRuntime = isLocalhostRuntime();
 
@@ -62,6 +72,45 @@ export default function SettingsSurface() {
     };
   }, [selectedHostedModel, selectedProvider, settings.ollamaEndpoint, authSyncKey]);
 
+  const refreshLocalImportCandidates = useCallback(async () => {
+    setLocalImportLoading(true);
+    try {
+      const candidates = await listLocalImportCandidates();
+      setLocalImportCandidates(candidates);
+    } finally {
+      setLocalImportLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!databaseSyncActive) {
+      setLocalImportCandidates([]);
+      setLocalImportStatus(null);
+      return;
+    }
+
+    void refreshLocalImportCandidates();
+  }, [databaseSyncActive, authSyncKey, refreshLocalImportCandidates]);
+
+  async function handleImportCandidate(candidate: LocalImportCandidate, replace: boolean) {
+    setLocalImportStatus(null);
+    const result = await importLocalStoreCandidate(candidate.key, { replace });
+    if (result.imported) {
+      setLocalImportStatus(`${candidate.label} imported into Supabase and the local copy was removed.`);
+    } else if (result.reason === 'remote_exists') {
+      setLocalImportStatus(`${candidate.label} already has database data. Use Replace DB to overwrite it.`);
+    } else {
+      setLocalImportStatus(`Could not import ${candidate.label}.`);
+    }
+    await refreshLocalImportCandidates();
+  }
+
+  async function handleDiscardCandidate(candidate: LocalImportCandidate) {
+    await clearLocalStoreCopy(candidate.key);
+    setLocalImportStatus(`${candidate.label} local copy removed.`);
+    await refreshLocalImportCandidates();
+  }
+
   return (
     <>
       <div className="surface-header">
@@ -75,20 +124,83 @@ export default function SettingsSurface() {
         <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Data Sync</h3>
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>{isSupabaseReady() && isAuthenticated() ? '🟢' : '🔴'}</span>
+            <span style={{ fontSize: 16 }}>{databaseSyncActive ? '🟢' : '🔴'}</span>
             <div>
               <div style={{ fontSize: 13, fontWeight: 500 }}>
-                {isSupabaseReady() && isAuthenticated()
-                  ? 'Your data syncs automatically'
+                {databaseSyncActive
+                  ? 'Supabase is the signed-in data source'
                   : 'Sign in with Google to sync your data across devices'}
               </div>
               <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 2 }}>
-                {isSupabaseReady() && isAuthenticated()
-                  ? `Signed in as ${getCurrentUserId()?.slice(0, 8)}... \u00b7 All changes saved to the cloud in real time.`
+                {databaseSyncActive
+                  ? `Signed in as ${getCurrentUserId()?.slice(0, 8)}... \u00b7 App data reads and writes Supabase only. Settings values are synced JSON, not encrypted vault storage.`
                   : 'Your data is stored locally. Sign in via the sidebar to enable cloud sync.'}
               </div>
             </div>
           </div>
+          {databaseSyncActive && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #1e2030' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>Local import candidates</div>
+                  <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 2 }}>
+                    Signed-in data ignores these local copies unless you import or replace them.
+                  </div>
+                </div>
+                <button className="btn btn-secondary btn-sm" onClick={() => void refreshLocalImportCandidates()} disabled={localImportLoading}>
+                  {localImportLoading ? 'Checking...' : 'Refresh'}
+                </button>
+              </div>
+              {localImportStatus && (
+                <div style={{ fontSize: 12, color: '#9499b0', marginBottom: 10 }}>{localImportStatus}</div>
+              )}
+              {localImportCandidates.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#6b6f85' }}>No local app-data copies are waiting for import.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {localImportCandidates.map(candidate => (
+                    <div
+                      key={candidate.key}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0, 1fr) auto',
+                        gap: 10,
+                        alignItems: 'center',
+                        padding: '10px 0',
+                        borderTop: '1px solid #1e2030',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{candidate.label}</div>
+                        <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 2 }}>
+                          {candidate.remoteExists === true ? 'Database already has data' : candidate.remoteExists === false ? 'Database is empty' : 'Database status unknown'} · {candidate.tauri ? 'Tauri' : 'localStorage'} · {candidate.sizeBytes} bytes
+                        </div>
+                      </div>
+                      <div className="actions-row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          disabled={candidate.remoteExists !== false}
+                          onClick={() => void handleImportCandidate(candidate, false)}
+                        >
+                          Import
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          disabled={candidate.remoteExists !== true}
+                          onClick={() => void handleImportCandidate(candidate, true)}
+                        >
+                          Replace DB
+                        </button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => void handleDiscardCandidate(candidate)}>
+                          Discard
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Google Calendar */}

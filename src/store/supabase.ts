@@ -3,7 +3,7 @@
  *
  * Schema required (v2 — with user scoping):
  *   CREATE TABLE kv_store (
- *     user_id TEXT NOT NULL,
+ *     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
  *     namespace TEXT NOT NULL,
  *     key TEXT NOT NULL,
  *     value JSONB NOT NULL,
@@ -12,7 +12,7 @@
  *   );
  *   ALTER TABLE kv_store ENABLE ROW LEVEL SECURITY;
  *   CREATE POLICY "User isolation" ON kv_store
- *     FOR ALL USING (auth.uid()::text = user_id);
+ *     FOR ALL USING (auth.uid()::text = user_id::text);
  */
 
 import { createClient, type AuthChangeEvent, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
@@ -199,6 +199,19 @@ interface KvRow {
   updated_at: string;
 }
 
+function isNoRowsError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === 'PGRST116' || /0 rows|no rows|not found/i.test(error.message || '');
+}
+
+function toError(error: unknown, fallback: string): Error {
+  if (error instanceof Error) return error;
+  if (typeof error === 'object' && error && 'message' in error) {
+    return new Error(String((error as { message?: unknown }).message));
+  }
+  return new Error(error ? String(error) : fallback);
+}
+
 /** Load a single value. */
 export async function loadRemote<T>(namespace: string, key: string): Promise<{ value: T; updatedAt: string } | null> {
   if (!client) return null;
@@ -210,11 +223,15 @@ export async function loadRemote<T>(namespace: string, key: string): Promise<{ v
       .eq('namespace', namespace)
       .eq('key', key)
       .single();
-    if (error || !data) return null;
+    if (error) {
+      if (isNoRowsError(error)) return null;
+      throw toError(error, `Failed to load ${namespace}:${key}`);
+    }
+    if (!data) return null;
     return { value: data.value as T, updatedAt: data.updated_at };
   } catch (e) {
     logError('Supabase', e);
-    return null;
+    throw e;
   }
 }
 
@@ -270,6 +287,147 @@ export async function deleteRemote(namespace: string, key: string): Promise<bool
     logError('Supabase', e);
     return false;
   }
+}
+
+// ── Realtime key-value invalidation ──
+
+export type SupabaseRealtimeState =
+  | 'unavailable'
+  | 'subscribing'
+  | 'subscribed'
+  | 'closed'
+  | 'error'
+  | 'timed_out';
+
+export interface SupabaseRealtimeSnapshot {
+  state: SupabaseRealtimeState;
+  lastEventAt: string | null;
+  lastStatusAt: string | null;
+  lastError: string | null;
+}
+
+export interface RemoteStoreChange {
+  event: 'INSERT' | 'UPDATE' | 'DELETE' | string;
+  namespace: string;
+  key: string;
+  updatedAt: string | null;
+  value: unknown;
+}
+
+let realtimeSnapshot: SupabaseRealtimeSnapshot = {
+  state: 'unavailable',
+  lastEventAt: null,
+  lastStatusAt: null,
+  lastError: null,
+};
+
+const realtimeSubscribers = new Set<(snapshot: SupabaseRealtimeSnapshot) => void>();
+
+function copyRealtimeSnapshot(): SupabaseRealtimeSnapshot {
+  return { ...realtimeSnapshot };
+}
+
+function publishRealtimeSnapshot(patch: Partial<SupabaseRealtimeSnapshot>): void {
+  realtimeSnapshot = {
+    ...realtimeSnapshot,
+    ...patch,
+    lastStatusAt: patch.state ? new Date().toISOString() : realtimeSnapshot.lastStatusAt,
+  };
+  const snapshot = copyRealtimeSnapshot();
+  realtimeSubscribers.forEach(listener => listener(snapshot));
+}
+
+function normalizeRealtimeStatus(status: string): SupabaseRealtimeState {
+  switch (status) {
+    case 'SUBSCRIBED':
+      return 'subscribed';
+    case 'CHANNEL_ERROR':
+      return 'error';
+    case 'TIMED_OUT':
+      return 'timed_out';
+    case 'CLOSED':
+      return 'closed';
+    default:
+      return 'subscribing';
+  }
+}
+
+function rowFromRealtimePayload(payload: unknown): Partial<KvRow> | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as {
+    eventType?: string;
+    new?: Partial<KvRow>;
+    old?: Partial<KvRow>;
+  };
+  return record.new?.key ? record.new : record.old?.key ? record.old : null;
+}
+
+export function getSupabaseRealtimeSnapshot(): SupabaseRealtimeSnapshot {
+  return copyRealtimeSnapshot();
+}
+
+export function subscribeSupabaseRealtimeSnapshot(
+  listener: (snapshot: SupabaseRealtimeSnapshot) => void,
+): () => void {
+  realtimeSubscribers.add(listener);
+  listener(copyRealtimeSnapshot());
+  return () => {
+    realtimeSubscribers.delete(listener);
+  };
+}
+
+export function subscribeRemoteStore(
+  namespace: string,
+  listener: (change: RemoteStoreChange) => void,
+): () => void {
+  if (!client || !currentUserId) {
+    publishRealtimeSnapshot({
+      state: 'unavailable',
+      lastError: !client ? 'Supabase is not configured.' : 'No authenticated Supabase user.',
+    });
+    return () => {};
+  }
+
+  publishRealtimeSnapshot({ state: 'subscribing', lastError: null });
+
+  const channel = client
+    .channel(`kv-store-${namespace}-${currentUserId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'kv_store',
+        filter: `user_id=eq.${currentUserId}`,
+      },
+      payload => {
+        const row = rowFromRealtimePayload(payload);
+        if (!row?.namespace || !row.key || row.namespace !== namespace) return;
+        publishRealtimeSnapshot({
+          state: 'subscribed',
+          lastEventAt: new Date().toISOString(),
+          lastError: null,
+        });
+        listener({
+          event: String(payload.eventType || 'change'),
+          namespace: row.namespace,
+          key: row.key,
+          updatedAt: typeof row.updated_at === 'string' ? row.updated_at : null,
+          value: row.value,
+        });
+      },
+    )
+    .subscribe(status => {
+      const state = normalizeRealtimeStatus(status);
+      publishRealtimeSnapshot({
+        state,
+        lastError: state === 'error' || state === 'timed_out' ? `Realtime channel ${status}.` : null,
+      });
+    });
+
+  return () => {
+    void client?.removeChannel(channel);
+  };
 }
 
 // ── Debounced write queue ──

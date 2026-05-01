@@ -1,7 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AppProvider } from './store/AppContext';
-import App from './App';
+import AppRoot from './AppRoot';
 import { initSupabase } from './store/supabase';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
 
@@ -12,8 +11,6 @@ if (SUPABASE_URL && SUPABASE_ANON_KEY) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AppProvider>
-      <App />
-    </AppProvider>
+    <AppRoot />
   </StrictMode>,
 );

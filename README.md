@@ -57,13 +57,13 @@ npm run check
 ## Current Product Reality
 
 - Google Calendar OAuth and sync are real.
-- Supabase auth and sync are real when configured.
+- Supabase auth and sync are real when configured; signed-in shared app data is database-backed rather than device-local.
 - Hosted GPT-5.4 assistant replies are real when Supabase is configured, the `assistant-openai` Edge Function is deployed, and the live planner is available.
 - Ollama-powered assistant responses are real when Ollama is running locally.
 - Voice input shows a live transcript preview while recording when Deepgram or the browser fallback is available, then confirms the final command after you stop.
 - A dedicated Clock surface provides a neat multi-clock workspace with on-demand timers and stopwatches, custom names, selectable alarm sounds, eye-catching finish alerts, and local-first persistence.
 - Several integrations remain placeholder or simulated.
-- Credentials stored in the local vault are not encrypted at rest in this MVP.
+- Credentials and API-key-like settings stored locally or synced through Supabase are not encrypted vault storage in this MVP.
 
 Use [docs/feature-status.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/feature-status.md) for the authoritative feature-by-feature status instead of inferring from UI copy.
 
