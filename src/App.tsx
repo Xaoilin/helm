@@ -21,13 +21,10 @@ import VoiceAssistant from './components/VoiceAssistant';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
   isSupabaseReady,
-  getSessionUser,
-  signInWithGoogle,
-  signOut,
-  onAuthStateChange,
+  signInWithGoogle as startGoogleSignIn,
+  signOut as endSupabaseSession,
 } from './store/supabase';
 import type { CaptureItemSource, Surface } from './types/domain';
-import type { User } from '@supabase/supabase-js';
 import { TIMING } from './config/constants';
 import { APP_RELEASE_LABEL, APP_RELEASE_VERSION } from './config/release';
 import {
@@ -35,8 +32,7 @@ import {
   isGoogleCalendarAccount,
 } from './services/googleCalendarAuthManager';
 import { useReleaseRefresh } from './hooks/useReleaseRefresh';
-import { logInfo } from './services/logger';
-import { shouldReloadForAuthStateChange } from './services/authStateReload';
+import { useOptionalAuthSession } from './store/AuthSessionContext';
 
 const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'dashboard', label: 'Dashboard', icon: '\u{1F3E0}' },
@@ -57,24 +53,20 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'debug', label: 'Debug', icon: '\u{1F41E}' },
 ];
 
-const AUTH_RELOAD_SOURCE = 'AppAuth';
-
 function AppInner() {
   const app = useApp();
-  const supabaseReady = isSupabaseReady();
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(supabaseReady);
+  const authSession = useOptionalAuthSession();
+  const authUser = authSession?.authUser ?? null;
+  const authLoading = authSession?.loading ?? false;
+  const signInWithGoogle = authSession?.signInWithGoogle ?? startGoogleSignIn;
+  const signOut = authSession?.signOut ?? endSupabaseSession;
+  const supabaseReady = authSession?.supabaseReady ?? isSupabaseReady();
   const [captureModalSource, setCaptureModalSource] = useState<CaptureItemSource | null>(null);
   const [quickCaptureText, setQuickCaptureText] = useState('');
   const [captureNotice, setCaptureNotice] = useState('');
-  const authUserRef = useRef<User | null>(null);
   const captureInputRef = useRef<HTMLTextAreaElement>(null);
 
   useReleaseRefresh();
-
-  useEffect(() => {
-    authUserRef.current = authUser;
-  }, [authUser]);
 
   const openCaptureModal = useCallback((source: CaptureItemSource) => {
     setQuickCaptureText('');
@@ -158,40 +150,6 @@ function AppInner() {
     }
   }, [app, app.calendarAccounts, app.integrations]);
 
-  // Check session on mount + listen for auth changes
-  useEffect(() => {
-    if (!supabaseReady) return;
-    let initialLoad = true;
-
-    getSessionUser().then(user => {
-      setAuthUser(user);
-      setAuthLoading(false);
-      // Mark initial load complete after a tick
-      setTimeout(() => { initialLoad = false; }, TIMING.AUTH_LOAD_DEBOUNCE);
-    });
-
-    const unsub = onAuthStateChange(({ event, user }) => {
-      if (initialLoad) {
-        // Skip the initial auth event (session restore on page load)
-        setAuthUser(user);
-        return;
-      }
-
-      const previousUserId = authUserRef.current?.id ?? null;
-      const nextUserId = user?.id ?? null;
-
-      if (shouldReloadForAuthStateChange(event, previousUserId, nextUserId)) {
-        logInfo(AUTH_RELOAD_SOURCE, `Reloading after auth event ${event}.`);
-        window.location.reload();
-        return;
-      }
-
-      logInfo(AUTH_RELOAD_SOURCE, `Ignoring auth event ${event}; keeping the current shell state.`);
-      setAuthUser(user);
-    });
-    return unsub;
-  }, [supabaseReady]);
-
   const handleSignIn = async () => {
     try {
       await signInWithGoogle();
@@ -202,7 +160,6 @@ function AppInner() {
 
   const handleSignOut = async () => {
     await signOut();
-    setAuthUser(null);
   };
 
   const renderSurface = () => {

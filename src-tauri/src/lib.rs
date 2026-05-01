@@ -17,6 +17,7 @@ pub fn run() {
             commands::get_app_data_dir,
             commands::pick_directory,
             commands::open_path,
+            commands::delete_store,
             commands::read_store,
             commands::write_store,
         ])

@@ -106,11 +106,10 @@ That navigation payload lets chat and voice hand the UI enough context to open a
 
 `src/store/persistence.ts` implements the storage priority rules:
 
-- Signed in: Supabase is the source of truth, `localStorage` is the cache, and failed remote reads can fall back to cached local data.
+- Signed in: Supabase is the only source of truth for shared app data. Local Tauri files and `localStorage` are ignored unless the user explicitly imports an old local copy.
 - Signed out: Tauri file storage is preferred, with `localStorage` as the web fallback.
 
-Writes always update `localStorage`, try the Tauri store when available, and queue debounced Supabase writes when the user is authenticated.
-Authenticated writes now also mark a local dirty-cache timestamp so a just-created item is not overwritten by stale remote data during an immediate reload before the remote queue flushes.
+Signed-in writes queue debounced Supabase `kv_store` updates and do not write local persistent storage. Signed-out writes still use the local-first Tauri/`localStorage` path. Settings now includes explicit import, replace, and discard actions for local copies created before sign-in; imports never happen automatically. Settings values, including API-key-like values, are synced as plain Supabase JSON under RLS and are not encrypted vault storage.
 
 ### Desktop boundary
 
@@ -124,10 +123,11 @@ The Tauri side is intentionally thin. Rust commands handle app-data directory di
 - session bootstrap and auth-state subscription
 - user-scoped key-value persistence through `kv_store`
 - a debounced remote write queue
+- best-effort realtime invalidation for open signed-in devices
 
 Supabase sync is optional. The app still works in local-first mode without it.
-The app shell only forces a browser reload for real identity transitions such as sign-in or sign-out. Background Supabase auth events like token refreshes now update session state without restarting the UI.
-When the authenticated write queue succeeds, the dirty-cache marker is cleared. Exit and background transitions also trigger best-effort queue flushes so cloud sync is less likely to lag behind the most recent local write.
+`src/AppRoot.tsx` waits for Supabase session bootstrap before mounting domain providers, so returning signed-in users load database data instead of device-local data. Real identity transitions remount the provider tree. Background Supabase auth events like token refreshes update session state without restarting the UI.
+Exit and background transitions trigger best-effort queue flushes so cloud sync is less likely to lag behind the most recent in-memory write.
 
 ## Integrations And External Services
 

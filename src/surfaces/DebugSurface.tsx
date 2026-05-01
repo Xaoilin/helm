@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import AiDebug from '../components/debug/AiDebug';
 import GoogleCalendarDebug from '../components/debug/GoogleCalendarDebug';
+import PersistenceDebug from '../components/debug/PersistenceDebug';
 import WakeWordDebug from '../components/debug/WakeWordDebug';
 
-type DebugTab = 'wakeword' | 'ai' | 'audio' | 'network';
+type DebugTab = 'wakeword' | 'ai' | 'audio' | 'network' | 'persistence';
 
 export default function DebugSurface() {
   const [tab, setTab] = useState<DebugTab>('wakeword');
@@ -13,6 +14,7 @@ export default function DebugSurface() {
     { id: 'ai', label: 'AI Assistant', icon: '🧠' },
     { id: 'audio', label: 'Audio Pipeline', icon: '🔊' },
     { id: 'network', label: 'Network / APIs', icon: '🌐' },
+    { id: 'persistence', label: 'Persistence', icon: '💾' },
   ];
 
   return (
@@ -47,6 +49,7 @@ export default function DebugSurface() {
         {tab === 'network' && (
           <GoogleCalendarDebug />
         )}
+        {tab === 'persistence' && <PersistenceDebug />}
       </div>
     </>
   );
