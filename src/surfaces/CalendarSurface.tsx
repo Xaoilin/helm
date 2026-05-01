@@ -37,6 +37,10 @@ export default function CalendarSurface() {
   const app = useApp();
   const [tab, setTab] = useState<Tab>(app.settings.defaultCalendarTab || 'week');
   const [viewDate, setViewDate] = useState(new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState(() => {
+    const todayDate = new Date();
+    return `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
+  });
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [editingAccount, setEditingAccount] = useState<CalendarAccount | null>(null);
@@ -126,6 +130,22 @@ export default function CalendarSurface() {
     const dateStr = toLocalDateStr(date);
     return visibleEvents.filter(e => toLocalDateStr(new Date(e.start)) === dateStr);
   };
+
+  const selectedDate = useMemo(() => {
+    const [selectedYear, selectedMonth, selectedDay] = selectedDateStr.split('-').map(Number);
+    return new Date(selectedYear, selectedMonth - 1, selectedDay);
+  }, [selectedDateStr]);
+
+  const selectedDateEvents = useMemo(
+    () => getEventsForDate(selectedDate).sort((a, b) => {
+      if (a.allDay && !b.allDay) return -1;
+      if (!a.allDay && b.allDay) return 1;
+      return a.start.localeCompare(b.start);
+    }),
+    // getEventsForDate closes over visibleEvents and is intentionally recalculated when visible events change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedDate, visibleEvents],
+  );
 
   // ── Month Grid ──
   const calendarDays = useMemo(() => {
@@ -439,7 +459,11 @@ export default function CalendarSurface() {
                   {calendarDays.map(({ date, isCurrentMonth }, i) => {
                     const dayEvents = getEventsForDate(date);
                     return (
-                      <div key={i} className={`calendar-day ${isCurrentMonth ? '' : 'other-month'} ${isToday(date) ? 'today' : ''}`}>
+                      <div
+                        key={i}
+                        className={`calendar-day ${isCurrentMonth ? '' : 'other-month'} ${isToday(date) ? 'today' : ''} ${toLocalDateStr(date) === selectedDateStr ? 'selected' : ''}`}
+                        onClick={() => setSelectedDateStr(toLocalDateStr(date))}
+                      >
                         <div className="day-num">{date.getDate()}</div>
                         {dayEvents.slice(0, 3).map(evt => {
                           const pal = getEventPalette(evt.sourceId);
@@ -460,6 +484,33 @@ export default function CalendarSurface() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+              {app.calendarAccounts.length > 0 && (
+                <div className="calendar-mobile-selected-agenda">
+                  <div className="calendar-mobile-selected-title">
+                    {selectedDate.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
+                  </div>
+                  {selectedDateEvents.length === 0 ? (
+                    <div className="calendar-mobile-empty">No events for this day.</div>
+                  ) : (
+                    selectedDateEvents.map(evt => {
+                      const pal = getEventPalette(evt.sourceId);
+                      return (
+                        <button
+                          key={evt.id}
+                          className="calendar-mobile-event"
+                          style={{ borderLeftColor: pal.border, background: pal.bg }}
+                          onClick={() => openEditEvent(evt)}
+                        >
+                          <span style={{ color: pal.text }}>
+                            {evt.allDay ? 'All day' : new Date(evt.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <strong>{evt.title}</strong>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               )}
             </div>
@@ -505,9 +556,53 @@ export default function CalendarSurface() {
                 </div>
               </div>
             ) : (
-              <div className="week-columns">
-                {weekDays.map((d, i) => {
-                  const dayEvents = getEventsForDate(d).sort((a, b) => {
+              <>
+                <div className="calendar-mobile-day-strip" aria-label="Week days">
+                  {weekDays.map((d, i) => {
+                    const dateStr = toLocalDateStr(d);
+                    const dayEvents = getEventsForDate(d);
+                    return (
+                      <button
+                        key={i}
+                        className={`calendar-mobile-day ${isToday(d) ? 'today' : ''} ${dateStr === selectedDateStr ? 'active' : ''}`}
+                        onClick={() => setSelectedDateStr(dateStr)}
+                      >
+                        <span>{DAYS[d.getDay()]}</span>
+                        <strong>{d.getDate()}</strong>
+                        {dayEvents.length > 0 && <em>{dayEvents.length}</em>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="calendar-mobile-selected-agenda">
+                  <div className="calendar-mobile-selected-title">
+                    {selectedDate.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
+                  </div>
+                  {selectedDateEvents.length === 0 ? (
+                    <div className="calendar-mobile-empty">No events for this day.</div>
+                  ) : (
+                    selectedDateEvents.map(evt => {
+                      const pal = getEventPalette(evt.sourceId);
+                      return (
+                        <button
+                          key={evt.id}
+                          className="calendar-mobile-event"
+                          style={{ borderLeftColor: pal.border, background: pal.bg }}
+                          onClick={() => openEditEvent(evt)}
+                        >
+                          <span style={{ color: pal.text }}>
+                            {evt.allDay ? 'All day' : new Date(evt.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <strong>{evt.title}</strong>
+                          {evt.location && <small>{evt.location}</small>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <div className="week-columns">
+                  {weekDays.map((d, i) => {
+                    const dayEvents = getEventsForDate(d).sort((a, b) => {
                     if (a.allDay && !b.allDay) return -1;
                     if (!a.allDay && b.allDay) return 1;
                     return a.start.localeCompare(b.start);
@@ -550,8 +645,9 @@ export default function CalendarSurface() {
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                  })}
+                </div>
+              </>
             )}
           </div>
         )}

@@ -53,6 +53,10 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'debug', label: 'Debug', icon: '\u{1F41E}' },
 ];
 
+const PRIMARY_MOBILE_NAV: Surface[] = ['dashboard', 'chat', 'calendar', 'tasks'];
+const MOBILE_NAV_ITEMS = NAV_ITEMS.filter(item => PRIMARY_MOBILE_NAV.includes(item.surface));
+const MOBILE_MORE_ITEMS = NAV_ITEMS.filter(item => !PRIMARY_MOBILE_NAV.includes(item.surface));
+
 function AppInner() {
   const app = useApp();
   const authSession = useOptionalAuthSession();
@@ -61,6 +65,7 @@ function AppInner() {
   const signInWithGoogle = authSession?.signInWithGoogle ?? startGoogleSignIn;
   const signOut = authSession?.signOut ?? endSupabaseSession;
   const supabaseReady = authSession?.supabaseReady ?? isSupabaseReady();
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [captureModalSource, setCaptureModalSource] = useState<CaptureItemSource | null>(null);
   const [quickCaptureText, setQuickCaptureText] = useState('');
   const [captureNotice, setCaptureNotice] = useState('');
@@ -110,6 +115,19 @@ function AppInner() {
     window.addEventListener('keydown', handleCaptureShortcut);
     return () => window.removeEventListener('keydown', handleCaptureShortcut);
   }, [openCaptureModal]);
+
+  useEffect(() => {
+    if (!mobileMoreOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileMoreOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileMoreOpen]);
 
   useEffect(() => {
     for (const account of app.calendarAccounts) {
@@ -186,6 +204,43 @@ function AppInner() {
     return <ErrorBoundary name={app.surface} key={app.surface}>{surface}</ErrorBoundary>;
   };
 
+  const renderAuthContent = (variant: 'sidebar' | 'mobile') => {
+    if (!supabaseReady) {
+      return <span className={`${variant}-auth-status`}>Local-first mode. Cloud sync is unavailable in this build.</span>;
+    }
+
+    if (authLoading) {
+      return <span className={`${variant}-auth-status`}>Checking sign-in status...</span>;
+    }
+
+    if (authUser) {
+      return (
+        <div className={`${variant}-auth`}>
+          <div className={`${variant}-auth-user`}>
+            <span className={`${variant}-auth-avatar`}>
+              {authUser.user_metadata?.full_name?.charAt(0) || authUser.email?.charAt(0) || '?'}
+            </span>
+            <span className={`${variant}-auth-email`} title={authUser.email || ''}>{authUser.email?.split('@')[0] || 'Signed in'}</span>
+          </div>
+          <button className="btn-icon btn-sm" onClick={handleSignOut} aria-label="Sign out">Sign out</button>
+        </div>
+      );
+    }
+
+    return (
+      <button className={`${variant}-auth-login`} onClick={handleSignIn}>
+        <span style={{ fontSize: 14 }}>G</span> Sign in with Google
+      </button>
+    );
+  };
+
+  const navigateFromMobile = (surface: Surface) => {
+    app.navigate(surface);
+    setMobileMoreOpen(false);
+  };
+
+  const moreIsActive = MOBILE_MORE_ITEMS.some(item => item.surface === app.surface);
+
   return (
     <div className="app-layout">
       <nav className="sidebar" aria-label="Main navigation">
@@ -225,32 +280,80 @@ function AppInner() {
           <div className="sidebar-release-meta">
             This sidebar always shows the exact build version you are running.
           </div>
-          {supabaseReady ? (
-            authLoading ? (
-              <span className="sidebar-auth-status">Checking sign-in status...</span>
-            ) : (
-            authUser ? (
-              <div className="sidebar-auth">
-                <div className="sidebar-auth-user">
-                  <span className="sidebar-auth-avatar">{authUser.user_metadata?.full_name?.charAt(0) || authUser.email?.charAt(0) || '?'}</span>
-                  <span className="sidebar-auth-email" title={authUser.email || ''}>{authUser.email?.split('@')[0] || 'Signed in'}</span>
-                </div>
-                <button className="btn-icon btn-sm" onClick={handleSignOut} aria-label="Sign out" style={{ fontSize: 10, color: '#6b6f85' }}>Sign out</button>
-              </div>
-            ) : (
-              <button className="sidebar-auth-login" onClick={handleSignIn}>
-                <span style={{ fontSize: 14 }}>G</span> Sign in with Google
-              </button>
-            )
-            )
-          ) : (
-            <span className="sidebar-auth-status">Local-first mode. Cloud sync is unavailable in this build.</span>
-          )}
+          {renderAuthContent('sidebar')}
         </div>
       </nav>
       <main className="main-content" aria-label={`${app.surface} surface`}>
         {renderSurface()}
       </main>
+      {mobileMoreOpen && (
+        <div className="mobile-more-backdrop" onClick={() => setMobileMoreOpen(false)}>
+          <section
+            className="mobile-more-sheet"
+            aria-label="More navigation"
+            aria-modal="true"
+            role="dialog"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="mobile-more-handle" aria-hidden="true" />
+            <div className="mobile-more-header">
+              <div>
+                <div className="mobile-more-title">More</div>
+                <div className="mobile-more-subtitle">All Lina surfaces</div>
+              </div>
+              <button className="btn-icon" onClick={() => setMobileMoreOpen(false)} aria-label="Close more navigation">
+                &times;
+              </button>
+            </div>
+            <div className="mobile-more-grid">
+              {MOBILE_MORE_ITEMS.map(item => (
+                <button
+                  key={item.surface}
+                  className={`mobile-more-item ${app.surface === item.surface ? 'active' : ''}`}
+                  onClick={() => navigateFromMobile(item.surface)}
+                  aria-current={app.surface === item.surface ? 'page' : undefined}
+                >
+                  <span className="mobile-more-icon" aria-hidden="true">{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="mobile-more-release" aria-label={APP_RELEASE_LABEL}>
+              <div>
+                <div className="mobile-more-release-label">Current release</div>
+                <div className="mobile-more-release-value">{APP_RELEASE_VERSION}</div>
+              </div>
+              <div className="mobile-more-release-copy">Exact build running on this device.</div>
+            </div>
+            <div className="mobile-auth-panel">
+              {renderAuthContent('mobile')}
+            </div>
+          </section>
+        </div>
+      )}
+      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+        {MOBILE_NAV_ITEMS.map(item => (
+          <button
+            key={item.surface}
+            className={`mobile-nav-item ${app.surface === item.surface ? 'active' : ''}`}
+            onClick={() => navigateFromMobile(item.surface)}
+            aria-current={app.surface === item.surface ? 'page' : undefined}
+            aria-label={`Navigate to ${item.label}`}
+          >
+            <span className="mobile-nav-icon" aria-hidden="true">{item.icon}</span>
+            <span className="mobile-nav-label">{item.label}</span>
+          </button>
+        ))}
+        <button
+          className={`mobile-nav-item ${moreIsActive || mobileMoreOpen ? 'active' : ''}`}
+          onClick={() => setMobileMoreOpen(open => !open)}
+          aria-expanded={mobileMoreOpen}
+          aria-label="Open more navigation"
+        >
+          <span className="mobile-nav-icon" aria-hidden="true">...</span>
+          <span className="mobile-nav-label">More</span>
+        </button>
+      </nav>
       <VoiceAssistant />
       {captureNotice && (
         <div className="capture-toast" role="status">

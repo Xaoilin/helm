@@ -26,8 +26,7 @@ export default function DebugSurface() {
         </div>
       </div>
       <div className="surface-body">
-        {/* Tab bar */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+        <div className="debug-tab-row">
           {tabs.map(t => (
             <button
               key={t.id}
