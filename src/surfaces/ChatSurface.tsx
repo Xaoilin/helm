@@ -184,7 +184,7 @@ export default function ChatSurface() {
   ];
 
   return (
-    <div className="chat-layout">
+    <div className={`chat-layout ${activeConv ? 'chat-has-active' : 'chat-no-active'}`}>
       {/* Conversation sidebar */}
       <div className="chat-sidebar">
         <div className="chat-sidebar-header">
@@ -280,6 +280,13 @@ export default function ChatSurface() {
           <>
             <div className="chat-main-header">
               <div className="chat-main-copy">
+                <button
+                  className="chat-mobile-back"
+                  onClick={() => app.setActiveConversation(null)}
+                  aria-label="Back to conversations"
+                >
+                  &lsaquo; Conversations
+                </button>
                 <h3 className="chat-main-title">{activeConv.title}</h3>
                 <p className="chat-main-meta">
                   {activeConv.messages.length > 0

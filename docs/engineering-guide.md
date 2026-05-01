@@ -103,6 +103,7 @@ For assistant-planning changes, the release bar is higher than generic unit cove
 - User-facing features should have Playwright coverage when they change visible flows.
 - Navigation, CRUD flows, settings persistence, and assistant interactions are strong E2E candidates.
 - If an existing spec covers the journey, extend it instead of creating duplicate coverage.
+- Responsive shell or surface changes must exercise `320x568`, `390x844`, `768x1024`, and desktop widths, and should save reviewed screenshots under `test-results/mobile-ui/<version>/` when mobile behavior is part of the change.
 
 ### Manual testing
 
@@ -128,6 +129,7 @@ After the feature works end to end, do one more rendered review that focuses on 
 - Check text wrapping, truncation, overflow, and any labels or buttons that feel squashed at the widths the surface actually uses.
 - Check spacing, alignment, visual balance, card heights, and hierarchy so the feature looks intentional instead of merely functional.
 - Check the most relevant responsive width for the surface, not just the default desktop viewport.
+- For mobile-first work, include the bottom navigation, More sheet, floating Lina panel, modals/forms, and at least one scroll-heavy surface in the rendered review.
 - Check hover, focus, disabled, empty, loading, and error states when the change touches them.
 - Capture screenshot evidence after this pass so the screenshot reflects the reviewed UI, not a pre-review build.
 - If the design review finds an issue, fix it and repeat the pass before handoff.

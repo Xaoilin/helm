@@ -146,23 +146,28 @@ describe('App shell', () => {
 
   it('should render the sidebar with all nav items', async () => {
     await act(async () => { renderWithProvider(<App />); });
+    const sidebar = screen.getByRole('navigation', { name: 'Main navigation' });
     expect(screen.getByText('HELM')).toBeInTheDocument();
     expect(screen.getByText('Current release')).toBeInTheDocument();
     expect(screen.getByText(APP_RELEASE_VERSION)).toBeInTheDocument();
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Chat')).toBeInTheDocument();
-    expect(screen.getByText('Calendar')).toBeInTheDocument();
-    expect(screen.getByText('Clock')).toBeInTheDocument();
-    expect(screen.getByText('Trips')).toBeInTheDocument();
-    expect(screen.getByText('Tasks')).toBeInTheDocument();
-    expect(screen.getByText('Projects')).toBeInTheDocument();
-    expect(screen.getByText('Finance')).toBeInTheDocument();
-    expect(screen.getByText('Health')).toBeInTheDocument();
-    expect(screen.getByText('Knowledge')).toBeInTheDocument();
-    expect(screen.getByText('Profile')).toBeInTheDocument();
-    expect(screen.getByText('Integrations')).toBeInTheDocument();
-    expect(screen.getByText('Activity')).toBeInTheDocument();
-    expect(screen.getByText('Settings')).toBeInTheDocument();
+    [
+      'Dashboard',
+      'Chat',
+      'Calendar',
+      'Clock',
+      'Trips',
+      'Tasks',
+      'Projects',
+      'Finance',
+      'Health',
+      'Knowledge',
+      'Profile',
+      'Integrations',
+      'Activity',
+      'Settings',
+    ].forEach(label => {
+      expect(within(sidebar).getByText(label)).toBeInTheDocument();
+    });
   });
 
   it('should NOT have Approvals in the sidebar', async () => {
