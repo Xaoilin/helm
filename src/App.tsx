@@ -1,8 +1,9 @@
 import './App.css';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from './store/AppContext';
 import DashboardSurface from './surfaces/DashboardSurface';
 import ChatSurface from './surfaces/ChatSurface';
+import CaptureInboxSurface from './surfaces/CaptureInboxSurface';
 import CalendarSurface from './surfaces/CalendarSurface';
 import ClockSurface from './surfaces/ClockSurface';
 import TripsSurface from './surfaces/TripsSurface';
@@ -20,13 +21,10 @@ import VoiceAssistant from './components/VoiceAssistant';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
   isSupabaseReady,
-  getSessionUser,
-  signInWithGoogle,
-  signOut,
-  onAuthStateChange,
+  signInWithGoogle as startGoogleSignIn,
+  signOut as endSupabaseSession,
 } from './store/supabase';
-import type { Surface } from './types/domain';
-import type { User } from '@supabase/supabase-js';
+import type { CaptureItemSource, Surface } from './types/domain';
 import { TIMING } from './config/constants';
 import { APP_RELEASE_LABEL, APP_RELEASE_VERSION } from './config/release';
 import {
@@ -34,12 +32,12 @@ import {
   isGoogleCalendarAccount,
 } from './services/googleCalendarAuthManager';
 import { useReleaseRefresh } from './hooks/useReleaseRefresh';
-import { logInfo } from './services/logger';
-import { shouldReloadForAuthStateChange } from './services/authStateReload';
+import { useOptionalAuthSession } from './store/AuthSessionContext';
 
 const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'dashboard', label: 'Dashboard', icon: '\u{1F3E0}' },
   { surface: 'chat', label: 'Chat', icon: '\u{1F4AC}' },
+  { surface: 'inbox', label: 'Inbox', icon: '\u{1F4E5}' },
   { surface: 'calendar', label: 'Calendar', icon: '\u{1F4C5}' },
   { surface: 'clock', label: 'Clock', icon: '\u23F1\uFE0F' },
   { surface: 'trips', label: 'Trips', icon: '\u{1F6EB}' },
@@ -59,21 +57,64 @@ const PRIMARY_MOBILE_NAV: Surface[] = ['dashboard', 'chat', 'calendar', 'tasks']
 const MOBILE_NAV_ITEMS = NAV_ITEMS.filter(item => PRIMARY_MOBILE_NAV.includes(item.surface));
 const MOBILE_MORE_ITEMS = NAV_ITEMS.filter(item => !PRIMARY_MOBILE_NAV.includes(item.surface));
 
-const AUTH_RELOAD_SOURCE = 'AppAuth';
-
 function AppInner() {
   const app = useApp();
-  const supabaseReady = isSupabaseReady();
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(supabaseReady);
+  const authSession = useOptionalAuthSession();
+  const authUser = authSession?.authUser ?? null;
+  const authLoading = authSession?.loading ?? false;
+  const signInWithGoogle = authSession?.signInWithGoogle ?? startGoogleSignIn;
+  const signOut = authSession?.signOut ?? endSupabaseSession;
+  const supabaseReady = authSession?.supabaseReady ?? isSupabaseReady();
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
-  const authUserRef = useRef<User | null>(null);
+  const [captureModalSource, setCaptureModalSource] = useState<CaptureItemSource | null>(null);
+  const [quickCaptureText, setQuickCaptureText] = useState('');
+  const [captureNotice, setCaptureNotice] = useState('');
+  const captureInputRef = useRef<HTMLTextAreaElement>(null);
 
   useReleaseRefresh();
 
+  const openCaptureModal = useCallback((source: CaptureItemSource) => {
+    setQuickCaptureText('');
+    setCaptureModalSource(source);
+  }, []);
+
+  const closeCaptureModal = useCallback(() => {
+    setCaptureModalSource(null);
+    setQuickCaptureText('');
+  }, []);
+
+  const submitQuickCapture = useCallback(() => {
+    const content = quickCaptureText.trim();
+    if (!content || !captureModalSource) return;
+
+    app.addCaptureItem({
+      content,
+      source: captureModalSource,
+      classification: 'unknown',
+      status: 'unprocessed',
+      sourceSurface: app.surface,
+    });
+    closeCaptureModal();
+    setCaptureNotice('Captured to Inbox.');
+    window.setTimeout(() => setCaptureNotice(''), TIMING.TOAST_LIFETIME);
+  }, [app, captureModalSource, closeCaptureModal, quickCaptureText]);
+
   useEffect(() => {
-    authUserRef.current = authUser;
-  }, [authUser]);
+    if (!captureModalSource) return;
+    window.setTimeout(() => captureInputRef.current?.focus(), TIMING.INPUT_FOCUS_DELAY);
+  }, [captureModalSource]);
+
+  useEffect(() => {
+    const handleCaptureShortcut = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        openCaptureModal('shortcut');
+      }
+    };
+
+    window.addEventListener('keydown', handleCaptureShortcut);
+    return () => window.removeEventListener('keydown', handleCaptureShortcut);
+  }, [openCaptureModal]);
 
   useEffect(() => {
     if (!mobileMoreOpen) return;
@@ -127,40 +168,6 @@ function AppInner() {
     }
   }, [app, app.calendarAccounts, app.integrations]);
 
-  // Check session on mount + listen for auth changes
-  useEffect(() => {
-    if (!supabaseReady) return;
-    let initialLoad = true;
-
-    getSessionUser().then(user => {
-      setAuthUser(user);
-      setAuthLoading(false);
-      // Mark initial load complete after a tick
-      setTimeout(() => { initialLoad = false; }, TIMING.AUTH_LOAD_DEBOUNCE);
-    });
-
-    const unsub = onAuthStateChange(({ event, user }) => {
-      if (initialLoad) {
-        // Skip the initial auth event (session restore on page load)
-        setAuthUser(user);
-        return;
-      }
-
-      const previousUserId = authUserRef.current?.id ?? null;
-      const nextUserId = user?.id ?? null;
-
-      if (shouldReloadForAuthStateChange(event, previousUserId, nextUserId)) {
-        logInfo(AUTH_RELOAD_SOURCE, `Reloading after auth event ${event}.`);
-        window.location.reload();
-        return;
-      }
-
-      logInfo(AUTH_RELOAD_SOURCE, `Ignoring auth event ${event}; keeping the current shell state.`);
-      setAuthUser(user);
-    });
-    return unsub;
-  }, [supabaseReady]);
-
   const handleSignIn = async () => {
     try {
       await signInWithGoogle();
@@ -171,7 +178,6 @@ function AppInner() {
 
   const handleSignOut = async () => {
     await signOut();
-    setAuthUser(null);
   };
 
   const renderSurface = () => {
@@ -179,6 +185,7 @@ function AppInner() {
       switch (app.surface) {
         case 'dashboard': return <DashboardSurface />;
         case 'chat': return <ChatSurface />;
+        case 'inbox': return <CaptureInboxSurface />;
         case 'calendar': return <CalendarSurface />;
         case 'clock': return <ClockSurface />;
         case 'trips': return <TripsSurface />;
@@ -238,6 +245,17 @@ function AppInner() {
     <div className="app-layout">
       <nav className="sidebar" aria-label="Main navigation">
         <div className="sidebar-logo" role="banner">HELM</div>
+        <div className="sidebar-capture">
+          <button
+            type="button"
+            className="sidebar-capture-button"
+            onClick={() => openCaptureModal('quick_button')}
+            title="Quick capture (Ctrl+Shift+K)"
+          >
+            <span aria-hidden="true">+</span>
+            <span>Capture</span>
+          </button>
+        </div>
         <div className="sidebar-nav" role="navigation">
           {NAV_ITEMS.map(item => (
             <button
@@ -337,6 +355,46 @@ function AppInner() {
         </button>
       </nav>
       <VoiceAssistant />
+      {captureNotice && (
+        <div className="capture-toast" role="status">
+          {captureNotice}
+        </div>
+      )}
+      {captureModalSource && (
+        <div className="capture-modal-overlay" onClick={closeCaptureModal}>
+          <div className="capture-modal" role="dialog" aria-modal="true" aria-label="Quick capture" onClick={event => event.stopPropagation()}>
+            <div className="capture-modal-header">
+              <h2>Quick capture</h2>
+              <button type="button" className="btn-icon btn-sm" onClick={closeCaptureModal} aria-label="Close quick capture">
+                &times;
+              </button>
+            </div>
+            <textarea
+              ref={captureInputRef}
+              className="form-input capture-modal-input"
+              value={quickCaptureText}
+              onChange={event => setQuickCaptureText(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  submitQuickCapture();
+                }
+                if (event.key === 'Escape') {
+                  closeCaptureModal();
+                }
+              }}
+              aria-label="Capture text"
+              placeholder="Write capture..."
+            />
+            <div className="capture-modal-actions">
+              <button type="button" className="btn btn-secondary" onClick={closeCaptureModal}>Cancel</button>
+              <button type="button" className="btn btn-primary" onClick={submitQuickCapture} disabled={!quickCaptureText.trim()}>
+                Save to Inbox
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

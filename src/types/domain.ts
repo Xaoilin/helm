@@ -384,6 +384,31 @@ export interface KnowledgeTopic {
   updatedAt: string;
 }
 
+// ── Universal Capture Inbox ──
+export type CaptureItemSource = 'chat' | 'voice' | 'shortcut' | 'quick_button' | 'manual';
+export type CaptureClassification =
+  | 'unknown'
+  | 'task'
+  | 'project_note'
+  | 'calendar_idea'
+  | 'trip_item'
+  | 'health_log'
+  | 'knowledge_entry';
+export type CaptureStatus = 'unprocessed' | 'classified' | 'archived';
+
+export interface CaptureItem {
+  id: string;
+  content: string;
+  source: CaptureItemSource;
+  classification: CaptureClassification;
+  status: CaptureStatus;
+  sourceSurface?: Surface;
+  conversationId?: string;
+  processedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Health ──
 export type FastFoodExperienceRating = 'good' | 'mixed' | 'bad' | 'awful';
 export type FastFoodSymptom =
@@ -493,7 +518,7 @@ export interface GamificationProfile {
 
 // ── Assistant Activity ──
 export type AssistantActivityActor = 'chat' | 'voice' | 'system';
-export type AssistantActivityDomain = 'assistant' | 'calendar' | 'finance' | 'knowledge' | 'tasks' | 'trips';
+export type AssistantActivityDomain = 'assistant' | 'calendar' | 'capture' | 'finance' | 'knowledge' | 'tasks' | 'trips';
 export type AssistantActivityAction = 'completed' | 'created' | 'deleted' | 'recorded' | 'saved' | 'updated';
 export type AssistantActivityStatus = 'applied' | 'undone' | 'undo_failed';
 
@@ -505,6 +530,7 @@ export interface AssistantActivityEntityReference {
 }
 
 export type AssistantUndoOperation =
+  | { type: 'capture.delete'; id: string }
   | { type: 'task.delete'; id: string }
   | { type: 'task.restore'; tasks: Task[] }
   | { type: 'task.replace'; task: Task; gamification?: GamificationProfile }
@@ -626,6 +652,7 @@ export interface ClockState {
 export type Surface =
   | 'dashboard'
   | 'chat'
+  | 'inbox'
   | 'calendar'
   | 'clock'
   | 'trips'

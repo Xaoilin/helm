@@ -26,6 +26,34 @@
   border-bottom: 1px solid #1e2030;
 }
 
+.sidebar-capture {
+  padding: 10px 16px;
+  border-bottom: 1px solid #1e2030;
+}
+
+.sidebar-capture-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid #334047;
+  border-radius: 8px;
+  background: #15211f;
+  color: #b8f5d2;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.sidebar-capture-button:hover {
+  background: #1a2b27;
+  border-color: #3d7d64;
+  color: #e2fff0;
+}
+
 .sidebar-nav {
   flex: 1;
   padding: 8px 0;
@@ -891,6 +919,13 @@ textarea.form-input {
   display: flex;
   gap: 6px;
   align-items: center;
+}
+
+.debug-tab-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 /* ── Sync Indicators ── */
@@ -5881,5 +5916,283 @@ button {
   .dash-focus-title,
   .all-tasks-overview h2 {
     font-size: 23px;
+  }
+}
+
+/* ── Universal Capture Inbox ── */
+.capture-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(3, 5, 10, 0.72);
+}
+
+.capture-modal {
+  width: min(560px, 100%);
+  padding: 18px;
+  border: 1px solid #2c3942;
+  border-radius: 10px;
+  background: #171b24;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.38);
+}
+
+.capture-modal-header,
+.capture-modal-actions,
+.capture-composer-actions,
+.capture-item-actions,
+.capture-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.capture-modal-header {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.capture-modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #f5f7ff;
+}
+
+.capture-modal-input {
+  min-height: 132px;
+}
+
+.capture-modal-actions {
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.capture-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 96px;
+  z-index: 130;
+  padding: 10px 14px;
+  border: 1px solid rgba(61, 125, 100, 0.55);
+  border-radius: 8px;
+  background: #15211f;
+  color: #b8f5d2;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.24);
+}
+
+.capture-inbox-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.capture-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #26313b;
+  border-radius: 8px;
+  background: #151923;
+}
+
+.capture-composer-main {
+  min-width: 0;
+}
+
+.capture-composer-input {
+  min-height: 96px;
+}
+
+.capture-composer-actions {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.capture-composer-actions .btn {
+  justify-content: center;
+}
+
+.capture-filter-row {
+  flex-wrap: wrap;
+}
+
+.capture-filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #2a2d42;
+  border-radius: 999px;
+  background: #11131a;
+  color: #8b8fa3;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.capture-filter-tab strong {
+  color: #e1e4ea;
+}
+
+.capture-filter-tab:hover,
+.capture-filter-tab.active {
+  border-color: #3d7d64;
+  background: #15211f;
+  color: #b8f5d2;
+}
+
+.capture-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.capture-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #26313b;
+  border-left: 3px solid #4f5bff;
+  border-radius: 8px;
+  background: #151923;
+}
+
+.capture-item.classified {
+  border-left-color: #3d7d64;
+}
+
+.capture-item.archived {
+  opacity: 0.72;
+  border-left-color: #6b6f85;
+}
+
+.capture-item-main {
+  min-width: 0;
+}
+
+.capture-item-topline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #6b6f85;
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.capture-item p {
+  margin: 8px 0 0;
+  color: #e1e4ea;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.capture-status,
+.capture-classification {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.capture-status {
+  border: 1px solid #2a2d42;
+  color: #8b8fa3;
+}
+
+.capture-status.unprocessed {
+  border-color: rgba(79, 91, 255, 0.48);
+  background: rgba(79, 91, 255, 0.12);
+  color: #bac1ff;
+}
+
+.capture-status.classified {
+  border-color: rgba(61, 125, 100, 0.5);
+  background: rgba(61, 125, 100, 0.14);
+  color: #b8f5d2;
+}
+
+.capture-status.archived {
+  color: #9499b0;
+}
+
+.capture-classification {
+  background: #11131a;
+  color: #9499b0;
+}
+
+.capture-item-actions {
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.capture-item-actions .form-select {
+  min-width: 160px;
+  width: auto;
+}
+
+@media (max-width: 900px) {
+  .capture-composer,
+  .capture-item {
+    grid-template-columns: 1fr;
+  }
+
+  .capture-item-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .capture-modal-overlay {
+    align-items: flex-end;
+    z-index: 520;
+    padding: 0;
+  }
+
+  .capture-modal {
+    width: 100%;
+    max-height: calc(100vh - 28px);
+    max-height: calc(100dvh - 28px);
+    overflow-y: auto;
+    padding: 18px var(--mobile-page-pad) calc(18px + var(--mobile-safe-bottom));
+    border-radius: 20px 20px 0 0;
+  }
+
+  .capture-modal-actions {
+    position: sticky;
+    bottom: calc(-18px - var(--mobile-safe-bottom));
+    margin: 12px calc(var(--mobile-page-pad) * -1) calc(-18px - var(--mobile-safe-bottom));
+    padding: 12px var(--mobile-page-pad) calc(12px + var(--mobile-safe-bottom));
+    border-top: 1px solid #242740;
+    background: rgba(24, 27, 39, 0.96);
+    flex-wrap: wrap;
+  }
+
+  .capture-modal-actions .btn,
+  .capture-composer-actions .btn,
+  .capture-item-actions .btn,
+  .capture-item-actions .form-select {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+
+  .capture-toast {
+    left: var(--mobile-page-pad);
+    right: var(--mobile-page-pad);
+    bottom: calc(var(--mobile-nav-height) + var(--mobile-safe-bottom) + 12px);
   }
 }

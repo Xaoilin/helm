@@ -7,6 +7,7 @@ import type {
   Task, GamificationProfile,
   DashboardFocusState,
   KnowledgeTopic, KnowledgeEntry,
+  CaptureItem,
   LifestyleItem,
   FastFoodLogEntry,
   FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
@@ -30,6 +31,7 @@ import { ProjectProvider, useProjectContext } from './contexts/ProjectContext';
 import { TaskProvider, useTaskContext } from './contexts/TaskContext';
 import { ChatProvider, useChatContext, type ChatCrossDomainData } from './contexts/ChatContext';
 import { KnowledgeProvider, useKnowledgeContext } from './contexts/KnowledgeContext';
+import { CaptureProvider, useCaptureContext } from './contexts/CaptureContext';
 import { HealthProvider, useHealthContext } from './contexts/HealthContext';
 import { FinanceProvider, useFinanceContext } from './contexts/FinanceContext';
 import { GamificationProvider, useGamificationContext } from './contexts/GamificationContext';
@@ -59,6 +61,7 @@ interface AppContextAPI {
   tasks: Task[];
   knowledgeTopics: KnowledgeTopic[];
   knowledgeEntries: KnowledgeEntry[];
+  captureItems: CaptureItem[];
   lifestyleItems: LifestyleItem[];
   fastFoodEntries: FastFoodLogEntry[];
   financeAccounts: FinanceAccount[];
@@ -132,6 +135,10 @@ interface AppContextAPI {
   addKnowledgeEntry: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateKnowledgeEntry: (id: string, updates: Partial<KnowledgeEntry>) => void;
   removeKnowledgeEntry: (id: string) => void;
+
+  addCaptureItem: (item: Omit<CaptureItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateCaptureItem: (id: string, updates: Partial<CaptureItem>) => void;
+  removeCaptureItem: (id: string) => void;
 
   addLifestyleItem: (item: Omit<LifestyleItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateLifestyleItem: (id: string, updates: Partial<LifestyleItem>) => void;
@@ -211,6 +218,7 @@ function isShellSurface(value: string | null): value is Surface {
   switch (value) {
     case 'dashboard':
     case 'chat':
+    case 'inbox':
     case 'calendar':
     case 'clock':
     case 'trips':
@@ -251,6 +259,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   const taskCtx = useTaskContext();
   const chat = useChatContext();
   const knowledge = useKnowledgeContext();
+  const captureCtx = useCaptureContext();
   const health = useHealthContext();
   const finance = useFinanceContext();
   const gamificationCtx = useGamificationContext();
@@ -319,6 +328,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     && taskCtx.loaded
     && chat.loaded
     && knowledge.loaded
+    && captureCtx.loaded
     && health.loaded
     && finance.loaded
     && gamificationCtx.loaded
@@ -397,6 +407,9 @@ function ShellProvider({ children }: { children: ReactNode }) {
     try {
       const operation = entry.undoOperation;
       switch (operation.type) {
+        case 'capture.delete':
+          captureCtx.removeCaptureItem(operation.id);
+          break;
         case 'task.delete':
           taskCtx.removeTask(operation.id);
           break;
@@ -449,6 +462,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   }, [
     activityCtx,
     calendar,
+    captureCtx,
     finance,
     gamificationCtx,
     knowledge,
@@ -475,6 +489,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     tasks: taskCtx.tasks,
     knowledgeTopics: knowledge.knowledgeTopics,
     knowledgeEntries: knowledge.knowledgeEntries,
+    captureItems: captureCtx.captureItems,
     lifestyleItems: knowledge.lifestyleItems,
     fastFoodEntries: health.fastFoodEntries,
     financeAccounts: finance.financeAccounts,
@@ -546,6 +561,9 @@ function ShellProvider({ children }: { children: ReactNode }) {
     addKnowledgeEntry: knowledge.addKnowledgeEntry,
     updateKnowledgeEntry: knowledge.updateKnowledgeEntry,
     removeKnowledgeEntry: knowledge.removeKnowledgeEntry,
+    addCaptureItem: captureCtx.addCaptureItem,
+    updateCaptureItem: captureCtx.updateCaptureItem,
+    removeCaptureItem: captureCtx.removeCaptureItem,
     addLifestyleItem: knowledge.addLifestyleItem,
     updateLifestyleItem: knowledge.updateLifestyleItem,
     removeLifestyleItem: knowledge.removeLifestyleItem,
@@ -609,6 +627,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     projectCtx,
     taskCtx,
     knowledge,
+    captureCtx,
     health,
     finance,
     settingsCtx,
@@ -657,6 +676,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
   const gamificationCtx = useGamificationContext();
   const settingsCtx = useSettingsContext();
   const knowledge = useKnowledgeContext();
+  const captureCtx = useCaptureContext();
   const finance = useFinanceContext();
   const assistantCtx = useAssistantContext();
   const activityCtx = useAssistantActivityContext();
@@ -671,6 +691,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
     transactions: finance.transactions,
     knowledgeEntries: knowledge.knowledgeEntries,
     knowledgeTopics: knowledge.knowledgeTopics,
+    captureItems: captureCtx.captureItems,
     lifestyleItems: knowledge.lifestyleItems,
     assistantCorrections: assistantCtx.corrections,
     gamification: gamificationCtx.gamification,
@@ -685,6 +706,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
     updateCalendarEvent: calendar.updateCalendarEvent,
     addTransaction: finance.addTransaction,
     addKnowledgeEntry: knowledge.addKnowledgeEntry,
+    addCaptureItem: captureCtx.addCaptureItem,
     updateGamification: gamificationCtx.updateGamification,
   }), [
     calendar.calendarAccounts,
@@ -704,6 +726,8 @@ function ChatBridge({ children }: { children: ReactNode }) {
     knowledge.knowledgeTopics,
     knowledge.lifestyleItems,
     knowledge.addKnowledgeEntry,
+    captureCtx.captureItems,
+    captureCtx.addCaptureItem,
     assistantCtx.corrections,
     assistantCtx.upsertCorrection,
     assistantCtx.noteCorrectionApplied,
@@ -726,19 +750,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
               <TaskProvider>
                 <DashboardFocusProvider>
                   <KnowledgeProvider>
-                    <HealthProvider>
-                      <FinanceProvider>
-                        <ClockProvider>
-                          <AssistantProvider>
-                            <AssistantActivityProvider>
-                              <ChatBridge>
-                                <ShellProvider>{children}</ShellProvider>
-                              </ChatBridge>
-                            </AssistantActivityProvider>
-                          </AssistantProvider>
-                        </ClockProvider>
-                      </FinanceProvider>
-                    </HealthProvider>
+                    <CaptureProvider>
+                      <HealthProvider>
+                        <FinanceProvider>
+                          <ClockProvider>
+                            <AssistantProvider>
+                              <AssistantActivityProvider>
+                                <ChatBridge>
+                                  <ShellProvider>{children}</ShellProvider>
+                                </ChatBridge>
+                              </AssistantActivityProvider>
+                            </AssistantProvider>
+                          </ClockProvider>
+                        </FinanceProvider>
+                      </HealthProvider>
+                    </CaptureProvider>
                   </KnowledgeProvider>
                 </DashboardFocusProvider>
               </TaskProvider>

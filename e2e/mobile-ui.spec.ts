@@ -18,6 +18,7 @@ const viewports = [
 const surfaces = [
   'Dashboard',
   'Chat',
+  'Inbox',
   'Calendar',
   'Clock',
   'Trips',

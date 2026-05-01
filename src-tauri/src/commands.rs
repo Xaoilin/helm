@@ -34,6 +34,16 @@ pub fn write_store(app: tauri::AppHandle, key: String, value: String) -> Result<
 }
 
 #[tauri::command]
+pub fn delete_store(app: tauri::AppHandle, key: String) -> Result<(), String> {
+    let path = store_dir(&app).join(format!("{}.json", key));
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| e.to_string())
+    } else {
+        Ok(())
+    }
+}
+
+#[tauri::command]
 pub fn pick_directory() -> Option<String> {
     rfd::FileDialog::new()
         .pick_folder()

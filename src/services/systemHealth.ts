@@ -94,6 +94,28 @@ function buildLocalItem(input: SystemHealthInput): HealthItem {
     };
   }
 
+  if (persistence.mode === 'database') {
+    const importCandidateCount = persistence.localImportCandidateCount || 0;
+    if (importCandidateCount > 0) {
+      return {
+        id: 'local',
+        label: 'Local data',
+        headline: 'Local copies waiting',
+        detail: `${plural(importCandidateCount, 'local copy', 'local copies')} can be imported or discarded in Settings.`,
+        tone: 'attention',
+        action: { kind: 'settings', label: 'Open Settings' },
+      };
+    }
+
+    return {
+      id: 'local',
+      label: 'Local data',
+      headline: 'Local data ignored',
+      detail: 'Signed-in app data is read from Supabase, not this device cache.',
+      tone: 'healthy',
+    };
+  }
+
   if (persistence.lastLocalWriteError) {
     return {
       id: 'local',
@@ -128,9 +150,9 @@ function buildLocalItem(input: SystemHealthInput): HealthItem {
 
 function buildSupabaseItem(input: SystemHealthInput): HealthItem {
   const { persistence, supabase } = input;
-  const dirtyCount = persistence.dirtyKeys.length;
   const queuedCount = persistence.supabaseQueue.queuedCount;
-  const hasPendingWork = dirtyCount > 0 || queuedCount > 0;
+  const remoteReadFailedKeys = persistence.remoteReadFailedKeys || [];
+  const readFailureCount = remoteReadFailedKeys.length;
 
   if (!supabase.ready) {
     return {
@@ -164,9 +186,20 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
     };
   }
 
-  if (hasPendingWork) {
+  if (readFailureCount > 0 || persistence.lastRemoteReadError || persistence.lastRemoteWriteError) {
+    const error = sanitizeHealthDetail(persistence.lastRemoteReadError || persistence.lastRemoteWriteError);
+    return {
+      id: 'supabase',
+      label: 'Supabase',
+      headline: 'Database needs attention',
+      detail: error || `${plural(readFailureCount, 'database read')} failed.`,
+      tone: 'attention',
+      action: { kind: 'refresh', label: 'Refresh status' },
+    };
+  }
+
+  if (queuedCount > 0) {
     const detailParts = [
-      dirtyCount > 0 ? plural(dirtyCount, 'local change') : null,
       queuedCount > 0 ? plural(queuedCount, 'queued write') : null,
     ].filter(Boolean);
     const lastError = sanitizeHealthDetail(persistence.supabaseQueue.lastFlushError);
@@ -186,10 +219,12 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
   return {
     id: 'supabase',
     label: 'Supabase',
-    headline: 'Supabase synced',
-    detail: 'No local changes are waiting for remote sync.',
+    headline: 'Database source of truth',
+    detail: persistence.supabaseRealtime?.state === 'subscribed'
+      ? 'Signed-in app data is saved in Supabase and realtime refresh is connected.'
+      : 'Signed-in app data is saved in Supabase. Realtime refresh is best-effort.',
     tone: 'healthy',
-    meta: formatCheckedAt(persistence.supabaseQueue.lastFlushSuccessAt),
+    meta: formatCheckedAt(persistence.lastRemoteWriteAt || persistence.supabaseQueue.lastFlushSuccessAt),
   };
 }
 

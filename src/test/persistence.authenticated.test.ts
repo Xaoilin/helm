@@ -1,34 +1,52 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
 
 const {
   flushWriteQueueMock,
+  getSupabaseRealtimeSnapshotMock,
   getSupabaseWriteQueueSnapshotMock,
   isAuthenticatedMock,
   isSupabaseReadyMock,
   loadRemoteMock,
   queueRemoteWriteMock,
+  saveRemoteMock,
+  subscribeRemoteStoreMock,
+  subscribeSupabaseRealtimeSnapshotMock,
   subscribeSupabaseWriteQueueSnapshotMock,
 } = vi.hoisted(() => ({
   flushWriteQueueMock: vi.fn(),
+  getSupabaseRealtimeSnapshotMock: vi.fn(),
   getSupabaseWriteQueueSnapshotMock: vi.fn(),
   isAuthenticatedMock: vi.fn(),
   isSupabaseReadyMock: vi.fn(),
   loadRemoteMock: vi.fn(),
   queueRemoteWriteMock: vi.fn(),
+  saveRemoteMock: vi.fn(),
+  subscribeRemoteStoreMock: vi.fn(),
+  subscribeSupabaseRealtimeSnapshotMock: vi.fn(),
   subscribeSupabaseWriteQueueSnapshotMock: vi.fn(),
 }));
 
 vi.mock('../store/supabase', () => ({
   flushWriteQueue: flushWriteQueueMock,
+  getSupabaseRealtimeSnapshot: getSupabaseRealtimeSnapshotMock,
   getSupabaseWriteQueueSnapshot: getSupabaseWriteQueueSnapshotMock,
   isAuthenticated: isAuthenticatedMock,
   isSupabaseReady: isSupabaseReadyMock,
   loadRemote: loadRemoteMock,
   queueRemoteWrite: queueRemoteWriteMock,
+  saveRemote: saveRemoteMock,
+  subscribeRemoteStore: subscribeRemoteStoreMock,
+  subscribeSupabaseRealtimeSnapshot: subscribeSupabaseRealtimeSnapshotMock,
   subscribeSupabaseWriteQueueSnapshot: subscribeSupabaseWriteQueueSnapshotMock,
 }));
 
-import { loadStore, saveStore } from '../store/persistence';
+import {
+  importLocalStoreCandidate,
+  listLocalImportCandidates,
+  loadStore,
+  saveStore,
+} from '../store/persistence';
 
 describe('Persistence layer in authenticated mode', () => {
   beforeEach(() => {
@@ -37,8 +55,16 @@ describe('Persistence layer in authenticated mode', () => {
     isSupabaseReadyMock.mockReturnValue(true);
     isAuthenticatedMock.mockReturnValue(true);
     loadRemoteMock.mockResolvedValue(null);
+    saveRemoteMock.mockResolvedValue(true);
     queueRemoteWriteMock.mockImplementation(() => {});
+    subscribeRemoteStoreMock.mockReturnValue(() => {});
     flushWriteQueueMock.mockResolvedValue(undefined);
+    getSupabaseRealtimeSnapshotMock.mockReturnValue({
+      state: 'unavailable',
+      lastEventAt: null,
+      lastStatusAt: null,
+      lastError: null,
+    });
     getSupabaseWriteQueueSnapshotMock.mockReturnValue({
       queuedCount: 0,
       queuedKeys: [],
@@ -51,76 +77,100 @@ describe('Persistence layer in authenticated mode', () => {
       lastFailureKeys: [],
     });
     subscribeSupabaseWriteQueueSnapshotMock.mockImplementation(() => () => {});
+    subscribeSupabaseRealtimeSnapshotMock.mockImplementation(() => () => {});
   });
 
-  it('keeps a dirty local cache when the remote copy is stale', async () => {
-    await saveStore('tasks', [{ id: 'task-1', title: 'Put up mirror' }]);
-    const localMeta = JSON.parse(localStorage.getItem('helm:meta:tasks') || '{}');
-
+  it('loads remote data even when localStorage has conflicting data', async () => {
+    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
     loadRemoteMock.mockResolvedValueOnce({
-      value: [{ id: 'task-1', title: 'Old remote task' }],
-      updatedAt: '2000-01-01T00:00:00.000Z',
+      value: [{ id: 'remote', title: 'Remote canonical note' }],
+      updatedAt: '2026-05-01T10:00:00.000Z',
     });
 
-    const loaded = await loadStore<Array<{ id: string; title: string }>>('tasks');
+    const loaded = await loadStore<Array<{ id: string; title: string }>>('knowledgeEntries');
 
-    expect(loaded).toEqual([{ id: 'task-1', title: 'Put up mirror' }]);
-    expect(localMeta.dirty).toBe(true);
+    expect(loaded).toEqual([{ id: 'remote', title: 'Remote canonical note' }]);
+    expect(loadRemoteMock).toHaveBeenCalledWith('helm', 'knowledgeEntries');
   });
 
-  it('accepts fresher remote data and clears the dirty bit', async () => {
-    await saveStore('tasks', [{ id: 'task-1', title: 'Put up mirror' }]);
-    const remoteUpdatedAt = new Date(Date.now() + 60_000).toISOString();
+  it('does not fall back to local data when the remote key is missing', async () => {
+    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
+    loadRemoteMock.mockResolvedValueOnce(null);
 
-    loadRemoteMock.mockResolvedValueOnce({
-      value: [{ id: 'task-1', title: 'Remote canonical copy' }],
-      updatedAt: remoteUpdatedAt,
-    });
+    const loaded = await loadStore<Array<{ id: string; title: string }>>('knowledgeEntries');
 
-    const loaded = await loadStore<Array<{ id: string; title: string }>>('tasks');
-    const meta = JSON.parse(localStorage.getItem('helm:meta:tasks') || '{}');
-
-    expect(loaded).toEqual([{ id: 'task-1', title: 'Remote canonical copy' }]);
-    expect(meta).toMatchObject({
-      updatedAt: remoteUpdatedAt,
-      dirty: false,
-    });
+    expect(loaded).toBeNull();
   });
 
-  it('marks authenticated writes dirty and clears them after a successful remote flush callback', async () => {
-    await saveStore('tasks', [{ id: 'task-1', title: 'Put up mirror' }]);
+  it('queues authenticated writes without writing localStorage or Tauri storage', async () => {
+    await saveStore('tasks', [{ id: 'task-1', title: 'Database task' }]);
 
     expect(queueRemoteWriteMock).toHaveBeenCalledWith(
       'helm',
       'tasks',
-      [{ id: 'task-1', title: 'Put up mirror' }],
+      [{ id: 'task-1', title: 'Database task' }],
       expect.objectContaining({
         updatedAt: expect.any(String),
         onSettled: expect.any(Function),
       }),
     );
+    expect(localStorage.setItem).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalledWith('write_store', expect.anything());
+  });
 
-    const [, , , options] = queueRemoteWriteMock.mock.calls[0];
-    const dirtyMeta = JSON.parse(localStorage.getItem('helm:meta:tasks') || '{}');
-    expect(dirtyMeta.dirty).toBe(true);
+  it('suppresses the provider initial save after a remote miss instead of creating a default row', async () => {
+    loadRemoteMock.mockResolvedValueOnce(null);
 
-    options.onSettled({
-      success: true,
-      updatedAt: options.updatedAt,
-    });
+    await loadStore('knowledgeEntries');
+    await saveStore('knowledgeEntries', []);
 
-    const cleanMeta = JSON.parse(localStorage.getItem('helm:meta:tasks') || '{}');
-    expect(cleanMeta).toMatchObject({
-      updatedAt: options.updatedAt,
-      dirty: false,
-    });
+    expect(queueRemoteWriteMock).not.toHaveBeenCalled();
   });
 
   it('flushes queued remote writes on beforeunload after an authenticated save', async () => {
-    await saveStore('tasks', [{ id: 'task-1', title: 'Put up mirror' }]);
+    await saveStore('financeAccounts', [{ id: 'account-1', name: 'Database account' }]);
 
     window.dispatchEvent(new Event('beforeunload'));
 
     expect(flushWriteQueueMock).toHaveBeenCalled();
+  });
+
+  it('lists local import candidates without importing them automatically', async () => {
+    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
+    loadRemoteMock.mockResolvedValue(null);
+
+    const candidates = await listLocalImportCandidates();
+
+    expect(candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: 'knowledgeEntries',
+        remoteExists: false,
+      }),
+    ]));
+    expect(saveRemoteMock).not.toHaveBeenCalled();
+  });
+
+  it('imports a selected local candidate only when the database key is empty', async () => {
+    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
+    loadRemoteMock.mockResolvedValueOnce(null);
+
+    const result = await importLocalStoreCandidate('knowledgeEntries');
+
+    expect(result).toMatchObject({ imported: true, cleared: true, reason: 'imported' });
+    expect(saveRemoteMock).toHaveBeenCalledWith('helm', 'knowledgeEntries', [{ id: 'local', title: 'Local note' }]);
+    expect(localStorage.getItem('helm:knowledgeEntries')).toBeNull();
+  });
+
+  it('requires replace=true before overwriting an existing database key during import', async () => {
+    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
+    loadRemoteMock.mockResolvedValueOnce({
+      value: [{ id: 'remote', title: 'Remote note' }],
+      updatedAt: '2026-05-01T10:00:00.000Z',
+    });
+
+    const result = await importLocalStoreCandidate('knowledgeEntries');
+
+    expect(result).toMatchObject({ imported: false, reason: 'remote_exists' });
+    expect(saveRemoteMock).not.toHaveBeenCalled();
   });
 });

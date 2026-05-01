@@ -357,6 +357,43 @@ describe('AppContext - Knowledge', () => {
   });
 });
 
+describe('AppContext - Capture Inbox', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('should add, update, and remove capture items', async () => {
+    const r = await renderWithApp();
+    let itemId = '';
+
+    act(() => {
+      itemId = r.api!.addCaptureItem({
+        content: 'Remember to compare ferry times for the trip.',
+        source: 'quick_button',
+        classification: 'unknown',
+        status: 'unprocessed',
+        sourceSurface: 'dashboard',
+      });
+    });
+
+    expect(r.api!.captureItems).toHaveLength(1);
+    expect(r.api!.captureItems[0].content).toBe('Remember to compare ferry times for the trip.');
+
+    act(() => {
+      r.api!.updateCaptureItem(itemId, {
+        classification: 'trip_item',
+        status: 'classified',
+      });
+    });
+
+    expect(r.api!.captureItems[0]).toMatchObject({
+      classification: 'trip_item',
+      status: 'classified',
+    });
+
+    act(() => { r.api!.removeCaptureItem(itemId); });
+    expect(r.api!.captureItems).toHaveLength(0);
+  });
+});
+
 describe('AppContext - Health', () => {
   beforeEach(() => { localStorage.clear(); });
 

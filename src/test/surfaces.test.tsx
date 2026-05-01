@@ -7,6 +7,7 @@ import CalendarSurface from '../surfaces/CalendarSurface';
 import ChatSurface from '../surfaces/ChatSurface';
 import ClockSurface from '../surfaces/ClockSurface';
 import DashboardSurface from '../surfaces/DashboardSurface';
+import CaptureInboxSurface from '../surfaces/CaptureInboxSurface';
 import TripsSurface from '../surfaces/TripsSurface';
 import TasksSurface from '../surfaces/TasksSurface';
 import ProjectsSurface from '../surfaces/ProjectsSurface';
@@ -153,11 +154,12 @@ describe('App shell', () => {
     [
       'Dashboard',
       'Chat',
+      'Inbox',
       'Calendar',
       'Clock',
       'Trips',
-      'Tasks',
       'Projects',
+      'Tasks',
       'Finance',
       'Health',
       'Knowledge',
@@ -165,6 +167,7 @@ describe('App shell', () => {
       'Integrations',
       'Activity',
       'Settings',
+      'Debug',
     ].forEach(label => {
       expect(within(sidebar).getByText(label)).toBeInTheDocument();
     });
@@ -185,6 +188,9 @@ describe('App shell', () => {
 
     await act(async () => { fireEvent.click(screen.getByText('Trips')); });
     expect(screen.getByRole('button', { name: 'Plan your first trip' })).toBeInTheDocument();
+
+    await act(async () => { fireEvent.click(screen.getByText('Inbox')); });
+    expect(screen.getByRole('heading', { name: 'Inbox' })).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Projects')); });
     expect(screen.getByText('Turn HELM into your local project hub')).toBeInTheDocument();
@@ -382,6 +388,54 @@ describe('ChatSurface', () => {
     expect(screen.getByText(/2 hosted OpenAI requests across 1 assistant turn/i)).toBeInTheDocument();
     expect(screen.getByText(/1,600 input/i)).toBeInTheDocument();
     expect(screen.getByText('OpenAI-hosted turns only; other turns excluded.')).toBeInTheDocument();
+  });
+});
+
+describe('CaptureInboxSurface', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('renders the empty inbox state', async () => {
+    await act(async () => { renderWithProvider(<CaptureInboxSurface />); });
+    expect(screen.getByRole('heading', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.getByText('No captures here')).toBeInTheDocument();
+  });
+
+  it('captures and classifies inbox items', async () => {
+    await act(async () => { renderWithProvider(<CaptureInboxSurface />); });
+
+    fireEvent.change(screen.getByLabelText('New capture'), {
+      target: { value: 'Research Lisbon day trips before booking flights.' },
+    });
+    fireEvent.change(screen.getByLabelText('New capture classification'), {
+      target: { value: 'trip_item' },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Capture' }));
+    });
+
+    expect(screen.getByText('Research Lisbon day trips before booking flights.')).toBeInTheDocument();
+    await waitFor(() => {
+      const captures = JSON.parse(localStorage.getItem('helm:captureItems') || '[]');
+      expect(captures[0]).toMatchObject({
+        content: 'Research Lisbon day trips before booking flights.',
+        classification: 'trip_item',
+        status: 'classified',
+        source: 'manual',
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText(/Classify Research Lisbon day trips/i), {
+      target: { value: 'task' },
+    });
+
+    await waitFor(() => {
+      const captures = JSON.parse(localStorage.getItem('helm:captureItems') || '[]');
+      expect(captures[0]).toMatchObject({
+        classification: 'task',
+        status: 'classified',
+      });
+    });
   });
 });
 
