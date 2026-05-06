@@ -15,11 +15,12 @@ import { canUseHostedAssistantProjectAccess, isLocalhostRuntime } from '../servi
 import { testOllamaConnection, listOllamaModels } from '../services/ollamaApi';
 import { APP_RELEASE_VERSION } from '../config/release';
 import {
-  clearLocalStoreCopy,
-  importLocalStoreCandidate,
-  listLocalImportCandidates,
-  type LocalImportCandidate,
+  listSyncDriftCandidates,
+  resolveSyncDriftCandidate,
+  type SyncDriftCandidate,
+  type SyncResolutionChoice,
 } from '../store/persistence';
+import SyncDriftModal from '../components/settings/SyncDriftModal';
 
 export default function SettingsSurface() {
   const app = useApp();
@@ -27,9 +28,12 @@ export default function SettingsSurface() {
   const linaEnabled = settings.assistantEnabled !== false;
   const [confirmReset, setConfirmReset] = useState(false);
   const [testAdhan, setTestAdhan] = useState<string | null>(null);
-  const [localImportCandidates, setLocalImportCandidates] = useState<LocalImportCandidate[]>([]);
-  const [localImportLoading, setLocalImportLoading] = useState(false);
-  const [localImportStatus, setLocalImportStatus] = useState<string | null>(null);
+  const [syncDriftCandidates, setSyncDriftCandidates] = useState<SyncDriftCandidate[]>([]);
+  const [syncDriftLoading, setSyncDriftLoading] = useState(false);
+  const [syncDriftStatus, setSyncDriftStatus] = useState<string | null>(null);
+  const [syncDriftModalOpen, setSyncDriftModalOpen] = useState(false);
+  const [resolvingSyncGroupId, setResolvingSyncGroupId] = useState<string | null>(null);
+  const autoOpenedSyncHashesRef = useRef<Set<string>>(new Set());
 
   // Goal tags
   const [newTag, setNewTag] = useState('');
@@ -72,44 +76,62 @@ export default function SettingsSurface() {
     };
   }, [selectedHostedModel, selectedProvider, settings.ollamaEndpoint, authSyncKey]);
 
-  const refreshLocalImportCandidates = useCallback(async () => {
-    setLocalImportLoading(true);
+  const refreshSyncDriftCandidates = useCallback(async (options: { autoOpen?: boolean } = {}) => {
+    setSyncDriftLoading(true);
     try {
-      const candidates = await listLocalImportCandidates();
-      setLocalImportCandidates(candidates);
+      const candidates = await listSyncDriftCandidates();
+      setSyncDriftCandidates(candidates);
+      setSyncDriftStatus(candidates.length === 0 ? 'Synced with Supabase.' : null);
+
+      const conflictHash = candidates.map(candidate => candidate.conflictHash).sort().join(':');
+      if (options.autoOpen && candidates.length > 0 && !autoOpenedSyncHashesRef.current.has(conflictHash)) {
+        autoOpenedSyncHashesRef.current.add(conflictHash);
+        setSyncDriftModalOpen(true);
+      }
     } finally {
-      setLocalImportLoading(false);
+      setSyncDriftLoading(false);
     }
   }, []);
 
   useEffect(() => {
     if (!databaseSyncActive) {
-      setLocalImportCandidates([]);
-      setLocalImportStatus(null);
+      setSyncDriftCandidates([]);
+      setSyncDriftStatus(null);
+      setSyncDriftModalOpen(false);
       return;
     }
 
-    void refreshLocalImportCandidates();
-  }, [databaseSyncActive, authSyncKey, refreshLocalImportCandidates]);
+    void refreshSyncDriftCandidates({ autoOpen: true });
+  }, [databaseSyncActive, authSyncKey, refreshSyncDriftCandidates]);
 
-  async function handleImportCandidate(candidate: LocalImportCandidate, replace: boolean) {
-    setLocalImportStatus(null);
-    const result = await importLocalStoreCandidate(candidate.key, { replace });
-    if (result.imported) {
-      setLocalImportStatus(`${candidate.label} imported into Supabase and the local copy was removed.`);
-    } else if (result.reason === 'remote_exists') {
-      setLocalImportStatus(`${candidate.label} already has database data. Use Replace DB to overwrite it.`);
-    } else {
-      setLocalImportStatus(`Could not import ${candidate.label}.`);
+  const handleResolveSyncDrift = useCallback(async (
+    candidate: SyncDriftCandidate,
+    choice: SyncResolutionChoice,
+  ) => {
+    setResolvingSyncGroupId(candidate.groupId);
+    setSyncDriftStatus(null);
+    try {
+      const result = await resolveSyncDriftCandidate(candidate.groupId, choice);
+      if (!result.resolved) {
+        setSyncDriftStatus(result.error || `Could not resolve ${candidate.label}.`);
+        return;
+      }
+
+      const nextCandidates = await listSyncDriftCandidates();
+      setSyncDriftCandidates(nextCandidates);
+      setSyncDriftStatus(choice === 'use_device'
+        ? `${candidate.label} was committed to Supabase.`
+        : `${candidate.label} now follows Supabase.`);
+      if (nextCandidates.length === 0) {
+        setSyncDriftModalOpen(false);
+      }
+      if (choice === 'use_device') {
+        window.dispatchEvent(new Event('helm:app-data-refresh'));
+      }
+    } finally {
+      setResolvingSyncGroupId(null);
     }
-    await refreshLocalImportCandidates();
-  }
-
-  async function handleDiscardCandidate(candidate: LocalImportCandidate) {
-    await clearLocalStoreCopy(candidate.key);
-    setLocalImportStatus(`${candidate.label} local copy removed.`);
-    await refreshLocalImportCandidates();
-  }
+  }, []);
 
   return (
     <>
@@ -123,82 +145,65 @@ export default function SettingsSurface() {
         {/* Data Sync Status */}
         <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Data Sync</h3>
         <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>{databaseSyncActive ? '🟢' : '🔴'}</span>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>
-                {databaseSyncActive
-                  ? 'Supabase is the signed-in data source'
-                  : 'Sign in with Google to sync your data across devices'}
+          <div className="sync-status-card">
+            <span
+              className={`sync-status-dot ${
+                !databaseSyncActive
+                  ? 'offline'
+                  : syncDriftLoading
+                    ? 'syncing'
+                    : syncDriftCandidates.length > 0
+                      ? 'attention'
+                      : 'healthy'
+              }`}
+              aria-hidden="true"
+            />
+            <div className="sync-status-copy">
+              <div className="sync-status-title">
+                {!databaseSyncActive
+                  ? 'Sign in with Google to sync your data across devices'
+                  : syncDriftLoading
+                    ? 'Finishing sync'
+                    : syncDriftCandidates.length > 0
+                      ? 'Data differences need review'
+                      : 'Synced with Supabase'}
               </div>
-              <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 2 }}>
+              <div className="sync-status-detail">
                 {databaseSyncActive
-                  ? `Signed in as ${getCurrentUserId()?.slice(0, 8)}... \u00b7 App data reads and writes Supabase only. Settings values are synced JSON, not encrypted vault storage.`
+                  ? `Signed in as ${getCurrentUserId()?.slice(0, 8)}... App data reads and writes Supabase only. Settings values are synced JSON, not encrypted vault storage.`
                   : 'Your data is stored locally. Sign in via the sidebar to enable cloud sync.'}
               </div>
             </div>
-          </div>
-          {databaseSyncActive && (
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #1e2030' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>Local import candidates</div>
-                  <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 2 }}>
-                    Signed-in data ignores these local copies unless you import or replace them.
-                  </div>
-                </div>
-                <button className="btn btn-secondary btn-sm" onClick={() => void refreshLocalImportCandidates()} disabled={localImportLoading}>
-                  {localImportLoading ? 'Checking...' : 'Refresh'}
+            {databaseSyncActive && (
+              <div className="sync-status-actions">
+                {syncDriftCandidates.length > 0 && (
+                  <button className="btn btn-primary btn-sm" type="button" onClick={() => setSyncDriftModalOpen(true)}>
+                    Review differences
+                  </button>
+                )}
+                <button
+                  className="btn btn-secondary btn-sm"
+                  type="button"
+                  onClick={() => void refreshSyncDriftCandidates()}
+                  disabled={syncDriftLoading}
+                >
+                  {syncDriftLoading ? 'Checking...' : 'Refresh'}
                 </button>
               </div>
-              {localImportStatus && (
-                <div style={{ fontSize: 12, color: '#9499b0', marginBottom: 10 }}>{localImportStatus}</div>
-              )}
-              {localImportCandidates.length === 0 ? (
-                <div style={{ fontSize: 12, color: '#6b6f85' }}>No local app-data copies are waiting for import.</div>
-              ) : (
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {localImportCandidates.map(candidate => (
-                    <div
-                      key={candidate.key}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'minmax(0, 1fr) auto',
-                        gap: 10,
-                        alignItems: 'center',
-                        padding: '10px 0',
-                        borderTop: '1px solid #1e2030',
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 600 }}>{candidate.label}</div>
-                        <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 2 }}>
-                          {candidate.remoteExists === true ? 'Database already has data' : candidate.remoteExists === false ? 'Database is empty' : 'Database status unknown'} · {candidate.tauri ? 'Tauri' : 'localStorage'} · {candidate.sizeBytes} bytes
-                        </div>
-                      </div>
-                      <div className="actions-row" style={{ gap: 6, justifyContent: 'flex-end' }}>
-                        <button
-                          className="btn btn-primary btn-sm"
-                          disabled={candidate.remoteExists !== false}
-                          onClick={() => void handleImportCandidate(candidate, false)}
-                        >
-                          Import
-                        </button>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          disabled={candidate.remoteExists !== true}
-                          onClick={() => void handleImportCandidate(candidate, true)}
-                        >
-                          Replace DB
-                        </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => void handleDiscardCandidate(candidate)}>
-                          Discard
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+            )}
+          </div>
+          {databaseSyncActive && (
+            <div className={`sync-drift-summary ${syncDriftCandidates.length > 0 ? 'attention' : 'healthy'}`}>
+              <strong>
+                {syncDriftCandidates.length > 0
+                  ? `${syncDriftCandidates.length} ${syncDriftCandidates.length === 1 ? 'section has' : 'sections have'} differences`
+                  : 'No unresolved device differences'}
+              </strong>
+              <span>
+                {syncDriftCandidates.length > 0
+                  ? 'Review the database and device versions before committing one side.'
+                  : syncDriftStatus || 'Safe local copies are cleaned up automatically.'}
+              </span>
             </div>
           )}
         </div>
@@ -628,6 +633,13 @@ export default function SettingsSurface() {
           </div>
         </div>
       </div>
+      <SyncDriftModal
+        candidates={syncDriftCandidates}
+        open={syncDriftModalOpen}
+        resolvingGroupId={resolvingSyncGroupId}
+        onClose={() => setSyncDriftModalOpen(false)}
+        onResolve={handleResolveSyncDrift}
+      />
     </>
   );
 }

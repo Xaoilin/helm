@@ -24,6 +24,17 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
     });
   }, [auth.authUser, auth.supabaseReady]);
 
+  useEffect(() => {
+    function reloadAppData() {
+      setRemoteGeneration(current => current + 1);
+    }
+
+    window.addEventListener('helm:app-data-refresh', reloadAppData);
+    return () => {
+      window.removeEventListener('helm:app-data-refresh', reloadAppData);
+    };
+  }, []);
+
   if (!auth.bootstrapped) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#8b8fa3' }}>

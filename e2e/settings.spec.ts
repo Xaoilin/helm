@@ -31,4 +31,78 @@ test.describe('Settings', () => {
       fullPage: false,
     });
   });
+
+  test('should open a review modal for signed-in data sync drift', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.clear();
+      const settings = {
+        theme: 'dark',
+        telemetry: false,
+        supabaseUrl: 'https://helm.test.supabase.co',
+        supabaseAnonKey: 'helm-test-anon-key',
+      };
+      localStorage.setItem('helm:settings', JSON.stringify(settings));
+      localStorage.setItem('helm:knowledgeEntries', JSON.stringify([
+        { id: 'note-1', title: 'Device note', content: 'Local copy', topicId: 'topic-1' },
+      ]));
+      localStorage.setItem('sb-helm-auth-token', JSON.stringify({
+        access_token: 'test-access-token',
+        token_type: 'bearer',
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        refresh_token: 'test-refresh-token',
+        user: {
+          id: 'user-sync-drift',
+          email: 'sync@example.com',
+          app_metadata: { provider: 'google' },
+          user_metadata: {},
+          aud: 'authenticated',
+          role: 'authenticated',
+        },
+      }));
+    });
+
+    await page.route('https://helm.test.supabase.co/rest/v1/kv_store**', async route => {
+      const url = route.request().url();
+      const method = route.request().method();
+      if (method !== 'GET') {
+        await route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
+        return;
+      }
+
+      if (url.includes('key=eq.knowledgeEntries')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            value: [{ id: 'note-1', title: 'Database note', content: 'Cloud copy', topicId: 'topic-1' }],
+            updated_at: '2026-05-01T10:00:00.000Z',
+          }),
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 406,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'No rows found' }),
+      });
+    });
+
+    await page.goto('/');
+    await page.waitForSelector('.sidebar');
+    await page.getByRole('button', { name: 'Navigate to Settings' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Data differences need review' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Knowledge' })).toBeVisible();
+    await expect(dialog.getByLabel(/Keep database/i)).toBeChecked();
+    await expect(dialog.getByText('Device note', { exact: true })).toBeVisible();
+    await dialog.getByText('Exact JSON').click();
+    await expect(dialog.getByText('Database note')).toBeVisible();
+    await page.screenshot({
+      path: 'test-results/manual-settings-sync-drift-modal-v0263.png',
+      fullPage: false,
+    });
+  });
 });
