@@ -704,6 +704,62 @@ describe('CalendarSurface', () => {
       expect(screen.queryByText('Delete me from Google')).not.toBeInTheDocument();
     });
   });
+
+  it('keeps the cached Google event when a provider delete fails', async () => {
+    const now = new Date();
+    const start = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+    const end = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
+    vi.spyOn(googleCalendarApi, 'deleteEvent').mockRejectedValue(new Error('provider unavailable'));
+    vi.spyOn(googleCalendarAuthManager, 'getGoogleCalendarPassiveAccessTokenWithRefresh').mockResolvedValue({
+      accessToken: 'stored-token',
+      authProvider: 'calendar-oauth',
+      authExpiresAt: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
+    });
+
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'acc-google',
+      name: 'Google',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'connected',
+      lastAuthCheckAt: now.toISOString(),
+      lastSyncTime: now.toISOString(),
+    }]));
+    localStorage.setItem('helm:calendarSources', JSON.stringify([{
+      id: 'src-google',
+      accountId: 'acc-google',
+      name: 'Primary',
+      color: '#4f5bff',
+      visible: true,
+      googleCalendarId: 'alisa@example.com',
+    }]));
+    localStorage.setItem('helm:calendarEvents', JSON.stringify([{
+      id: 'evt-google',
+      sourceId: 'src-google',
+      title: 'Do not delete locally',
+      description: '',
+      start,
+      end,
+      allDay: false,
+      googleEventId: 'google-event-1',
+      googleCalendarId: 'alisa@example.com',
+    }]));
+
+    await act(async () => { renderWithProvider(<CalendarSurface />); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Agenda' })); });
+    await act(async () => { fireEvent.click(screen.getByText('Do not delete locally')); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Delete' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Confirm Delete' })); });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Google Calendar was not changed/i);
+    const events = JSON.parse(localStorage.getItem('helm:calendarEvents') || '[]');
+    expect(events).toHaveLength(1);
+    expect(events[0]).not.toHaveProperty('pendingSync');
+  });
 });
 
 describe('ClockSurface', () => {

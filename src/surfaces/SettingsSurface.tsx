@@ -174,7 +174,7 @@ export default function SettingsSurface() {
               </div>
               <div className="sync-status-detail">
                 {databaseSyncActive
-                  ? `Signed in as ${getCurrentUserId()?.slice(0, 8)}... App data reads and writes Supabase only. Settings values are synced JSON, not encrypted vault storage.`
+                  ? `Signed in as ${getCurrentUserId()?.slice(0, 8)}... App data reads and writes Supabase only. Connected calendar data refreshes from Google instead of asking you to resolve cache drift.`
                   : 'Your data is stored locally. Sign in via the sidebar to enable cloud sync.'}
               </div>
             </div>

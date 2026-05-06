@@ -8,6 +8,7 @@ import {
   deleteEvent as googleDeleteEvent,
   localEventToGooglePayload,
 } from '../services/googleCalendarApi';
+import { buildGoogleEventCacheId } from '../services/calendarProviderSync';
 import { logError } from '../services/logger';
 import type { CalendarAccount, CalendarEvent } from '../types/domain';
 import {
@@ -48,6 +49,7 @@ export default function CalendarSurface() {
   const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [savingToGoogle, setSavingToGoogle] = useState(false);
+  const [eventWriteError, setEventWriteError] = useState<string | null>(null);
   const [movingSourceId, setMovingSourceId] = useState<string | null>(null);
 
   // Form state for account
@@ -212,17 +214,20 @@ export default function CalendarSurface() {
     const endStr = `${toLocalDateStr(end)}T${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')}`;
     setEvtStart(startStr); setEvtEnd(endStr);
     setEvtSourceId(app.calendarSources[0]?.id || '');
+    setEventWriteError(null);
     setEditingEvent(null); setShowAddEvent(true);
   };
   const openEditEvent = (evt: CalendarEvent) => {
     setEvtTitle(evt.title); setEvtDesc(evt.description); setEvtAllDay(evt.allDay);
     setEvtStart(evt.start.slice(0, 16)); setEvtEnd(evt.end.slice(0, 16));
     setEvtSourceId(evt.sourceId); setEvtLocation(evt.location || '');
+    setEventWriteError(null);
     setEditingEvent(evt); setShowAddEvent(true);
   };
 
   const saveEvent = async () => {
     if (!evtTitle.trim() || !evtSourceId) return;
+    setEventWriteError(null);
     const eventData = {
       title: evtTitle.trim(),
       description: evtDesc.trim(),
@@ -249,7 +254,13 @@ export default function CalendarSurface() {
           app.updateCalendarEvent(editingEvent.id, { ...eventData, googleEventId: result.id, pendingSync: undefined });
         } else {
           const result = await googleCreateEvent(accessToken, googleCalId, payload);
-          app.addCalendarEvent({ ...eventData, googleEventId: result.id, googleCalendarId: googleCalId });
+          app.bulkUpsertCalendarEvents([{
+            ...eventData,
+            id: buildGoogleEventCacheId(evtSourceId, result.id),
+            googleEventId: result.id,
+            googleCalendarId: googleCalId,
+            pendingSync: undefined,
+          }]);
         }
         app.updateCalendarAccount(account.id, {
           authProvider: token.authProvider,
@@ -260,8 +271,10 @@ export default function CalendarSurface() {
           lastAuthError: undefined,
           syncError: undefined,
         });
+        void triggerSync(true);
       } catch (err) {
         logError('CalendarSurface', err);
+        const message = err instanceof Error ? err.message : 'Google event write failed.';
         appendGoogleCalendarDiagnosticEvent({
           operation: 'sync_account',
           phase: 'failure',
@@ -270,7 +283,7 @@ export default function CalendarSurface() {
           accountId: account.id,
           email: account.email,
           resolvedAuthProvider: account.authProvider,
-          message: err instanceof Error ? `Google event write failed: ${err.message}` : 'Google event write failed.',
+          message: `Google event write failed: ${message}`,
         });
         if (err instanceof GoogleCalendarReconnectRequiredError) {
           app.updateCalendarAccount(account.id, {
@@ -281,12 +294,16 @@ export default function CalendarSurface() {
             lastAuthError: err.message,
             syncError: undefined,
           });
-        }
-        if (editingEvent) {
-          app.updateCalendarEvent(editingEvent.id, { ...eventData, pendingSync: 'update' });
         } else {
-          app.addCalendarEvent({ ...eventData, pendingSync: 'create' });
+          app.updateCalendarAccount(account.id, {
+            authStatus: 'error',
+            authEmail: account.email,
+            lastAuthCheckAt: new Date().toISOString(),
+            syncError: message,
+          });
         }
+        setEventWriteError(`Google Calendar was not changed: ${message}`);
+        return;
       } finally {
         setSavingToGoogle(false);
       }
@@ -302,6 +319,7 @@ export default function CalendarSurface() {
 
   const handleDeleteEvent = async () => {
     if (!editingEvent) return;
+    setEventWriteError(null);
     const isGoogle = isGoogleSource(editingEvent.sourceId);
     const googleCalId = getGoogleCalendarId(editingEvent.sourceId);
     const account = getAccountForSource(editingEvent.sourceId);
@@ -320,8 +338,10 @@ export default function CalendarSurface() {
           lastAuthError: undefined,
           syncError: undefined,
         });
+        void triggerSync(true);
       } catch (err) {
         logError('CalendarSurface', err);
+        const message = err instanceof Error ? err.message : 'Google event delete failed.';
         appendGoogleCalendarDiagnosticEvent({
           operation: 'sync_account',
           phase: 'failure',
@@ -330,7 +350,7 @@ export default function CalendarSurface() {
           accountId: account.id,
           email: account.email,
           resolvedAuthProvider: account.authProvider,
-          message: err instanceof Error ? `Google event delete failed: ${err.message}` : 'Google event delete failed.',
+          message: `Google event delete failed: ${message}`,
         });
         if (err instanceof GoogleCalendarReconnectRequiredError) {
           app.updateCalendarAccount(account.id, {
@@ -341,7 +361,16 @@ export default function CalendarSurface() {
             lastAuthError: err.message,
             syncError: undefined,
           });
+        } else {
+          app.updateCalendarAccount(account.id, {
+            authStatus: 'error',
+            authEmail: account.email,
+            lastAuthCheckAt: new Date().toISOString(),
+            syncError: message,
+          });
         }
+        setEventWriteError(`Google Calendar was not changed: ${message}`);
+        return;
       }
       app.removeCalendarEvent(editingEvent.id);
     } else {
@@ -361,17 +390,17 @@ export default function CalendarSurface() {
   const syncStatusText = () => {
     if (!hasGoogleAccounts) return null;
     const reconnectCount = googleAccounts.filter(account => account.authStatus === 'needs_reconnect' || account.authStatus === 'revoked').length;
-    if (syncState === 'syncing') return <span className="sync-indicator syncing"><span className="spinner" /> Syncing...</span>;
+    if (syncState === 'syncing') return <span className="sync-indicator syncing"><span className="spinner" /> Refreshing from Google...</span>;
     if (reconnectCount > 0) {
       return <span className="sync-indicator error">{reconnectCount} account{reconnectCount !== 1 ? 's' : ''} need reconnect</span>;
     }
-    if (syncState === 'error') return <span className="sync-indicator error">{syncError || 'Sync error'}</span>;
+    if (syncState === 'error') return <span className="sync-indicator error">{syncError || 'Google sync error'}</span>;
     if (lastSyncTime) {
       const ago = Math.round((Date.now() - new Date(lastSyncTime).getTime()) / 60000);
       const timeText = ago < 1 ? 'just now' : ago < 60 ? `${ago}m ago` : `${Math.round(ago / 60)}h ago`;
-      return <span className="sync-indicator synced">Synced {timeText}</span>;
+      return <span className="sync-indicator synced">Synced from Google {timeText}</span>;
     }
-    return <span className="sync-indicator">Not yet synced</span>;
+    return <span className="sync-indicator">Waiting for Google refresh</span>;
   };
 
   // ── Account color legend ──
@@ -730,7 +759,7 @@ export default function CalendarSurface() {
                         <div className="card-subtitle">
                           {acc.email} &middot; {acc.provider}
                           {acc.mocked && ' (local only)'}
-                          {isGoogleAcc && acc.lastSyncTime && ` \u00b7 Synced ${new Date(acc.lastSyncTime).toLocaleString()}`}
+                          {isGoogleAcc && acc.lastSyncTime && ` \u00b7 Synced from Google ${new Date(acc.lastSyncTime).toLocaleString()}`}
                           {isGoogleAcc && acc.lastAuthCheckAt && ` \u00b7 Access checked ${new Date(acc.lastAuthCheckAt).toLocaleString()}`}
                           {isGoogleAcc && ` \u00b7 Credential status ${getGoogleCalendarCredentialStatusLabel(acc)}`}
                           {isGoogleAcc && acc.authProvider === 'profile-google' && ' \u00b7 Linked to HELM sign-in'}
@@ -885,13 +914,18 @@ export default function CalendarSurface() {
 
       {/* ── Add/Edit Event Modal ── */}
       {showAddEvent && (
-        <div className="modal-overlay" onClick={() => setShowAddEvent(false)}>
+        <div className="modal-overlay" onClick={() => { setShowAddEvent(false); setEventWriteError(null); }}>
           <div className="modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={editingEvent ? 'Edit Event' : 'Add Event'}>
             <h2>{editingEvent ? 'Edit Event' : 'Add Event'}</h2>
             {isGoogleSource(evtSourceId) && (
               <div className="info-box" style={{ background: '#152d1a', borderColor: '#1e4d28', fontSize: 11 }}>
                 This event will be {editingEvent ? 'updated on' : 'created on'} Google Calendar
                               </div>
+            )}
+            {eventWriteError && (
+              <div className="info-box" role="alert" style={{ background: '#3d1a1a', borderColor: '#7f1d1d', color: '#fecaca', fontSize: 11 }}>
+                {eventWriteError}
+              </div>
             )}
             <div className="form-group">
               <label htmlFor="evt-title">Title</label>
@@ -907,7 +941,7 @@ export default function CalendarSurface() {
             </div>
             <div className="form-group">
               <label htmlFor="evt-calendar">Calendar</label>
-              <select id="evt-calendar" className="form-select" value={evtSourceId} onChange={e => setEvtSourceId(e.target.value)}>
+              <select id="evt-calendar" className="form-select" value={evtSourceId} onChange={e => { setEvtSourceId(e.target.value); setEventWriteError(null); }}>
                 {app.calendarSources.map(s => (
                   <option key={s.id} value={s.id}>{s.name}{s.googleCalendarId ? ' (Google)' : ''}</option>
                 ))}
@@ -938,7 +972,7 @@ export default function CalendarSurface() {
                   {deletingEventId === editingEvent.id ? 'Confirm Delete' : 'Delete'}
                 </button>
               )}
-              <button className="btn btn-secondary" onClick={() => { setShowAddEvent(false); setDeletingEventId(null); }}>Cancel</button>
+              <button className="btn btn-secondary" onClick={() => { setShowAddEvent(false); setDeletingEventId(null); setEventWriteError(null); }}>Cancel</button>
               <button className="btn btn-primary" onClick={saveEvent} disabled={!evtTitle.trim() || !evtSourceId || savingToGoogle}>
                 {savingToGoogle ? <><span className="spinner" /> Saving...</> : editingEvent ? 'Save' : 'Add Event'}
               </button>

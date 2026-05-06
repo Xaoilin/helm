@@ -39,6 +39,10 @@ let lastSyncDriftScanAt: string | null = null;
 let lastSyncDriftResolutionAt: string | null = null;
 let lastSyncDriftError: string | null = null;
 let syncDriftConflictCount = 0;
+let lastCalendarCacheCleanupAt: string | null = null;
+let lastCalendarCacheCleanupReason: string | null = null;
+let lastCalendarSyncRequestAt: string | null = null;
+let lastCalendarSyncRequestReason: string | null = null;
 const persistenceHealthSubscribers = new Set<(snapshot: PersistenceHealthSnapshot) => void>();
 const storeChangeSubscribers = new Set<(change: RemoteStoreChange) => void>();
 const lastKnownRemoteJson = new Map<string, string>();
@@ -77,6 +81,10 @@ export interface PersistenceHealthSnapshot {
   lastSyncDriftScanAt: string | null;
   lastSyncDriftResolutionAt: string | null;
   lastSyncDriftError: string | null;
+  lastCalendarCacheCleanupAt: string | null;
+  lastCalendarCacheCleanupReason: string | null;
+  lastCalendarSyncRequestAt: string | null;
+  lastCalendarSyncRequestReason: string | null;
 }
 
 export interface LocalImportCandidate {
@@ -165,6 +173,8 @@ export interface SyncResolutionResult {
   savedKeys: string[];
   error: string | null;
 }
+
+export const CALENDAR_SYNC_REQUEST_EVENT = 'helm:calendar-sync-requested';
 
 async function isTauri(): Promise<boolean> {
   if (tauriAvailable !== null) return tauriAvailable;
@@ -287,6 +297,7 @@ interface SyncDriftGroupDefinition {
   label: string;
   description: string;
   keys: string[];
+  policy?: 'user_resolved' | 'external_cache';
 }
 
 interface LocalDriftValue {
@@ -326,7 +337,7 @@ const SYNC_DRIFT_GROUPS: SyncDriftGroupDefinition[] = [
   { groupId: 'settings', label: 'Settings', description: 'Theme, assistant, voice, and provider settings.', keys: ['settings'] },
   { groupId: 'integrations', label: 'Integrations', description: 'Integration connection status and metadata.', keys: ['integrations'] },
   { groupId: 'conversations', label: 'Chat conversations', description: 'Saved Lina chat threads.', keys: ['conversations'] },
-  { groupId: 'calendar', label: 'Calendar', description: 'Calendar accounts, sources, and events kept together.', keys: ['calendarAccounts', 'calendarSources', 'calendarEvents'] },
+  { groupId: 'calendar', label: 'Calendar', description: 'Calendar accounts, sources, and events mirrored from connected providers.', keys: ['calendarAccounts', 'calendarSources', 'calendarEvents'], policy: 'external_cache' },
   { groupId: 'clock', label: 'Clock workspace', description: 'Timers and stopwatches.', keys: ['clock'] },
   { groupId: 'trips', label: 'Trips', description: 'Trips, legs, itinerary, bookings, and trip budget data.', keys: ['trips', 'tripLegs', 'tripItineraryItems', 'tripBookings', 'tripBudgetEntries'] },
   { groupId: 'projects', label: 'Projects', description: 'Project portfolio and project wiki pages.', keys: ['projects', 'projectPages'] },
@@ -1136,6 +1147,29 @@ async function clearIdenticalSyncDriftEntries(scan: SyncDriftGroupScan): Promise
     .map(entry => clearLocalStoreCopy(entry.key)));
 }
 
+function requestCalendarProviderRefresh(reason: string): void {
+  lastCalendarSyncRequestAt = new Date().toISOString();
+  lastCalendarSyncRequestReason = reason;
+  notifyPersistenceHealthSubscribers();
+
+  if (typeof window === 'undefined') return;
+
+  window.dispatchEvent(new CustomEvent(CALENDAR_SYNC_REQUEST_EVENT, {
+    detail: { reason },
+  }));
+}
+
+async function autoResolveExternalCacheSyncDrift(scan: SyncDriftGroupScan): Promise<void> {
+  const localEntries = scan.entries.filter(entry => entry.local.hasValue || entry.local.parseError);
+  if (localEntries.length === 0) return;
+
+  await Promise.all(localEntries.map(entry => clearLocalStoreCopy(entry.key)));
+  lastSyncDriftResolutionAt = new Date().toISOString();
+  lastCalendarCacheCleanupAt = lastSyncDriftResolutionAt;
+  lastCalendarCacheCleanupReason = `${scan.definition.label} follows its connected provider and Supabase cache.`;
+  requestCalendarProviderRefresh(`sync_drift_${scan.definition.groupId}`);
+}
+
 function readDirtyKeys(): string[] {
   const dirtyKeys: string[] = [];
 
@@ -1186,6 +1220,10 @@ function buildPersistenceHealthSnapshot(): PersistenceHealthSnapshot {
     lastSyncDriftScanAt,
     lastSyncDriftResolutionAt,
     lastSyncDriftError,
+    lastCalendarCacheCleanupAt,
+    lastCalendarCacheCleanupReason,
+    lastCalendarSyncRequestAt,
+    lastCalendarSyncRequestReason,
   };
 }
 
@@ -1407,6 +1445,16 @@ export async function listSyncDriftCandidates(): Promise<SyncDriftCandidate[]> {
       const hasLocalData = scan.entries.some(entry => entry.local.hasValue || entry.local.parseError);
       if (!hasLocalData) continue;
 
+      if (definition.policy === 'external_cache') {
+        if (scan.kind === 'local_only') {
+          await autoResolveSafeSyncDrift(scan);
+          requestCalendarProviderRefresh(`sync_drift_${definition.groupId}_local_import`);
+        } else {
+          await autoResolveExternalCacheSyncDrift(scan);
+        }
+        continue;
+      }
+
       if (scan.kind === 'identical' || scan.kind === 'local_only') {
         await autoResolveSafeSyncDrift(scan);
         continue;
@@ -1461,6 +1509,20 @@ export async function resolveSyncDriftCandidate(
   const savedKeys: string[] = [];
 
   try {
+    if (definition.policy === 'external_cache') {
+      await autoResolveExternalCacheSyncDrift(scan);
+      return {
+        groupId,
+        choice: 'keep_database',
+        resolved: true,
+        clearedKeys: scan.entries
+          .filter(entry => entry.local.hasValue || entry.local.parseError)
+          .map(entry => entry.key),
+        savedKeys: [],
+        error: null,
+      };
+    }
+
     if (choice === 'use_device') {
       const unreadable = scan.entries.find(entry => entry.local.parseError);
       if (unreadable) {

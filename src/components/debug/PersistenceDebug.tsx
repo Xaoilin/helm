@@ -63,6 +63,10 @@ export default function PersistenceDebug() {
         <Field label="Last drift scan" value={snapshot.lastSyncDriftScanAt || 'None'} />
         <Field label="Last drift resolution" value={snapshot.lastSyncDriftResolutionAt || 'None'} />
         <Field label="Last drift error" value={snapshot.lastSyncDriftError || 'None'} />
+        <Field label="Calendar cache cleanup" value={snapshot.lastCalendarCacheCleanupAt || 'None'} />
+        <Field label="Calendar cleanup reason" value={snapshot.lastCalendarCacheCleanupReason || 'None'} />
+        <Field label="Calendar refresh requested" value={snapshot.lastCalendarSyncRequestAt || 'None'} />
+        <Field label="Calendar refresh reason" value={snapshot.lastCalendarSyncRequestReason || 'None'} />
       </div>
       {candidates.length > 0 && (
         <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>

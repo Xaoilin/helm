@@ -658,6 +658,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     removeCalendarSource: calendar.removeCalendarSource,
     updateCalendarEvent: calendar.updateCalendarEvent,
     removeCalendarEvent: calendar.removeCalendarEvent,
+    bulkRemoveCalendarEvents: calendar.bulkRemoveCalendarEvents,
   };
 
   return (
