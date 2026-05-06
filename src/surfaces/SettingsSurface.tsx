@@ -83,8 +83,9 @@ export default function SettingsSurface() {
       setSyncDriftCandidates(candidates);
       setSyncDriftStatus(candidates.length === 0 ? 'Synced with Supabase.' : null);
 
-      const conflictHash = candidates.map(candidate => candidate.conflictHash).sort().join(':');
-      if (options.autoOpen && candidates.length > 0 && !autoOpenedSyncHashesRef.current.has(conflictHash)) {
+      const actionableCandidates = candidates.filter(candidate => candidate.requiresUserChoice);
+      const conflictHash = actionableCandidates.map(candidate => candidate.conflictHash).sort().join(':');
+      if (options.autoOpen && actionableCandidates.length > 0 && !autoOpenedSyncHashesRef.current.has(conflictHash)) {
         autoOpenedSyncHashesRef.current.add(conflictHash);
         setSyncDriftModalOpen(true);
       }
@@ -133,6 +134,9 @@ export default function SettingsSurface() {
     }
   }, []);
 
+  const syncChoiceCount = syncDriftCandidates.reduce((sum, candidate) => sum + candidate.userChoiceCount, 0);
+  const syncAutoCleanCount = syncDriftCandidates.reduce((sum, candidate) => sum + candidate.autoResolvedCount, 0);
+
   return (
     <>
       <div className="surface-header">
@@ -165,7 +169,7 @@ export default function SettingsSurface() {
                   : syncDriftLoading
                     ? 'Finishing sync'
                     : syncDriftCandidates.length > 0
-                      ? 'Data differences need review'
+                      ? 'Data differences need your choice'
                       : 'Synced with Supabase'}
               </div>
               <div className="sync-status-detail">
@@ -196,12 +200,14 @@ export default function SettingsSurface() {
             <div className={`sync-drift-summary ${syncDriftCandidates.length > 0 ? 'attention' : 'healthy'}`}>
               <strong>
                 {syncDriftCandidates.length > 0
-                  ? `${syncDriftCandidates.length} ${syncDriftCandidates.length === 1 ? 'section has' : 'sections have'} differences`
+                  ? `${syncChoiceCount} ${syncChoiceCount === 1 ? 'difference needs' : 'differences need'} your choice`
                   : 'No unresolved device differences'}
               </strong>
               <span>
                 {syncDriftCandidates.length > 0
-                  ? 'Review the database and device versions before committing one side.'
+                  ? syncAutoCleanCount > 0
+                    ? 'Only user data is shown here. System metadata differences will follow Supabase automatically.'
+                    : 'Only meaningful user data differences are shown here.'
                   : syncDriftStatus || 'Safe local copies are cleaned up automatically.'}
               </span>
             </div>

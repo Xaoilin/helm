@@ -100,8 +100,8 @@ function buildLocalItem(input: SystemHealthInput): HealthItem {
       return {
         id: 'local',
         label: 'Local data',
-        headline: 'Data differences need review',
-        detail: `${plural(conflictCount, 'section')} has database and device differences waiting in Settings.`,
+        headline: 'User data differences need review',
+        detail: `${plural(conflictCount, 'section')} has meaningful database and device differences waiting in Settings. System metadata is cleaned up automatically.`,
         tone: 'attention',
         action: { kind: 'settings', label: 'Open Settings' },
       };
