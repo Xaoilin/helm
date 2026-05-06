@@ -6,8 +6,10 @@ import { GoogleCalendarOAuthFunctionError } from '../services/googleCalendarServ
 const {
   appState,
   authSnapshotMock,
+  connectProfileGoogleCalendarMock,
   googleSyncState,
   revokeGoogleCalendarCredentialMock,
+  triggerProfileGoogleReconnectMock,
 } = vi.hoisted(() => ({
   appState: {
     integrations: [{
@@ -40,6 +42,7 @@ const {
     navigate: vi.fn(),
   },
   authSnapshotMock: vi.fn(),
+  connectProfileGoogleCalendarMock: vi.fn(),
   googleSyncState: {
     refreshCredentialStatuses: vi.fn(),
     serverRuntimeStatus: {
@@ -57,6 +60,7 @@ const {
     },
   },
   revokeGoogleCalendarCredentialMock: vi.fn(),
+  triggerProfileGoogleReconnectMock: vi.fn(),
 }));
 
 vi.mock('../store/AppContext', () => ({
@@ -79,6 +83,15 @@ vi.mock('../store/supabase', () => ({
   getAuthSessionSnapshot: authSnapshotMock,
 }));
 
+vi.mock('../services/googleCalendarAuthManager', async () => {
+  const actual = await vi.importActual<typeof import('../services/googleCalendarAuthManager')>('../services/googleCalendarAuthManager');
+  return {
+    ...actual,
+    connectProfileGoogleCalendar: connectProfileGoogleCalendarMock,
+    triggerProfileGoogleReconnect: triggerProfileGoogleReconnectMock,
+  };
+});
+
 vi.mock('../services/googleCalendarServerAuth', async () => {
   const actual = await vi.importActual<typeof import('../services/googleCalendarServerAuth')>('../services/googleCalendarServerAuth');
   return {
@@ -90,7 +103,44 @@ vi.mock('../services/googleCalendarServerAuth', async () => {
 describe('IntegrationsSurface degraded Google state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    appState.integrations = [{
+      id: 'int-google',
+      name: 'Google Calendar',
+      provider: 'google',
+      status: 'connected',
+      description: 'Sync Google Calendar events',
+    }];
+    appState.calendarAccounts = [{
+      id: 'acc-google',
+      name: 'Google',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'calendar-oauth',
+      authStatus: 'error',
+      lastSyncTime: '2026-04-15T08:00:00.000Z',
+      lastAuthCheckAt: '2026-04-15T08:10:00.000Z',
+      syncError: 'This browser origin is not allowed to use the hosted Google Calendar OAuth function.',
+    }];
+    appState.calendarSources = [];
     revokeGoogleCalendarCredentialMock.mockResolvedValue(undefined);
+    triggerProfileGoogleReconnectMock.mockResolvedValue(undefined);
+    connectProfileGoogleCalendarMock.mockResolvedValue({
+      email: 'alisa@example.com',
+      accountName: 'Alisa London',
+      calendars: [
+        {
+          id: 'alisa@example.com',
+          summary: 'Primary',
+          accessRole: 'owner',
+          primary: true,
+        },
+      ],
+      authProvider: 'profile-google',
+      authExpiresAt: '2026-05-06T12:00:00.000Z',
+    });
     authSnapshotMock.mockReturnValue({
       userId: 'user-1',
       email: 'alisa@example.com',
@@ -135,6 +185,50 @@ describe('IntegrationsSurface degraded Google state', () => {
         configuredAt: undefined,
         lastError: undefined,
       });
+      expect(googleSyncState.refreshCredentialStatuses).toHaveBeenCalled();
+    });
+  });
+
+  it('repairs a revoked HELM sign-in Google Calendar account without looping through sign-in again', async () => {
+    appState.integrations = [{
+      id: 'int-google',
+      name: 'Google Calendar',
+      provider: 'google',
+      status: 'error',
+      description: 'Sync Google Calendar events',
+      lastError: 'Google access was revoked. Reconnect this account.',
+    }];
+    appState.calendarAccounts = [{
+      id: 'acc-profile',
+      name: 'Alisa London',
+      email: 'alisa@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: true,
+      mocked: false,
+      authProvider: 'profile-google',
+      authStatus: 'revoked',
+      lastSyncTime: '2026-05-02T18:14:10.000Z',
+      lastAuthCheckAt: '2026-05-06T10:53:14.000Z',
+      lastAuthError: 'Google access was revoked. Reconnect this account.',
+    }];
+
+    render(<IntegrationsSurface />);
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+
+    await waitFor(() => {
+      expect(connectProfileGoogleCalendarMock).toHaveBeenCalledTimes(1);
+      expect(triggerProfileGoogleReconnectMock).not.toHaveBeenCalled();
+      expect(appState.updateCalendarAccount).toHaveBeenCalledWith('acc-profile', expect.objectContaining({
+        authProvider: 'profile-google',
+        authStatus: 'connected',
+        lastAuthError: undefined,
+        syncError: undefined,
+      }));
+      expect(appState.updateIntegration).toHaveBeenCalledWith('int-google', expect.objectContaining({
+        status: 'connected',
+        lastError: undefined,
+      }));
       expect(googleSyncState.refreshCredentialStatuses).toHaveBeenCalled();
     });
   });

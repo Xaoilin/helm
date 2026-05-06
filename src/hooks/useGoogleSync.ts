@@ -219,19 +219,11 @@ function getTimelineOutcomeForSyncOutcome(outcome: GoogleSyncDiagnosticOutcome) 
 }
 
 function shouldPreserveExplicitFailureState(account: CalendarAccount): boolean {
-  if (account.authStatus === 'revoked' || account.authStatus === 'error') {
-    return true;
-  }
-
-  if (account.lastAuthError === GOOGLE_ACCESS_EXPIRED_MESSAGE || account.lastAuthError === GOOGLE_ACCESS_REVOKED_MESSAGE) {
-    return true;
-  }
-
   if (account.lastAuthError?.includes('Reconnect this account explicitly.')) {
     return true;
   }
 
-  return account.syncError === GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE;
+  return false;
 }
 
 function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
@@ -473,6 +465,24 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
             syncError: account.syncError,
           }
         : credentialPatch;
+
+      if (
+        runtimeState.credentialHealth === 'refreshable'
+        && accountPatch.authStatus === 'connected'
+        && (account.authStatus === 'revoked' || account.authStatus === 'needs_reconnect' || account.authStatus === 'error')
+      ) {
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'credential_status',
+          phase: 'success',
+          outcome: 'success',
+          triggerSource: 'system',
+          accountId: account.id,
+          email: account.email,
+          resolvedAuthProvider: runtimeState.resolvedAuthProvider,
+          credentialSource: runtimeState.credentialSource,
+          message: `Hosted Google Calendar credential for ${account.email} is refreshable; clearing stale ${account.authStatus} status.`,
+        });
+      }
 
       updateAccountIfChanged(account, accountPatch);
     }
