@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "private": true,
-  "version": "0.2.62",
+  "version": "0.2.63",
   "type": "module",
   "scripts": {
     "benchmark:assistant": "tsx ./scripts/run-assistant-benchmark.ts",

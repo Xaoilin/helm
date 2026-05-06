@@ -95,14 +95,26 @@ function buildLocalItem(input: SystemHealthInput): HealthItem {
   }
 
   if (persistence.mode === 'database') {
+    const conflictCount = persistence.syncDriftConflictCount || 0;
+    if (conflictCount > 0) {
+      return {
+        id: 'local',
+        label: 'Local data',
+        headline: 'Data differences need review',
+        detail: `${plural(conflictCount, 'section')} has database and device differences waiting in Settings.`,
+        tone: 'attention',
+        action: { kind: 'settings', label: 'Open Settings' },
+      };
+    }
+
     const importCandidateCount = persistence.localImportCandidateCount || 0;
     if (importCandidateCount > 0) {
       return {
         id: 'local',
         label: 'Local data',
-        headline: 'Local copies waiting',
-        detail: `${plural(importCandidateCount, 'local copy', 'local copies')} can be imported or discarded in Settings.`,
-        tone: 'attention',
+        headline: 'Finishing sync',
+        detail: `${plural(importCandidateCount, 'local copy', 'local copies')} will be cleaned up or imported when Settings scans sync drift.`,
+        tone: 'syncing',
         action: { kind: 'settings', label: 'Open Settings' },
       };
     }
@@ -110,8 +122,8 @@ function buildLocalItem(input: SystemHealthInput): HealthItem {
     return {
       id: 'local',
       label: 'Local data',
-      headline: 'Local data ignored',
-      detail: 'Signed-in app data is read from Supabase, not this device cache.',
+      headline: 'Synced with Supabase',
+      detail: 'Signed-in app data is read from Supabase, and this device has no unresolved data differences.',
       tone: 'healthy',
     };
   }

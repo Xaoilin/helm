@@ -59,6 +59,10 @@ export default function PersistenceDebug() {
         <Field label="Realtime" value={snapshot.supabaseRealtime.state} />
         <Field label="Realtime error" value={snapshot.supabaseRealtime.lastError || 'None'} />
         <Field label="Local import candidates" value={String(candidates.length)} />
+        <Field label="Sync drift conflicts" value={String(snapshot.syncDriftConflictCount)} />
+        <Field label="Last drift scan" value={snapshot.lastSyncDriftScanAt || 'None'} />
+        <Field label="Last drift resolution" value={snapshot.lastSyncDriftResolutionAt || 'None'} />
+        <Field label="Last drift error" value={snapshot.lastSyncDriftError || 'None'} />
       </div>
       {candidates.length > 0 && (
         <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>

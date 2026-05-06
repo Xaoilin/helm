@@ -109,7 +109,7 @@ That navigation payload lets chat and voice hand the UI enough context to open a
 - Signed in: Supabase is the only source of truth for shared app data. Local Tauri files and `localStorage` are ignored unless the user explicitly imports an old local copy.
 - Signed out: Tauri file storage is preferred, with `localStorage` as the web fallback.
 
-Signed-in writes queue debounced Supabase `kv_store` updates and do not write local persistent storage. Signed-out writes still use the local-first Tauri/`localStorage` path. Settings now includes explicit import, replace, and discard actions for local copies created before sign-in; imports never happen automatically. Settings values, including API-key-like values, are synced as plain Supabase JSON under RLS and are not encrypted vault storage.
+Signed-in writes queue debounced Supabase `kv_store` updates and do not write local persistent storage. Signed-out writes still use the local-first Tauri/`localStorage` path. Settings now scans old local copies by grouped app domain, silently clears identical copies, imports local-only data when the matching database group is empty, and opens a review modal only for real conflicts or unreadable local JSON. The modal defaults to keeping Supabase, shows item-level summaries with expandable redacted JSON, and can commit the device copy to Supabase when the user explicitly chooses that side. Settings values, including API-key-like values, are synced as plain Supabase JSON under RLS and are not encrypted vault storage.
 
 ### Desktop boundary
 
