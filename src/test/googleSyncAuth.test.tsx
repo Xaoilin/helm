@@ -357,6 +357,80 @@ describe('useGoogleSync durable auth behavior', () => {
     });
   });
 
+  it('clears stale revoked state when a linked profile account has a refreshable hosted credential', async () => {
+    getCredentialStatusesMock.mockResolvedValue({
+      statuses: [{
+        accountEmail: 'alisa@example.com',
+        serverCredentialPresent: true,
+        credentialHealth: 'refreshable',
+        currentAccessTokenExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+        lastRefreshAt: new Date().toISOString(),
+        credentialOrigin: 'profile_session',
+      }],
+      requestId: 'req-status-profile-revoked',
+      checkedAt: new Date().toISOString(),
+      readiness: {
+        functionReachable: true,
+        oauthConfigured: true,
+        originAllowed: true,
+        signedIn: true,
+      },
+    });
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-profile-revoked',
+        name: 'Alisa London',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'profile-google',
+        authStatus: 'revoked',
+        lastAuthError: 'Google access was revoked. Reconnect this account.',
+        lastAuthCheckAt: new Date().toISOString(),
+      }],
+    });
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
+    await waitFor(() => {
+      const [account] = readGoogleAccounts();
+      expect(account.authStatus).toBe('connected');
+      expect(account.lastAuthError).toBeUndefined();
+      expect(account.syncError).toBeUndefined();
+    });
+  });
+
+  it('preserves wrong-account reconnect state even if the hosted credential can refresh', async () => {
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-profile-mismatch',
+        name: 'Alisa London',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'profile-google',
+        authStatus: 'needs_reconnect',
+        lastAuthError: 'Google returned other@example.com while syncing alisa@example.com. Reconnect this account explicitly.',
+        lastAuthCheckAt: new Date().toISOString(),
+      }],
+    });
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
+    await waitFor(() => {
+      const [account] = readGoogleAccounts();
+      expect(account.authStatus).toBe('needs_reconnect');
+      expect(account.lastAuthError).toContain('Reconnect this account explicitly.');
+      expect(passiveTokenMock).not.toHaveBeenCalled();
+    });
+  });
+
   it('lets a manual sync retry stale reconnect-required accounts and clear the status on success', async () => {
     setGoogleCalendarState({
       accounts: [{

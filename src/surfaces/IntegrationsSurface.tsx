@@ -10,6 +10,7 @@ import {
   connectGoogleCalendarOAuthAccount,
   connectProfileGoogleCalendar,
   clearGoogleCalendarAuth,
+  GoogleCalendarReconnectRequiredError,
   getGoogleCalendarCredentialStatusLabel,
   getGoogleCalendarAuthPatch,
   getGoogleCalendarStatusLabel,
@@ -69,6 +70,15 @@ export default function IntegrationsSurface() {
   ), [googleAccounts, profileEmail]);
   const canLinkSignedInGoogle = Boolean(profileEmail && authSnapshot?.provider === 'google' && !linkedProfileAccount);
   const needsProfileReconnect = Boolean(profileEmail && authSnapshot?.provider === 'google' && !authSnapshot?.providerRefreshToken);
+
+  const isLinkedProfileAccount = (account: CalendarAccount): boolean => {
+    if (account.authProvider === 'profile-google') return true;
+    return Boolean(
+      profileEmail
+      && authSnapshot?.provider === 'google'
+      && normalizeEmail(account.email) === normalizeEmail(profileEmail),
+    );
+  };
 
   const addSourcesIfMissing = (accountId: string, calendars: Awaited<ReturnType<typeof connectProfileGoogleCalendar>>['calendars']) => {
     const existingGoogleIds = new Set(
@@ -218,8 +228,69 @@ export default function IntegrationsSurface() {
         return;
       }
 
-      if (account.authProvider === 'profile-google') {
-        await triggerProfileGoogleReconnect();
+      if (isLinkedProfileAccount(account)) {
+        const profileMatchesAccount = Boolean(
+          profileEmail
+          && authSnapshot?.provider === 'google'
+          && normalizeEmail(account.email) === normalizeEmail(profileEmail),
+        );
+
+        if (!profileMatchesAccount || !authSnapshot?.providerRefreshToken) {
+          appendGoogleCalendarDiagnosticEvent({
+            operation: 'reconnect',
+            phase: 'start',
+            outcome: 'info',
+            triggerSource: 'user_action',
+            accountId: account.id,
+            email: account.email,
+            resolvedAuthProvider: 'profile-google',
+            message: `Refreshing the HELM Google sign-in before repairing Calendar access for ${account.email}.`,
+          });
+          await triggerProfileGoogleReconnect();
+          return;
+        }
+
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'reconnect',
+          phase: 'start',
+          outcome: 'info',
+          triggerSource: 'user_action',
+          accountId: account.id,
+          email: account.email,
+          resolvedAuthProvider: 'profile-google',
+          message: `Repairing the linked HELM Google Calendar credential for ${account.email}.`,
+        });
+
+        const result = await connectProfileGoogleCalendar();
+        app.updateCalendarAccount(account.id, {
+          name: result.accountName,
+          connected: true,
+          mocked: false,
+          authProvider: result.authProvider,
+          authStatus: 'connected',
+          authEmail: result.email,
+          authExpiresAt: result.authExpiresAt,
+          lastAuthError: undefined,
+          lastAuthCheckAt: new Date().toISOString(),
+          syncError: undefined,
+        });
+        addSourcesIfMissing(account.id, result.calendars);
+        app.updateIntegration('int-google', {
+          status: 'connected',
+          configuredAt: new Date().toISOString(),
+          lastError: undefined,
+        });
+        await googleSync.refreshCredentialStatuses();
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'reconnect',
+          phase: 'success',
+          outcome: 'success',
+          triggerSource: 'user_action',
+          accountId: account.id,
+          email: account.email,
+          resolvedAuthProvider: 'profile-google',
+          message: `Repaired the linked HELM Google Calendar credential for ${account.email}.`,
+        });
         return;
       }
 
@@ -245,7 +316,10 @@ export default function IntegrationsSurface() {
       const message = error instanceof Error ? error.message : 'Reconnect failed';
       setGoogleError(message);
       app.updateCalendarAccount(account.id, {
-        authStatus: account.authProvider === 'profile-google' ? 'needs_reconnect' : account.authStatus,
+        authProvider: error instanceof GoogleCalendarReconnectRequiredError ? error.authProvider : account.authProvider,
+        authStatus: error instanceof GoogleCalendarReconnectRequiredError
+          ? error.authStatus
+          : isLinkedProfileAccount(account) ? 'needs_reconnect' : account.authStatus,
         lastAuthError: message,
       });
     } finally {
