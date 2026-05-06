@@ -95,6 +95,8 @@ function readGoogleAccounts() {
 function readCalendarSources() {
   return JSON.parse(localStorage.getItem('helm:calendarSources') || '[]') as Array<{
     id: string;
+    accountId: string;
+    name?: string;
     googleCalendarId?: string;
   }>;
 }
@@ -616,6 +618,117 @@ describe('useGoogleSync durable auth behavior', () => {
       expect(readCalendarSources()).toHaveLength(1);
       expect(readCalendarEvents()).toHaveLength(1);
       expect(result.current.diagnostics.accounts['acc-mismatch']?.outcome).toBe('ownership_mismatch');
+    });
+  });
+
+  it('fetches events for a newly discovered Google calendar in the same sync pass', async () => {
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-new-source',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
+      }],
+    });
+    fetchEventsMock.mockResolvedValueOnce([{
+      id: 'google-event-1',
+      summary: 'Existing meeting',
+      start: { dateTime: '2026-05-06T09:00:00.000Z' },
+      end: { dateTime: '2026-05-06T09:30:00.000Z' },
+    }]);
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
+    await act(async () => {
+      await result.current!.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      const sources = readCalendarSources();
+      const events = readCalendarEvents();
+      expect(fetchEventsMock).toHaveBeenCalledWith(
+        'server-minted-access-token',
+        'alisa@example.com',
+        expect.any(String),
+        expect.any(String),
+      );
+      expect(sources).toHaveLength(1);
+      expect(sources[0]?.accountId).toBe('acc-new-source');
+      expect(events).toHaveLength(1);
+      expect(events[0]?.googleEventId).toBe('google-event-1');
+      expect(events[0]?.sourceId).toBe(sources[0]?.id);
+    });
+  });
+
+  it('adopts orphaned pre-reconnect sources before fetching events', async () => {
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-reconnected',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'profile-google',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
+      }],
+      sources: [{
+        id: 'src-orphaned-primary',
+        accountId: 'acc-old-profile',
+        name: 'Old primary',
+        color: '#64748b',
+        visible: true,
+        googleCalendarId: 'alisa@example.com',
+      }],
+    });
+    passiveTokenMock.mockResolvedValueOnce({
+      accessToken: 'server-minted-access-token',
+      authProvider: 'profile-google',
+      authExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+    });
+    fetchEventsMock.mockResolvedValueOnce([{
+      id: 'google-event-restored',
+      summary: 'Restored meeting',
+      start: { dateTime: '2026-05-06T10:00:00.000Z' },
+      end: { dateTime: '2026-05-06T10:30:00.000Z' },
+    }]);
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
+    await act(async () => {
+      await result.current!.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      const sources = readCalendarSources();
+      const events = readCalendarEvents();
+      expect(fetchEventsMock).toHaveBeenCalledWith(
+        'server-minted-access-token',
+        'alisa@example.com',
+        expect.any(String),
+        expect.any(String),
+      );
+      expect(sources).toHaveLength(1);
+      expect(sources[0]).toMatchObject({
+        id: 'src-orphaned-primary',
+        accountId: 'acc-reconnected',
+        googleCalendarId: 'alisa@example.com',
+      });
+      expect(events).toHaveLength(1);
+      expect(events[0]?.googleEventId).toBe('google-event-restored');
+      expect(events[0]?.sourceId).toBe('src-orphaned-primary');
     });
   });
 

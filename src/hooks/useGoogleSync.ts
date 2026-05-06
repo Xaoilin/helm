@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { v4 as uuid } from 'uuid';
 import type { CalendarAccount, CalendarEvent, CalendarSource } from '../types/domain';
 import {
   fetchCalendarList,
@@ -127,6 +128,8 @@ interface GoogleSyncApp {
 }
 
 const GoogleSyncContext = createContext<GoogleSyncResult | null>(null);
+
+type SyncableCalendarSource = CalendarSource & { googleCalendarId: string };
 
 function createBlockedDiagnostic(
   account: CalendarAccount,
@@ -600,83 +603,141 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
         primaryCalendarEmail: ownership.primaryEmail,
       });
 
+      const activeAccountIds = new Set(currentApp.calendarAccounts.map(candidate => candidate.id));
       const existingSources = currentApp.calendarSources.filter(source => source.accountId === accountId);
       const existingByGoogleId = new Map(
         existingSources
           .filter(source => source.googleCalendarId)
           .map(source => [source.googleCalendarId!, source]),
       );
-      const foreignGoogleCalendarIds = new Set(
+      const orphanedByGoogleId = new Map(
         currentApp.calendarSources
-          .filter(source => source.googleCalendarId && source.accountId !== accountId)
+          .filter(source => (
+            Boolean(source.googleCalendarId)
+            && source.accountId !== accountId
+            && !activeAccountIds.has(source.accountId)
+          ))
+          .map(source => [source.googleCalendarId!, source]),
+      );
+      const activeForeignGoogleCalendarIds = new Set(
+        currentApp.calendarSources
+          .filter(source => (
+            Boolean(source.googleCalendarId)
+            && source.accountId !== accountId
+            && activeAccountIds.has(source.accountId)
+          ))
           .map(source => source.googleCalendarId!),
       );
 
-      const sourcesToUpsert: Array<{
-        id?: string;
-        accountId: string;
-        name: string;
-        color: string;
-        visible: boolean;
-        googleCalendarId: string;
-        accessRole: string;
-      }> = [];
+      const sourcesToUpsert: SyncableCalendarSource[] = [];
+      const syncableSources: SyncableCalendarSource[] = [];
+      let adoptedSourceCount = 0;
+      let skippedActiveForeignSourceCount = 0;
 
       for (const googleCalendar of googleCalendars) {
-        if (foreignGoogleCalendarIds.has(googleCalendar.id)) continue;
+        if (activeForeignGoogleCalendarIds.has(googleCalendar.id)) {
+          skippedActiveForeignSourceCount += 1;
+          continue;
+        }
 
         const existing = existingByGoogleId.get(googleCalendar.id);
+        const orphaned = orphanedByGoogleId.get(googleCalendar.id);
+        const color = googleCalendar.backgroundColor || '#4f5bff';
         if (existing) {
           if (
             existing.name !== googleCalendar.summary
-            || existing.color !== (googleCalendar.backgroundColor || '#4f5bff')
+            || existing.color !== color
+            || existing.accessRole !== googleCalendar.accessRole
           ) {
             sourcesToUpsert.push({
+              ...existing,
               id: existing.id,
               accountId,
               name: googleCalendar.summary,
-              color: googleCalendar.backgroundColor || '#4f5bff',
+              color,
               visible: existing.visible,
               googleCalendarId: googleCalendar.id,
               accessRole: googleCalendar.accessRole,
             });
           }
-        } else {
-          sourcesToUpsert.push({
+          syncableSources.push({ ...existing, googleCalendarId: googleCalendar.id });
+        } else if (orphaned) {
+          const adopted = {
+            ...orphaned,
             accountId,
             name: googleCalendar.summary,
-            color: googleCalendar.backgroundColor || '#4f5bff',
+            color,
+            visible: orphaned.visible,
+            googleCalendarId: googleCalendar.id,
+            accessRole: googleCalendar.accessRole,
+          };
+          sourcesToUpsert.push(adopted);
+          syncableSources.push(adopted);
+          adoptedSourceCount += 1;
+        } else {
+          const created = {
+            id: uuid(),
+            accountId,
+            name: googleCalendar.summary,
+            color,
             visible: true,
             googleCalendarId: googleCalendar.id,
             accessRole: googleCalendar.accessRole,
-          });
+          };
+          sourcesToUpsert.push(created);
+          syncableSources.push(created);
         }
       }
 
       if (sourcesToUpsert.length > 0) {
         currentApp.bulkUpsertCalendarSources(sourcesToUpsert);
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'calendar_list_fetch',
+          phase: 'info',
+          outcome: 'info',
+          triggerSource,
+          accountId,
+          email: account.email,
+          resolvedAuthProvider: token.authProvider,
+          message: `Prepared ${syncableSources.length} local Google calendar source${syncableSources.length === 1 ? '' : 's'} for event sync${adoptedSourceCount > 0 ? ` and adopted ${adoptedSourceCount} source${adoptedSourceCount === 1 ? '' : 's'} from inactive account rows` : ''}.`,
+          calendarCount: syncableSources.length,
+        });
       }
 
       const googleCalendarIds = new Set(googleCalendars.map(calendar => calendar.id));
-      const preservedSourceCount = existingSources.filter(source => (
+      const syncableGoogleCalendarIds = new Set(syncableSources.map(source => source.googleCalendarId));
+      const preservedSources = existingSources.filter(source => (
         Boolean(source.googleCalendarId)
-        && (!googleCalendarIds.has(source.googleCalendarId!) || foreignGoogleCalendarIds.has(source.googleCalendarId!))
-      )).length;
+        && (!googleCalendarIds.has(source.googleCalendarId!) || !syncableGoogleCalendarIds.has(source.googleCalendarId!))
+      ));
+      const preservedSourceCount = preservedSources.length;
+      const preservedSourceIds = new Set(preservedSources.map(source => source.id));
 
       const timeMin = new Date(Date.now() - LIMITS.CALENDAR_PAST_DAYS * 86400000).toISOString();
       const timeMax = new Date(Date.now() + LIMITS.CALENDAR_FUTURE_DAYS * 86400000).toISOString();
-      const syncableSources = existingSources.filter(source => source.googleCalendarId && !foreignGoogleCalendarIds.has(source.googleCalendarId));
       const globalEventIds = new Set(
         currentApp.calendarEvents
           .filter(event => event.googleEventId)
           .map(event => event.googleEventId!),
       );
 
-      let preservedEventCount = 0;
+      let preservedEventCount = currentApp.calendarEvents.filter(event => preservedSourceIds.has(event.sourceId)).length;
+
+      if (googleCalendars.length > 0 && syncableSources.length === 0) {
+        appendGoogleCalendarDiagnosticEvent({
+          operation: 'calendar_event_fetch',
+          phase: 'blocked',
+          outcome: 'blocked',
+          triggerSource,
+          accountId,
+          email: account.email,
+          resolvedAuthProvider: token.authProvider,
+          message: `No local Google calendar sources were available for event fetch after source reconciliation; ${skippedActiveForeignSourceCount} calendar${skippedActiveForeignSourceCount === 1 ? ' was' : 's were'} already owned by another active account.`,
+          calendarCount: googleCalendars.length,
+        });
+      }
 
       for (const source of syncableSources) {
-        if (!source.googleCalendarId) continue;
-
         try {
           appendGoogleCalendarDiagnosticEvent({
             operation: 'calendar_event_fetch',
