@@ -9,7 +9,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { v4 as uuid } from 'uuid';
 import type { CalendarAccount, CalendarEvent, CalendarSource } from '../types/domain';
 import {
   fetchCalendarList,
@@ -47,6 +46,12 @@ import {
   getAuthSessionSnapshot,
   isAuthSessionBootstrapped,
 } from '../store/supabase';
+import { CALENDAR_SYNC_REQUEST_EVENT } from '../store/persistence';
+import {
+  buildGoogleEventCacheId,
+  buildGoogleSourceCacheId,
+  isEventInsideCalendarFetchWindow,
+} from '../services/calendarProviderSync';
 import { logWarn } from '../services/logger';
 
 export type SyncState = 'idle' | 'syncing' | 'error';
@@ -69,6 +74,8 @@ export interface GoogleSyncAccountDiagnostic {
   primaryCalendarEmail?: string;
   preservedSourceCount?: number;
   preservedEventCount?: number;
+  removedSourceCount?: number;
+  removedEventCount?: number;
   skippedDestructiveRemovals?: boolean;
 }
 
@@ -125,6 +132,7 @@ interface GoogleSyncApp {
   removeCalendarSource: (id: string) => void;
   updateCalendarEvent: (id: string, updates: { sourceId: string }) => void;
   removeCalendarEvent: (id: string) => void;
+  bulkRemoveCalendarEvents: (ids: string[]) => void;
 }
 
 const GoogleSyncContext = createContext<GoogleSyncResult | null>(null);
@@ -165,20 +173,28 @@ function createOwnershipMismatchDiagnostic(
   };
 }
 
-function createSuccessMessage(preservedSourceCount: number, preservedEventCount: number): string {
-  if (preservedSourceCount === 0 && preservedEventCount === 0) {
-    return 'Passive sync updated cached Google data without destructive deletes.';
-  }
+function createSuccessMessage(
+  preservedSourceCount: number,
+  preservedEventCount: number,
+  removedSourceCount: number,
+  removedEventCount: number,
+): string {
+  const parts: string[] = ['mirrored Google Calendar into the local cache'];
 
-  const parts: string[] = [];
+  if (removedSourceCount > 0) {
+    parts.push(`removed ${removedSourceCount} stale calendar${removedSourceCount === 1 ? '' : 's'}`);
+  }
+  if (removedEventCount > 0) {
+    parts.push(`removed ${removedEventCount} stale event${removedEventCount === 1 ? '' : 's'}`);
+  }
   if (preservedSourceCount > 0) {
-    parts.push(`kept ${preservedSourceCount} cached calendar${preservedSourceCount === 1 ? '' : 's'}`);
+    parts.push(`kept ${preservedSourceCount} local calendar${preservedSourceCount === 1 ? '' : 's'}`);
   }
   if (preservedEventCount > 0) {
-    parts.push(`kept ${preservedEventCount} cached event${preservedEventCount === 1 ? '' : 's'}`);
+    parts.push(`kept ${preservedEventCount} cached event${preservedEventCount === 1 ? '' : 's'} outside the fetch window`);
   }
 
-  return `Passive sync updated cached Google data and ${parts.join(' and ')} missing from this fetch window.`;
+  return `Passive sync ${parts.join(', ')}.`;
 }
 
 function defaultServerReadiness(): GoogleCalendarBackendReadiness {
@@ -292,6 +308,8 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
       primaryCalendarEmail: entry.primaryCalendarEmail,
       preservedSourceCount: entry.preservedSourceCount,
       preservedEventCount: entry.preservedEventCount,
+      removedSourceCount: entry.removedSourceCount,
+      removedEventCount: entry.removedEventCount,
       skippedDestructiveRemovals: entry.skippedDestructiveRemovals,
     });
   }, []);
@@ -644,23 +662,24 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
         const orphaned = orphanedByGoogleId.get(googleCalendar.id);
         const color = googleCalendar.backgroundColor || '#4f5bff';
         if (existing) {
+          const nextSource = {
+            ...existing,
+            id: existing.id,
+            accountId,
+            name: googleCalendar.summary,
+            color,
+            visible: existing.visible,
+            googleCalendarId: googleCalendar.id,
+            accessRole: googleCalendar.accessRole,
+          };
           if (
             existing.name !== googleCalendar.summary
             || existing.color !== color
             || existing.accessRole !== googleCalendar.accessRole
           ) {
-            sourcesToUpsert.push({
-              ...existing,
-              id: existing.id,
-              accountId,
-              name: googleCalendar.summary,
-              color,
-              visible: existing.visible,
-              googleCalendarId: googleCalendar.id,
-              accessRole: googleCalendar.accessRole,
-            });
+            sourcesToUpsert.push(nextSource);
           }
-          syncableSources.push({ ...existing, googleCalendarId: googleCalendar.id });
+          syncableSources.push(nextSource);
         } else if (orphaned) {
           const adopted = {
             ...orphaned,
@@ -676,7 +695,7 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
           adoptedSourceCount += 1;
         } else {
           const created = {
-            id: uuid(),
+            id: buildGoogleSourceCacheId(accountId, googleCalendar.id),
             accountId,
             name: googleCalendar.summary,
             color,
@@ -706,22 +725,29 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
 
       const googleCalendarIds = new Set(googleCalendars.map(calendar => calendar.id));
       const syncableGoogleCalendarIds = new Set(syncableSources.map(source => source.googleCalendarId));
-      const preservedSources = existingSources.filter(source => (
+      const staleSources = existingSources.filter(source => (
         Boolean(source.googleCalendarId)
         && (!googleCalendarIds.has(source.googleCalendarId!) || !syncableGoogleCalendarIds.has(source.googleCalendarId!))
       ));
+      const preservedSources = existingSources.filter(source => !source.googleCalendarId);
       const preservedSourceCount = preservedSources.length;
       const preservedSourceIds = new Set(preservedSources.map(source => source.id));
+      const staleSourceIds = new Set(staleSources.map(source => source.id));
 
       const timeMin = new Date(Date.now() - LIMITS.CALENDAR_PAST_DAYS * 86400000).toISOString();
       const timeMax = new Date(Date.now() + LIMITS.CALENDAR_FUTURE_DAYS * 86400000).toISOString();
-      const globalEventIds = new Set(
+      const globalEventKeys = new Set(
         currentApp.calendarEvents
-          .filter(event => event.googleEventId)
-          .map(event => event.googleEventId!),
+          .filter(event => event.googleEventId && event.googleCalendarId)
+          .map(event => `${event.googleCalendarId}:${event.googleEventId}`),
       );
 
       let preservedEventCount = currentApp.calendarEvents.filter(event => preservedSourceIds.has(event.sourceId)).length;
+      let removedSourceCount = 0;
+      let removedEventCount = 0;
+      const staleSourceEventCount = currentApp.calendarEvents.filter(event => staleSourceIds.has(event.sourceId)).length;
+      const eventIdsToRemoveAfterSuccessfulFetch: string[] = [];
+      let skippedDestructiveCleanupReason: string | null = null;
 
       if (googleCalendars.length > 0 && syncableSources.length === 0) {
         appendGoogleCalendarDiagnosticEvent({
@@ -772,7 +798,8 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
               .map(event => [event.googleEventId!, event]),
           );
 
-          const eventsToUpsert: Array<typeof mappedEvents[number] & { id?: string }> = [];
+          const eventsToUpsert: Array<typeof mappedEvents[number] & { id?: string; pendingSync?: undefined }> = [];
+          const eventsToRemove: string[] = [];
           const seenGoogleEventIds = new Set<string>();
 
           for (const mappedEvent of mappedEvents) {
@@ -785,27 +812,45 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
                 || existing.end !== mappedEvent.end
                 || existing.description !== mappedEvent.description
                 || existing.location !== mappedEvent.location
+                || existing.pendingSync
               ) {
-                eventsToUpsert.push({ ...mappedEvent, id: existing.id });
+                eventsToUpsert.push({ ...mappedEvent, id: existing.id, pendingSync: undefined });
               }
-            } else if (!globalEventIds.has(mappedEvent.googleEventId)) {
-              eventsToUpsert.push(mappedEvent);
-              globalEventIds.add(mappedEvent.googleEventId);
+            } else {
+              const globalEventKey = `${source.googleCalendarId}:${mappedEvent.googleEventId}`;
+              if (!globalEventKeys.has(globalEventKey)) {
+                eventsToUpsert.push({
+                  ...mappedEvent,
+                  id: buildGoogleEventCacheId(source.id, mappedEvent.googleEventId),
+                  pendingSync: undefined,
+                });
+                globalEventKeys.add(globalEventKey);
+              }
             }
           }
 
-          preservedEventCount += existingEvents.filter(event => (
-            Boolean(event.googleEventId) && !seenGoogleEventIds.has(event.googleEventId!)
-          )).length;
+          for (const event of existingEvents) {
+            if (!event.googleEventId || seenGoogleEventIds.has(event.googleEventId)) continue;
+            if (isEventInsideCalendarFetchWindow(event, timeMin, timeMax)) {
+              eventsToRemove.push(event.id);
+            } else {
+              preservedEventCount += 1;
+            }
+          }
 
           if (eventsToUpsert.length > 0) {
             currentApp.bulkUpsertCalendarEvents(eventsToUpsert);
+          }
+          if (eventsToRemove.length > 0) {
+            eventIdsToRemoveAfterSuccessfulFetch.push(...eventsToRemove);
           }
         } catch (error) {
           if (error instanceof GoogleApiError && (error.isAuthError || error.isForbidden)) {
             throw error;
           }
-          logWarn('GoogleSync', `Failed to sync calendar ${source.name}: ${error instanceof Error ? error.message : String(error)}`);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          skippedDestructiveCleanupReason = `Could not refresh every Google calendar. Stale cache cleanup was skipped so existing calendar data stays intact. ${errorMessage}`;
+          logWarn('GoogleSync', `Failed to sync calendar ${source.name}: ${errorMessage}`);
           appendGoogleCalendarDiagnosticEvent({
             operation: 'calendar_event_fetch',
             phase: 'failure',
@@ -815,9 +860,23 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
             email: account.email,
             resolvedAuthProvider: token.authProvider,
             calendarId: source.googleCalendarId,
-            message: error instanceof Error ? error.message : GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
+            message: errorMessage || GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE,
           });
         }
+      }
+
+      if (skippedDestructiveCleanupReason) {
+        throw new Error(skippedDestructiveCleanupReason);
+      }
+
+      for (const source of staleSources) {
+        currentApp.removeCalendarSource(source.id);
+      }
+      removedSourceCount = staleSources.length;
+      removedEventCount = staleSourceEventCount;
+      if (eventIdsToRemoveAfterSuccessfulFetch.length > 0) {
+        currentApp.bulkRemoveCalendarEvents(eventIdsToRemoveAfterSuccessfulFetch);
+        removedEventCount += eventIdsToRemoveAfterSuccessfulFetch.length;
       }
 
       const now = new Date().toISOString();
@@ -852,10 +911,12 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
         checkedAt: now,
         triggerSource,
         outcome: 'success',
-        message: createSuccessMessage(preservedSourceCount, preservedEventCount),
+        message: createSuccessMessage(preservedSourceCount, preservedEventCount, removedSourceCount, removedEventCount),
         primaryCalendarEmail: ownership.primaryEmail,
         preservedSourceCount,
         preservedEventCount,
+        removedSourceCount,
+        removedEventCount,
         skippedDestructiveRemovals: preservedSourceCount > 0 || preservedEventCount > 0,
       });
       return true;
@@ -914,6 +975,9 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
           syncError: undefined,
         });
       } else {
+        if (error instanceof Error && !(error instanceof GoogleApiError)) {
+          message = error.message;
+        }
         authStatus = 'error';
         currentApp.updateCalendarAccount(accountId, {
           authStatus,
@@ -1021,6 +1085,17 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
       return () => window.clearTimeout(timer);
     }
   }, [googleAccountsSignature, shouldAutoSync, triggerSync]);
+
+  useEffect(() => {
+    const handleCalendarSyncRequest = () => {
+      void triggerSync(false);
+    };
+
+    window.addEventListener(CALENDAR_SYNC_REQUEST_EVENT, handleCalendarSyncRequest);
+    return () => {
+      window.removeEventListener(CALENDAR_SYNC_REQUEST_EVENT, handleCalendarSyncRequest);
+    };
+  }, [triggerSync]);
 
   const lastSyncTime = googleAccounts.reduce<string | null>((latest, account) => {
     if (!account.lastSyncTime) return latest;

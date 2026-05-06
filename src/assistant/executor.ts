@@ -28,6 +28,7 @@ import type {
   AssistantUndoOperation,
 } from '../types/domain';
 import { getCapabilityDefinition } from './capabilities';
+import { canApplyLocalCalendarMutation } from '../services/calendarProviderSync';
 import {
   SURFACE_LABELS,
   makeEntityReference,
@@ -872,6 +873,12 @@ function executeSingleStep(
       if (!calendarChoice.source) {
         return { kind: 'clarify', reason: calendarChoice.clarify || 'Which calendar should I use?' };
       }
+      if (!canApplyLocalCalendarMutation(calendarChoice.source, context.calendarAccounts)) {
+        return {
+          kind: 'clarify',
+          reason: 'Google Calendar is synced live, so I will not create an offline calendar copy from chat. Open Calendar to add it directly to Google.',
+        };
+      }
 
       const extracted = extractTemporalReference(asString(step.args.timePhrase), context);
       const start = asString(step.args.start) || extracted.resolution?.start;
@@ -956,6 +963,13 @@ function executeSingleStep(
           };
       if (!eventResolution.event) {
         return { kind: 'clarify', reason: eventResolution.clarify || 'Which event should I move?' };
+      }
+      const eventSource = context.calendarSources.find(source => source.id === eventResolution.event?.sourceId) || null;
+      if (!canApplyLocalCalendarMutation(eventSource, context.calendarAccounts)) {
+        return {
+          kind: 'clarify',
+          reason: 'Google Calendar is synced live, so I will not move an offline calendar copy from chat. Open Calendar to change it directly in Google.',
+        };
       }
 
       const extracted = extractTemporalReference(asString(step.args.timePhrase), context);

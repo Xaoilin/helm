@@ -637,7 +637,7 @@ describe('useGoogleSync durable auth behavior', () => {
         lastSyncTime: new Date().toISOString(),
       }],
     });
-    fetchEventsMock.mockResolvedValueOnce([{
+    fetchEventsMock.mockResolvedValue([{
       id: 'google-event-1',
       summary: 'Existing meeting',
       start: { dateTime: '2026-05-06T09:00:00.000Z' },
@@ -697,7 +697,7 @@ describe('useGoogleSync durable auth behavior', () => {
       authProvider: 'profile-google',
       authExpiresAt: new Date(Date.now() + 3600000).toISOString(),
     });
-    fetchEventsMock.mockResolvedValueOnce([{
+    fetchEventsMock.mockResolvedValue([{
       id: 'google-event-restored',
       summary: 'Restored meeting',
       start: { dateTime: '2026-05-06T10:00:00.000Z' },
@@ -732,7 +732,7 @@ describe('useGoogleSync durable auth behavior', () => {
     });
   });
 
-  it('keeps cached calendars and events when Google omits a previously synced calendar', async () => {
+  it('removes cached Google calendars and events when Google omits a previously synced calendar', async () => {
     setGoogleCalendarState({
       accounts: [{
         id: 'acc-cache',
@@ -794,10 +794,9 @@ describe('useGoogleSync durable auth behavior', () => {
     });
 
     await waitFor(() => {
-      expect(readCalendarSources()).toHaveLength(2);
-      expect(readCalendarEvents()).toHaveLength(1);
-      expect(result.current.diagnostics.accounts['acc-cache']?.preservedSourceCount).toBe(1);
-      expect(result.current.diagnostics.accounts['acc-cache']?.preservedEventCount).toBe(1);
+      expect(readCalendarSources()).toHaveLength(1);
+      expect(readCalendarEvents()).toHaveLength(0);
+      expect(result.current.diagnostics.accounts['acc-cache']?.removedSourceCount).toBe(1);
     });
   });
 
@@ -848,6 +847,169 @@ describe('useGoogleSync durable auth behavior', () => {
       expect(readCalendarEvents()).toHaveLength(1);
       expect(readCalendarEvents()[0]?.googleEventId).toBe('evt-old');
       expect(result.current.diagnostics.accounts['acc-window']?.preservedEventCount).toBe(1);
+    });
+  });
+
+  it('removes stale Google events inside the fetched window after a successful refresh', async () => {
+    const start = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const end = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-window',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
+      }],
+      sources: [{
+        id: 'src-window',
+        accountId: 'acc-window',
+        name: 'Primary',
+        color: '#4f5bff',
+        visible: true,
+        googleCalendarId: 'alisa@example.com',
+      }],
+      events: [{
+        id: 'evt-stale',
+        sourceId: 'src-window',
+        title: 'Deleted upstream',
+        description: '',
+        start,
+        end,
+        allDay: false,
+        googleEventId: 'evt-stale',
+        googleCalendarId: 'alisa@example.com',
+      }],
+    });
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
+    await act(async () => {
+      await result.current!.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      expect(readCalendarEvents()).toHaveLength(0);
+      expect(result.current.diagnostics.accounts['acc-window']?.removedEventCount).toBe(1);
+    });
+  });
+
+  it('preserves stale cached Google events when an event fetch fails', async () => {
+    const start = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const end = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    fetchEventsMock.mockRejectedValueOnce(new GoogleApiError(500, 'server error', 'Google API 500: Server Error'));
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-failure',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
+      }],
+      sources: [{
+        id: 'src-failure',
+        accountId: 'acc-failure',
+        name: 'Primary',
+        color: '#4f5bff',
+        visible: true,
+        googleCalendarId: 'alisa@example.com',
+      }],
+      events: [{
+        id: 'evt-kept',
+        sourceId: 'src-failure',
+        title: 'Keep until next successful fetch',
+        description: '',
+        start,
+        end,
+        allDay: false,
+        googleEventId: 'evt-kept',
+        googleCalendarId: 'alisa@example.com',
+      }],
+    });
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
+    await act(async () => {
+      await result.current!.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      expect(readCalendarEvents()).toHaveLength(1);
+      expect(readCalendarEvents()[0]?.googleEventId).toBe('evt-kept');
+    });
+  });
+
+  it('skips stale source cleanup when any Google event fetch fails', async () => {
+    const start = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const end = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    fetchEventsMock.mockRejectedValueOnce(new GoogleApiError(500, 'server error', 'Google API 500: Server Error'));
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-partial-failure',
+        name: 'Personal',
+        email: 'alisa@example.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
+      }],
+      sources: [{
+        id: 'src-active',
+        accountId: 'acc-partial-failure',
+        name: 'Primary',
+        color: '#4f5bff',
+        visible: true,
+        googleCalendarId: 'alisa@example.com',
+      }, {
+        id: 'src-stale',
+        accountId: 'acc-partial-failure',
+        name: 'Removed upstream',
+        color: '#777777',
+        visible: true,
+        googleCalendarId: 'removed-upstream',
+      }],
+      events: [{
+        id: 'evt-stale-source',
+        sourceId: 'src-stale',
+        title: 'Keep stale source event until full refresh',
+        description: '',
+        start,
+        end,
+        allDay: false,
+        googleEventId: 'evt-stale-source',
+        googleCalendarId: 'removed-upstream',
+      }],
+    });
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
+    await act(async () => {
+      await result.current!.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      expect(readCalendarSources().map(source => source.id)).toEqual(expect.arrayContaining(['src-active', 'src-stale']));
+      expect(readCalendarEvents().map(event => event.id)).toContain('evt-stale-source');
+      expect(readGoogleAccounts()[0]?.syncError).toContain('Stale cache cleanup was skipped');
     });
   });
 });

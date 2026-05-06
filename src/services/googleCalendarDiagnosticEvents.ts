@@ -93,6 +93,8 @@ export interface GoogleCalendarDiagnosticEvent {
   eventCount?: number;
   preservedSourceCount?: number;
   preservedEventCount?: number;
+  removedSourceCount?: number;
+  removedEventCount?: number;
   skippedDestructiveRemovals?: boolean;
 }
 

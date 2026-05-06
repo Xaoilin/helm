@@ -345,7 +345,9 @@ describe('Persistence layer in authenticated mode', () => {
     expect(candidates[0].summary).toContain('Knowledge: 1 changed field');
   });
 
-  it('keeps calendar event time drift as a user data conflict', async () => {
+  it('cleans Google calendar drift instead of asking for a database/device choice', async () => {
+    const refreshSpy = vi.fn();
+    window.addEventListener('helm:calendar-sync-requested', refreshSpy);
     localStorage.setItem('helm:calendarEvents', JSON.stringify([{
       id: 'event-1',
       sourceId: 'source-1',
@@ -375,13 +377,20 @@ describe('Persistence layer in authenticated mode', () => {
 
     const candidates = await listSyncDriftCandidates();
 
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0]).toMatchObject({
-      groupId: 'calendar',
-      requiresUserChoice: true,
-      userChoiceCount: 2,
-    });
-    expect(candidates[0].diff.changed.map(item => item.fieldLabel)).toEqual(['End time', 'Start time']);
+    expect(candidates).toEqual([]);
+    expect(localStorage.getItem('helm:calendarEvents')).toBeNull();
+    expect(refreshSpy).toHaveBeenCalled();
+    window.removeEventListener('helm:calendar-sync-requested', refreshSpy);
+  });
+
+  it('clears unreadable calendar cache without surfacing a user conflict', async () => {
+    localStorage.setItem('helm:calendarEvents', '{not json');
+    loadRemoteMock.mockResolvedValue(null);
+
+    const candidates = await listSyncDriftCandidates();
+
+    expect(candidates).toEqual([]);
+    expect(localStorage.getItem('helm:calendarEvents')).toBeNull();
   });
 
   it('surfaces unreadable local JSON without allowing device overwrite', async () => {

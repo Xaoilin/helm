@@ -172,6 +172,8 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
           const idx = newEvents.findIndex(x => x.id === evt.id);
           if (idx >= 0) {
             newEvents[idx] = { ...newEvents[idx], ...evt } as CalendarEvent;
+          } else {
+            newEvents.push(evt as CalendarEvent);
           }
         } else {
           newEvents.push({ ...evt, id: uuid() } as CalendarEvent);
