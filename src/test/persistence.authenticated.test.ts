@@ -202,6 +202,121 @@ describe('Persistence layer in authenticated mode', () => {
     expect(localStorage.getItem('helm:knowledgeEntries')).toBeNull();
   });
 
+  it('clears metadata-only integration drift without prompting', async () => {
+    localStorage.setItem('helm:integrations', JSON.stringify([
+      {
+        id: 'int-google',
+        icon: 'calendar',
+        name: 'Google Calendar',
+        provider: 'google',
+        status: 'connected',
+        description: 'Sync Google Calendar events',
+        configuredAt: '2026-04-26T18:55:19.267Z',
+      },
+    ]));
+    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
+      key === 'integrations'
+        ? {
+          value: [{
+            id: 'int-google',
+            icon: 'calendar',
+            name: 'Google Calendar',
+            provider: 'google',
+            status: 'connected',
+            description: 'Sync Google Calendar events',
+            configuredAt: '2026-05-06T10:31:06.224Z',
+          }],
+          updatedAt: '2026-05-06T10:31:06.224Z',
+        }
+        : null
+    ));
+
+    const candidates = await listSyncDriftCandidates();
+
+    expect(candidates).toEqual([]);
+    expect(localStorage.getItem('helm:integrations')).toBeNull();
+    expect(saveRemoteMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores calendar account sync and auth metadata drift', async () => {
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'account-1',
+      name: 'Google',
+      email: 'sync@example.com',
+      provider: 'google',
+      isPrimary: true,
+      connected: false,
+      mocked: false,
+      lastSyncTime: '2026-04-26T18:55:19.267Z',
+      lastAuthError: 'Expired token',
+    }]));
+    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
+      key === 'calendarAccounts'
+        ? {
+          value: [{
+            id: 'account-1',
+            name: 'Google',
+            email: 'sync@example.com',
+            provider: 'google',
+            isPrimary: true,
+            connected: true,
+            mocked: false,
+            lastSyncTime: '2026-05-06T10:31:06.224Z',
+            lastAuthError: null,
+          }],
+          updatedAt: '2026-05-06T10:31:06.224Z',
+        }
+        : null
+    ));
+
+    const candidates = await listSyncDriftCandidates();
+
+    expect(candidates).toEqual([]);
+    expect(localStorage.getItem('helm:calendarAccounts')).toBeNull();
+  });
+
+  it('clears identical local keys even when a grouped database-only key exists', async () => {
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'account-1',
+      name: 'Google',
+      email: 'sync@example.com',
+      provider: 'google',
+      isPrimary: true,
+    }]));
+    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => {
+      if (key === 'calendarAccounts') {
+        return {
+          value: [{
+            id: 'account-1',
+            name: 'Google',
+            email: 'sync@example.com',
+            provider: 'google',
+            isPrimary: true,
+          }],
+          updatedAt: '2026-05-06T10:31:06.224Z',
+        };
+      }
+      if (key === 'calendarSources') {
+        return {
+          value: [{
+            id: 'source-1',
+            accountId: 'account-1',
+            name: 'Primary calendar',
+            visible: true,
+          }],
+          updatedAt: '2026-05-06T10:31:06.224Z',
+        };
+      }
+      return null;
+    });
+
+    const candidates = await listSyncDriftCandidates();
+
+    expect(candidates).toEqual([]);
+    expect(localStorage.getItem('helm:calendarAccounts')).toBeNull();
+    expect(saveRemoteMock).not.toHaveBeenCalled();
+  });
+
   it('returns a grouped conflict when database and device values differ', async () => {
     localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'note-1', title: 'Local note' }]));
     loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
@@ -222,7 +337,51 @@ describe('Persistence layer in authenticated mode', () => {
     expect(candidates[0].diff.changed[0]).toMatchObject({
       key: 'knowledgeEntries',
       label: 'Local note',
+      fieldLabel: 'Title',
+      localValue: '"Local note"',
+      remoteValue: '"Remote note"',
+      impact: 'user_data',
     });
+    expect(candidates[0].summary).toContain('Knowledge: 1 changed field');
+  });
+
+  it('keeps calendar event time drift as a user data conflict', async () => {
+    localStorage.setItem('helm:calendarEvents', JSON.stringify([{
+      id: 'event-1',
+      sourceId: 'source-1',
+      title: 'Planning',
+      description: '',
+      start: '2026-05-06T11:00:00.000Z',
+      end: '2026-05-06T12:00:00.000Z',
+      allDay: false,
+      pendingSync: 'update',
+    }]));
+    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
+      key === 'calendarEvents'
+        ? {
+          value: [{
+            id: 'event-1',
+            sourceId: 'source-1',
+            title: 'Planning',
+            description: '',
+            start: '2026-05-06T10:00:00.000Z',
+            end: '2026-05-06T11:00:00.000Z',
+            allDay: false,
+          }],
+          updatedAt: '2026-05-06T10:31:06.224Z',
+        }
+        : null
+    ));
+
+    const candidates = await listSyncDriftCandidates();
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      groupId: 'calendar',
+      requiresUserChoice: true,
+      userChoiceCount: 2,
+    });
+    expect(candidates[0].diff.changed.map(item => item.fieldLabel)).toEqual(['End time', 'Start time']);
   });
 
   it('surfaces unreadable local JSON without allowing device overwrite', async () => {

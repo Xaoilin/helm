@@ -97,12 +97,96 @@ test.describe('Settings', () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('heading', { name: 'Knowledge' })).toBeVisible();
     await expect(dialog.getByLabel(/Keep database/i)).toBeChecked();
-    await expect(dialog.getByText('Device note', { exact: true })).toBeVisible();
-    await dialog.getByText('Exact JSON').click();
-    await expect(dialog.getByText('Database note')).toBeVisible();
+    await expect(dialog.locator('.sync-drift-diff-list')).toContainText('Device note');
+    await expect(dialog.getByText(/Title: database/)).toBeVisible();
+    await dialog.getByText('Highlighted JSON diff').click();
+    await expect(dialog.locator('.sync-drift-json-diff')).toContainText('"title": "Database note"');
+    await expect(dialog.locator('.sync-drift-json-diff-row.database')).not.toHaveCount(0);
+    await expect(dialog.locator('.sync-drift-json-diff-row.device')).not.toHaveCount(0);
     await page.screenshot({
-      path: 'test-results/manual-settings-sync-drift-modal-v0263.png',
+      path: 'test-results/manual-settings-sync-drift-modal-v0264.png',
       fullPage: false,
     });
+  });
+
+  test('should not open drift review for metadata-only integration timestamps', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.clear();
+      localStorage.setItem('helm:settings', JSON.stringify({
+        theme: 'dark',
+        telemetry: false,
+        supabaseUrl: 'https://helm.test.supabase.co',
+        supabaseAnonKey: 'helm-test-anon-key',
+      }));
+      localStorage.setItem('helm:integrations', JSON.stringify([
+        {
+          id: 'int-google',
+          icon: 'calendar',
+          name: 'Google Calendar',
+          status: 'connected',
+          provider: 'google',
+          description: 'Sync Google Calendar events',
+          configuredAt: '2026-04-26T18:55:19.267Z',
+        },
+      ]));
+      localStorage.setItem('sb-helm-auth-token', JSON.stringify({
+        access_token: 'test-access-token',
+        token_type: 'bearer',
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        refresh_token: 'test-refresh-token',
+        user: {
+          id: 'user-sync-metadata',
+          email: 'sync@example.com',
+          app_metadata: { provider: 'google' },
+          user_metadata: {},
+          aud: 'authenticated',
+          role: 'authenticated',
+        },
+      }));
+    });
+
+    await page.route('https://helm.test.supabase.co/rest/v1/kv_store**', async route => {
+      const url = route.request().url();
+      const method = route.request().method();
+      if (method !== 'GET') {
+        await route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
+        return;
+      }
+
+      if (url.includes('key=eq.integrations')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            value: [{
+              id: 'int-google',
+              icon: 'calendar',
+              name: 'Google Calendar',
+              status: 'connected',
+              provider: 'google',
+              description: 'Sync Google Calendar events',
+              configuredAt: '2026-05-06T10:31:06.224Z',
+            }],
+            updated_at: '2026-05-06T10:31:06.224Z',
+          }),
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 406,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'No rows found' }),
+      });
+    });
+
+    await page.goto('/');
+    await page.waitForSelector('.sidebar');
+    await page.getByRole('button', { name: 'Navigate to Settings' }).click();
+
+    await expect(page.locator('.sync-status-title')).toHaveText('Synced with Supabase');
+    await expect(page.getByRole('dialog', { name: 'Data differences need review' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Review differences' })).toHaveCount(0);
   });
 });

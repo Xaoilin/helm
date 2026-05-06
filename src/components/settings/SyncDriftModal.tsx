@@ -33,6 +33,47 @@ function formatSource(source: string): string {
   }
 }
 
+interface JsonDiffRow {
+  databaseLine: string | null;
+  deviceLine: string | null;
+  kind: 'same' | 'database' | 'device';
+}
+
+function buildJsonDiffRows(databaseJson: string, deviceJson: string): JsonDiffRow[] {
+  const databaseLines = databaseJson.split('\n');
+  const deviceLines = deviceJson.split('\n');
+  const rows = databaseLines.length;
+  const columns = deviceLines.length;
+  const lcs: number[][] = Array.from({ length: rows + 1 }, () => Array(columns + 1).fill(0));
+
+  for (let row = rows - 1; row >= 0; row -= 1) {
+    for (let column = columns - 1; column >= 0; column -= 1) {
+      lcs[row][column] = databaseLines[row] === deviceLines[column]
+        ? lcs[row + 1][column + 1] + 1
+        : Math.max(lcs[row + 1][column], lcs[row][column + 1]);
+    }
+  }
+
+  const diffRows: JsonDiffRow[] = [];
+  let row = 0;
+  let column = 0;
+  while (row < rows || column < columns) {
+    if (row < rows && column < columns && databaseLines[row] === deviceLines[column]) {
+      diffRows.push({ databaseLine: databaseLines[row], deviceLine: deviceLines[column], kind: 'same' });
+      row += 1;
+      column += 1;
+    } else if (column >= columns || (row < rows && lcs[row + 1][column] >= lcs[row][column + 1])) {
+      diffRows.push({ databaseLine: databaseLines[row], deviceLine: null, kind: 'database' });
+      row += 1;
+    } else {
+      diffRows.push({ databaseLine: null, deviceLine: deviceLines[column], kind: 'device' });
+      column += 1;
+    }
+  }
+
+  return diffRows;
+}
+
 function itemSummary(items: SyncDriftDiffItem[], empty: string): string {
   if (items.length === 0) return empty;
   return `${items.length} ${items.length === 1 ? 'item' : 'items'}`;
@@ -54,11 +95,38 @@ function DiffList({ title, items, empty }: { title: string; items: SyncDriftDiff
             <li key={`${item.key}:${item.id}`}>
               <span>{item.label}</span>
               <small>{item.keyLabel} - {item.detail}</small>
+              {(item.remoteValue !== null || item.localValue !== null) && (
+                <div className="sync-drift-field-values">
+                  {item.remoteValue !== null && <em>Database: {item.remoteValue}</em>}
+                  {item.localValue !== null && <em>Device: {item.localValue}</em>}
+                </div>
+              )}
             </li>
           ))}
           {remaining > 0 && <li><span>+{remaining} more</span></li>}
         </ul>
       )}
+    </div>
+  );
+}
+
+function JsonDiffViewer({ databaseJson, deviceJson }: { databaseJson: string; deviceJson: string }) {
+  const rows = buildJsonDiffRows(databaseJson, deviceJson);
+
+  return (
+    <div className="sync-drift-json-diff" aria-label="Highlighted JSON differences">
+      <div className="sync-drift-json-diff-header">
+        <span>Database</span>
+        <span>This device</span>
+      </div>
+      <div className="sync-drift-json-diff-body">
+        {rows.map((row, index) => (
+          <div className={`sync-drift-json-diff-row ${row.kind}`} key={`${index}:${row.kind}`}>
+            <code>{row.databaseLine ?? ''}</code>
+            <code>{row.deviceLine ?? ''}</code>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -72,19 +140,20 @@ export default function SyncDriftModal({
 }: SyncDriftModalProps) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [choices, setChoices] = useState<Record<string, SyncResolutionChoice>>({});
+  const actionableCandidates = useMemo(
+    () => candidates.filter(candidate => candidate.requiresUserChoice),
+    [candidates],
+  );
 
   const activeCandidate = useMemo(
-    () => candidates.find(candidate => candidate.groupId === selectedGroupId) || candidates[0] || null,
-    [candidates, selectedGroupId],
+    () => actionableCandidates.find(candidate => candidate.groupId === selectedGroupId) || actionableCandidates[0] || null,
+    [actionableCandidates, selectedGroupId],
   );
 
   if (!open || !activeCandidate) return null;
 
   const activeChoice = choices[activeCandidate.groupId] || activeCandidate.recommendedChoice;
   const resolving = resolvingGroupId === activeCandidate.groupId;
-  const differenceCount = activeCandidate.diff.localOnly.length
-    + activeCandidate.diff.remoteOnly.length
-    + activeCandidate.diff.changed.length;
 
   return (
     <div className="modal-overlay sync-drift-overlay" role="presentation">
@@ -93,7 +162,7 @@ export default function SyncDriftModal({
           <div>
             <h2 id="sync-drift-title">Data differences need review</h2>
             <p>
-              Supabase is the signed-in source of truth. These local device copies are different enough that Lina needs your choice before clearing or replacing anything.
+              Only user data differences are shown here. System metadata follows Supabase automatically so Lina does not ask you about cache timestamps or connection bookkeeping.
             </p>
           </div>
           <button className="btn-icon" type="button" onClick={onClose} aria-label="Close data differences">
@@ -103,7 +172,7 @@ export default function SyncDriftModal({
 
         <div className="sync-drift-layout">
           <div className="sync-drift-groups" aria-label="Data groups with differences">
-            {candidates.map(candidate => {
+            {actionableCandidates.map(candidate => {
               const selected = candidate.groupId === activeCandidate.groupId;
               const count = candidate.diff.localOnly.length + candidate.diff.remoteOnly.length + candidate.diff.changed.length;
               return (
@@ -114,7 +183,11 @@ export default function SyncDriftModal({
                   onClick={() => setSelectedGroupId(candidate.groupId)}
                 >
                   <span>{candidate.label}</span>
-                  <small>{candidate.kind === 'unreadable' ? 'Unreadable local data' : `${count} differences`}</small>
+                  <small>
+                    {candidate.kind === 'unreadable'
+                      ? 'Unreadable local data'
+                      : `${candidate.userChoiceCount || count} ${candidate.userChoiceCount === 1 ? 'difference' : 'differences'} need your choice`}
+                  </small>
                 </button>
               );
             })}
@@ -127,8 +200,15 @@ export default function SyncDriftModal({
                 <p>{activeCandidate.description}</p>
               </div>
               <span className={`sync-drift-pill ${activeCandidate.kind}`}>
-                {activeCandidate.kind === 'unreadable' ? 'Needs review' : `${differenceCount} differences`}
+                {activeCandidate.kind === 'unreadable' ? 'Needs review' : 'Needs your choice'}
               </span>
+            </div>
+
+            <div className="sync-drift-readable-summary">
+              <strong>{activeCandidate.summary}</strong>
+              {activeCandidate.autoResolvedCount > 0 && (
+                <span>{activeCandidate.autoResolvedCount} system {activeCandidate.autoResolvedCount === 1 ? 'difference' : 'differences'} will be cleaned up with Supabase.</span>
+              )}
             </div>
 
             <div className="sync-drift-choice">
@@ -171,23 +251,14 @@ export default function SyncDriftModal({
             </div>
 
             <div className="sync-drift-diff-grid">
-              <DiffList title="Only on this device" items={activeCandidate.diff.localOnly} empty="No local-only items" />
-              <DiffList title="Only in database" items={activeCandidate.diff.remoteOnly} empty="No database-only items" />
-              <DiffList title="Changed in both" items={activeCandidate.diff.changed} empty="No changed items" />
+              <DiffList title="Only on this device" items={activeCandidate.diff.localOnly} empty="No device-only user data" />
+              <DiffList title="Only in database" items={activeCandidate.diff.remoteOnly} empty="No database-only user data" />
+              <DiffList title="Changed content" items={activeCandidate.diff.changed} empty="No changed user data" />
             </div>
 
             <details className="sync-drift-json">
-              <summary>Exact JSON</summary>
-              <div className="sync-drift-json-grid">
-                <div>
-                  <h4>Database</h4>
-                  <pre>{activeCandidate.remote.redactedJson}</pre>
-                </div>
-                <div>
-                  <h4>This device</h4>
-                  <pre>{activeCandidate.local.redactedJson}</pre>
-                </div>
-              </div>
+              <summary>Highlighted JSON diff</summary>
+              <JsonDiffViewer databaseJson={activeCandidate.remote.redactedJson} deviceJson={activeCandidate.local.redactedJson} />
             </details>
           </div>
         </div>

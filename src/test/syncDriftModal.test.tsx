@@ -13,6 +13,10 @@ function makeCandidate(overrides: Partial<SyncDriftCandidate> = {}): SyncDriftCa
     recommendedChoice: 'keep_database',
     conflictHash: 'abc123',
     canUseDevice: true,
+    userChoiceCount: 1,
+    autoResolvedCount: 0,
+    hasOnlySystemMetadata: false,
+    summary: 'Knowledge: 1 changed field needs your choice.',
     keys: [],
     local: {
       hasValue: true,
@@ -36,7 +40,12 @@ function makeCandidate(overrides: Partial<SyncDriftCandidate> = {}): SyncDriftCa
         keyLabel: 'Knowledge entries',
         id: 'note-1',
         label: 'Local note',
-        detail: 'Different fields in both places.',
+        detail: 'Title: database "Remote note", device "Local note".',
+        fieldPath: 'knowledgeEntries.note-1.title',
+        fieldLabel: 'Title',
+        localValue: '"Local note"',
+        remoteValue: '"Remote note"',
+        impact: 'user_data',
       }],
       unchangedCount: 0,
     },
@@ -59,6 +68,7 @@ describe('SyncDriftModal', () => {
     expect(screen.getByLabelText(/Keep database/i)).toBeChecked();
     expect(screen.getByLabelText(/Use this device/i)).not.toBeChecked();
     expect(screen.getByText('Local note')).toBeInTheDocument();
+    expect(screen.getByText(/1 changed field needs your choice/i)).toBeInTheDocument();
   });
 
   it('allows switching to this device and resolves the active group', () => {
@@ -80,8 +90,8 @@ describe('SyncDriftModal', () => {
     expect(onResolve).toHaveBeenCalledWith(candidate, 'use_device');
   });
 
-  it('renders expandable exact JSON for both sides', () => {
-    render(
+  it('renders expandable highlighted JSON diff for both sides', () => {
+    const { container } = render(
       <SyncDriftModal
         candidates={[makeCandidate()]}
         open
@@ -91,12 +101,14 @@ describe('SyncDriftModal', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('Exact JSON'));
+    fireEvent.click(screen.getByText('Highlighted JSON diff'));
 
-    const jsonRegion = screen.getByText('Exact JSON').closest('details');
+    const jsonRegion = screen.getByText('Highlighted JSON diff').closest('details');
     expect(jsonRegion).not.toBeNull();
     expect(within(jsonRegion as HTMLElement).getByText(/Remote note/)).toBeInTheDocument();
     expect(within(jsonRegion as HTMLElement).getByText(/Local note/)).toBeInTheDocument();
+    expect(container.querySelector('.sync-drift-json-diff-row.database')).not.toBeNull();
+    expect(container.querySelector('.sync-drift-json-diff-row.device')).not.toBeNull();
   });
 
   it('prevents device overwrite when local JSON is unreadable', () => {
@@ -114,6 +126,11 @@ describe('SyncDriftModal', () => {
               id: 'settings',
               label: 'Settings',
               detail: 'This device has unreadable JSON.',
+              fieldPath: 'settings',
+              fieldLabel: 'Settings',
+              localValue: null,
+              remoteValue: null,
+              impact: 'unreadable',
             }],
             unchangedCount: 0,
           },
@@ -126,5 +143,27 @@ describe('SyncDriftModal', () => {
     );
 
     expect(screen.getByLabelText(/Use this device/i)).toBeDisabled();
+  });
+
+  it('does not render metadata-only candidates that do not need a user choice', () => {
+    render(
+      <SyncDriftModal
+        candidates={[makeCandidate({
+          groupId: 'integrations',
+          label: 'Integrations',
+          requiresUserChoice: false,
+          userChoiceCount: 0,
+          autoResolvedCount: 1,
+          hasOnlySystemMetadata: true,
+          summary: 'Integrations only has system metadata differences. Supabase will be kept automatically.',
+        })]}
+        open
+        resolvingGroupId={null}
+        onClose={vi.fn()}
+        onResolve={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
