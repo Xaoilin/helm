@@ -153,6 +153,8 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
           const idx = newSources.findIndex(x => x.id === src.id);
           if (idx >= 0) {
             newSources[idx] = { ...newSources[idx], ...src } as CalendarSource;
+          } else {
+            newSources.push(src as CalendarSource);
           }
         } else {
           newSources.push({ ...src, id: uuid() } as CalendarSource);
