@@ -67,9 +67,18 @@ test.describe('Navigation', () => {
     await page.waitForSelector('.sidebar');
 
     await expect.poll(() => releaseChecks >= 2).toBe(true);
-    await expect.poll(async () => page.evaluate(
-      (key) => sessionStorage.getItem(key),
-      `helm:release-refresh:${publishedVersion}`,
-    )).toBe('done');
+    await expect.poll(async () => {
+      try {
+        return await page.evaluate(
+          (key) => sessionStorage.getItem(key),
+          `helm:release-refresh:${publishedVersion}`,
+        );
+      } catch (error) {
+        if (error instanceof Error && /Execution context was destroyed|navigation/i.test(error.message)) {
+          return null;
+        }
+        throw error;
+      }
+    }).toBe('done');
   });
 });

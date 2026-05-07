@@ -129,6 +129,53 @@ describe('Persistence layer in authenticated mode', () => {
     expect(queueRemoteWriteMock).not.toHaveBeenCalled();
   });
 
+  it('does not suppress the first real write when it differs from the loaded database value', async () => {
+    loadRemoteMock.mockResolvedValueOnce({
+      value: [{ id: 'event-cached', title: 'Cached meeting' }],
+      updatedAt: '2026-05-07T12:00:00.000Z',
+    });
+
+    await loadStore('calendarEvents');
+    await saveStore('calendarEvents', [
+      { id: 'event-cached', title: 'Cached meeting' },
+      { id: 'event-google', title: 'Fetched from Google' },
+    ]);
+
+    expect(queueRemoteWriteMock).toHaveBeenCalledWith(
+      'helm',
+      'calendarEvents',
+      [
+        { id: 'event-cached', title: 'Cached meeting' },
+        { id: 'event-google', title: 'Fetched from Google' },
+      ],
+      expect.objectContaining({
+        updatedAt: expect.any(String),
+        onSettled: expect.any(Function),
+      }),
+    );
+  });
+
+  it('does not suppress a non-empty array write after a remote miss', async () => {
+    loadRemoteMock.mockResolvedValueOnce(null);
+
+    await loadStore('calendarEvents');
+    await saveStore('calendarEvents', [
+      { id: 'event-google', title: 'Fetched from Google' },
+    ]);
+
+    expect(queueRemoteWriteMock).toHaveBeenCalledWith(
+      'helm',
+      'calendarEvents',
+      [
+        { id: 'event-google', title: 'Fetched from Google' },
+      ],
+      expect.objectContaining({
+        updatedAt: expect.any(String),
+        onSettled: expect.any(Function),
+      }),
+    );
+  });
+
   it('flushes queued remote writes on beforeunload after an authenticated save', async () => {
     await saveStore('financeAccounts', [{ id: 'account-1', name: 'Database account' }]);
 

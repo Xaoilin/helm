@@ -46,7 +46,7 @@ let lastCalendarSyncRequestReason: string | null = null;
 const persistenceHealthSubscribers = new Set<(snapshot: PersistenceHealthSnapshot) => void>();
 const storeChangeSubscribers = new Set<(change: RemoteStoreChange) => void>();
 const lastKnownRemoteJson = new Map<string, string>();
-const suppressNextAuthenticatedSave = new Set<string>();
+const suppressNextAuthenticatedSaveJson = new Map<string, string | null>();
 const remoteReadFailedKeys = new Map<string, string>();
 
 interface LocalCacheMeta {
@@ -247,6 +247,13 @@ function writeLocalCacheMeta(key: string, meta: LocalCacheMeta): void {
 function removeLocalCacheValue(key: string): void {
   localStorage.removeItem(getDataKey(key));
   localStorage.removeItem(getMetaKey(key));
+}
+
+function isInitialEmptyStoreValue(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'object') return true;
+  return false;
 }
 
 async function readTauriRaw(key: string): Promise<string | null> {
@@ -1587,17 +1594,19 @@ export async function loadStore<T>(key: string): Promise<T | null> {
   if (isSupabaseReady() && isAuthenticated()) {
     try {
       const remote = await loadRemote<T>(NAMESPACE, key);
-      suppressNextAuthenticatedSave.add(key);
       rememberRemoteRead(key, null);
       if (remote) {
-        lastKnownRemoteJson.set(key, JSON.stringify(remote.value));
+        const remoteJson = JSON.stringify(remote.value);
+        suppressNextAuthenticatedSaveJson.set(key, remoteJson);
+        lastKnownRemoteJson.set(key, remoteJson);
         return remote.value;
       }
+      suppressNextAuthenticatedSaveJson.set(key, null);
       lastKnownRemoteJson.delete(key);
       return null;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      suppressNextAuthenticatedSave.add(key);
+      suppressNextAuthenticatedSaveJson.set(key, null);
       rememberRemoteRead(key, message);
       logWarn('Persistence', `Supabase load failed for ${key}: ${message}`);
       return null;
@@ -1635,14 +1644,18 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
 
   if (authenticated) {
     if (lastKnownRemoteJson.get(key) === json) {
-      suppressNextAuthenticatedSave.delete(key);
+      suppressNextAuthenticatedSaveJson.delete(key);
       return;
     }
 
-    if (suppressNextAuthenticatedSave.has(key)) {
-      suppressNextAuthenticatedSave.delete(key);
-      rememberSuppressedInitialWrite(key);
-      return;
+    if (suppressNextAuthenticatedSaveJson.has(key)) {
+      const loadedJson = suppressNextAuthenticatedSaveJson.get(key);
+      if (loadedJson === json || (loadedJson === null && isInitialEmptyStoreValue(value))) {
+        suppressNextAuthenticatedSaveJson.delete(key);
+        rememberSuppressedInitialWrite(key);
+        return;
+      }
+      suppressNextAuthenticatedSaveJson.delete(key);
     }
 
     const readFailure = remoteReadFailedKeys.get(key);

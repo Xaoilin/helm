@@ -72,6 +72,10 @@ export interface GoogleSyncAccountDiagnostic {
   outcome: GoogleSyncDiagnosticOutcome;
   message: string;
   primaryCalendarEmail?: string;
+  fetchedEventCount?: number;
+  upsertedEventCount?: number;
+  cachedEventCount?: number;
+  visibleCachedEventCount?: number;
   preservedSourceCount?: number;
   preservedEventCount?: number;
   removedSourceCount?: number;
@@ -174,12 +178,26 @@ function createOwnershipMismatchDiagnostic(
 }
 
 function createSuccessMessage(
+  fetchedEventCount: number,
+  upsertedEventCount: number,
+  cachedEventCount: number,
+  visibleCachedEventCount: number,
   preservedSourceCount: number,
   preservedEventCount: number,
   removedSourceCount: number,
   removedEventCount: number,
 ): string {
-  const parts: string[] = ['mirrored Google Calendar into the local cache'];
+  const parts: string[] = [
+    `mirrored ${fetchedEventCount} Google event${fetchedEventCount === 1 ? '' : 's'} into the local cache`,
+  ];
+
+  if (upsertedEventCount > 0) {
+    parts.push(`added or updated ${upsertedEventCount} event${upsertedEventCount === 1 ? '' : 's'}`);
+  }
+  parts.push(`cache now has ${cachedEventCount} Google event${cachedEventCount === 1 ? '' : 's'}`);
+  if (visibleCachedEventCount !== cachedEventCount) {
+    parts.push(`${visibleCachedEventCount} visible`);
+  }
 
   if (removedSourceCount > 0) {
     parts.push(`removed ${removedSourceCount} stale calendar${removedSourceCount === 1 ? '' : 's'}`);
@@ -195,6 +213,39 @@ function createSuccessMessage(
   }
 
   return `Passive sync ${parts.join(', ')}.`;
+}
+
+function applyCalendarEventUpserts(
+  existingEvents: CalendarEvent[],
+  events: Array<Partial<CalendarEvent> & {
+    id?: string;
+    sourceId: string;
+    title: string;
+    description: string;
+    start: string;
+    end: string;
+    allDay: boolean;
+  }>,
+): CalendarEvent[] {
+  if (events.length === 0) return existingEvents;
+
+  const nextEvents = [...existingEvents];
+  for (const event of events) {
+    if (!event.id) continue;
+    const index = nextEvents.findIndex(candidate => candidate.id === event.id);
+    if (index >= 0) {
+      nextEvents[index] = { ...nextEvents[index], ...event } as CalendarEvent;
+    } else {
+      nextEvents.push(event as CalendarEvent);
+    }
+  }
+  return nextEvents;
+}
+
+function removeCalendarEventsById(existingEvents: CalendarEvent[], ids: string[]): CalendarEvent[] {
+  if (ids.length === 0) return existingEvents;
+  const idSet = new Set(ids);
+  return existingEvents.filter(event => !idSet.has(event.id));
 }
 
 function defaultServerReadiness(): GoogleCalendarBackendReadiness {
@@ -311,6 +362,10 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
       removedSourceCount: entry.removedSourceCount,
       removedEventCount: entry.removedEventCount,
       skippedDestructiveRemovals: entry.skippedDestructiveRemovals,
+      fetchedEventCount: entry.fetchedEventCount,
+      upsertedEventCount: entry.upsertedEventCount,
+      cachedEventCount: entry.cachedEventCount,
+      visibleCachedEventCount: entry.visibleCachedEventCount,
     });
   }, []);
 
@@ -742,10 +797,13 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
           .map(event => `${event.googleCalendarId}:${event.googleEventId}`),
       );
 
-      let preservedEventCount = currentApp.calendarEvents.filter(event => preservedSourceIds.has(event.sourceId)).length;
+      let projectedCalendarEvents = [...currentApp.calendarEvents];
+      let fetchedEventCount = 0;
+      let upsertedEventCount = 0;
+      let preservedEventCount = projectedCalendarEvents.filter(event => preservedSourceIds.has(event.sourceId)).length;
       let removedSourceCount = 0;
       let removedEventCount = 0;
-      const staleSourceEventCount = currentApp.calendarEvents.filter(event => staleSourceIds.has(event.sourceId)).length;
+      const staleSourceEventCount = projectedCalendarEvents.filter(event => staleSourceIds.has(event.sourceId)).length;
       const eventIdsToRemoveAfterSuccessfulFetch: string[] = [];
       let skippedDestructiveCleanupReason: string | null = null;
 
@@ -789,9 +847,10 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
             message: `Fetched ${googleEvents.length} Google event${googleEvents.length === 1 ? '' : 's'} for calendar ${source.googleCalendarId}.`,
             eventCount: googleEvents.length,
           });
+          fetchedEventCount += googleEvents.length;
           const mappedEvents = googleEvents.map(event => googleEventToLocal(event, source.id, source.googleCalendarId!));
 
-          const existingEvents = currentApp.calendarEvents.filter(event => event.sourceId === source.id);
+          const existingEvents = projectedCalendarEvents.filter(event => event.sourceId === source.id);
           const existingByGoogleEventId = new Map(
             existingEvents
               .filter(event => event.googleEventId)
@@ -840,6 +899,8 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
 
           if (eventsToUpsert.length > 0) {
             currentApp.bulkUpsertCalendarEvents(eventsToUpsert);
+            projectedCalendarEvents = applyCalendarEventUpserts(projectedCalendarEvents, eventsToUpsert);
+            upsertedEventCount += eventsToUpsert.length;
           }
           if (eventsToRemove.length > 0) {
             eventIdsToRemoveAfterSuccessfulFetch.push(...eventsToRemove);
@@ -874,10 +935,19 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
       }
       removedSourceCount = staleSources.length;
       removedEventCount = staleSourceEventCount;
+      if (staleSourceIds.size > 0) {
+        projectedCalendarEvents = projectedCalendarEvents.filter(event => !staleSourceIds.has(event.sourceId));
+      }
       if (eventIdsToRemoveAfterSuccessfulFetch.length > 0) {
         currentApp.bulkRemoveCalendarEvents(eventIdsToRemoveAfterSuccessfulFetch);
+        projectedCalendarEvents = removeCalendarEventsById(projectedCalendarEvents, eventIdsToRemoveAfterSuccessfulFetch);
         removedEventCount += eventIdsToRemoveAfterSuccessfulFetch.length;
       }
+
+      const syncableSourceIds = new Set(syncableSources.map(source => source.id));
+      const visibleSyncableSourceIds = new Set(syncableSources.filter(source => source.visible).map(source => source.id));
+      const cachedEventCount = projectedCalendarEvents.filter(event => syncableSourceIds.has(event.sourceId)).length;
+      const visibleCachedEventCount = projectedCalendarEvents.filter(event => visibleSyncableSourceIds.has(event.sourceId)).length;
 
       const now = new Date().toISOString();
       currentApp.updateCalendarAccount(accountId, {
@@ -911,8 +981,21 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
         checkedAt: now,
         triggerSource,
         outcome: 'success',
-        message: createSuccessMessage(preservedSourceCount, preservedEventCount, removedSourceCount, removedEventCount),
+        message: createSuccessMessage(
+          fetchedEventCount,
+          upsertedEventCount,
+          cachedEventCount,
+          visibleCachedEventCount,
+          preservedSourceCount,
+          preservedEventCount,
+          removedSourceCount,
+          removedEventCount,
+        ),
         primaryCalendarEmail: ownership.primaryEmail,
+        fetchedEventCount,
+        upsertedEventCount,
+        cachedEventCount,
+        visibleCachedEventCount,
         preservedSourceCount,
         preservedEventCount,
         removedSourceCount,
