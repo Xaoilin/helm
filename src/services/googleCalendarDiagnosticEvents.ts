@@ -91,6 +91,10 @@ export interface GoogleCalendarDiagnosticEvent {
   calendarId?: string;
   calendarCount?: number;
   eventCount?: number;
+  fetchedEventCount?: number;
+  upsertedEventCount?: number;
+  cachedEventCount?: number;
+  visibleCachedEventCount?: number;
   preservedSourceCount?: number;
   preservedEventCount?: number;
   removedSourceCount?: number;

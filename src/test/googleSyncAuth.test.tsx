@@ -665,6 +665,12 @@ describe('useGoogleSync durable auth behavior', () => {
       expect(events).toHaveLength(1);
       expect(events[0]?.googleEventId).toBe('google-event-1');
       expect(events[0]?.sourceId).toBe(sources[0]?.id);
+      expect(result.current.diagnostics.accounts['acc-new-source']).toMatchObject({
+        fetchedEventCount: 1,
+        upsertedEventCount: 1,
+        cachedEventCount: 1,
+        visibleCachedEventCount: 1,
+      });
     });
   });
 

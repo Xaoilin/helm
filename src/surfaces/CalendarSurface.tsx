@@ -436,7 +436,7 @@ export default function CalendarSurface() {
           <div className="subtitle">
             {app.calendarAccounts.length === 0
               ? 'No accounts connected'
-              : `${app.calendarAccounts.length} account${app.calendarAccounts.length > 1 ? 's' : ''} \u00b7 ${visibleEvents.length} event${visibleEvents.length !== 1 ? 's' : ''}`}
+              : `${app.calendarAccounts.length} account${app.calendarAccounts.length > 1 ? 's' : ''} \u00b7 ${visibleEvents.length} visible event${visibleEvents.length !== 1 ? 's' : ''}`}
             {hasGoogleAccounts ? (
               <span style={{ marginLeft: 8 }}>{syncStatusText()}</span>
             ) : (
@@ -446,7 +446,7 @@ export default function CalendarSurface() {
         </div>
         <div className="actions-row">
           {hasGoogleAccounts && (
-            <button className="btn btn-secondary btn-sm" onClick={() => triggerSync(true)} disabled={syncState === 'syncing'} title="Sync cached Google data without opening Google sign-in">
+            <button className="btn btn-secondary btn-sm" onClick={() => triggerSync(true)} disabled={syncState === 'syncing'} title="Fetch the latest Google calendars and update HELM's calendar cache without opening Google sign-in">
               {syncState === 'syncing' ? <><span className="spinner" /> Syncing</> : '\u{21BB} Sync'}
             </button>
           )}

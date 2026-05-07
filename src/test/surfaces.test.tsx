@@ -520,6 +520,52 @@ describe('CalendarSurface', () => {
     expect(screen.getByText('Local-only data – not synced')).toBeInTheDocument();
   });
 
+  it('labels the header count as visible calendar events', async () => {
+    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+      id: 'acc-local',
+      name: 'Local',
+      email: 'local@example.com',
+      provider: 'local',
+      isPrimary: true,
+      connected: false,
+      mocked: true,
+    }]));
+    localStorage.setItem('helm:calendarSources', JSON.stringify([{
+      id: 'src-visible',
+      accountId: 'acc-local',
+      name: 'Visible',
+      color: '#4f5bff',
+      visible: true,
+    }, {
+      id: 'src-hidden',
+      accountId: 'acc-local',
+      name: 'Hidden',
+      color: '#22c55e',
+      visible: false,
+    }]));
+    localStorage.setItem('helm:calendarEvents', JSON.stringify([{
+      id: 'evt-visible',
+      sourceId: 'src-visible',
+      title: 'Visible meeting',
+      description: '',
+      start: '2026-05-07T09:00:00.000Z',
+      end: '2026-05-07T10:00:00.000Z',
+      allDay: false,
+    }, {
+      id: 'evt-hidden',
+      sourceId: 'src-hidden',
+      title: 'Hidden meeting',
+      description: '',
+      start: '2026-05-07T11:00:00.000Z',
+      end: '2026-05-07T12:00:00.000Z',
+      allDay: false,
+    }]));
+
+    await act(async () => { renderWithProvider(<CalendarSurface />); });
+
+    expect(screen.getByText(/1 account · 1 visible event/i)).toBeInTheDocument();
+  });
+
   it('should surface reconnect-required Google accounts without prompting', async () => {
     localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
       id: 'acc-google',
