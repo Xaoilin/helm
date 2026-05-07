@@ -74,6 +74,7 @@ export interface GoogleSyncAccountDiagnostic {
   primaryCalendarEmail?: string;
   fetchedEventCount?: number;
   upsertedEventCount?: number;
+  relinkedEventCount?: number;
   cachedEventCount?: number;
   visibleCachedEventCount?: number;
   preservedSourceCount?: number;
@@ -180,6 +181,7 @@ function createOwnershipMismatchDiagnostic(
 function createSuccessMessage(
   fetchedEventCount: number,
   upsertedEventCount: number,
+  relinkedEventCount: number,
   cachedEventCount: number,
   visibleCachedEventCount: number,
   preservedSourceCount: number,
@@ -193,6 +195,9 @@ function createSuccessMessage(
 
   if (upsertedEventCount > 0) {
     parts.push(`added or updated ${upsertedEventCount} event${upsertedEventCount === 1 ? '' : 's'}`);
+  }
+  if (relinkedEventCount > 0) {
+    parts.push(`relinked ${relinkedEventCount} cached event${relinkedEventCount === 1 ? '' : 's'} to the current calendar source`);
   }
   parts.push(`cache now has ${cachedEventCount} Google event${cachedEventCount === 1 ? '' : 's'}`);
   if (visibleCachedEventCount !== cachedEventCount) {
@@ -364,6 +369,7 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
       skippedDestructiveRemovals: entry.skippedDestructiveRemovals,
       fetchedEventCount: entry.fetchedEventCount,
       upsertedEventCount: entry.upsertedEventCount,
+      relinkedEventCount: entry.relinkedEventCount,
       cachedEventCount: entry.cachedEventCount,
       visibleCachedEventCount: entry.visibleCachedEventCount,
     });
@@ -791,15 +797,16 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
 
       const timeMin = new Date(Date.now() - LIMITS.CALENDAR_PAST_DAYS * 86400000).toISOString();
       const timeMax = new Date(Date.now() + LIMITS.CALENDAR_FUTURE_DAYS * 86400000).toISOString();
-      const globalEventKeys = new Set(
+      const globalEventsByProviderKey = new Map<string, CalendarEvent>(
         currentApp.calendarEvents
           .filter(event => event.googleEventId && event.googleCalendarId)
-          .map(event => `${event.googleCalendarId}:${event.googleEventId}`),
+          .map(event => [`${event.googleCalendarId}:${event.googleEventId}`, event] as const),
       );
 
       let projectedCalendarEvents = [...currentApp.calendarEvents];
       let fetchedEventCount = 0;
       let upsertedEventCount = 0;
+      let relinkedEventCount = 0;
       let preservedEventCount = projectedCalendarEvents.filter(event => preservedSourceIds.has(event.sourceId)).length;
       let removedSourceCount = 0;
       let removedEventCount = 0;
@@ -877,14 +884,21 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
               }
             } else {
               const globalEventKey = `${source.googleCalendarId}:${mappedEvent.googleEventId}`;
-              if (!globalEventKeys.has(globalEventKey)) {
-                eventsToUpsert.push({
-                  ...mappedEvent,
-                  id: buildGoogleEventCacheId(source.id, mappedEvent.googleEventId),
-                  pendingSync: undefined,
-                });
-                globalEventKeys.add(globalEventKey);
+              const globallyCachedEvent = globalEventsByProviderKey.get(globalEventKey);
+              const id = globallyCachedEvent?.id ?? buildGoogleEventCacheId(source.id, mappedEvent.googleEventId);
+              eventsToUpsert.push({
+                ...mappedEvent,
+                id,
+                pendingSync: undefined,
+              });
+              if (globallyCachedEvent && globallyCachedEvent.sourceId !== source.id) {
+                relinkedEventCount += 1;
               }
+              globalEventsByProviderKey.set(globalEventKey, {
+                ...mappedEvent,
+                id,
+                pendingSync: undefined,
+              });
             }
           }
 
@@ -984,6 +998,7 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
         message: createSuccessMessage(
           fetchedEventCount,
           upsertedEventCount,
+          relinkedEventCount,
           cachedEventCount,
           visibleCachedEventCount,
           preservedSourceCount,
@@ -994,6 +1009,7 @@ function useGoogleSyncController(app: GoogleSyncApp): GoogleSyncResult {
         primaryCalendarEmail: ownership.primaryEmail,
         fetchedEventCount,
         upsertedEventCount,
+        relinkedEventCount,
         cachedEventCount,
         visibleCachedEventCount,
         preservedSourceCount,

@@ -104,7 +104,9 @@ function readCalendarSources() {
 function readCalendarEvents() {
   return JSON.parse(localStorage.getItem('helm:calendarEvents') || '[]') as Array<{
     id: string;
+    title?: string;
     googleEventId?: string;
+    googleCalendarId?: string;
     sourceId: string;
   }>;
 }
@@ -670,6 +672,96 @@ describe('useGoogleSync durable auth behavior', () => {
         upsertedEventCount: 1,
         cachedEventCount: 1,
         visibleCachedEventCount: 1,
+      });
+    });
+  });
+
+  it('relinks fetched Google events that were cached under a stale source id', async () => {
+    setGoogleCalendarState({
+      accounts: [{
+        id: 'acc-relink',
+        name: 'Work',
+        email: 'sali@ripple.com',
+        provider: 'google',
+        isPrimary: true,
+        connected: true,
+        mocked: false,
+        authProvider: 'calendar-oauth',
+        authStatus: 'connected',
+        lastAuthCheckAt: new Date().toISOString(),
+        lastSyncTime: new Date().toISOString(),
+      }],
+      sources: [{
+        id: 'src-current-sali',
+        accountId: 'acc-relink',
+        name: 'sali@ripple.com',
+        color: '#4f5bff',
+        visible: true,
+        googleCalendarId: 'sali@ripple.com',
+      }],
+      events: [{
+        id: 'evt-old-source-cache',
+        sourceId: 'src-stale-sali',
+        title: 'Old cached title',
+        description: '',
+        start: '2026-05-07T08:00:00.000Z',
+        end: '2026-05-07T08:30:00.000Z',
+        allDay: false,
+        googleEventId: 'google-event-relink',
+        googleCalendarId: 'sali@ripple.com',
+      }],
+    });
+    fetchCalendarListMock.mockResolvedValueOnce([
+      {
+        id: 'sali@ripple.com',
+        summary: 'sali@ripple.com',
+        accessRole: 'owner',
+        primary: true,
+      },
+    ]);
+    fetchEventsMock.mockResolvedValue([{
+      id: 'google-event-relink',
+      summary: 'Today customer call',
+      start: { dateTime: '2026-05-07T14:00:00.000Z' },
+      end: { dateTime: '2026-05-07T14:30:00.000Z' },
+    }, {
+      id: 'google-event-new',
+      summary: 'Today planning meeting',
+      start: { dateTime: '2026-05-07T15:00:00.000Z' },
+      end: { dateTime: '2026-05-07T15:30:00.000Z' },
+    }]);
+
+    const { result } = renderHook(() => useGoogleSync(), { wrapper });
+    await waitForHookReady(result);
+
+    await act(async () => {
+      await result.current!.triggerSync(true);
+    });
+
+    await waitFor(() => {
+      const events = readCalendarEvents();
+      expect(events).toHaveLength(2);
+      expect(events).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 'evt-old-source-cache',
+          sourceId: 'src-current-sali',
+          googleEventId: 'google-event-relink',
+          googleCalendarId: 'sali@ripple.com',
+          title: 'Today customer call',
+        }),
+        expect.objectContaining({
+          sourceId: 'src-current-sali',
+          googleEventId: 'google-event-new',
+          googleCalendarId: 'sali@ripple.com',
+          title: 'Today planning meeting',
+        }),
+      ]));
+      expect(result.current.diagnostics.accounts['acc-relink']).toMatchObject({
+        fetchedEventCount: 2,
+        upsertedEventCount: 2,
+        relinkedEventCount: 1,
+        cachedEventCount: 2,
+        visibleCachedEventCount: 2,
       });
     });
   });
