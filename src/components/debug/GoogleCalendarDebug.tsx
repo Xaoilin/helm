@@ -111,6 +111,7 @@ function TimelineRow({ event }: { event: GoogleCalendarDiagnosticEvent }) {
         {typeof event.eventCount === 'number' && <span>{event.eventCount} events</span>}
         {typeof event.fetchedEventCount === 'number' && <span>{event.fetchedEventCount} fetched</span>}
         {typeof event.upsertedEventCount === 'number' && <span>{event.upsertedEventCount} added or updated</span>}
+        {typeof event.relinkedEventCount === 'number' && event.relinkedEventCount > 0 && <span>{event.relinkedEventCount} relinked</span>}
         {typeof event.cachedEventCount === 'number' && <span>{event.cachedEventCount} cached</span>}
         {typeof event.visibleCachedEventCount === 'number' && <span>{event.visibleCachedEventCount} visible</span>}
         {event.primaryCalendarEmail && <span>Primary {event.primaryCalendarEmail}</span>}
@@ -411,6 +412,7 @@ export default function GoogleCalendarDebug() {
                 <DebugField label="Last sync note" value={syncDiagnostic?.message || 'None'} />
                 <DebugField label="Fetched events" value={typeof syncDiagnostic?.fetchedEventCount === 'number' ? String(syncDiagnostic.fetchedEventCount) : 'Not recorded'} />
                 <DebugField label="Added or updated" value={typeof syncDiagnostic?.upsertedEventCount === 'number' ? String(syncDiagnostic.upsertedEventCount) : 'Not recorded'} />
+                <DebugField label="Relinked cached events" value={typeof syncDiagnostic?.relinkedEventCount === 'number' ? String(syncDiagnostic.relinkedEventCount) : 'Not recorded'} />
                 <DebugField label="Cached Google events" value={typeof syncDiagnostic?.cachedEventCount === 'number' ? String(syncDiagnostic.cachedEventCount) : 'Not recorded'} />
                 <DebugField label="Visible Google events" value={typeof syncDiagnostic?.visibleCachedEventCount === 'number' ? String(syncDiagnostic.visibleCachedEventCount) : 'Not recorded'} />
                 <DebugField label="Ownership email" value={syncDiagnostic?.primaryCalendarEmail || 'Not recorded'} />

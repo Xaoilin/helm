@@ -93,6 +93,7 @@ export interface GoogleCalendarDiagnosticEvent {
   eventCount?: number;
   fetchedEventCount?: number;
   upsertedEventCount?: number;
+  relinkedEventCount?: number;
   cachedEventCount?: number;
   visibleCachedEventCount?: number;
   preservedSourceCount?: number;
