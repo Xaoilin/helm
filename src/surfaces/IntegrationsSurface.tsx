@@ -228,72 +228,6 @@ export default function IntegrationsSurface() {
         return;
       }
 
-      if (isLinkedProfileAccount(account)) {
-        const profileMatchesAccount = Boolean(
-          profileEmail
-          && authSnapshot?.provider === 'google'
-          && normalizeEmail(account.email) === normalizeEmail(profileEmail),
-        );
-
-        if (!profileMatchesAccount || !authSnapshot?.providerRefreshToken) {
-          appendGoogleCalendarDiagnosticEvent({
-            operation: 'reconnect',
-            phase: 'start',
-            outcome: 'info',
-            triggerSource: 'user_action',
-            accountId: account.id,
-            email: account.email,
-            resolvedAuthProvider: 'profile-google',
-            message: `Refreshing the HELM Google sign-in before repairing Calendar access for ${account.email}.`,
-          });
-          await triggerProfileGoogleReconnect();
-          return;
-        }
-
-        appendGoogleCalendarDiagnosticEvent({
-          operation: 'reconnect',
-          phase: 'start',
-          outcome: 'info',
-          triggerSource: 'user_action',
-          accountId: account.id,
-          email: account.email,
-          resolvedAuthProvider: 'profile-google',
-          message: `Repairing the linked HELM Google Calendar credential for ${account.email}.`,
-        });
-
-        const result = await connectProfileGoogleCalendar();
-        app.updateCalendarAccount(account.id, {
-          name: result.accountName,
-          connected: true,
-          mocked: false,
-          authProvider: result.authProvider,
-          authStatus: 'connected',
-          authEmail: result.email,
-          authExpiresAt: result.authExpiresAt,
-          lastAuthError: undefined,
-          lastAuthCheckAt: new Date().toISOString(),
-          syncError: undefined,
-        });
-        addSourcesIfMissing(account.id, result.calendars);
-        app.updateIntegration('int-google', {
-          status: 'connected',
-          configuredAt: new Date().toISOString(),
-          lastError: undefined,
-        });
-        await googleSync.refreshCredentialStatuses();
-        appendGoogleCalendarDiagnosticEvent({
-          operation: 'reconnect',
-          phase: 'success',
-          outcome: 'success',
-          triggerSource: 'user_action',
-          accountId: account.id,
-          email: account.email,
-          resolvedAuthProvider: 'profile-google',
-          message: `Repaired the linked HELM Google Calendar credential for ${account.email}.`,
-        });
-        return;
-      }
-
       if (!clientId?.trim()) {
         setGoogleError('Please set your Google OAuth Client ID in Settings first.');
         return;
@@ -311,6 +245,11 @@ export default function IntegrationsSurface() {
         syncError: undefined,
       });
       addSourcesIfMissing(account.id, result.calendars);
+      app.updateIntegration('int-google', {
+        status: 'connected',
+        configuredAt: new Date().toISOString(),
+        lastError: undefined,
+      });
       await googleSync.refreshCredentialStatuses();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Reconnect failed';

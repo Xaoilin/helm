@@ -8,6 +8,7 @@ const {
   authSnapshotMock,
   connectProfileGoogleCalendarMock,
   googleSyncState,
+  reconnectGoogleCalendarOAuthAccountMock,
   revokeGoogleCalendarCredentialMock,
   triggerProfileGoogleReconnectMock,
 } = vi.hoisted(() => ({
@@ -43,6 +44,7 @@ const {
   },
   authSnapshotMock: vi.fn(),
   connectProfileGoogleCalendarMock: vi.fn(),
+  reconnectGoogleCalendarOAuthAccountMock: vi.fn(),
   googleSyncState: {
     refreshCredentialStatuses: vi.fn(),
     serverRuntimeStatus: {
@@ -88,6 +90,7 @@ vi.mock('../services/googleCalendarAuthManager', async () => {
   return {
     ...actual,
     connectProfileGoogleCalendar: connectProfileGoogleCalendarMock,
+    reconnectGoogleCalendarOAuthAccount: reconnectGoogleCalendarOAuthAccountMock,
     triggerProfileGoogleReconnect: triggerProfileGoogleReconnectMock,
   };
 });
@@ -141,6 +144,20 @@ describe('IntegrationsSurface degraded Google state', () => {
       authProvider: 'profile-google',
       authExpiresAt: '2026-05-06T12:00:00.000Z',
     });
+    reconnectGoogleCalendarOAuthAccountMock.mockResolvedValue({
+      email: 'alisa@example.com',
+      accountName: 'Alisa London',
+      calendars: [
+        {
+          id: 'alisa@example.com',
+          summary: 'Primary',
+          accessRole: 'owner',
+          primary: true,
+        },
+      ],
+      authProvider: 'calendar-oauth',
+      authExpiresAt: '2026-05-06T12:00:00.000Z',
+    });
     authSnapshotMock.mockReturnValue({
       userId: 'user-1',
       email: 'alisa@example.com',
@@ -189,7 +206,7 @@ describe('IntegrationsSurface degraded Google state', () => {
     });
   });
 
-  it('repairs a revoked HELM sign-in Google Calendar account without looping through sign-in again', async () => {
+  it('repairs a revoked HELM sign-in Google Calendar account through explicit Calendar OAuth', async () => {
     appState.integrations = [{
       id: 'int-google',
       name: 'Google Calendar',
@@ -217,10 +234,11 @@ describe('IntegrationsSurface degraded Google state', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
 
     await waitFor(() => {
-      expect(connectProfileGoogleCalendarMock).toHaveBeenCalledTimes(1);
+      expect(reconnectGoogleCalendarOAuthAccountMock).toHaveBeenCalledWith(appState.calendarAccounts[0], 'test-client-id');
+      expect(connectProfileGoogleCalendarMock).not.toHaveBeenCalled();
       expect(triggerProfileGoogleReconnectMock).not.toHaveBeenCalled();
       expect(appState.updateCalendarAccount).toHaveBeenCalledWith('acc-profile', expect.objectContaining({
-        authProvider: 'profile-google',
+        authProvider: 'calendar-oauth',
         authStatus: 'connected',
         lastAuthError: undefined,
         syncError: undefined,

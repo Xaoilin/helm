@@ -151,6 +151,7 @@ Important behavior:
 - Passive sync is non-interactive. Opening Calendar or pressing `Sync` should never launch a consent or reconnect popup.
 - Reconnect-required is a confirmed failure state, not a shortcut for "cached GIS token expired". Calendar-OAuth accounts only move into reconnect-required after passive auth actually fails, a 401 comes back, or the user no longer has transport credentials to retry with.
 - Linked `profile-google` accounts stay tied to the HELM sign-in relationship, but the live Calendar transport is no longer the Supabase `provider_token`. Both linked and extra accounts use the same hosted refresh-token credential model.
+- Row-level reconnect for linked `profile-google` accounts uses the same explicit Google Calendar authorization-code path as extra Calendar accounts, so a revoked Supabase profile refresh token cannot trap the account in a failed profile-bootstrap loop.
 - Existing browser-token-only accounts are treated as legacy migration state. They keep their cached calendar data, but HELM asks for a one-time reconnect to upgrade them onto the durable hosted credential path.
 - Accounts that lose Calendar access move into account-level states such as reconnect-required or revoked instead of surfacing as a generic global outage.
 - Google Identity Services still starts the browser flow for separately connected Calendar accounts, but it now uses the authorization-code model and hands off token exchange to the hosted function.
