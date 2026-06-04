@@ -29,7 +29,7 @@ Use this matrix when updating docs or UI copy. The allowed states are:
 | Browser speech fallback | `local-only/degraded` | Usable where supported, less reliable than Deepgram. |
 | ElevenLabs speech output | `real` | Requires env configuration. |
 | Browser speech output | `local-only/degraded` | Used when ElevenLabs is unavailable. |
-| Prayer times and adhan notifications | `real` | Backed by AlAdhan plus browser notifications. |
+| Prayer times, adhan notifications, and prayer tracking | `real` | Backed by AlAdhan plus browser notifications. Prayer rate stats use active local calendar days for their denominators, so missed days with no prayer log still count in dashboard and profile progress. |
 | Clock surface (multi-timer and stopwatch workspace) | `real` | Local-first timers and stopwatches persist through the shared store so in-progress sessions survive navigation and reloads. The Clock surface supports multiple on-demand timer and stopwatch cards, custom per-card names, stopwatch lap totals plus per-lap split times, selectable built-in alarm sounds, and completion alerts that keep pulsing until acknowledged. |
 | Finance accounts, budgets, and savings goals | `real` | Local-first app data is implemented. |
 | Health fast food log | `real` | Local-first fast-food tracking is implemented through the Health surface, with a quick-entry journal for venue, date, symptoms, and an overall experience rating plus a recent-history reminder view. |

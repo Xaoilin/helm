@@ -73,6 +73,79 @@ function toMonthStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function parseLocalDateStr(dateStr: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(dateStr);
+  if (!match) return null;
+
+  const [, yearStr, monthStr, dayStr] = match;
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  const parsed = new Date(year, month - 1, day);
+
+  if (
+    parsed.getFullYear() !== year
+    || parsed.getMonth() !== month - 1
+    || parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function toLocalDateStrFromIso(isoDate: string): string | null {
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return toLocalDateStr(parsed);
+}
+
+function enumerateLocalDateRange(startDateStr: string, endDateStr: string): string[] {
+  const start = parseLocalDateStr(startDateStr);
+  const end = parseLocalDateStr(endDateStr);
+  if (!start || !end || start > end) return [];
+
+  const dates: string[] = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    dates.push(toLocalDateStr(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+function maxLocalDateStr(left: string, right: string): string {
+  return left >= right ? left : right;
+}
+
+function minLocalDateStr(left: string, right: string): string {
+  return left <= right ? left : right;
+}
+
+function getMonthEndDateStr(monthStr: string): string {
+  const [yearStr, monthStrPart] = monthStr.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStrPart);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return `${monthStr}-01`;
+  return toLocalDateStr(new Date(year, month, 0));
+}
+
+function enumerateMonthKeys(startMonth: string, endMonth: string): string[] {
+  const [startYearStr, startMonthStr] = startMonth.split('-');
+  const [endYearStr, endMonthStr] = endMonth.split('-');
+  const start = new Date(Number(startYearStr), Number(startMonthStr) - 1, 1);
+  const end = new Date(Number(endYearStr), Number(endMonthStr) - 1, 1);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
+
+  const months: string[] = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    months.push(toMonthStr(cursor));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return months;
+}
+
 function formatMonthLabel(monthStr: string): string {
   const [yearStr, monthStrPart] = monthStr.split('-');
   const year = Number(yearStr);
@@ -698,8 +771,16 @@ export interface PrayerStatsResult {
   monthlyHistory: PrayerStatsPeriod[];
 }
 
+type PrayerStatsTask = {
+  id: string;
+  title: string;
+  category: string;
+  prayerName?: string;
+  createdAt?: string;
+};
+
 function buildPrayerStatsPeriod(
-  prayerHabits: { id: string; title: string; prayerName?: string }[],
+  prayerHabits: Pick<PrayerStatsTask, 'id' | 'title' | 'prayerName'>[],
   log: Record<string, string[]>,
   dates: string[],
   month: string,
@@ -734,9 +815,39 @@ function buildPrayerStatsPeriod(
   };
 }
 
+function getPrayerStatsActiveStart(
+  prayerHabits: Pick<PrayerStatsTask, 'id' | 'createdAt'>[],
+  log: Record<string, string[]>,
+): string | null {
+  const prayerHabitIds = new Set(prayerHabits.map(habit => habit.id));
+  const taskStartDates = prayerHabits
+    .map(habit => habit.createdAt ? toLocalDateStrFromIso(habit.createdAt) : null)
+    .filter((date): date is string => Boolean(date));
+  const loggedPrayerDates = Object.entries(log)
+    .filter(([, taskIds]) => taskIds.some(taskId => prayerHabitIds.has(taskId)))
+    .map(([date]) => date)
+    .filter(date => parseLocalDateStr(date) !== null);
+  const candidateDates = [...taskStartDates, ...loggedPrayerDates].sort();
+  return candidateDates[0] || null;
+}
+
+function buildPrayerStatsDates(
+  activeStartDate: string | null,
+  referenceDateStr: string,
+  month?: string,
+): string[] {
+  if (!activeStartDate) return [];
+
+  const monthStart = month ? `${month}-01` : activeStartDate;
+  const monthEnd = month ? getMonthEndDateStr(month) : referenceDateStr;
+  const start = maxLocalDateStr(activeStartDate, monthStart);
+  const end = minLocalDateStr(referenceDateStr, monthEnd);
+  return enumerateLocalDateRange(start, end);
+}
+
 export function calculatePrayerStats(
   profile: GamificationProfile,
-  tasks: { id: string; title: string; category: string; prayerName?: string }[],
+  tasks: PrayerStatsTask[],
   referenceDate: Date = new Date(),
 ): PrayerStatsResult {
   const prayerHabits = tasks.filter(task => isPrayerTask(task as Pick<Task, 'category' | 'title' | 'prayerName'>));
@@ -762,18 +873,23 @@ export function calculatePrayerStats(
   }
 
   const log = profile.dailyLog || {};
-  const dates = Object.keys(log).sort();
+  const referenceDateStr = toLocalDateStr(referenceDate);
+  const activeStartDate = getPrayerStatsActiveStart(prayerHabits, log);
+  const dates = buildPrayerStatsDates(activeStartDate, referenceDateStr);
   const allTime = buildPrayerStatsPeriod(prayerHabits, log, dates, 'all-time', 'All time');
-  const currentMonthDates = dates.filter(date => date.startsWith(currentMonthKey));
+  const currentMonthDates = buildPrayerStatsDates(activeStartDate, referenceDateStr, currentMonthKey);
   const currentMonth = buildPrayerStatsPeriod(prayerHabits, log, currentMonthDates, currentMonthKey, currentMonthLabel);
 
-  const monthKeys = Array.from(new Set([...dates.map(date => date.slice(0, 7)), currentMonthKey]))
+  const activeMonthKeys = activeStartDate
+    ? enumerateMonthKeys(activeStartDate.slice(0, 7), currentMonthKey)
+    : [];
+  const monthKeys = Array.from(new Set([...activeMonthKeys, currentMonthKey]))
     .sort((left, right) => right.localeCompare(left));
   const monthlyHistory = monthKeys.map(month =>
     buildPrayerStatsPeriod(
       prayerHabits,
       log,
-      dates.filter(date => date.startsWith(month)),
+      buildPrayerStatsDates(activeStartDate, referenceDateStr, month),
       month,
       formatMonthLabel(month),
     )
