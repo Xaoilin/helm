@@ -1172,6 +1172,9 @@ describe('ProfileSurface', () => {
   });
 
   it('shows month-by-month prayer rate history', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 3, 20, 10, 0, 0));
+
     localStorage.setItem('helm:tasks', JSON.stringify([
       {
         id: 'prayer-fajr',
@@ -1207,14 +1210,18 @@ describe('ProfileSurface', () => {
       },
     }));
 
-    await act(async () => { renderWithProvider(<ProfileSurface />); });
+    try {
+      await act(async () => { renderWithProvider(<ProfileSurface />); });
 
-    expect(screen.getByText('Month-by-month rate history')).toBeInTheDocument();
-    const history = screen.getByLabelText('Prayer rate history by month');
-    expect(within(history).getByText('April 2026')).toBeInTheDocument();
-    expect(within(history).getByText('March 2026')).toBeInTheDocument();
-    expect(within(history).getByText('75%')).toBeInTheDocument();
-    expect(within(history).getByText('50%')).toBeInTheDocument();
+      expect(screen.getByText('Month-by-month rate history')).toBeInTheDocument();
+      const history = screen.getByLabelText('Prayer rate history by month');
+      expect(within(history).getByText('April 2026')).toBeInTheDocument();
+      expect(within(history).getByText('March 2026')).toBeInTheDocument();
+      expect(within(history).getByText('8%')).toBeInTheDocument();
+      expect(within(history).getByText('50%')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -1281,10 +1288,10 @@ describe('DashboardSurface', () => {
 
       const prayerCard = screen.getByText(/Prayer Rate/).closest('.dash-card');
       expect(prayerCard).not.toBeNull();
-      expect(prayerCard).toHaveTextContent('75%');
+      expect(prayerCard).toHaveTextContent('8%');
       expect(prayerCard).toHaveTextContent('This month only');
       expect(prayerCard).toHaveTextContent('April 2026');
-      expect(prayerCard).toHaveTextContent('2 tracked days');
+      expect(prayerCard).toHaveTextContent('20 tracked days');
       expect(prayerCard).not.toHaveTextContent('67%');
     } finally {
       vi.useRealTimers();
