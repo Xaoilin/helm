@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import type { Task } from '../types/domain';
+import type { PrayerOutcomeStatus, Task } from '../types/domain';
 import { getHabitEmoji } from '../services/habitEmoji';
+import { isPrayerTask } from '../services/prayerTasks';
 
 interface HabitCardsProps {
   habits: Task[];
   onComplete: (task: Task) => void; // called only once, when confirmed
   xpPerHabit?: number;
+  getPrayerOutcome?: (task: Task) => PrayerOutcomeStatus | undefined;
 }
 
 function ProgressRing({ done, total }: { done: number; total: number }) {
@@ -48,7 +50,12 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
   );
 }
 
-export default function HabitCards({ habits, onComplete, xpPerHabit = 15 }: HabitCardsProps) {
+export default function HabitCards({
+  habits,
+  onComplete,
+  xpPerHabit = 15,
+  getPrayerOutcome,
+}: HabitCardsProps) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const done = habits.filter(h => h.completed).length;
   const total = habits.length;
@@ -58,6 +65,10 @@ export default function HabitCards({ habits, onComplete, xpPerHabit = 15 }: Habi
   const handleClick = (h: Task) => {
     // If already completed today, do nothing (locked)
     if (h.completed) return;
+    if (isPrayerTask(h)) {
+      onComplete(h);
+      return;
+    }
     // Show confirmation
     setConfirmingId(h.id);
   };
@@ -74,6 +85,16 @@ export default function HabitCards({ habits, onComplete, xpPerHabit = 15 }: Habi
         {habits.map(h => {
           const emoji = getHabitEmoji(h.title, h.emoji);
           const isConfirming = confirmingId === h.id;
+          const prayerOutcome = isPrayerTask(h) ? getPrayerOutcome?.(h) : undefined;
+          const prayerOutcomeLabel = prayerOutcome === 'on_time'
+            ? 'On time'
+            : prayerOutcome === 'late'
+              ? 'Late'
+              : prayerOutcome === 'unclassified'
+                ? 'Legacy — classify'
+                : prayerOutcome === 'missed'
+                  ? 'Missed'
+                  : null;
           return (
             <div
               key={h.id}
@@ -81,7 +102,10 @@ export default function HabitCards({ habits, onComplete, xpPerHabit = 15 }: Habi
               onClick={() => !isConfirming && handleClick(h)}
               role="button"
               tabIndex={0}
-              aria-label={h.completed ? `${h.title} \u2014 completed` : `Complete ${h.title}`}
+              aria-disabled={h.completed || undefined}
+              aria-label={h.completed
+                ? `${h.title} \u2014 completed${prayerOutcomeLabel ? `, ${prayerOutcomeLabel}` : ''}`
+                : `Complete ${h.title}`}
               onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !isConfirming) { e.preventDefault(); handleClick(h); } }}
             >
               <div className="habit-card-check">{h.completed ? '\u2713' : ''}</div>
@@ -89,7 +113,7 @@ export default function HabitCards({ habits, onComplete, xpPerHabit = 15 }: Habi
               <div className="habit-card-name">{h.title}</div>
               {!isConfirming && (
                 <div className="habit-card-freq">
-                  {h.completed ? 'Done \u2713' : (h.recurring?.frequency || 'daily')}
+                  {prayerOutcomeLabel || (h.completed ? 'Done \u2713' : (h.recurring?.frequency || 'daily'))}
                 </div>
               )}
               {h.completed && <div className="habit-card-xp">+{xpPerHabit} XP</div>}

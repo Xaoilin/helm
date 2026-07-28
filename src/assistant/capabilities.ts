@@ -50,6 +50,7 @@ const SURFACE_VALUES: readonly Surface[] = [
 const TASK_TAB_VALUES = ['today', 'all', 'goals'] as const;
 const TASK_PRIORITY_VALUES: readonly TaskPriority[] = ['high', 'medium', 'low'];
 const TASK_CATEGORY_VALUES: readonly TaskCategory[] = ['daily', 'prayer', 'task', 'goal'];
+const PRAYER_COMPLETION_STATUS_VALUES = ['on_time', 'late'] as const;
 const CAPTURE_CLASSIFICATION_VALUES: readonly CaptureClassification[] = [
   'unknown',
   'task',
@@ -222,11 +223,11 @@ export const ASSISTANT_ACTIONS = [
   {
     id: 'tasks.complete_matching',
     title: 'Complete Task',
-    description: 'Mark a matching task or habit as complete.',
+    description: 'Mark a matching task or habit as complete. Prayer completions may include an explicit on-time or late outcome.',
     domain: 'tasks',
     status: 'live',
-    examples: ['Mark ship launch checklist done', 'Complete my water habit'],
-    aliases: ['mark done', 'complete task', 'complete habit'],
+    examples: ['Mark ship launch checklist done', 'Complete my water habit', 'I prayed Fajr on time', 'Mark Isha as prayed late'],
+    aliases: ['mark done', 'complete task', 'complete habit', 'prayed on time', 'prayed late'],
     confirmationRule: 'on_ambiguity',
     executorKey: 'complete_task',
     debugSummary: 'Resolves an incomplete task or habit and marks it complete through the shared task executor.',
@@ -237,6 +238,14 @@ export const ASSISTANT_ACTIONS = [
         description: 'The grounded task or habit identifier to complete.',
         type: 'string',
         required: true,
+      },
+      {
+        key: 'prayerStatus',
+        label: 'Prayer Status',
+        description: 'Use on_time or late only when the user explicitly classifies a prayer. Omit it when they have not said which.',
+        type: 'enum',
+        required: false,
+        values: PRAYER_COMPLETION_STATUS_VALUES,
       },
     ],
   },

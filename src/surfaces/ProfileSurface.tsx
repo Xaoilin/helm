@@ -5,16 +5,23 @@ import {
   titleForLevel,
   BADGES,
   STREAK_MILESTONES,
-  calculatePrayerStats,
 } from '../services/gamification';
 import { isStandardDailyTask } from '../services/prayerTasks';
-
-function toLocalDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+import { toLocalDateStr } from '../services/financeHelpers';
+import {
+  calculatePrayerOutcomeStats,
+  filterPrayerTrackingRecords,
+} from '../services/prayerTracking';
+import { usePrayerContext } from '../store/contexts/PrayerContext';
+import PrayerOutcomeBars, {
+  PrayerOutcomeLegend,
+  PrayerOutcomeStack,
+} from '../components/prayer/PrayerOutcomeBars';
+import type { PrayerOutcomeStats } from '../types/domain';
 
 export default function ProfileSurface() {
   const app = useApp();
+  const prayer = usePrayerContext();
   const gam = app.gamification;
   const xp = xpToNextLevel(gam.totalXp);
   const title = titleForLevel(gam.level);
@@ -37,10 +44,45 @@ export default function ProfileSurface() {
   }, [app.tasks, gam.totalTasksCompleted, referenceTime]);
 
   const avgPerDay = gam.totalTasksCompleted > 0 ? (gam.totalTasksCompleted / daysSinceFirst).toFixed(1) : '0';
-  const prayerStats = useMemo(
-    () => calculatePrayerStats(gam, app.tasks, new Date(referenceTime)),
-    [app.tasks, gam, referenceTime],
-  );
+  const prayerStats = prayer.stats;
+  const prayerLast30Days = useMemo(() => {
+    const output: Array<{ date: string; stats: PrayerOutcomeStats }> = [];
+    for (let index = 29; index >= 0; index -= 1) {
+      const date = new Date(referenceTime);
+      date.setDate(date.getDate() - index);
+      const dateStr = toLocalDateStr(date);
+      output.push({
+        date: dateStr,
+        stats: calculatePrayerOutcomeStats(
+          filterPrayerTrackingRecords(prayer.tracking, recordDate => recordDate === dateStr),
+          prayer.scheduleDays.filter(day => day.date === dateStr),
+          new Date(referenceTime),
+        ),
+      });
+    }
+    return output;
+  }, [prayer.scheduleDays, prayer.tracking, referenceTime]);
+  const prayerMonthlyHistory = useMemo(() => {
+    const months = [...new Set([
+      ...prayer.scheduleDays.map(day => day.date.slice(0, 7)),
+      ...Object.values(prayer.tracking.records).map(record => record.date.slice(0, 7)),
+    ])].sort().reverse();
+    return months.map(month => {
+      const [year, monthNumber] = month.split('-').map(Number);
+      return {
+        month,
+        label: new Date(year, monthNumber - 1, 1).toLocaleDateString([], {
+          month: 'long',
+          year: 'numeric',
+        }),
+        stats: calculatePrayerOutcomeStats(
+          filterPrayerTrackingRecords(prayer.tracking, recordDate => recordDate.startsWith(month)),
+          prayer.scheduleDays.filter(day => day.date.startsWith(month)),
+          new Date(referenceTime),
+        ),
+      };
+    });
+  }, [prayer.scheduleDays, prayer.tracking, referenceTime]);
 
   // Streak heatmap: last 30 days
   const heatmapDays = useMemo(() => {
@@ -216,85 +258,60 @@ export default function ProfileSurface() {
           );
         })()}
 
-        {/* ── Prayer Rate ── */}
-        {(() => {
-          if (prayerStats.perPrayer.length === 0) return null;
-          return (
-            <div className="profile-section">
-              <h3 className="profile-section-title">
-                Prayer Rate
-                <span style={{ fontWeight: 400, color: prayerStats.overall.percentage >= 80 ? '#22c55e' : prayerStats.overall.percentage >= 50 ? '#f59e0b' : '#ff6b6b', marginLeft: 8 }}>
-                  {prayerStats.overall.percentage}% overall
-                </span>
-              </h3>
-              <div className="prayer-stats-grid" style={{ marginBottom: 16 }}>
-                {prayerStats.perPrayer.map(p => (
-                  <div key={p.name} className="prayer-stat-item">
-                    <div className="prayer-stat-name">{p.name}</div>
-                    <div className="prayer-stat-bar">
-                      <div className="prayer-stat-fill" style={{ width: `${p.percentage}%`, background: p.percentage >= 80 ? '#22c55e' : p.percentage >= 50 ? '#f59e0b' : '#ff6b6b' }} />
-                    </div>
-                    <div className="prayer-stat-pct">{p.percentage}%</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, color: '#6b6f85' }}>
-                {prayerStats.overall.completed} / {prayerStats.overall.total} total prayers tracked over {prayerStats.trackedDays} day{prayerStats.trackedDays === 1 ? '' : 's'}
-              </div>
-              {/* 30-day heatmap for prayers */}
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 11, color: '#6b6f85', marginBottom: 4 }}>Last 30 days</div>
-                <div className="profile-heatmap" aria-label="Prayer completion last 30 days">
-                  {prayerStats.last30Days.map(day => (
-                    <div
-                      key={day.date}
-                      className={`profile-heatmap-cell ${day.count >= prayerStats.perPrayer.length ? 'active' : day.count > 0 ? 'partial' : ''}`}
-                      title={`${day.date}: ${day.count}/${prayerStats.perPrayer.length} prayers`}
-                      style={day.count > 0 && day.count < prayerStats.perPrayer.length ? { background: '#f59e0b' } : undefined}
-                    />
-                  ))}
+        {/* ── Prayer outcomes ── */}
+        <div className="profile-section">
+          <h3 className="profile-section-title">Prayer outcomes</h3>
+          <PrayerOutcomeBars stats={prayerStats} />
+          <div className="profile-prayer-summary">
+            {prayerStats.classifiedTotal} classified opportunities over {prayerStats.trackedDays} day{prayerStats.trackedDays === 1 ? '' : 's'}.
+            Open and future prayers are pending and excluded.
+          </div>
+
+          <div className="profile-prayer-history-block">
+            <div className="profile-prayer-history-title">Last 30 days</div>
+            <div className="profile-prayer-days" aria-label="Prayer outcomes for the last 30 days">
+              {prayerLast30Days.map(day => (
+                <div
+                  key={day.date}
+                  className="profile-prayer-day"
+                  title={`${day.date}: ${day.stats.percentages.onTime}% on time, ${day.stats.percentages.late}% late, ${day.stats.percentages.missed}% missed`}
+                  role="img"
+                  aria-label={`${day.date}: ${day.stats.percentages.onTime}% on time, ${day.stats.percentages.late}% late, ${day.stats.percentages.missed}% missed`}
+                >
+                  <span className="on-time" style={{ height: `${day.stats.percentages.onTime}%` }} />
+                  <span className="late" style={{ height: `${day.stats.percentages.late}%` }} />
+                  <span className="missed" style={{ height: `${day.stats.percentages.missed}%` }} />
                 </div>
-                <div className="profile-heatmap-legend">
-                  <span>30 days ago</span>
-                  <div style={{ display: 'flex', gap: 8, fontSize: 10, color: '#6b6f85' }}>
-                    <span><span style={{ display: 'inline-block', width: 8, height: 8, background: '#1e2030', borderRadius: 2, marginRight: 3 }} />Missed</span>
-                    <span><span style={{ display: 'inline-block', width: 8, height: 8, background: '#f59e0b', borderRadius: 2, marginRight: 3 }} />Partial</span>
-                    <span><span style={{ display: 'inline-block', width: 8, height: 8, background: '#22c55e', borderRadius: 2, marginRight: 3 }} />All 5</span>
-                  </div>
-                </div>
-              </div>
-              <div style={{ marginTop: 18 }}>
-                <div style={{ fontSize: 11, color: '#6b6f85', marginBottom: 8 }}>Month-by-month rate history</div>
-                <div className="profile-month-history" aria-label="Prayer rate history by month">
-                  {prayerStats.monthlyHistory.map(period => (
-                    <div key={period.month} className="profile-month-history-row">
-                      <div>
-                        <div className="profile-month-history-label">{period.label}</div>
-                        <div className="profile-month-history-meta">
-                          {period.trackedDays > 0 ? `${period.trackedDays} tracked day${period.trackedDays === 1 ? '' : 's'}` : 'No prayer logs'}
-                          {period.month === prayerStats.currentMonth.month ? ' · Current month' : ''}
-                        </div>
-                      </div>
-                      <div className="profile-month-history-bar">
-                        <div
-                          className="profile-month-history-fill"
-                          style={{
-                            width: `${period.overall.percentage}%`,
-                            background: period.overall.percentage >= 80 ? '#22c55e' : period.overall.percentage >= 50 ? '#f59e0b' : '#ff6b6b',
-                          }}
-                        />
-                      </div>
-                      <div className="profile-month-history-value">
-                        {period.overall.percentage}%
-                        <span>{period.overall.completed}/{period.overall.total}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              ))}
             </div>
-          );
-        })()}
+            <PrayerOutcomeLegend tally={prayerStats} />
+          </div>
+
+          <div className="profile-prayer-history-block">
+            <div className="profile-prayer-history-title">Month history</div>
+            <div className="profile-month-history" aria-label="Prayer outcome history by month">
+              {prayerMonthlyHistory.map(period => (
+                <div key={period.month} className="profile-month-history-row">
+                  <div>
+                    <div className="profile-month-history-label">{period.label}</div>
+                    <div className="profile-month-history-meta">
+                      {period.stats.trackedDays} tracked day{period.stats.trackedDays === 1 ? '' : 's'}
+                      {period.month === todayStr.slice(0, 7) ? ' · Current month' : ''}
+                    </div>
+                  </div>
+                  <PrayerOutcomeStack tally={period.stats} label={period.label} />
+                  <div className="profile-month-history-value">
+                    {period.stats.classifiedTotal}
+                    <span>classified</span>
+                  </div>
+                </div>
+              ))}
+              {prayerMonthlyHistory.length === 0 && (
+                <div className="profile-prayer-empty">Classified metrics begin when this feature is activated.</div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </>
   );

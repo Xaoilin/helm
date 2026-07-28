@@ -16,6 +16,10 @@ import type {
   KnowledgeEntry,
   KnowledgeTopic,
   LifestyleItem,
+  PrayerCompletionSource,
+  PrayerCompletionStatus,
+  PrayerCompletionUndoData,
+  PrayerName,
   Project,
   Settings,
   Task,
@@ -64,6 +68,15 @@ export interface ChatCrossDomainData {
   addKnowledgeEntry: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
   addCaptureItem: (item: Omit<CaptureItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateGamification: (profile: GamificationProfile) => void;
+  completePrayer?: (
+    prayerName: PrayerName,
+    status: PrayerCompletionStatus,
+    taskId?: string,
+    source?: PrayerCompletionSource,
+  ) => {
+    undo: PrayerCompletionUndoData;
+    xpEarned: number;
+  };
 }
 
 export interface ChatContextValue {
@@ -257,6 +270,10 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
         addKnowledgeEntry: crossDomain.addKnowledgeEntry,
         addCaptureItem: crossDomain.addCaptureItem,
         updateGamification: crossDomain.updateGamification,
+        completePrayer: crossDomain.completePrayer
+          ? (prayerName, status, taskId) =>
+              crossDomain.completePrayer!(prayerName, status, taskId, 'chat')
+          : undefined,
         recordAssistantActivity: crossDomain.recordAssistantActivity,
       },
     });

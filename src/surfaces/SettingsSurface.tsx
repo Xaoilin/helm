@@ -21,13 +21,17 @@ import {
   type SyncResolutionChoice,
 } from '../store/persistence';
 import SyncDriftModal from '../components/settings/SyncDriftModal';
+import { usePrayerContext } from '../store/contexts/PrayerContext';
+import { PRAYER_REMINDERS } from '../config/constants';
+import { createPrayerTrackingState } from '../services/prayerTracking';
 
 export default function SettingsSurface() {
   const app = useApp();
+  const prayer = usePrayerContext();
   const { settings } = app;
   const linaEnabled = settings.assistantEnabled !== false;
   const [confirmReset, setConfirmReset] = useState(false);
-  const [testAdhan, setTestAdhan] = useState<string | null>(null);
+  const [prayerTestStatus, setPrayerTestStatus] = useState<string | null>(null);
   const [syncDriftCandidates, setSyncDriftCandidates] = useState<SyncDriftCandidate[]>([]);
   const [syncDriftLoading, setSyncDriftLoading] = useState(false);
   const [syncDriftStatus, setSyncDriftStatus] = useState<string | null>(null);
@@ -238,13 +242,13 @@ export default function SettingsSurface() {
 
         {/* Goal categories */}
         {/* Prayer Times */}
-        <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Prayer Times (Adhan)</h3>
+        <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Prayer times and reminders</h3>
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>Enable prayer time notifications</div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>Enable prayer tracking and Adhan</div>
               <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 2 }}>
-                Show prayer times on Dashboard with Adhan notification when each prayer arrives.
+                Show the Jafari timetable, prayer outcomes, and global Adhan notifications.
               </div>
             </div>
             <label className="toggle">
@@ -262,57 +266,81 @@ export default function SettingsSurface() {
               <input id="settings-prayer-country" className="form-input" value={settings.prayerCountry || 'United Kingdom'} onChange={e => app.updateSettings({ prayerCountry: e.target.value })} />
             </div>
           </div>
+          <div className="prayer-settings-reminder-row">
+            <div>
+              <div className="prayer-settings-title">Warn before the on-time deadline</div>
+              <div className="prayer-settings-copy">
+                Pulse across every HELM surface and send one native notification while HELM is running.
+              </div>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={settings.prayerReminderEnabled !== false}
+                disabled={settings.prayerEnabled === false}
+                onChange={event => app.updateSettings({ prayerReminderEnabled: event.target.checked })}
+                aria-label="Toggle prayer deadline reminders"
+              />
+              <span className="slider" />
+            </label>
+          </div>
+          <div className="form-group prayer-reminder-lead">
+            <label htmlFor="settings-prayer-reminder-minutes">Reminder lead time</label>
+            <select
+              id="settings-prayer-reminder-minutes"
+              className="form-select"
+              value={settings.prayerReminderMinutes ?? PRAYER_REMINDERS.DEFAULT_MINUTES}
+              disabled={settings.prayerEnabled === false || settings.prayerReminderEnabled === false}
+              onChange={event => app.updateSettings({
+                prayerReminderMinutes: Number(event.target.value) as 5 | 10 | 15 | 30,
+              })}
+            >
+              {PRAYER_REMINDERS.OPTIONS_MINUTES.map(minutes => (
+                <option key={minutes} value={minutes}>{minutes} minutes before</option>
+              ))}
+            </select>
+          </div>
           <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 8 }}>
             Method: Shia Ithna-Ashari (Jafari), Leva Institute, Qum.{' '}
             <a href="https://aladhan.com/calculation-methods" target="_blank" rel="noopener noreferrer" style={{ color: '#4f5bff' }}>Learn more</a>
           </div>
-          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #1e2030' }}>
-            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}>Test Notification</div>
-            <div className="actions-row" style={{ gap: 6 }}>
-              {['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map(name => (
-                <button
-                  key={name}
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => {
-                    setTestAdhan(name);
-                    if ('Notification' in window && Notification.permission === 'granted') {
-                      new Notification(`\u0627\u0644\u0644\u0647 \u0623\u0643\u0628\u0631 - ${name}`, { body: `It's time for ${name} prayer` });
-                    } else if ('Notification' in window && Notification.permission === 'default') {
-                      Notification.requestPermission().then(p => {
-                        if (p === 'granted') new Notification(`\u0627\u0644\u0644\u0647 \u0623\u0643\u0628\u0631 - ${name}`, { body: `It's time for ${name} prayer` });
-                      });
-                    }
-                    setTimeout(() => setTestAdhan(null), 10000);
-                  }}
-                >
-                  Test {name}
-                </button>
-              ))}
+          <div className="prayer-settings-runtime-note">
+            Native deadline timers continue when the HELM window is minimized. They stop when HELM is fully exited; tray and autostart are not enabled.
+          </div>
+          {!prayer.timezoneMatches && prayer.schedule && (
+            <div className="prayer-settings-timezone-warning" role="alert">
+              Reminders paused: schedule timezone {prayer.schedule.timezone || 'unknown'} does not match desktop timezone {prayer.desktopTimezone}.
             </div>
-            <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
-              Click to preview the Adhan banner + browser notification. Banner dismisses after 10 seconds.
+          )}
+          <div className="prayer-settings-test">
+            <div className="prayer-settings-title">Notification permission and test</div>
+            <div className="actions-row">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={async () => {
+                  const result = await prayer.requestReminderPermission();
+                  setPrayerTestStatus(result === 'granted' ? 'Notification permission granted.' : `Notification permission: ${result}.`);
+                }}
+              >
+                Request permission
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={async () => {
+                  const sent = await prayer.testReminder('Fajr');
+                  setPrayerTestStatus(sent
+                    ? 'Labelled TEST scheduled for five seconds from now. Minimize HELM now.'
+                    : 'Test not scheduled. Grant notification permission first or check Prayer Debug.');
+                }}
+              >
+                Schedule labelled test (5 sec)
+              </button>
             </div>
+            {prayerTestStatus && <div className="prayer-settings-test-status" role="status">{prayerTestStatus}</div>}
           </div>
         </div>
-
-        {/* Test Adhan — Full Screen Overlay */}
-        {testAdhan && (
-          <div className="adhan-banner" onClick={() => setTestAdhan(null)}>
-            <div className="adhan-ring" />
-            <div className="adhan-ring" />
-            <div className="adhan-ring" />
-            <div className="adhan-content">
-              <div className="adhan-mosque">{'\u{1F54C}'}</div>
-              <div className="adhan-text">
-                <div className="adhan-title">{'\u0627\u0644\u0644\u0647 \u0623\u0643\u0628\u0631'}</div>
-                <div className="adhan-subtitle">Allahu Akbar</div>
-                <div className="adhan-subtitle">It's time for <strong>{testAdhan}</strong></div>
-                <div className="adhan-time">Test notification</div>
-              </div>
-            </div>
-            <div className="adhan-dismiss">Click anywhere to dismiss</div>
-          </div>
-        )}
 
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Goal Categories</h3>
         <div className="card">
@@ -611,7 +639,16 @@ export default function SettingsSurface() {
           {confirmReset ? (
             <div className="confirm-bar" role="alert">
               Are you sure? This will permanently reset ALL gamification progress.
-              <button className="btn btn-danger btn-sm" onClick={() => { app.updateGamification({ ...DEFAULT_PROFILE }); setConfirmReset(false); }}>Yes, Reset Everything</button>
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={() => {
+                  app.updateGamification({ ...DEFAULT_PROFILE });
+                  prayer.replacePrayerTracking(createPrayerTrackingState());
+                  setConfirmReset(false);
+                }}
+              >
+                Yes, Reset Everything
+              </button>
               <button className="btn btn-secondary btn-sm" onClick={() => setConfirmReset(false)}>Cancel</button>
             </div>
           ) : (

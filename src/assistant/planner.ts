@@ -224,7 +224,7 @@ function derivePlannerHintIntent(transcript: string): GuardrailIntent {
   const lower = normaliseText(transcript);
 
   if (/(?:\bdelete\b|\bremove\b|\btrash\b|احذف|امسح|شيل)/i.test(lower)) return 'delete_task';
-  if (/(?:\bcomplete\b|\bfinish\b|\bmark\b|\bcheck off\b|أكمل|انهِ|عل[ّم]?)/i.test(lower)) return 'complete_task';
+  if (/(?:\bcomplete\b|\bfinish\b|\bmark\b|\bcheck off\b|\bprayed\b|أكمل|انهِ|عل[ّم]?|صليت)/i.test(lower)) return 'complete_task';
   if (/^(?:show me|open|find|locate|pull up|take me to)\s+(?:that task|this task|that one|this one|it)\b/i.test(transcript.trim())) return 'reveal_task';
   if (/(?:show(?:\s+me)?|open|pull up|take me to|go to)\s+(?:all\s+tasks|all\s+my\s+tasks|my\s+tasks|task\s+list|my\s+goals|goals|today(?:'s)?\s+tasks|tasks\s+for\s+today|today(?:'s)?\s+habits)/i.test(lower)) return 'task_view';
   if (/(?:\bmove\b|\bpush\b|\breschedule\b)/i.test(lower)) return 'reschedule_event';
@@ -653,6 +653,7 @@ Planning rules:
 - For grounded entity actions, use only ids from the planning bundle candidate lists. Never invent ids.
 - Entity candidate detail may describe a default or umbrella target. If exactly one grounded candidate is marked default and its detail clearly covers the user's requested subtopic, use that grounded id instead of clarifying.
 - For tasks.reveal_task and tasks.complete_matching, pass taskId.
+- For a prayer completion, set prayerStatus to on_time or late only when the user explicitly says which. Otherwise omit prayerStatus so Lina can ask; never infer it from the clock.
 - For tasks.delete_matching, pass taskIds as an array of one or more grounded task ids.
 - For calendar.reschedule_event, pass eventId.
 - For calendar.create_event, pass calendarSourceId when a specific calendar is intended or the bundle makes a default clear.
@@ -921,6 +922,9 @@ export function validateModelPlan(
 
       case 'tasks.complete_matching': {
         const taskId = typeof step.args.taskId === 'string' ? step.args.taskId : '';
+        const prayerStatus = step.args.prayerStatus === 'on_time' || step.args.prayerStatus === 'late'
+          ? step.args.prayerStatus
+          : undefined;
         const validation = validateTaskId(taskId, context, false);
         if (!validation.task) {
           return validationReject(validation.reason || 'Invalid task reference.', RESPONSES.completeClarify[lang]);
@@ -929,7 +933,10 @@ export function validateModelPlan(
         referencedEntities.push(makeEntityReference('task', validation.task.id, validation.task.title, 'tasks', 1));
         normalizedSteps.push({
           ...step,
-          args: { taskId: validation.task.id },
+          args: {
+            taskId: validation.task.id,
+            ...(prayerStatus ? { prayerStatus } : {}),
+          },
         });
         break;
       }

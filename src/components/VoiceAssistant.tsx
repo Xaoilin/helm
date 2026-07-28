@@ -374,6 +374,13 @@ export default function VoiceAssistant({ prayerData }: Props) {
           addKnowledgeEntry: app.addKnowledgeEntry,
           addCaptureItem: app.addCaptureItem,
           updateGamification: app.updateGamification,
+          completePrayer: (prayerName, status, taskId) =>
+            app.completePrayer(
+              prayerName,
+              status,
+              taskId,
+              inputMode === 'voice' ? 'voice' : 'chat',
+            ),
           recordAssistantActivity: app.recordAssistantActivity,
         },
       });
@@ -401,7 +408,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
       const sessionId = sessionIdRef.current;
       const continueHandsFree = inputMode === 'voice' && handsFreeSessionActiveRef.current;
-      const finishedSpeaking = await speakMessage(result.assistantMessage, continueHandsFree ? sessionId : undefined);
+      const finishedSpeaking = await speakMessage(result.assistantMessage, sessionId);
 
       if (continueHandsFree && finishedSpeaking) {
         scheduleHandsFreeListening('followup', sessionId);

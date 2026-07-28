@@ -1,132 +1,133 @@
-import type { Task, GamificationProfile } from '../../types/domain';
-import { calculatePrayerStats } from '../../services/gamification';
-
-function toLocalDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+import type { PrayerName, PrayerOutcomeStats, PrayerOutcomeStatus } from '../../types/domain';
+import {
+  CANONICAL_PRAYER_NAMES,
+  getPrayerDeadlineBounds,
+  isPrayerOpportunityTracked,
+} from '../../services/prayerTracking';
+import { toLocalDateStr } from '../../services/financeHelpers';
+import { usePrayerContext } from '../../store/contexts/PrayerContext';
+import PrayerOutcomeBars from '../prayer/PrayerOutcomeBars';
 
 interface PrayerStatsCardProps {
-  prayerStats: ReturnType<typeof calculatePrayerStats>['currentMonth'];
-  prayerHabits: Task[];
-  gam: GamificationProfile;
-  todayStr: string;
+  prayerStats: PrayerOutcomeStats;
   showPrayerLog: boolean;
   onTogglePrayerLog: () => void;
-  onBackfillPrayerLog: (taskId: string, dateStr: string, completed: boolean) => void;
+}
+
+function getDisplayedStatus(
+  prayerName: PrayerName,
+  date: string,
+  prayer: ReturnType<typeof usePrayerContext>,
+): PrayerOutcomeStatus | 'pending' | 'not_tracked' {
+  const record = prayer.getOutcome(date, prayerName);
+  if (record) return record.status;
+  if (!prayer.schedule || !prayer.timezoneMatches) return 'pending';
+  if (!isPrayerOpportunityTracked(
+    prayer.tracking,
+    { date, prayers: prayer.schedule.prayers },
+    prayerName,
+    prayer.now,
+  )) {
+    return 'not_tracked';
+  }
+  const bounds = getPrayerDeadlineBounds(prayer.schedule.prayers, date, prayerName);
+  return bounds && prayer.now >= bounds.deadlineAt ? 'missed' : 'pending';
 }
 
 export default function PrayerStatsCard({
   prayerStats,
-  prayerHabits,
-  gam,
-  todayStr,
   showPrayerLog,
   onTogglePrayerLog,
-  onBackfillPrayerLog,
 }: PrayerStatsCardProps) {
-  if (prayerStats.perPrayer.length === 0) return null;
-
-  // Build last 7 days for the prayer log editor
+  const prayer = usePrayerContext();
   const last7Days: { dateStr: string; label: string }[] = [];
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const ds = toLocalDateStr(d);
-    const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday' : dayNames[d.getDay()];
-    last7Days.push({ dateStr: ds, label });
+  for (let index = 6; index >= 0; index -= 1) {
+    const date = new Date();
+    date.setDate(date.getDate() - index);
+    last7Days.push({
+      dateStr: toLocalDateStr(date),
+      label: index === 0
+        ? 'Today'
+        : index === 1
+          ? 'Yesterday'
+          : date.toLocaleDateString([], { weekday: 'short' }),
+    });
   }
 
   return (
-    <div className="dash-card" style={{ marginBottom: 16 }}>
+    <section className="dash-card prayer-stats-card">
       <div className="dash-card-header">
-        <span>{'\u{1F64F}'} Prayer Rate</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button
-            className="btn btn-secondary btn-sm"
-            style={{ fontSize: 10, padding: '3px 8px' }}
-            onClick={onTogglePrayerLog}
-          >
-            {showPrayerLog ? 'Close' : 'Edit Log'}
-          </button>
-          <span style={{ fontSize: 18, fontWeight: 700, color: prayerStats.overall.percentage >= 80 ? '#22c55e' : prayerStats.overall.percentage >= 50 ? '#f59e0b' : '#ff6b6b' }}>
-            {prayerStats.overall.percentage}%
-          </span>
-        </div>
+        <span>🙏 Prayer outcomes · Current month</span>
+        <button className="btn btn-secondary btn-sm" type="button" onClick={onTogglePrayerLog}>
+          {showPrayerLog ? 'Close history' : 'Correct history'}
+        </button>
       </div>
 
-      {/* Prayer Log Editor */}
       {showPrayerLog && (
-        <div style={{ marginBottom: 14, padding: 12, background: '#13151c', borderRadius: 8, border: '1px solid #1e2030' }}>
-          <div style={{ fontSize: 11, color: '#6b6f85', marginBottom: 8 }}>
-            Check off prayers you completed but forgot to log. No XP awarded — this only corrects your stats.
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <div className="prayer-history-editor">
+          <p id="prayer-history-help">
+            Correct On time, Late, or Missed outcomes. Corrections never award XP.
+            Open and future prayers stay locked here; record them from Prayer Times or Tasks after praying.
+          </p>
+          <div className="prayer-history-scroll">
+            <table>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left', padding: '4px 8px', color: '#6b6f85', fontWeight: 500 }}>Day</th>
-                  {prayerHabits.map(h => {
-                    const name = h.prayerName || h.title;
-                    return (
-                      <th key={h.id} style={{ textAlign: 'center', padding: '4px 6px', color: '#8b8fa3', fontWeight: 500, fontSize: 11 }}>
-                        {name.charAt(0).toUpperCase() + name.slice(1)}
-                      </th>
-                    );
-                  })}
+                  <th>Day</th>
+                  {CANONICAL_PRAYER_NAMES.map(prayerName => <th key={prayerName}>{prayerName}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {last7Days.map(({ dateStr, label }) => {
-                  const isToday = dateStr === todayStr;
-                  const dayLog = gam.dailyLog?.[dateStr] || [];
-                  return (
-                    <tr key={dateStr} style={{ borderTop: '1px solid #1e2030' }}>
-                      <td style={{ padding: '6px 8px', color: isToday ? '#7c8aff' : '#e1e4ea', fontWeight: isToday ? 600 : 400, fontSize: 12 }}>
-                        {label}
-                        <span style={{ fontSize: 10, color: '#4a4e62', marginLeft: 6 }}>{dateStr.slice(5)}</span>
-                      </td>
-                      {prayerHabits.map(h => {
-                        const checked = dayLog.includes(h.id);
-                        return (
-                          <td key={h.id} style={{ textAlign: 'center', padding: '6px 6px' }}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={isToday}
-                              onChange={e => onBackfillPrayerLog(h.id, dateStr, e.target.checked)}
-                              title={isToday ? 'Use the habit cards above for today' : `${label}: ${h.title}`}
-                              style={{ cursor: isToday ? 'default' : 'pointer', width: 16, height: 16, accentColor: '#22c55e' }}
-                              aria-label={`${h.title} on ${label}`}
-                            />
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
+                {last7Days.map(({ dateStr, label }) => (
+                  <tr key={dateStr}>
+                    <td>
+                      <strong>{label}</strong>
+                      <span>{dateStr.slice(5)}</span>
+                    </td>
+                    {CANONICAL_PRAYER_NAMES.map(prayerName => {
+                      const status = getDisplayedStatus(prayerName, dateStr, prayer);
+                      const isLocked = status === 'pending' || status === 'not_tracked';
+                      return (
+                        <td key={prayerName}>
+                          <select
+                            value={status}
+                            className={`prayer-history-status ${status}`}
+                            disabled={isLocked}
+                            onChange={event => prayer.correctPrayerOutcome(
+                              dateStr,
+                              prayerName,
+                              event.target.value as PrayerOutcomeStatus,
+                            )}
+                            aria-label={`${prayerName} outcome on ${label}`}
+                            aria-describedby="prayer-history-help"
+                            title={status === 'not_tracked'
+                              ? 'This prayer deadline passed before classified tracking began.'
+                              : status === 'pending'
+                                ? 'Pending prayers cannot be corrected before their on-time window closes. Use Prayer Times or Tasks to record a prayer.'
+                              : `Correct ${prayerName} outcome on ${label}`}
+                          >
+                            <option value="pending" disabled>Pending</option>
+                            <option value="not_tracked" disabled>Before tracking</option>
+                            <option value="unclassified" disabled>Legacy unknown</option>
+                            <option value="on_time">On time</option>
+                            <option value="late">Late</option>
+                            <option value="missed">Missed</option>
+                          </select>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      <div className="prayer-stats-grid">
-        {prayerStats.perPrayer.map(p => (
-          <div key={p.name} className="prayer-stat-item">
-            <div className="prayer-stat-name">{p.name}</div>
-            <div className="prayer-stat-bar">
-              <div className="prayer-stat-fill" style={{ width: `${p.percentage}%`, background: p.percentage >= 80 ? '#22c55e' : p.percentage >= 50 ? '#f59e0b' : '#ff6b6b' }} />
-            </div>
-            <div className="prayer-stat-pct">{p.percentage}%</div>
-          </div>
-        ))}
+      <PrayerOutcomeBars stats={prayerStats} />
+      <div className="prayer-stats-meta">
+        Current month · Classified opportunities only · {prayerStats.trackedDays} tracked day{prayerStats.trackedDays === 1 ? '' : 's'} · pending prayers excluded
       </div>
-      <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 8 }}>
-        {prayerStats.trackedDays > 0
-          ? `This month only \u00b7 ${prayerStats.label} \u00b7 ${prayerStats.trackedDays} tracked day${prayerStats.trackedDays === 1 ? '' : 's'}`
-          : `This month only \u00b7 ${prayerStats.label} \u00b7 No prayer logs yet`}
-      </div>
-    </div>
+    </section>
   );
 }

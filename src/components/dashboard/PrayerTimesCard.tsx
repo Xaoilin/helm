@@ -4,6 +4,13 @@ import {
   type PrayerTimesData,
   type PrayerTime as PrayerTimeType,
 } from '../../services/prayerTimes';
+import {
+  getPrayerDeadlineBounds,
+  getPrayerDeadlineName,
+  isPrayerOpportunityTracked,
+} from '../../services/prayerTracking';
+import { usePrayerContext } from '../../store/contexts/PrayerContext';
+import type { PrayerName, PrayerOutcomeStatus } from '../../types/domain';
 
 interface PrayerTimesCardProps {
   prayerData: PrayerTimesData;
@@ -11,39 +18,116 @@ interface PrayerTimesCardProps {
   city: string;
 }
 
+type DisplayedPrayerStatus = PrayerOutcomeStatus | 'pending' | 'not_tracked';
+
+function outcomeLabel(status: DisplayedPrayerStatus): string {
+  switch (status) {
+    case 'on_time': return 'On time';
+    case 'late': return 'Late';
+    case 'missed': return 'Missed';
+    case 'unclassified': return 'Legacy — classify';
+    case 'not_tracked': return 'Before tracking';
+    default: return 'Pending';
+  }
+}
+
 export default function PrayerTimesCard({ prayerData, nextPrayer, city }: PrayerTimesCardProps) {
+  const prayer = usePrayerContext();
+
   return (
-    <div className="dash-card" style={{ marginBottom: 16 }}>
+    <section className="dash-card prayer-times-card">
       <div className="dash-card-header">
-        <span>{'\u{1F54C}'} Prayer Times &mdash; {city}</span>
-        <span style={{ fontSize: 11, color: '#6b6f85' }}>{prayerData.hijriDate}</span>
+        <span>🕌 Prayer Times — {city}</span>
+        <span className="prayer-hijri-date">{prayerData.hijriDate}</span>
       </div>
       <div className="prayer-grid">
-        {prayerData.prayers.map(p => {
-          const isNext = nextPrayer?.prayer.name === p.name;
-          const isPrayer = p.type === 'prayer';
-          return (
-            <div key={p.name} className={`prayer-row ${isNext ? 'next' : ''} ${isPrayer ? 'wajib' : 'event'}`}>
-              <div className="prayer-name">
-                {p.name}
-                <span className="prayer-arabic">{p.nameArabic}</span>
+        {prayerData.prayers.map(entry => {
+          const isNext = nextPrayer?.prayer.name === entry.name;
+          if (entry.type === 'event') {
+            return (
+              <div key={entry.name} className="prayer-row event">
+                <div className="prayer-name">
+                  {entry.name}
+                  <span className="prayer-arabic">{entry.nameArabic}</span>
+                </div>
+                <div className="prayer-time">{entry.time}</div>
               </div>
-              <div className="prayer-time">{p.time}</div>
-              {isNext && (
-                <div className="prayer-countdown">in {formatTimeUntil(nextPrayer!.minutesUntil)}</div>
-              )}
+            );
+          }
+
+          const prayerName = entry.name as PrayerName;
+          const bounds = prayer.timezoneMatches
+            ? getPrayerDeadlineBounds(prayerData.prayers, prayer.today, prayerName)
+            : null;
+          const deadlineName = getPrayerDeadlineName(prayerName);
+          const deadlineTime = prayerData.prayers.find(candidate => candidate.name === deadlineName)?.time;
+          const record = prayer.getOutcome(prayer.today, prayerName);
+          const opportunityIsTracked = prayer.timezoneMatches && isPrayerOpportunityTracked(
+            prayer.tracking,
+            { date: prayer.today, prayers: prayerData.prayers },
+            prayerName,
+            prayer.now,
+          );
+          const status: DisplayedPrayerStatus = record?.status
+            || (!prayer.timezoneMatches
+              ? 'pending'
+              : !opportunityIsTracked
+              ? 'not_tracked'
+              : bounds && prayer.now >= bounds.deadlineAt
+                ? 'missed'
+                : 'pending');
+          const isCompleted = status === 'on_time' || status === 'late' || status === 'unclassified';
+
+          return (
+            <div
+              key={entry.name}
+              className={`prayer-row wajib ${isNext ? 'next' : ''} outcome-${status}`}
+            >
+              <div className="prayer-name">
+                {entry.name}
+                <span className="prayer-arabic">{entry.nameArabic}</span>
+              </div>
+              <div className="prayer-window-copy">
+                <strong>Starts {entry.time}</strong>
+                {(bounds || deadlineTime) && (
+                  <span>
+                    On time until {deadlineName} {bounds
+                      ? bounds.deadlineAt.toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : deadlineTime}
+                  </span>
+                )}
+                {isNext && nextPrayer && (
+                  <small>Starts in {formatTimeUntil(nextPrayer.minutesUntil)}</small>
+                )}
+              </div>
+              <span className={`prayer-outcome-badge ${status}`}>{outcomeLabel(status)}</span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm prayer-mark-button"
+                disabled={isCompleted}
+                onClick={() => prayer.requestPrayerCompletion(prayerName, { source: 'dashboard' })}
+              >
+                {isCompleted ? 'Recorded' : 'Mark prayed'}
+              </button>
             </div>
           );
         })}
       </div>
+      <div className="prayer-schedule-meta">
+        <span>{prayerData.source === 'cache' ? 'Same-day cached schedule' : 'Live schedule'} · {prayerData.timezone || 'Timezone unavailable'}</span>
+        <span>{prayerData.method}</span>
+      </div>
       <div className="prayer-sources">
-        <span style={{ fontSize: 10, color: '#4a4e62' }}>Sources:</span>
+        <span>Sources:</span>
         <a href={PRAYER_SOURCES.api.url} target="_blank" rel="noopener noreferrer">{PRAYER_SOURCES.api.name}</a>
-        <span style={{ color: '#2a2d42' }}>|</span>
+        <span>|</span>
         <a href={PRAYER_SOURCES.method.url} target="_blank" rel="noopener noreferrer">{PRAYER_SOURCES.method.name}</a>
-        <span style={{ color: '#2a2d42' }}>|</span>
+        <span>|</span>
         <a href={PRAYER_SOURCES.verification.url} target="_blank" rel="noopener noreferrer">Verify times</a>
       </div>
-    </div>
+    </section>
   );
 }

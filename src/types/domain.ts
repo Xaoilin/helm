@@ -268,6 +268,134 @@ export interface Task {
   updatedAt: string;
 }
 
+// ── Prayer Tracking ──
+export type PrayerCompletionStatus = 'on_time' | 'late';
+export type PrayerOutcomeStatus = PrayerCompletionStatus | 'missed' | 'unclassified';
+export type PrayerCompletionSource =
+  | 'dashboard'
+  | 'tasks'
+  | 'focus'
+  | 'reminder'
+  | 'chat'
+  | 'voice'
+  | 'history'
+  | 'migration'
+  | 'system'
+  | (string & {});
+
+export interface PrayerTrackingRecord {
+  date: string; // local YYYY-MM-DD
+  prayerName: PrayerName;
+  status: PrayerOutcomeStatus;
+  recordedAt: string;
+  /** Persistent one-time reward receipt. Corrections must preserve it. */
+  rewarded?: true;
+  taskId?: string;
+  source?: PrayerCompletionSource;
+}
+
+/**
+ * Duplicate transaction receipt kept with XP/dailyLog. Prayer tracking and
+ * gamification are separate persisted stores, so this ledger repairs either
+ * side after an interrupted multi-store write.
+ */
+export interface PrayerCompletionLedgerEntry {
+  date: string;
+  prayerName: PrayerName;
+  status: PrayerOutcomeStatus;
+  recordedAt: string;
+  rewarded: boolean;
+  taskId?: string;
+  source?: PrayerCompletionSource;
+}
+
+export interface PrayerReminderReceipt {
+  date: string; // local YYYY-MM-DD
+  prayerName: PrayerName;
+  deadlineAt: string;
+  notificationKey: string;
+  notifiedAt?: string;
+  snoozedUntil?: string;
+}
+
+export interface PrayerActivationDayEligibility {
+  date: string; // local YYYY-MM-DD captured from actual activation-day schedule
+  prayerNames: PrayerName[];
+}
+
+export interface PrayerTrackingState {
+  schemaVersion: number;
+  trackingStartedAt: string;
+  activationDayEligibility?: PrayerActivationDayEligibility;
+  records: Record<string, PrayerTrackingRecord>;
+  reminderReceipts: Record<string, PrayerReminderReceipt>;
+}
+
+export interface PrayerCompletionUndoData {
+  prayerDate: string;
+  prayerName: PrayerName;
+  taskCompletion?: {
+    taskId: string;
+    before: {
+      completed: boolean;
+      completedAt?: string;
+      recurringLastReset?: string;
+    };
+    after: {
+      completed: boolean;
+      completedAt?: string;
+      recurringLastReset?: string;
+    };
+  };
+  outcomeBefore?: PrayerTrackingRecord;
+  outcomeAfter: PrayerTrackingRecord;
+  gamificationBefore: GamificationProfile;
+  gamificationAfter: GamificationProfile;
+}
+
+export type PrayerDeadlineName = 'Sunrise' | 'Sunset' | 'Midnight';
+
+export interface PrayerDeadlineBounds {
+  date: string; // local prayer date, not necessarily deadline calendar date
+  prayerName: PrayerName;
+  deadlineName: PrayerDeadlineName;
+  startsAt: Date;
+  deadlineAt: Date;
+}
+
+export interface PrayerScheduleEntry {
+  name: string;
+  time: string;
+}
+
+export interface PrayerScheduleDay {
+  date: string; // local YYYY-MM-DD
+  prayers: readonly PrayerScheduleEntry[];
+}
+
+export interface PrayerOutcomePercentages {
+  onTime: number;
+  late: number;
+  missed: number;
+}
+
+export interface PrayerOutcomeTally {
+  onTime: number;
+  late: number;
+  missed: number;
+  inferredMissed: number;
+  unclassified: number;
+  pending: number;
+  classifiedTotal: number;
+  opportunities: number;
+  percentages: PrayerOutcomePercentages;
+}
+
+export interface PrayerOutcomeStats extends PrayerOutcomeTally {
+  trackedDays: number;
+  perPrayer: Record<PrayerName, PrayerOutcomeTally>;
+}
+
 export type FocusCandidateKind = 'task' | 'habit' | 'prayer' | 'meeting_prep' | 'break' | 'clear';
 export type FocusFeedbackAction = 'dismissed' | 'snoozed' | 'opened' | 'completed' | 'refreshed';
 export type FocusDurationSource = 'task_title' | 'task_description' | 'event_window' | 'system' | 'heuristic' | 'openai';
@@ -514,6 +642,8 @@ export interface GamificationProfile {
   habitTallies?: Record<string, number>;
   /** Daily completion log: "YYYY-MM-DD" → list of completed habit task IDs. */
   dailyLog?: Record<string, string[]>;
+  /** Durable prayer mutation receipts, keyed by local date + prayer. */
+  prayerCompletionLedger?: Record<string, PrayerCompletionLedgerEntry>;
 }
 
 // ── Assistant Activity ──
@@ -534,6 +664,7 @@ export type AssistantUndoOperation =
   | { type: 'task.delete'; id: string }
   | { type: 'task.restore'; tasks: Task[] }
   | { type: 'task.replace'; task: Task; gamification?: GamificationProfile }
+  | { type: 'prayer.complete'; inverse: PrayerCompletionUndoData }
   | { type: 'calendar.delete'; id: string }
   | { type: 'calendar.replace'; event: CalendarEvent }
   | { type: 'finance.delete_transaction'; id: string }
@@ -604,6 +735,8 @@ export interface Settings {
   prayerEnabled?: boolean;
   prayerCity?: string;
   prayerCountry?: string;
+  prayerReminderEnabled?: boolean;
+  prayerReminderMinutes?: 5 | 10 | 15 | 30;
   assistantEnabled?: boolean;
   elevenLabsApiKey?: string;
   elevenLabsVoiceId?: string;

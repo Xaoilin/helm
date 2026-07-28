@@ -17,6 +17,7 @@
 import { API_TIMEOUT } from '../config/constants';
 import { prayerTimesBreaker } from './serviceBreakers';
 import { withRetry } from './retry';
+import { toLocalDateStr } from './financeHelpers';
 
 const API_BASE = 'https://api.aladhan.com/v1';
 const CACHE_KEY = 'helm:prayer-times-cache';
@@ -34,8 +35,10 @@ export interface PrayerTimesData {
   hijriDate: string;
   city: string;
   country: string;
+  timezone: string;
   method: string;
   fetchedAt: string;
+  source: 'network' | 'cache';
 }
 
 export const PRAYER_NAMES: Record<string, { arabic: string; type: 'prayer' | 'event' }> = {
@@ -50,22 +53,99 @@ export const PRAYER_NAMES: Record<string, { arabic: string; type: 'prayer' | 'ev
 };
 
 const DISPLAY_ORDER = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Sunset', 'Maghrib', 'Isha', 'Midnight'];
+const REQUIRED_TIMINGS = DISPLAY_ORDER;
+const CLOCK_TIME_PATTERN = /^([01]?\d|2[0-3]):([0-5]\d)(?:\s*\([^)]*\))?$/u;
 
-function toLocalDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function clockMinutes(value: string): number | null {
+  const match = CLOCK_TIME_PATTERN.exec(value.trim());
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function hasValidPrayerSequence(timings: Readonly<Record<string, string>>): boolean {
+  const values = Object.fromEntries(REQUIRED_TIMINGS.map(name => [
+    name,
+    clockMinutes(timings[name] || ''),
+  ])) as Record<(typeof REQUIRED_TIMINGS)[number], number | null>;
+  if (Object.values(values).some(value => value === null)) return false;
+
+  const fajr = values.Fajr!;
+  const sunrise = values.Sunrise!;
+  const dhuhr = values.Dhuhr!;
+  const asr = values.Asr!;
+  const sunset = values.Sunset!;
+  const maghrib = values.Maghrib!;
+  const isha = values.Isha!;
+  const midnight = values.Midnight! <= isha ? values.Midnight! + 24 * 60 : values.Midnight!;
+
+  return fajr < sunrise
+    && sunrise < dhuhr
+    && dhuhr <= asr
+    && asr < sunset
+    && sunset <= maghrib
+    && maghrib <= isha
+    && isha < midnight
+    && midnight < fajr + 24 * 60;
+}
+
+function isCompletePrayerTimesData(value: unknown): value is PrayerTimesData {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<PrayerTimesData>;
+  if (
+    typeof candidate.date !== 'string'
+    || typeof candidate.city !== 'string'
+    || typeof candidate.country !== 'string'
+    || typeof candidate.timezone !== 'string'
+    || typeof candidate.method !== 'string'
+    || typeof candidate.fetchedAt !== 'string'
+    || !Array.isArray(candidate.prayers)
+  ) {
+    return false;
+  }
+
+  const entries = new Map(candidate.prayers.map(prayer => [prayer?.name, prayer]));
+  const complete = REQUIRED_TIMINGS.every(name => {
+    const entry = entries.get(name);
+    return Boolean(
+      entry
+      && typeof entry.nameArabic === 'string'
+      && typeof entry.time === 'string'
+      && CLOCK_TIME_PATTERN.test(entry.time)
+      && entry.type === PRAYER_NAMES[name]?.type,
+    );
+  });
+  if (!complete) return false;
+  return hasValidPrayerSequence(Object.fromEntries(
+    REQUIRED_TIMINGS.map(name => [name, entries.get(name)!.time]),
+  ));
 }
 
 /** Fetch prayer times from AlAdhan API. */
 export async function fetchPrayerTimes(city: string, country: string): Promise<PrayerTimesData> {
   const url = `${API_BASE}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=0`;
   const resp = await prayerTimesBreaker.call(() => withRetry(async () => {
-    return fetch(url, { signal: AbortSignal.timeout(API_TIMEOUT.PRAYER_TIMES) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(API_TIMEOUT.PRAYER_TIMES) });
+    if (!response.ok) {
+      throw new Error(`Prayer times API error: ${response.status}`);
+    }
+    return response;
   }, { name: 'PrayerTimes', maxRetries: 2, initialDelayMs: 2000 }));
-  if (!resp.ok) throw new Error(`Prayer times API error: ${resp.status}`);
   const json = await resp.json();
   const data = json.data;
+  if (!data || typeof data !== 'object' || !data.timings || typeof data.timings !== 'object') {
+    throw new Error('Prayer times API returned an invalid schedule');
+  }
 
   const timings = data.timings as Record<string, string>;
+  const missingTimings = REQUIRED_TIMINGS.filter(name =>
+    typeof timings[name] !== 'string' || !CLOCK_TIME_PATTERN.test(timings[name].trim())
+  );
+  if (missingTimings.length > 0) {
+    throw new Error(`Prayer times API omitted required timings: ${missingTimings.join(', ')}`);
+  }
+  if (!hasValidPrayerSequence(timings)) {
+    throw new Error('Prayer times API returned an invalid timing sequence');
+  }
   const prayers: PrayerTime[] = DISPLAY_ORDER
     .filter(name => timings[name])
     .map(name => ({
@@ -84,30 +164,66 @@ export async function fetchPrayerTimes(city: string, country: string): Promise<P
     hijriDate,
     city,
     country,
+    timezone: typeof data.meta?.timezone === 'string' ? data.meta.timezone : '',
     method: 'Shia Ithna-Ashari, Leva Institute, Qum',
     fetchedAt: new Date().toISOString(),
+    source: 'network',
   };
 }
 
-/** Load cached prayer times for today, or fetch fresh. */
-export async function getPrayerTimes(city: string, country: string): Promise<PrayerTimesData> {
-  const todayStr = toLocalDateStr(new Date());
+export interface GetPrayerTimesOptions {
+  forceRefresh?: boolean;
+}
 
-  // Check cache
+function readPrayerTimesCache(
+  city: string,
+  country: string,
+  todayStr: string,
+): PrayerTimesData | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
-    if (raw) {
-      const cached = JSON.parse(raw) as PrayerTimesData;
-      if (cached.date === todayStr && cached.city === city && cached.country === country) {
-        return cached;
-      }
-    }
-  } catch { /* ignore */ }
+    if (!raw) return null;
 
-  // Fetch fresh
-  const data = await fetchPrayerTimes(city, country);
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* ignore */ }
-  return data;
+    const cached = JSON.parse(raw) as unknown;
+    if (
+      !isCompletePrayerTimesData(cached)
+      || cached.date !== todayStr
+      || cached.city !== city
+      || cached.country !== country
+    ) {
+      return null;
+    }
+
+    return {
+      ...cached,
+      timezone: cached.timezone || '',
+      source: 'cache',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Load cached prayer times for today, or fetch fresh. */
+export async function getPrayerTimes(
+  city: string,
+  country: string,
+  options: GetPrayerTimesOptions = {},
+): Promise<PrayerTimesData> {
+  const todayStr = toLocalDateStr(new Date());
+  const cached = readPrayerTimesCache(city, country, todayStr);
+
+  if (cached && !options.forceRefresh) return cached;
+
+  try {
+    const data = await fetchPrayerTimes(city, country);
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+    return data;
+  } catch (error) {
+    // A matching same-day cache is safe as a truthful degraded fallback.
+    if (cached) return cached;
+    throw error;
+  }
 }
 
 /** Parse "HH:MM" time string to today's Date object. */

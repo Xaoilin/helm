@@ -17,6 +17,9 @@ import type {
   AssistantUndoResult,
   ClockState,
   ClockTimerSound,
+  PrayerCompletionSource,
+  PrayerCompletionStatus,
+  PrayerName,
 } from '../types/domain';
 import {
   normalizeAssistantNavigationRequest,
@@ -40,6 +43,11 @@ import { AssistantProvider, useAssistantContext } from './contexts/AssistantCont
 import { AssistantActivityProvider, useAssistantActivityContext } from './contexts/AssistantActivityContext';
 import { ClockProvider, useClockContext } from './contexts/ClockContext';
 import { DashboardFocusProvider, useDashboardFocusContext } from './contexts/DashboardFocusContext';
+import {
+  PrayerProvider,
+  usePrayerContext,
+  type PrayerCompletionMutationResult,
+} from './contexts/PrayerContext';
 import { GoogleSyncProvider } from '../hooks/useGoogleSync';
 import { STORAGE_KEYS } from '../config/constants';
 import { logError } from '../services/logger';
@@ -164,6 +172,12 @@ interface AppContextAPI {
 
   updateGamification: (profile: GamificationProfile) => void;
   backfillPrayerLog: (taskId: string, dateStr: string, completed: boolean) => void;
+  completePrayer: (
+    prayerName: PrayerName,
+    status: PrayerCompletionStatus,
+    taskId?: string,
+    source?: PrayerCompletionSource,
+  ) => PrayerCompletionMutationResult;
   refreshDashboardFocus: () => void;
   dismissDashboardFocus: (candidateId?: string) => void;
   snoozeDashboardFocus: (candidateId?: string, minutes?: number) => void;
@@ -268,6 +282,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   const activityCtx = useAssistantActivityContext();
   const clockCtx = useClockContext();
   const dashboardFocusCtx = useDashboardFocusContext();
+  const prayerCtx = usePrayerContext();
 
   const navigate = useCallback((surface: Surface) => setState(current => ({
     ...current,
@@ -336,6 +351,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     && assistantCtx.loaded
     && activityCtx.loaded
     && clockCtx.loaded
+    && prayerCtx.loaded
     && dashboardFocusCtx.loaded;
 
   const openDashboardFocusTarget = useCallback((candidateId?: string) => {
@@ -421,6 +437,11 @@ function ShellProvider({ children }: { children: ReactNode }) {
           });
           break;
         case 'task.replace':
+          if (operation.task.category === 'prayer' && operation.gamification) {
+            throw new Error(
+              'This legacy prayer undo cannot be applied safely after later activity.',
+            );
+          }
           taskCtx.setTasks(prev => {
             const exists = prev.some(task => task.id === operation.task.id);
             return exists
@@ -431,6 +452,49 @@ function ShellProvider({ children }: { children: ReactNode }) {
             gamificationCtx.updateGamification(operation.gamification);
           }
           break;
+        case 'prayer.complete': {
+          const taskCompletion = operation.inverse.taskCompletion;
+          if (taskCompletion) {
+            const currentTask = taskCtx.tasks.find(task => task.id === taskCompletion.taskId);
+            if (!currentTask) {
+              throw new Error('The completed prayer task no longer exists.');
+            }
+            const completionFieldsChanged = currentTask.completed !== taskCompletion.after.completed
+              || currentTask.completedAt !== taskCompletion.after.completedAt
+              || (
+                taskCompletion.after.recurringLastReset !== undefined
+                && currentTask.recurring?.lastReset !== taskCompletion.after.recurringLastReset
+              );
+            if (completionFieldsChanged) {
+              throw new Error(
+                'The prayer task completion changed after this action and was not undone.',
+              );
+            }
+          }
+
+          prayerCtx.undoPrayerCompletion(operation.inverse);
+          if (taskCompletion) {
+            taskCtx.setTasks(prev => prev.map(task => {
+              if (task.id !== taskCompletion.taskId) return task;
+              let recurring = task.recurring;
+              if (taskCompletion.after.recurringLastReset !== undefined && recurring) {
+                recurring = { ...recurring };
+                if (taskCompletion.before.recurringLastReset !== undefined) {
+                  recurring.lastReset = taskCompletion.before.recurringLastReset;
+                } else {
+                  delete recurring.lastReset;
+                }
+              }
+              return {
+                ...task,
+                completed: taskCompletion.before.completed,
+                completedAt: taskCompletion.before.completedAt,
+                ...(recurring ? { recurring } : {}),
+              };
+            }));
+          }
+          break;
+        }
         case 'calendar.delete':
           calendar.removeCalendarEvent(operation.id);
           break;
@@ -466,6 +530,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     finance,
     gamificationCtx,
     knowledge,
+    prayerCtx,
     taskCtx,
   ]);
 
@@ -588,6 +653,12 @@ function ShellProvider({ children }: { children: ReactNode }) {
 
     updateGamification: gamificationCtx.updateGamification,
     backfillPrayerLog: gamificationCtx.backfillPrayerLog,
+    completePrayer: (
+      prayerName: PrayerName,
+      status: PrayerCompletionStatus,
+      taskId?: string,
+      source: PrayerCompletionSource = 'system',
+    ) => prayerCtx.completePrayer(prayerName, status, { taskId, source }),
     refreshDashboardFocus: dashboardFocusCtx.refreshDashboardFocus,
     dismissDashboardFocus: dashboardFocusCtx.dismissDashboardFocus,
     snoozeDashboardFocus: dashboardFocusCtx.snoozeDashboardFocus,
@@ -634,6 +705,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     assistantCtx,
     activityCtx,
     gamificationCtx,
+    prayerCtx,
     dashboardFocusCtx,
     clockCtx,
     navigate,
@@ -681,6 +753,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
   const finance = useFinanceContext();
   const assistantCtx = useAssistantContext();
   const activityCtx = useAssistantActivityContext();
+  const prayerCtx = usePrayerContext();
 
   const crossDomain: ChatCrossDomainData = useMemo(() => ({
     calendarAccounts: calendar.calendarAccounts,
@@ -709,6 +782,12 @@ function ChatBridge({ children }: { children: ReactNode }) {
     addKnowledgeEntry: knowledge.addKnowledgeEntry,
     addCaptureItem: captureCtx.addCaptureItem,
     updateGamification: gamificationCtx.updateGamification,
+    completePrayer: (
+      prayerName,
+      status,
+      taskId,
+      source = 'chat',
+    ) => prayerCtx.completePrayer(prayerName, status, { taskId, source }),
   }), [
     calendar.calendarAccounts,
     calendar.calendarSources,
@@ -735,6 +814,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
     activityCtx.recordAssistantActivity,
     gamificationCtx.gamification,
     gamificationCtx.updateGamification,
+    prayerCtx,
     settingsCtx.settings,
   ]);
 
@@ -749,25 +829,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
           <TripProvider>
             <ProjectProvider>
               <TaskProvider>
-                <DashboardFocusProvider>
-                  <KnowledgeProvider>
-                    <CaptureProvider>
-                      <HealthProvider>
-                        <FinanceProvider>
-                          <ClockProvider>
-                            <AssistantProvider>
-                              <AssistantActivityProvider>
-                                <ChatBridge>
-                                  <ShellProvider>{children}</ShellProvider>
-                                </ChatBridge>
-                              </AssistantActivityProvider>
-                            </AssistantProvider>
-                          </ClockProvider>
-                        </FinanceProvider>
-                      </HealthProvider>
-                    </CaptureProvider>
-                  </KnowledgeProvider>
-                </DashboardFocusProvider>
+                <KnowledgeProvider>
+                  <CaptureProvider>
+                    <HealthProvider>
+                      <FinanceProvider>
+                        <PrayerProvider>
+                          <DashboardFocusProvider>
+                            <ClockProvider>
+                              <AssistantProvider>
+                                <AssistantActivityProvider>
+                                  <ChatBridge>
+                                    <ShellProvider>{children}</ShellProvider>
+                                  </ChatBridge>
+                                </AssistantActivityProvider>
+                              </AssistantProvider>
+                            </ClockProvider>
+                          </DashboardFocusProvider>
+                        </PrayerProvider>
+                      </FinanceProvider>
+                    </HealthProvider>
+                  </CaptureProvider>
+                </KnowledgeProvider>
               </TaskProvider>
             </ProjectProvider>
           </TripProvider>

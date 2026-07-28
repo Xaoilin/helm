@@ -12,6 +12,9 @@ import type {
   KnowledgeEntry,
   KnowledgeTopic,
   LifestyleItem,
+  PrayerCompletionStatus,
+  PrayerCompletionUndoData,
+  PrayerName,
   Project,
   Settings,
   AssistantProvider,
@@ -79,6 +82,17 @@ export interface AssistantToolCall extends AssistantToolCallDraft {
 export interface AssistantPendingConfirmation {
   assistantMessage: string;
   toolCalls: AssistantToolCall[];
+  referencedEntities: AssistantEntityReference[];
+  createdAt: string;
+  source: AssistantPlanningSource;
+  planningModel?: string;
+}
+
+export interface AssistantPendingPrayerCompletion {
+  assistantMessage: string;
+  toolCall: AssistantToolCall;
+  prayerName: PrayerName;
+  taskId: string;
   referencedEntities: AssistantEntityReference[];
   createdAt: string;
   source: AssistantPlanningSource;
@@ -153,6 +167,7 @@ export type AssistantPlanningStatus =
   | 'model_response_invalid'
   | 'validator_rejected'
   | 'local_confirmation'
+  | 'local_clarification'
   | 'local_correction';
 
 export interface AssistantPlannerValidation {
@@ -165,6 +180,7 @@ export interface AssistantDialogState {
   recentEntities: AssistantEntityReference[];
   recentPlans: AssistantDialogPlanReference[];
   pendingConfirmation?: AssistantPendingConfirmation;
+  pendingPrayerCompletion?: AssistantPendingPrayerCompletion;
 }
 
 export interface AssistantCommandContext {
@@ -205,6 +221,14 @@ export interface AssistantActionHandlers {
   addTransaction?: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => string;
   addKnowledgeEntry?: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateGamification?: (profile: GamificationProfile) => void;
+  completePrayer?: (
+    prayerName: PrayerName,
+    status: PrayerCompletionStatus,
+    taskId?: string,
+  ) => {
+    undo: PrayerCompletionUndoData;
+    xpEarned: number;
+  };
   recordAssistantActivity?: (activity: AssistantActivityDraft) => void;
 }
 

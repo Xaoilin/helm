@@ -4,6 +4,7 @@ import type {
   AssistantDialogState,
   AssistantEntityReference,
   AssistantPendingConfirmation,
+  AssistantPendingPrayerCompletion,
 } from './shared';
 import type { ActionPlan } from './plannerSchema';
 
@@ -27,6 +28,7 @@ export function normaliseDialogState(
     recentEntities: state?.recentEntities ?? [],
     recentPlans: state?.recentPlans ?? [],
     pendingConfirmation: state?.pendingConfirmation,
+    pendingPrayerCompletion: state?.pendingPrayerCompletion,
   };
 }
 
@@ -68,5 +70,15 @@ export function withPendingConfirmation(
   return {
     ...state,
     pendingConfirmation: plan,
+  };
+}
+
+export function withPendingPrayerCompletion(
+  state: AssistantDialogState,
+  pending: AssistantPendingPrayerCompletion | undefined,
+): AssistantDialogState {
+  return {
+    ...state,
+    pendingPrayerCompletion: pending,
   };
 }

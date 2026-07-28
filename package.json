@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "private": true,
-  "version": "0.2.69",
+  "version": "0.2.70",
   "type": "module",
   "scripts": {
     "benchmark:assistant": "tsx ./scripts/run-assistant-benchmark.ts",
@@ -28,6 +28,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.100.1",
     "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-notification": "^2.3.3",
     "openwakeword-wasm-browser": "^0.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

@@ -37,6 +37,25 @@ describe('assistant tool schemas', () => {
     ]);
   });
 
+  it('exposes optional prayer completion status as a strict nullable enum', () => {
+    const [definition] = buildAssistantToolDefinitions(['tasks.complete_matching']);
+    const parameters = definition.parameters as {
+      required: string[];
+      properties: {
+        prayerStatus: {
+          type: string[];
+          enum: string[];
+        };
+      };
+    };
+
+    expect(parameters.required).toContain('prayerStatus');
+    expect(parameters.properties.prayerStatus).toEqual({
+      type: ['string', 'null'],
+      enum: ['on_time', 'late'],
+    });
+  });
+
   it('rejects unknown tool names', () => {
     expect(fromAssistantToolName('helm_not_a_real_tool')).toBeNull();
   });

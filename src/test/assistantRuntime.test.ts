@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CapabilityId } from '../assistant/capabilities';
+import { executeActionPlan } from '../assistant/executor';
+import type { ActionPlan } from '../assistant/plannerSchema';
 import { toAssistantToolName } from '../assistant/toolSchemas';
 import { DEFAULT_PROFILE } from '../services/gamification';
 import { processAssistantCommand, resetOllamaCache } from '../services/assistantRuntime';
@@ -48,6 +50,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     category: overrides.category || 'task',
     dueDate: overrides.dueDate,
     recurring: overrides.recurring,
+    prayerName: overrides.prayerName,
     goalTag: overrides.goalTag,
     emoji: overrides.emoji,
     createdAt: overrides.createdAt || '2026-04-06T09:00:00.000Z',
@@ -424,6 +427,295 @@ describe('assistant runtime', () => {
       undoOperation: { type: 'capture.delete', id: 'capture-1' },
     }));
     expect(result.assistantMessage).toBe('Captured that in your Inbox.');
+  });
+
+  it('persists prayer completion clarification and resolves a strict follow-up locally', async () => {
+    mockHostedAssistant(() => makeHostedToolTurn([{
+      callId: 'call_complete_fajr',
+      capability: 'tasks.complete_matching',
+      args: {
+        taskId: 'prayer-fajr',
+      },
+    }]));
+
+    const prayerTask = makeTask({
+      id: 'prayer-fajr',
+      title: 'Fajr Prayer',
+      category: 'prayer',
+      prayerName: 'Fajr',
+      recurring: { frequency: 'daily' },
+    });
+    const completePrayer = vi.fn(() => ({
+      undo: {
+        prayerDate: '2026-04-06',
+        prayerName: 'Fajr' as const,
+        taskCompletion: {
+          taskId: prayerTask.id,
+          before: { completed: false },
+          after: {
+            completed: true,
+            completedAt: '2026-04-06T05:00:00.000Z',
+            recurringLastReset: '2026-04-06',
+          },
+        },
+        outcomeAfter: {
+          date: '2026-04-06',
+          prayerName: 'Fajr' as const,
+          status: 'on_time' as const,
+          recordedAt: '2026-04-06T05:00:00.000Z',
+        },
+        gamificationBefore: DEFAULT_PROFILE,
+        gamificationAfter: DEFAULT_PROFILE,
+      },
+      xpEarned: 25,
+    }));
+    const recordAssistantActivity = vi.fn();
+    const handlers = {
+      addTask: vi.fn(() => 'unused'),
+      updateTask: vi.fn(),
+      completePrayer,
+      recordAssistantActivity,
+    };
+    const context = makeContext({ tasks: [prayerTask] });
+
+    const first = await processAssistantCommand('I prayed Fajr', context, {
+      lang: 'en',
+      provider: 'hosted',
+      dialogState: makeDialogState(),
+      handlers,
+    });
+
+    expect(first.assistantMessage).toBe('On time or late?');
+    expect(first.dialogState.pendingPrayerCompletion).toEqual(expect.objectContaining({
+      prayerName: 'Fajr',
+      taskId: 'prayer-fajr',
+      toolCall: expect.objectContaining({
+        callId: 'call_complete_fajr',
+        capability: 'tasks.complete_matching',
+        args: { taskId: 'prayer-fajr' },
+      }),
+    }));
+    expect(completePrayer).not.toHaveBeenCalled();
+
+    const ambiguous = await processAssistantCommand('around breakfast', context, {
+      lang: 'en',
+      provider: 'hosted',
+      dialogState: first.dialogState,
+      handlers,
+    });
+
+    expect(ambiguous.assistantMessage).toBe('On time or late?');
+    expect(ambiguous.dialogState.pendingPrayerCompletion).toBeDefined();
+    expect(completePrayer).not.toHaveBeenCalled();
+
+    const resolved = await processAssistantCommand('It was on time.', context, {
+      lang: 'en',
+      provider: 'hosted',
+      dialogState: ambiguous.dialogState,
+      activity: {
+        actor: 'chat',
+        surface: 'chat',
+        sourceTranscript: 'It was on time.',
+      },
+      handlers,
+    });
+
+    expect(resolved.planningStatus).toBe('local_clarification');
+    expect(resolved.assistantMessage).toBe('Completed "Fajr Prayer" as on time.');
+    expect(resolved.dialogState.pendingPrayerCompletion).toBeUndefined();
+    expect(completePrayer).toHaveBeenCalledWith('Fajr', 'on_time', 'prayer-fajr');
+    expect(runHostedAssistantTurn).toHaveBeenCalledTimes(1);
+    expect(recordAssistantActivity).toHaveBeenCalledWith(expect.objectContaining({
+      domain: 'tasks',
+      action: 'completed',
+      undoOperation: {
+        type: 'prayer.complete',
+        inverse: expect.objectContaining({
+          prayerDate: '2026-04-06',
+          prayerName: 'Fajr',
+        }),
+      },
+    }));
+  });
+
+  it('executes an explicitly classified late prayer without clarification', async () => {
+    mockHostedAssistant(() => makeHostedToolTurn([{
+      callId: 'call_complete_isha',
+      capability: 'tasks.complete_matching',
+      args: {
+        taskId: 'prayer-isha',
+        prayerStatus: 'late',
+      },
+    }]));
+
+    const prayerTask = makeTask({
+      id: 'prayer-isha',
+      title: 'Isha Prayer',
+      category: 'prayer',
+      prayerName: 'Isha',
+      recurring: { frequency: 'daily' },
+    });
+    const completePrayer = vi.fn(() => ({
+      undo: {
+        prayerDate: '2026-04-06',
+        prayerName: 'Isha' as const,
+        taskCompletion: {
+          taskId: prayerTask.id,
+          before: { completed: false },
+          after: {
+            completed: true,
+            completedAt: '2026-04-06T22:00:00.000Z',
+            recurringLastReset: '2026-04-06',
+          },
+        },
+        outcomeAfter: {
+          date: '2026-04-06',
+          prayerName: 'Isha' as const,
+          status: 'late' as const,
+          recordedAt: '2026-04-06T22:00:00.000Z',
+        },
+        gamificationBefore: DEFAULT_PROFILE,
+        gamificationAfter: DEFAULT_PROFILE,
+      },
+      xpEarned: 25,
+    }));
+
+    const result = await processAssistantCommand('I prayed Isha late', makeContext({
+      tasks: [prayerTask],
+    }), {
+      lang: 'en',
+      provider: 'hosted',
+      dialogState: makeDialogState(),
+      handlers: {
+        addTask: vi.fn(() => 'unused'),
+        updateTask: vi.fn(),
+        completePrayer,
+      },
+    });
+
+    expect(result.dialogState.pendingPrayerCompletion).toBeUndefined();
+    expect(result.execution?.toolResults[0]).toEqual(expect.objectContaining({
+      status: 'completed',
+      summary: 'Completed "Isha Prayer" as late.',
+    }));
+    expect(completePrayer).toHaveBeenCalledWith('Isha', 'late', 'prayer-isha');
+  });
+
+  it('preflights missing prayer status before mutating earlier plan steps', () => {
+    const prayerTask = makeTask({
+      id: 'prayer-fajr',
+      title: 'Fajr Prayer',
+      category: 'prayer',
+      prayerName: 'Fajr',
+      recurring: { frequency: 'daily' },
+    });
+    const plan: ActionPlan = {
+      mode: 'act',
+      response: '',
+      confidence: 1,
+      steps: [
+        {
+          capability: 'tasks.create_task',
+          args: {
+            title: 'Buy milk',
+            priority: 'medium',
+            category: 'task',
+          },
+        },
+        {
+          capability: 'tasks.complete_matching',
+          args: { taskId: 'prayer-fajr' },
+        },
+      ],
+    };
+    const addTask = vi.fn(() => 'task-milk');
+    const updateTask = vi.fn();
+
+    const result = executeActionPlan(
+      plan,
+      makeContext({ tasks: [prayerTask] }),
+      { addTask, updateTask },
+      'en',
+      makeDialogState(),
+      [{ callId: 'call_create' }, { callId: 'call_prayer' }],
+    );
+
+    expect(result).toEqual(expect.objectContaining({
+      kind: 'clarify',
+      reason: 'On time or late?',
+      pendingPrayerCompletion: expect.objectContaining({
+        prayerName: 'Fajr',
+        taskId: 'prayer-fajr',
+        toolCall: expect.objectContaining({ callId: 'call_prayer' }),
+      }),
+    }));
+    expect(addTask).not.toHaveBeenCalled();
+    expect(updateTask).not.toHaveBeenCalled();
+  });
+
+  it('clears pending prayer status when completion handlers become unavailable', async () => {
+    mockHostedAssistant(() => makeHostedToolTurn([{
+      callId: 'call_complete_fajr',
+      capability: 'tasks.complete_matching',
+      args: { taskId: 'prayer-fajr' },
+    }]));
+    const context = makeContext({
+      tasks: [makeTask({
+        id: 'prayer-fajr',
+        title: 'Fajr Prayer',
+        category: 'prayer',
+        prayerName: 'Fajr',
+      })],
+    });
+    const first = await processAssistantCommand('I prayed Fajr', context, {
+      lang: 'en',
+      provider: 'hosted',
+      handlers: {
+        addTask: vi.fn(() => 'unused'),
+        updateTask: vi.fn(),
+      },
+    });
+
+    const blocked = await processAssistantCommand('late', context, {
+      lang: 'en',
+      provider: 'hosted',
+      dialogState: first.dialogState,
+    });
+
+    expect(blocked.assistantMessage).toBe('Prayer completion tracking is not available in this surface.');
+    expect(blocked.dialogState.pendingPrayerCompletion).toBeUndefined();
+  });
+
+  it('keeps ordinary task completion on the existing task and gamification path', async () => {
+    mockHostedAssistant(() => makeHostedToolTurn([{
+      callId: 'call_complete_milk',
+      capability: 'tasks.complete_matching',
+      args: {
+        taskId: 'task-milk',
+      },
+    }]));
+
+    const updateTask = vi.fn();
+    const completePrayer = vi.fn();
+    const result = await processAssistantCommand('Mark buy milk done', makeContext({
+      tasks: [makeTask({ id: 'task-milk', title: 'Buy milk' })],
+    }), {
+      lang: 'en',
+      provider: 'hosted',
+      dialogState: makeDialogState(),
+      handlers: {
+        addTask: vi.fn(() => 'unused'),
+        updateTask,
+        updateGamification: vi.fn(),
+        completePrayer,
+      },
+    });
+
+    expect(result.dialogState.pendingPrayerCompletion).toBeUndefined();
+    expect(updateTask).toHaveBeenCalledWith('task-milk', expect.objectContaining({
+      completed: true,
+    }));
+    expect(completePrayer).not.toHaveBeenCalled();
   });
 
   it('passes the selected hosted model through planning and narration', async () => {

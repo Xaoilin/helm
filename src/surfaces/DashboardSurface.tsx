@@ -1,13 +1,6 @@
-import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import HabitCards from '../components/HabitCards';
-import {
-  getPrayerTimes,
-  getNextPrayer,
-  isAdhanTime,
-  type PrayerTimesData,
-  type PrayerTime as PrayerTimeType,
-} from '../services/prayerTimes';
 import {
   xpToNextLevel,
   titleForLevel,
@@ -17,28 +10,29 @@ import {
   processTaskCompletion,
   buildCompletionContext,
   recordHabitCompletion,
-  calculatePrayerStats,
   checkStreakBroken,
 } from '../services/gamification';
 import type { Task, CalendarEvent } from '../types/domain';
 import { TIMING } from '../config/constants';
 import PrayerStatsCard from '../components/dashboard/PrayerStatsCard';
 import PrayerTimesCard from '../components/dashboard/PrayerTimesCard';
-import AdhanBanner from '../components/dashboard/AdhanBanner';
 import AgendaList from '../components/dashboard/AgendaList';
 import FocusSnapshot from '../components/dashboard/FocusSnapshot';
 import SystemStatusPanel from '../components/dashboard/SystemStatusPanel';
 import type { AgendaItem } from '../components/dashboard/AgendaList';
 import {
   comparePrayerTasks,
+  getPrayerTaskName,
   isHabitTask,
   isPrayerTask,
   isStandardDailyTask,
 } from '../services/prayerTasks';
-
-function toLocalDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+import { toLocalDateStr } from '../services/financeHelpers';
+import {
+  calculatePrayerOutcomeStats,
+  filterPrayerTrackingRecords,
+} from '../services/prayerTracking';
+import { usePrayerContext } from '../store/contexts/PrayerContext';
 
 function compareEventStarts(a: CalendarEvent, b: CalendarEvent): number {
   return new Date(a.start).getTime() - new Date(b.start).getTime();
@@ -59,6 +53,7 @@ const ACCOUNT_PALETTES = [
 
 export default function DashboardSurface() {
   const app = useApp();
+  const prayer = usePrayerContext();
   const gam = app.gamification;
   const [now, setNow] = useState(() => new Date());
   const todayStr = toLocalDateStr(now);
@@ -92,43 +87,8 @@ export default function DashboardSurface() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayStr]);
 
-  // Prayer times
-  const [prayerData, setPrayerData] = useState<PrayerTimesData | null>(null);
-  const [adhanPrayer, setAdhanPrayer] = useState<PrayerTimeType | null>(null);
-  const adhanShownRef = useRef<Set<string>>(new Set());
   const prayerEnabled = app.settings.prayerEnabled !== false;
   const prayerCity = app.settings.prayerCity || 'Bedford';
-  const prayerCountry = app.settings.prayerCountry || 'United Kingdom';
-
-  // Fetch prayer times on mount
-  useEffect(() => {
-    if (!prayerEnabled) return;
-    getPrayerTimes(prayerCity, prayerCountry).then(setPrayerData).catch(err => console.warn('Prayer times fetch failed:', err));
-  }, [prayerEnabled, prayerCity, prayerCountry]);
-
-  // Poll for Adhan every 30 seconds
-  useEffect(() => {
-    if (!prayerEnabled || !prayerData) return;
-    const check = () => {
-      const adhan = isAdhanTime(prayerData.prayers);
-      if (adhan && !adhanShownRef.current.has(adhan.name)) {
-        setAdhanPrayer(adhan);
-        adhanShownRef.current.add(adhan.name);
-        // Browser notification
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification(`${adhan.nameArabic} - ${adhan.name}`, { body: `It's time for ${adhan.name} prayer`, icon: '\u{1F54C}' });
-        } else if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission();
-        }
-        // No auto-dismiss — stays until user clicks
-      }
-    };
-    check();
-    const interval = setInterval(check, 30000);
-    return () => clearInterval(interval);
-  }, [prayerEnabled, prayerData]);
-
-  const nextPrayer = prayerData ? getNextPrayer(prayerData.prayers) : null;
 
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const xp = xpToNextLevel(gam.totalXp);
@@ -283,6 +243,31 @@ export default function DashboardSurface() {
   const completeTask = useCallback((task: Task) => {
     // Already completed — do nothing (locked)
     if (task.completed) return;
+    const prayerName = getPrayerTaskName(task);
+    if (prayerName) {
+      prayer.requestPrayerCompletion(prayerName, {
+        taskId: task.id,
+        source: 'dashboard',
+        onCompleted: completion => {
+          const result = completion.gamificationResult;
+          if (completion.xpEarned > 0) {
+            addToast({ type: 'xp', text: `+${completion.xpEarned} XP`, emoji: '\u2728' });
+          }
+          if (result?.leveledUp) {
+            addToast({ type: 'levelup', text: `Level ${result.newLevel}! ${result.newTitle}`, emoji: '\u{1F31F}' });
+            setShowLevelFlash(true);
+            setTimeout(() => setShowLevelFlash(false), TIMING.LEVEL_FLASH_DURATION);
+          }
+          if (result?.isStreakMilestone) {
+            addToast({ type: 'streak', text: `${result.streakUpdate.currentStreak}-day streak!`, emoji: '\u{1F525}' });
+          }
+          for (const badge of result?.newBadges || []) {
+            addToast({ type: 'badge', text: `${badge.name} unlocked!`, emoji: badge.emoji });
+          }
+        },
+      });
+      return;
+    }
 
     const nowDate = new Date();
     app.updateTask(task.id, {
@@ -322,7 +307,7 @@ export default function DashboardSurface() {
     for (const badge of result.newBadges) {
       addToast({ type: 'badge', text: `${badge.name} unlocked!`, emoji: badge.emoji });
     }
-  }, [addToast, app, gam, todayStr]);
+  }, [addToast, app, gam, prayer, todayStr]);
 
   const completeFocusCandidate = useCallback((candidateId: string) => {
     const candidate = app.dashboardFocus.candidates.find(item => item.id === candidateId);
@@ -393,6 +378,10 @@ export default function DashboardSurface() {
                 <HabitCards
                   habits={prayerTasks}
                   onComplete={completeTask}
+                  getPrayerOutcome={task => {
+                    const prayerName = getPrayerTaskName(task);
+                    return prayerName ? prayer.getOutcome(todayStr, prayerName)?.status : undefined;
+                  }}
                 />
               </div>
             )}
@@ -501,35 +490,51 @@ export default function DashboardSurface() {
 
         {/* ── Prayer Stats ── */}
         {(() => {
-          const prayerHabits = app.tasks.filter(isPrayerTask).sort(comparePrayerTasks);
-          const prayerStats = calculatePrayerStats(gam, app.tasks, now);
+          const currentMonth = todayStr.slice(0, 7);
+          const prayerStats = calculatePrayerOutcomeStats(
+            filterPrayerTrackingRecords(
+              prayer.tracking,
+              recordDate => recordDate.startsWith(currentMonth),
+            ),
+            prayer.scheduleDays.filter(day => day.date.startsWith(currentMonth)),
+            now,
+          );
           return (
             <PrayerStatsCard
-              prayerStats={prayerStats.currentMonth}
-              prayerHabits={prayerHabits}
-              gam={gam}
-              todayStr={todayStr}
+              prayerStats={prayerStats}
               showPrayerLog={showPrayerLog}
               onTogglePrayerLog={() => setShowPrayerLog(!showPrayerLog)}
-              onBackfillPrayerLog={app.backfillPrayerLog}
             />
           );
         })()}
 
         {/* ── Prayer Times ── */}
-        {prayerEnabled && prayerData && (
+        {prayerEnabled && prayer.schedule && (
             <PrayerTimesCard
-              prayerData={prayerData}
-              nextPrayer={nextPrayer}
+              prayerData={prayer.schedule}
+              nextPrayer={prayer.nextPrayer}
               city={prayerCity}
             />
         )}
+        {prayerEnabled && prayer.scheduleStatus === 'unavailable' && (
+          <div className="dash-card prayer-unavailable" role="status">
+            <strong>Prayer schedule unavailable</strong>
+            <span>{prayer.scheduleError || 'No matching current-day schedule is available.'}</span>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void prayer.retrySchedule()}>
+              Retry schedule
+            </button>
+          </div>
+        )}
+        {prayerEnabled && prayer.schedule && !prayer.timezoneMatches && (
+          <div className="dash-card prayer-timezone-warning" role="alert">
+            <strong>Deadline classification and reminders paused</strong>
+            <span>
+              The schedule timezone ({prayer.schedule.timezone || 'unknown'}) does not match this desktop ({prayer.desktopTimezone}).
+              Update the prayer location before HELM compares deadlines or schedules reminders.
+            </span>
+          </div>
+        )}
       </div>
-
-      {/* Adhan Notification — Full Screen */}
-      {adhanPrayer && (
-        <AdhanBanner adhanPrayer={adhanPrayer} onDismiss={() => setAdhanPrayer(null)} />
-      )}
 
       {/* Toasts */}
       {toasts.length > 0 && (

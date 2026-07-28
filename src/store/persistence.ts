@@ -353,7 +353,7 @@ const SYNC_DRIFT_GROUPS: SyncDriftGroupDefinition[] = [
   { groupId: 'knowledge', label: 'Knowledge', description: 'Knowledge topics, notes, and lifestyle tracker items.', keys: ['knowledgeTopics', 'knowledgeEntries', 'lifestyleItems'] },
   { groupId: 'health', label: 'Health', description: 'Fast-food journal entries.', keys: ['healthFastFoodEntries'] },
   { groupId: 'finance', label: 'Finance', description: 'Finance accounts, transactions, budgets, and savings goals.', keys: ['financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals'] },
-  { groupId: 'profile', label: 'Profile progress', description: 'Gamification and prayer progress.', keys: ['gamification'] },
+  { groupId: 'profile', label: 'Profile progress', description: 'Gamification and classified prayer progress.', keys: ['gamification', 'prayerTracking'] },
   { groupId: 'assistant', label: 'Assistant memory', description: 'Lina corrections and action audit history.', keys: ['assistantCorrections', 'assistantActivityLog'] },
 ];
 

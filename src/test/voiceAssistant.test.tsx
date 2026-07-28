@@ -246,6 +246,15 @@ describe('VoiceAssistant', () => {
       expect(processAssistantCommandMock).toHaveBeenCalledTimes(1);
       expect(speakMock).toHaveBeenCalledWith('You have one task left today.');
     });
+    expect(processAssistantCommandMock).toHaveBeenCalledWith(
+      'what do I have left today?',
+      expect.anything(),
+      expect.objectContaining({
+        handlers: expect.objectContaining({
+          completePrayer: expect.any(Function),
+        }),
+      }),
+    );
 
     await act(async () => {
       await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
@@ -344,6 +353,45 @@ describe('VoiceAssistant', () => {
 
     expect(screen.getAllByText(/Listening\.\.\. speak now/i).length).toBeGreaterThan(0);
     expect(playReadyToneMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays closed when speech resolves after the user closes Lina', async () => {
+    let resolveSpeech!: () => void;
+    speakMock.mockImplementationOnce(() => new Promise<void>(resolve => {
+      resolveSpeech = resolve;
+    }));
+    processAssistantCommandMock.mockResolvedValue(
+      createAssistantResult('Deferred spoken answer.'),
+    );
+
+    renderAssistant();
+    fireEvent.click(await screen.findByRole('button', { name: 'Talk to Lina' }));
+
+    const input = await screen.findByPlaceholderText(/Type or talk to Lina/i);
+    fireEvent.change(input, { target: { value: 'what is next?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send command' }));
+
+    await waitFor(() => {
+      expect(speakMock).toHaveBeenCalledWith('Deferred spoken answer.');
+      expect(screen.getByRole('button', { name: 'Close Lina' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Lina' }));
+    expect(screen.getByRole('button', { name: 'Talk to Lina' })).toBeInTheDocument();
+    expect(screen.queryByText('Deferred spoken answer.')).not.toBeInTheDocument();
+    expect(stopSpeakingMock).toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSpeech();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Talk to Lina' })).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/Type or talk to Lina/i)).not.toBeInTheDocument();
+      expect(latestWakeWordOptions?.wakeWordArmed).toBe(true);
+    });
+    expect(startListeningMock).not.toHaveBeenCalled();
   });
 
   it('keeps the wake word armed while the manual popup is open', async () => {
