@@ -9,7 +9,7 @@ import {
   processTaskCompletion,
   recordHabitCompletion,
 } from '../services/gamification';
-import { isHabitTask } from '../services/prayerTasks';
+import { getPrayerTaskName, isHabitTask } from '../services/prayerTasks';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, formatGBP, parseToPence, toLocalDateStr } from '../services/financeHelpers';
 import type {
   CalendarEvent,
@@ -20,6 +20,8 @@ import type {
   FinanceAccount,
   GamificationProfile,
   KnowledgeTopic,
+  PrayerCompletionStatus,
+  PrayerName,
   Surface,
   Task,
   Transaction,
@@ -48,13 +50,22 @@ import type {
   AssistantExecutionResult,
   AssistantExecutionStep,
   AssistantLang,
+  AssistantToolCall,
   AssistantToolResult,
 } from './shared';
 import { extractTemporalReference } from './temporalResolver';
+import { buildPrayerStatusQuestion } from './prayerCompletion';
+
+interface PendingPrayerCompletionDraft {
+  prayerName: PrayerName;
+  taskId: string;
+  toolCall: AssistantToolCall;
+}
 
 interface ClarifyOutcome {
   kind: 'clarify';
   reason: string;
+  pendingPrayerCompletion?: PendingPrayerCompletionDraft;
 }
 
 interface ExecutedStepOutcome {
@@ -154,6 +165,10 @@ function asString(value: unknown): string {
 
 function asBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
+}
+
+function asPrayerCompletionStatus(value: unknown): PrayerCompletionStatus | undefined {
+  return value === 'on_time' || value === 'late' ? value : undefined;
 }
 
 function asCaptureClassification(value: unknown): CaptureClassification {
@@ -642,6 +657,95 @@ function executeSingleStep(
       if (!resolvedTask) {
         return { kind: 'clarify', reason: 'Which task should I complete?' };
       }
+      const prayerName = getPrayerTaskName(resolvedTask);
+      if (prayerName) {
+        const prayerStatus = asPrayerCompletionStatus(step.args.prayerStatus);
+        if (!prayerStatus) {
+          return {
+            kind: 'clarify',
+            reason: buildPrayerStatusQuestion(prayerName, _lang),
+            pendingPrayerCompletion: {
+              prayerName,
+              taskId: resolvedTask.id,
+              toolCall: {
+                callId,
+                capability: step.capability,
+                args: { ...step.args, taskId: resolvedTask.id },
+                unresolved: step.unresolved,
+                requiresConfirmation: step.requiresConfirmation,
+              },
+            },
+          };
+        }
+        if (!handlers.completePrayer) {
+          return {
+            kind: 'clarify',
+            reason: 'Prayer completion tracking is not available in this surface.',
+          };
+        }
+
+        const completion = handlers.completePrayer(prayerName, prayerStatus, resolvedTask.id);
+        const now = getNow(context);
+        const today = toLocalDateStr(now);
+        const completedAt = now.toISOString();
+        context.tasks = context.tasks.map(item =>
+          item.id === resolvedTask.id
+            ? {
+                ...item,
+                completed: true,
+                completedAt,
+                recurring: resolvedTask.recurring
+                  ? { ...resolvedTask.recurring, lastReset: today }
+                  : undefined,
+              }
+            : item
+        );
+
+        const ref = makeEntityReference('task', resolvedTask.id, resolvedTask.title, 'tasks', 1);
+        const statusLabel = prayerStatus === 'on_time' ? 'on time' : 'late';
+        const summary = `Completed "${resolvedTask.title}" as ${statusLabel}.`;
+        const facts = [
+          `Marked ${prayerName} as prayed ${statusLabel}.`,
+          completion.xpEarned > 0
+            ? `Awarded ${completion.xpEarned} XP.`
+            : 'No additional XP was awarded.',
+        ];
+        recordAssistantActivity(handlers, activity, {
+          domain: 'tasks',
+          action: 'completed',
+          summary,
+          details: facts,
+          refs: [ref],
+          undoOperation: {
+            type: 'prayer.complete',
+            inverse: completion.undo,
+          },
+        });
+        return {
+          stepResult: {
+            callId,
+            capability: step.capability,
+            status: 'completed',
+            summary,
+            entityRefs: [ref],
+          },
+          toolResult: {
+            callId,
+            capability: step.capability,
+            status: 'completed',
+            summary,
+            facts,
+            entityRefs: [ref],
+          },
+          refs: [ref],
+          undoToken: JSON.stringify({
+            type: 'task.reopen',
+            id: resolvedTask.id,
+            prayerStatus,
+          }),
+        };
+      }
+
       const taskBefore: Task = {
         ...resolvedTask,
         recurring: resolvedTask.recurring ? { ...resolvedTask.recurring } : undefined,
@@ -1201,6 +1305,44 @@ export function executeActionPlan(
   toolCalls?: Array<{ callId: string }>,
   activity?: AssistantActivitySource,
 ): ExecutionOutcome {
+  for (const [index, step] of plan.steps.entries()) {
+    if (step.capability !== 'tasks.complete_matching' || asPrayerCompletionStatus(step.args.prayerStatus)) {
+      continue;
+    }
+
+    const taskId = asString(step.args.taskId);
+    const task = taskId
+      ? context.tasks.find(item => item.id === taskId && !item.completed) || null
+      : null;
+    const legacyTaskQuery = asString(step.args.taskQuery);
+    const legacyResolution = !task && legacyTaskQuery
+      ? findOrClarifyTask(legacyTaskQuery, context, dialogState, {
+          category: asTaskCategory(step.args.category),
+          allowCompleted: false,
+        })
+      : { task: null as Task | null };
+    const resolvedTask = task || legacyResolution.task;
+    const prayerName = resolvedTask ? getPrayerTaskName(resolvedTask) : null;
+    if (!resolvedTask || !prayerName) continue;
+
+    const callId = toolCalls?.[index]?.callId || `call_${index + 1}`;
+    return {
+      kind: 'clarify',
+      reason: buildPrayerStatusQuestion(prayerName, _lang),
+      pendingPrayerCompletion: {
+        prayerName,
+        taskId: resolvedTask.id,
+        toolCall: {
+          callId,
+          capability: step.capability,
+          args: { ...step.args, taskId: resolvedTask.id },
+          unresolved: step.unresolved,
+          requiresConfirmation: step.requiresConfirmation,
+        },
+      },
+    };
+  }
+
   const workingContext = cloneContext(context);
   const steps: AssistantExecutionStep[] = [];
   const toolResults: AssistantToolResult[] = [];

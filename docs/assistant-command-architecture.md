@@ -26,6 +26,7 @@ Implemented pieces:
 - model-led conversational turns that return `reply`, `clarify`, `confirm`, or `tool_calls`
 - grounded ID-based validation for task reveal, task complete, task delete, calendar reschedule, finance account selection, and knowledge topic selection
 - structured pending confirmations stored as validated tool-call batches plus grounded entity references
+- typed pending prayer completions shared by chat and voice, so an omitted prayer outcome asks `On time or late?` and a strict local follow-up resumes the stored tool call without a second model request
 - final assistant replies narrated from verified execution results instead of surfacing executor templates directly
 - local-first assistant activity entries for chat and voice mutations, with actor/source transcript, execution details, and undo metadata where the executor can provide a grounded inverse operation
 - benchmark example retrieval from a 200-plus command corpus
@@ -211,6 +212,8 @@ For write actions, Lina should only describe success after the deterministic loc
 For view-only task navigation, the executor should use the same typed Tasks surface-state payload even when no task id is involved so "show me all my tasks" is explicit and testable instead of being approximated to a generic surface jump.
 Activity entries are persisted through the same local-first store as other app data. The Activity surface is the user-facing audit trail; the floating Lina panel also surfaces the latest recent action with an Undo shortcut when the entry is still undoable.
 
+Prayer completion is a domain-owned exception to generic binary task completion. The planner may pass `prayerStatus: on_time | late` only when the user states it explicitly. Otherwise the executor performs no mutation and creates a typed pending prayer action. The resolved action calls the shared prayer mutation once, and its undo payload restores task state, gamification, and canonical prayer tracking together. Ordinary tasks continue through the existing completion path.
+
 ### 6. Dialog state
 
 Keep a lightweight dialog state shared by voice and chat so the assistant can interpret:
@@ -221,6 +224,8 @@ Keep a lightweight dialog state shared by voice and chat so the assistant can in
 - "use my work calendar"
 
 Dialog state should track recent entities, recent plans, current surface, and recent clarifications.
+
+Prayer status clarification is persisted in this shared state. Replies that clearly mean On time or Late resolve locally for both chat and voice; ambiguous replies repeat the question, and cancellation clears the pending action. The clock never silently supplies the user's answer.
 
 ### 7. Teaching loop
 
@@ -326,6 +331,7 @@ The model-first cutover is now shipped:
 ## Design Principles
 
 - one assistant runtime for both voice and chat
+- asynchronous voice work carries the current assistant session token; closing Lina invalidates it so a late speech or planner callback cannot reopen the panel or restart listening
 - semantic capabilities instead of raw state patches
 - model-first planning with local deterministic validation and execution
 - confirmation for risky actions

@@ -15,12 +15,14 @@ import {
 } from '../services/gamification';
 import {
   comparePrayerTasks,
+  getPrayerTaskName,
   getPrayerTaskTitle,
   isHabitTask,
   isPrayerTask,
   isStandardDailyTask,
   PRAYER_TASK_ORDER,
 } from '../services/prayerTasks';
+import { usePrayerContext } from '../store/contexts/PrayerContext';
 
 type Tab = 'today' | 'all' | 'goals';
 
@@ -74,6 +76,7 @@ function getAllTaskSectionId(task: Task, todayStr: string): AllTaskSection['id']
 
 export default function TasksSurface() {
   const app = useApp();
+  const prayer = usePrayerContext();
   const [tab, setTab] = useState<Tab>('today');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
@@ -459,6 +462,31 @@ export default function TasksSurface() {
 
     // Habit-like items stay locked for the day once completed
     if (isHabitTask(task) && !completing) return;
+    const canonicalPrayerName = getPrayerTaskName(task);
+    if (canonicalPrayerName && completing) {
+      prayer.requestPrayerCompletion(canonicalPrayerName, {
+        taskId: task.id,
+        source: 'tasks',
+        onCompleted: completion => {
+          const result = completion.gamificationResult;
+          if (completion.xpEarned > 0) {
+            addToast({ type: 'xp', text: `+${completion.xpEarned} XP`, emoji: '\u2728' });
+          }
+          if (result?.leveledUp) {
+            addToast({ type: 'levelup', text: `Level ${result.newLevel}! ${result.newTitle}`, emoji: '\u{1F31F}' });
+            setShowLevelFlash(true);
+            setTimeout(() => setShowLevelFlash(false), 1000);
+          }
+          if (result?.isStreakMilestone) {
+            addToast({ type: 'streak', text: `${result.streakUpdate.currentStreak}-day streak!`, emoji: '\u{1F525}' });
+          }
+          for (const badge of result?.newBadges || []) {
+            addToast({ type: 'badge', text: `${badge.name} unlocked!`, emoji: badge.emoji });
+          }
+        },
+      });
+      return;
+    }
 
     app.updateTask(task.id, {
       completed: completing,
@@ -558,6 +586,13 @@ export default function TasksSurface() {
           {task.priority !== 'low' && <span className={`tag tag-${task.priority}`}>{task.priority}</span>}
           {task.category === 'daily' && <span className="tag tag-daily">daily</span>}
           {task.category === 'prayer' && <span className="tag tag-daily">prayer</span>}
+          {(() => {
+            const name = getPrayerTaskName(task);
+            const status = name ? prayer.getOutcome(todayStr, name)?.status : undefined;
+            return status
+              ? <span className={`prayer-outcome-badge compact ${status}`}>{status === 'on_time' ? 'On time' : status === 'unclassified' ? 'Legacy' : status}</span>
+              : null;
+          })()}
         </div>
         <div className="task-meta">
           {task.dueDate && (
@@ -587,6 +622,15 @@ export default function TasksSurface() {
 
   const renderAllTaskCard = (task: Task) => {
     const projectName = task.projectId ? app.projects.find(project => project.id === task.projectId)?.name || 'Project' : undefined;
+    const canonicalPrayerName = getPrayerTaskName(task);
+    const canonicalPrayerOutcome = canonicalPrayerName
+      ? prayer.getOutcome(todayStr, canonicalPrayerName)?.status
+      : undefined;
+    const canonicalPrayerOutcomeLabel = canonicalPrayerOutcome === 'on_time'
+      ? 'on time'
+      : canonicalPrayerOutcome === 'unclassified'
+        ? 'legacy, unclassified'
+        : canonicalPrayerOutcome;
     const completionDate = task.completedAt ? toLocalDateStr(new Date(task.completedAt)) : undefined;
     const dueLabel = task.dueDate
       ? task.dueDate < todayStr && !task.completed
@@ -605,11 +649,13 @@ export default function TasksSurface() {
           : 'future'
       : undefined;
     const footerNote = task.completed
-      ? completionDate === todayStr
-        ? 'Completed today'
-        : completionDate
-          ? `Completed ${formatShortDate(completionDate)}`
-          : 'Completed'
+      ? canonicalPrayerOutcomeLabel
+        ? `Prayer recorded ${canonicalPrayerOutcomeLabel}`
+        : completionDate === todayStr
+          ? 'Completed today'
+          : completionDate
+            ? `Completed ${formatShortDate(completionDate)}`
+            : 'Completed'
       : task.recurring
         ? `Repeats ${task.recurring.frequency}`
         : task.dueDate
@@ -646,6 +692,11 @@ export default function TasksSurface() {
                 <span className={`all-task-type ${task.category}`}>
                   {task.category === 'daily' ? 'Routine' : task.category === 'prayer' ? 'Prayer' : 'Task'}
                 </span>
+                {canonicalPrayerOutcome && (
+                  <span className={`prayer-outcome-badge compact ${canonicalPrayerOutcome}`}>
+                    {canonicalPrayerOutcomeLabel}
+                  </span>
+                )}
                 <span className={`tag tag-${task.priority}`}>{task.priority}</span>
                 {projectName && <span className="tag tag-connected">{projectName}</span>}
               </div>
@@ -792,7 +843,14 @@ export default function TasksSurface() {
                 {prayerTasks.length > 0 && (
                   <>
                     <div className="section-heading">Islamic</div>
-                    <HabitCards habits={prayerTasks} onComplete={toggleComplete} />
+                    <HabitCards
+                      habits={prayerTasks}
+                      onComplete={toggleComplete}
+                      getPrayerOutcome={task => {
+                        const name = getPrayerTaskName(task);
+                        return name ? prayer.getOutcome(todayStr, name)?.status : undefined;
+                      }}
+                    />
                   </>
                 )}
                 {dailyHabits.length > 0 && (

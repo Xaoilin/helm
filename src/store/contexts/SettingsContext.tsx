@@ -8,6 +8,11 @@ const defaultSettings: Settings = {
   theme: 'dark',
   dataRetentionDays: 90,
   telemetry: false,
+  prayerEnabled: true,
+  prayerCity: 'Bedford',
+  prayerCountry: 'United Kingdom',
+  prayerReminderEnabled: true,
+  prayerReminderMinutes: 15,
   assistantProvider: DEFAULT_ASSISTANT_PROVIDER,
 };
 
@@ -47,7 +52,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         loadStore<Settings>('settings'),
         loadStore<Integration[]>('integrations'),
       ]);
-      setSettings(s ?? defaultSettings);
+      setSettings({ ...defaultSettings, ...(s ?? {}) });
       setIntegrations(i ?? defaultIntegrations);
       setLoaded(true);
     })();

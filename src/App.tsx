@@ -18,6 +18,7 @@ import ActivitySurface from './surfaces/ActivitySurface';
 import SettingsSurface from './surfaces/SettingsSurface';
 import DebugSurface from './surfaces/DebugSurface';
 import VoiceAssistant from './components/VoiceAssistant';
+import PrayerGlobalOverlays from './components/prayer/PrayerGlobalOverlays';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
   isSupabaseReady,
@@ -354,6 +355,7 @@ function AppInner() {
           <span className="mobile-nav-label">More</span>
         </button>
       </nav>
+      <PrayerGlobalOverlays />
       <VoiceAssistant />
       {captureNotice && (
         <div className="capture-toast" role="status">

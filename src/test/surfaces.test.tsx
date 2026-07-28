@@ -19,7 +19,6 @@ import SettingsSurface from '../surfaces/SettingsSurface';
 import * as googleCalendarApi from '../services/googleCalendarApi';
 import * as googleCalendarAuthManager from '../services/googleCalendarAuthManager';
 import * as hostedAssistantApi from '../services/hostedAssistantApi';
-import { DEFAULT_PROFILE } from '../services/gamification';
 import { defaultIntegrations } from '../store/contexts/SettingsContext';
 import { APP_RELEASE_VERSION } from '../config/release';
 import type { AssistantNavigationTarget } from '../services/assistantNavigation';
@@ -36,11 +35,22 @@ function installGoogleCalendarFetchMock() {
         data: {
           timings: {
             Fajr: '05:00',
+            Sunrise: '06:45',
             Dhuhr: '13:00',
             Asr: '16:30',
+            Sunset: '20:00',
             Maghrib: '20:15',
             Isha: '21:45',
+            Midnight: '00:15',
           },
+          date: {
+            hijri: {
+              day: '12',
+              month: { en: 'Safar' },
+              year: '1448',
+            },
+          },
+          meta: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
         },
       }), {
         status: 200,
@@ -1146,7 +1156,10 @@ describe('TasksSurface', () => {
 });
 
 describe('ProfileSurface', () => {
-  beforeEach(() => { localStorage.clear(); });
+  beforeEach(() => {
+    localStorage.clear();
+    installGoogleCalendarFetchMock();
+  });
 
   it('should render profile with level and sections', async () => {
     await act(async () => { renderWithProvider(<ProfileSurface />); });
@@ -1201,24 +1214,40 @@ describe('ProfileSurface', () => {
         updatedAt: '2026-04-02T08:00:00.000Z',
       },
     ]));
-    localStorage.setItem('helm:gamification', JSON.stringify({
-      ...DEFAULT_PROFILE,
-      dailyLog: {
-        '2026-03-31': ['prayer-fajr'],
-        '2026-04-01': ['prayer-fajr', 'prayer-dhuhr'],
-        '2026-04-02': ['prayer-dhuhr'],
+    localStorage.setItem('helm:prayerTracking', JSON.stringify({
+      schemaVersion: 1,
+      trackingStartedAt: '2026-03-31T00:00:00.000Z',
+      reminderReceipts: {},
+      records: {
+        '2026-03-31::Fajr': {
+          date: '2026-03-31',
+          prayerName: 'Fajr',
+          status: 'on_time',
+          recordedAt: '2026-03-31T05:20:00.000Z',
+        },
+        '2026-04-01::Fajr': {
+          date: '2026-04-01',
+          prayerName: 'Fajr',
+          status: 'on_time',
+          recordedAt: '2026-04-01T05:20:00.000Z',
+        },
+        '2026-04-01::Dhuhr': {
+          date: '2026-04-01',
+          prayerName: 'Dhuhr',
+          status: 'late',
+          recordedAt: '2026-04-01T21:00:00.000Z',
+        },
       },
     }));
 
     try {
       await act(async () => { renderWithProvider(<ProfileSurface />); });
 
-      expect(screen.getByText('Month-by-month rate history')).toBeInTheDocument();
-      const history = screen.getByLabelText('Prayer rate history by month');
+      expect(screen.getByText('Month history')).toBeInTheDocument();
+      const history = screen.getByLabelText('Prayer outcome history by month');
       expect(within(history).getByText('April 2026')).toBeInTheDocument();
       expect(within(history).getByText('March 2026')).toBeInTheDocument();
-      expect(within(history).getByText('8%')).toBeInTheDocument();
-      expect(within(history).getByText('50%')).toBeInTheDocument();
+      expect(within(history).getAllByText('classified').length).toBeGreaterThan(0);
     } finally {
       vi.useRealTimers();
     }
@@ -1226,7 +1255,10 @@ describe('ProfileSurface', () => {
 });
 
 describe('DashboardSurface', () => {
-  beforeEach(() => { localStorage.clear(); });
+  beforeEach(() => {
+    localStorage.clear();
+    installGoogleCalendarFetchMock();
+  });
 
   it('should render greeting and up next section', async () => {
     await act(async () => { renderWithProvider(<DashboardSurface />); });
@@ -1247,7 +1279,12 @@ describe('DashboardSurface', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 20, 10, 0, 0));
 
-    localStorage.setItem('helm:settings', JSON.stringify({ prayerEnabled: false }));
+    localStorage.setItem('helm:settings', JSON.stringify({
+      prayerEnabled: true,
+      prayerReminderEnabled: false,
+      prayerCity: 'Bedford',
+      prayerCountry: 'United Kingdom',
+    }));
     localStorage.setItem('helm:tasks', JSON.stringify([
       {
         id: 'prayer-fajr',
@@ -1274,25 +1311,42 @@ describe('DashboardSurface', () => {
         updatedAt: '2026-04-02T08:00:00.000Z',
       },
     ]));
-    localStorage.setItem('helm:gamification', JSON.stringify({
-      ...DEFAULT_PROFILE,
-      dailyLog: {
-        '2026-03-31': ['prayer-fajr'],
-        '2026-04-01': ['prayer-fajr', 'prayer-dhuhr'],
-        '2026-04-02': ['prayer-dhuhr'],
+    localStorage.setItem('helm:prayerTracking', JSON.stringify({
+      schemaVersion: 1,
+      trackingStartedAt: '2026-03-31T00:00:00.000Z',
+      reminderReceipts: {},
+      records: {
+        '2026-03-31::Fajr': {
+          date: '2026-03-31',
+          prayerName: 'Fajr',
+          status: 'on_time',
+          recordedAt: '2026-03-31T05:20:00.000Z',
+        },
+        '2026-04-01::Fajr': {
+          date: '2026-04-01',
+          prayerName: 'Fajr',
+          status: 'on_time',
+          recordedAt: '2026-04-01T05:20:00.000Z',
+        },
+        '2026-04-01::Dhuhr': {
+          date: '2026-04-01',
+          prayerName: 'Dhuhr',
+          status: 'late',
+          recordedAt: '2026-04-01T21:00:00.000Z',
+        },
       },
     }));
 
     try {
       await act(async () => { renderWithProvider(<DashboardSurface />); });
 
-      const prayerCard = screen.getByText(/Prayer Rate/).closest('.dash-card');
+      const prayerCard = screen.getByText(/Prayer outcomes/).closest('.dash-card');
       expect(prayerCard).not.toBeNull();
-      expect(prayerCard).toHaveTextContent('8%');
-      expect(prayerCard).toHaveTextContent('This month only');
-      expect(prayerCard).toHaveTextContent('April 2026');
+      expect(prayerCard).toHaveTextContent('On time');
+      expect(prayerCard).toHaveTextContent('Late');
+      expect(prayerCard).toHaveTextContent('Missed');
       expect(prayerCard).toHaveTextContent('20 tracked days');
-      expect(prayerCard).not.toHaveTextContent('67%');
+      expect(prayerCard).not.toHaveTextContent('March 2026');
     } finally {
       vi.useRealTimers();
     }

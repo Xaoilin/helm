@@ -29,7 +29,8 @@ export const SHARED_STORE_KEYS = [
   { key: 'transactions', label: 'Transactions', description: 'Finance transaction ledger.' },
   { key: 'financeBudgets', label: 'Finance budgets', description: 'Budget records.' },
   { key: 'savingsGoals', label: 'Savings goals', description: 'Savings goal records.' },
-  { key: 'gamification', label: 'Profile progress', description: 'Gamification and prayer progress.' },
+  { key: 'gamification', label: 'Profile progress', description: 'XP, streak, and achievement progress.' },
+  { key: 'prayerTracking', label: 'Prayer outcomes', description: 'Classified prayer outcomes and reminder receipts.' },
   { key: 'assistantCorrections', label: 'Assistant corrections', description: 'Lina transcript correction memory.' },
   { key: 'assistantActivityLog', label: 'Assistant activity', description: 'Lina action audit log.' },
 ] as const satisfies SharedStoreKey[];

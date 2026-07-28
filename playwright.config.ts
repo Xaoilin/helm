@@ -8,6 +8,7 @@ export default defineConfig({
     baseURL: 'http://localhost:5173/helm/',
     headless: true,
     screenshot: 'only-on-failure',
+    timezoneId: 'Europe/London',
   },
   webServer: {
     command: 'npx vite --port 5173 --strictPort',

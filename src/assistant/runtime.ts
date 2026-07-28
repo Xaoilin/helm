@@ -1,7 +1,13 @@
 import { getCapabilityDefinition } from './capabilities';
 import { applyStoredCorrections, parseCorrectionIntent } from './correctionMemory';
 import { classifyConfirmationReply } from './confirmation';
-import { normaliseDialogState, rememberEntities, rememberPlan, withPendingConfirmation } from './dialogState';
+import {
+  normaliseDialogState,
+  rememberEntities,
+  rememberPlan,
+  withPendingConfirmation,
+  withPendingPrayerCompletion,
+} from './dialogState';
 import { executeActionPlan } from './executor';
 import {
   buildExecutionFacts,
@@ -19,6 +25,10 @@ import {
 } from '../services/assistantBilling';
 import type { ActionPlan } from './plannerSchema';
 import { recordAssistantDebugTrace } from '../services/assistantDebug';
+import {
+  buildPrayerStatusQuestion,
+  parsePrayerCompletionStatusReply,
+} from './prayerCompletion';
 import type {
   AssistantCommandContext,
   AssistantCommandOptions,
@@ -217,6 +227,150 @@ export async function runAssistantTurn(
     }, payload, localFallback);
   }
 
+  if (dialogState.pendingPrayerCompletion) {
+    const pending = dialogState.pendingPrayerCompletion;
+    const prayerStatus = parsePrayerCompletionStatusReply(effectiveTranscript);
+    const cancelled = !prayerStatus
+      && classifyConfirmationReply(effectiveTranscript, lang) === 'deny';
+
+    if (cancelled) {
+      const assistantMessage = lang === 'ar'
+        ? 'حسناً، لن أسجل هذه الصلاة.'
+        : "Okay, I won't record that prayer.";
+      const plan = buildReplyPlan('answer', assistantMessage);
+      const nextDialogState = rememberPlan(
+        withPendingPrayerCompletion(dialogState, undefined),
+        plan,
+      );
+      return finalize({
+        assistantMessage,
+        message: assistantMessage,
+        plan,
+        dialogState: nextDialogState,
+        referencedEntities: pending.referencedEntities,
+        source: 'local',
+        planningSource: pending.source,
+        planningStatus: 'local_clarification',
+        planningModel: pending.planningModel,
+        toolCalls: [pending.toolCall],
+      });
+    }
+
+    if (!prayerStatus) {
+      const assistantMessage = buildPrayerStatusQuestion(pending.prayerName, lang);
+      const plan = buildReplyPlan('clarify', assistantMessage);
+      const nextDialogState = rememberPlan(dialogState, plan);
+      return finalize({
+        assistantMessage,
+        message: assistantMessage,
+        plan,
+        dialogState: nextDialogState,
+        referencedEntities: pending.referencedEntities,
+        source: 'local',
+        planningSource: pending.source,
+        planningStatus: 'local_clarification',
+        planningModel: pending.planningModel,
+        toolCalls: [pending.toolCall],
+      });
+    }
+
+    const resolvedToolCall: AssistantToolCall = {
+      ...pending.toolCall,
+      args: {
+        ...pending.toolCall.args,
+        taskId: pending.taskId,
+        prayerStatus,
+      },
+    };
+    const plan = buildReplyPlan('act', pending.assistantMessage, [resolvedToolCall]);
+    const clearedDialogState = withPendingPrayerCompletion(dialogState, undefined);
+
+    if (!options.handlers) {
+      const assistantMessage = 'Prayer completion tracking is not available in this surface.';
+      const blockedPlan = buildReplyPlan('clarify', assistantMessage);
+      return finalize({
+        assistantMessage,
+        message: assistantMessage,
+        plan: blockedPlan,
+        dialogState: rememberPlan(clearedDialogState, blockedPlan),
+        referencedEntities: pending.referencedEntities,
+        source: 'local',
+        planningSource: pending.source,
+        planningStatus: 'local_clarification',
+        planningModel: pending.planningModel,
+        toolCalls: [resolvedToolCall],
+      });
+    }
+
+    const execution = executeActionPlan(
+      plan,
+      context,
+      options.handlers,
+      lang,
+      clearedDialogState,
+      [resolvedToolCall],
+      activity,
+    );
+
+    if (execution.kind === 'clarify') {
+      const assistantMessage = execution.reason;
+      const clarifyPlan = buildReplyPlan('clarify', assistantMessage);
+      const nextDialogState = execution.pendingPrayerCompletion
+        ? withPendingPrayerCompletion(rememberPlan(clearedDialogState, clarifyPlan), {
+            assistantMessage,
+            ...execution.pendingPrayerCompletion,
+            referencedEntities: pending.referencedEntities,
+            createdAt: new Date().toISOString(),
+            source: pending.source,
+            planningModel: pending.planningModel,
+          })
+        : rememberPlan(clearedDialogState, clarifyPlan);
+      return finalize({
+        assistantMessage,
+        message: assistantMessage,
+        plan: clarifyPlan,
+        dialogState: nextDialogState,
+        referencedEntities: pending.referencedEntities,
+        source: 'local',
+        planningSource: pending.source,
+        planningStatus: 'local_clarification',
+        planningModel: pending.planningModel,
+        toolCalls: [resolvedToolCall],
+      });
+    }
+
+    const toolResults = buildToolResultFacts(execution.execution.toolResults);
+    const executionResult = {
+      ...execution.execution,
+      toolResults,
+    };
+    const referencedEntities = mergeReferencedEntities(
+      pending.referencedEntities,
+      execution.referencedEntities,
+    );
+    const assistantMessage = buildExecutionFallbackMessage(
+      toolResults,
+      executionResult.steps.at(-1)?.summary || 'Done.',
+    );
+    const nextDialogState = rememberEntities(
+      rememberPlan(clearedDialogState, plan),
+      referencedEntities,
+    );
+    return finalize({
+      assistantMessage,
+      message: assistantMessage,
+      plan,
+      dialogState: nextDialogState,
+      execution: executionResult,
+      referencedEntities,
+      source: 'local',
+      planningSource: pending.source,
+      planningStatus: 'local_clarification',
+      planningModel: pending.planningModel,
+      toolCalls: [resolvedToolCall],
+    });
+  }
+
   if (dialogState.pendingConfirmation) {
     const pending = dialogState.pendingConfirmation;
     const confirmationIntent = classifyConfirmationReply(effectiveTranscript, lang);
@@ -265,6 +419,34 @@ export async function runAssistantTurn(
       );
 
       if (execution.kind === 'clarify') {
+        if (execution.pendingPrayerCompletion) {
+          const assistantMessage = execution.reason;
+          const plan = buildReplyPlan('clarify', assistantMessage);
+          const nextDialogState = withPendingPrayerCompletion(
+            rememberPlan(clearedDialogState, plan),
+            {
+              assistantMessage,
+              ...execution.pendingPrayerCompletion,
+              referencedEntities: pending.referencedEntities,
+              createdAt: new Date().toISOString(),
+              source: pending.source,
+              planningModel: pending.planningModel,
+            },
+          );
+          return finalize({
+            assistantMessage,
+            message: assistantMessage,
+            plan,
+            dialogState: nextDialogState,
+            referencedEntities: pending.referencedEntities,
+            source: 'local',
+            planningSource: pending.source,
+            planningStatus: 'local_clarification',
+            planningModel: pending.planningModel,
+            toolCalls: pending.toolCalls,
+          });
+        }
+
         const narration = await narrateFromFacts(
           pending.source,
           {
@@ -543,6 +725,45 @@ export async function runAssistantTurn(
   );
 
   if (execution.kind === 'clarify') {
+    if (execution.pendingPrayerCompletion) {
+      const assistantMessage = execution.reason;
+      const clarifyPlan = buildReplyPlan('clarify', assistantMessage);
+      const nextDialogState = withPendingPrayerCompletion(
+        rememberEntities(
+          rememberPlan(withPendingConfirmation(dialogState, undefined), clarifyPlan),
+          planning.referencedEntities,
+        ),
+        {
+          assistantMessage,
+          ...execution.pendingPrayerCompletion,
+          referencedEntities: planning.referencedEntities || [],
+          createdAt: new Date().toISOString(),
+          source: planning.planningSource,
+          planningModel: planning.planningModel,
+        },
+      );
+      return finalize({
+        assistantMessage,
+        assistantBilling: planning.assistantBilling,
+        message: assistantMessage,
+        plan: clarifyPlan,
+        modelTurn: planning.modelTurn,
+        toolCalls: resolvedToolCalls,
+        dialogState: nextDialogState,
+        referencedEntities: planning.referencedEntities,
+        degradedReason: planning.degradedReason,
+        source: planning.source,
+        planningSource: planning.planningSource,
+        planningStatus: planning.planningStatus,
+        planningModel: planning.planningModel,
+        planningBundle: planning.planningBundle,
+        rawPlannerResponse: planning.rawPlannerResponse,
+        parsedPlan: planning.parsedPlan,
+        validatedPlan: planning.validatedPlan,
+        plannerValidation: planning.plannerValidation,
+      });
+    }
+
     const narration = await narrateFromFacts(
       planning.planningSource,
       {

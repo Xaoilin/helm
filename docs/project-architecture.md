@@ -52,29 +52,39 @@ Provider stack:
 1. `SettingsProvider`
 2. `GamificationProvider`
 3. `CalendarProvider`
-4. `ProjectProvider`
-5. `TaskProvider`
-6. `KnowledgeProvider`
-7. `HealthProvider`
-8. `FinanceProvider`
-9. `ClockProvider`
-10. `AssistantProvider`
-11. `ChatProvider` through `ChatBridge`
-12. `ShellProvider`
+4. `TripProvider`
+5. `ProjectProvider`
+6. `TaskProvider`
+7. `KnowledgeProvider`
+8. `CaptureProvider`
+9. `HealthProvider`
+10. `FinanceProvider`
+11. `PrayerProvider`
+12. `DashboardFocusProvider`
+13. `ClockProvider`
+14. `AssistantProvider`
+15. `AssistantActivityProvider`
+16. `ChatProvider` through `ChatBridge`
+17. `ShellProvider`
 
 State is split across:
 
 - `src/store/contexts/CalendarContext.tsx`
+- `src/store/contexts/TripContext.tsx`
 - `src/store/contexts/ProjectContext.tsx`
 - `src/store/contexts/TaskContext.tsx`
 - `src/store/contexts/ChatContext.tsx`
 - `src/store/contexts/KnowledgeContext.tsx`
+- `src/store/contexts/CaptureContext.tsx`
 - `src/store/contexts/HealthContext.tsx`
 - `src/store/contexts/FinanceContext.tsx`
+- `src/store/contexts/PrayerContext.tsx`
+- `src/store/contexts/DashboardFocusContext.tsx`
 - `src/store/contexts/ClockContext.tsx`
 - `src/store/contexts/GamificationContext.tsx`
 - `src/store/contexts/SettingsContext.tsx`
 - `src/store/contexts/AssistantContext.tsx`
+- `src/store/contexts/AssistantActivityContext.tsx`
 
 The shell layer keeps only cross-cutting UI state:
 
@@ -114,7 +124,7 @@ Authenticated provider startup uses an initial-save guard so domain defaults do 
 
 ### Desktop boundary
 
-The Tauri side is intentionally thin. Rust commands handle app-data directory discovery, JSON store reads and writes, and a small number of desktop-only affordances such as project directory picking and opening a local project path. App behavior and business rules stay in the TypeScript layer.
+The Tauri side is intentionally thin. Rust commands handle app-data directory discovery, JSON store reads and writes, cancellable process-side prayer reminder timers, and a small number of desktop-only affordances such as project directory picking and opening a local project path. Prayer deadline and eligibility rules stay in TypeScript; Rust only keeps scheduled timers alive while the HELM process is running and delivers native notifications when they fire.
 
 ### Supabase
 
@@ -204,7 +214,7 @@ The assistant benchmark corpus and scorer now live under `src/assistant/evals/` 
 
 The app also integrates with:
 
-- AlAdhan for prayer times
+- AlAdhan for validated Jafari prayer times, final-deadline inputs, and timezone metadata. `PrayerProvider` is the sole schedule owner, refreshes on date/location/resume/retry, and refuses stale or timezone-mismatched reminder scheduling.
 - Monzo for finance import
 - ElevenLabs for voice output
 - Deepgram for speech-to-text
@@ -214,10 +224,11 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 
 ## Surface Notes
 
-- Dashboard is the daily operating view and combines agenda, prayer, habits, goals, achievements, and a compact task snapshot. The `Up Next` hero now comes from a dedicated dashboard-focus domain that ranks grounded task, habit, prayer, and near-meeting candidates locally, lets the hosted GPT model review that candidate pool once per local day when available, and falls back immediately to the local ranker when hosted AI is unavailable or invalid. Prayer tasks are driven by the live prayer schedule, so the snapshot only recommends the active prayer window and never mixes expired or later prayers into the queue. The dashboard UI now distinguishes `GPT-reviewed`, `GPT unavailable`, and `Ollama mode`, only shows duration chips when they come from grounded task or calendar data rather than heuristics, and keeps the prayer-rate card scoped to the current month while Profile preserves the longer month-by-month history.
+- Dashboard is the daily operating view and combines agenda, prayer, habits, goals, achievements, and a compact task snapshot. The `Up Next` hero now comes from a dedicated dashboard-focus domain that ranks grounded task, habit, prayer, and near-meeting candidates locally, lets the hosted GPT model review that candidate pool once per local day when available, and falls back immediately to the local ranker when hosted AI is unavailable or invalid. Prayer tasks are driven by the live prayer schedule, so the snapshot only recommends the active sequential prayer window and never mixes expired or later prayers into the queue. Separate Jafari final deadlines drive On-time/Late outcomes and warnings. The dashboard UI distinguishes `GPT-reviewed`, `GPT unavailable`, and `Ollama mode`, only shows duration chips when they come from grounded task or calendar data rather than heuristics, and shows the current-month On-time/Late/Missed split while Profile preserves longer history.
 - Chat is persistent and conversation-based.
 - Calendar is the most integration-heavy surface and depends on account/source/event integrity.
-- Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, Islamic prayer tasks, routine habits, and completed work for easier scanning, with collapsible section headers for long lists. Legacy prayer habits are normalized into first-class prayer tasks on load so prayer logs and streak data continue to work without manual migration.
+- Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, Islamic prayer tasks, routine habits, and completed work for easier scanning, with collapsible section headers for long lists. Legacy prayer habits are normalized into first-class prayer tasks on load. Canonical prayer outcome records are keyed by local prayer date and prayer name rather than task ID, so task deletion or recreation does not erase history. Old checked prayer entries migrate idempotently as `unclassified`; HELM never invents legacy on-time status or missed days.
+- Prayer tracking and reminders are specified in `docs/prayer-tracking-and-reminders.md`. `PrayerProvider` owns schedule freshness, canonical outcomes, the shared completion selector, stats, reminders, and Prayer Debug diagnostics. UI, chat, and voice all use the same completion mutation; Lina asks `On time or late?` when status is omitted, and undo restores task, XP, and prayer tracking together.
 - Projects is a local-first project-management hub built on the shared Tasks domain. Project boards read and write task workflow fields directly, milestones reuse project-linked goals, and wiki pages are lightweight notes stored alongside the rest of local app data.
 - Clock is a local-first utility surface for timer and stopwatch workflows, and it persists multiple active cards plus per-timer alarm sound preferences through the shared store.
 - Health is a local-first reflection surface for logging fast-food experiences, keeping a quick-entry form and recent reminder history in the same view so the pattern stays visible.
@@ -230,7 +241,7 @@ The repo includes:
 
 - unit tests with Vitest
 - browser E2E coverage with Playwright
-- desktop and web behavior that still requires manual checks for OAuth, microphone access, wake word, and some live integrations
+- desktop and web behavior that still requires manual checks for OAuth, microphone access, wake word, native notification permission, minimized prayer reminders, and some live integrations
 
 The Vite README is still the default template, so the docs in this folder and `AGENTS.md` should be treated as the actual project guide until the README is refreshed.
 

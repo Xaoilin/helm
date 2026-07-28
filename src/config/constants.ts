@@ -256,6 +256,16 @@ export const STORAGE_KEYS = {
   SHELL_SURFACE: 'helm:shell-surface',
 } as const;
 
+export const PRAYER_REMINDERS = {
+  DEFAULT_MINUTES: 15,
+  OPTIONS_MINUTES: [5, 10, 15, 30] as const,
+  SNOOZE_MINUTES: 5,
+  SNOOZE_CUTOFF_MINUTES: 5,
+  RUNTIME_TICK_MS: 15_000,
+  TEST_DELAY_MS: 5_000,
+  TEST_DEADLINE_MS: 60_000,
+} as const;
+
 // ── Environment ──
 
 export const LOCALHOST_HOSTNAMES = ['localhost', '127.0.0.1', '::1', '[::1]'] as const;

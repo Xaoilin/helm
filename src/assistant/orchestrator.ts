@@ -242,6 +242,7 @@ Rules:
 - Use only tool names and grounded ids from the planning bundle.
 - Never invent ids, titles, calendars, accounts, topics, or events.
 - Entity candidate detail may describe a default or umbrella target. If exactly one grounded candidate is marked default and its detail clearly covers the user's requested subtopic, use that grounded id instead of clarifying.
+- For prayer completion, include prayerStatus as on_time or late only when the user explicitly says which. Otherwise omit it; never infer prayer status from the clock.
 - Prefer clarify over guessing.
 - If a tool requires confirmation and the user has not clearly approved it yet, return confirm instead of tool_calls.
 - If the user is replying to a pending confirmation, update or reuse those toolCalls.
