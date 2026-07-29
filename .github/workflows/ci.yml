@@ -456,7 +456,23 @@ jobs:
 
   auto-promote:
     name: auto-promote
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'master' && startsWith(github.event.pull_request.head.ref, 'codex/')
+    # `always()` prevents a skipped transitive native matrix from suppressing
+    # this job. Explicit direct-result guards keep promotion fail closed.
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == 'master' &&
+      startsWith(github.event.pull_request.head.ref, 'codex/') &&
+      needs.lint.result == 'success' &&
+      needs['agent-policy'].result == 'success' &&
+      needs.typecheck.result == 'success' &&
+      needs.unit.result == 'success' &&
+      needs.e2e.result == 'success' &&
+      needs.build.result == 'success' &&
+      needs.native.result == 'success' &&
+      needs['codex-review'].result == 'success'
     runs-on: ubuntu-latest
     concurrency:
       group: helm-auto-promote-master
