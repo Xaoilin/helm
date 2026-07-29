@@ -2,6 +2,21 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+const LOCAL_GIT_ENVIRONMENT_NAMES = execFileSync(
+  'git',
+  ['rev-parse', '--local-env-vars'],
+  { encoding: 'utf8' },
+).split(/\r?\n/u).filter(Boolean)
+
+export function withoutLocalGitEnvironment(environment = process.env) {
+  // Hooks export repository-local Git variables; cwd must select the target repo.
+  const isolated = { ...environment }
+  for (const name of LOCAL_GIT_ENVIRONMENT_NAMES) {
+    delete isolated[name]
+  }
+  return isolated
+}
+
 const NATIVE_VERSION_FILES = new Set([
   'src-tauri/Cargo.lock',
   'src-tauri/Cargo.toml',
@@ -13,6 +28,7 @@ function git(rootDir, args, { allowFailure = false } = {}) {
     return execFileSync('git', args, {
       cwd: rootDir,
       encoding: 'utf8',
+      env: withoutLocalGitEnvironment(),
       stdio: ['ignore', 'pipe', allowFailure ? 'ignore' : 'pipe'],
     }).trim()
   } catch (error) {
@@ -98,6 +114,7 @@ function readFileAtRef(rootDir, ref, filePath) {
     return execFileSync('git', ['show', `${ref}:${filePath}`], {
       cwd: rootDir,
       encoding: 'utf8',
+      env: withoutLocalGitEnvironment(),
       stdio: ['ignore', 'pipe', 'ignore'],
     })
   } catch {

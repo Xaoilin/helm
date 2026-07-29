@@ -50,6 +50,7 @@ Behavioral E2E and screenshot evidence are separate. `test:e2e` blocks on behavi
 - [docs/project-architecture.md](docs/project-architecture.md): app structure, provider graph, persistence, and integration boundaries
 - [docs/engineering-guide.md](docs/engineering-guide.md): workflow, Definition of Done, testing, resilience, and documentation rules
 - [docs/agentic-coding-workflow.md](docs/agentic-coding-workflow.md): agent feedback, CI, automated review, and production automation policy
+- [docs/ci-performance.md](docs/ci-performance.md): measured local and hosted validation receipts
 - [docs/feature-status.md](docs/feature-status.md): truthful feature matrix
 - [docs/assistant-command-architecture.md](docs/assistant-command-architecture.md): long-term assistant design direction
 
