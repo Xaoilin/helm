@@ -102,12 +102,16 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
 
-  unit:
-    name: unit
+  unit-shard:
+    name: unit-${{ matrix.shard }}-of-2
     if: >-
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event_name != 'workflow_dispatch' ||
         (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -116,7 +120,27 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run test -- --config vite.config.ts
+      - run: npm run test -- --config vite.config.ts --shard=${{ matrix.shard }}/2
+
+  unit:
+    name: unit
+    needs: unit-shard
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' ||
+        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every unit-test shard
+        env:
+          UNIT_SHARDS_RESULT: ${{ needs['unit-shard'].result }}
+        run: |
+          if [ "$UNIT_SHARDS_RESULT" != "success" ]; then
+            echo "One or more unit-test shards did not pass."
+            exit 1
+          fi
+          echo "All unit-test shards passed."
 
   e2e:
     name: e2e

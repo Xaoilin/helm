@@ -154,6 +154,9 @@ export function evaluateCiWorkflow(rawWorkflow) {
     'node ./scripts/detect-ci-native-impact.mjs',
     'uses: actions/cache@v5',
     'npm run test -- --config vite.config.ts',
+    'name: unit-${{ matrix.shard }}-of-2',
+    '--shard=${{ matrix.shard }}/2',
+    "UNIT_SHARDS_RESULT: ${{ needs['unit-shard'].result }}",
     'google-chrome --version',
     "needs['native-changes'].outputs.native == 'true'",
   ]

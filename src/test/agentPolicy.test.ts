@@ -47,9 +47,13 @@ ${checkJobs}
     if: needs['native-changes'].outputs.native == 'true'
     steps:
       - uses: actions/cache@v5
-  unit-config:
+  unit-shard:
+    name: unit-\${{ matrix.shard }}-of-2
     steps:
-      - run: npm run test -- --config vite.config.ts
+      - run: npm run test -- --config vite.config.ts --shard=\${{ matrix.shard }}/2
+  unit-aggregate:
+    env:
+      UNIT_SHARDS_RESULT: \${{ needs['unit-shard'].result }}
   e2e-browser:
     steps:
       - run: google-chrome --version

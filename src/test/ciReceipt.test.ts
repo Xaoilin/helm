@@ -56,7 +56,7 @@ function passingState() {
       event: 'pull_request',
       head_sha: sourceHeadSha,
       id: sourceRunId,
-      name: 'CI',
+      name: 'Speed up agent feedback and CI validation',
       path: '.github/workflows/ci.yml',
       run_attempt: 1,
       status: 'completed',

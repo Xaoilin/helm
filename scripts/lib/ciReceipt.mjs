@@ -241,7 +241,6 @@ export function evaluateCiReceipt({
     Number(sourceRun?.id) === Number(sourceRunId),
     'GitHub returned a different source workflow run.',
   )
-  addFailure(failures, sourceRun?.name === 'CI', 'The source workflow run is not CI.')
   addFailure(
     failures,
     sourceRun?.path === '.github/workflows/ci.yml',
