@@ -3,14 +3,19 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { AppProvider, useApp } from '../store/AppContext';
 import { createElement, type ReactNode } from 'react';
 
-const { processAssistantCommandMock } = vi.hoisted(() => ({
+const { processAssistantCommandMock, revokeProjectProfilesForProjectMock } = vi.hoisted(() => ({
   processAssistantCommandMock: vi.fn(),
+  revokeProjectProfilesForProjectMock: vi.fn(),
 }));
 
 vi.mock('../services/assistantRuntime', () => ({
   isOllamaAvailable: vi.fn(),
   resetOllamaCache: vi.fn(),
   processAssistantCommand: processAssistantCommandMock,
+}));
+
+vi.mock('../services/projectRuntime', () => ({
+  revokeProjectProfilesForProject: revokeProjectProfilesForProjectMock,
 }));
 
 beforeEach(() => {
@@ -28,6 +33,8 @@ beforeEach(() => {
     planningSource: 'openai',
     planningStatus: 'planned',
   });
+  revokeProjectProfilesForProjectMock.mockReset();
+  revokeProjectProfilesForProjectMock.mockResolvedValue(undefined);
 });
 
 async function renderWithApp() {
@@ -206,6 +213,37 @@ describe('AppContext - Settings', () => {
 describe('AppContext - Projects', () => {
   beforeEach(() => { localStorage.clear(); });
 
+  it('does not adopt a legacy project localPath when native canonicalization is unavailable', async () => {
+    localStorage.setItem('helm:projects', JSON.stringify([{
+      id: 'legacy-project',
+      name: 'Legacy Project',
+      localPath: '/device/legacy-project',
+      summary: '',
+      status: 'active',
+      tags: [],
+      isPinned: false,
+      createdAt: '2026-07-29T12:00:00.000Z',
+      updatedAt: '2026-07-29T12:00:00.000Z',
+    }]));
+
+    const r = await renderWithApp();
+
+    expect(r.api!.projects[0]).toMatchObject({
+      id: 'legacy-project',
+      catalogKey: 'custom:legacy-project',
+    });
+    expect(r.api!.projects[0]).not.toHaveProperty('localPath');
+
+    await waitFor(() => {
+      const shared = localStorage.getItem('helm:projects') || '';
+      const device = localStorage.getItem('helm:device:projectDeviceBindings') || '';
+      const pending = localStorage.getItem('helm:device:projectPendingLegacyPaths') || '';
+      expect(shared).not.toContain('/device/legacy-project');
+      expect(device).not.toContain('/device/legacy-project');
+      expect(pending).toContain('/device/legacy-project');
+    });
+  });
+
   it('should add, update, and remove projects', async () => {
     const r = await renderWithApp();
     let projectId = '';
@@ -226,9 +264,10 @@ describe('AppContext - Projects', () => {
     act(() => { r.api!.updateProject(projectId, { summary: 'Updated' }); });
     expect(r.api!.projects[0].summary).toBe('Updated');
 
-    act(() => { r.api!.removeProject(projectId); });
+    await act(async () => { await r.api!.removeProject(projectId); });
     expect(r.api!.projects).toHaveLength(0);
     expect(r.api!.projectPages).toHaveLength(0);
+    expect(revokeProjectProfilesForProjectMock).toHaveBeenCalledWith(projectId);
   });
 
   it('should unlink tasks when a project is removed', async () => {
@@ -257,12 +296,33 @@ describe('AppContext - Projects', () => {
       });
     });
 
-    act(() => { r.api!.removeProject(projectId); });
+    await act(async () => { await r.api!.removeProject(projectId); });
 
     const task = r.api!.tasks.find(item => item.id === taskId);
     expect(task?.projectId).toBeUndefined();
     expect(task?.workflowState).toBeUndefined();
     expect(task?.boardOrder).toBeUndefined();
+  });
+
+  it('preserves the project when native approval revocation fails', async () => {
+    const r = await renderWithApp();
+    let projectId = '';
+    act(() => {
+      projectId = r.api!.addProject({
+        name: 'Project',
+        summary: '',
+        status: 'active',
+        tags: [],
+        isPinned: false,
+      });
+    });
+    revokeProjectProfilesForProjectMock.mockRejectedValueOnce(new Error('Approval store unavailable'));
+
+    await expect(act(async () => {
+      await r.api!.removeProject(projectId);
+    })).rejects.toThrow('Approval store unavailable');
+
+    expect(r.api!.projects.some(project => project.id === projectId)).toBe(true);
   });
 });
 

@@ -175,6 +175,9 @@ After the feature works end to end, do one more rendered review that focuses on 
 - Keep project management state on the shared task model. Project boards must continue to use `Task.projectId`, `Task.workflowState`, `Task.blockedReason`, `Task.boardOrder`, and `Task.completed` instead of inventing a second parallel board record.
 - Project removal must safely unlink project-backed tasks and goals instead of deleting the underlying work items.
 - Each project should retain a lightweight overview wiki page; migrations and CRUD flows should not leave orphaned project pages behind.
+- Project catalogue records may sync names, summaries, links, display-only setup steps, portable run recipes, and preview styling. Absolute roots, native approvals, fingerprints, process state, and logs belong only in the device store and must be stripped from shared writes, imports, drift checks, and assistant context.
+- Legacy absolute paths that cannot yet be canonicalised stay in the device-only pending-path store; they become active bindings only after native verification succeeds.
+- Native project launch must execute a Rust-normalised approved profile ID, never renderer-supplied shell text. Keep native confirmation, native fingerprints, start-time canonical containment, one process group per profile, bounded output, and exit cleanup intact. Web builds and Lina navigation stay reference-only.
 
 ## Security Notes
 
@@ -182,6 +185,8 @@ After the feature works end to end, do one more rendered review that focuses on 
 - Do not imply HELM includes a secure general-purpose credential vault. Project local paths and other app metadata are plain local-first records, not hardened secret storage.
 - Hosted-assistant browser calls currently use the build's configured Supabase project access key. Keep the UI copy truthful about that architecture, and if tighter access control is needed later, move the OpenAI call behind a server-side auth boundary instead of implying the browser path is private.
 - Avoid `dangerouslySetInnerHTML` and preserve React's default escaping protections.
+- Keep the Tauri CSP enabled and narrowly scoped. The native project approval dialog is the user-presence trust boundary; renderer confirmation alone is not sufficient for process launch.
+- Keep generic native persistence on its strict store-key allowlist and runtime approvals inside the isolated `project-runtime` directory. A shared/device store addition must update the declarations and allowlist together; the agent-policy gate enforces parity.
 - If the product ever moves beyond single-user local-first usage, secrets and privileged API calls need a server-side redesign.
 
 ## UI And UX Rules
