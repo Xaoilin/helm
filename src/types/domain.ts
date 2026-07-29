@@ -94,6 +94,8 @@ export interface CalendarEvent {
 
 // ── Projects ──
 export type ProjectStatus = 'planning' | 'active' | 'blocked' | 'completed' | 'archived';
+export type ProjectStatusBeforeArchive = Exclude<ProjectStatus, 'archived'>;
+export type ProjectCatalogueSection = 'pinned' | 'projects' | 'archived';
 export type ProjectWorkflowState = 'backlog' | 'next_up' | 'in_progress' | 'blocked';
 export type ProjectKind =
   | 'web_app'
@@ -168,8 +170,12 @@ export interface Project {
   localPath?: string;
   summary: string;
   status: ProjectStatus;
+  /** Restored when a reversible archive is removed. */
+  statusBeforeArchive?: ProjectStatusBeforeArchive;
   tags: string[];
   isPinned: boolean;
+  /** Manual position within the project's catalogue section. */
+  sortOrder?: number;
   createdAt: string;
   updatedAt: string;
 }

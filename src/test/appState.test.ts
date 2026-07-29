@@ -270,6 +270,55 @@ describe('AppContext - Projects', () => {
     expect(revokeProjectProfilesForProjectMock).toHaveBeenCalledWith(projectId);
   });
 
+  it('pins, reorders, archives, and restores projects through atomic catalogue operations', async () => {
+    const r = await renderWithApp();
+    let firstId = '';
+    let secondId = '';
+    act(() => {
+      firstId = r.api!.addProject({
+        name: 'First',
+        summary: '',
+        status: 'blocked',
+        tags: [],
+        isPinned: false,
+      });
+      secondId = r.api!.addProject({
+        name: 'Second',
+        summary: '',
+        status: 'active',
+        tags: [],
+        isPinned: false,
+      });
+    });
+
+    act(() => { r.api!.reorderProjectSection('projects', [secondId, firstId]); });
+    expect(r.api!.projects.find(project => project.id === secondId)?.sortOrder).toBe(0);
+    expect(r.api!.projects.find(project => project.id === firstId)?.sortOrder).toBe(1);
+
+    act(() => { r.api!.setProjectPinned(firstId, true); });
+    expect(r.api!.projects.find(project => project.id === firstId)).toMatchObject({
+      isPinned: true,
+      sortOrder: 0,
+    });
+
+    act(() => { r.api!.setProjectArchived(firstId, true); });
+    expect(r.api!.projects.find(project => project.id === firstId)).toMatchObject({
+      status: 'archived',
+      statusBeforeArchive: 'blocked',
+      isPinned: false,
+      sortOrder: 0,
+    });
+
+    act(() => { r.api!.setProjectArchived(firstId, false); });
+    const restored = r.api!.projects.find(project => project.id === firstId);
+    expect(restored).toMatchObject({
+      status: 'blocked',
+      isPinned: false,
+      sortOrder: 1,
+    });
+    expect(restored).not.toHaveProperty('statusBeforeArchive');
+  });
+
   it('should unlink tasks when a project is removed', async () => {
     const r = await renderWithApp();
     let projectId = '';

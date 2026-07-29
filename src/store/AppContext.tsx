@@ -3,7 +3,7 @@ import type {
   Surface, ChatConversation,
   CalendarAccount, CalendarSource, CalendarEvent,
   Trip, TripBooking, TripBookingInput, TripBudgetEntry, TripBudgetEntryInput, TripItineraryItem, TripLeg,
-  Project, ProjectDeviceBinding, ProjectPage, ProjectRunProfile, Integration, Settings,
+  Project, ProjectCatalogueSection, ProjectDeviceBinding, ProjectPage, ProjectRunProfile, Integration, Settings,
   Task, GamificationProfile,
   DashboardFocusState,
   KnowledgeTopic, KnowledgeEntry,
@@ -131,6 +131,9 @@ interface AppContextAPI {
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProject: (id: string, updates: Partial<Project>) => void;
   removeProject: (id: string) => Promise<void>;
+  setProjectPinned: (projectId: string, isPinned: boolean) => void;
+  setProjectArchived: (projectId: string, isArchived: boolean) => void;
+  reorderProjectSection: (section: ProjectCatalogueSection, orderedProjectIds: string[]) => void;
   setProjectDeviceRoot: (catalogKey: string, projectRoot: string) => boolean;
   clearProjectDeviceBinding: (catalogKey: string) => void;
   approveProjectRunProfile: (catalogKey: string, profile: ProjectRunProfile) => void;
@@ -620,6 +623,9 @@ function ShellProvider({ children }: { children: ReactNode }) {
     addProject: projectCtx.addProject,
     updateProject: projectCtx.updateProject,
     removeProject,
+    setProjectPinned: projectCtx.setProjectPinned,
+    setProjectArchived: projectCtx.setProjectArchived,
+    reorderProjectSection: projectCtx.reorderProjectSection,
     setProjectDeviceRoot: projectCtx.setProjectDeviceRoot,
     clearProjectDeviceBinding: projectCtx.clearProjectDeviceBinding,
     approveProjectRunProfile: projectCtx.approveProjectRunProfile,

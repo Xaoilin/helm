@@ -11,12 +11,19 @@ import type {
   ProjectRunRecipe,
   ProjectSetupStep,
   ProjectStatus,
+  ProjectStatusBeforeArchive,
 } from '../types/domain';
 
 export const PROJECT_DEVICE_BINDINGS_STORE_KEY = 'projectDeviceBindings' as const;
 export const PROJECT_PENDING_LEGACY_PATHS_STORE_KEY = 'projectPendingLegacyPaths' as const;
 
 const VALID_PROJECT_STATUSES = new Set<ProjectStatus>(['planning', 'active', 'blocked', 'completed', 'archived']);
+const VALID_PROJECT_STATUSES_BEFORE_ARCHIVE = new Set<ProjectStatusBeforeArchive>([
+  'planning',
+  'active',
+  'blocked',
+  'completed',
+]);
 const VALID_PROJECT_KINDS = new Set<ProjectKind>([
   'web_app',
   'desktop_app',
@@ -88,6 +95,12 @@ function normalizeTimestamp(value: unknown, fallback: string): string {
 function normalizeOptionalTimestamp(value: unknown): string | undefined {
   const candidate = trimmedString(value);
   return candidate && Number.isFinite(Date.parse(candidate)) ? candidate : undefined;
+}
+
+function normalizeOptionalSortOrder(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
 }
 
 function normalizeTags(value: unknown): string[] {
@@ -266,6 +279,12 @@ export function normalizeProjectRecord(
   const status = typeof record.status === 'string' && VALID_PROJECT_STATUSES.has(record.status as ProjectStatus)
     ? record.status as ProjectStatus
     : 'active';
+  const statusBeforeArchive = status === 'archived'
+    && typeof record.statusBeforeArchive === 'string'
+    && VALID_PROJECT_STATUSES_BEFORE_ARCHIVE.has(record.statusBeforeArchive as ProjectStatusBeforeArchive)
+    ? record.statusBeforeArchive as ProjectStatusBeforeArchive
+    : undefined;
+  const sortOrder = normalizeOptionalSortOrder(record.sortOrder);
 
   return {
     id,
@@ -279,8 +298,10 @@ export function normalizeProjectRecord(
     verifiedAt: normalizeOptionalTimestamp(record.verifiedAt),
     summary: trimmedString(record.summary),
     status,
+    ...(statusBeforeArchive ? { statusBeforeArchive } : {}),
     tags: normalizeTags(record.tags),
-    isPinned: record.isPinned === true,
+    isPinned: status !== 'archived' && record.isPinned === true,
+    ...(sortOrder !== undefined ? { sortOrder } : {}),
     createdAt,
     updatedAt,
   };
@@ -335,8 +356,10 @@ export function serializeSharedProject(project: Project): SharedProjectRecord {
     verifiedAt: normalized.verifiedAt,
     summary: normalized.summary,
     status: normalized.status,
+    ...(normalized.statusBeforeArchive ? { statusBeforeArchive: normalized.statusBeforeArchive } : {}),
     tags: normalized.tags,
     isPinned: normalized.isPinned,
+    ...(normalized.sortOrder !== undefined ? { sortOrder: normalized.sortOrder } : {}),
     createdAt: normalized.createdAt,
     updatedAt: normalized.updatedAt,
   };
