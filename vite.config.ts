@@ -34,6 +34,8 @@ export default defineConfig({
     css: false,
     pool: 'forks',
     maxWorkers: process.env.CI ? 2 : 8,
+    // Keep successful expected warnings out of hosted logs; failed-test output remains visible.
+    silent: 'passed-only',
     exclude: ['node_modules', 'e2e', '.codex_tmp/**'],
     alias: {
       'openwakeword-wasm-browser': path.resolve(__dirname, 'src/test/__mocks__/openwakeword.ts'),
