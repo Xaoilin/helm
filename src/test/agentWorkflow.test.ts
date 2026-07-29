@@ -8,13 +8,35 @@ import {
   hasNativeImpact,
   hasPackageRuntimeImpact,
   listChangedFiles,
+  withoutLocalGitEnvironment,
 } from '../../scripts/lib/changedFiles.mjs'
+
+const temporaryGitEnvironment = withoutLocalGitEnvironment()
+
+function runTemporaryGit(cwd: string, args: string[]) {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    env: temporaryGitEnvironment,
+  })
+}
 
 describe('agent workflow change classification', () => {
   const rootDir = mkdtempSync(join(tmpdir(), 'helm-agent-workflow-'))
 
   afterAll(() => {
     rmSync(rootDir, { recursive: true, force: true })
+  })
+
+  it('isolates temporary repositories from Git hook repository variables', () => {
+    expect(withoutLocalGitEnvironment({
+      GIT_COMMON_DIR: '/real/repository/common',
+      GIT_DIR: '/real/repository/git-dir',
+      GIT_WORK_TREE: '/real/repository/worktree',
+      PATH: process.env.PATH,
+    })).toEqual({
+      PATH: process.env.PATH,
+    })
   })
 
   it('selects focused web checks without native tests', () => {
@@ -57,9 +79,9 @@ describe('agent workflow change classification', () => {
       'version = 4\n\n[[package]]\nname = "helm"\nversion = "0.2.71"\n',
     )
     writeFileSync(join(repo, 'src-tauri', 'tauri.conf.json'), '{"version":"0.2.71"}\n')
-    execFileSync('git', ['init', '-b', 'master'], { cwd: repo })
-    execFileSync('git', ['add', '.'], { cwd: repo })
-    execFileSync('git', [
+    runTemporaryGit(repo, ['init', '-b', 'master'])
+    runTemporaryGit(repo, ['add', '.'])
+    runTemporaryGit(repo, [
       '-c',
       'user.name=HELM Test',
       '-c',
@@ -67,7 +89,7 @@ describe('agent workflow change classification', () => {
       'commit',
       '-m',
       'base',
-    ], { cwd: repo })
+    ])
 
     writeFileSync(join(repo, 'src-tauri', 'Cargo.toml'), '[package]\nname = "helm"\nversion = "0.2.72"\n')
     writeFileSync(
@@ -96,9 +118,9 @@ describe('agent workflow change classification', () => {
     mkdirSync(join(repo, 'src-tauri'), { recursive: true })
     const baseCargo = '[package]\nname = "helm"\nversion = "0.2.71"\n'
     writeFileSync(join(repo, 'src-tauri', 'Cargo.toml'), baseCargo)
-    execFileSync('git', ['init', '-b', 'master'], { cwd: repo })
-    execFileSync('git', ['add', '.'], { cwd: repo })
-    execFileSync('git', [
+    runTemporaryGit(repo, ['init', '-b', 'master'])
+    runTemporaryGit(repo, ['add', '.'])
+    runTemporaryGit(repo, [
       '-c',
       'user.name=HELM Test',
       '-c',
@@ -106,13 +128,13 @@ describe('agent workflow change classification', () => {
       'commit',
       '-m',
       'base',
-    ], { cwd: repo })
+    ])
 
     writeFileSync(
       join(repo, 'src-tauri', 'Cargo.toml'),
       `${baseCargo}\n[dependencies]\nserde = "1"\n`,
     )
-    execFileSync('git', ['add', 'src-tauri/Cargo.toml'], { cwd: repo })
+    runTemporaryGit(repo, ['add', 'src-tauri/Cargo.toml'])
     writeFileSync(
       join(repo, 'src-tauri', 'Cargo.toml'),
       '[package]\r\nname = "helm"\r\nversion = "0.2.72"\r\n',
@@ -129,9 +151,9 @@ describe('agent workflow change classification', () => {
       join(repo, 'package-lock.json'),
       '{"name":"helm","version":"0.2.71","lockfileVersion":3,"packages":{"":{"version":"0.2.71"}}}\n',
     )
-    execFileSync('git', ['init', '-b', 'master'], { cwd: repo })
-    execFileSync('git', ['add', '.'], { cwd: repo })
-    execFileSync('git', [
+    runTemporaryGit(repo, ['init', '-b', 'master'])
+    runTemporaryGit(repo, ['add', '.'])
+    runTemporaryGit(repo, [
       '-c',
       'user.name=HELM Test',
       '-c',
@@ -139,7 +161,7 @@ describe('agent workflow change classification', () => {
       'commit',
       '-m',
       'base',
-    ], { cwd: repo })
+    ])
 
     writeFileSync(join(repo, 'package.json'), '{"name":"helm","version":"0.2.72","scripts":{"test":"vitest"}}\n')
     writeFileSync(
@@ -159,12 +181,12 @@ describe('agent workflow change classification', () => {
 
   it('unions branch, staged, unstaged, and untracked changes', () => {
     const repo = mkdtempSync(join(tmpdir(), 'helm-changed-files-'))
-    execFileSync('git', ['init', '-b', 'master'], { cwd: repo })
+    runTemporaryGit(repo, ['init', '-b', 'master'])
     for (const fileName of ['branch.ts', 'staged.ts', 'unstaged.ts']) {
       writeFileSync(join(repo, fileName), 'export const value = 1\n')
     }
-    execFileSync('git', ['add', '.'], { cwd: repo })
-    execFileSync('git', [
+    runTemporaryGit(repo, ['add', '.'])
+    runTemporaryGit(repo, [
       '-c',
       'user.name=HELM Test',
       '-c',
@@ -172,20 +194,14 @@ describe('agent workflow change classification', () => {
       'commit',
       '-m',
       'base',
-    ], { cwd: repo })
-    const baseSha = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: repo,
-      encoding: 'utf8',
-    }).trim()
-    execFileSync('git', ['update-ref', 'refs/remotes/origin/master', baseSha], { cwd: repo })
-    execFileSync('git', ['switch', '-c', 'codex/test'], {
-      cwd: repo,
-      stdio: 'ignore',
-    })
+    ])
+    const baseSha = runTemporaryGit(repo, ['rev-parse', 'HEAD']).trim()
+    runTemporaryGit(repo, ['update-ref', 'refs/remotes/origin/master', baseSha])
+    runTemporaryGit(repo, ['switch', '-c', 'codex/test'])
 
     writeFileSync(join(repo, 'branch.ts'), 'export const value = 2\n')
-    execFileSync('git', ['add', 'branch.ts'], { cwd: repo })
-    execFileSync('git', [
+    runTemporaryGit(repo, ['add', 'branch.ts'])
+    runTemporaryGit(repo, [
       '-c',
       'user.name=HELM Test',
       '-c',
@@ -193,9 +209,9 @@ describe('agent workflow change classification', () => {
       'commit',
       '-m',
       'branch',
-    ], { cwd: repo })
+    ])
     writeFileSync(join(repo, 'staged.ts'), 'export const value = 2\n')
-    execFileSync('git', ['add', 'staged.ts'], { cwd: repo })
+    runTemporaryGit(repo, ['add', 'staged.ts'])
     writeFileSync(join(repo, 'unstaged.ts'), 'export const value = 2\n')
     writeFileSync(join(repo, 'untracked.ts'), 'export const value = 1\n')
 
@@ -210,9 +226,9 @@ describe('agent workflow change classification', () => {
     const repo = mkdtempSync(join(tmpdir(), 'helm-native-rename-'))
     mkdirSync(join(repo, 'src-tauri', 'src'), { recursive: true })
     writeFileSync(join(repo, 'src-tauri', 'src', 'command.rs'), 'pub fn command() {}\n')
-    execFileSync('git', ['init', '-b', 'master'], { cwd: repo })
-    execFileSync('git', ['add', '.'], { cwd: repo })
-    execFileSync('git', [
+    runTemporaryGit(repo, ['init', '-b', 'master'])
+    runTemporaryGit(repo, ['add', '.'])
+    runTemporaryGit(repo, [
       '-c',
       'user.name=HELM Test',
       '-c',
@@ -220,14 +236,11 @@ describe('agent workflow change classification', () => {
       'commit',
       '-m',
       'base',
-    ], { cwd: repo })
-    const baseSha = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: repo,
-      encoding: 'utf8',
-    }).trim()
-    execFileSync('git', ['update-ref', 'refs/remotes/origin/master', baseSha], { cwd: repo })
+    ])
+    const baseSha = runTemporaryGit(repo, ['rev-parse', 'HEAD']).trim()
+    runTemporaryGit(repo, ['update-ref', 'refs/remotes/origin/master', baseSha])
     mkdirSync(join(repo, 'archive'), { recursive: true })
-    execFileSync('git', ['mv', 'src-tauri/src/command.rs', 'archive/command.rs'], { cwd: repo })
+    runTemporaryGit(repo, ['mv', 'src-tauri/src/command.rs', 'archive/command.rs'])
 
     const selection = listChangedFiles(repo)
     expect(selection.files).toEqual([
