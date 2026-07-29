@@ -36,7 +36,7 @@ on:
   push:
     branches: [master]
 concurrency:
-  group: ci-\${{ github.workflow }}-\${{ github.event.pull_request.number || github.ref }}
+  group: ci-\${{ github.workflow }}-\${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: \${{ github.event_name == 'pull_request' }}
 jobs:
 ${checkJobs}
@@ -128,6 +128,17 @@ describe('agent policy helpers', () => {
       ok: false,
       failures: expect.arrayContaining([
         "CI workflow is missing required fast-feedback behavior: cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+      ]),
+    })
+
+    const sharedMasterQueue = validCiWorkflow().replace(
+      "github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id",
+      'github.event.pull_request.number || github.ref',
+    )
+    expect(evaluateCiWorkflow(sharedMasterQueue)).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining([
+        "CI workflow is missing required fast-feedback behavior: github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id",
       ]),
     })
 

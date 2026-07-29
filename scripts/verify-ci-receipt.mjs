@@ -100,17 +100,35 @@ async function loadWorkflowDispatchRuns(repository, workflowFile) {
   const runs = []
   const encodedWorkflow = encodeURIComponent(workflowFile)
 
-  for (let page = 1; page <= 10; page += 1) {
+  for (let page = 1; ; page += 1) {
     const response = await githubRequest(
       `/repos/${repository}/actions/workflows/${encodedWorkflow}/runs`
       + `?event=workflow_dispatch&per_page=100&page=${page}`,
     )
     const pageRuns = Array.isArray(response?.workflow_runs) ? response.workflow_runs : []
     runs.push(...pageRuns)
-    if (pageRuns.length < 100) break
+    const totalCount = Number(response?.total_count)
+    if (pageRuns.length < 100 || (Number.isFinite(totalCount) && runs.length >= totalCount)) break
   }
 
   return runs
+}
+
+async function loadSourceJobs(repository, sourceRunId) {
+  const jobs = []
+
+  for (let page = 1; ; page += 1) {
+    const response = await githubRequest(
+      `/repos/${repository}/actions/runs/${sourceRunId}/jobs`
+      + `?filter=all&per_page=100&page=${page}`,
+    )
+    const pageJobs = Array.isArray(response?.jobs) ? response.jobs : []
+    jobs.push(...pageJobs)
+    const totalCount = Number(response?.total_count)
+    if (pageJobs.length < 100 || (Number.isFinite(totalCount) && jobs.length >= totalCount)) break
+  }
+
+  return jobs
 }
 
 async function dispatchWorkflowOnce({
@@ -281,12 +299,10 @@ async function verifyReceipt() {
     'origin',
     '+refs/heads/master:refs/remotes/origin/master',
   ])
-  const [sourceRun, pullRequest, jobsResponse] = await Promise.all([
+  const [sourceRun, pullRequest, sourceJobs] = await Promise.all([
     loadSourceRun(inputs.repository, inputs.sourceRunId),
     loadPullRequest(inputs.repository, inputs.sourcePr),
-    githubRequest(
-      `/repos/${inputs.repository}/actions/runs/${inputs.sourceRunId}/jobs?filter=all&per_page=100`,
-    ),
+    loadSourceJobs(inputs.repository, inputs.sourceRunId),
   ])
   const currentSha = git(['rev-parse', 'HEAD'])
   const currentTree = git(['rev-parse', 'HEAD^{tree}'])
@@ -295,7 +311,7 @@ async function verifyReceipt() {
   const result = evaluateCiReceipt({
     currentSha,
     currentTree,
-    jobs: Array.isArray(jobsResponse.jobs) ? jobsResponse.jobs : [],
+    jobs: sourceJobs,
     liveMasterSha,
     liveMasterTree,
     pullRequest,

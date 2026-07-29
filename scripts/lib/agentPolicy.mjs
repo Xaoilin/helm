@@ -149,7 +149,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
 
   const requiredEfficiencySnippets = [
     'converted_to_draft',
-    "group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
+    "github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id",
     "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
     'node ./scripts/detect-ci-native-impact.mjs',
     'uses: actions/cache@v5',
