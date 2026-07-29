@@ -18,6 +18,7 @@ export default defineConfig({
   timeout: 30_000,
   retries: isCi ? 1 : 0,
   failOnFlakyTests: isCi,
+  workers: isCi ? 4 : undefined,
   use: {
     baseURL,
     headless: true,
