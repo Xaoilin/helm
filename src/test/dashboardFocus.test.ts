@@ -13,6 +13,7 @@ vi.mock('../services/hostedAssistantApi', () => ({
   testHostedAssistantConnection: testHostedAssistantConnectionMock,
 }));
 
+// @vitest-environment node
 import {
   buildDashboardFocusCandidates,
   selectDashboardFocusRecommendation,

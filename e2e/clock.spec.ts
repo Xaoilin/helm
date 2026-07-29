@@ -1,7 +1,8 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/helm-fixture';
 
 test.describe('Clock', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, scenario }) => {
+    await scenario('empty');
     await page.goto('/');
     await page.waitForSelector('.sidebar');
     await page.getByRole('button', { name: 'Navigate to Clock' }).click();
@@ -41,10 +42,14 @@ test.describe('Clock', () => {
     await page.getByRole('button', { name: 'Start Stopwatch 1' }).click();
     await expect(page.getByRole('button', { name: 'Pause Stopwatch 1' })).toBeVisible();
 
-    await page.waitForTimeout(1100);
+    const elapsed = page.getByLabel('Elapsed for Stopwatch 1');
+    await expect(elapsed).not.toContainText('00:00.00');
     await page.getByRole('button', { name: 'Add lap to Stopwatch 1' }).click();
-    await page.waitForTimeout(1200);
+    await expect(page.locator('.clock-lap-row')).toHaveCount(1);
+    const firstLapElapsed = await elapsed.textContent();
+    await expect.poll(() => elapsed.textContent()).not.toBe(firstLapElapsed);
     await page.getByRole('button', { name: 'Add lap to Stopwatch 1' }).click();
+    await expect(page.locator('.clock-lap-row')).toHaveCount(2);
     await expect(page.locator('.clock-lap-row').first()).toContainText('Split');
 
     await page.getByRole('button', { name: 'Pause Stopwatch 1' }).click();

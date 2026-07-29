@@ -2,18 +2,55 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      tested_tree:
+        description: Exact pull request merge-tree validated by the source CI run
+        required: false
+        type: string
+      source_run_id:
+        description: Successful pull request CI run that produced the tree receipt
+        required: false
+        type: string
+      source_pr:
+        description: Pull request number associated with the source CI run
+        required: false
+        type: string
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   push:
     branches:
       - master
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  native-changes:
+    name: native-changes
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    outputs:
+      native: ${{ steps.detect.outputs.native }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: detect
+        name: Detect native-impact changes
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node ./scripts/detect-ci-native-impact.mjs
+
   lint:
     name: lint
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' ||
+        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -26,6 +63,10 @@ jobs:
 
   agent-policy:
     name: agent-policy
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' ||
+        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -34,12 +75,14 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 20
-          cache: npm
-      - run: npm ci
       - run: npm run agent:policy
 
   typecheck:
     name: typecheck
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' ||
+        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -52,6 +95,10 @@ jobs:
 
   unit:
     name: unit
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' ||
+        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -60,10 +107,14 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run test
+      - run: npm run test -- --config vite.config.ts
 
   e2e:
     name: e2e
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' ||
+        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -72,11 +123,15 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps --only-shell chromium
       - run: npm run test:e2e
 
   build:
     name: build
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' ||
+        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -87,8 +142,15 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-  native:
+  native-platform:
     name: native-${{ matrix.os }}
+    needs: native-changes
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' ||
+        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == '')) &&
+      (github.event_name != 'pull_request' || needs['native-changes'].outputs.native == 'true')
     strategy:
       fail-fast: false
       matrix:
@@ -96,14 +158,118 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+      - name: Restore Cargo cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.89.0 --profile minimal --no-self-update
       - name: Test native runtime
         run: cargo +1.89.0 test --locked --manifest-path src-tauri/Cargo.toml
 
+  native:
+    name: native
+    needs:
+      - native-changes
+      - native-platform
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' ||
+        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require applicable native validation
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          NATIVE_CHANGE_RESULT: ${{ needs['native-changes'].result }}
+          NATIVE_IMPACT: ${{ needs['native-changes'].outputs.native }}
+          NATIVE_PLATFORM_RESULT: ${{ needs['native-platform'].result }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$NATIVE_CHANGE_RESULT" != "success" ]; then
+            echo "Native-impact detection did not complete successfully."
+            exit 1
+          fi
+
+          if [ "$EVENT_NAME" != "pull_request" ] || [ "$NATIVE_IMPACT" = "true" ]; then
+            if [ "$NATIVE_PLATFORM_RESULT" != "success" ]; then
+              echo "Required macOS and Windows native validation did not pass."
+              exit 1
+            fi
+            echo "Required native validation passed."
+          else
+            echo "No native-impact changes detected; native matrix skipped."
+          fi
+
+  receipt:
+    name: receipt
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.tested_tree != '' || inputs.source_run_id != '' || inputs.source_pr != '')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: helm-auto-promote-master
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Wait briefly for source CI completion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_PR: ${{ inputs.source_pr }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          TESTED_TREE: ${{ inputs.tested_tree }}
+        run: node ./scripts/verify-ci-receipt.mjs wait
+      - name: Download source merge-tree record
+        uses: actions/download-artifact@v5
+        with:
+          name: ci-tested-tree
+          path: test-results/ci-receipt
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.source_run_id }}
+      - name: Verify exact-tree CI receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_PR: ${{ inputs.source_pr }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          TESTED_TREE: ${{ inputs.tested_tree }}
+        run: node ./scripts/verify-ci-receipt.mjs verify
+      - name: Trigger deploy workflows after verified receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # GITHUB_TOKEN-dispatched CI does not cascade into workflow_run,
+          # so the verified receipt explicitly starts each deploy once.
+          workflows=(
+            "Deploy to GitHub Pages"
+            "Deploy Supabase Assistant Function"
+          )
+          for workflow in "${workflows[@]}"; do
+            for attempt in 1 2 3; do
+              if gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref master; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                exit 1
+              fi
+              sleep 10
+            done
+          done
+
   codex-review:
     name: codex-review
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -267,6 +433,9 @@ jobs:
     name: auto-promote
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'master' && startsWith(github.event.pull_request.head.ref, 'codex/')
     runs-on: ubuntu-latest
+    concurrency:
+      group: helm-auto-promote-master
+      cancel-in-progress: false
     needs:
       - lint
       - agent-policy
@@ -281,28 +450,83 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - id: record
+        name: Record exact pull request merge-tree
+        env:
+          SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SOURCE_PR: ${{ github.event.pull_request.number }}
+        run: node ./scripts/verify-ci-receipt.mjs record
+      - name: Publish tested merge-tree record
+        uses: actions/upload-artifact@v5
+        with:
+          name: ci-tested-tree
+          path: test-results/ci-receipt/source-tree.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+      - id: merge_state
+        name: Check for an already verified squash merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_PR: ${{ github.event.pull_request.number }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          TESTED_TREE: ${{ steps.record.outputs.tested_tree }}
+        run: node ./scripts/verify-ci-receipt.mjs merge-state
+      - name: Revalidate tested tree immediately before merge
+        if: steps.merge_state.outputs.already_merged != 'true'
+        env:
+          SOURCE_PR: ${{ github.event.pull_request.number }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          TESTED_TREE: ${{ steps.record.outputs.tested_tree }}
+        run: node ./scripts/verify-ci-receipt.mjs pre-merge
       - name: Squash merge validated codex branch
+        if: steps.merge_state.outputs.already_merged != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash --delete-branch
-      - name: Trigger master verification and deploy workflows
+          SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          TESTED_TREE: ${{ steps.record.outputs.tested_tree }}
+        run: |
+          pr_title="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title --jq .title)"
+          gh pr merge "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --squash \
+            --delete-branch \
+            --match-head-commit "$SOURCE_HEAD_SHA" \
+            --subject "$pr_title (#$PR_NUMBER)"
+      - id: merged_tree
+        name: Verify resulting master tree
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_PR: ${{ github.event.pull_request.number }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          TESTED_TREE: ${{ steps.record.outputs.tested_tree }}
+        run: node ./scripts/verify-ci-receipt.mjs merged-tree
+      # The GITHUB_TOKEN squash does not trigger the push workflow. Dispatch
+      # only the exact-tree receipt; direct user pushes still run the full suite.
+      - name: Trigger exact-tree master verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_PR: ${{ github.event.pull_request.number }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          TESTED_TREE: ${{ steps.record.outputs.tested_tree }}
         run: |
-          workflows=(
-            "CI"
-            "Deploy to GitHub Pages"
-            "Deploy Supabase Assistant Function"
-          )
-          for workflow in "${workflows[@]}"; do
-            for attempt in 1 2 3; do
-              if gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref master; then
-                break
-              fi
-              if [ "$attempt" -eq 3 ]; then
-                exit 1
-              fi
-              sleep 10
-            done
+          for attempt in 1 2 3; do
+            if gh workflow run "CI" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref master \
+              --field "tested_tree=$TESTED_TREE" \
+              --field "source_run_id=$SOURCE_RUN_ID" \
+              --field "source_pr=$SOURCE_PR"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 10
           done

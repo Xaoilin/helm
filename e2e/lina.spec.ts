@@ -1,9 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { test, expect } from '@playwright/test';
 import type { CapabilityId } from '../src/assistant/capabilities';
 import { toAssistantToolName } from '../src/assistant/toolSchemas';
-
-const SETTINGS_KEY = 'helm:settings';
+import { expect, test } from './support/helm-fixture';
 
 type VoiceAssistantDebugState = {
   assistantState: string;
@@ -287,70 +285,38 @@ function buildNarrationResponse(messages: AssistantMessage[]): string {
 }
 
 test.describe('Lina Assistant', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(({ settingsKey }) => {
-      localStorage.clear();
-      localStorage.setItem(settingsKey, JSON.stringify({
-        credentialSource: 'onepassword-first',
-        theme: 'dark',
-        dataRetentionDays: 90,
-        telemetry: false,
-        prayerEnabled: false,
-        assistantProvider: 'hosted',
-        assistantLanguage: 'en',
-        supabaseUrl: 'https://helm.test.supabase.co',
-        supabaseAnonKey: 'helm-test-anon-key',
-      }));
-    }, {
-      settingsKey: SETTINGS_KEY,
-    });
-    await page.route('**/functions/v1/assistant-openai', async route => {
-      const body = route.request().postDataJSON() as {
-        action?: string;
-        messages?: AssistantMessage[];
-      } | null;
-
-      if (body?.action === 'health') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
+  test.beforeEach(async ({ page, scenario }) => {
+    await scenario('hosted-assistant', {
+      assistant: body => {
+        const messages = (body.messages || []) as AssistantMessage[];
+        if (body.action === 'health') {
+          return {
             ok: true,
             provider: 'openai',
             model: 'gpt-5.4',
-          }),
-        });
-        return;
-      }
+          };
+        }
 
-      if (body?.action === 'turn') {
-        const turn = buildTurnResponse(body?.messages || []);
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
+        if (body.action === 'turn') {
+          const turn = buildTurnResponse(messages);
+          return {
             ok: true,
             provider: 'openai',
             model: 'gpt-5.4',
             turn,
             rawResponse: turn.type === 'text' ? turn.text : JSON.stringify(turn.toolCalls),
-          }),
-        });
-        return;
-      }
+          };
+        }
 
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
+        return {
           ok: true,
           provider: 'openai',
           model: 'gpt-5.4',
           text: JSON.stringify({
-            assistantMessage: buildNarrationResponse(body?.messages || []),
+            assistantMessage: buildNarrationResponse(messages),
           }),
-        }),
-      });
+        };
+      },
     });
 
     await page.goto('/');
@@ -361,7 +327,7 @@ test.describe('Lina Assistant', () => {
     await expect(page.locator('button[aria-label="Talk to Lina"]')).toBeVisible();
   });
 
-  test('should open panel when L button clicked', async ({ page }) => {
+  test('@smoke should open panel when L button clicked', async ({ page }) => {
     await page.locator('button[aria-label="Talk to Lina"]').click();
     // Panel should appear with Lina header
     await expect(page.locator('text=Ask me anything').or(page.locator('text=اسألني أي شيء'))).toBeVisible();

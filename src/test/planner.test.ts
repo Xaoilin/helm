@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { buildPlanningBundle, validateModelPlan } from '../assistant/planner';
 import type { ActionPlan } from '../assistant/plannerSchema';

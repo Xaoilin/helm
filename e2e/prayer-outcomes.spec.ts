@@ -1,97 +1,22 @@
-import { expect, test } from '@playwright/test';
 import { toAssistantToolName } from '../src/assistant/toolSchemas';
+import { expect, test } from './support/helm-fixture';
 
-const prayerTasks = ['Fajr', 'Dhuhr', 'Asr'].map((prayerName, index) => ({
-  id: `prayer-${prayerName.toLowerCase()}`,
-  title: `${prayerName} Prayer`,
-  description: '',
-  completed: false,
-  priority: 'medium',
-  category: 'prayer',
-  prayerName,
-  recurring: { frequency: 'daily' },
-  createdAt: `2026-07-28T04:0${index}:00.000Z`,
-  updatedAt: `2026-07-28T04:0${index}:00.000Z`,
-}));
-
-test('tracks prayer outcomes, warns globally, persists stats, and clarifies chat and voice status', async ({ page }) => {
-  await page.clock.install({ time: new Date('2026-07-28T05:36:00.000Z') });
-  await page.addInitScript(({ tasks }) => {
-    if (sessionStorage.getItem('helm:e2e-prayer-seeded') === 'yes') {
-      return;
-    }
-
-    localStorage.clear();
-    sessionStorage.clear();
-    sessionStorage.setItem('helm:e2e-prayer-seeded', 'yes');
-    localStorage.setItem('helm:settings', JSON.stringify({
-      theme: 'dark',
-      dataRetentionDays: 90,
-      telemetry: false,
-      prayerEnabled: true,
-      prayerCity: 'Bedford',
-      prayerCountry: 'United Kingdom',
-      prayerReminderEnabled: true,
-      prayerReminderMinutes: 15,
-      assistantEnabled: true,
-      assistantLanguage: 'en',
-      assistantProvider: 'hosted',
-      supabaseUrl: 'https://helm.test.supabase.co',
-      supabaseAnonKey: 'helm-test-anon-key',
-    }));
-    localStorage.setItem('helm:tasks', JSON.stringify(tasks));
-    sessionStorage.setItem('helm:shell-surface', 'settings');
-  }, { tasks: prayerTasks });
-
-  await page.route('**/api.aladhan.com/v1/timingsByCity**', async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        data: {
-          timings: {
-            Fajr: '05:00',
-            Sunrise: '06:50',
-            Dhuhr: '13:00',
-            Asr: '16:30',
-            Sunset: '20:00',
-            Maghrib: '20:15',
-            Isha: '21:45',
-            Midnight: '00:15',
-          },
-          date: {
-            hijri: {
-              day: '12',
-              month: { en: 'Safar' },
-              year: '1448',
-            },
-          },
-          meta: { timezone: 'Europe/London' },
-        },
-      }),
-    });
-  });
-
-  await page.route('**/functions/v1/assistant-openai', async route => {
-    const body = route.request().postDataJSON() as {
-      action?: string;
-      messages?: Array<{ role: string; content: string }>;
-    } | null;
-    if (body?.action === 'health') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ ok: true, provider: 'openai', model: 'gpt-5.4' }),
-      });
-      return;
-    }
-    if (body?.action === 'turn') {
-      const transcript = [...(body.messages || [])].reverse().find(message => message.role === 'user')?.content.toLowerCase() || '';
-      const prayerName = transcript.includes('asr') ? 'Asr' : 'Dhuhr';
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
+test('tracks prayer outcomes, warns globally, persists stats, and clarifies chat and voice status', async ({
+  page,
+  scenario,
+}) => {
+  await scenario('prayer', {
+    assistant: body => {
+      if (body.action === 'health') {
+        return { ok: true, provider: 'openai', model: 'gpt-5.4' };
+      }
+      if (body.action === 'turn') {
+        const transcript = [...(body.messages || [])]
+          .reverse()
+          .find(message => message.role === 'user')
+          ?.content.toLowerCase() || '';
+        const prayerName = transcript.includes('asr') ? 'Asr' : 'Dhuhr';
+        return {
           ok: true,
           provider: 'openai',
           model: 'gpt-5.4',
@@ -103,20 +28,15 @@ test('tracks prayer outcomes, warns globally, persists stats, and clarifies chat
               arguments: JSON.stringify({ taskId: `prayer-${prayerName.toLowerCase()}` }),
             }],
           },
-        }),
-      });
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
+        };
+      }
+      return {
         ok: true,
         provider: 'openai',
         model: 'gpt-5.4',
         text: JSON.stringify({ assistantMessage: 'Prayer outcome recorded.' }),
-      }),
-    });
+      };
+    },
   });
 
   await page.goto('/');
@@ -141,9 +61,6 @@ test('tracks prayer outcomes, warns globally, persists stats, and clarifies chat
     name: 'All prayers: 100% on time, 0% late, 0% missed',
   })).toBeVisible();
   await page.getByRole('heading', { name: 'Prayer outcomes' }).scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: 'test-results/prayer-outcomes-profile.png',
-  });
 
   await page.getByRole('button', { name: 'Navigate to Chat' }).click();
   await page.locator('.chat-main button:has-text("New conversation")').click();
@@ -188,10 +105,6 @@ test('tracks prayer outcomes, warns globally, persists stats, and clarifies chat
   await expect(page.getByRole('button', { name: 'Talk to Lina' })).toBeVisible();
   await expect(page.locator('.va-bubble')).toBeHidden();
   await page.locator('.prayer-stats-card').scrollIntoViewIfNeeded();
-  await page.waitForTimeout(500);
   await expect(page.getByRole('button', { name: 'Talk to Lina' })).toBeVisible();
   await expect(page.locator('.va-bubble')).toBeHidden();
-  await page.screenshot({
-    path: 'test-results/prayer-outcomes-reminder.png',
-  });
 });

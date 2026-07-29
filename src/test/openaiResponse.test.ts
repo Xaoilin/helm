@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { extractOutputText } from '../../supabase/functions/assistant-openai/openaiResponse';
 

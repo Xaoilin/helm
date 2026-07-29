@@ -4,11 +4,12 @@ import { resolve } from 'node:path'
 
 export const REQUIRED_CI_CHECKS = [
   'lint',
+  'agent-policy',
   'typecheck',
   'unit',
   'e2e',
   'build',
-  'agent-policy',
+  'native',
   'codex-review',
 ]
 
@@ -89,11 +90,21 @@ export function evaluateCiWorkflow(rawWorkflow) {
     "github.event.pull_request.head.repo.full_name == github.repository",
     "github.event.pull_request.base.ref == 'master'",
     "startsWith(github.event.pull_request.head.ref, 'codex/')",
-    'gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash --delete-branch',
-    'gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref master',
-    '"CI"',
-    '"Deploy to GitHub Pages"',
-    '"Deploy Supabase Assistant Function"',
+    'group: helm-auto-promote-master',
+    'cancel-in-progress: false',
+    'overwrite: true',
+    'node ./scripts/verify-ci-receipt.mjs merge-state',
+    'node ./scripts/verify-ci-receipt.mjs pre-merge',
+    'gh pr merge "$PR_NUMBER"',
+    '--squash',
+    '--delete-branch',
+    '--match-head-commit "$SOURCE_HEAD_SHA"',
+    '--subject "$pr_title (#$PR_NUMBER)"',
+    'node ./scripts/verify-ci-receipt.mjs merged-tree',
+    'gh workflow run "CI"',
+    '--field "tested_tree=$TESTED_TREE"',
+    '--field "source_run_id=$SOURCE_RUN_ID"',
+    '--field "source_pr=$SOURCE_PR"',
   ]
 
   for (const snippet of requiredAutoPromoteSnippets) {
@@ -103,7 +114,84 @@ export function evaluateCiWorkflow(rawWorkflow) {
   }
 
   if (requiredAutoPromoteSnippets.every((snippet) => rawWorkflow.includes(snippet))) {
-    passes.push('CI workflow keeps auto-promote limited to non-draft same-repo codex/* PRs into master.')
+    passes.push(
+      'CI workflow keeps auto-promote limited to validated non-draft codex/* PRs and dispatches exact-tree verification.',
+    )
+  }
+
+  const promotionLockCount = rawWorkflow.match(/group:\s*helm-auto-promote-master/gu)?.length ?? 0
+  if (promotionLockCount < 2) {
+    failures.push(
+      'CI workflow must serialize auto-promote and receipt deployment dispatch with the same lock.',
+    )
+  } else {
+    passes.push('Auto-promote and receipt deployment dispatch share the master promotion lock.')
+  }
+
+  const forbiddenAutoPromoteDeployDispatches = [
+    '"Deploy to GitHub Pages"',
+    '"Deploy Supabase Assistant Function"',
+  ]
+  const autoPromoteStart = rawWorkflow.indexOf('\n  auto-promote:')
+  const autoPromoteBody = autoPromoteStart >= 0
+    ? rawWorkflow.slice(autoPromoteStart)
+    : ''
+  for (const workflowName of forbiddenAutoPromoteDeployDispatches) {
+    if (autoPromoteBody.includes(workflowName)) {
+      failures.push(
+        `CI workflow must let successful verification trigger deploys instead of dispatching ${workflowName}.`,
+      )
+    }
+  }
+  if (forbiddenAutoPromoteDeployDispatches.every(name => !autoPromoteBody.includes(name))) {
+    passes.push('Auto-promote leaves deployment dispatch to the verified receipt.')
+  }
+
+  const requiredEfficiencySnippets = [
+    'converted_to_draft',
+    "group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
+    "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+    'node ./scripts/detect-ci-native-impact.mjs',
+    'uses: actions/cache@v5',
+    'npm run test -- --config vite.config.ts',
+    'npx playwright install --with-deps --only-shell chromium',
+    "needs['native-changes'].outputs.native == 'true'",
+  ]
+
+  for (const snippet of requiredEfficiencySnippets) {
+    if (!rawWorkflow.includes(snippet)) {
+      failures.push(`CI workflow is missing required fast-feedback behavior: ${snippet}`)
+    }
+  }
+
+  if (requiredEfficiencySnippets.every((snippet) => rawWorkflow.includes(snippet))) {
+    passes.push('CI workflow cancels stale PR runs and conditionally caches native validation.')
+  }
+
+  const requiredReceiptSnippets = [
+    'tested_tree:',
+    'source_run_id:',
+    'source_pr:',
+    'node ./scripts/verify-ci-receipt.mjs record',
+    'uses: actions/upload-artifact@v5',
+    'node ./scripts/verify-ci-receipt.mjs wait',
+    'uses: actions/download-artifact@v5',
+    'run-id: ${{ inputs.source_run_id }}',
+    'node ./scripts/verify-ci-receipt.mjs verify',
+    'Trigger deploy workflows after verified receipt',
+    'gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref master',
+    '"Deploy to GitHub Pages"',
+    '"Deploy Supabase Assistant Function"',
+  ]
+
+  for (const snippet of requiredReceiptSnippets) {
+    if (!rawWorkflow.includes(snippet)) {
+      failures.push(`CI workflow is missing exact-tree receipt behavior: ${snippet}`)
+    }
+  }
+
+  if (requiredReceiptSnippets.every((snippet) => rawWorkflow.includes(snippet))) {
+    passes.push('CI workflow verifies an exact-tree source-run receipt before dispatching deploys.')
   }
 
   const requiredCodexReviewSnippets = [
@@ -136,9 +224,9 @@ export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
   const passes = []
 
   if (!rawWorkflow.includes('workflow_dispatch:')) {
-    failures.push(`${workflowName} workflow must support workflow_dispatch for auto-promote.`)
+    failures.push(`${workflowName} workflow must support workflow_dispatch for verified receipts.`)
   } else {
-    passes.push(`${workflowName} workflow supports direct auto-promote dispatch.`)
+    passes.push(`${workflowName} workflow supports verified receipt dispatch.`)
   }
 
   if (!rawWorkflow.includes('workflow_run:')) {
@@ -148,9 +236,9 @@ export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
   }
 
   if (!rawWorkflow.includes("github.event_name == 'workflow_dispatch'")) {
-    failures.push(`${workflowName} workflow jobs must run when auto-promote dispatches the workflow.`)
+    failures.push(`${workflowName} workflow jobs must run when a verified receipt dispatches it.`)
   } else {
-    passes.push(`${workflowName} workflow jobs run for direct auto-promote dispatch.`)
+    passes.push(`${workflowName} workflow jobs run for verified receipt dispatch.`)
   }
 
   return {

@@ -23,23 +23,22 @@ Open the app in the browser for web development, or run the Tauri shell separate
 ## Core Commands
 
 ```bash
-npm run agent:policy
-npm run agent:local-gate
-npm run lint
+npm run agent:fast
+npm run check
+npm run test:e2e:smoke
+npm run test:e2e
+npm run test:e2e:visual -- --surface projects --viewports 390x844,1440x900
+npm run test:native
+npm run build:web
 npm run handoff:check
 npm run llm-compare
-npm run typecheck
-npm run test
-npm run test:e2e
-npm run build
-npm run check
 ```
 
-`npm run check` is the full local validation gate and runs lint, typecheck, unit tests, E2E, and build in sequence.
+`npm run agent:fast` is the normal iteration loop. It compares the complete working tree with `origin/master`, then selects policy, changed-file lint, incremental typecheck, related unit tests, UI smoke tests, and native tests as needed. It prints and records timings.
 
-`npm run agent:policy` is the fast agent workflow policy gate. It verifies release version sync, enforces the required CI automation shape, and scans tracked source/docs for HELM-specific forbidden patterns.
+`npm run check` is the single full local gate. Independent lint, typecheck, unit, blocking E2E, web-build, and relevant native work runs concurrently without compiling TypeScript twice.
 
-`npm run agent:local-gate` runs policy, lint, typecheck, and unit tests for a faster pre-PR confidence pass.
+Behavioral E2E and screenshot evidence are separate. `test:e2e` blocks on behavior and responsive overflow; `test:e2e:visual` captures only requested surfaces and viewports. Each run starts a fresh server on its own free port.
 
 `npm run handoff:check` is the shipped-release gate. It fails unless there are no uncommitted non-generated changes, the current work is merged into `origin/master`, the `CI`, `Deploy to GitHub Pages`, and `Deploy Supabase Assistant Function` workflows have all succeeded for the deployed `master` head, the live GitHub Pages bundle is serving the current package version, and merged `codex/` branches have been cleaned up.
 
@@ -47,12 +46,12 @@ npm run check
 
 ## Project Map
 
-- [AGENTS.md](C:/Users/alisa/Documents/Claude/pa-test/helm/AGENTS.md): short operational instructions for Codex
-- [docs/project-architecture.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/project-architecture.md): app structure, provider graph, persistence, and integration boundaries
-- [docs/engineering-guide.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/engineering-guide.md): workflow, Definition of Done, testing, resilience, and documentation rules
-- [docs/agentic-coding-workflow.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/agentic-coding-workflow.md): researched agentic coding workflow, local hooks, automated review, and prod automation policy
-- [docs/feature-status.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/feature-status.md): truthful feature matrix
-- [docs/assistant-command-architecture.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/assistant-command-architecture.md): long-term assistant design direction
+- [AGENTS.md](AGENTS.md): short operational instructions for Codex
+- [docs/project-architecture.md](docs/project-architecture.md): app structure, provider graph, persistence, and integration boundaries
+- [docs/engineering-guide.md](docs/engineering-guide.md): workflow, Definition of Done, testing, resilience, and documentation rules
+- [docs/agentic-coding-workflow.md](docs/agentic-coding-workflow.md): agent feedback, CI, automated review, and production automation policy
+- [docs/feature-status.md](docs/feature-status.md): truthful feature matrix
+- [docs/assistant-command-architecture.md](docs/assistant-command-architecture.md): long-term assistant design direction
 
 ## Current Product Reality
 
@@ -65,7 +64,7 @@ npm run check
 - Several integrations remain placeholder or simulated.
 - Credentials and API-key-like settings stored locally or synced through Supabase are not encrypted vault storage in this MVP.
 
-Use [docs/feature-status.md](C:/Users/alisa/Documents/Claude/pa-test/helm/docs/feature-status.md) for the authoritative feature-by-feature status instead of inferring from UI copy.
+Use [docs/feature-status.md](docs/feature-status.md) for the authoritative feature-by-feature status instead of inferring from UI copy.
 
 ## Hosted Assistant Deployment
 
@@ -100,9 +99,10 @@ The function is intended for signed-in HELM users. If hosted AI is not configure
 ## Deployment And CI
 
 - Install local Git hooks with `npm run hooks:install` if you want the pre-commit and pre-push gates in this checkout.
-- Pull requests should satisfy `agent-policy`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, and `build`.
+- Pull requests should satisfy `agent-policy`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and the stable `native` aggregator.
 - `codex-review` is useful extra review coverage, but OpenAI quota or provider availability is not a release dependency; unavailable review output is reported as a warning.
 - Non-draft same-repo `codex/*` pull requests into `master` auto-promote after those automated gates pass. Manual PR approval is intentionally not required for this personal-app workflow.
-- GitHub Pages and Supabase deploys run for `master` after successful CI or by the guarded `auto-promote` dispatch path, and the Pages build defaults the website to hosted GPT-5.4 mode.
+- Auto-promotion records the tested PR merge tree. After squash merge, verification-only CI proves that `master` has that exact tree and revalidates the successful source jobs before the release is accepted. Direct pushes and ordinary manual CI dispatches still run the full suite.
+- GitHub Pages and Supabase deploys remain required for `master`, and the Pages build defaults the website to hosted GPT-5.4 mode.
 - `master` is protected to require pull requests plus the automated checks before merge.
 - Before calling a web-facing change live in a handoff, run `npm run handoff:check` after the merge and deploy complete.

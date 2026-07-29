@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { applyStoredCorrections, parseCorrectionIntent } from '../assistant/correctionMemory';
 import type { AssistantCorrection } from '../types/domain';

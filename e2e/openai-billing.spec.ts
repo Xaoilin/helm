@@ -1,23 +1,22 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/helm-fixture';
 
 const SETTINGS_KEY = 'helm:settings';
 
 test.describe('OpenAI billing visibility', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(({ settingsKey }) => {
-      localStorage.clear();
-      localStorage.setItem(settingsKey, JSON.stringify({
-        credentialSource: 'onepassword-first',
-        theme: 'dark',
-        dataRetentionDays: 90,
-        telemetry: false,
-        assistantProvider: 'hosted',
-        assistantLanguage: 'en',
-        supabaseUrl: 'https://helm.test.supabase.co',
-        supabaseAnonKey: 'helm-test-anon-key',
-      }));
-    }, {
-      settingsKey: SETTINGS_KEY,
+  test.beforeEach(async ({ page, scenario }) => {
+    await scenario('empty', {
+      storage: {
+        [SETTINGS_KEY]: {
+          credentialSource: 'onepassword-first',
+          theme: 'dark',
+          dataRetentionDays: 90,
+          telemetry: false,
+          assistantProvider: 'hosted',
+          assistantLanguage: 'en',
+          supabaseUrl: 'https://helm.test.supabase.co',
+          supabaseAnonKey: 'helm-test-anon-key',
+        },
+      },
     });
 
     await page.route('**/functions/v1/assistant-openai', async route => {
@@ -224,10 +223,6 @@ test.describe('OpenAI billing visibility', () => {
     await expect(page.getByText('$0.0085')).toBeVisible();
     await expect(page.getByText('OpenAI-hosted turns only; other turns excluded.')).toBeVisible();
 
-    await page.screenshot({
-      path: 'test-results/manual-openai-billing-chat-v026.png',
-      fullPage: true,
-    });
   });
 
   test('shows latest-turn estimates and factual project billing in debug', async ({ page }) => {
@@ -253,9 +248,5 @@ test.describe('OpenAI billing visibility', () => {
     await expect(projectCostsCard.getByText(/^Project ID$/).locator('..').getByText(/^proj_helm_hosted$/)).toBeVisible();
     await expect(projectCostsCard.getByText(/^2026-04-08 UTC$/).locator('..').getByText(/^\$1\.25$/)).toBeVisible();
 
-    await page.screenshot({
-      path: 'test-results/manual-openai-billing-debug-v026.png',
-      fullPage: true,
-    });
   });
 });

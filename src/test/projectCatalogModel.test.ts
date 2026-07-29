@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { getProjectAvailability } from '../components/projects/projectCatalogModel';
 import type { Project } from '../types/domain';

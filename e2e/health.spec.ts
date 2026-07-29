@@ -1,7 +1,8 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/helm-fixture';
 
 test.describe('Health fast food log', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, scenario }) => {
+    await scenario('empty');
     await page.goto('/');
     await page.waitForSelector('.sidebar');
     await page.getByRole('button', { name: 'Navigate to Health' }).click();
