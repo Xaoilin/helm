@@ -143,7 +143,7 @@ jobs:
           echo "All unit-test shards passed."
 
   e2e-shard:
-    name: e2e-${{ matrix.shard }}-of-2
+    name: e2e-${{ matrix.shard }}-of-3
     if: >-
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event_name != 'workflow_dispatch' ||
@@ -151,7 +151,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -163,7 +163,7 @@ jobs:
       - name: Verify hosted browser
         run: google-chrome --version
       - name: Run blocking E2E shard
-        run: npm run test:e2e -- --shard=${{ matrix.shard }}/2 --reporter=line
+        run: npm run test:e2e -- --fully-parallel --workers=2 --shard=${{ matrix.shard }}/3 --reporter=line
         env:
           HELM_E2E_USE_HOST_CHROME: "1"
 

@@ -63,10 +63,13 @@ ${checkJobs}
     env:
       UNIT_SHARDS_RESULT: \${{ needs['unit-shard'].result }}
   e2e-shard:
-    name: e2e-\${{ matrix.shard }}-of-2
+    name: e2e-\${{ matrix.shard }}-of-3
+    strategy:
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - run: google-chrome --version
-      - run: npm run test:e2e -- --shard=\${{ matrix.shard }}/2 --reporter=line
+      - run: npm run test:e2e -- --fully-parallel --workers=2 --shard=\${{ matrix.shard }}/3 --reporter=line
   record-tree:
     steps:
       - run: node ./scripts/verify-ci-receipt.mjs record
@@ -150,6 +153,30 @@ describe('agent policy helpers', () => {
       ok: false,
       failures: expect.arrayContaining([
         "CI workflow is missing required fast-feedback behavior: E2E_SHARDS_RESULT: ${{ needs['e2e-shard'].result }}",
+      ]),
+    })
+
+    const withoutBalancedE2eShards = validCiWorkflow().replace('--fully-parallel ', '')
+    expect(evaluateCiWorkflow(withoutBalancedE2eShards)).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining([
+        'CI workflow is missing required fast-feedback behavior: npm run test:e2e -- --fully-parallel --workers=2 --shard=${{ matrix.shard }}/3 --reporter=line',
+      ]),
+    })
+
+    const withoutE2eWorkerCap = validCiWorkflow().replace('--workers=2 ', '')
+    expect(evaluateCiWorkflow(withoutE2eWorkerCap)).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining([
+        'CI workflow is missing required fast-feedback behavior: npm run test:e2e -- --fully-parallel --workers=2 --shard=${{ matrix.shard }}/3 --reporter=line',
+      ]),
+    })
+
+    const withoutThirdE2eShard = validCiWorkflow().replace('shard: [1, 2, 3]', 'shard: [1, 2]')
+    expect(evaluateCiWorkflow(withoutThirdE2eShard)).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining([
+        'CI workflow is missing required fast-feedback behavior: shard: [1, 2, 3]',
       ]),
     })
   })
