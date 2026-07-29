@@ -33,7 +33,7 @@ export default defineConfig({
     // Layout is covered by Playwright; unit tests stub CSS to avoid needless transforms.
     css: false,
     pool: 'forks',
-    maxWorkers: process.env.CI ? 2 : 8,
+    maxWorkers: process.env.CI ? 2 : 10,
     // Keep successful expected warnings out of hosted logs; failed-test output remains visible.
     silent: 'passed-only',
     exclude: ['node_modules', 'e2e', '.codex_tmp/**'],

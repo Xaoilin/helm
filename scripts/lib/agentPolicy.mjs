@@ -166,6 +166,9 @@ export function evaluateCiWorkflow(rawWorkflow) {
     'name: unit-${{ matrix.shard }}-of-2',
     '--shard=${{ matrix.shard }}/2',
     "UNIT_SHARDS_RESULT: ${{ needs['unit-shard'].result }}",
+    'name: e2e-${{ matrix.shard }}-of-2',
+    'npm run test:e2e -- --shard=${{ matrix.shard }}/2 --reporter=line',
+    "E2E_SHARDS_RESULT: ${{ needs['e2e-shard'].result }}",
     'google-chrome --version',
     "needs['native-changes'].outputs.native == 'true'",
   ]
