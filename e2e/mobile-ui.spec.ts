@@ -217,6 +217,21 @@ test.describe('Opt-in visual evidence', () => {
         path: path.join(projectsRoot, `${viewport.name}-catalogue.png`),
         fullPage: true,
       });
+      await page.getByRole('heading', { name: 'Pinned' }).evaluate(element => {
+        element.scrollIntoView({ block: 'start' });
+      });
+      await page.screenshot({
+        path: path.join(projectsRoot, `${viewport.name}-catalogue-sections.png`),
+        fullPage: true,
+      });
+      const archivedDisclosure = page.getByRole('button', { name: 'Show archived' });
+      await archivedDisclosure.click();
+      await expect(page.locator('.project-catalog-section-archived .project-catalog-card')).toHaveCount(1);
+      await page.locator('.project-catalog-section-archived').scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: path.join(projectsRoot, `${viewport.name}-archive-expanded.png`),
+        fullPage: true,
+      });
 
       const orbitCard = page.locator('.project-catalog-card').filter({ hasText: 'Orbit Console' });
       await orbitCard.getByRole('button', { name: 'View details' }).click();

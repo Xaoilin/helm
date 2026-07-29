@@ -57,6 +57,40 @@ describe('project persistence normalization', () => {
     expect(normalized.map(project => project.name)).toEqual(['First']);
   });
 
+  it('preserves valid catalogue ordering and reversible archive state', () => {
+    const archived = normalizeProjectRecord({
+      id: 'archived-project',
+      name: 'Archived Project',
+      status: 'archived',
+      statusBeforeArchive: 'blocked',
+      isPinned: true,
+      sortOrder: 3,
+    }, 'Fallback', NOW);
+
+    expect(archived).toMatchObject({
+      status: 'archived',
+      statusBeforeArchive: 'blocked',
+      isPinned: false,
+      sortOrder: 3,
+    });
+    expect(serializeSharedProjects([archived])[0]).toMatchObject({
+      status: 'archived',
+      statusBeforeArchive: 'blocked',
+      isPinned: false,
+      sortOrder: 3,
+    });
+
+    const invalid = normalizeProjectRecord({
+      id: 'invalid-order',
+      name: 'Invalid Order',
+      status: 'active',
+      statusBeforeArchive: 'completed',
+      sortOrder: -1,
+    }, 'Fallback', NOW);
+    expect(invalid).not.toHaveProperty('statusBeforeArchive');
+    expect(invalid).not.toHaveProperty('sortOrder');
+  });
+
   it('serializes shared project data without device paths, approvals, or unsafe recipe paths', () => {
     const project = {
       id: 'project-1',

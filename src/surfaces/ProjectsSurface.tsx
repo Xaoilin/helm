@@ -8,8 +8,16 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import {
+  DragDropProvider,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/react';
+import { arrayMove } from '@dnd-kit/helpers';
+import { isSortable } from '@dnd-kit/react/sortable';
+import {
   ProjectCard,
   ProjectReferenceDrawer,
+  type ProjectMoveDirection,
   type ProjectRecipeViewState,
 } from '../components/projects/ProjectCatalog';
 import {
@@ -17,6 +25,10 @@ import {
   type ProjectCatalogFilter,
 } from '../components/projects/projectCatalogModel';
 import { useApp } from '../store/AppContext';
+import {
+  compareProjectCatalogueOrder,
+  getOrderedProjectsInSection,
+} from '../store/projectOrdering';
 import {
   canUseDesktopProjectPaths,
   canonicalizeProjectPath,
@@ -38,6 +50,8 @@ import {
 } from '../services/projectRuntime';
 import type {
   Project,
+  ProjectCatalogueSection,
+  ProjectDeviceBinding,
   ProjectKind,
   ProjectPage,
   ProjectRunRecipe,
@@ -246,6 +260,156 @@ function ProjectWikiEditor({
   );
 }
 
+function ProjectCatalogueSectionView({
+  section,
+  title,
+  description,
+  projects,
+  bindings,
+  collapsed = false,
+  collapsible = false,
+  reorderEnabled,
+  onToggleCollapsed,
+  getActiveWorkCount,
+  onOpen,
+  onPinChange,
+  onArchiveChange,
+  onReorder,
+  onAnnounce,
+}: {
+  section: ProjectCatalogueSection;
+  title: string;
+  description: string;
+  projects: Project[];
+  bindings: ReadonlyMap<string, ProjectDeviceBinding>;
+  collapsed?: boolean;
+  collapsible?: boolean;
+  reorderEnabled: boolean;
+  onToggleCollapsed?: () => void;
+  getActiveWorkCount: (projectId: string) => number;
+  onOpen: (project: Project) => void;
+  onPinChange: (project: Project, pinned: boolean) => void;
+  onArchiveChange: (project: Project, archived: boolean) => void;
+  onReorder: (section: ProjectCatalogueSection, orderedIds: string[]) => void;
+  onAnnounce: (message: string) => void;
+}) {
+  const sectionTitleId = `project-section-${section}-title`;
+  const sectionGridId = `project-section-${section}-grid`;
+  const orderedIds = projects.map(project => project.id);
+
+  function moveProject(project: Project, direction: ProjectMoveDirection): void {
+    const currentIndex = orderedIds.indexOf(project.id);
+    const nextIndex = direction === 'earlier' ? currentIndex - 1 : currentIndex + 1;
+    if (!reorderEnabled || currentIndex < 0 || nextIndex < 0 || nextIndex >= orderedIds.length) return;
+    onReorder(section, arrayMove(orderedIds, currentIndex, nextIndex));
+    onAnnounce(`${project.name} moved to position ${nextIndex + 1} of ${orderedIds.length} in ${title}.`);
+  }
+
+  function handleDragStart(event: DragStartEvent): void {
+    const sourceId = event.operation.source?.id;
+    const sourceIndex = orderedIds.findIndex(id => id === String(sourceId));
+    const sourceProject = projects[sourceIndex];
+    if (sourceProject) {
+      onAnnounce(`Picked up ${sourceProject.name}, position ${sourceIndex + 1} of ${projects.length} in ${title}.`);
+    }
+  }
+
+  function handleDragEnd(event: DragEndEvent): void {
+    const source = event.operation.source;
+    if (!isSortable(source)) {
+      onAnnounce('Project order was not changed.');
+      return;
+    }
+    const sourceProject = projects.find(project => project.id === String(source.id));
+
+    if (event.canceled) {
+      if (sourceProject) onAnnounce(`Reordering ${sourceProject.name} cancelled.`);
+      return;
+    }
+    if (
+      !sourceProject
+      || source.initialGroup !== section
+      || source.group !== section
+      || source.initialIndex < 0
+      || source.index < 0
+      || source.initialIndex >= orderedIds.length
+      || source.index >= orderedIds.length
+    ) {
+      onAnnounce('Project order was not changed.');
+      return;
+    }
+    if (source.initialIndex === source.index) {
+      onAnnounce(`${sourceProject.name} remains at position ${source.index + 1} of ${projects.length}.`);
+      return;
+    }
+
+    onReorder(section, arrayMove(orderedIds, source.initialIndex, source.index));
+    onAnnounce(`${sourceProject.name} moved to position ${source.index + 1} of ${projects.length} in ${title}.`);
+    requestAnimationFrame(() => {
+      Array.from(document.querySelectorAll<HTMLButtonElement>('[data-project-drag-id]'))
+        .find(button => button.dataset.projectDragId === sourceProject.id)
+        ?.focus();
+    });
+  }
+
+  return (
+    <section className={`project-catalog-section project-catalog-section-${section}`} aria-labelledby={sectionTitleId}>
+      <header className="project-catalog-section-header">
+        <div>
+          <div className="project-catalog-section-title-row">
+            <h2 id={sectionTitleId}>{title}</h2>
+            <span>{projects.length}</span>
+          </div>
+          <p>{description}</p>
+        </div>
+        {collapsible && (
+          <button
+            type="button"
+            className="project-archive-disclosure"
+            aria-expanded={!collapsed}
+            aria-controls={sectionGridId}
+            disabled={projects.length === 0}
+            onClick={onToggleCollapsed}
+          >
+            {collapsed ? 'Show archived' : 'Hide archived'}
+            <span aria-hidden="true" className={collapsed ? '' : 'is-open'}>⌄</span>
+          </button>
+        )}
+      </header>
+
+      <div id={sectionGridId} className="project-catalog-section-body" hidden={collapsed}>
+        {!collapsed && projects.length > 0 && (
+          <DragDropProvider onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <div className="project-catalog-grid" role="list">
+              {projects.map((project, index) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  binding={project.catalogKey ? bindings.get(project.catalogKey) : undefined}
+                  activeWorkCount={getActiveWorkCount(project.id)}
+                  section={section}
+                  index={index}
+                  sectionSize={projects.length}
+                  reorderEnabled={reorderEnabled}
+                  onOpen={onOpen}
+                  onPinChange={pinned => onPinChange(project, pinned)}
+                  onArchiveChange={archived => onArchiveChange(project, archived)}
+                  onMove={direction => moveProject(project, direction)}
+                />
+              ))}
+            </div>
+          </DragDropProvider>
+        )}
+        {!collapsed && projects.length === 0 && (
+          <p className="project-catalog-section-empty">
+            {section === 'archived' ? 'No archived projects.' : `No ${title.toLowerCase()} in this view.`}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function ProjectsSurface() {
   const app = useApp();
   const today = toLocalDateStr(new Date());
@@ -259,6 +423,8 @@ export default function ProjectsSurface() {
   const [kindFilter, setKindFilter] = useState<'all' | ProjectKind>('all');
   const [catalogFilter, setCatalogFilter] = useState<ProjectCatalogFilter>('all');
   const [tagFilter, setTagFilter] = useState<'all' | string>('all');
+  const [archivedExpanded, setArchivedExpanded] = useState(false);
+  const [catalogAnnouncement, setCatalogAnnouncement] = useState('');
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [projectName, setProjectName] = useState('');
@@ -460,11 +626,6 @@ export default function ProjectsSurface() {
         || (catalogFilter === 'hardware' && project.kind === 'hardware')
         || (catalogFilter === 'reference' && availability.key === 'reference');
       return matchesQuery && matchesStatus && matchesKind && matchesTag && matchesCatalogFilter;
-    }).sort((left, right) => {
-      if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
-      if (left.status === 'active' && right.status !== 'active') return -1;
-      if (right.status === 'active' && left.status !== 'active') return 1;
-      return left.name.localeCompare(right.name);
     });
   }, [app.projects, bindingByCatalogKey, catalogFilter, kindFilter, searchQuery, statusFilter, tagFilter]);
 
@@ -600,11 +761,88 @@ export default function ProjectsSurface() {
   }, []);
 
   const groupedProjects = useMemo(() => ({
-    pinned: filteredProjects.filter(project => project.isPinned),
-    active: filteredProjects.filter(project => !project.isPinned && (project.status === 'planning' || project.status === 'active' || project.status === 'completed')),
-    blocked: filteredProjects.filter(project => !project.isPinned && project.status === 'blocked'),
-    archived: filteredProjects.filter(project => !project.isPinned && project.status === 'archived'),
+    pinned: getOrderedProjectsInSection(filteredProjects, 'pinned'),
+    projects: getOrderedProjectsInSection(filteredProjects, 'projects'),
+    active: filteredProjects.filter(project => (
+      project.status !== 'archived'
+      && !project.isPinned
+      && (project.status === 'planning' || project.status === 'active' || project.status === 'completed')
+    )).sort(compareProjectCatalogueOrder),
+    blocked: filteredProjects.filter(project => (
+      !project.isPinned && project.status === 'blocked'
+    )).sort(compareProjectCatalogueOrder),
+    archived: getOrderedProjectsInSection(filteredProjects, 'archived'),
   }), [filteredProjects]);
+  const isCatalogueFiltered = Boolean(
+    searchQuery.trim()
+    || statusFilter !== 'all'
+    || kindFilter !== 'all'
+    || catalogFilter !== 'all'
+    || tagFilter !== 'all',
+  );
+
+  useEffect(() => {
+    if (
+      groupedProjects.archived.length > 0
+      && (searchQuery.trim() || statusFilter === 'archived')
+    ) {
+      setArchivedExpanded(true);
+    }
+  }, [groupedProjects.archived.length, searchQuery, statusFilter]);
+
+  const clearCatalogueFilters = useCallback(() => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setKindFilter('all');
+    setCatalogFilter('all');
+    setTagFilter('all');
+  }, []);
+
+  const focusProjectControl = useCallback((
+    projectId: string,
+    control: 'pin' | 'unarchive',
+  ) => {
+    requestAnimationFrame(() => {
+      const selector = control === 'pin' ? '[data-project-pin-id]' : '[data-project-unarchive-id]';
+      const dataKey = control === 'pin' ? 'projectPinId' : 'projectUnarchiveId';
+      Array.from(document.querySelectorAll<HTMLButtonElement>(selector))
+        .find(button => button.dataset[dataKey] === projectId)
+        ?.focus();
+    });
+  }, []);
+
+  const changeProjectPinned = useCallback((
+    project: Project,
+    pinned: boolean,
+    focusCard = true,
+  ) => {
+    app.setProjectPinned(project.id, pinned);
+    setCatalogAnnouncement(`${project.name} ${pinned ? 'pinned' : 'unpinned'}.`);
+    if (focusCard) focusProjectControl(project.id, 'pin');
+  }, [app, focusProjectControl]);
+
+  const changeProjectArchived = useCallback((
+    project: Project,
+    archived: boolean,
+    focusCard = true,
+  ) => {
+    app.setProjectArchived(project.id, archived);
+    setCatalogAnnouncement(`${project.name} ${archived ? 'archived' : 'restored to Projects'}.`);
+    if (archived) {
+      clearCatalogueFilters();
+      setArchivedExpanded(true);
+    } else if (statusFilter === 'archived') {
+      setStatusFilter('all');
+    }
+    if (focusCard) focusProjectControl(project.id, archived ? 'unarchive' : 'pin');
+  }, [app, clearCatalogueFilters, focusProjectControl, statusFilter]);
+
+  const reorderProjects = useCallback((
+    section: ProjectCatalogueSection,
+    orderedIds: string[],
+  ) => {
+    app.reorderProjectSection(section, orderedIds);
+  }, [app]);
 
   const openCount = selectedProjectTasks.filter(task => !task.completed).length;
   const blockedCount = selectedProjectBoardTasks.filter(task => !task.completed && task.workflowState === 'blocked').length;
@@ -726,7 +964,7 @@ export default function ProjectsSurface() {
       ? deviceBindingByCatalogKey.get(editingProject.catalogKey)
       : undefined;
     const localPathChanged = nextLocalPath !== (currentBinding?.projectRoot || '');
-    const payload = {
+    const referencePayload = {
       name: projectName.trim(),
       summary: projectSummary.trim(),
       kind: projectKind,
@@ -753,15 +991,26 @@ export default function ProjectsSurface() {
         backgroundColor: '#171b2e',
       },
       verifiedAt: editingProject?.verifiedAt,
-      status: projectStatus,
       tags: parseTagsInput(projectTagsInput),
-      isPinned: projectPinned,
     };
 
     if (editingProject) {
+      const wasArchived = editingProject.status === 'archived';
+      const willBeArchived = projectStatus === 'archived';
       app.updateProject(editingProject.id, localPathChanged
-        ? { ...payload, localPath: nextLocalPath || undefined }
-        : payload);
+        ? { ...referencePayload, localPath: nextLocalPath || undefined }
+        : referencePayload);
+      if (wasArchived !== willBeArchived) {
+        changeProjectArchived(editingProject, willBeArchived, false);
+      }
+      if (!willBeArchived) {
+        if (!wasArchived || projectStatus !== (editingProject.statusBeforeArchive || 'active')) {
+          app.updateProject(editingProject.id, { status: projectStatus });
+        }
+        if (editingProject.isPinned !== projectPinned) {
+          changeProjectPinned(editingProject, projectPinned, false);
+        }
+      }
       if (editingProject.catalogKey && localPathChanged) {
         setUnavailableBindingCatalogKeys(previous => {
           if (!previous.has(editingProject.catalogKey!)) return previous;
@@ -773,7 +1022,9 @@ export default function ProjectsSurface() {
       setSelectedProjectIdState(editingProject.id);
     } else {
       const createdId = app.addProject({
-        ...payload,
+        ...referencePayload,
+        status: projectStatus,
+        isPinned: projectStatus !== 'archived' && projectPinned,
         ...(nextLocalPath ? { localPath: nextLocalPath } : {}),
       });
       setSelectedProjectIdState(createdId);
@@ -1638,26 +1889,93 @@ export default function ProjectsSurface() {
 
             <section className="project-catalog-results">
               <div className="project-catalog-results-header">
-                <h2>{catalogFilter === 'all' ? 'All projects' : PROJECT_CATALOG_FILTERS.find(filter => filter.value === catalogFilter)?.label}</h2>
+                <div>
+                  <h2>{catalogFilter === 'all' ? 'Project catalogue' : PROJECT_CATALOG_FILTERS.find(filter => filter.value === catalogFilter)?.label}</h2>
+                  {isCatalogueFiltered && (
+                    <button
+                      type="button"
+                      className="project-reorder-filter-note"
+                      onClick={clearCatalogueFilters}
+                    >
+                      Clear filters to reorder
+                    </button>
+                  )}
+                </div>
                 <span role="status" aria-live="polite" aria-atomic="true">
                   {filteredProjects.length} result{filteredProjects.length === 1 ? '' : 's'}
                 </span>
               </div>
+              <p id="project-reorder-instructions" className="project-sr-only">
+                Use the Reorder button to move this project. Press Space or Enter to pick it up,
+                use the arrow keys to change its position, then press Space or Enter to drop.
+                Press Escape to cancel.
+              </p>
+              <div className="project-sr-only" role="status" aria-live="assertive" aria-atomic="true">
+                {catalogAnnouncement}
+              </div>
               {filteredProjects.length > 0 ? (
-                <div className="project-catalog-grid">
-                  {filteredProjects.map(project => (
-                    <ProjectCard
-                      key={project.id}
-                      project={project}
-                      binding={project.catalogKey ? bindingByCatalogKey.get(project.catalogKey) : undefined}
-                      activeWorkCount={app.tasks.filter(task => task.projectId === project.id && !task.completed).length}
+                <div className="project-catalog-sections">
+                  {groupedProjects.pinned.length > 0 && (
+                    <ProjectCatalogueSectionView
+                      section="pinned"
+                      title="Pinned"
+                      description="Your quickest access to priority projects."
+                      projects={groupedProjects.pinned}
+                      bindings={bindingByCatalogKey}
+                      reorderEnabled={!isCatalogueFiltered}
+                      getActiveWorkCount={projectId => app.tasks.filter(task => task.projectId === projectId && !task.completed).length}
                       onOpen={openedProject => {
                         setSelectedProjectIdState(openedProject.id);
                         setDetailProjectId(openedProject.id);
                         setPathFeedback(null);
                       }}
+                      onPinChange={(project, pinned) => changeProjectPinned(project, pinned)}
+                      onArchiveChange={(project, archived) => changeProjectArchived(project, archived)}
+                      onReorder={reorderProjects}
+                      onAnnounce={setCatalogAnnouncement}
                     />
-                  ))}
+                  )}
+                  {groupedProjects.projects.length > 0 && (
+                    <ProjectCatalogueSectionView
+                      section="projects"
+                      title="Projects"
+                      description="Active, planned, blocked, and completed work."
+                      projects={groupedProjects.projects}
+                      bindings={bindingByCatalogKey}
+                      reorderEnabled={!isCatalogueFiltered}
+                      getActiveWorkCount={projectId => app.tasks.filter(task => task.projectId === projectId && !task.completed).length}
+                      onOpen={openedProject => {
+                        setSelectedProjectIdState(openedProject.id);
+                        setDetailProjectId(openedProject.id);
+                        setPathFeedback(null);
+                      }}
+                      onPinChange={(project, pinned) => changeProjectPinned(project, pinned)}
+                      onArchiveChange={(project, archived) => changeProjectArchived(project, archived)}
+                      onReorder={reorderProjects}
+                      onAnnounce={setCatalogAnnouncement}
+                    />
+                  )}
+                  <ProjectCatalogueSectionView
+                    section="archived"
+                    title="Archived"
+                    description="Out of the way, but always recoverable."
+                    projects={groupedProjects.archived}
+                    bindings={bindingByCatalogKey}
+                    collapsed={!archivedExpanded}
+                    collapsible
+                    reorderEnabled={!isCatalogueFiltered}
+                    onToggleCollapsed={() => setArchivedExpanded(current => !current)}
+                    getActiveWorkCount={projectId => app.tasks.filter(task => task.projectId === projectId && !task.completed).length}
+                    onOpen={openedProject => {
+                      setSelectedProjectIdState(openedProject.id);
+                      setDetailProjectId(openedProject.id);
+                      setPathFeedback(null);
+                    }}
+                    onPinChange={(project, pinned) => changeProjectPinned(project, pinned)}
+                    onArchiveChange={(project, archived) => changeProjectArchived(project, archived)}
+                    onReorder={reorderProjects}
+                    onAnnounce={setCatalogAnnouncement}
+                  />
                 </div>
               ) : (
                 <div className="project-empty-filter" role="status">
@@ -1667,13 +1985,7 @@ export default function ProjectsSurface() {
                     <button
                       className="btn btn-secondary btn-sm"
                       type="button"
-                      onClick={() => {
-                        setSearchQuery('');
-                        setStatusFilter('all');
-                        setKindFilter('all');
-                        setCatalogFilter('all');
-                        setTagFilter('all');
-                      }}
+                      onClick={clearCatalogueFilters}
                     >
                       Clear filters
                     </button>
@@ -1711,6 +2023,8 @@ export default function ProjectsSurface() {
           onCopy={(value, label) => { void copyProjectReference(value, label); }}
           onRun={recipe => { void runProjectRecipe(recipe); }}
           onStop={recipe => { void stopProjectRecipe(recipe); }}
+          onPinChange={pinned => changeProjectPinned(detailProject, pinned, false)}
+          onArchiveChange={archived => changeProjectArchived(detailProject, archived, false)}
         />
       )}
 
@@ -1737,7 +2051,16 @@ export default function ProjectsSurface() {
               </div>
               <div className="form-group">
                 <label htmlFor="project-status">Status</label>
-                <select id="project-status" className="form-select" value={projectStatus} onChange={event => setProjectStatus(event.target.value as ProjectStatus)}>
+                <select
+                  id="project-status"
+                  className="form-select"
+                  value={projectStatus}
+                  onChange={event => {
+                    const nextStatus = event.target.value as ProjectStatus;
+                    setProjectStatus(nextStatus);
+                    if (nextStatus === 'archived') setProjectPinned(false);
+                  }}
+                >
                   {PROJECT_STATUS_OPTIONS.map(status => (
                     <option key={status} value={status}>{getStatusLabel(status)}</option>
                   ))}
@@ -1774,8 +2097,15 @@ export default function ProjectsSurface() {
               <small>This absolute path stays on this device and is never synced.</small>
             </div>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#cfd3e6' }}>
-              <input type="checkbox" checked={projectPinned} onChange={event => setProjectPinned(event.target.checked)} />
-              Pin this project at the top of the catalogue
+              <input
+                type="checkbox"
+                checked={projectPinned}
+                disabled={projectStatus === 'archived'}
+                onChange={event => setProjectPinned(event.target.checked)}
+              />
+              {projectStatus === 'archived'
+                ? 'Archived projects cannot be pinned'
+                : 'Pin this project at the top of the catalogue'}
             </label>
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowProjectForm(false)}>Cancel</button>

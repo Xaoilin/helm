@@ -1,6 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
+import { useSortable } from '@dnd-kit/react/sortable';
 import type {
   Project,
+  ProjectCatalogueSection,
   ProjectDeviceBinding,
   ProjectKind,
   ProjectRunRecipe,
@@ -88,17 +98,189 @@ function ProjectPreview({ project }: { project: Project }) {
   );
 }
 
+export type ProjectMoveDirection = 'earlier' | 'later';
+
+function ProjectCardActionMenu({
+  project,
+  reorderEnabled,
+  canMoveEarlier,
+  canMoveLater,
+  onMove,
+  onArchiveChange,
+}: {
+  project: Project;
+  reorderEnabled: boolean;
+  canMoveEarlier: boolean;
+  canMoveLater: boolean;
+  onMove: (direction: ProjectMoveDirection) => void;
+  onArchiveChange: (archived: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuId = useId();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus();
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [open]);
+
+  function closeAndReturnFocus(): void {
+    setOpen(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  }
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeAndReturnFocus();
+      return;
+    }
+
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>(
+      '[role="menuitem"]:not([disabled])',
+    ) || []);
+    if (items.length === 0) return;
+
+    event.preventDefault();
+    const activeIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? items.length - 1
+        : event.key === 'ArrowUp'
+          ? (activeIndex <= 0 ? items.length - 1 : activeIndex - 1)
+          : (activeIndex + 1) % items.length;
+    items[nextIndex]?.focus();
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="project-card-action-menu"
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        className="project-card-more-button"
+        aria-label={`More actions for ${project.name}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        data-project-action-id={project.id}
+        onClick={() => setOpen(current => !current)}
+      >
+        <span aria-hidden="true">•••</span>
+      </button>
+      {open && (
+        <div
+          ref={menuRef}
+          id={menuId}
+          className="project-card-menu-popover"
+          role="menu"
+          aria-label={`${project.name} actions`}
+          onKeyDown={handleMenuKeyDown}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!reorderEnabled || !canMoveEarlier}
+            onClick={() => {
+              onMove('earlier');
+              closeAndReturnFocus();
+            }}
+          >
+            Move earlier
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!reorderEnabled || !canMoveLater}
+            onClick={() => {
+              onMove('later');
+              closeAndReturnFocus();
+            }}
+          >
+            Move later
+          </button>
+          {project.status !== 'archived' && (
+            <>
+              <span className="project-card-menu-divider" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                className="project-card-menu-danger"
+                onClick={() => {
+                  onArchiveChange(true);
+                  setOpen(false);
+                }}
+              >
+                Archive project
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ProjectCard({
   project,
   binding,
   activeWorkCount,
+  section,
+  index,
+  sectionSize,
+  reorderEnabled,
   onOpen,
+  onPinChange,
+  onArchiveChange,
+  onMove,
 }: {
   project: Project;
   binding?: ProjectDeviceBinding;
   activeWorkCount: number;
+  section: ProjectCatalogueSection;
+  index: number;
+  sectionSize: number;
+  reorderEnabled: boolean;
   onOpen: (project: Project) => void;
+  onPinChange: (pinned: boolean) => void;
+  onArchiveChange: (archived: boolean) => void;
+  onMove: (direction: ProjectMoveDirection) => void;
 }) {
+  const {
+    ref: sortableRef,
+    handleRef,
+    isDragging,
+    isDropTarget,
+  } = useSortable({
+    id: project.id,
+    index,
+    group: section,
+    data: {
+      projectId: project.id,
+      projectName: project.name,
+      section,
+    },
+    disabled: !reorderEnabled,
+    transition: { duration: 160, easing: 'cubic-bezier(0.2, 0.75, 0.22, 1)' },
+  });
   const liveLink = (project.links || []).find(link => (
     link.kind === 'deployment' && isSafeExternalUrl(link.url)
   ));
@@ -107,13 +289,45 @@ export function ProjectCard({
   ));
 
   return (
-    <article className="project-catalog-card">
+    <article
+      ref={element => sortableRef(element)}
+      className={`project-catalog-card ${project.status === 'archived' ? 'is-archived' : ''} ${isDragging ? 'is-dragging' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
+      role="listitem"
+      data-project-card-id={project.id}
+    >
       <ProjectPreview project={project} />
+      <div className="project-card-utility-row">
+        {project.status !== 'archived' && (
+          <button
+            type="button"
+            className={`project-card-pin-toggle ${project.isPinned ? 'is-pinned' : ''}`}
+            aria-label={`${project.isPinned ? 'Unpin' : 'Pin'} ${project.name}`}
+            aria-pressed={project.isPinned}
+            data-project-pin-id={project.id}
+            onClick={() => onPinChange(!project.isPinned)}
+          >
+            <span aria-hidden="true">{project.isPinned ? '★' : '☆'}</span>
+            {project.isPinned ? 'Pinned' : 'Pin'}
+          </button>
+        )}
+        <button
+          ref={element => handleRef(element)}
+          type="button"
+          className="project-card-drag-handle"
+          aria-label={`Reorder ${project.name}`}
+          aria-describedby="project-reorder-instructions"
+          disabled={!reorderEnabled}
+          title={reorderEnabled ? `Reorder ${project.name}` : 'Clear filters to reorder projects'}
+          data-project-drag-id={project.id}
+        >
+          <span aria-hidden="true">⠿</span>
+        </button>
+      </div>
       <div className="project-card-content">
         <div className="project-card-heading">
           <div>
             <div className="project-card-title-row">
-              <h2>{project.name}</h2>
+              <h3>{project.name}</h3>
               {project.isPinned && <span className="project-pin" title="Pinned">Pinned</span>}
             </div>
             <p>{project.summary || 'No summary has been added yet.'}</p>
@@ -152,6 +366,27 @@ export function ProjectCard({
               Repository
             </a>
           )}
+          {project.status === 'archived' && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              data-project-unarchive-id={project.id}
+              aria-label={`Unarchive ${project.name}`}
+              onClick={() => onArchiveChange(false)}
+            >
+              Unarchive
+            </button>
+          )}
+          {(project.status !== 'archived' || (reorderEnabled && sectionSize > 1)) && (
+            <ProjectCardActionMenu
+              project={project}
+              reorderEnabled={reorderEnabled}
+              canMoveEarlier={index > 0}
+              canMoveLater={index < sectionSize - 1}
+              onMove={onMove}
+              onArchiveChange={onArchiveChange}
+            />
+          )}
         </div>
       </div>
     </article>
@@ -183,6 +418,8 @@ export function ProjectReferenceDrawer({
   onCopy,
   onRun,
   onStop,
+  onPinChange,
+  onArchiveChange,
 }: {
   project: Project;
   binding?: ProjectDeviceBinding;
@@ -200,6 +437,8 @@ export function ProjectReferenceDrawer({
   onCopy: (value: string, label: string) => void;
   onRun: (recipe: ProjectRunRecipe) => void;
   onStop: (recipe: ProjectRunRecipe) => void;
+  onPinChange: (pinned: boolean) => void;
+  onArchiveChange: (archived: boolean) => void;
 }) {
   const drawerRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -452,7 +691,29 @@ export function ProjectReferenceDrawer({
 
         <footer className="project-drawer-footer">
           <span aria-live="polite">{feedback}</span>
-          <button className="btn btn-secondary btn-sm" type="button" onClick={onEdit}>Edit project</button>
+          <div className="project-drawer-footer-actions">
+            {project.status !== 'archived' && (
+              <button
+                className={`btn btn-sm ${project.isPinned ? 'project-drawer-pin-active' : 'btn-secondary'}`}
+                type="button"
+                aria-pressed={project.isPinned}
+                aria-label={`${project.isPinned ? 'Unpin' : 'Pin'} ${project.name}`}
+                onClick={() => onPinChange(!project.isPinned)}
+              >
+                <span aria-hidden="true">{project.isPinned ? '★' : '☆'}</span>
+                {project.isPinned ? 'Pinned' : 'Pin'}
+              </button>
+            )}
+            <button
+              className={`btn btn-sm ${project.status === 'archived' ? 'btn-secondary' : 'project-archive-button'}`}
+              type="button"
+              aria-label={`${project.status === 'archived' ? 'Unarchive' : 'Archive'} ${project.name}`}
+              onClick={() => onArchiveChange(project.status !== 'archived')}
+            >
+              {project.status === 'archived' ? 'Unarchive' : 'Archive'}
+            </button>
+            <button className="btn btn-secondary btn-sm" type="button" onClick={onEdit}>Edit project</button>
+          </div>
         </footer>
       </section>
     </div>

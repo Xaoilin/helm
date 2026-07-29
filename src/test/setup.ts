@@ -52,3 +52,14 @@ if (typeof HTMLElement !== 'undefined') {
     configurable: true,
   });
 }
+
+class MockResizeObserver implements ResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+
+Object.defineProperty(globalThis, 'ResizeObserver', {
+  value: MockResizeObserver,
+  configurable: true,
+});
