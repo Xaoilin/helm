@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createProjectRunFingerprint,
+  revokeProjectProfilesForProject,
   startProjectProfile,
   subscribeProjectSession,
   type ProjectRuntimeEvent,
@@ -99,5 +100,56 @@ describe('project runtime bridge', () => {
 
     await subscribeProjectSession('profile', onEvent);
     expect(onEvent).toHaveBeenCalledWith(event);
+  });
+
+  it('stops running sessions and revokes every native profile when a project is removed', async () => {
+    vi.mocked(invoke).mockImplementation(async command => {
+      if (command === 'get_app_data_dir') return '/tmp/helm';
+      if (command === 'list_project_profiles') {
+        return [
+          {
+            id: 'profile-running',
+            projectId: 'project',
+            recipeId: 'dev',
+          },
+          {
+            id: 'profile-idle',
+            projectId: 'project',
+            recipeId: 'build',
+          },
+          {
+            id: 'other-profile',
+            projectId: 'other-project',
+            recipeId: 'dev',
+          },
+        ];
+      }
+      if (command === 'list_project_sessions') {
+        return [
+          {
+            ...snapshot,
+            profileId: 'profile-running',
+            status: 'running',
+          },
+          {
+            ...snapshot,
+            profileId: 'profile-idle',
+            status: 'exited',
+          },
+        ];
+      }
+      if (command === 'stop_project_session' || command === 'revoke_project_profile') {
+        return undefined;
+      }
+      throw new Error(`Unexpected command: ${command}`);
+    });
+
+    await revokeProjectProfilesForProject('project');
+
+    expect(invoke).toHaveBeenCalledWith('stop_project_session', { profileId: 'profile-running' });
+    expect(invoke).not.toHaveBeenCalledWith('stop_project_session', { profileId: 'profile-idle' });
+    expect(invoke).toHaveBeenCalledWith('revoke_project_profile', { profileId: 'profile-running' });
+    expect(invoke).toHaveBeenCalledWith('revoke_project_profile', { profileId: 'profile-idle' });
+    expect(invoke).not.toHaveBeenCalledWith('revoke_project_profile', { profileId: 'other-profile' });
   });
 });

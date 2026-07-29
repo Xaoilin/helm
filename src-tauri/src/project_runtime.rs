@@ -23,6 +23,28 @@ const MAX_ENVIRONMENT_ENTRIES: usize = 32;
 const MAX_VALUE_LENGTH: usize = 4_096;
 const MAX_LOG_LINE_BYTES: usize = 16_384;
 
+#[cfg(unix)]
+const INHERITED_RUNTIME_ENVIRONMENT: &[&str] = &[
+    "HOME", "LANG", "LC_ALL", "LC_CTYPE", "LOGNAME", "TERM", "TMPDIR", "USER",
+];
+
+#[cfg(windows)]
+const INHERITED_RUNTIME_ENVIRONMENT: &[&str] = &[
+    "APPDATA",
+    "COMSPEC",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "LOCALAPPDATA",
+    "SYSTEMDRIVE",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "USERDOMAIN",
+    "USERNAME",
+    "USERPROFILE",
+    "WINDIR",
+];
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRunEnvironment {
@@ -271,6 +293,20 @@ fn validate_environment(
     Ok(normalized)
 }
 
+fn inherited_runtime_environment() -> Vec<ProjectRunEnvironment> {
+    INHERITED_RUNTIME_ENVIRONMENT
+        .iter()
+        .filter_map(|name| {
+            let value = env::var(name).ok()?;
+            let value = validate_raw_value(&value, "Inherited environment value").ok()?;
+            Some(ProjectRunEnvironment {
+                name: (*name).to_string(),
+                value,
+            })
+        })
+        .collect()
+}
+
 fn resolve_working_directory(root: &Path, requested: Option<&str>) -> Result<PathBuf, String> {
     let candidate = match requested.map(str::trim).filter(|value| !value.is_empty()) {
         Some(value) => {
@@ -458,6 +494,14 @@ fn normalize_approval(input: ApproveProjectProfileInput) -> Result<ApprovedProje
 
     let mut environment = validate_environment(input.environment)?;
     environment.retain(|entry| !entry.name.eq_ignore_ascii_case("PATH"));
+    for inherited in inherited_runtime_environment() {
+        if !environment
+            .iter()
+            .any(|entry| entry.name.eq_ignore_ascii_case(&inherited.name))
+        {
+            environment.push(inherited);
+        }
+    }
     environment.push(ProjectRunEnvironment {
         name: "PATH".to_string(),
         value: device_runtime_path()?,
@@ -699,6 +743,21 @@ fn stop_session(session: &Arc<RuntimeSession>) -> Result<ProjectSessionSnapshot,
     Ok(snapshot.clone())
 }
 
+fn build_project_command(profile: &ApprovedProjectProfile) -> Command {
+    let mut command = Command::new(&profile.executable);
+    command
+        .args(&profile.args)
+        .current_dir(&profile.working_directory)
+        .env_clear()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    for entry in &profile.environment {
+        command.env(&entry.name, &entry.value);
+    }
+    command
+}
+
 #[tauri::command]
 pub fn fingerprint_project_profile(input: ApproveProjectProfileInput) -> Result<String, String> {
     Ok(normalize_approval(input)?.source_fingerprint)
@@ -788,18 +847,7 @@ pub fn start_project_profile(
         .map_err(|_| "Project runtime is unavailable.".to_string())?;
     ensure_profile_can_start(&sessions, &profile.id)?;
 
-    let mut command = Command::new(&profile.executable);
-    command
-        .args(&profile.args)
-        .current_dir(&profile.working_directory)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    for entry in &profile.environment {
-        command.env(&entry.name, &entry.value);
-    }
-
-    let mut child = command
+    let mut child = build_project_command(&profile)
         .group_spawn()
         .map_err(|error| format!("Unable to start '{}': {error}", profile.label))?;
     let stdout = child.inner().stdout.take();
@@ -1043,6 +1091,77 @@ mod tests {
             }),
             child: Mutex::new(child),
         })
+    }
+
+    const UNAPPROVED_ENVIRONMENT_SENTINEL: &str =
+        "HELM_PROJECT_RUNTIME_UNAPPROVED_ENVIRONMENT_SENTINEL";
+    const ENVIRONMENT_PROBE_STAGE: &str = "HELM_PROJECT_RUNTIME_ENVIRONMENT_PROBE_STAGE";
+
+    #[test]
+    fn approved_command_does_not_inherit_unapproved_environment() {
+        if env::var(ENVIRONMENT_PROBE_STAGE).as_deref() == Ok("approved-command") {
+            assert!(
+                env::var_os(UNAPPROVED_ENVIRONMENT_SENTINEL).is_none(),
+                "the approved command inherited an environment value outside its profile"
+            );
+            return;
+        }
+
+        if env::var_os(UNAPPROVED_ENVIRONMENT_SENTINEL).is_none() {
+            let output = Command::new(env::current_exe().expect("current test executable"))
+                .arg("approved_command_does_not_inherit_unapproved_environment")
+                .arg("--nocapture")
+                .env(UNAPPROVED_ENVIRONMENT_SENTINEL, "must-not-leak")
+                .env_remove(ENVIRONMENT_PROBE_STAGE)
+                .output()
+                .expect("spawn isolated test driver");
+            assert!(
+                output.status.success(),
+                "isolated test driver failed:\nstdout:\n{}\nstderr:\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+
+        let current_executable = env::current_exe().expect("current test executable");
+        let working_directory = current_executable
+            .parent()
+            .expect("test executable directory")
+            .to_path_buf();
+        let profile = ApprovedProjectProfile {
+            id: "profile".to_string(),
+            project_id: "project".to_string(),
+            recipe_id: "environment-probe".to_string(),
+            label: "Environment probe".to_string(),
+            source_fingerprint: "unused".to_string(),
+            project_root: working_directory.to_string_lossy().to_string(),
+            executable: current_executable.to_string_lossy().to_string(),
+            args: vec![
+                "approved_command_does_not_inherit_unapproved_environment".to_string(),
+                "--nocapture".to_string(),
+            ],
+            environment: [
+                inherited_runtime_environment(),
+                vec![ProjectRunEnvironment {
+                    name: ENVIRONMENT_PROBE_STAGE.to_string(),
+                    value: "approved-command".to_string(),
+                }],
+            ]
+            .concat(),
+            working_directory: working_directory.to_string_lossy().to_string(),
+            approved_at: Utc::now().to_rfc3339(),
+        };
+
+        let output = build_project_command(&profile)
+            .output()
+            .expect("spawn approved environment probe");
+        assert!(
+            output.status.success(),
+            "approved environment probe failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[test]

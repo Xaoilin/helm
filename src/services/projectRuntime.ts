@@ -131,6 +131,26 @@ export async function revokeProjectProfile(profileId: string): Promise<void> {
   }
 }
 
+export async function revokeProjectProfilesForProject(projectId: string): Promise<void> {
+  if (!(await canUseProjectRuntime())) return;
+
+  const [profiles, sessions] = await Promise.all([
+    listApprovedProjectProfiles(),
+    listProjectSessions(),
+  ]);
+  const projectProfiles = profiles.filter(profile => profile.projectId === projectId);
+  const projectProfileIds = new Set(projectProfiles.map(profile => profile.id));
+  const runningProfileIds = sessions
+    .filter(session => (
+      session.status === 'running'
+      && projectProfileIds.has(session.profileId)
+    ))
+    .map(session => session.profileId);
+
+  await Promise.all(runningProfileIds.map(profileId => stopProjectSession(profileId)));
+  await Promise.all(projectProfiles.map(profile => revokeProjectProfile(profile.id)));
+}
+
 export async function listProjectSessions(): Promise<ProjectSessionSnapshot[]> {
   if (!(await canUseProjectRuntime())) return [];
   try {

@@ -3,14 +3,19 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { AppProvider, useApp } from '../store/AppContext';
 import { createElement, type ReactNode } from 'react';
 
-const { processAssistantCommandMock } = vi.hoisted(() => ({
+const { processAssistantCommandMock, revokeProjectProfilesForProjectMock } = vi.hoisted(() => ({
   processAssistantCommandMock: vi.fn(),
+  revokeProjectProfilesForProjectMock: vi.fn(),
 }));
 
 vi.mock('../services/assistantRuntime', () => ({
   isOllamaAvailable: vi.fn(),
   resetOllamaCache: vi.fn(),
   processAssistantCommand: processAssistantCommandMock,
+}));
+
+vi.mock('../services/projectRuntime', () => ({
+  revokeProjectProfilesForProject: revokeProjectProfilesForProjectMock,
 }));
 
 beforeEach(() => {
@@ -28,6 +33,8 @@ beforeEach(() => {
     planningSource: 'openai',
     planningStatus: 'planned',
   });
+  revokeProjectProfilesForProjectMock.mockReset();
+  revokeProjectProfilesForProjectMock.mockResolvedValue(undefined);
 });
 
 async function renderWithApp() {
@@ -257,9 +264,10 @@ describe('AppContext - Projects', () => {
     act(() => { r.api!.updateProject(projectId, { summary: 'Updated' }); });
     expect(r.api!.projects[0].summary).toBe('Updated');
 
-    act(() => { r.api!.removeProject(projectId); });
+    await act(async () => { await r.api!.removeProject(projectId); });
     expect(r.api!.projects).toHaveLength(0);
     expect(r.api!.projectPages).toHaveLength(0);
+    expect(revokeProjectProfilesForProjectMock).toHaveBeenCalledWith(projectId);
   });
 
   it('should unlink tasks when a project is removed', async () => {
@@ -288,12 +296,33 @@ describe('AppContext - Projects', () => {
       });
     });
 
-    act(() => { r.api!.removeProject(projectId); });
+    await act(async () => { await r.api!.removeProject(projectId); });
 
     const task = r.api!.tasks.find(item => item.id === taskId);
     expect(task?.projectId).toBeUndefined();
     expect(task?.workflowState).toBeUndefined();
     expect(task?.boardOrder).toBeUndefined();
+  });
+
+  it('preserves the project when native approval revocation fails', async () => {
+    const r = await renderWithApp();
+    let projectId = '';
+    act(() => {
+      projectId = r.api!.addProject({
+        name: 'Project',
+        summary: '',
+        status: 'active',
+        tags: [],
+        isPinned: false,
+      });
+    });
+    revokeProjectProfilesForProjectMock.mockRejectedValueOnce(new Error('Approval store unavailable'));
+
+    await expect(act(async () => {
+      await r.api!.removeProject(projectId);
+    })).rejects.toThrow('Approval store unavailable');
+
+    expect(r.api!.projects.some(project => project.id === projectId)).toBe(true);
   });
 });
 

@@ -27,6 +27,7 @@ import {
   type AssistantNavigationHandler,
   type AssistantNavigationRequest,
 } from '../services/assistantNavigation';
+import { revokeProjectProfilesForProject } from '../services/projectRuntime';
 
 import { CalendarProvider, useCalendar } from './contexts/CalendarContext';
 import { TripProvider, useTripContext } from './contexts/TripContext';
@@ -129,7 +130,7 @@ interface AppContextAPI {
 
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProject: (id: string, updates: Partial<Project>) => void;
-  removeProject: (id: string) => void;
+  removeProject: (id: string) => Promise<void>;
   setProjectDeviceRoot: (catalogKey: string, projectRoot: string) => boolean;
   clearProjectDeviceBinding: (catalogKey: string) => void;
   approveProjectRunProfile: (catalogKey: string, profile: ProjectRunProfile) => void;
@@ -325,7 +326,8 @@ function ShellProvider({ children }: { children: ReactNode }) {
     }
   }, [state.surface]);
 
-  const removeProject = useCallback((id: string) => {
+  const removeProject = useCallback(async (id: string) => {
+    await revokeProjectProfilesForProject(id);
     projectCtx.removeProject(id);
 
     taskCtx.setTasks(prev => prev.map(task => (

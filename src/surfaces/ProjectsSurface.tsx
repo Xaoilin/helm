@@ -400,6 +400,11 @@ export default function ProjectsSurface() {
     return [...tags].sort((left, right) => left.localeCompare(right));
   }, [app.projects]);
 
+  const deviceBindingByCatalogKey = useMemo(
+    () => new Map(app.projectDeviceBindings
+      .map(binding => [binding.catalogKey, binding])),
+    [app.projectDeviceBindings],
+  );
   const bindingByCatalogKey = useMemo(
     () => new Map((desktopPathActions ? app.projectDeviceBindings : [])
       .filter(binding => !unavailableBindingCatalogKeys.has(binding.catalogKey))
@@ -678,7 +683,7 @@ export default function ProjectsSurface() {
   }
 
   function resetProjectForm(project?: Project | null): void {
-    const binding = project?.catalogKey ? bindingByCatalogKey.get(project.catalogKey) : undefined;
+    const binding = project?.catalogKey ? deviceBindingByCatalogKey.get(project.catalogKey) : undefined;
     setProjectName(project?.name || '');
     setProjectSummary(project?.summary || '');
     setProjectLocalPath(binding?.projectRoot || '');
@@ -716,10 +721,14 @@ export default function ProjectsSurface() {
     const retainedLinks = existingLinks.filter(link => link.kind !== 'repository' && link.kind !== 'deployment');
     const repositoryUrl = projectRepositoryUrl.trim();
     const deploymentUrl = projectDeploymentUrl.trim();
+    const nextLocalPath = projectLocalPath.trim();
+    const currentBinding = editingProject?.catalogKey
+      ? deviceBindingByCatalogKey.get(editingProject.catalogKey)
+      : undefined;
+    const localPathChanged = nextLocalPath !== (currentBinding?.projectRoot || '');
     const payload = {
       name: projectName.trim(),
       summary: projectSummary.trim(),
-      localPath: projectLocalPath.trim() || undefined,
       kind: projectKind,
       links: [
         ...retainedLinks,
@@ -750,8 +759,10 @@ export default function ProjectsSurface() {
     };
 
     if (editingProject) {
-      app.updateProject(editingProject.id, payload);
-      if (editingProject.catalogKey) {
+      app.updateProject(editingProject.id, localPathChanged
+        ? { ...payload, localPath: nextLocalPath || undefined }
+        : payload);
+      if (editingProject.catalogKey && localPathChanged) {
         setUnavailableBindingCatalogKeys(previous => {
           if (!previous.has(editingProject.catalogKey!)) return previous;
           const next = new Set(previous);
@@ -761,7 +772,10 @@ export default function ProjectsSurface() {
       }
       setSelectedProjectIdState(editingProject.id);
     } else {
-      const createdId = app.addProject(payload);
+      const createdId = app.addProject({
+        ...payload,
+        ...(nextLocalPath ? { localPath: nextLocalPath } : {}),
+      });
       setSelectedProjectIdState(createdId);
       setActiveTab('overview');
     }
@@ -1177,8 +1191,13 @@ export default function ProjectsSurface() {
                         <button className="btn btn-secondary btn-sm" onClick={() => openEditProject(selectedProject)}>Edit Project</button>
                         <button className="btn btn-danger btn-sm" onClick={() => {
                           if (window.confirm(`Remove project "${selectedProject.name}"? Linked tasks will stay in HELM but lose their project assignment.`)) {
-                            app.removeProject(selectedProject.id);
-                            setSelectedProjectIdState(null);
+                            void app.removeProject(selectedProject.id)
+                              .then(() => setSelectedProjectIdState(null))
+                              .catch(error => {
+                                setPathFeedback(error instanceof Error
+                                  ? error.message
+                                  : 'Unable to revoke this project’s local command approvals.');
+                              });
                           }
                         }}>Remove</button>
                       </div>
