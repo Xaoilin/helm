@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { v4 as uuid } from 'uuid';
 import type {
   Project,
+  ProjectCatalogueSection,
   ProjectDeviceBinding,
   ProjectPage,
   ProjectRunProfile,
@@ -29,6 +30,12 @@ import {
   type LegacyWorkspaceRecord,
   type PendingLegacyProjectPath,
 } from '../projectPersistence';
+import {
+  appendProjectToCollection,
+  reorderProjectsInSection,
+  setProjectArchivedInCollection,
+  setProjectPinnedInCollection,
+} from '../projectOrdering';
 
 export interface ProjectContextValue {
   projects: Project[];
@@ -38,6 +45,9 @@ export interface ProjectContextValue {
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProject: (id: string, updates: Partial<Project>) => void;
   removeProject: (id: string) => void;
+  setProjectPinned: (projectId: string, isPinned: boolean) => void;
+  setProjectArchived: (projectId: string, isArchived: boolean) => void;
+  reorderProjectSection: (section: ProjectCatalogueSection, orderedProjectIds: string[]) => void;
   setProjectDeviceRoot: (catalogKey: string, projectRoot: string) => boolean;
   clearProjectDeviceBinding: (catalogKey: string) => void;
   approveProjectRunProfile: (catalogKey: string, profile: ProjectRunProfile) => void;
@@ -201,7 +211,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         now,
       ));
     }
-    setProjects(prev => [nextProject, ...prev]);
+    setProjects(prev => appendProjectToCollection(prev, nextProject, now));
     setProjectPages(prev => [buildOverviewPage(nextProject), ...prev]);
     return id;
   }, []);
@@ -242,6 +252,24 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     setProjects(prev => prev.filter(project => project.id !== id));
     setProjectPages(prev => prev.filter(page => page.projectId !== id));
   }, [projects]);
+
+  const setProjectPinned = useCallback((projectId: string, isPinned: boolean) => {
+    const updatedAt = new Date().toISOString();
+    setProjects(prev => setProjectPinnedInCollection(prev, projectId, isPinned, updatedAt).projects);
+  }, []);
+
+  const setProjectArchived = useCallback((projectId: string, isArchived: boolean) => {
+    const updatedAt = new Date().toISOString();
+    setProjects(prev => setProjectArchivedInCollection(prev, projectId, isArchived, updatedAt).projects);
+  }, []);
+
+  const reorderProjectSection = useCallback((
+    section: ProjectCatalogueSection,
+    orderedProjectIds: string[],
+  ) => {
+    const updatedAt = new Date().toISOString();
+    setProjects(prev => reorderProjectsInSection(prev, section, orderedProjectIds, updatedAt).projects);
+  }, []);
 
   const setProjectDeviceRoot = useCallback((catalogKey: string, projectRoot: string): boolean => {
     if (!catalogKey.trim() || !isAbsoluteProjectRoot(projectRoot)) return false;
@@ -319,6 +347,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       addProject,
       updateProject,
       removeProject,
+      setProjectPinned,
+      setProjectArchived,
+      reorderProjectSection,
       setProjectDeviceRoot,
       clearProjectDeviceBinding,
       approveProjectRunProfile,

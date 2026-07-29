@@ -207,6 +207,24 @@ const DEFAULT_PROJECTS = [
     createdAt: '2026-07-29T12:00:00.000Z',
     updatedAt: '2026-07-29T12:00:00.000Z',
   },
+  {
+    id: 'project-release-vault',
+    catalogKey: 'fixture:release-vault',
+    name: 'Release Vault',
+    kind: 'research',
+    summary: 'A completed reference retained for future decisions.',
+    status: 'archived',
+    statusBeforeArchive: 'completed',
+    tags: ['reference'],
+    isPinned: false,
+    links: [],
+    setupSteps: [],
+    runRecipes: [],
+    preview: { icon: 'RV', accentColor: '#94a3b8', backgroundColor: '#171b24' },
+    verifiedAt: '2026-07-29T12:00:00.000Z',
+    createdAt: '2026-07-29T12:00:00.000Z',
+    updatedAt: '2026-07-29T12:00:00.000Z',
+  },
 ] as const;
 
 const DEFAULT_PRAYER_TASKS = ['Fajr', 'Dhuhr', 'Asr'].map((prayerName, index) => ({

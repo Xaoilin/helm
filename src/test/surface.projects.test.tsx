@@ -81,11 +81,87 @@ describe('ProjectsSurface', () => {
     await act(async () => { renderWithProvider(<ProjectsSurface />); });
 
     expect(await screen.findByText('Your work, easy to find again.')).toBeInTheDocument();
+    const pinnedRegion = screen.getByRole('region', { name: 'Pinned' });
+    const projectsRegion = screen.getByRole('region', { name: 'Projects' });
+    expect(within(pinnedRegion).getByRole('heading', { name: 'Orbit Console' })).toBeInTheDocument();
+    expect(within(projectsRegion).getByRole('heading', { name: 'Sensor Bench' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Archived' })).toBeInTheDocument();
     const cards = document.querySelectorAll('.project-catalog-card');
     expect(cards).toHaveLength(2);
     expect(within(cards[0] as HTMLElement).getByRole('heading', { name: 'Orbit Console' })).toBeInTheDocument();
     expect(within(cards[0] as HTMLElement).getByText('Live + local')).toBeInTheDocument();
     expect(within(cards[1] as HTMLElement).getByText('Reference')).toBeInTheDocument();
+  });
+
+  it('pins directly from a card and moves the project into the Pinned section', async () => {
+    seedProjectCatalogue();
+    await act(async () => { renderWithProvider(<ProjectsSurface />); });
+    await screen.findByText('Your work, easy to find again.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pin Sensor Bench' }));
+
+    await waitFor(() => {
+      const pinnedRegion = screen.getByRole('region', { name: 'Pinned' });
+      expect(within(pinnedRegion).getByRole('heading', { name: 'Sensor Bench' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Unpin Sensor Bench' })).toHaveFocus();
+    });
+  });
+
+  it('archives from the action menu, expands Archived, and restores the project', async () => {
+    seedProjectCatalogue();
+    await act(async () => { renderWithProvider(<ProjectsSurface />); });
+    await screen.findByText('Your work, easy to find again.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Orbit Console' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Archive project' }));
+
+    const archivedRegion = await screen.findByRole('region', { name: 'Archived' });
+    const unarchiveButton = await within(archivedRegion).findByRole('button', { name: 'Unarchive Orbit Console' });
+    expect(screen.getByRole('button', { name: 'Hide archived' })).toHaveAttribute('aria-expanded', 'true');
+    expect(unarchiveButton).toHaveFocus();
+
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'archived' } });
+    await waitFor(() => expect(screen.getByLabelText('Status')).toHaveValue('archived'));
+    fireEvent.click(unarchiveButton);
+    await waitFor(() => {
+      const projectsRegion = screen.getByRole('region', { name: 'Projects' });
+      expect(within(projectsRegion).getByRole('heading', { name: 'Orbit Console' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Pin Orbit Console' })).toHaveFocus();
+      expect(screen.getByLabelText('Status')).toHaveValue('all');
+    });
+  });
+
+  it('offers move actions and persists manual ordering within a section', async () => {
+    seedProjectCatalogue();
+    const projects = JSON.parse(localStorage.getItem('helm:projects') || '[]') as Array<Record<string, unknown>>;
+    localStorage.setItem('helm:projects', JSON.stringify(projects.map((project, index) => ({
+      ...project,
+      isPinned: false,
+      sortOrder: index,
+    }))));
+    await act(async () => { renderWithProvider(<ProjectsSurface />); });
+    await screen.findByText('Your work, easy to find again.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Orbit Console' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move later' }));
+
+    await waitFor(() => {
+      const projectCards = within(screen.getByRole('region', { name: 'Projects' }))
+        .getAllByRole('listitem');
+      expect(within(projectCards[0]).getByRole('heading', { name: 'Sensor Bench' })).toBeInTheDocument();
+      expect(within(projectCards[1]).getByRole('heading', { name: 'Orbit Console' })).toBeInTheDocument();
+    });
+  });
+
+  it('disables reordering while the catalogue is filtered', async () => {
+    seedProjectCatalogue();
+    await act(async () => { renderWithProvider(<ProjectsSurface />); });
+    await screen.findByText('Your work, easy to find again.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hardware' }));
+
+    expect(screen.getByRole('button', { name: 'Clear filters to reorder' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reorder Sensor Bench' })).toBeDisabled();
   });
 
   it('filters the catalogue by hardware and search text', async () => {
@@ -186,6 +262,56 @@ describe('ProjectsSurface', () => {
       expect(bindings).toHaveLength(1);
       expect(bindings[0].projectRoot).toBe(projectRoot);
       expect(bindings[0].runProfiles).toHaveLength(1);
+    });
+  });
+
+  it('routes Edit Project pinning and archiving through catalogue transitions', async () => {
+    seedProjectCatalogue();
+    await act(async () => { renderWithProvider(<ProjectsSurface />); });
+    await screen.findByText('Your work, easy to find again.');
+
+    const orbitCard = screen.getByRole('heading', { name: 'Orbit Console' })
+      .closest('.project-catalog-card') as HTMLElement;
+    fireEvent.click(within(orbitCard).getByRole('button', { name: 'View details' }));
+    let drawer = await screen.findByRole('dialog', { name: 'Orbit Console' });
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Edit project' }));
+    let editDialog = screen.getByRole('dialog', { name: 'Edit Project' });
+    fireEvent.change(within(editDialog).getByLabelText('Status'), { target: { value: 'archived' } });
+    expect(within(editDialog).getByRole('checkbox')).toBeDisabled();
+    fireEvent.click(within(editDialog).getByRole('button', { name: 'Save Project' }));
+
+    const archivedRegion = await screen.findByRole('region', { name: 'Archived' });
+    expect(await within(archivedRegion).findByRole('button', { name: 'Unarchive Orbit Console' }))
+      .toBeVisible();
+    expect(screen.getByRole('button', { name: 'Hide archived' })).toHaveAttribute('aria-expanded', 'true');
+    await waitFor(() => {
+      const projects = JSON.parse(localStorage.getItem('helm:projects') || '[]') as Array<{
+        id: string;
+        status: string;
+        statusBeforeArchive?: string;
+        isPinned: boolean;
+      }>;
+      expect(projects.find(project => project.id === 'project-orbit')).toMatchObject({
+        status: 'archived',
+        statusBeforeArchive: 'active',
+        isPinned: false,
+      });
+    });
+
+    const archivedCard = within(archivedRegion).getByRole('heading', { name: 'Orbit Console' })
+      .closest('.project-catalog-card') as HTMLElement;
+    fireEvent.click(within(archivedCard).getByRole('button', { name: 'View details' }));
+    drawer = await screen.findByRole('dialog', { name: 'Orbit Console' });
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Edit project' }));
+    editDialog = screen.getByRole('dialog', { name: 'Edit Project' });
+    fireEvent.change(within(editDialog).getByLabelText('Status'), { target: { value: 'blocked' } });
+    fireEvent.click(within(editDialog).getByRole('button', { name: 'Save Project' }));
+
+    await waitFor(() => {
+      const projectsRegion = screen.getByRole('region', { name: 'Projects' });
+      const restoredCard = within(projectsRegion).getByRole('heading', { name: 'Orbit Console' })
+        .closest('.project-catalog-card') as HTMLElement;
+      expect(within(restoredCard).getByText('blocked')).toBeInTheDocument();
     });
   });
 });
