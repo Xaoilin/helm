@@ -50,9 +50,9 @@ ${checkJobs}
   unit-config:
     steps:
       - run: npm run test -- --config vite.config.ts
-  e2e-install:
+  e2e-browser:
     steps:
-      - run: npx playwright install --with-deps --only-shell chromium
+      - run: google-chrome --version
   record-tree:
     steps:
       - run: node ./scripts/verify-ci-receipt.mjs record

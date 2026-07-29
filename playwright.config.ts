@@ -9,6 +9,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
 
 const baseURL = `http://127.0.0.1:${port}/helm/`;
 const isCi = Boolean(process.env.CI);
+const useHostedChrome = process.env.HELM_E2E_USE_HOST_CHROME === '1';
 const runId = process.env.HELM_E2E_RUN_ID || String(port);
 
 export default defineConfig({
@@ -30,6 +31,12 @@ export default defineConfig({
     timeout: 15_000,
   },
   projects: [
-    { name: 'chromium', use: { browserName: 'chromium' } },
+    {
+      name: 'chromium',
+      use: {
+        browserName: 'chromium',
+        channel: useHostedChrome ? 'chrome' : undefined,
+      },
+    },
   ],
 });

@@ -132,8 +132,11 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps --only-shell chromium
+      - name: Verify hosted browser
+        run: google-chrome --version
       - run: npm run test:e2e
+        env:
+          HELM_E2E_USE_HOST_CHROME: "1"
 
   build:
     name: build

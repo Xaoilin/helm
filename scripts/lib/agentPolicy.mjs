@@ -154,7 +154,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
     'node ./scripts/detect-ci-native-impact.mjs',
     'uses: actions/cache@v5',
     'npm run test -- --config vite.config.ts',
-    'npx playwright install --with-deps --only-shell chromium',
+    'google-chrome --version',
     "needs['native-changes'].outputs.native == 'true'",
   ]
 
