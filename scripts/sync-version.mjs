@@ -8,6 +8,7 @@ const packageJsonPath = resolve(rootDir, 'package.json');
 const packageLockPath = resolve(rootDir, 'package-lock.json');
 const releaseManifestPath = resolve(rootDir, 'public', 'release.json');
 const cargoTomlPath = resolve(rootDir, 'src-tauri', 'Cargo.toml');
+const cargoLockPath = resolve(rootDir, 'src-tauri', 'Cargo.lock');
 const tauriConfigPath = resolve(rootDir, 'src-tauri', 'tauri.conf.json');
 const checkOnly = process.argv.includes('--check');
 
@@ -93,6 +94,27 @@ if (cargoVersion !== packageVersion) {
     const nextCargoToml = cargoToml.replace(cargoMatch[0], `${cargoMatch[1]}${packageVersion}${cargoMatch[3]}`);
     writeFileSync(cargoTomlPath, nextCargoToml);
     updates.push(`Synced src-tauri/Cargo.toml to ${packageVersion}`);
+  }
+}
+
+const cargoLock = readFileSync(cargoLockPath, 'utf8');
+const cargoLockMatch = cargoLock.match(
+  /(\[\[package\]\]\r?\nname\s*=\s*"helm"\r?\nversion\s*=\s*")([^"]+)(")/u,
+);
+if (!cargoLockMatch) {
+  throw new Error('Could not find the HELM package version in src-tauri/Cargo.lock.');
+}
+const cargoLockVersion = cargoLockMatch[2];
+if (cargoLockVersion !== packageVersion) {
+  if (checkOnly) {
+    mismatches.push(`src-tauri/Cargo.lock is ${cargoLockVersion} but package.json is ${packageVersion}`);
+  } else {
+    const nextCargoLock = cargoLock.replace(
+      cargoLockMatch[0],
+      `${cargoLockMatch[1]}${packageVersion}${cargoLockMatch[3]}`,
+    );
+    writeFileSync(cargoLockPath, nextCargoLock);
+    updates.push(`Synced src-tauri/Cargo.lock to ${packageVersion}`);
   }
 }
 

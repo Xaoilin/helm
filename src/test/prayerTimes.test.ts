@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// @vitest-environment node
 import {
   fetchPrayerTimes,
   getPrayerTimes,

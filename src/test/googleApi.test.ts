@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   fetchCalendarList,
@@ -262,20 +263,27 @@ describe('Google Calendar API', () => {
     });
 
     it('opens the breaker on repeated transient service failures', async () => {
-      for (let i = 0; i < 9; i++) {
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 503,
-          statusText: 'Unavailable',
-          text: () => Promise.resolve('{"error":"unavailable"}'),
-        });
-      }
+      vi.useFakeTimers();
+      try {
+        for (let i = 0; i < 9; i++) {
+          mockFetch.mockResolvedValueOnce({
+            ok: false,
+            status: 503,
+            statusText: 'Unavailable',
+            text: () => Promise.resolve('{"error":"unavailable"}'),
+          });
+        }
 
-      await expect(fetchCalendarList('token-1')).rejects.toThrow(GoogleApiError);
-      await expect(fetchCalendarList('token-2')).rejects.toThrow(GoogleApiError);
-      await expect(fetchCalendarList('token-3')).rejects.toThrow(GoogleApiError);
-      await expect(fetchCalendarList('token-4')).rejects.toThrow('Circuit breaker open');
-      expect(mockFetch).toHaveBeenCalledTimes(9);
-    }, 15000);
+        for (const token of ['token-1', 'token-2', 'token-3']) {
+          const rejection = expect(fetchCalendarList(token)).rejects.toThrow(GoogleApiError);
+          await vi.runAllTimersAsync();
+          await rejection;
+        }
+        await expect(fetchCalendarList('token-4')).rejects.toThrow('Circuit breaker open');
+        expect(mockFetch).toHaveBeenCalledTimes(9);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

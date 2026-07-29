@@ -16,32 +16,57 @@ This note records the current best-practice setup for HELM's AI-assisted develop
 HELM uses a branch-to-production flow for personal use:
 
 1. Work starts on a `codex/*` branch.
-2. The branch must bump the app version above `origin/master`.
-3. The branch opens a PR into `master`.
-4. CI runs `agent-policy`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and `codex-review`.
-5. `codex-review` fails the PR for P0 or P1 findings when a review completes, allows P2/P3 findings to remain advisory, and treats missing keys, quota exhaustion, or provider failures as advisory unavailable instead of blocking release.
-6. `auto-promote` squash-merges non-draft same-repo `codex/*` PRs into `master` when every gate passes.
-7. The merge explicitly dispatches `CI`, `Deploy to GitHub Pages`, and `Deploy Supabase Assistant Function` on `master`. This avoids relying on token-triggered `workflow_run` cascades while still requiring `npm run handoff:check` to verify the deployed head before handoff.
-8. `npm run handoff:check` remains the proof that the release is truly live.
+2. The branch bumps the app version above `origin/master` once, before iterative policy checks.
+3. `npm run agent:fast` selects the smallest safe feedback loop from every change against `origin/master`, including staged, unstaged, and untracked files.
+4. The pre-push hook runs the single full local gate, `npm run check`, once.
+5. CI runs stable `agent-policy`, `lint`, `typecheck`, `unit`, `e2e`, `build`, `native`, and `codex-review` checks. Draft PRs do not consume runners, and a newer PR run cancels its predecessor.
+6. `codex-review` fails the PR for P0 or P1 findings when a review completes, allows P2/P3 findings to remain advisory, and treats missing keys, quota exhaustion, or provider failures as advisory unavailable.
+7. Frontend-only PRs satisfy `native` without starting macOS/Windows. Native-impact PRs require both cached platform jobs.
+8. `auto-promote` records the tested PR merge-tree, squash-merges, and proves that the resulting `master` tree is byte-for-byte identical.
+9. Verification-only CI revalidates the successful source run, PR identity, required jobs, and live `master` tree under the same promotion lock. Direct pushes and ordinary manual dispatches still run the full suite.
+10. Pages and Supabase deployments remain required, and `npm run handoff:check` proves the release is live.
 
 This is intentionally no-human-review for now. It is appropriate because HELM is a personal app, the checks are broad, and the release gate verifies the deployed version before work is called shipped.
 
-## Mandatory Gates
+## Local Feedback Contract
 
 - `npm run hooks:install` points Git at `.githooks`.
-- `.githooks/pre-commit` runs `npm run agent:policy` and `npm run lint`.
+- `.githooks/pre-commit` runs only `git diff --cached --check`.
 - `.githooks/pre-push` runs `npm run check`.
-- `npm run agent:policy` runs version checks and HELM-specific policy checks.
-- `npm run agent:local-gate` runs policy, lint, typecheck, and unit tests for a faster local confidence pass.
-- `npm run check` remains the full local validation gate.
+- `npm run agent:fast` is the default iteration command and prints selected/skipped checks plus timings.
+- `npm run check` is the only full local validation gate. After the fast policy guard, lint, incremental typecheck, Vitest, blocking E2E, the web build, and relevant native tests run concurrently.
+- `npm run test:e2e:smoke` is rapid behavior feedback on a fresh isolated port.
+- `npm run test:e2e` is blocking behavior and responsive overflow.
+- `npm run test:e2e:visual -- --surface <name> --viewports <csv>` is opt-in screenshot evidence.
 - `npm run handoff:check` remains the shipped-release gate.
+
+Do not run the primitive commands and then their aggregate gate. Focused primitives are reserved for diagnosis.
 
 The policy scanner currently enforces:
 
 - release/version files stay in sync through `npm run version:check`,
 - `codex/*` branches have a version above `origin/master`,
 - tracked source/docs avoid UTC string slicing for local dates,
-- CI keeps the required check names, auto-promote guards, and advisory Codex review fallback that branch protection depends on.
+- CI keeps stable required names, draft/concurrency guards, conditional native proof, exact-tree receipts, and the advisory Codex review fallback that branch protection depends on.
+
+## Why There Is No HELM MCP
+
+The valuable agent interactions already have deterministic interfaces: typed Tauri IPC and Rust tests for privileged native behavior, typed Playwright scenarios and route mocks for user flows, and the Debug surface for runtime diagnostics. A custom MCP layer would duplicate those contracts without removing a measured bottleneck. Reconsider it only if future traces show interaction/setup still consumes more than 20% of agent task time.
+
+## Performance Budgets
+
+Measure warm local runs and hosted job durations; do not infer speed from command count.
+
+- representative `agent:fast`: at most 12 seconds
+- full local `check` median: at most 32 seconds
+- Vitest: at most 10 seconds locally and 30 seconds in CI
+- blocking E2E: at most 22 seconds locally and 60 seconds in CI
+- cached native test: at most 15 seconds per OS, with cold compile recorded separately
+- PR CI p50: at most 75 seconds
+- merge-to-release p50: at most 140 seconds
+- PR runner occupancy: at most 6.5 minutes
+
+The local runners write machine-readable timing reports under ignored `test-results/`.
 
 ## Sources
 
@@ -54,6 +79,7 @@ The policy scanner currently enforces:
 - [Anthropic Claude Code hooks](https://code.claude.com/docs/en/hooks)
 - [GitHub Copilot cloud agent best practices](https://docs.github.com/en/copilot/tutorials/cloud-agent/get-the-best-results)
 - [GitHub branch protection](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
+- [GitHub GITHUB_TOKEN workflow-trigger behavior](https://docs.github.com/en/actions/concepts/security/github_token#when-github_token-triggers-workflow-runs)
 - [pre-commit.ci](https://pre-commit.ci/)
 - [Lefthook](https://lefthook.dev/)
 - [release-please](https://github.com/googleapis/release-please)

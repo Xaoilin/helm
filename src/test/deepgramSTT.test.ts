@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createDeepgramLiveSession, transcribeWithDeepgram } from '../services/deepgramSTT';
 import { TIMING } from '../config/constants';

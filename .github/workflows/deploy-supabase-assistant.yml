@@ -1,7 +1,21 @@
 name: Deploy Supabase Assistant Function
 
+run-name: >-
+  ${{ inputs.source_run_id != '' &&
+      format('Deploy Supabase receipt {0} {1}', inputs.source_run_id, inputs.deploy_sha) ||
+      format('Deploy Supabase {0}', github.ref_name) }}
+
 on:
   workflow_dispatch:
+    inputs:
+      deploy_sha:
+        description: Immutable verified commit to deploy
+        required: false
+        type: string
+      source_run_id:
+        description: Source CI run for idempotent receipt dispatch
+        required: false
+        type: string
   workflow_run:
     workflows: ["CI"]
     types: [completed]
@@ -10,9 +24,17 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+concurrency:
+  group: supabase-deploy
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+        !startsWith(github.event.workflow_run.display_title, 'CI receipt source '))
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -52,6 +74,8 @@ jobs:
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' }}
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.deploy_sha || github.event.workflow_run.head_sha || 'master' }}
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' }}
         uses: actions/setup-node@v5

@@ -139,6 +139,10 @@ function createAssistantResult(message: string, overrides: Record<string, unknow
   } as const;
 }
 
+async function advanceVoiceSessionResumeDelay() {
+  await vi.advanceTimersByTimeAsync(TIMING.VOICE_SESSION_RESUME_DELAY + 20);
+}
+
 describe('VoiceAssistant', () => {
   beforeEach(() => {
     latestVoiceInputOptions = null;
@@ -182,6 +186,7 @@ describe('VoiceAssistant', () => {
   });
 
   it('shows preparing before the wake-word session becomes visibly ready to speak', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     autoReadyOnStart = false;
 
     await act(async () => {
@@ -203,7 +208,7 @@ describe('VoiceAssistant', () => {
     });
 
     await act(async () => {
-      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+      await advanceVoiceSessionResumeDelay();
     });
 
     expect(startListeningMock).toHaveBeenCalledTimes(1);
@@ -219,6 +224,7 @@ describe('VoiceAssistant', () => {
   });
 
   it('reopens in preparing first and then listening for a spoken follow-up', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     processAssistantCommandMock.mockResolvedValue(createAssistantResult('You have one task left today.'));
 
     await act(async () => {
@@ -232,7 +238,7 @@ describe('VoiceAssistant', () => {
 
     await act(async () => {
       latestWakeWordOptions?.onWakeWordDetected();
-      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+      await advanceVoiceSessionResumeDelay();
     });
 
     autoReadyOnStart = false;
@@ -257,7 +263,7 @@ describe('VoiceAssistant', () => {
     );
 
     await act(async () => {
-      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+      await advanceVoiceSessionResumeDelay();
     });
 
     expect(startListeningMock).toHaveBeenCalledTimes(2);
@@ -272,6 +278,7 @@ describe('VoiceAssistant', () => {
   });
 
   it('passes shared dialog state between spoken turns so reveal-task follow-ups stay grounded', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     const firstDialogState = {
       currentSurface: 'dashboard',
       recentEntities: [{
@@ -303,7 +310,7 @@ describe('VoiceAssistant', () => {
 
     await act(async () => {
       latestWakeWordOptions?.onWakeWordDetected();
-      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+      await advanceVoiceSessionResumeDelay();
     });
 
     await act(async () => {
@@ -445,6 +452,7 @@ describe('VoiceAssistant', () => {
   });
 
   it('ends the hands-free session when the user says a stop phrase', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     await act(async () => {
       renderAssistant();
       await Promise.resolve();
@@ -456,7 +464,7 @@ describe('VoiceAssistant', () => {
 
     await act(async () => {
       latestWakeWordOptions?.onWakeWordDetected();
-      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+      await advanceVoiceSessionResumeDelay();
     });
 
     await act(async () => {
@@ -473,6 +481,7 @@ describe('VoiceAssistant', () => {
   });
 
   it('re-arms the wake word after a hands-free session ends', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     await act(async () => {
       renderAssistant();
       await Promise.resolve();
@@ -484,7 +493,7 @@ describe('VoiceAssistant', () => {
 
     await act(async () => {
       latestWakeWordOptions?.onWakeWordDetected();
-      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+      await advanceVoiceSessionResumeDelay();
     });
 
     expect(latestWakeWordOptions?.wakeWordArmed).toBe(false);
@@ -501,6 +510,7 @@ describe('VoiceAssistant', () => {
   });
 
   it('creates a fresh chat conversation for each wake-word session', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     processAssistantCommandMock
       .mockResolvedValueOnce(createAssistantResult('First answer.'))
       .mockResolvedValueOnce(createAssistantResult('Second answer.'));
@@ -516,7 +526,7 @@ describe('VoiceAssistant', () => {
 
     await act(async () => {
       latestWakeWordOptions?.onWakeWordDetected();
-      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+      await advanceVoiceSessionResumeDelay();
     });
 
     await act(async () => {
@@ -545,7 +555,7 @@ describe('VoiceAssistant', () => {
 
     await act(async () => {
       latestWakeWordOptions?.onWakeWordDetected();
-      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+      await advanceVoiceSessionResumeDelay();
     });
 
     await act(async () => {
@@ -571,6 +581,7 @@ describe('VoiceAssistant', () => {
   });
 
   it('stores assistant billing metadata on voice-created conversation turns', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     processAssistantCommandMock.mockResolvedValue(createAssistantResult('Hosted answer.', {
       source: 'openai',
       planningSource: 'openai',
@@ -630,7 +641,7 @@ describe('VoiceAssistant', () => {
 
     await act(async () => {
       latestWakeWordOptions?.onWakeWordDetected();
-      await new Promise(resolve => window.setTimeout(resolve, TIMING.VOICE_SESSION_RESUME_DELAY + 20));
+      await advanceVoiceSessionResumeDelay();
     });
 
     await act(async () => {

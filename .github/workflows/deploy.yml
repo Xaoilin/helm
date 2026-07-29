@@ -1,7 +1,21 @@
 name: Deploy to GitHub Pages
 
+run-name: >-
+  ${{ inputs.source_run_id != '' &&
+      format('Deploy Pages receipt {0} {1}', inputs.source_run_id, inputs.deploy_sha) ||
+      format('Deploy Pages {0}', github.ref_name) }}
+
 on:
   workflow_dispatch:
+    inputs:
+      deploy_sha:
+        description: Immutable verified commit to deploy
+        required: false
+        type: string
+      source_run_id:
+        description: Source CI run for idempotent receipt dispatch
+        required: false
+        type: string
   workflow_run:
     workflows: ["CI"]
     types: [completed]
@@ -18,13 +32,19 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: false
+  queue: max
 
 jobs:
   build:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+        !startsWith(github.event.workflow_run.display_title, 'CI receipt source '))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.deploy_sha || github.event.workflow_run.head_sha || 'master' }}
       - uses: actions/setup-node@v5
         with:
           node-version: 20
@@ -46,7 +66,10 @@ jobs:
 
   deploy:
     needs: build
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+        !startsWith(github.event.workflow_run.display_title, 'CI receipt source '))
     runs-on: ubuntu-latest
     environment:
       name: github-pages

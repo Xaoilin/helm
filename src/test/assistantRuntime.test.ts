@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CapabilityId } from '../assistant/capabilities';
 import { executeActionPlan } from '../assistant/executor';

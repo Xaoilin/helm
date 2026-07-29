@@ -1,5 +1,5 @@
 #!/bin/sh
 set -eu
 
-echo "Running HELM pre-push gate..."
+echo "Running the single HELM full gate..."
 npm run check

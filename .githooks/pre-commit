@@ -1,6 +1,5 @@
 #!/bin/sh
 set -eu
 
-echo "Running HELM pre-commit gate..."
-npm run agent:policy
-npm run lint
+echo "Checking staged HELM changes..."
+git diff --cached --check

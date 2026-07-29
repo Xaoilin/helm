@@ -1,19 +1,41 @@
-import { test, expect, type Page } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, test } from './support/helm-fixture';
 
 const packageJson = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
 ) as { version: string };
 
-const screenshotRoot = path.join('test-results', 'mobile-ui', packageJson.version);
+const screenshotRoot = path.join(
+  'test-results',
+  'mobile-ui',
+  packageJson.version,
+  process.env.HELM_E2E_RUN_ID || 'manual',
+);
 
-const viewports = [
-  { name: 'phone-320', width: 320, height: 568 },
-  { name: 'phone-390', width: 390, height: 844 },
-  { name: 'tablet-768', width: 768, height: 1024 },
-  { name: 'desktop-1366', width: 1366, height: 768 },
-] as const;
+const viewportCatalog = {
+  'phone-320': { width: 320, height: 568 },
+  'phone-390': { width: 390, height: 844 },
+  'tablet-768': { width: 768, height: 1024 },
+  'desktop-1024': { width: 1024, height: 768 },
+  'desktop-1366': { width: 1366, height: 768 },
+  'desktop-1440': { width: 1440, height: 900 },
+} as const;
+
+type ViewportName = keyof typeof viewportCatalog;
+interface VisualViewport {
+  height: number;
+  name: string;
+  width: number;
+}
+
+const behaviorViewportNames: ViewportName[] = [
+  'phone-320',
+  'phone-390',
+  'tablet-768',
+  'desktop-1366',
+];
 
 const surfaces = [
   'Dashboard',
@@ -34,22 +56,135 @@ const surfaces = [
   'Debug',
 ] as const;
 
-const mobilePrimarySurfaces = new Set(['Dashboard', 'Chat', 'Calendar', 'Tasks']);
+type SurfaceName = typeof surfaces[number];
 
-test.describe('Mobile-first UI coverage', () => {
-  test.describe.configure({ timeout: 300_000 });
+const mobilePrimarySurfaces = new Set<SurfaceName>([
+  'Dashboard',
+  'Chat',
+  'Calendar',
+  'Tasks',
+]);
 
-  test('renders surfaces and captures mobile interaction states', async ({ page }) => {
-    for (const viewport of viewports) {
-      mkdirSync(path.join(screenshotRoot, viewport.name), { recursive: true });
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+test.describe('Responsive UI behavior', () => {
+  test.describe.configure({ timeout: 120_000 });
+
+  test('keeps every surface within supported viewport boundaries', async ({ page, scenario }) => {
+    await scenario('empty');
+
+    for (const viewportName of behaviorViewportNames) {
+      const viewport = viewportCatalog[viewportName];
+      await page.setViewportSize(viewport);
       await page.goto('/');
-      await page.waitForSelector('.app-layout');
+      await expect(page.locator('.app-layout')).toBeVisible();
 
       for (const surface of surfaces) {
         await navigateToSurface(page, surface, viewport.width <= 760);
-        await page.waitForTimeout(150);
-        await expect(page.locator(`main[aria-label="${surface.toLowerCase()} surface"]`)).toBeVisible();
+        await expect(
+          page.locator(`main[aria-label="${surface.toLowerCase()} surface"]`),
+        ).toBeVisible();
+        await expectNoAccidentalOverflow(page);
+      }
+    }
+  });
+
+  test('@smoke opens the Projects catalogue and detail view', async ({ page, scenario }) => {
+    await scenario('projects');
+    await page.setViewportSize(viewportCatalog['phone-390']);
+    await page.goto('/');
+    await expect(page.locator('.app-layout')).toBeVisible();
+    await navigateToSurface(page, 'Projects', true);
+
+    await expect(page.locator('.project-catalog-card')).toHaveCount(4);
+    const orbitCard = page.locator('.project-catalog-card').filter({ hasText: 'Orbit Console' });
+    await orbitCard.getByRole('button', { name: 'View details' }).click();
+    await expect(page.getByRole('dialog', { name: 'Orbit Console' })).toBeVisible();
+  });
+
+  test('keeps project catalogue, details, and management layouts contained', async ({
+    page,
+    scenario,
+  }) => {
+    await scenario('projects');
+
+    for (const viewportName of ['desktop-1440', 'desktop-1024', 'phone-390'] as const) {
+      const viewport = viewportCatalog[viewportName];
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      await expect(page.locator('.app-layout')).toBeVisible();
+      await navigateToSurface(page, 'Projects', viewport.width <= 760);
+      await expect(page.locator('.project-catalog-card')).toHaveCount(4);
+      await expectNoAccidentalOverflow(page);
+
+      const orbitCard = page.locator('.project-catalog-card').filter({ hasText: 'Orbit Console' });
+      await orbitCard.getByRole('button', { name: 'View details' }).click();
+      const details = page.getByRole('dialog', { name: 'Orbit Console' });
+      await expect(details).toBeVisible();
+      await expectAnimationsSettled(page, '.project-reference-drawer');
+      await expectNoAccidentalOverflow(page);
+
+      if (viewport.width >= 1_000) {
+        await page.getByRole('button', { name: 'Manage project' }).click();
+        await expect(page.getByRole('tab', { name: 'Board' })).toBeVisible();
+        await expectNoAccidentalOverflow(page);
+      }
+    }
+  });
+
+  test('supports mobile navigation and modal interaction states', async ({ page, scenario }) => {
+    await scenario('empty', { storage: calendarStorage() });
+    await page.setViewportSize(viewportCatalog['phone-390']);
+    await page.goto('/');
+    await expect(page.locator('.app-layout')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Open more navigation' }).click();
+    await expect(page.getByRole('button', { name: 'Close more navigation' })).toBeVisible();
+    await page.getByRole('button', { name: 'Close more navigation' }).click();
+
+    await page.getByRole('button', { name: 'Talk to Lina' }).click();
+    await expect(page.getByRole('button', { name: 'Close Lina' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Talk to Lina' })).toBeVisible();
+
+    await navigateToSurface(page, 'Chat', true);
+    await page.getByRole('button', { name: 'New conversation' }).click();
+    await expect(page.locator('input[placeholder*="Type a message"]')).toBeVisible();
+
+    await navigateToSurface(page, 'Calendar', true);
+    await page.getByRole('button', { name: 'Month', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Month', exact: true })).toHaveClass(/active/);
+    await page.getByRole('button', { name: 'Week', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Week', exact: true })).toHaveClass(/active/);
+    await page.getByRole('button', { name: /\+ Event/ }).click();
+    await expect(page.locator('.modal')).toBeVisible();
+    await page.locator('.modal').getByRole('button', { name: 'Cancel' }).click();
+
+    await navigateToSurface(page, 'Tasks', true);
+    await page.getByRole('button', { name: /\+ Add Task/ }).click();
+    await expect(page.locator('.modal')).toBeVisible();
+    await page.locator('.modal').getByRole('button', { name: 'Cancel' }).click();
+
+    await navigateToSurface(page, 'Settings', true);
+    await expectNoAccidentalOverflow(page);
+  });
+});
+
+test.describe('Opt-in visual evidence', () => {
+  test.describe.configure({ timeout: 300_000 });
+
+  test('@visual captures requested surface snapshots', async ({ page, scenario }) => {
+    await scenario('empty');
+
+    for (const viewport of visualViewports()) {
+      mkdirSync(path.join(screenshotRoot, viewport.name), { recursive: true });
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      await expect(page.locator('.app-layout')).toBeVisible();
+
+      for (const surface of visualSurfaces()) {
+        await navigateToSurface(page, surface, viewport.width <= 760);
+        await expect(
+          page.locator(`main[aria-label="${surface.toLowerCase()} surface"]`),
+        ).toBeVisible();
         await expectNoAccidentalOverflow(page);
         await page.screenshot({
           path: path.join(screenshotRoot, viewport.name, `${slug(surface)}.png`),
@@ -57,57 +192,24 @@ test.describe('Mobile-first UI coverage', () => {
         });
       }
     }
-
-    mkdirSync(path.join(screenshotRoot, 'interactions'), { recursive: true });
-    await seedCalendar(page);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/');
-    await page.waitForSelector('.app-layout');
-
-    await page.getByRole('button', { name: 'Open more navigation' }).click();
-    await page.screenshot({ path: path.join(screenshotRoot, 'interactions', 'more-sheet.png'), fullPage: true });
-    await page.getByRole('button', { name: 'Close more navigation' }).click();
-
-    await page.getByRole('button', { name: 'Talk to Lina' }).click();
-    await page.screenshot({ path: path.join(screenshotRoot, 'interactions', 'lina-open.png'), fullPage: true });
-    await page.keyboard.press('Escape');
-
-    await navigateToSurface(page, 'Chat', true);
-    await page.getByRole('button', { name: 'New conversation' }).click();
-    await page.screenshot({ path: path.join(screenshotRoot, 'interactions', 'chat-detail.png'), fullPage: true });
-
-    await navigateToSurface(page, 'Calendar', true);
-    await page.getByRole('button', { name: 'Month' }).click();
-    await page.screenshot({ path: path.join(screenshotRoot, 'interactions', 'calendar-month.png'), fullPage: true });
-    await page.getByRole('button', { name: 'Week' }).click();
-    await page.screenshot({ path: path.join(screenshotRoot, 'interactions', 'calendar-week.png'), fullPage: true });
-    await page.getByRole('button', { name: /\+ Event/ }).click();
-    await page.screenshot({ path: path.join(screenshotRoot, 'interactions', 'calendar-add-event.png'), fullPage: true });
-    await page.locator('.modal').getByRole('button', { name: 'Cancel' }).click();
-
-    await navigateToSurface(page, 'Tasks', true);
-    await page.getByRole('button', { name: /\+ Add Task/ }).click();
-    await page.screenshot({ path: path.join(screenshotRoot, 'interactions', 'tasks-add-task.png'), fullPage: true });
-    await page.locator('.modal').getByRole('button', { name: 'Cancel' }).click();
-
-    await navigateToSurface(page, 'Settings', true);
-    await page.screenshot({ path: path.join(screenshotRoot, 'interactions', 'settings.png'), fullPage: true });
-    await expectNoAccidentalOverflow(page);
   });
 
-  test('captures the Projects catalogue, drawer, sheet, and management states', async ({ page }) => {
+  test('@visual captures requested Projects catalogue and detail states', async ({
+    page,
+    scenario,
+  }) => {
+    test.skip(
+      Boolean(visualSurfaceFilter() && visualSurfaceFilter() !== 'projects'),
+      'A different visual surface was requested.',
+    );
+    await scenario('projects');
     const projectsRoot = path.join(screenshotRoot, 'projects');
     mkdirSync(projectsRoot, { recursive: true });
-    await seedProjects(page);
 
-    for (const viewport of [
-      { name: 'desktop-1440', width: 1440, height: 900 },
-      { name: 'desktop-1024', width: 1024, height: 768 },
-      { name: 'phone-390', width: 390, height: 844 },
-    ]) {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    for (const viewport of visualViewports()) {
+      await page.setViewportSize(viewport);
       await page.goto('/');
-      await page.waitForSelector('.app-layout');
+      await expect(page.locator('.app-layout')).toBeVisible();
       await navigateToSurface(page, 'Projects', viewport.width <= 760);
       await expect(page.locator('.project-catalog-card')).toHaveCount(4);
       await expectNoAccidentalOverflow(page);
@@ -119,14 +221,14 @@ test.describe('Mobile-first UI coverage', () => {
       const orbitCard = page.locator('.project-catalog-card').filter({ hasText: 'Orbit Console' });
       await orbitCard.getByRole('button', { name: 'View details' }).click();
       await expect(page.getByRole('dialog', { name: 'Orbit Console' })).toBeVisible();
-      await page.waitForTimeout(250);
+      await expectAnimationsSettled(page, '.project-reference-drawer');
       await expectNoAccidentalOverflow(page);
       await page.screenshot({
         path: path.join(projectsRoot, `${viewport.name}-details.png`),
         fullPage: true,
       });
 
-      if (viewport.width === 1440) {
+      if (viewport.width >= 1_000) {
         await page.getByRole('button', { name: 'Manage project' }).click();
         await expect(page.getByRole('tab', { name: 'Board' })).toBeVisible();
         await page.screenshot({
@@ -138,17 +240,21 @@ test.describe('Mobile-first UI coverage', () => {
   });
 });
 
-async function navigateToSurface(page: Page, surface: typeof surfaces[number], isMobile: boolean) {
+async function navigateToSurface(
+  page: Page,
+  surface: SurfaceName,
+  isMobile: boolean,
+): Promise<void> {
   if (!isMobile || mobilePrimarySurfaces.has(surface)) {
     await page.getByRole('button', { name: `Navigate to ${surface}` }).click();
     return;
   }
 
   await page.getByRole('button', { name: 'Open more navigation' }).click();
-  await page.getByRole('button', { name: surface }).click();
+  await page.getByRole('button', { name: surface, exact: true }).click();
 }
 
-async function expectNoAccidentalOverflow(page: Page) {
+async function expectNoAccidentalOverflow(page: Page): Promise<void> {
   const result = await page.evaluate(() => {
     const intentionalScrollContainers = [
       '.tabs',
@@ -170,7 +276,13 @@ async function expectNoAccidentalOverflow(page: Page) {
       .filter(element => {
         const rect = element.getBoundingClientRect();
         const style = window.getComputedStyle(element);
-        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+        if (
+          style.display === 'none'
+          || style.visibility === 'hidden'
+          || Number(style.opacity) === 0
+        ) {
+          return false;
+        }
         if (rect.width < 1 || rect.height < 1) return false;
         if (isIntentional(element)) return false;
         return rect.left < -1 || rect.right > window.innerWidth + 1;
@@ -199,19 +311,27 @@ async function expectNoAccidentalOverflow(page: Page) {
   expect(result.issues).toEqual([]);
 }
 
-async function seedCalendar(page: Page) {
-  await page.addInitScript(() => {
-    const today = new Date();
-    const morningStart = new Date(today);
-    morningStart.setHours(10, 15, 0, 0);
-    const morningEnd = new Date(today);
-    morningEnd.setHours(11, 15, 0, 0);
-    const afternoonStart = new Date(today);
-    afternoonStart.setHours(13, 0, 0, 0);
-    const afternoonEnd = new Date(today);
-    afternoonEnd.setHours(13, 20, 0, 0);
+async function expectAnimationsSettled(page: Page, selector: string): Promise<void> {
+  await expect.poll(() => page.locator(selector).evaluate(element => (
+    element.getAnimations({ subtree: true }).every(animation => (
+      animation.playState === 'finished' || animation.playState === 'idle'
+    ))
+  ))).toBe(true);
+}
 
-    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
+function calendarStorage(): Record<string, unknown> {
+  const today = new Date();
+  const morningStart = new Date(today);
+  morningStart.setHours(10, 15, 0, 0);
+  const morningEnd = new Date(today);
+  morningEnd.setHours(11, 15, 0, 0);
+  const afternoonStart = new Date(today);
+  afternoonStart.setHours(13, 0, 0, 0);
+  const afternoonEnd = new Date(today);
+  afternoonEnd.setHours(13, 20, 0, 0);
+
+  return {
+    'helm:calendarAccounts': [{
       id: 'acc-mobile',
       name: 'Personal',
       email: 'alisa@example.com',
@@ -219,15 +339,15 @@ async function seedCalendar(page: Page) {
       isPrimary: true,
       connected: true,
       mocked: false,
-    }]));
-    localStorage.setItem('helm:calendarSources', JSON.stringify([{
+    }],
+    'helm:calendarSources': [{
       id: 'src-mobile',
       accountId: 'acc-mobile',
       name: 'Personal',
       color: '#4285f4',
       visible: true,
-    }]));
-    localStorage.setItem('helm:calendarEvents', JSON.stringify([
+    }],
+    'helm:calendarEvents': [
       {
         id: 'evt-mobile-morning',
         sourceId: 'src-mobile',
@@ -250,112 +370,41 @@ async function seedCalendar(page: Page) {
         createdAt: today.toISOString(),
         updatedAt: today.toISOString(),
       },
-    ]));
+    ],
+  };
+}
+
+function visualViewports(): VisualViewport[] {
+  const requested = (process.env.HELM_E2E_VISUAL_VIEWPORTS || '390x844,1440x900')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean);
+  return requested.map(value => {
+    if (value in viewportCatalog) {
+      return { name: value, ...viewportCatalog[value as ViewportName] };
+    }
+    const match = value.match(/^([1-9]\d{2,3})x([1-9]\d{2,3})$/u);
+    if (!match) throw new Error(`Unknown HELM visual viewport: ${value}`);
+    return {
+      name: value,
+      width: Number(match[1]),
+      height: Number(match[2]),
+    };
   });
 }
 
-async function seedProjects(page: Page) {
-  await page.addInitScript(() => {
-    const timestamp = '2026-07-29T12:00:00.000Z';
-    localStorage.setItem('helm:projects', JSON.stringify([
-      {
-        id: 'project-orbit-console',
-        catalogKey: 'fixture:orbit-console',
-        name: 'Orbit Console',
-        kind: 'desktop_app',
-        summary: 'A desktop command centre and project reference example.',
-        status: 'active',
-        tags: ['app', 'productivity', 'tauri'],
-        isPinned: true,
-        links: [
-          { id: 'orbit-live', kind: 'deployment', label: 'Live Orbit Console', url: 'https://example.com/orbit/' },
-          { id: 'orbit-repo', kind: 'repository', label: 'GitHub repository', url: 'https://github.com/example/orbit-console' },
-        ],
-        setupSteps: [
-          { id: 'orbit-install', title: 'Install dependencies', description: 'Requires Node.js and npm.', displayCode: 'npm install' },
-        ],
-        runRecipes: [
-          {
-            id: 'orbit-dev',
-            label: 'Development server',
-            displayCommand: 'npm run dev',
-            executable: 'npm',
-            args: ['run', 'dev'],
-            prerequisites: ['Node.js', 'npm'],
-            mode: 'service',
-          },
-        ],
-        preview: { icon: 'OC', accentColor: '#8b7cff', backgroundColor: '#17172a' },
-        verifiedAt: timestamp,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      },
-      {
-        id: 'project-canvas-studio',
-        catalogKey: 'fixture:canvas-studio',
-        name: 'Canvas Studio',
-        kind: 'web_app',
-        summary: 'A collaborative visual whiteboard with a WebGL canvas.',
-        status: 'active',
-        tags: ['app', 'whiteboard'],
-        isPinned: true,
-        links: [
-          { id: 'canvas-live', kind: 'deployment', label: 'Live Canvas Studio', url: 'https://example.com/canvas/' },
-        ],
-        setupSteps: [],
-        runRecipes: [],
-        preview: { icon: 'CS', accentColor: '#4f9cff', backgroundColor: '#112033' },
-        verifiedAt: timestamp,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      },
-      {
-        id: 'project-caption-local',
-        catalogKey: 'fixture:caption-local',
-        name: 'Caption Local',
-        kind: 'web_app',
-        summary: 'A private local media transcription utility.',
-        status: 'active',
-        tags: ['app', 'local-first'],
-        isPinned: false,
-        links: [],
-        setupSteps: [],
-        runRecipes: [
-          {
-            id: 'caption-ui',
-            label: 'Local transcription UI',
-            displayCommand: 'caption-local --host 127.0.0.1 --port 7860',
-            executable: 'caption-local',
-            args: ['--host', '127.0.0.1', '--port', '7860'],
-            prerequisites: ['Python 3.10+', 'ffmpeg'],
-            localUrl: 'http://127.0.0.1:7860/',
-            mode: 'service',
-          },
-        ],
-        preview: { icon: 'CL', accentColor: '#ef4444', backgroundColor: '#2a1218' },
-        verifiedAt: timestamp,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      },
-      {
-        id: 'project-sensor-bench',
-        catalogKey: 'fixture:sensor-bench',
-        name: 'Sensor Bench',
-        kind: 'hardware',
-        summary: 'An electronics, firmware, and enclosure reference workspace.',
-        status: 'active',
-        tags: ['hardware', 'electronics'],
-        isPinned: false,
-        links: [],
-        setupSteps: [],
-        runRecipes: [],
-        preview: { icon: 'SB', accentColor: '#f472b6', backgroundColor: '#2b1624' },
-        verifiedAt: timestamp,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      },
-    ]));
-  });
+function visualSurfaceFilter(): string {
+  return (process.env.HELM_E2E_VISUAL_SURFACE || '').trim().toLowerCase();
+}
+
+function visualSurfaces(): SurfaceName[] {
+  const filter = visualSurfaceFilter();
+  if (!filter) return [...surfaces];
+  const match = surfaces.find(surface => surface.toLowerCase() === filter);
+  if (!match) {
+    throw new Error(`Unknown HELM visual surface: ${filter}`);
+  }
+  return [match];
 }
 
 function slug(value: string): string {

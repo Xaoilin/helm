@@ -7,7 +7,7 @@
 - Run `npm run handoff:check` at the end of every completed feature handoff. If it fails, the work is not done yet unless the user explicitly asked for a local-only or unmerged outcome or an external access blocker prevents completion.
 - Do not call a user-facing change live, shipped, or deployed until it is merged to `master`, the deployment has succeeded, and the deployed result has been verified directly. `npm run handoff:check` is the required proof point for that state, and meaningful feature work should not be handed off as complete before that proof exists.
 - When meaningful work is ready and the user did not ask to keep it local, continue through PR creation, automated gates, merge, deploy, and verification instead of waiting for a separate release instruction.
-- For personal-app feature delivery, non-draft same-repo `codex/*` PRs into `master` auto-promote after `agent-policy`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, and `build` pass. `codex-review` must not block solely because OpenAI quota, credentials, or provider availability are unavailable. Manual human PR approval is not required unless the user explicitly asks for it.
+- For personal-app feature delivery, non-draft same-repo `codex/*` PRs into `master` auto-promote after `agent-policy`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and the stable `native` check pass. `codex-review` must not block solely because OpenAI quota, credentials, or provider availability are unavailable. Manual human PR approval is not required unless the user explicitly asks for it.
 - After a task branch is merged, delete it locally and on `origin`. If any branch remains unmerged, call out its status explicitly instead of leaving stale topic branches around.
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
@@ -39,24 +39,17 @@ A change is not done until all of the following are true:
 
 ## Verification Commands
 
-Use the repo scripts or local binaries directly:
+Use the smallest complete interface for the current stage:
 
-- `npm run version:check`
-- `npm run agent:policy`
-- `npm run agent:local-gate`
-- `npm run lint`
-- `npm run typecheck`
-- `.\node_modules\.bin\tsc.cmd -b`
-- `npm run test`
-- `npm run test:e2e`
-- `npm run build`
-- `npm run check`
-- `npm run benchmark:assistant -- --provider hosted --enforce` when the hosted assistant env is available
-- `npm run release:check` when you want the local release gate plus the hosted benchmark in one command
+- `npm run agent:fast` during implementation. It selects policy, changed-file lint, incremental typecheck, related Vitest, UI smoke, and native tests from the complete diff against `origin/master`.
+- `npm run check` once before push. It is the full local gate and runs independent checks concurrently without repeating TypeScript compilation.
+- `npm run test:e2e:visual -- --surface <name> --viewports <csv>` only when screenshot evidence is needed.
+- `npm run benchmark:assistant -- --provider hosted --enforce` when assistant planning changed and the hosted environment is available.
+- `npm run handoff:check` after merge and deployments.
 
-For small changes, run the most relevant checks first. Before landing broader code changes, run the full set above unless a dependency or environment blocker prevents it.
+Focused primitive commands are for diagnosis, not a second checklist around `agent:fast` or `check`.
 
-Install local git hooks with `npm run hooks:install` when setting up a checkout. The pre-commit hook runs the fast policy and lint gate; the pre-push hook runs `npm run check`. These hooks are convenience feedback only. CI and branch protection remain the authoritative gates.
+Install local hooks with `npm run hooks:install`. Pre-commit only rejects malformed staged diffs; pre-push runs `npm run check` once. If hooks are unavailable, run the full gate manually once. CI and branch protection remain authoritative.
 
 Run `npm run handoff:check` for every completed feature handoff. If the result is failing because the work is still branch-only, undeployed, or unclean, keep going through release cleanup instead of handing the task back as complete.
 
@@ -81,14 +74,16 @@ For assistant-planning changes, the release bar is higher than generic unit cove
 
 ## CI And Branch Protection
 
-- The CI workflow job names are part of the contract with GitHub branch protection. Keep them as `lint`, `typecheck`, `unit`, `e2e`, `build`, `agent-policy`, and `codex-review`.
-- `master` should stay protected with pull requests required, zero required human approvals for the personal-app flow, and those seven checks required before merge. The `codex-review` check must degrade to a passing advisory-unavailable result when OpenAI quota or service availability prevents review output.
-- `auto-promote` must stay limited to non-draft, same-repo `codex/*` pull requests targeting `master`. It should squash-merge, delete the branch, and explicitly dispatch `CI`, `Deploy to GitHub Pages`, and `Deploy Supabase Assistant Function` on `master` so GitHub token recursion rules cannot leave the merged head undeployed.
+- The CI workflow job names are part of the contract with GitHub branch protection. Keep them as `lint`, `typecheck`, `unit`, `e2e`, `build`, `agent-policy`, `native`, and `codex-review`.
+- `master` should stay protected with pull requests required, zero required human approvals, and those eight checks required before merge. The `codex-review` check must degrade to a passing advisory-unavailable result when OpenAI quota or service availability prevents review output.
+- Pull-request runs cancel older runs for the same PR and do not consume runners while draft. Frontend-only PRs skip the macOS/Windows matrix, but the stable `native` aggregator still reports success. The detector normalizes synchronized release-version fields, so the mandatory version bump alone does not make a frontend PR native. Rust, dependency, build, or native-workflow changes require both platforms and use Cargo caches.
+- `auto-promote` must stay limited to non-draft, same-repo `codex/*` pull requests targeting `master`. It records the exact tested merge-tree, squash-merges, verifies that the resulting `master` tree is identical, deletes the branch, and dispatches verification-only `CI` with the source run and PR identity. Only the verified receipt dispatches both deployment workflows.
+- Verification-only CI must fail closed for a checkout or live-`master` tree mismatch, unsuccessful or wrong source run, wrong PR, or any missing/failed required source job. Auto-promotion and receipt-gated deploy dispatch share one FIFO repository queue; dispatch titles deduplicate retries, and deploy workflows check out the verified squash SHA rather than mutable `master`. Direct pushes and ordinary manual dispatches run the full suite.
 - `codex-review` is a blocking automated review gate only when it successfully returns P0/P1 findings. Missing `OPENAI_API_KEY`, quota exhaustion, provider failures, or malformed review output should produce warnings and must not block the release cycle.
 - The non-required `assistant-benchmark` CI job now runs on pushes to `master` and blocks deployment if the live hosted benchmark thresholds fail.
 - The normal landing path is therefore a small branch and PR into `master`, not direct commits to `master` or long-lived finished changes sitting only locally.
 - If a Supabase change depends on a new migration, ship the migration rollout in the same release path as the code that depends on it. Prefer keeping `SUPABASE_DB_PASSWORD` configured so `supabase db push` can run non-interactively; when that secret is unavailable, provide an equally automatic fallback in the release workflow so production cannot end up with new hosted code but missing schema.
-- Deploy should continue to run only for `master`. The deploy workflows support both the normal successful-`CI` `workflow_run` path and the `auto-promote` direct `workflow_dispatch` path; final handoff is still gated by `npm run handoff:check` verifying successful CI, deploys, and the live bundle version for the same `origin/master` head.
+- Deploy should continue to run only for `master`. The deploy workflows support both the normal successful-`CI` `workflow_run` path and the verified-receipt `workflow_dispatch` path; final handoff is still gated by `npm run handoff:check` verifying successful CI, deploys, and the live bundle version for the same `origin/master` head.
 
 ## Testing Expectations
 
@@ -103,7 +98,11 @@ For assistant-planning changes, the release bar is higher than generic unit cove
 - User-facing features should have Playwright coverage when they change visible flows.
 - Navigation, CRUD flows, settings persistence, and assistant interactions are strong E2E candidates.
 - If an existing spec covers the journey, extend it instead of creating duplicate coverage.
-- Responsive shell or surface changes must exercise `320x568`, `390x844`, `768x1024`, and desktop widths, and should save reviewed screenshots under `test-results/mobile-ui/<version>/` when mobile behavior is part of the change.
+- `npm run test:e2e:smoke` is the rapid iteration suite; keep it around five seconds.
+- `npm run test:e2e` blocks on behavior and responsive overflow with no routine evidence screenshots.
+- `npm run test:e2e:visual -- --surface <name> --viewports <csv>` is the opt-in evidence path.
+- Every run owns a fresh server on an isolated free port. Never reuse an existing Vite process.
+- Responsive shell or surface changes must exercise `320x568`, `390x844`, `768x1024`, and desktop widths. Capture reviewed screenshots only through the visual command.
 
 ### Manual testing
 

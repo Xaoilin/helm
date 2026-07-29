@@ -1,45 +1,18 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from './support/helm-fixture';
 
-const SETTINGS_KEY = 'helm:settings';
-
-test('should not render malformed hosted planner JSON in chat', async ({ page }) => {
-  await page.addInitScript(({ settingsKey }) => {
-    localStorage.clear();
-    localStorage.setItem(settingsKey, JSON.stringify({
-      credentialSource: 'onepassword-first',
-      theme: 'dark',
-      dataRetentionDays: 90,
-      telemetry: false,
-      assistantProvider: 'hosted',
-      assistantLanguage: 'en',
-      supabaseUrl: 'https://helm.test.supabase.co',
-      supabaseAnonKey: 'helm-test-anon-key',
-    }));
-  }, {
-    settingsKey: SETTINGS_KEY,
-  });
-
-  await page.route('**/functions/v1/assistant-openai', async route => {
-    const body = route.request().postDataJSON() as { action?: string } | null;
-
-    if (body?.action === 'health') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
+test('should not render malformed hosted planner JSON in chat', async ({ page, scenario }) => {
+  await scenario('hosted-assistant', {
+    assistant: body => {
+      if (body.action === 'health') {
+        return {
           ok: true,
           provider: 'openai',
           model: 'gpt-5.4',
-        }),
-      });
-      return;
-    }
+        };
+      }
 
-    if (body?.action === 'turn') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
+      if (body.action === 'turn') {
+        return {
           ok: true,
           provider: 'openai',
           model: 'gpt-5.4',
@@ -48,23 +21,18 @@ test('should not render malformed hosted planner JSON in chat', async ({ page })
             text: '{"mode":"tool_calls","assistantMessage":"","toolCalls":[{"capability":"tasks.open_view"',
           },
           rawResponse: '{"mode":"tool_calls","assistantMessage":"","toolCalls":[{"capability":"tasks.open_view"',
-        }),
-      });
-      return;
-    }
+        };
+      }
 
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
+      return {
         ok: true,
         provider: 'openai',
         model: 'gpt-5.4',
         text: JSON.stringify({
           assistantMessage: 'This narration should never be shown for an invalid planner turn.',
         }),
-      }),
-    });
+      };
+    },
   });
 
   await page.goto('/');
@@ -81,8 +49,4 @@ test('should not render malformed hosted planner JSON in chat', async ({ page })
   await expect(assistantReply).toContainText('I had trouble interpreting the model response');
   await expect(assistantReply).not.toContainText('"mode":"tool_calls"');
 
-  await page.screenshot({
-    path: 'test-results/manual-hosted-json-guard-v0219.png',
-    fullPage: true,
-  });
 });

@@ -156,7 +156,7 @@ export function createDeepgramLiveSession({
   let isClosed = false;
   let hasOpened = false;
   let sendQueue = Promise.resolve();
-  const connectTimer = window.setTimeout(() => {
+  const connectTimer = globalThis.setTimeout(() => {
     if (hasOpened || isClosed) return;
     onError?.(new Error('Live transcript preview timed out.'));
     try {
@@ -256,7 +256,7 @@ export function createDeepgramLiveSession({
           }
         }
 
-        window.setTimeout(() => {
+        globalThis.setTimeout(() => {
           if (socket.readyState === WebSocket.CLOSED) return;
           try {
             socket.close();

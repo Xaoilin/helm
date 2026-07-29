@@ -475,6 +475,11 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const shownAdhanKeysRef = useRef(new Set<string>());
   const [reminderListenerReady, setReminderListenerReady] = useState(false);
 
+  useEffect(() => () => {
+    // Invalidate in-flight schedule requests before React tears down the test/app tree.
+    refreshSequenceRef.current += 1;
+  }, []);
+
   const today = toLocalDateStr(now);
   const prayerEnabled = settingsCtx.settings.prayerEnabled !== false;
   const reminderEnabled = settingsCtx.settings.prayerReminderEnabled !== false;

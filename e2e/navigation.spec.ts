@@ -1,7 +1,8 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from './support/helm-fixture';
 
 test.describe('Navigation', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, scenario }) => {
+    await scenario('empty');
     await page.goto('/');
     await page.waitForSelector('.sidebar');
   });
@@ -10,7 +11,7 @@ test.describe('Navigation', () => {
     await expect(page.locator('text=Good morning').or(page.locator('text=Good afternoon').or(page.locator('text=Good evening')))).toBeVisible();
   });
 
-  test('should navigate to key surfaces via sidebar', async ({ page }) => {
+  test('@smoke should navigate to key surfaces via sidebar', async ({ page }) => {
     // Test a subset of surfaces to keep test fast and stable
     await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
     await expect(page.locator('h1:has-text("Tasks")')).toBeVisible();

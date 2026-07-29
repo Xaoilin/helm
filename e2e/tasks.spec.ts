@@ -1,11 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from './support/helm-fixture';
 
 test.describe('Tasks', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, scenario }) => {
+    await scenario('empty');
     await page.goto('/');
-    // Clear localStorage for clean state
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
     await page.waitForSelector('.sidebar');
     await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
   });
@@ -14,7 +12,7 @@ test.describe('Tasks', () => {
     await expect(page.locator('text=No tasks yet')).toBeVisible();
   });
 
-  test('should add a new task', async ({ page }) => {
+  test('@smoke should add a new task', async ({ page }) => {
     // Click add task button
     await page.locator('button:has-text("Add"), button:has-text("New Task"), button:has-text("+ Add")').first().click();
 
