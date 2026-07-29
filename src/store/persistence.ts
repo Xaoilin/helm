@@ -17,9 +17,25 @@ import {
 } from './supabase';
 import { logWarn } from '../services/logger';
 import { getSharedStoreKey, SHARED_STORE_KEYS } from './storeKeys';
+import {
+  PROJECT_DEVICE_BINDINGS_STORE_KEY,
+  PROJECT_PENDING_LEGACY_PATHS_STORE_KEY,
+  migrateLegacyProjectDeviceBindings,
+  normalizePendingLegacyProjectPaths,
+  normalizeProjectDeviceBindings,
+  normalizeProjectRecords,
+  serializeSharedProjects,
+} from './projectPersistence';
 
 const NAMESPACE = 'helm';
 const META_PREFIX = `${NAMESPACE}:meta:`;
+const DEVICE_STORE_KEYS = new Set<string>([
+  PROJECT_DEVICE_BINDINGS_STORE_KEY,
+  PROJECT_PENDING_LEGACY_PATHS_STORE_KEY,
+]);
+type ProjectDeviceStoreKey =
+  | typeof PROJECT_DEVICE_BINDINGS_STORE_KEY
+  | typeof PROJECT_PENDING_LEGACY_PATHS_STORE_KEY;
 
 let tauriAvailable: boolean | null = null;
 let remoteFlushHandlersRegistered = false;
@@ -196,6 +212,59 @@ function getMetaKey(key: string): string {
   return `${META_PREFIX}${key}`;
 }
 
+function getDeviceDataKey(key: string): string {
+  return `${NAMESPACE}:device:${key}`;
+}
+
+function getDeviceTauriKey(key: string): string {
+  return `device-${key}`;
+}
+
+function assertSharedStoreKeyIsNotDeviceOnly(key: string): void {
+  if (DEVICE_STORE_KEYS.has(key)) {
+    throw new Error(`${key} is device-only. Use loadDeviceStore/saveDeviceStore.`);
+  }
+}
+
+async function prepareSharedStoreValue(key: string, value: unknown): Promise<unknown> {
+  if (key !== 'projects') return value;
+
+  const now = new Date().toISOString();
+  const projects = normalizeProjectRecords(value, now);
+  const [storedBindings, storedPendingPaths] = await Promise.all([
+    loadDeviceStore<unknown>(PROJECT_DEVICE_BINDINGS_STORE_KEY),
+    loadDeviceStore<unknown>(PROJECT_PENDING_LEGACY_PATHS_STORE_KEY),
+  ]);
+  const existingBindings = normalizeProjectDeviceBindings(storedBindings, now);
+  const existingPendingPaths = normalizePendingLegacyProjectPaths(storedPendingPaths, now);
+  const migration = await migrateLegacyProjectDeviceBindings(
+    value,
+    projects,
+    existingBindings,
+    existingPendingPaths,
+    async projectRoot => {
+      if (!(await isTauri())) return null;
+      try {
+        const canonicalRoot = await invoke<string>('canonicalize_project_path', { path: projectRoot });
+        return typeof canonicalRoot === 'string' && canonicalRoot.trim()
+          ? canonicalRoot.trim()
+          : null;
+      } catch {
+        return null;
+      }
+    },
+    now,
+  );
+  if (JSON.stringify(existingBindings) !== JSON.stringify(migration.bindings)) {
+    await saveDeviceStore(PROJECT_DEVICE_BINDINGS_STORE_KEY, migration.bindings);
+  }
+  if (JSON.stringify(existingPendingPaths) !== JSON.stringify(migration.pendingPaths)) {
+    await saveDeviceStore(PROJECT_PENDING_LEGACY_PATHS_STORE_KEY, migration.pendingPaths);
+  }
+
+  return serializeSharedProjects(projects);
+}
+
 function readLocalCache<T>(key: string): LocalCacheSnapshot<T> {
   const raw = localStorage.getItem(getDataKey(key));
   if (raw === null) {
@@ -345,6 +414,7 @@ const SYNC_DRIFT_GROUPS: SyncDriftGroupDefinition[] = [
   { groupId: 'integrations', label: 'Integrations', description: 'Integration connection status and metadata.', keys: ['integrations'] },
   { groupId: 'conversations', label: 'Chat conversations', description: 'Saved Lina chat threads.', keys: ['conversations'] },
   { groupId: 'calendar', label: 'Calendar', description: 'Calendar accounts, sources, and events mirrored from connected providers.', keys: ['calendarAccounts', 'calendarSources', 'calendarEvents'], policy: 'external_cache' },
+  { groupId: 'capture', label: 'Captured items', description: 'Inbox captures awaiting review.', keys: ['captureItems'] },
   { groupId: 'clock', label: 'Clock workspace', description: 'Timers and stopwatches.', keys: ['clock'] },
   { groupId: 'trips', label: 'Trips', description: 'Trips, legs, itinerary, bookings, and trip budget data.', keys: ['trips', 'tripLegs', 'tripItineraryItems', 'tripBookings', 'tripBudgetEntries'] },
   { groupId: 'projects', label: 'Projects', description: 'Project portfolio and project wiki pages.', keys: ['projects', 'projectPages'] },
@@ -444,6 +514,10 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   return stableStringify(a) === stableStringify(b);
 }
 
+function sanitizeProjectValueForSyncInspection(value: unknown): unknown {
+  return serializeSharedProjects(normalizeProjectRecords(value, '1970-01-01T00:00:00.000Z'));
+}
+
 function isIgnoredMetadataPath(key: string, path: string[]): boolean {
   if (SYSTEM_METADATA_STORE_KEYS.has(key)) return true;
 
@@ -470,8 +544,12 @@ function isIgnoredMetadataPath(key: string, path: string[]): boolean {
 function normalizeSyncDriftValue(key: string, value: unknown, path: string[] = []): unknown {
   if (isIgnoredMetadataPath(key, path)) return OMIT_SYNC_FIELD;
 
-  if (Array.isArray(value)) {
-    const normalizedItems = value
+  const inspectedValue = key === 'projects' && path.length === 0
+    ? sanitizeProjectValueForSyncInspection(value)
+    : value;
+
+  if (Array.isArray(inspectedValue)) {
+    const normalizedItems = inspectedValue
       .map((item, index) => normalizeSyncDriftValue(key, item, [...path, String(index)]))
       .filter(item => item !== OMIT_SYNC_FIELD);
 
@@ -482,8 +560,8 @@ function normalizeSyncDriftValue(key: string, value: unknown, path: string[] = [
     return normalizedItems;
   }
 
-  if (isRecord(value)) {
-    const normalizedEntries = Object.entries(value)
+  if (isRecord(inspectedValue)) {
+    const normalizedEntries = Object.entries(inspectedValue)
       .map(([childKey, childValue]) => [
         childKey,
         normalizeSyncDriftValue(key, childValue, [...path, childKey]),
@@ -493,7 +571,7 @@ function normalizeSyncDriftValue(key: string, value: unknown, path: string[] = [
     return Object.fromEntries(normalizedEntries);
   }
 
-  return value;
+  return inspectedValue;
 }
 
 function byteSize(value: unknown): number {
@@ -843,6 +921,12 @@ function buildValueDiff(entry: SyncDriftKeyScan): SyncDriftDiff {
     changed: [],
     unchangedCount: 0,
   };
+  const localValue = entry.key === 'projects' && entry.local.hasValue
+    ? sanitizeProjectValueForSyncInspection(entry.local.value)
+    : entry.local.value;
+  const remoteValue = entry.key === 'projects' && entry.remote.hasValue
+    ? sanitizeProjectValueForSyncInspection(entry.remote.value)
+    : entry.remote.value;
 
   if (entry.local.parseError) {
     diff.changed.push(diffItem(entry, entry.key, entry.label, 'This device has unreadable JSON.', {
@@ -854,12 +938,12 @@ function buildValueDiff(entry: SyncDriftKeyScan): SyncDriftDiff {
   }
 
   if (entry.local.hasValue && !entry.remote.hasValue) {
-    diff.localOnly.push(...collectionItems(entry, entry.local.value, 'Only on this device.'));
+    diff.localOnly.push(...collectionItems(entry, localValue, 'Only on this device.'));
     return diff;
   }
 
   if (!entry.local.hasValue && entry.remote.hasValue) {
-    diff.remoteOnly.push(...collectionItems(entry, entry.remote.value, 'Only in database.'));
+    diff.remoteOnly.push(...collectionItems(entry, remoteValue, 'Only in database.'));
     return diff;
   }
 
@@ -872,7 +956,7 @@ function buildValueDiff(entry: SyncDriftKeyScan): SyncDriftDiff {
     return diff;
   }
 
-  const fieldChanges = collectFieldChanges(entry.key, entry.local.value, entry.remote.value);
+  const fieldChanges = collectFieldChanges(entry.key, localValue, remoteValue);
   fieldChanges.forEach(change => {
     const item = fieldChangeToDiffItem(entry, change);
     if (item.impact === 'system_metadata') return;
@@ -975,8 +1059,11 @@ function buildSideSummary(
   entries.forEach(entry => {
     const value = entry[side];
     if (!value.hasValue) return;
-    values[entry.key] = value.value;
-    sizeBytes += value.sizeBytes;
+    const inspectedValue = entry.key === 'projects'
+      ? sanitizeProjectValueForSyncInspection(value.value)
+      : value.value;
+    values[entry.key] = inspectedValue;
+    sizeBytes += byteSize(inspectedValue);
     if (side === 'local') {
       sources.add((value as LocalDriftValue).source || 'none');
     } else {
@@ -1135,11 +1222,12 @@ async function autoResolveSafeSyncDrift(scan: SyncDriftGroupScan): Promise<void>
 
   for (const entry of scan.entries) {
     if (!entry.local.hasValue) continue;
-    const success = await saveRemote(NAMESPACE, entry.key, entry.local.value);
+    const sharedValue = await prepareSharedStoreValue(entry.key, entry.local.value);
+    const success = await saveRemote(NAMESPACE, entry.key, sharedValue);
     if (!success) {
       throw new Error(`Supabase import write failed for ${entry.key}.`);
     }
-    lastKnownRemoteJson.set(entry.key, JSON.stringify(entry.local.value));
+    lastKnownRemoteJson.set(entry.key, JSON.stringify(sharedValue));
     rememberRemoteWrite(entry.key, null);
   }
 
@@ -1421,13 +1509,14 @@ export async function importLocalStoreCandidate(
     return { key, imported: false, cleared: false, reason: 'remote_write_failed' };
   }
 
-  const success = await saveRemote(NAMESPACE, key, local.value);
+  const sharedValue = await prepareSharedStoreValue(key, local.value);
+  const success = await saveRemote(NAMESPACE, key, sharedValue);
   if (!success) {
     rememberRemoteWrite(key, 'Supabase import write failed.');
     return { key, imported: false, cleared: false, reason: 'remote_write_failed' };
   }
 
-  lastKnownRemoteJson.set(key, JSON.stringify(local.value));
+  lastKnownRemoteJson.set(key, JSON.stringify(sharedValue));
   rememberRemoteWrite(key, null);
   await clearLocalStoreCopy(key);
   return { key, imported: true, cleared: true, reason: 'imported' };
@@ -1538,11 +1627,12 @@ export async function resolveSyncDriftCandidate(
 
       for (const entry of scan.entries) {
         if (!entry.local.hasValue) continue;
-        const success = await saveRemote(NAMESPACE, entry.key, entry.local.value);
+        const sharedValue = await prepareSharedStoreValue(entry.key, entry.local.value);
+        const success = await saveRemote(NAMESPACE, entry.key, sharedValue);
         if (!success) {
           throw new Error(`Supabase write failed for ${entry.label}.`);
         }
-        lastKnownRemoteJson.set(entry.key, JSON.stringify(entry.local.value));
+        lastKnownRemoteJson.set(entry.key, JSON.stringify(sharedValue));
         rememberRemoteWrite(entry.key, null);
         savedKeys.push(entry.key);
       }
@@ -1591,6 +1681,8 @@ export async function resolveSyncDriftCandidate(
  *   Not authenticated: Tauri → localStorage
  */
 export async function loadStore<T>(key: string): Promise<T | null> {
+  assertSharedStoreKeyIsNotDeviceOnly(key);
+
   if (isSupabaseReady() && isAuthenticated()) {
     try {
       const remote = await loadRemote<T>(NAMESPACE, key);
@@ -1638,7 +1730,10 @@ export async function loadStore<T>(key: string): Promise<T | null> {
  * write to the local-first Tauri/localStorage store.
  */
 export async function saveStore<T>(key: string, value: T): Promise<void> {
-  const json = JSON.stringify(value);
+  assertSharedStoreKeyIsNotDeviceOnly(key);
+
+  const sharedValue = await prepareSharedStoreValue(key, value) as T;
+  const json = JSON.stringify(sharedValue);
   const updatedAt = new Date().toISOString();
   const authenticated = isSupabaseReady() && isAuthenticated();
 
@@ -1650,7 +1745,7 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
 
     if (suppressNextAuthenticatedSaveJson.has(key)) {
       const loadedJson = suppressNextAuthenticatedSaveJson.get(key);
-      if (loadedJson === json || (loadedJson === null && isInitialEmptyStoreValue(value))) {
+      if (loadedJson === json || (loadedJson === null && isInitialEmptyStoreValue(sharedValue))) {
         suppressNextAuthenticatedSaveJson.delete(key);
         rememberSuppressedInitialWrite(key);
         return;
@@ -1668,7 +1763,7 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
 
     ensureRemoteFlushHandlers();
     ensureRemoteStoreSubscription();
-    queueRemoteWrite(NAMESPACE, key, value, {
+    queueRemoteWrite(NAMESPACE, key, sharedValue, {
       updatedAt,
       onSettled: ({ success }) => {
         if (!success) {
@@ -1704,4 +1799,49 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
     logWarn('Persistence', `Local cache write failed: ${message}`);
     throw error;
   }
+}
+
+/**
+ * Device-only stores deliberately bypass Supabase, shared imports, sync-drift
+ * scans, and the shared local cache namespace.
+ */
+export async function loadDeviceStore<T>(
+  key: ProjectDeviceStoreKey,
+): Promise<T | null> {
+  try {
+    if (await isTauri()) {
+      const raw = await invoke<string>('read_store', { key: getDeviceTauriKey(key) });
+      const parsed = JSON.parse(raw) as T | null;
+      if (parsed !== null) return parsed;
+    }
+  } catch {
+    logWarn('Persistence', `Tauri device-only read failed for ${key}`);
+  }
+
+  const raw = localStorage.getItem(getDeviceDataKey(key));
+  if (raw === null) return null;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    logWarn('Persistence', `Device-only cache JSON parse failed for ${key}`);
+    return null;
+  }
+}
+
+export async function saveDeviceStore<T>(
+  key: ProjectDeviceStoreKey,
+  value: T,
+): Promise<void> {
+  const json = JSON.stringify(value);
+
+  try {
+    if (await isTauri()) {
+      await invoke('write_store', { key: getDeviceTauriKey(key), value: json });
+    }
+  } catch {
+    logWarn('Persistence', `Tauri device-only write failed for ${key}`);
+  }
+
+  localStorage.setItem(getDeviceDataKey(key), json);
 }

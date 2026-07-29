@@ -2,6 +2,9 @@ import '@testing-library/jest-dom/vitest';
 
 // Mock the Tauri API
 vi.mock('@tauri-apps/api/core', () => ({
+  Channel: class MockChannel<T> {
+    onmessage?: (message: T) => void;
+  },
   invoke: vi.fn().mockRejectedValue(new Error('Tauri not available')),
 }));
 

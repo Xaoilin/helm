@@ -160,6 +160,47 @@ export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
   }
 }
 
+export function evaluateNativeStoreAllowlist(rootDir) {
+  const failures = []
+  const passes = []
+  const storeKeysSource = readFileSync(resolve(rootDir, 'src', 'store', 'storeKeys.ts'), 'utf8')
+  const projectPersistenceSource = readFileSync(
+    resolve(rootDir, 'src', 'store', 'projectPersistence.ts'),
+    'utf8',
+  )
+  const commandsSource = readFileSync(resolve(rootDir, 'src-tauri', 'src', 'commands.rs'), 'utf8')
+
+  const sharedKeys = [...storeKeysSource.matchAll(/\{\s*key:\s*'([^']+)'/gu)]
+    .map((match) => match[1])
+  const deviceKeys = [...projectPersistenceSource.matchAll(
+    /export const PROJECT_[A-Z_]+_STORE_KEY\s*=\s*'([^']+)'/gu,
+  )].map((match) => `device-${match[1]}`)
+  const allowlistBody = commandsSource.match(
+    /const ALLOWED_STORE_KEYS:\s*&\[&str\]\s*=\s*&\[(.*?)\];/su,
+  )?.[1] ?? ''
+  const allowedKeys = [...allowlistBody.matchAll(/"([^"]+)"/gu)].map((match) => match[1])
+  const expectedKeys = [...new Set([...sharedKeys, ...deviceKeys, 'workspaces'])].sort()
+  const actualKeys = [...new Set(allowedKeys)].sort()
+  const missing = expectedKeys.filter((key) => !actualKeys.includes(key))
+  const unexpected = actualKeys.filter((key) => !expectedKeys.includes(key))
+
+  if (missing.length > 0) {
+    failures.push(`Native store allowlist is missing: ${missing.join(', ')}.`)
+  }
+  if (unexpected.length > 0) {
+    failures.push(`Native store allowlist has undeclared keys: ${unexpected.join(', ')}.`)
+  }
+  if (missing.length === 0 && unexpected.length === 0) {
+    passes.push('Native store allowlist matches every declared shared, device, and legacy store key.')
+  }
+
+  return {
+    failures,
+    passes,
+    ok: failures.length === 0,
+  }
+}
+
 export function evaluateAgentPolicy(rootDir) {
   const failures = []
   const passes = []
@@ -195,6 +236,10 @@ export function evaluateAgentPolicy(rootDir) {
     failures.push(...deployResult.failures)
     passes.push(...deployResult.passes)
   }
+
+  const nativeStoreResult = evaluateNativeStoreAllowlist(rootDir)
+  failures.push(...nativeStoreResult.failures)
+  passes.push(...nativeStoreResult.passes)
 
   return {
     failures,

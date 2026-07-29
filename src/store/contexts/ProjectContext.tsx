@@ -1,73 +1,53 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
-import type { Project, ProjectPage, ProjectStatus } from '../../types/domain';
-import { loadStore, saveStore } from '../persistence';
-
-interface LegacyWorkspace {
-  id?: string;
-  name?: string;
-  path?: string;
-  description?: string;
-  isPrimary?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
+import type {
+  Project,
+  ProjectDeviceBinding,
+  ProjectPage,
+  ProjectRunProfile,
+} from '../../types/domain';
+import {
+  loadDeviceStore,
+  loadStore,
+  saveDeviceStore,
+  saveStore,
+} from '../persistence';
+import { canonicalizeProjectPath } from '../../services/projectPaths';
+import {
+  PROJECT_DEVICE_BINDINGS_STORE_KEY,
+  PROJECT_PENDING_LEGACY_PATHS_STORE_KEY,
+  isAbsoluteProjectRoot,
+  migrateLegacyProjectDeviceBindings,
+  migrateLegacyWorkspaceRecord,
+  normalizePendingLegacyProjectPaths,
+  normalizeProjectDeviceBindings,
+  normalizeProjectRecord,
+  normalizeProjectRecords,
+  serializeSharedProjects,
+  upsertProjectDeviceRoot,
+  upsertProjectRunProfile,
+  type LegacyWorkspaceRecord,
+  type PendingLegacyProjectPath,
+} from '../projectPersistence';
 
 export interface ProjectContextValue {
   projects: Project[];
+  projectDeviceBindings: ProjectDeviceBinding[];
   projectPages: ProjectPage[];
   loaded: boolean;
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProject: (id: string, updates: Partial<Project>) => void;
   removeProject: (id: string) => void;
+  setProjectDeviceRoot: (catalogKey: string, projectRoot: string) => boolean;
+  clearProjectDeviceBinding: (catalogKey: string) => void;
+  approveProjectRunProfile: (catalogKey: string, profile: ProjectRunProfile) => void;
+  removeProjectRunProfile: (catalogKey: string, profileId: string) => void;
   addProjectPage: (page: Omit<ProjectPage, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProjectPage: (id: string, updates: Partial<ProjectPage>) => void;
   removeProjectPage: (id: string) => void;
 }
 
 const ProjectCtx = createContext<ProjectContextValue | null>(null);
-
-const VALID_PROJECT_STATUSES = new Set<ProjectStatus>(['planning', 'active', 'blocked', 'completed', 'archived']);
-
-function normalizeTags(tags: string[] | undefined): string[] {
-  return [...new Set((tags || []).map(tag => tag.trim()).filter(Boolean))];
-}
-
-function normalizeProject(project: Project, fallbackName: string): Project {
-  const createdAt = typeof project.createdAt === 'string' && project.createdAt ? project.createdAt : new Date().toISOString();
-  const updatedAt = typeof project.updatedAt === 'string' && project.updatedAt ? project.updatedAt : createdAt;
-  const status = VALID_PROJECT_STATUSES.has(project.status) ? project.status : 'active';
-
-  return {
-    id: project.id || uuid(),
-    name: project.name?.trim() || fallbackName,
-    localPath: project.localPath?.trim() || undefined,
-    summary: project.summary?.trim() || '',
-    status,
-    tags: normalizeTags(project.tags),
-    isPinned: project.isPinned === true,
-    createdAt,
-    updatedAt,
-  };
-}
-
-function migrateLegacyWorkspace(workspace: LegacyWorkspace, index: number): Project {
-  const fallbackName = `Project ${index + 1}`;
-  const createdAt = workspace.createdAt || new Date().toISOString();
-  const updatedAt = workspace.updatedAt || createdAt;
-
-  return {
-    id: workspace.id || uuid(),
-    name: workspace.name?.trim() || fallbackName,
-    localPath: workspace.path?.trim() || undefined,
-    summary: workspace.description?.trim() || '',
-    status: 'active',
-    tags: [],
-    isPinned: workspace.isPrimary === true,
-    createdAt,
-    updatedAt,
-  };
-}
 
 function buildOverviewContent(project: Project): string {
   const intro = project.summary
@@ -137,19 +117,40 @@ export function useProjectContext(): ProjectContextValue {
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectDeviceBindings, setProjectDeviceBindings] = useState<ProjectDeviceBinding[]>([]);
+  const [pendingLegacyProjectPaths, setPendingLegacyProjectPaths] = useState<PendingLegacyProjectPath[]>([]);
   const [projectPages, setProjectPages] = useState<ProjectPage[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const storedProjects = await loadStore<Project[]>('projects');
-      const nextProjects = storedProjects && storedProjects.length > 0
-        ? storedProjects.map((project, index) => normalizeProject(project, `Project ${index + 1}`))
-        : ((await loadStore<LegacyWorkspace[]>('workspaces')) || []).map(migrateLegacyWorkspace);
-      const storedPages = await loadStore<ProjectPage[]>('projectPages');
+      const now = new Date().toISOString();
+      const [storedProjects, storedPages, storedBindings, storedPendingPaths, storedWorkspaces] = await Promise.all([
+        loadStore<unknown>('projects'),
+        loadStore<ProjectPage[]>('projectPages'),
+        loadDeviceStore<unknown>(PROJECT_DEVICE_BINDINGS_STORE_KEY),
+        loadDeviceStore<unknown>(PROJECT_PENDING_LEGACY_PATHS_STORE_KEY),
+        loadStore<LegacyWorkspaceRecord[]>('workspaces'),
+      ]);
+      const sourceRecords = Array.isArray(storedProjects) && storedProjects.length > 0
+        ? storedProjects
+        : (storedWorkspaces || []).map((workspace, index) => migrateLegacyWorkspaceRecord(workspace, index, now));
+      const nextProjects = normalizeProjectRecords(sourceRecords, now);
+      const existingBindings = normalizeProjectDeviceBindings(storedBindings, now);
+      const existingPendingPaths = normalizePendingLegacyProjectPaths(storedPendingPaths, now);
+      const migration = await migrateLegacyProjectDeviceBindings(
+        sourceRecords,
+        nextProjects,
+        existingBindings,
+        existingPendingPaths,
+        canonicalizeProjectPath,
+        now,
+      );
       const nextPages = ensureOverviewPages(nextProjects, storedPages || []);
 
       setProjects(nextProjects);
+      setProjectDeviceBindings(migration.bindings);
+      setPendingLegacyProjectPaths(migration.pendingPaths);
       setProjectPages(nextPages);
       setLoaded(true);
     })();
@@ -157,9 +158,21 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loaded) {
-      void saveStore('projects', projects);
+      void saveStore('projects', serializeSharedProjects(projects));
     }
   }, [projects, loaded]);
+
+  useEffect(() => {
+    if (loaded) {
+      void saveDeviceStore(PROJECT_DEVICE_BINDINGS_STORE_KEY, projectDeviceBindings);
+    }
+  }, [projectDeviceBindings, loaded]);
+
+  useEffect(() => {
+    if (loaded) {
+      void saveDeviceStore(PROJECT_PENDING_LEGACY_PATHS_STORE_KEY, pendingLegacyProjectPaths);
+    }
+  }, [loaded, pendingLegacyProjectPaths]);
 
   useEffect(() => {
     if (loaded) {
@@ -170,13 +183,24 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const addProject = useCallback((project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): string => {
     const id = uuid();
     const now = new Date().toISOString();
-    const nextProject = normalizeProject({
+    const nextProject = normalizeProjectRecord({
       ...project,
       id,
       createdAt: now,
       updatedAt: now,
     }, 'New Project');
 
+    const legacyPath = project.localPath?.trim();
+    const catalogKey = nextProject.catalogKey;
+    if (legacyPath && catalogKey) {
+      setProjectDeviceBindings(prev => upsertProjectDeviceRoot(
+        prev,
+        catalogKey,
+        legacyPath,
+        'user',
+        now,
+      ));
+    }
     setProjects(prev => [nextProject, ...prev]);
     setProjectPages(prev => [buildOverviewPage(nextProject), ...prev]);
     return id;
@@ -184,21 +208,67 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   const updateProject = useCallback((id: string, updates: Partial<Project>) => {
     const updatedAt = new Date().toISOString();
+    const existing = projects.find(project => project.id === id);
+    const existingCatalogKey = existing?.catalogKey;
+    if (existingCatalogKey && Object.prototype.hasOwnProperty.call(updates, 'localPath')) {
+      const nextPath = updates.localPath?.trim() || '';
+      setProjectDeviceBindings(prev => (
+        isAbsoluteProjectRoot(nextPath)
+          ? upsertProjectDeviceRoot(prev, existingCatalogKey, nextPath, 'user', updatedAt)
+          : prev.filter(binding => binding.catalogKey !== existingCatalogKey)
+      ));
+    }
+
     setProjects(prev => prev.map(project => (
       project.id === id
-        ? normalizeProject({
+        ? normalizeProjectRecord({
           ...project,
           ...updates,
           id,
+          catalogKey: project.catalogKey,
+          localPath: undefined,
           updatedAt,
         }, project.name)
         : project
     )));
-  }, []);
+  }, [projects]);
 
   const removeProject = useCallback((id: string) => {
+    const catalogKey = projects.find(project => project.id === id)?.catalogKey;
+    if (catalogKey) {
+      setProjectDeviceBindings(prev => prev.filter(binding => binding.catalogKey !== catalogKey));
+      setPendingLegacyProjectPaths(prev => prev.filter(pending => pending.catalogKey !== catalogKey));
+    }
     setProjects(prev => prev.filter(project => project.id !== id));
     setProjectPages(prev => prev.filter(page => page.projectId !== id));
+  }, [projects]);
+
+  const setProjectDeviceRoot = useCallback((catalogKey: string, projectRoot: string): boolean => {
+    if (!catalogKey.trim() || !isAbsoluteProjectRoot(projectRoot)) return false;
+    setProjectDeviceBindings(prev => upsertProjectDeviceRoot(prev, catalogKey, projectRoot));
+    setPendingLegacyProjectPaths(prev => prev.filter(pending => pending.catalogKey !== catalogKey));
+    return true;
+  }, []);
+
+  const clearProjectDeviceBinding = useCallback((catalogKey: string) => {
+    setProjectDeviceBindings(prev => prev.filter(binding => binding.catalogKey !== catalogKey));
+    setPendingLegacyProjectPaths(prev => prev.filter(pending => pending.catalogKey !== catalogKey));
+  }, []);
+
+  const approveProjectRunProfile = useCallback((catalogKey: string, profile: ProjectRunProfile) => {
+    setProjectDeviceBindings(prev => upsertProjectRunProfile(prev, catalogKey, profile));
+  }, []);
+
+  const removeProjectRunProfile = useCallback((catalogKey: string, profileId: string) => {
+    setProjectDeviceBindings(prev => prev.map(binding => (
+      binding.catalogKey === catalogKey
+        ? {
+          ...binding,
+          updatedAt: new Date().toISOString(),
+          runProfiles: binding.runProfiles.filter(profile => profile.profileId !== profileId),
+        }
+        : binding
+    )));
   }, []);
 
   const addProjectPage = useCallback((page: Omit<ProjectPage, 'id' | 'createdAt' | 'updatedAt'>): string => {
@@ -243,11 +313,16 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   return (
     <ProjectCtx.Provider value={{
       projects,
+      projectDeviceBindings,
       projectPages,
       loaded,
       addProject,
       updateProject,
       removeProject,
+      setProjectDeviceRoot,
+      clearProjectDeviceBinding,
+      approveProjectRunProfile,
+      removeProjectRunProfile,
       addProjectPage,
       updateProjectPage,
       removeProjectPage,

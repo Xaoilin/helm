@@ -34,6 +34,18 @@ export async function pickProjectDirectory(): Promise<string | null> {
   }
 }
 
+export async function canonicalizeProjectPath(path: string): Promise<string | null> {
+  if (!(await isDesktopPathSupportAvailable())) return null;
+
+  try {
+    const canonical = await invoke<string>('canonicalize_project_path', { path });
+    return typeof canonical === 'string' && canonical.trim() ? canonical.trim() : null;
+  } catch (error) {
+    logError('ProjectPaths', error);
+    return null;
+  }
+}
+
 export async function openProjectPath(path: string): Promise<void> {
   if (!(await isDesktopPathSupportAvailable())) {
     throw new Error('Opening local project paths is only available in the desktop app.');

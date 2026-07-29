@@ -206,6 +206,37 @@ describe('AppContext - Settings', () => {
 describe('AppContext - Projects', () => {
   beforeEach(() => { localStorage.clear(); });
 
+  it('does not adopt a legacy project localPath when native canonicalization is unavailable', async () => {
+    localStorage.setItem('helm:projects', JSON.stringify([{
+      id: 'legacy-project',
+      name: 'Legacy Project',
+      localPath: '/device/legacy-project',
+      summary: '',
+      status: 'active',
+      tags: [],
+      isPinned: false,
+      createdAt: '2026-07-29T12:00:00.000Z',
+      updatedAt: '2026-07-29T12:00:00.000Z',
+    }]));
+
+    const r = await renderWithApp();
+
+    expect(r.api!.projects[0]).toMatchObject({
+      id: 'legacy-project',
+      catalogKey: 'custom:legacy-project',
+    });
+    expect(r.api!.projects[0]).not.toHaveProperty('localPath');
+
+    await waitFor(() => {
+      const shared = localStorage.getItem('helm:projects') || '';
+      const device = localStorage.getItem('helm:device:projectDeviceBindings') || '';
+      const pending = localStorage.getItem('helm:device:projectPendingLegacyPaths') || '';
+      expect(shared).not.toContain('/device/legacy-project');
+      expect(device).not.toContain('/device/legacy-project');
+      expect(pending).toContain('/device/legacy-project');
+    });
+  });
+
   it('should add, update, and remove projects', async () => {
     const r = await renderWithApp();
     let projectId = '';

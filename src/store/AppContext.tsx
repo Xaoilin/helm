@@ -3,7 +3,7 @@ import type {
   Surface, ChatConversation,
   CalendarAccount, CalendarSource, CalendarEvent,
   Trip, TripBooking, TripBookingInput, TripBudgetEntry, TripBudgetEntryInput, TripItineraryItem, TripLeg,
-  Project, ProjectPage, Integration, Settings,
+  Project, ProjectDeviceBinding, ProjectPage, ProjectRunProfile, Integration, Settings,
   Task, GamificationProfile,
   DashboardFocusState,
   KnowledgeTopic, KnowledgeEntry,
@@ -65,6 +65,7 @@ interface AppContextAPI {
   tripBookings: TripBooking[];
   tripBudgetEntries: TripBudgetEntry[];
   projects: Project[];
+  projectDeviceBindings: ProjectDeviceBinding[];
   projectPages: ProjectPage[];
   tasks: Task[];
   knowledgeTopics: KnowledgeTopic[];
@@ -129,6 +130,10 @@ interface AppContextAPI {
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProject: (id: string, updates: Partial<Project>) => void;
   removeProject: (id: string) => void;
+  setProjectDeviceRoot: (catalogKey: string, projectRoot: string) => boolean;
+  clearProjectDeviceBinding: (catalogKey: string) => void;
+  approveProjectRunProfile: (catalogKey: string, profile: ProjectRunProfile) => void;
+  removeProjectRunProfile: (catalogKey: string, profileId: string) => void;
   addProjectPage: (page: Omit<ProjectPage, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProjectPage: (id: string, updates: Partial<ProjectPage>) => void;
   removeProjectPage: (id: string) => void;
@@ -550,6 +555,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     tripBookings: tripCtx.tripBookings,
     tripBudgetEntries: tripCtx.tripBudgetEntries,
     projects: projectCtx.projects,
+    projectDeviceBindings: projectCtx.projectDeviceBindings,
     projectPages: projectCtx.projectPages,
     tasks: taskCtx.tasks,
     knowledgeTopics: knowledge.knowledgeTopics,
@@ -612,6 +618,10 @@ function ShellProvider({ children }: { children: ReactNode }) {
     addProject: projectCtx.addProject,
     updateProject: projectCtx.updateProject,
     removeProject,
+    setProjectDeviceRoot: projectCtx.setProjectDeviceRoot,
+    clearProjectDeviceBinding: projectCtx.clearProjectDeviceBinding,
+    approveProjectRunProfile: projectCtx.approveProjectRunProfile,
+    removeProjectRunProfile: projectCtx.removeProjectRunProfile,
     addProjectPage: projectCtx.addProjectPage,
     updateProjectPage: projectCtx.updateProjectPage,
     removeProjectPage: projectCtx.removeProjectPage,

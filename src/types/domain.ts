@@ -95,10 +95,76 @@ export interface CalendarEvent {
 // ── Projects ──
 export type ProjectStatus = 'planning' | 'active' | 'blocked' | 'completed' | 'archived';
 export type ProjectWorkflowState = 'backlog' | 'next_up' | 'in_progress' | 'blocked';
+export type ProjectKind =
+  | 'web_app'
+  | 'desktop_app'
+  | 'mobile_app'
+  | 'cli'
+  | 'service'
+  | 'library'
+  | 'automation'
+  | 'hardware'
+  | 'research'
+  | 'other';
+export type ProjectLinkKind = 'repository' | 'deployment' | 'documentation' | 'demo' | 'other';
+
+export interface ProjectLink {
+  id: string;
+  kind: ProjectLinkKind;
+  label: string;
+  url: string;
+}
+
+/**
+ * Setup guidance is intentionally display-only. It must never be passed to a
+ * shell or treated as approval to run the displayed code.
+ */
+export interface ProjectSetupStep {
+  id: string;
+  title: string;
+  description: string;
+  displayCode?: string;
+}
+
+/**
+ * A shared run recipe is a portable reference. Device roots and approvals live
+ * in ProjectDeviceBinding instead of the synced Project record.
+ */
+export interface ProjectRunRecipe {
+  id: string;
+  label: string;
+  displayCommand: string;
+  executable: string;
+  args: string[];
+  workingDirectory?: string;
+  environment?: Record<string, string>;
+  localUrl?: string;
+  prerequisites?: string[];
+  mode?: 'service' | 'one_shot';
+}
+
+export interface ProjectPreviewStyle {
+  icon: string;
+  accentColor: string;
+  backgroundColor: string;
+  coverImageUrl?: string;
+}
 
 export interface Project {
   id: string;
+  /** Stable catalogue identity. Normalized legacy projects use custom:<id>. */
+  catalogKey?: string;
   name: string;
+  kind?: ProjectKind;
+  links?: ProjectLink[];
+  setupSteps?: ProjectSetupStep[];
+  runRecipes?: ProjectRunRecipe[];
+  preview?: ProjectPreviewStyle;
+  verifiedAt?: string;
+  /**
+   * @deprecated Migration input only. Normalized Project records never retain
+   * or sync an absolute local path.
+   */
   localPath?: string;
   summary: string;
   status: ProjectStatus;
@@ -106,6 +172,34 @@ export interface Project {
   isPinned: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ProjectDeviceBindingSource = 'legacy' | 'user';
+
+/**
+ * Opaque, device-approved execution material. This data must remain in the
+ * device-only project binding store and must never enter Supabase or exports.
+ */
+export interface ProjectRunProfile {
+  profileId: string;
+  projectId: string;
+  recipeId: string;
+  projectRoot: string;
+  workingDirectory: string;
+  executable: string;
+  args: string[];
+  environment: Record<string, string>;
+  fingerprint: string;
+  approvedAt: string;
+}
+
+export interface ProjectDeviceBinding {
+  catalogKey: string;
+  projectRoot: string;
+  source: ProjectDeviceBindingSource;
+  adoptedAt: string;
+  updatedAt: string;
+  runProfiles: ProjectRunProfile[];
 }
 
 export interface ProjectPage {

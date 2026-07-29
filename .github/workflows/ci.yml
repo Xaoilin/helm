@@ -87,6 +87,20 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+  native:
+    name: native-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.89.0 --profile minimal --no-self-update
+      - name: Test native runtime
+        run: cargo +1.89.0 test --locked --manifest-path src-tauri/Cargo.toml
+
   codex-review:
     name: codex-review
     if: github.event_name == 'pull_request'
@@ -260,6 +274,7 @@ jobs:
       - unit
       - e2e
       - build
+      - native
       - codex-review
     permissions:
       actions: write
@@ -291,4 +306,3 @@ jobs:
               sleep 10
             done
           done
-

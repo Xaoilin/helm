@@ -11,6 +11,7 @@ export const SHARED_STORE_KEYS = [
   { key: 'calendarAccounts', label: 'Calendar accounts', description: 'Calendar account records.' },
   { key: 'calendarSources', label: 'Calendar sources', description: 'Calendars and source visibility.' },
   { key: 'calendarEvents', label: 'Calendar events', description: 'Local and synced calendar events.' },
+  { key: 'captureItems', label: 'Captured items', description: 'Inbox captures awaiting review.' },
   { key: 'clock', label: 'Clock workspace', description: 'Timers and stopwatches.' },
   { key: 'trips', label: 'Trips', description: 'Trip records.' },
   { key: 'tripLegs', label: 'Trip legs', description: 'Trip destination legs.' },

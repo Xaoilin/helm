@@ -94,6 +94,48 @@ test.describe('Mobile-first UI coverage', () => {
     await page.screenshot({ path: path.join(screenshotRoot, 'interactions', 'settings.png'), fullPage: true });
     await expectNoAccidentalOverflow(page);
   });
+
+  test('captures the Projects catalogue, drawer, sheet, and management states', async ({ page }) => {
+    const projectsRoot = path.join(screenshotRoot, 'projects');
+    mkdirSync(projectsRoot, { recursive: true });
+    await seedProjects(page);
+
+    for (const viewport of [
+      { name: 'desktop-1440', width: 1440, height: 900 },
+      { name: 'desktop-1024', width: 1024, height: 768 },
+      { name: 'phone-390', width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.goto('/');
+      await page.waitForSelector('.app-layout');
+      await navigateToSurface(page, 'Projects', viewport.width <= 760);
+      await expect(page.locator('.project-catalog-card')).toHaveCount(4);
+      await expectNoAccidentalOverflow(page);
+      await page.screenshot({
+        path: path.join(projectsRoot, `${viewport.name}-catalogue.png`),
+        fullPage: true,
+      });
+
+      const orbitCard = page.locator('.project-catalog-card').filter({ hasText: 'Orbit Console' });
+      await orbitCard.getByRole('button', { name: 'View details' }).click();
+      await expect(page.getByRole('dialog', { name: 'Orbit Console' })).toBeVisible();
+      await page.waitForTimeout(250);
+      await expectNoAccidentalOverflow(page);
+      await page.screenshot({
+        path: path.join(projectsRoot, `${viewport.name}-details.png`),
+        fullPage: true,
+      });
+
+      if (viewport.width === 1440) {
+        await page.getByRole('button', { name: 'Manage project' }).click();
+        await expect(page.getByRole('tab', { name: 'Board' })).toBeVisible();
+        await page.screenshot({
+          path: path.join(projectsRoot, `${viewport.name}-manage.png`),
+          fullPage: true,
+        });
+      }
+    }
+  });
 });
 
 async function navigateToSurface(page: Page, surface: typeof surfaces[number], isMobile: boolean) {
@@ -117,6 +159,8 @@ async function expectNoAccidentalOverflow(page: Page) {
       '.finance-type-toggle',
       '.clock-toolbar-metrics',
       '.clock-toolbar-actions',
+      '.projects-catalog-stats',
+      '.projects-filter-chips',
     ];
 
     const isIntentional = (element: Element) =>
@@ -205,6 +249,110 @@ async function seedCalendar(page: Page) {
         allDay: false,
         createdAt: today.toISOString(),
         updatedAt: today.toISOString(),
+      },
+    ]));
+  });
+}
+
+async function seedProjects(page: Page) {
+  await page.addInitScript(() => {
+    const timestamp = '2026-07-29T12:00:00.000Z';
+    localStorage.setItem('helm:projects', JSON.stringify([
+      {
+        id: 'project-orbit-console',
+        catalogKey: 'fixture:orbit-console',
+        name: 'Orbit Console',
+        kind: 'desktop_app',
+        summary: 'A desktop command centre and project reference example.',
+        status: 'active',
+        tags: ['app', 'productivity', 'tauri'],
+        isPinned: true,
+        links: [
+          { id: 'orbit-live', kind: 'deployment', label: 'Live Orbit Console', url: 'https://example.com/orbit/' },
+          { id: 'orbit-repo', kind: 'repository', label: 'GitHub repository', url: 'https://github.com/example/orbit-console' },
+        ],
+        setupSteps: [
+          { id: 'orbit-install', title: 'Install dependencies', description: 'Requires Node.js and npm.', displayCode: 'npm install' },
+        ],
+        runRecipes: [
+          {
+            id: 'orbit-dev',
+            label: 'Development server',
+            displayCommand: 'npm run dev',
+            executable: 'npm',
+            args: ['run', 'dev'],
+            prerequisites: ['Node.js', 'npm'],
+            mode: 'service',
+          },
+        ],
+        preview: { icon: 'OC', accentColor: '#8b7cff', backgroundColor: '#17172a' },
+        verifiedAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: 'project-canvas-studio',
+        catalogKey: 'fixture:canvas-studio',
+        name: 'Canvas Studio',
+        kind: 'web_app',
+        summary: 'A collaborative visual whiteboard with a WebGL canvas.',
+        status: 'active',
+        tags: ['app', 'whiteboard'],
+        isPinned: true,
+        links: [
+          { id: 'canvas-live', kind: 'deployment', label: 'Live Canvas Studio', url: 'https://example.com/canvas/' },
+        ],
+        setupSteps: [],
+        runRecipes: [],
+        preview: { icon: 'CS', accentColor: '#4f9cff', backgroundColor: '#112033' },
+        verifiedAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: 'project-caption-local',
+        catalogKey: 'fixture:caption-local',
+        name: 'Caption Local',
+        kind: 'web_app',
+        summary: 'A private local media transcription utility.',
+        status: 'active',
+        tags: ['app', 'local-first'],
+        isPinned: false,
+        links: [],
+        setupSteps: [],
+        runRecipes: [
+          {
+            id: 'caption-ui',
+            label: 'Local transcription UI',
+            displayCommand: 'caption-local --host 127.0.0.1 --port 7860',
+            executable: 'caption-local',
+            args: ['--host', '127.0.0.1', '--port', '7860'],
+            prerequisites: ['Python 3.10+', 'ffmpeg'],
+            localUrl: 'http://127.0.0.1:7860/',
+            mode: 'service',
+          },
+        ],
+        preview: { icon: 'CL', accentColor: '#ef4444', backgroundColor: '#2a1218' },
+        verifiedAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: 'project-sensor-bench',
+        catalogKey: 'fixture:sensor-bench',
+        name: 'Sensor Bench',
+        kind: 'hardware',
+        summary: 'An electronics, firmware, and enclosure reference workspace.',
+        status: 'active',
+        tags: ['hardware', 'electronics'],
+        isPinned: false,
+        links: [],
+        setupSteps: [],
+        runRecipes: [],
+        preview: { icon: 'SB', accentColor: '#f472b6', backgroundColor: '#2b1624' },
+        verifiedAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp,
       },
     ]));
   });

@@ -45,10 +45,13 @@ import {
   importLocalStoreCandidate,
   listLocalImportCandidates,
   listSyncDriftCandidates,
+  loadDeviceStore,
   loadStore,
   resolveSyncDriftCandidate,
+  saveDeviceStore,
   saveStore,
 } from '../store/persistence';
+import { PROJECT_DEVICE_BINDINGS_STORE_KEY } from '../store/projectPersistence';
 
 describe('Persistence layer in authenticated mode', () => {
   beforeEach(() => {
@@ -118,6 +121,49 @@ describe('Persistence layer in authenticated mode', () => {
     );
     expect(localStorage.setItem).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalledWith('write_store', expect.anything());
+  });
+
+  it('keeps project device bindings local even while authenticated', async () => {
+    const bindings = [{
+      catalogKey: 'catalog:project-1',
+      projectRoot: '/device/project-1',
+      source: 'user' as const,
+      adoptedAt: '2026-07-29T12:00:00.000Z',
+      updatedAt: '2026-07-29T12:00:00.000Z',
+      runProfiles: [],
+    }];
+
+    await saveDeviceStore(PROJECT_DEVICE_BINDINGS_STORE_KEY, bindings);
+    const loaded = await loadDeviceStore(PROJECT_DEVICE_BINDINGS_STORE_KEY);
+
+    expect(loaded).toEqual(bindings);
+    expect(localStorage.getItem('helm:device:projectDeviceBindings')).toBe(JSON.stringify(bindings));
+    expect(queueRemoteWriteMock).not.toHaveBeenCalled();
+    expect(saveRemoteMock).not.toHaveBeenCalled();
+    expect(loadRemoteMock).not.toHaveBeenCalledWith('helm', PROJECT_DEVICE_BINDINGS_STORE_KEY);
+
+    const candidates = await listLocalImportCandidates();
+    expect(candidates.some(candidate => candidate.key === PROJECT_DEVICE_BINDINGS_STORE_KEY)).toBe(false);
+  });
+
+  it('sanitizes legacy device fields before a shared project write', async () => {
+    await saveStore('projects', [{
+      id: 'project-1',
+      name: 'Project',
+      localPath: '/device/private-project',
+      projectRoot: '/device/private-project',
+      summary: '',
+      status: 'active',
+      tags: [],
+      isPinned: false,
+      createdAt: '2026-07-29T12:00:00.000Z',
+      updatedAt: '2026-07-29T12:00:00.000Z',
+    }]);
+
+    const queuedValue = queueRemoteWriteMock.mock.calls.at(-1)?.[2] as Array<Record<string, unknown>>;
+    expect(queuedValue[0]).not.toHaveProperty('localPath');
+    expect(queuedValue[0]).not.toHaveProperty('projectRoot');
+    expect(JSON.stringify(queuedValue)).not.toContain('/device/private-project');
   });
 
   it('suppresses the provider initial save after a remote miss instead of creating a default row', async () => {
@@ -208,6 +254,31 @@ describe('Persistence layer in authenticated mode', () => {
     expect(result).toMatchObject({ imported: true, cleared: true, reason: 'imported' });
     expect(saveRemoteMock).toHaveBeenCalledWith('helm', 'knowledgeEntries', [{ id: 'local', title: 'Local note' }]);
     expect(localStorage.getItem('helm:knowledgeEntries')).toBeNull();
+  });
+
+  it('does not adopt a legacy project path when native canonicalization is unavailable', async () => {
+    localStorage.setItem('helm:projects', JSON.stringify([{
+      id: 'legacy-project',
+      name: 'Legacy Project',
+      localPath: '/device/legacy-project',
+      summary: '',
+      status: 'active',
+      tags: [],
+      isPinned: false,
+      createdAt: '2026-07-29T12:00:00.000Z',
+      updatedAt: '2026-07-29T12:00:00.000Z',
+    }]));
+    loadRemoteMock.mockResolvedValueOnce(null);
+
+    const result = await importLocalStoreCandidate('projects');
+
+    expect(result).toMatchObject({ imported: true, cleared: true, reason: 'imported' });
+    const sharedWrite = saveRemoteMock.mock.calls.at(-1)?.[2] as Array<Record<string, unknown>>;
+    expect(sharedWrite[0]).not.toHaveProperty('localPath');
+    expect(JSON.stringify(sharedWrite)).not.toContain('/device/legacy-project');
+    expect(localStorage.getItem('helm:device:projectDeviceBindings') || '').not.toContain('/device/legacy-project');
+    expect(localStorage.getItem('helm:device:projectPendingLegacyPaths') || '').toContain('/device/legacy-project');
+    expect(localStorage.getItem('helm:projects')).toBeNull();
   });
 
   it('requires replace=true before overwriting an existing database key during import', async () => {
@@ -476,6 +547,48 @@ describe('Persistence layer in authenticated mode', () => {
     expect(candidates[0].local.redactedJson).toContain('[redacted]');
     expect(candidates[0].local.redactedJson).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
     expect(candidates[0].remote.redactedJson).not.toContain('remoteabcdefghijklmnopqrstuvwxyz');
+  });
+
+  it('excludes project device fields from drift comparisons and previews', async () => {
+    localStorage.setItem('helm:projects', JSON.stringify([{
+      id: 'project-1',
+      catalogKey: 'fixture:project-1',
+      name: 'Local name',
+      localPath: '/device/private-project',
+      projectRoot: '/device/private-project',
+      approvedProfiles: [{ fingerprint: 'device-only' }],
+      summary: '',
+      status: 'active',
+      tags: [],
+      isPinned: false,
+      createdAt: '2026-07-29T12:00:00.000Z',
+      updatedAt: '2026-07-29T12:00:00.000Z',
+    }]));
+    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
+      key === 'projects'
+        ? {
+          value: [{
+            id: 'project-1',
+            catalogKey: 'fixture:project-1',
+            name: 'Remote name',
+            summary: '',
+            status: 'active',
+            tags: [],
+            isPinned: false,
+            createdAt: '2026-07-29T12:00:00.000Z',
+            updatedAt: '2026-07-29T12:00:00.000Z',
+          }],
+          updatedAt: '2026-07-29T12:00:00.000Z',
+        }
+        : null
+    ));
+
+    const candidates = await listSyncDriftCandidates();
+    const preview = JSON.stringify(candidates);
+
+    expect(candidates).toHaveLength(1);
+    expect(preview).not.toContain('/device/private-project');
+    expect(preview).not.toContain('device-only');
   });
 
   it('resolves grouped calendar drift by clearing all local calendar copies when keeping database', async () => {
