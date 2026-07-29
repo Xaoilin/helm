@@ -27,3 +27,7 @@ GitHub Actions remains final cross-platform validation. Typed Playwright
 scenarios, Debug diagnostics, Tauri IPC contracts, and native tests cover the
 current agent interaction needs. Reconsider custom MCP tooling only if measured
 interaction setup exceeds 20% of task time.
+
+Documentation plus synchronized release-version metadata is the frontend-only
+acceptance case: the stable `native` check must pass while the macOS and Windows
+native matrix jobs are skipped.
