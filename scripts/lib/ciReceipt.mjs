@@ -21,6 +21,26 @@ function addFailure(failures, condition, message) {
   if (!condition) failures.push(message)
 }
 
+export function receiptRunTitle(sourceRunId, testedTree) {
+  return `CI receipt source ${sourceRunId} tree ${testedTree}`
+}
+
+export function deployRunTitle(kind, sourceRunId, deploySha) {
+  return `Deploy ${kind} receipt ${sourceRunId} ${deploySha}`
+}
+
+export function findReusableWorkflowDispatch(workflowRuns, expectedTitle) {
+  return workflowRuns
+    .filter(run => (
+      run?.display_title === expectedTitle
+      && (
+        run.status !== 'completed'
+        || run.conclusion === 'success'
+      )
+    ))
+    .sort((left, right) => Number(right.id ?? 0) - Number(left.id ?? 0))[0] ?? null
+}
+
 export function createTreeRecord({
   repository,
   sourceHeadSha,

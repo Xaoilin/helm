@@ -101,10 +101,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
     '--match-head-commit "$SOURCE_HEAD_SHA"',
     '--subject "$pr_title (#$PR_NUMBER)"',
     'node ./scripts/verify-ci-receipt.mjs merged-tree',
-    'gh workflow run "CI"',
-    '--field "tested_tree=$TESTED_TREE"',
-    '--field "source_run_id=$SOURCE_RUN_ID"',
-    '--field "source_pr=$SOURCE_PR"',
+    'node ./scripts/verify-ci-receipt.mjs dispatch-receipt',
   ]
 
   for (const snippet of requiredAutoPromoteSnippets) {
@@ -120,12 +117,15 @@ export function evaluateCiWorkflow(rawWorkflow) {
   }
 
   const promotionLockCount = rawWorkflow.match(/group:\s*helm-auto-promote-master/gu)?.length ?? 0
-  if (promotionLockCount < 2) {
+  const promotionQueueCount = rawWorkflow.match(
+    /group:\s*helm-auto-promote-master[\s\S]*?cancel-in-progress:\s*false[\s\S]*?queue:\s*max/gu,
+  )?.length ?? 0
+  if (promotionLockCount < 2 || promotionQueueCount < 2) {
     failures.push(
-      'CI workflow must serialize auto-promote and receipt deployment dispatch with the same lock.',
+      'CI workflow must FIFO-queue auto-promote and receipt deployment dispatch with the same lock.',
     )
   } else {
-    passes.push('Auto-promote and receipt deployment dispatch share the master promotion lock.')
+    passes.push('Auto-promote and receipt deployment dispatch share the FIFO promotion queue.')
   }
 
   const forbiddenAutoPromoteDeployDispatches = [
@@ -169,6 +169,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
   }
 
   const requiredReceiptSnippets = [
+    "format('CI receipt source {0} tree {1}', inputs.source_run_id, inputs.tested_tree)",
     'tested_tree:',
     'source_run_id:',
     'source_pr:',
@@ -178,10 +179,9 @@ export function evaluateCiWorkflow(rawWorkflow) {
     'uses: actions/download-artifact@v5',
     'run-id: ${{ inputs.source_run_id }}',
     'node ./scripts/verify-ci-receipt.mjs verify',
+    'DEPLOY_SHA: ${{ steps.verify.outputs.verified_sha }}',
     'Trigger deploy workflows after verified receipt',
-    'gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref master',
-    '"Deploy to GitHub Pages"',
-    '"Deploy Supabase Assistant Function"',
+    'node ./scripts/verify-ci-receipt.mjs dispatch-deploys',
   ]
 
   for (const snippet of requiredReceiptSnippets) {
@@ -222,6 +222,9 @@ export function evaluateCiWorkflow(rawWorkflow) {
 export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
   const failures = []
   const passes = []
+  const receiptTitle = workflowName === 'Deploy to GitHub Pages'
+    ? "format('Deploy Pages receipt {0} {1}', inputs.source_run_id, inputs.deploy_sha)"
+    : "format('Deploy Supabase receipt {0} {1}', inputs.source_run_id, inputs.deploy_sha)"
 
   if (!rawWorkflow.includes('workflow_dispatch:')) {
     failures.push(`${workflowName} workflow must support workflow_dispatch for verified receipts.`)
@@ -239,6 +242,24 @@ export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
     failures.push(`${workflowName} workflow jobs must run when a verified receipt dispatches it.`)
   } else {
     passes.push(`${workflowName} workflow jobs run for verified receipt dispatch.`)
+  }
+
+  const requiredPinnedDispatchSnippets = [
+    receiptTitle,
+    "!startsWith(github.event.workflow_run.display_title, 'CI receipt source ')",
+    'deploy_sha:',
+    'source_run_id:',
+    "ref: ${{ inputs.deploy_sha || github.event.workflow_run.head_sha || 'master' }}",
+    'cancel-in-progress: false',
+    'queue: max',
+  ]
+  for (const snippet of requiredPinnedDispatchSnippets) {
+    if (!rawWorkflow.includes(snippet)) {
+      failures.push(`${workflowName} workflow is missing pinned/idempotent dispatch behavior: ${snippet}`)
+    }
+  }
+  if (requiredPinnedDispatchSnippets.every(snippet => rawWorkflow.includes(snippet))) {
+    passes.push(`${workflowName} pins verified deploys and serializes dispatches safely.`)
   }
 
   return {

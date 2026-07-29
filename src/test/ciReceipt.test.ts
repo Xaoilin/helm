@@ -2,9 +2,12 @@
 import {
   REQUIRED_SOURCE_JOBS,
   createTreeRecord,
+  deployRunTitle,
   evaluateCiReceipt,
   evaluateMergedTree,
   evaluatePreMergeTree,
+  findReusableWorkflowDispatch,
+  receiptRunTitle,
   waitForSourceRun,
 } from '../../scripts/lib/ciReceipt.mjs'
 
@@ -255,5 +258,36 @@ describe('exact-tree CI receipts', () => {
       async () => ({ status: 'in_progress' }),
       { attempts: 2, intervalMs: 1, sleep },
     )).rejects.toThrow('Source CI run did not complete after 2 checks')
+  })
+
+  it('uses stable receipt titles and reuses only live or successful dispatches', () => {
+    const receiptTitle = receiptRunTitle(sourceRunId, testedTree)
+    expect(receiptTitle).toBe(`CI receipt source ${sourceRunId} tree ${testedTree}`)
+    expect(deployRunTitle('Pages', sourceRunId, currentSha)).toBe(
+      `Deploy Pages receipt ${sourceRunId} ${currentSha}`,
+    )
+
+    const runs = [
+      {
+        conclusion: 'failure',
+        display_title: receiptTitle,
+        id: 3,
+        status: 'completed',
+      },
+      {
+        conclusion: null,
+        display_title: receiptTitle,
+        id: 2,
+        status: 'in_progress',
+      },
+      {
+        conclusion: 'success',
+        display_title: 'another receipt',
+        id: 1,
+        status: 'completed',
+      },
+    ]
+    expect(findReusableWorkflowDispatch(runs, receiptTitle)).toMatchObject({ id: 2 })
+    expect(findReusableWorkflowDispatch([runs[0]], receiptTitle)).toBeNull()
   })
 })

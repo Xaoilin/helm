@@ -24,7 +24,8 @@ function validCiWorkflow() {
     name: ${checkName}`
   }).join('\n')
 
-  return `on:
+  return `run-name: \${{ format('CI receipt source {0} tree {1}', inputs.source_run_id, inputs.tested_tree) }}
+on:
   workflow_dispatch:
     inputs:
       tested_tree:
@@ -60,6 +61,7 @@ ${checkJobs}
     concurrency:
       group: helm-auto-promote-master
       cancel-in-progress: false
+      queue: max
     steps:
       - run: node ./scripts/verify-ci-receipt.mjs wait
       - uses: actions/download-artifact@v5
@@ -67,16 +69,16 @@ ${checkJobs}
           run-id: \${{ inputs.source_run_id }}
       - run: node ./scripts/verify-ci-receipt.mjs verify
       - name: Trigger deploy workflows after verified receipt
-        run: |
-          for workflow in "Deploy to GitHub Pages" "Deploy Supabase Assistant Function"; do
-            gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref master
-          done
+        env:
+          DEPLOY_SHA: \${{ steps.verify.outputs.verified_sha }}
+        run: node ./scripts/verify-ci-receipt.mjs dispatch-deploys
   auto-promote:
     name: auto-promote
     if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'master' && startsWith(github.event.pull_request.head.ref, 'codex/')
     concurrency:
       group: helm-auto-promote-master
       cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/upload-artifact@v5
         with:
@@ -86,11 +88,7 @@ ${checkJobs}
       - run: |
           gh pr merge "$PR_NUMBER" --squash --delete-branch --match-head-commit "$SOURCE_HEAD_SHA" --subject "$pr_title (#$PR_NUMBER)"
       - run: node ./scripts/verify-ci-receipt.mjs merged-tree
-      - run: |
-          gh workflow run "CI" --repo "$GITHUB_REPOSITORY" --ref master \\
-            --field "tested_tree=$TESTED_TREE" \\
-            --field "source_run_id=$SOURCE_RUN_ID" \\
-            --field "source_pr=$SOURCE_PR"
+      - run: node ./scripts/verify-ci-receipt.mjs dispatch-receipt
 `
 }
 
@@ -146,13 +144,25 @@ describe('agent policy helpers', () => {
   })
 
   it('requires deploy workflows to support direct auto-promote dispatch', () => {
-    const workflow = `on:
+    const workflow = `run-name: ${"${{ format('Deploy Pages receipt {0} {1}', inputs.source_run_id, inputs.deploy_sha) }}"}
+on:
   workflow_dispatch:
+    inputs:
+      deploy_sha:
+      source_run_id:
   workflow_run:
     workflows: ["CI"]
+concurrency:
+  group: pages
+  cancel-in-progress: false
+  queue: max
 jobs:
   deploy:
-    if: ${"${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}"}
+    if: ${"${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && !startsWith(github.event.workflow_run.display_title, 'CI receipt source ')) }}"}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${"${{ inputs.deploy_sha || github.event.workflow_run.head_sha || 'master' }}"}
 `
 
     expect(evaluateDeployWorkflow(workflow, 'Deploy to GitHub Pages').ok).toBe(true)

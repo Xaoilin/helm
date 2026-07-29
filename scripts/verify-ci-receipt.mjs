@@ -9,10 +9,13 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   createTreeRecord,
+  deployRunTitle,
   evaluateCiReceipt,
   evaluateMergedTree,
   evaluatePreMergeTree,
   evaluateTreeRecord,
+  findReusableWorkflowDispatch,
+  receiptRunTitle,
   waitForSourceRun,
 } from './lib/ciReceipt.mjs'
 
@@ -63,21 +66,25 @@ function receiptInputs() {
   }
 }
 
-async function githubRequest(path) {
+async function githubRequest(path, { body, method = 'GET' } = {}) {
   const apiUrl = process.env.GITHUB_API_URL || 'https://api.github.com'
   const token = requiredEnvironment('GH_TOKEN')
   const response = await fetch(`${apiUrl}${path}`, {
     headers: {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
       'User-Agent': 'helm-ci-receipt',
       'X-GitHub-Api-Version': '2022-11-28',
     },
+    method,
+    ...(body ? { body: JSON.stringify(body) } : {}),
   })
 
   if (!response.ok) {
     throw new Error(`GitHub API ${path} failed with ${response.status}.`)
   }
+  if (response.status === 204) return null
   return response.json()
 }
 
@@ -87,6 +94,52 @@ async function loadSourceRun(repository, sourceRunId) {
 
 async function loadPullRequest(repository, sourcePr) {
   return githubRequest(`/repos/${repository}/pulls/${sourcePr}`)
+}
+
+async function loadWorkflowDispatchRuns(repository, workflowFile) {
+  const runs = []
+  const encodedWorkflow = encodeURIComponent(workflowFile)
+
+  for (let page = 1; page <= 10; page += 1) {
+    const response = await githubRequest(
+      `/repos/${repository}/actions/workflows/${encodedWorkflow}/runs`
+      + `?event=workflow_dispatch&per_page=100&page=${page}`,
+    )
+    const pageRuns = Array.isArray(response?.workflow_runs) ? response.workflow_runs : []
+    runs.push(...pageRuns)
+    if (pageRuns.length < 100) break
+  }
+
+  return runs
+}
+
+async function dispatchWorkflowOnce({
+  inputs,
+  repository,
+  runTitle,
+  workflowFile,
+}) {
+  const runs = await loadWorkflowDispatchRuns(repository, workflowFile)
+  const existing = findReusableWorkflowDispatch(runs, runTitle)
+  if (existing) {
+    console.log(
+      `Workflow ${workflowFile} already has ${existing.status}/${existing.conclusion ?? 'none'}`
+      + ` run ${existing.id} for this receipt; skipping duplicate dispatch.`,
+    )
+    return
+  }
+
+  await githubRequest(
+    `/repos/${repository}/actions/workflows/${encodeURIComponent(workflowFile)}/dispatches`,
+    {
+      body: {
+        inputs,
+        ref: 'master',
+      },
+      method: 'POST',
+    },
+  )
+  console.log(`Dispatched ${workflowFile} once for ${runTitle}.`)
 }
 
 function report(result) {
@@ -255,9 +308,58 @@ async function verifyReceipt() {
   })
   if (!report(result)) return
 
+  writeOutput('verified_sha', currentSha)
   console.log(
     `Verified source CI ${inputs.sourceRunId}, PR #${inputs.sourcePr}, and master tree ${currentTree}.`,
   )
+}
+
+async function dispatchReceipt() {
+  const inputs = receiptInputs()
+  await dispatchWorkflowOnce({
+    inputs: {
+      source_pr: String(inputs.sourcePr),
+      source_run_id: String(inputs.sourceRunId),
+      tested_tree: inputs.testedTree,
+    },
+    repository: inputs.repository,
+    runTitle: receiptRunTitle(inputs.sourceRunId, inputs.testedTree),
+    workflowFile: 'ci.yml',
+  })
+}
+
+async function dispatchDeploys() {
+  const repository = requiredEnvironment('GITHUB_REPOSITORY')
+  const sourceRunId = positiveIntegerEnvironment('SOURCE_RUN_ID')
+  const deploySha = requiredEnvironment('DEPLOY_SHA')
+  if (!/^[0-9a-f]{40,64}$/u.test(deploySha)) {
+    throw new Error('DEPLOY_SHA must be a full Git SHA.')
+  }
+
+  const dispatches = [
+    {
+      runTitle: deployRunTitle('Pages', sourceRunId, deploySha),
+      workflowFile: 'deploy.yml',
+    },
+    {
+      runTitle: deployRunTitle('Supabase', sourceRunId, deploySha),
+      workflowFile: 'deploy-supabase-assistant.yml',
+    },
+  ]
+  const results = await Promise.allSettled(dispatches.map(dispatch => dispatchWorkflowOnce({
+    inputs: {
+      deploy_sha: deploySha,
+      source_run_id: String(sourceRunId),
+    },
+    repository,
+    ...dispatch,
+  })))
+  const failures = results
+    .filter(result => result.status === 'rejected')
+    .map(result => result.reason instanceof Error ? result.reason.message : String(result.reason))
+  if (failures.length > 0) {
+    throw new Error(`Deployment dispatch failed: ${failures.join('; ')}`)
+  }
 }
 
 const command = process.argv[2]
@@ -275,9 +377,14 @@ try {
     await verifyMergedTree()
   } else if (command === 'verify') {
     await verifyReceipt()
+  } else if (command === 'dispatch-receipt') {
+    await dispatchReceipt()
+  } else if (command === 'dispatch-deploys') {
+    await dispatchDeploys()
   } else {
     throw new Error(
-      'Usage: node scripts/verify-ci-receipt.mjs <record|wait|merge-state|pre-merge|merged-tree|verify>',
+      'Usage: node scripts/verify-ci-receipt.mjs '
+      + '<record|wait|merge-state|pre-merge|merged-tree|verify|dispatch-receipt|dispatch-deploys>',
     )
   }
 } catch (error) {

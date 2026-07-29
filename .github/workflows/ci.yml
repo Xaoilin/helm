@@ -1,5 +1,11 @@
 name: CI
 
+run-name: >-
+  ${{ inputs.source_run_id != '' &&
+      format('CI receipt source {0} tree {1}', inputs.source_run_id, inputs.tested_tree) ||
+      github.event.pull_request.title ||
+      format('CI {0}', github.ref_name) }}
+
 on:
   workflow_dispatch:
     inputs:
@@ -216,6 +222,7 @@ jobs:
     concurrency:
       group: helm-auto-promote-master
       cancel-in-progress: false
+      queue: max
     permissions:
       actions: write
       contents: read
@@ -238,7 +245,8 @@ jobs:
           path: test-results/ci-receipt
           github-token: ${{ github.token }}
           run-id: ${{ inputs.source_run_id }}
-      - name: Verify exact-tree CI receipt
+      - id: verify
+        name: Verify exact-tree CI receipt
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_PR: ${{ inputs.source_pr }}
@@ -247,25 +255,12 @@ jobs:
         run: node ./scripts/verify-ci-receipt.mjs verify
       - name: Trigger deploy workflows after verified receipt
         env:
+          DEPLOY_SHA: ${{ steps.verify.outputs.verified_sha }}
           GH_TOKEN: ${{ github.token }}
-        run: |
-          # GITHUB_TOKEN-dispatched CI does not cascade into workflow_run,
-          # so the verified receipt explicitly starts each deploy once.
-          workflows=(
-            "Deploy to GitHub Pages"
-            "Deploy Supabase Assistant Function"
-          )
-          for workflow in "${workflows[@]}"; do
-            for attempt in 1 2 3; do
-              if gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref master; then
-                break
-              fi
-              if [ "$attempt" -eq 3 ]; then
-                exit 1
-              fi
-              sleep 10
-            done
-          done
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        # GITHUB_TOKEN-dispatched CI does not cascade into workflow_run,
+        # so the verified receipt explicitly starts each pinned deploy once.
+        run: node ./scripts/verify-ci-receipt.mjs dispatch-deploys
 
   codex-review:
     name: codex-review
@@ -436,6 +431,7 @@ jobs:
     concurrency:
       group: helm-auto-promote-master
       cancel-in-progress: false
+      queue: max
     needs:
       - lint
       - agent-policy
@@ -515,18 +511,4 @@ jobs:
           SOURCE_PR: ${{ github.event.pull_request.number }}
           SOURCE_RUN_ID: ${{ github.run_id }}
           TESTED_TREE: ${{ steps.record.outputs.tested_tree }}
-        run: |
-          for attempt in 1 2 3; do
-            if gh workflow run "CI" \
-              --repo "$GITHUB_REPOSITORY" \
-              --ref master \
-              --field "tested_tree=$TESTED_TREE" \
-              --field "source_run_id=$SOURCE_RUN_ID" \
-              --field "source_pr=$SOURCE_PR"; then
-              break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-            sleep 10
-          done
+        run: node ./scripts/verify-ci-receipt.mjs dispatch-receipt
