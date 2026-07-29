@@ -20,6 +20,14 @@ function validCiWorkflow() {
           echo "treating review as advisory unavailable"`
     }
 
+    if (checkName === 'e2e') {
+      return `  e2e:
+    name: e2e
+    needs: e2e-shard
+    env:
+      E2E_SHARDS_RESULT: \${{ needs['e2e-shard'].result }}`
+    }
+
     return `  ${checkName}:
     name: ${checkName}`
   }).join('\n')
@@ -54,9 +62,11 @@ ${checkJobs}
   unit-aggregate:
     env:
       UNIT_SHARDS_RESULT: \${{ needs['unit-shard'].result }}
-  e2e-browser:
+  e2e-shard:
+    name: e2e-\${{ matrix.shard }}-of-2
     steps:
       - run: google-chrome --version
+      - run: npm run test:e2e -- --shard=\${{ matrix.shard }}/2 --reporter=line
   record-tree:
     steps:
       - run: node ./scripts/verify-ci-receipt.mjs record
@@ -129,6 +139,17 @@ describe('agent policy helpers', () => {
       ok: false,
       failures: expect.arrayContaining([
         "CI workflow auto-promote job is missing expected guard or command: needs.native.result == 'success'",
+      ]),
+    })
+
+    const withoutE2eAggregation = validCiWorkflow().replace(
+      "E2E_SHARDS_RESULT: ${{ needs['e2e-shard'].result }}",
+      'E2E_SHARDS_RESULT: success',
+    )
+    expect(evaluateCiWorkflow(withoutE2eAggregation)).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining([
+        "CI workflow is missing required fast-feedback behavior: E2E_SHARDS_RESULT: ${{ needs['e2e-shard'].result }}",
       ]),
     })
   })
