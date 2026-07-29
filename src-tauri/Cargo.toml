@@ -1,6 +1,6 @@
 [package]
 name = "helm"
-version = "0.2.76"
+version = "0.2.77"
 description = "HELM - Personal Assistant for Engineers"
 authors = ["you"]
 license = ""

@@ -20,6 +20,7 @@ Hosted receipts:
 
 - [Native-enabled source CI](https://github.com/Xaoilin/helm/actions/runs/30472474396)
 - [Sharded-unit source CI](https://github.com/Xaoilin/helm/actions/runs/30473633033)
+- [Frontend-only native-skip source CI](https://github.com/Xaoilin/helm/actions/runs/30475111216)
 - [Successful exact-tree receipt](https://github.com/Xaoilin/helm/actions/runs/30474006814)
 
 `agent:fast` is the iteration command; `check` is the one full local gate.
