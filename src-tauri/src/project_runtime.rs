@@ -1209,7 +1209,12 @@ mod tests {
             normalize_approval(input).expect("approval should preserve structured values");
         assert_eq!(profile.args[1], "value with spaces ");
         assert_eq!(profile.args[2], "");
-        assert_eq!(profile.environment[0].value, " enabled ");
+        let dashboard_mode = profile
+            .environment
+            .iter()
+            .find(|entry| entry.name == "DASHBOARD_MODE")
+            .expect("approved environment entry");
+        assert_eq!(dashboard_mode.value, " enabled ");
         let _ = fs::remove_dir_all(root);
     }
 
