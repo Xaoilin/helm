@@ -7,6 +7,7 @@ export const REQUIRED_SOURCE_JOBS = [
   'unit',
   'e2e',
   'build',
+  'database',
   'native',
   'codex-review',
 ]

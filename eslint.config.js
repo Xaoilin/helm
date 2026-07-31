@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', '.codex_tmp/**']),
+  globalIgnores(['dist', '.codex_tmp/**', 'src-tauri/target/**']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -18,6 +18,13 @@ export default defineConfig([
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
+    },
+    rules: {
+      // ESLint 10 and the current React Hooks preset promote these new rules.
+      // Keep the established HELM baseline while they are adopted deliberately.
+      'no-useless-assignment': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-hooks/set-state-in-effect': 'off',
     },
   },
   {

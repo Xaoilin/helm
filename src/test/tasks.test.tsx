@@ -1,8 +1,14 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { AppProvider, useApp } from '../store/AppContext';
 import { createElement, type ReactNode } from 'react';
 import type { Task } from '../types/domain';
+
+vi.mock('../store/persistence', async importOriginal => {
+  const actual = await importOriginal<typeof import('../store/persistence')>();
+  const { createLocalPersistenceMock } = await import('./localPersistenceMock');
+  return createLocalPersistenceMock(actual);
+});
 
 async function renderWithApp() {
   const wrapper = ({ children }: { children: ReactNode }) => createElement(AppProvider, null, children);

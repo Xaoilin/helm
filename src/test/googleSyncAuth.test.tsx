@@ -28,6 +28,12 @@ const {
   passiveTokenMock: vi.fn(),
 }));
 
+vi.mock('../store/persistence', async importOriginal => {
+  const actual = await importOriginal<typeof import('../store/persistence')>();
+  const { createLocalPersistenceMock } = await import('./localPersistenceMock');
+  return createLocalPersistenceMock(actual);
+});
+
 vi.mock('../services/googleCalendarApi', async () => {
   const actual = await vi.importActual<typeof import('../services/googleCalendarApi')>('../services/googleCalendarApi');
   return {

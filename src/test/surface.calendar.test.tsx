@@ -8,9 +8,9 @@ import * as googleCalendarAuthManager from '../services/googleCalendarAuthManage
 describe('CalendarSurface', () => {
   beforeEach(() => { localStorage.clear(); });
 
-  it('should label local-only calendar state truthfully', async () => {
+  it('should label a manual calendar without implying shared data is local-only', async () => {
     await act(async () => { renderWithProvider(<CalendarSurface />); });
-    expect(screen.getByText('Local-only data – not synced')).toBeInTheDocument();
+    expect(screen.getByText('Manual calendar – no external provider sync')).toBeInTheDocument();
   });
 
   it('labels the header count as visible calendar events', async () => {

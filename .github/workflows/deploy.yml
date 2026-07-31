@@ -41,6 +41,9 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
         !startsWith(github.event.workflow_run.display_title, 'CI receipt source '))
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -50,10 +53,13 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Wait for authoritative database cutover
+        timeout-minutes: 12
+        run: npm run database:wait
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.VITE_GOOGLE_OAUTH_CLIENT_ID }}
           VITE_ELEVENLABS_API_KEY: ${{ secrets.VITE_ELEVENLABS_API_KEY }}
           VITE_ELEVENLABS_VOICE_ID: ${{ secrets.VITE_ELEVENLABS_VOICE_ID }}

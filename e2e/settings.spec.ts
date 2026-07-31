@@ -29,7 +29,7 @@ test.describe('Settings', () => {
     ).toBeVisible();
   });
 
-  test('should open a review modal for signed-in data sync drift', async ({
+  test('should resolve legacy conflicts automatically with the database winning', async ({
     page,
     scenario,
   }) => {
@@ -51,18 +51,10 @@ test.describe('Settings', () => {
 
     await openSettings(page);
 
-    const dialog = page.getByRole('dialog', { name: 'Data differences need review' });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('heading', { name: 'Knowledge' })).toBeVisible();
-    await expect(dialog.getByLabel(/Keep database/i)).toBeChecked();
-    await expect(dialog.locator('.sync-drift-diff-list')).toContainText('Device note');
-    await expect(dialog.getByText(/Title: database/)).toBeVisible();
-    await dialog.getByText('Highlighted JSON diff').click();
-    await expect(dialog.locator('.sync-drift-json-diff')).toContainText(
-      '"title": "Database note"',
-    );
-    await expect(dialog.locator('.sync-drift-json-diff-row.database')).not.toHaveCount(0);
-    await expect(dialog.locator('.sync-drift-json-diff-row.device')).not.toHaveCount(0);
+    await expect(page.locator('.sync-status-title')).toHaveText('Database source of truth');
+    await expect(page.getByText('No sync decisions required')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Data differences need review' })).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('helm:knowledgeEntries'))).toBeNull();
   });
 
   test('should not open drift review for metadata-only integration timestamps', async ({
@@ -104,7 +96,7 @@ test.describe('Settings', () => {
 
     await openSettings(page);
 
-    await expect(page.locator('.sync-status-title')).toHaveText('Synced with Supabase');
+    await expect(page.locator('.sync-status-title')).toHaveText('Database source of truth');
     await expect(
       page.getByRole('dialog', { name: 'Data differences need review' }),
     ).toHaveCount(0);

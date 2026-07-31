@@ -416,6 +416,94 @@ textarea.form-input {
   line-height: 1.5;
 }
 
+.online-gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(96, 103, 255, 0.18), transparent 38%),
+    #0b0d14;
+  color: #f5f6ff;
+}
+
+.online-gate-card {
+  width: min(460px, 100%);
+  padding: 38px;
+  border: 1px solid #292d43;
+  border-radius: 22px;
+  background: rgba(18, 21, 32, 0.96);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.36);
+  text-align: center;
+}
+
+.online-gate-mark {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 18px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #7278ff, #4d54d8);
+  color: white;
+  font-size: 22px;
+  font-weight: 800;
+  box-shadow: 0 14px 34px rgba(76, 84, 216, 0.34);
+}
+
+.online-gate-eyebrow {
+  color: #9ea4c7;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.online-gate h1 {
+  margin: 10px 0 12px;
+  font-size: clamp(25px, 5vw, 34px);
+  line-height: 1.1;
+}
+
+.online-gate p {
+  margin: 0 auto;
+  max-width: 390px;
+  color: #aeb3ca;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.online-gate-error {
+  margin-top: 18px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 107, 128, 0.36);
+  border-radius: 10px;
+  background: rgba(255, 107, 128, 0.08);
+  color: #ffb3c0;
+  font-size: 12px;
+}
+
+.online-gate-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+@media (max-width: 520px) {
+  .online-gate {
+    padding: 18px;
+  }
+
+  .online-gate-card {
+    padding: 30px 22px;
+  }
+
+  .online-gate-actions {
+    flex-direction: column;
+  }
+}
+
 /* ── Tags / Badges ── */
 .tag {
   display: inline-block;

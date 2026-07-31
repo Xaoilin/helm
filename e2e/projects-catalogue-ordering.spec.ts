@@ -1,7 +1,6 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { type Locator, type Page } from '@playwright/test';
+import { expect, test } from './support/helm-fixture';
 
-const PROJECT_STORE_KEY = 'helm:projects';
-const SEED_MARKER_KEY = 'helm:e2e-project-catalogue-ordering-seeded';
 const TIMESTAMP = '2026-07-29T12:00:00.000Z';
 
 const seededProjects = [
@@ -107,8 +106,8 @@ const seededProjects = [
 ] as const;
 
 test.describe('Projects catalogue organisation', () => {
-  test.beforeEach(async ({ page }) => {
-    await seedProjectsOnce(page);
+  test.beforeEach(async ({ scenario }) => {
+    await scenario('projects', { projects: [...seededProjects] });
   });
 
   test('pins, keyboard-reorders, persists, archives, and restores projects', async ({ page }) => {
@@ -222,8 +221,8 @@ test.describe('Projects catalogue at 390px', () => {
     hasTouch: true,
   });
 
-  test.beforeEach(async ({ page }) => {
-    await seedProjectsOnce(page);
+  test.beforeEach(async ({ scenario }) => {
+    await scenario('projects', { projects: [...seededProjects] });
   });
 
   test('keeps touch actions reachable without accidental horizontal overflow', async ({ page }) => {
@@ -271,19 +270,6 @@ function projectCard(region: Locator, name: string): Locator {
   return region.locator('[data-project-card-id]').filter({ hasText: name });
 }
 
-async function seedProjectsOnce(page: Page): Promise<void> {
-  await page.addInitScript(({ markerKey, projects, storeKey }) => {
-    if (sessionStorage.getItem(markerKey) === 'yes') return;
-    localStorage.clear();
-    localStorage.setItem(storeKey, JSON.stringify(projects));
-    sessionStorage.setItem(markerKey, 'yes');
-  }, {
-    markerKey: SEED_MARKER_KEY,
-    projects: seededProjects,
-    storeKey: PROJECT_STORE_KEY,
-  });
-}
-
 async function openProjects(page: Page, mobile = false): Promise<void> {
   await page.goto('/');
   await page.waitForSelector('.app-layout');
@@ -318,32 +304,49 @@ async function expectSectionOrder(
 }
 
 async function storedProject(page: Page, projectId: string): Promise<Record<string, unknown>> {
-  return page.evaluate(({ id, key }) => {
-    const projects = JSON.parse(localStorage.getItem(key) || '[]') as Array<Record<string, unknown>>;
-    return projects.find(project => project.id === id) || {};
-  }, { id: projectId, key: PROJECT_STORE_KEY });
+  const rows = await databaseRows(page);
+  return rows.find(row => (
+    row.collection === 'projects'
+    && row.record_id === projectId
+    && row.deleted_at === null
+  ))?.payload || {};
 }
 
 async function storedSectionOrder(
   page: Page,
   targetSection: 'pinned' | 'projects' | 'archived',
 ): Promise<string[]> {
-  return page.evaluate(({ key, sectionName }) => {
-    const projects = JSON.parse(localStorage.getItem(key) || '[]') as Array<{
-      id: string;
-      isPinned?: boolean;
-      sortOrder?: number;
-      status?: string;
-    }>;
-    return projects
-      .filter(project => {
-        if (sectionName === 'archived') return project.status === 'archived';
-        if (project.status === 'archived') return false;
-        return sectionName === 'pinned' ? project.isPinned === true : project.isPinned !== true;
-      })
-      .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
-      .map(project => project.id);
-  }, { key: PROJECT_STORE_KEY, sectionName: targetSection });
+  const rows = await databaseRows(page);
+  return rows
+    .filter(row => row.collection === 'projects' && row.deleted_at === null)
+    .filter(row => {
+      if (targetSection === 'archived') return row.payload.status === 'archived';
+      if (row.payload.status === 'archived') return false;
+      return targetSection === 'pinned'
+        ? row.payload.isPinned === true
+        : row.payload.isPinned !== true;
+    })
+    .sort((left, right) => (
+      (left.position ?? Number.MAX_SAFE_INTEGER) - (right.position ?? Number.MAX_SAFE_INTEGER)
+      || left.record_id.localeCompare(right.record_id)
+    ))
+    .map(row => row.record_id);
+}
+
+interface DatabaseRow {
+  collection: string;
+  deleted_at: string | null;
+  payload: Record<string, unknown>;
+  position: number | null;
+  record_id: string;
+}
+
+async function databaseRows(page: Page): Promise<DatabaseRow[]> {
+  return page.evaluate(async () => {
+    const response = await fetch('/__helm_e2e_db');
+    if (!response.ok) throw new Error('Could not read the HELM database fixture.');
+    return response.json() as Promise<DatabaseRow[]>;
+  });
 }
 
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {

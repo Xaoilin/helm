@@ -2,13 +2,13 @@
 
 ## Overview
 
-HELM is a local-first desktop assistant for a solo operator. The in-app assistant is Lina. The product combines calendar, tasks and habits, a multi-clock timer and stopwatch workspace, project management, finance tracking, personal health journaling, Islamic knowledge and lifestyle tracking, prayer times, integrations, and chat and voice AI in one desktop app.
+HELM is an account-backed desktop assistant for a solo operator. The in-app assistant is Lina. Shared state is online-only and database-authoritative; machine-bound execution state remains device-local.
 
 The current stack is:
 
 - Tauri 2 for desktop packaging and local file access
 - React 19 with TypeScript 5 and Vite 8 for the UI
-- Supabase for optional sign-in and cloud sync
+- Supabase for required account identity, shared records, mutations, and private change notifications
 - Supabase Edge Functions plus OpenAI or local Ollama for assistant orchestration
 - Deepgram, ElevenLabs, and OpenWakeWord for voice features
 
@@ -112,15 +112,21 @@ That navigation payload lets chat and voice hand the UI enough context to open a
 
 ## Persistence And Sync
 
-### Local-first storage
+### Database-authoritative shared state
 
-`src/store/persistence.ts` implements the storage priority rules:
+`src/store/persistence.ts`, `src/store/recordCodec.ts`, and `src/store/supabase.ts` enforce these boundaries:
 
-- Signed in: Supabase is the only source of truth for shared app data. Local Tauri files and `localStorage` are ignored unless the user explicitly imports an old local copy.
-- Signed out: Tauri file storage is preferred, with `localStorage` as the web fallback.
+- Shared screens mount only after an authenticated database snapshot, schema/client gate, private Broadcast subscription, and post-subscription version probe succeed.
+- Signed-out, expired, or offline sessions cannot view or change shared state. HELM keeps no durable offline mutation queue.
+- Arrays are stored as stable account-owned records with explicit positions. Clock, gamification, and prayer aggregates are decomposed into independently mutable records.
+- All writes are semantic `create`, `patch`, `increment`, `delete`, `restore`, or `reorder` operations sent through one idempotent transactional RPC. Direct table writes are denied.
+- Tombstones prevent stale resurrection; database commit order resolves unavoidable same-field concurrency. Reordering never deletes records.
+- Private per-account Broadcast messages contain identifiers and versions only. Clients refetch through RLS, and version gaps or reconnects force an authoritative refresh.
+- Account changes synchronously clear shared in-memory state before the next account can render.
 
-Signed-in writes queue debounced Supabase `kv_store` updates and do not write local persistent storage. Signed-out writes still use the local-first Tauri/`localStorage` path. Settings scans old local copies by grouped app domain, normalizes away system/cache metadata drift such as integration setup timestamps, sync/auth timestamps, transient errors, pending sync flags, dashboard cache, and assistant audit noise, then silently clears identical copies. Local-only user data imports when the matching database group is empty, and the review modal opens only for meaningful user data or user-preference conflicts, plus unreadable local JSON. Calendar provider data is an exception: Google-backed account, source, and event JSON is treated as external cache, so stale device copies are cleared and a Google refresh is requested instead of asking the user to choose database versus device. The modal defaults to keeping Supabase, shows field-level database/device summaries with expandable redacted git-style JSON diffs, and can commit the device copy to Supabase when the user explicitly chooses that side. Settings values, including API-key-like values, are synced as plain Supabase JSON under RLS and are not encrypted vault storage.
-Authenticated provider startup uses an initial-save guard so domain defaults do not create empty Supabase rows after a database miss. For existing database rows, that guard records the loaded JSON and only suppresses that exact value; a real first mutation, such as a Google Calendar refresh adding events to the cache, still queues a Supabase write.
+Legacy `helm:<shared-key>` browser and Tauri snapshots are one-time migration inputs only. Matching database records win, safe missing fields and valid local-only records are added, counters are never summed, malformed data is quarantined outside the runtime, and the device copy is removed only after the database commit is confirmed. No conflict chooser is shown.
+
+Absolute project roots, native approvals, fingerprints, process state, logs, microphones, local model endpoints, and API keys use explicit device-only stores. They never enter shared records.
 
 ### Desktop boundary
 
@@ -132,13 +138,11 @@ The Tauri side is intentionally narrow. Rust commands handle app-data directory 
 
 - Google sign-in through Supabase Auth
 - session bootstrap and auth-state subscription
-- user-scoped key-value persistence through `kv_store`
-- a debounced remote write queue
-- best-effort realtime invalidation for open signed-in devices
+- account-isolated reads from `helm_account_state` and `helm_records`
+- idempotent transactional calls to `apply_helm_mutations`
+- private account Broadcast subscriptions plus version probes
 
-Supabase sync is optional. The app still works in local-first mode without it.
-`src/AppRoot.tsx` waits for Supabase session bootstrap before mounting domain providers, so returning signed-in users load database data instead of device-local data. Real identity transitions remount the provider tree. Background Supabase auth events like token refreshes update session state without restarting the UI.
-Exit and background transitions trigger best-effort queue flushes so cloud sync is less likely to lag behind the most recent in-memory write.
+`src/AppRoot.tsx` blocks the provider tree until that database session is ready. Auth-account changes clear the previous cache before bootstrap, while same-user token refreshes keep the current account identity.
 
 ## Integrations And External Services
 
@@ -156,8 +160,8 @@ Important behavior:
 - Google Calendar accounts persist explicit auth metadata in the domain model.
 - Browser Google Calendar transport is now server-backed and refreshable. The browser only obtains Google authorization codes; refresh tokens stay on the hosted Supabase side in `google_calendar_credentials`.
 - The hosted `google-calendar-oauth` function validates the Supabase session inside the function and is deployed with JWT verification disabled. This avoids Supabase Edge gateway rejects when the project issues asymmetric `ES256` access tokens.
-- Production rollout for hosted Google Calendar auth requires the matching Supabase migration to be applied before or with the function deploy. The release workflow now prefers full `supabase db push` when `SUPABASE_DB_PASSWORD` is configured, and otherwise falls back to an idempotent Supabase Management API apply of the `google_calendar_credentials` schema before the function deploys.
-- Durable browser Google Calendar support now requires HELM sign-in. Signed-out browser mode is a truthful degraded state for connect or reconnect, while local calendars continue to work normally.
+- Production rollout for hosted Google Calendar auth requires the matching Supabase migration to be applied before or with the function deploy. The release workflow uses the repository-pinned Supabase CLI and fails closed without the database password, verified cutover-backup digest, exact historical-schema equivalence, and passing post-migration database contract.
+- Calendar surfaces require HELM sign-in. Signed-out or offline sessions cannot open either provider-backed or manual shared calendar records.
 - Passive sync is non-interactive. Opening Calendar or pressing `Sync` should never launch a consent or reconnect popup.
 - Reconnect-required is a confirmed failure state, not a shortcut for "cached GIS token expired". Calendar-OAuth accounts only move into reconnect-required after passive auth actually fails, a 401 comes back, or the user no longer has transport credentials to retry with.
 - Linked `profile-google` accounts stay tied to the HELM sign-in relationship, but the live Calendar transport is no longer the Supabase `provider_token`. Both linked and extra accounts use the same hosted refresh-token credential model.
@@ -203,7 +207,7 @@ Both chat and voice now route through the shared grounded assistant runtime unde
 Planning providers:
 
 - hosted GPT-5.4 through the `assistant-openai` Supabase Edge Function for web builds
-- local Ollama for desktop or local-first setups when a live Ollama model is available
+- local Ollama for desktop setups when a live Ollama model is available
 
 The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally. That shared runtime owns task-title normalization, recent-task reveal handling such as "show me that task", grounded ID validation for mutations, and the typed navigation handoff used by the Tasks and Projects surfaces to jump to the right view and reveal the resolved entity.
 The assistant action registry in `src/assistant/capabilities.ts` is the source of truth for which actions Lina may claim and execute. The model now decides whether a turn is `reply`, `clarify`, `confirm`, or `tool_calls`, HELM validates and executes locally, and the final visible assistant reply is narrated from verified results rather than coming from executor templates.
@@ -229,9 +233,9 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 - Calendar is the most integration-heavy surface and depends on account/source/event integrity.
 - Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, Islamic prayer tasks, routine habits, and completed work for easier scanning, with collapsible section headers for long lists. Legacy prayer habits are normalized into first-class prayer tasks on load. Canonical prayer outcome records are keyed by local prayer date and prayer name rather than task ID, so task deletion or recreation does not erase history. Old checked prayer entries migrate idempotently as `unclassified`; HELM never invents legacy on-time status or missed days.
 - Prayer tracking and reminders are specified in `docs/prayer-tracking-and-reminders.md`. `PrayerProvider` owns schedule freshness, canonical outcomes, the shared completion selector, stats, reminders, and Prayer Debug diagnostics. UI, chat, and voice all use the same completion mutation; Lina asks `On time or late?` when status is omitted, and undo restores task, XP, and prayer tracking together.
-- Projects is a reference-first catalogue layered over the existing local-first management workspace. Searchable cards and an accessible drawer/sheet expose live links, repositories, documentation, setup references, and portable run recipes; Board, Milestones, and Wiki remain available through Manage project. Shared records are keyed by stable `catalogKey`. Device roots, approvals, process state, and logs use separate device-only persistence and never enter Supabase or assistant context. Web HELM is copy/reference-only; the desktop runner accepts only native-approved structured profiles.
-- Clock is a local-first utility surface for timer and stopwatch workflows, and it persists multiple active cards plus per-timer alarm sound preferences through the shared store.
-- Health is a local-first reflection surface for logging fast-food experiences, keeping a quick-entry form and recent reminder history in the same view so the pattern stays visible.
+- Projects is a reference-first account catalogue. Searchable cards and an accessible drawer/sheet expose live links, repositories, documentation, setup references, and portable run recipes; Board, Milestones, and Wiki remain available through Manage project. Shared records are keyed by stable `catalogKey`. Device roots, approvals, process state, and logs use separate device-only persistence and never enter Supabase or assistant context. Web HELM is copy/reference-only; the desktop runner accepts only native-approved structured profiles.
+- Clock persists multiple active timer and stopwatch records plus per-timer alarm preferences in the signed-in account database.
+- Health persists reflection entries in the signed-in account database while keeping the quick-entry and recent-history workflow in one view.
 - Knowledge contains both a topic-entry knowledge base and the lifestyle tracker.
 - Integrations is the operational hub for Google Calendar and placeholder external providers.
 
@@ -250,4 +254,4 @@ The Vite README is still the default template, so the docs in this folder and `A
 - Entity retrieval and benchmark example retrieval are still heuristic, so improvements should be measured before changing prompts or capability metadata.
 - Some integrations are real and some are still mock or placeholder paths, so docs must distinguish between them carefully.
 - Large surface components still exist, even though state has already been split into domain providers.
-- Security is MVP-grade for a single-user local-first app; this is not a general-purpose secret vault, and local project-path metadata should not be described as protected storage.
+- Shared records are account-isolated by RLS and constrained RPCs, but HELM is not a general-purpose secret vault. Machine paths and credentials remain explicit device-only data.

@@ -4,7 +4,7 @@ import AppRoot from './AppRoot';
 import { initSupabase } from './store/supabase';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
 
-// Initialize Supabase from config (env vars or settings fallback)
+// Initialize the account database only from build-managed configuration.
 if (SUPABASE_URL && SUPABASE_ANON_KEY) {
   initSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
 }

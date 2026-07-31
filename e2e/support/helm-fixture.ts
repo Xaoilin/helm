@@ -3,6 +3,8 @@ import {
   test as base,
   type Page,
 } from '@playwright/test';
+import { encodeStoreValue } from '../../src/store/recordCodec';
+import type { HelmMutation } from '../../src/store/databaseTypes';
 
 export type HelmScenarioName =
   | 'empty'
@@ -38,6 +40,14 @@ interface HostedAssistantScenarioOptions extends EmptyScenarioOptions {
 export interface RemoteStoreFixture {
   value: unknown;
   updatedAt?: string;
+}
+
+interface DatabaseScenarioOptions {
+  email?: string;
+  localStorage?: Record<string, unknown>;
+  stores?: Record<string, unknown>;
+  surface?: string;
+  userId?: string;
 }
 
 interface SignedInSyncScenarioOptions extends EmptyScenarioOptions {
@@ -248,64 +258,72 @@ async function installScenario<Name extends HelmScenarioName>(
   await mockPrayerTimes(page);
 
   if (name === 'empty') {
-    await seedStorage(page, name, options.storage, options.surface);
+    const normalized = normalizeScenarioStorage(options.storage);
+    await installDatabaseScenario(page, name, {
+      localStorage: normalized.local,
+      stores: normalized.stores,
+      surface: options.surface,
+    });
     return;
   }
 
   if (name === 'projects') {
     const projectOptions = options as ProjectsScenarioOptions;
-    await seedStorage(page, name, {
-      ...projectOptions.storage,
-      'helm:projects': projectOptions.projects || DEFAULT_PROJECTS,
-    }, projectOptions.surface);
+    const normalized = normalizeScenarioStorage(projectOptions.storage);
+    await installDatabaseScenario(page, name, {
+      localStorage: normalized.local,
+      stores: {
+        ...normalized.stores,
+        projects: projectOptions.projects || DEFAULT_PROJECTS,
+      },
+      surface: projectOptions.surface,
+    });
     return;
   }
 
   if (name === 'hosted-assistant') {
     const hostedOptions = options as HostedAssistantScenarioOptions;
-    await seedStorage(page, name, {
-      ...hostedOptions.storage,
-      'helm:settings': {
+    const normalized = normalizeScenarioStorage(hostedOptions.storage);
+    await installDatabaseScenario(page, name, {
+      localStorage: normalized.local,
+      stores: {
+        ...normalized.stores,
+        settings: {
         ...DEFAULT_HOSTED_SETTINGS,
         ...hostedOptions.settings,
+        },
       },
-    }, hostedOptions.surface);
+      surface: hostedOptions.surface,
+    });
     await mockHostedAssistant(page, hostedOptions.assistant);
     return;
   }
 
   if (name === 'signed-in-sync') {
     const syncOptions = options as SignedInSyncScenarioOptions;
-    const userId = syncOptions.userId || 'user-sync-fixture';
-    await seedStorage(page, name, {
-      ...syncOptions.storage,
+    const normalized = normalizeScenarioStorage(syncOptions.storage);
+    await installDatabaseScenario(page, name, {
+      email: syncOptions.email,
+      userId: syncOptions.userId,
+      localStorage: {
+        ...normalized.local,
       ...Object.fromEntries(
         Object.entries(syncOptions.localStores || {}).map(([key, value]) => [`helm:${key}`, value]),
       ),
-      'helm:settings': {
-        supabaseAnonKey: 'helm-test-anon-key',
-        supabaseUrl: 'https://helm.test.supabase.co',
+      },
+      stores: {
+        ...normalized.stores,
+        ...Object.fromEntries(
+          Object.entries(syncOptions.remoteStores || {}).map(([key, fixture]) => [key, fixture.value]),
+        ),
+        settings: {
         telemetry: false,
         theme: 'dark',
         ...syncOptions.settings,
       },
-      'sb-helm-auth-token': {
-        access_token: 'test-access-token',
-        expires_at: 4_102_444_800,
-        expires_in: 3600,
-        refresh_token: 'test-refresh-token',
-        token_type: 'bearer',
-        user: {
-          app_metadata: { provider: 'google' },
-          aud: 'authenticated',
-          email: syncOptions.email || 'sync@example.com',
-          id: userId,
-          role: 'authenticated',
-          user_metadata: {},
-        },
       },
-    }, syncOptions.surface);
-    await mockSupabaseStores(page, syncOptions.remoteStores || {});
+      surface: syncOptions.surface,
+    });
     return;
   }
 
@@ -313,9 +331,12 @@ async function installScenario<Name extends HelmScenarioName>(
   await page.clock.install({
     time: new Date(prayerOptions.now || '2026-07-28T05:36:00.000Z'),
   });
-  await seedStorage(page, name, {
-    ...prayerOptions.storage,
-    'helm:settings': {
+  const normalized = normalizeScenarioStorage(prayerOptions.storage);
+  await installDatabaseScenario(page, name, {
+    localStorage: normalized.local,
+    stores: {
+      ...normalized.stores,
+      settings: {
       ...DEFAULT_HOSTED_SETTINGS,
       assistantEnabled: true,
       prayerCity: 'Bedford',
@@ -324,10 +345,57 @@ async function installScenario<Name extends HelmScenarioName>(
       prayerReminderEnabled: true,
       prayerReminderMinutes: 15,
       ...prayerOptions.settings,
+      },
+      tasks: prayerOptions.tasks || DEFAULT_PRAYER_TASKS,
     },
-    'helm:tasks': prayerOptions.tasks || DEFAULT_PRAYER_TASKS,
-  }, prayerOptions.surface || 'settings');
+    surface: prayerOptions.surface || 'settings',
+  });
   await mockHostedAssistant(page, prayerOptions.assistant);
+}
+
+function normalizeScenarioStorage(storage: Record<string, unknown> = {}): {
+  local: Record<string, unknown>;
+  stores: Record<string, unknown>;
+} {
+  const local: Record<string, unknown> = {};
+  const stores: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(storage)) {
+    if (key.startsWith('helm:device:')) {
+      local[key] = value;
+    } else if (key.startsWith('helm:')) {
+      stores[key.slice('helm:'.length)] = value;
+    } else {
+      local[key] = value;
+    }
+  }
+  return { local, stores };
+}
+
+async function installDatabaseScenario(
+  page: Page,
+  scenario: HelmScenarioName,
+  options: DatabaseScenarioOptions,
+): Promise<void> {
+  const userId = options.userId || '11111111-1111-4111-8111-111111111111';
+  await seedStorage(page, scenario, {
+    ...options.localStorage,
+    'sb-helm-auth-token': {
+      access_token: 'test-access-token',
+      expires_at: 4_102_444_800,
+      expires_in: 3600,
+      refresh_token: 'test-refresh-token',
+      token_type: 'bearer',
+      user: {
+        app_metadata: { provider: 'google' },
+        aud: 'authenticated',
+        email: options.email || 'sync@example.com',
+        id: userId,
+        role: 'authenticated',
+        user_metadata: {},
+      },
+    },
+  }, options.surface);
+  await mockHelmDatabase(page, userId, options.stores || {});
 }
 
 async function seedStorage(
@@ -369,41 +437,214 @@ async function mockHostedAssistant(
   });
 }
 
-async function mockSupabaseStores(
+interface MockDatabaseRow {
+  user_id: string;
+  collection: string;
+  record_id: string;
+  payload: Record<string, unknown>;
+  position: number | null;
+  revision: number;
+  account_version: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+async function mockHelmDatabase(
   page: Page,
-  stores: Record<string, RemoteStoreFixture>,
+  userId: string,
+  stores: Record<string, unknown>,
 ): Promise<void> {
-  await page.route('https://helm.test.supabase.co/rest/v1/kv_store**', async route => {
-    if (route.request().method() !== 'GET') {
-      await route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: '[]',
-      });
-      return;
+  await mockHelmRealtime(page);
+  const timestamp = '2026-07-31T12:00:00.000Z';
+  let accountVersion = 1;
+  const rows = new Map<string, MockDatabaseRow>();
+  for (const [collection, value] of Object.entries(stores)) {
+    for (const record of encodeStoreValue(collection, value)) {
+      const row: MockDatabaseRow = {
+        user_id: userId,
+        collection,
+        record_id: record.recordId,
+        payload: record.payload,
+        position: record.position,
+        revision: 1,
+        account_version: accountVersion,
+        created_at: timestamp,
+        updated_at: timestamp,
+        deleted_at: null,
+      };
+      rows.set(`${collection}\0${record.recordId}`, row);
     }
+  }
 
-    const url = decodeURIComponent(route.request().url());
-    const match = Object.entries(stores).find(([key]) => url.includes(`key=eq.${key}`));
-    if (!match) {
-      await route.fulfill({
-        status: 406,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'No rows found' }),
-      });
-      return;
-    }
+  await page.route('**/__helm_e2e_db', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([...rows.values()]),
+    });
+  });
 
-    const [, store] = match;
+  await page.route('https://helm.test.supabase.co/rest/v1/helm_records**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([...rows.values()]),
+    });
+  });
+
+  await page.route('https://helm.test.supabase.co/rest/v1/helm_account_state**', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        value: store.value,
-        updated_at: store.updatedAt || '2026-05-01T10:00:00.000Z',
+        user_id: userId,
+        schema_version: 1,
+        account_version: accountVersion,
+        minimum_client_version: '0.2.82',
+        migrated_at: timestamp,
+        updated_at: timestamp,
       }),
     });
   });
+
+  await page.route('https://helm.test.supabase.co/rest/v1/rpc/apply_helm_mutations', async route => {
+    const request = route.request().postDataJSON() as {
+      p_operations?: HelmMutation[];
+      p_request_id?: string;
+    };
+    accountVersion += 1;
+    const changed = applyMockMutations(
+      rows,
+      userId,
+      accountVersion,
+      request.p_operations || [],
+      new Date().toISOString(),
+    );
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        requestId: request.p_request_id,
+        accountVersion,
+        changes: changed.map(toMutationResponseRow),
+      }),
+    });
+  });
+}
+
+async function mockHelmRealtime(page: Page): Promise<void> {
+  await page.routeWebSocket('wss://helm.test.supabase.co/realtime/v1/websocket**', socket => {
+    socket.onMessage(message => {
+      if (typeof message !== 'string') return;
+      let frame: unknown;
+      try {
+        frame = JSON.parse(message);
+      } catch {
+        return;
+      }
+      if (Array.isArray(frame) && frame.length >= 5) {
+        const [joinRef, ref, topic, event] = frame;
+        if (event === 'phx_join' || event === 'heartbeat' || event === 'access_token') {
+          socket.send(JSON.stringify([
+            joinRef,
+            ref,
+            topic,
+            'phx_reply',
+            { status: 'ok', response: {} },
+          ]));
+        }
+        return;
+      }
+      if (frame && typeof frame === 'object') {
+        const envelope = frame as Record<string, unknown>;
+        if (envelope.event === 'phx_join' || envelope.event === 'heartbeat' || envelope.event === 'access_token') {
+          socket.send(JSON.stringify({
+            topic: envelope.topic,
+            event: 'phx_reply',
+            payload: { status: 'ok', response: {} },
+            ref: envelope.ref,
+            join_ref: envelope.join_ref,
+          }));
+        }
+      }
+    });
+  });
+}
+
+function applyMockMutations(
+  rows: Map<string, MockDatabaseRow>,
+  userId: string,
+  accountVersion: number,
+  operations: HelmMutation[],
+  now: string,
+): MockDatabaseRow[] {
+  const changed = new Map<string, MockDatabaseRow>();
+  const mark = (row: MockDatabaseRow) => {
+    row.revision += 1;
+    row.account_version = accountVersion;
+    row.updated_at = now;
+    changed.set(`${row.collection}\0${row.record_id}`, row);
+  };
+  for (const operation of operations) {
+    if (operation.op === 'reorder') {
+      operation.orderedRecordIds.forEach((recordId, position) => {
+        const row = rows.get(`${operation.collection}\0${recordId}`);
+        if (row && row.deleted_at === null && row.position !== position) {
+          row.position = position;
+          mark(row);
+        }
+      });
+      continue;
+    }
+    const key = `${operation.collection}\0${operation.recordId}`;
+    const existing = rows.get(key);
+    if (operation.op === 'create') {
+      const row: MockDatabaseRow = {
+        user_id: userId,
+        collection: operation.collection,
+        record_id: operation.recordId,
+        payload: operation.payload,
+        position: operation.position ?? null,
+        revision: 1,
+        account_version: accountVersion,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+      };
+      rows.set(key, row);
+      changed.set(key, row);
+    } else if (existing && operation.op === 'patch' && existing.deleted_at === null) {
+      existing.payload = { ...existing.payload, ...operation.set };
+      for (const field of operation.unset || []) delete existing.payload[field];
+      mark(existing);
+    } else if (existing && operation.op === 'increment' && existing.deleted_at === null) {
+      existing.payload[operation.field] = Number(existing.payload[operation.field] || 0) + operation.amount;
+      mark(existing);
+    } else if (existing && operation.op === 'delete' && existing.deleted_at === null) {
+      existing.deleted_at = now;
+      mark(existing);
+    } else if (existing && operation.op === 'restore' && existing.deleted_at !== null) {
+      existing.deleted_at = null;
+      mark(existing);
+    }
+  }
+  return [...changed.values()];
+}
+
+function toMutationResponseRow(row: MockDatabaseRow) {
+  return {
+    userId: row.user_id,
+    collection: row.collection,
+    recordId: row.record_id,
+    payload: row.payload,
+    position: row.position,
+    revision: row.revision,
+    accountVersion: row.account_version,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+  };
 }
 
 async function mockPrayerTimes(page: Page): Promise<void> {

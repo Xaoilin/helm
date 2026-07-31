@@ -71,7 +71,7 @@ export const ASSISTANT_ACTIONS = [
     aliases: ['capture this', 'dump this', 'remember this', 'jot this down', 'save to inbox', 'quick capture'],
     confirmationRule: 'never',
     executorKey: 'capture_add_item',
-    debugSummary: 'Stores raw user-provided content in the local-first Capture Inbox without converting it into another domain item.',
+    debugSummary: 'Stores raw user-provided content in the account-backed Capture Inbox without converting it into another domain item.',
     args: [
       {
         key: 'content',

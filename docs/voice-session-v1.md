@@ -165,7 +165,7 @@ If Lina mishears a spoken request, the user can correct her with phrasing like:
 
 - `No, I said delete all of the tasks related to mirrors`
 
-The shared assistant runtime now stores that correction in local-first assistant memory and applies it to future matching voice and chat turns.
+The shared assistant runtime stores that correction in account-backed assistant memory and applies it to future matching voice and chat turns.
 
 ## Verification
 

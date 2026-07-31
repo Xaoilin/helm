@@ -54,10 +54,28 @@ function baseInput(overrides: InputOverrides = {}): SystemHealthInput {
   const base: SystemHealthInput = {
     appLoaded: true,
     persistence: {
+      mode: 'database',
+      syncSession: {
+        status: 'ready',
+        userId: '11111111-1111-4111-8111-111111111111',
+        accountVersion: 1,
+        lastReadyAt: '2026-04-24T09:00:00.000Z',
+        lastProbeAt: '2026-04-24T09:00:00.000Z',
+        error: null,
+      },
       lastLocalWriteAt: '2026-04-24T09:00:00.000Z',
       lastLocalWriteKey: 'tasks',
       lastLocalWriteError: null,
       dirtyKeys: [],
+      lastRemoteReadError: null,
+      lastRemoteWriteError: null,
+      remoteReadFailedKeys: [],
+      supabaseRealtime: {
+        state: 'subscribed',
+        lastEventAt: null,
+        lastStatusAt: '2026-04-24T09:00:00.000Z',
+        lastError: null,
+      },
       supabaseQueue: emptyQueue,
     },
     supabase: {
@@ -134,8 +152,19 @@ function item(input: SystemHealthInput, id: string) {
 }
 
 describe('system health status mapping', () => {
-  it('shows signed-out local-first data as saved and Supabase local-only', () => {
+  it('shows signed-out shared data as blocked and requires sign-in', () => {
     const input = baseInput({
+      persistence: {
+        mode: 'blocked',
+        syncSession: {
+          status: 'blocked',
+          userId: null,
+          accountVersion: 0,
+          lastReadyAt: null,
+          lastProbeAt: null,
+          error: 'Sign in to load HELM data.',
+        },
+      },
       supabase: {
         ready: true,
         authenticated: false,
@@ -144,12 +173,12 @@ describe('system health status mapping', () => {
     });
 
     expect(item(input, 'local')).toMatchObject({
-      headline: 'Local data saved',
-      tone: 'healthy',
+      headline: 'Database connection required',
+      tone: 'offline',
     });
     expect(item(input, 'supabase')).toMatchObject({
-      headline: 'Local-only',
-      tone: 'local',
+      headline: 'Sign in required',
+      tone: 'offline',
       action: { kind: 'sign-in' },
     });
   });

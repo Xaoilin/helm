@@ -37,7 +37,7 @@ Sequential timetable windows remain separate and continue to drive Dashboard `Up
 
 Canonical types live in `src/types/domain.ts`. Pure normalization, deadline, outcome, reminder-key, and percentage logic lives in `src/services/prayerTracking.ts`. `src/store/contexts/PrayerContext.tsx` owns the live schedule, tracking state, completion dialog, reminder lifecycle, and diagnostics.
 
-Records use `<local date>::<PrayerName>` keys so deletion or recreation of a prayer task cannot erase history. The provider persists the JSON through the normal local-first storage path and shared Supabase key-value group; this feature does not require a SQL migration.
+Records use `<local date>::<PrayerName>` keys so deletion or recreation of a prayer task cannot erase history. The aggregate is decomposed into account-owned metadata, outcome, eligibility, and reminder-receipt records and changed through the transactional HELM mutation RPC.
 
 All UI, chat, and voice entry points call the same prayer completion mutation. One completion:
 
@@ -65,7 +65,7 @@ The provider refreshes on:
 
 Only a cache matching the current local date and selected location may be shown. If a usable timetable is unavailable, the UI says so and does not manufacture deadline state.
 
-AlAdhan schedule validation requires all five prayers plus Sunrise, Sunset, and Midnight, valid 24-hour clock ranges, and a plausible daily ordering. Reminder scheduling, deadline inference, next-prayer comparison, and clock-suggested outcomes pause when the returned IANA timezone does not match the desktop timezone; Debug and Settings expose the mismatch instead of guessing. Explicit persisted outcomes and legacy counts remain reportable offline or during a mismatch, but missing outcomes are never inferred without a trusted matching schedule.
+AlAdhan schedule validation requires all five prayers plus Sunrise, Sunset, and Midnight, valid 24-hour clock ranges, and a plausible daily ordering. Reminder scheduling, deadline inference, next-prayer comparison, and clock-suggested outcomes pause when the returned IANA timezone does not match the desktop timezone; Debug and Settings expose the mismatch instead of guessing. Shared prayer history is blocked offline, and missing outcomes are never inferred without a trusted matching schedule.
 
 ## Reminder Lifecycle
 

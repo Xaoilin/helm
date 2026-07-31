@@ -2049,7 +2049,7 @@ export default function TripsSurface() {
           <div className="empty-state" role="status">
             <div className="empty-icon">&#9992;&#65039;</div>
             <h3>Plan your first trip</h3>
-            <p>Create a travel timeline with destinations, bookings, and day plans that stay local-first inside HELM.</p>
+            <p>Create a travel timeline with destinations, bookings, and day plans saved to your HELM account.</p>
             <button className="btn btn-primary" onClick={openCreateWizard}>Plan your first trip</button>
           </div>
         ) : (

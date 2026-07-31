@@ -35,10 +35,28 @@ const {
     syncError: null,
   },
   persistenceSnapshot: {
+    mode: 'blocked',
+    syncSession: {
+      status: 'blocked',
+      userId: null,
+      accountVersion: 0,
+      lastReadyAt: null,
+      lastProbeAt: null,
+      error: 'Sign in to load HELM data.',
+    },
     lastLocalWriteAt: '2026-04-24T09:00:00.000Z',
     lastLocalWriteKey: 'tasks',
     lastLocalWriteError: null,
     dirtyKeys: [] as string[],
+    lastRemoteReadError: null,
+    lastRemoteWriteError: null,
+    remoteReadFailedKeys: [] as string[],
+    supabaseRealtime: {
+      state: 'unavailable',
+      lastEventAt: null,
+      lastStatusAt: null,
+      lastError: null,
+    },
     supabaseQueue: {
       queuedCount: 0,
       queuedKeys: [] as string[],
@@ -124,15 +142,15 @@ describe('SystemStatusPanel', () => {
     });
 
     expect(screen.getByText('System status')).toBeInTheDocument();
-    expect(screen.getByText('Local data')).toBeInTheDocument();
+    expect(screen.getByText('Account data')).toBeInTheDocument();
     expect(screen.getByText('Supabase')).toBeInTheDocument();
     expect(screen.getByText('Google Calendar')).toBeInTheDocument();
     expect(screen.getByText('OpenAI')).toBeInTheDocument();
     expect(screen.getByText('Ollama')).toBeInTheDocument();
     expect(screen.getByText('Voice')).toBeInTheDocument();
-    expect(screen.getByText('Local data saved')).toBeInTheDocument();
-    expect(screen.getAllByText('Local-only').length).toBeGreaterThan(0);
-    expect(screen.getByText('Calendar local-only')).toBeInTheDocument();
+    expect(screen.getByText('Database connection required')).toBeInTheDocument();
+    expect(screen.getByText('Sign in required')).toBeInTheDocument();
+    expect(screen.getByText('No external calendar')).toBeInTheDocument();
     expect(await screen.findByText('OpenAI available')).toBeInTheDocument();
     expect(await screen.findByText('Ollama offline')).toBeInTheDocument();
     expect(screen.getByText('Voice unavailable')).toBeInTheDocument();

@@ -4,8 +4,9 @@ import type { AssistantProvider } from './types/domain';
  * App configuration — developer-managed, baked into the build.
  * End users should never need to configure these.
  *
- * Values come from environment variables (VITE_* prefix).
- * Fallback to localStorage settings for backward compatibility.
+ * Values come from environment variables (VITE_* prefix). Legacy provider
+ * settings may still be read during the one-time device migration, but the
+ * Supabase account boundary is build-managed and never device-configured.
  */
 
 function getEnv(key: string): string {
@@ -19,7 +20,7 @@ function getAssistantProviderEnv(): AssistantProvider {
 
 function getSettingsValue(key: string): string {
   try {
-    const raw = localStorage.getItem('helm:settings');
+    const raw = localStorage.getItem('helm:device:deviceSettings');
     if (!raw) return '';
     const settings = JSON.parse(raw);
     return settings?.[key] || '';
@@ -27,10 +28,10 @@ function getSettingsValue(key: string): string {
 }
 
 /** Supabase project URL. */
-export const SUPABASE_URL = getEnv('VITE_SUPABASE_URL') || getSettingsValue('supabaseUrl');
+export const SUPABASE_URL = getEnv('VITE_SUPABASE_URL');
 
-/** Supabase anon key. */
-export const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_ANON_KEY') || getSettingsValue('supabaseAnonKey');
+/** Supabase publishable key (legacy anon key remains supported during rotation). */
+export const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_PUBLISHABLE_KEY') || getEnv('VITE_SUPABASE_ANON_KEY');
 
 /** Google OAuth Client ID for Calendar integration. */
 export const GOOGLE_OAUTH_CLIENT_ID = getEnv('VITE_GOOGLE_OAUTH_CLIENT_ID') || getSettingsValue('googleOAuthClientId');

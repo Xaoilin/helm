@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { isSupabaseReady, isAuthenticated, getCurrentUserId } from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
@@ -15,12 +15,10 @@ import { canUseHostedAssistantProjectAccess, isLocalhostRuntime } from '../servi
 import { testOllamaConnection, listOllamaModels } from '../services/ollamaApi';
 import { APP_RELEASE_VERSION } from '../config/release';
 import {
-  listSyncDriftCandidates,
-  resolveSyncDriftCandidate,
-  type SyncDriftCandidate,
-  type SyncResolutionChoice,
+  getSyncSessionSnapshot,
+  refreshDatabasePersistence,
+  subscribeSyncSession,
 } from '../store/persistence';
-import SyncDriftModal from '../components/settings/SyncDriftModal';
 import { usePrayerContext } from '../store/contexts/PrayerContext';
 import { PRAYER_REMINDERS } from '../config/constants';
 import { createPrayerTrackingState } from '../services/prayerTracking';
@@ -32,12 +30,7 @@ export default function SettingsSurface() {
   const linaEnabled = settings.assistantEnabled !== false;
   const [confirmReset, setConfirmReset] = useState(false);
   const [prayerTestStatus, setPrayerTestStatus] = useState<string | null>(null);
-  const [syncDriftCandidates, setSyncDriftCandidates] = useState<SyncDriftCandidate[]>([]);
-  const [syncDriftLoading, setSyncDriftLoading] = useState(false);
-  const [syncDriftStatus, setSyncDriftStatus] = useState<string | null>(null);
-  const [syncDriftModalOpen, setSyncDriftModalOpen] = useState(false);
-  const [resolvingSyncGroupId, setResolvingSyncGroupId] = useState<string | null>(null);
-  const autoOpenedSyncHashesRef = useRef<Set<string>>(new Set());
+  const [syncSession, setSyncSession] = useState(() => getSyncSessionSnapshot());
 
   // Goal tags
   const [newTag, setNewTag] = useState('');
@@ -51,7 +44,6 @@ export default function SettingsSurface() {
   const selectedHostedModel = getHostedAssistantModelSetting(settings);
   const selectedHostedModelOption = getHostedAssistantModelOption(selectedHostedModel);
   const authSyncKey = `${isSupabaseReady()}:${isAuthenticated()}:${getCurrentUserId() || ''}`;
-  const databaseSyncActive = isSupabaseReady() && isAuthenticated();
   const hostedProjectAccessAvailable = canUseHostedAssistantProjectAccess();
   const localhostRuntime = isLocalhostRuntime();
 
@@ -80,66 +72,7 @@ export default function SettingsSurface() {
     };
   }, [selectedHostedModel, selectedProvider, settings.ollamaEndpoint, authSyncKey]);
 
-  const refreshSyncDriftCandidates = useCallback(async (options: { autoOpen?: boolean } = {}) => {
-    setSyncDriftLoading(true);
-    try {
-      const candidates = await listSyncDriftCandidates();
-      setSyncDriftCandidates(candidates);
-      setSyncDriftStatus(candidates.length === 0 ? 'Synced with Supabase.' : null);
-
-      const actionableCandidates = candidates.filter(candidate => candidate.requiresUserChoice);
-      const conflictHash = actionableCandidates.map(candidate => candidate.conflictHash).sort().join(':');
-      if (options.autoOpen && actionableCandidates.length > 0 && !autoOpenedSyncHashesRef.current.has(conflictHash)) {
-        autoOpenedSyncHashesRef.current.add(conflictHash);
-        setSyncDriftModalOpen(true);
-      }
-    } finally {
-      setSyncDriftLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!databaseSyncActive) {
-      setSyncDriftCandidates([]);
-      setSyncDriftStatus(null);
-      setSyncDriftModalOpen(false);
-      return;
-    }
-
-    void refreshSyncDriftCandidates({ autoOpen: true });
-  }, [databaseSyncActive, authSyncKey, refreshSyncDriftCandidates]);
-
-  const handleResolveSyncDrift = useCallback(async (
-    candidate: SyncDriftCandidate,
-    choice: SyncResolutionChoice,
-  ) => {
-    setResolvingSyncGroupId(candidate.groupId);
-    setSyncDriftStatus(null);
-    try {
-      const result = await resolveSyncDriftCandidate(candidate.groupId, choice);
-      if (!result.resolved) {
-        setSyncDriftStatus(result.error || `Could not resolve ${candidate.label}.`);
-        return;
-      }
-
-      const nextCandidates = await listSyncDriftCandidates();
-      setSyncDriftCandidates(nextCandidates);
-      setSyncDriftStatus(choice === 'use_device'
-        ? `${candidate.label} was committed to Supabase.`
-        : `${candidate.label} now follows Supabase.`);
-      if (nextCandidates.length === 0) {
-        setSyncDriftModalOpen(false);
-      }
-      if (choice === 'use_device') {
-        window.dispatchEvent(new Event('helm:app-data-refresh'));
-      }
-    } finally {
-      setResolvingSyncGroupId(null);
-    }
-  }, []);
-
-  const syncChoiceCount = syncDriftCandidates.reduce((sum, candidate) => sum + candidate.userChoiceCount, 0);
-  const syncAutoCleanCount = syncDriftCandidates.reduce((sum, candidate) => sum + candidate.autoResolvedCount, 0);
+  useEffect(() => subscribeSyncSession(setSyncSession), []);
 
   return (
     <>
@@ -156,66 +89,33 @@ export default function SettingsSurface() {
           <div className="sync-status-card">
             <span
               className={`sync-status-dot ${
-                !databaseSyncActive
-                  ? 'offline'
-                  : syncDriftLoading
-                    ? 'syncing'
-                    : syncDriftCandidates.length > 0
-                      ? 'attention'
-                      : 'healthy'
+                syncSession.status === 'ready' ? 'healthy' : 'syncing'
               }`}
               aria-hidden="true"
             />
             <div className="sync-status-copy">
               <div className="sync-status-title">
-                {!databaseSyncActive
-                  ? 'Sign in with Google to sync your data across devices'
-                  : syncDriftLoading
-                    ? 'Finishing sync'
-                    : syncDriftCandidates.length > 0
-                      ? 'Data differences need your choice'
-                      : 'Synced with Supabase'}
+                {syncSession.status === 'ready' ? 'Database source of truth' : 'Refreshing database state'}
               </div>
               <div className="sync-status-detail">
-                {databaseSyncActive
-                  ? `Signed in as ${getCurrentUserId()?.slice(0, 8)}... App data reads and writes Supabase only. Connected calendar data refreshes from Google instead of asking you to resolve cache drift.`
-                  : 'Your data is stored locally. Sign in via the sidebar to enable cloud sync.'}
+                {`Signed in as ${getCurrentUserId()?.slice(0, 8)}... Shared data belongs to this account and is read and written through Supabase only. HELM resolves concurrent updates automatically.`}
               </div>
             </div>
-            {databaseSyncActive && (
-              <div className="sync-status-actions">
-                {syncDriftCandidates.length > 0 && (
-                  <button className="btn btn-primary btn-sm" type="button" onClick={() => setSyncDriftModalOpen(true)}>
-                    Review differences
-                  </button>
-                )}
-                <button
-                  className="btn btn-secondary btn-sm"
-                  type="button"
-                  onClick={() => void refreshSyncDriftCandidates()}
-                  disabled={syncDriftLoading}
-                >
-                  {syncDriftLoading ? 'Checking...' : 'Refresh'}
-                </button>
-              </div>
-            )}
+            <div className="sync-status-actions">
+              <button
+                className="btn btn-secondary btn-sm"
+                type="button"
+                onClick={() => void refreshDatabasePersistence()}
+                disabled={syncSession.status !== 'ready'}
+              >
+                Refresh from database
+              </button>
+            </div>
           </div>
-          {databaseSyncActive && (
-            <div className={`sync-drift-summary ${syncDriftCandidates.length > 0 ? 'attention' : 'healthy'}`}>
-              <strong>
-                {syncDriftCandidates.length > 0
-                  ? `${syncChoiceCount} ${syncChoiceCount === 1 ? 'difference needs' : 'differences need'} your choice`
-                  : 'No unresolved device differences'}
-              </strong>
-              <span>
-                {syncDriftCandidates.length > 0
-                  ? syncAutoCleanCount > 0
-                    ? 'Only user data is shown here. System metadata differences will follow Supabase automatically.'
-                    : 'Only meaningful user data differences are shown here.'
-                  : syncDriftStatus || 'Safe local copies are cleaned up automatically.'}
-              </span>
-            </div>
-          )}
+          <div className="sync-drift-summary healthy">
+            <strong>No sync decisions required</strong>
+            <span>Legacy device copies are resolved additively and retired automatically after the database confirms the result.</span>
+          </div>
         </div>
 
         {/* Google Calendar */}
@@ -662,7 +562,7 @@ export default function SettingsSurface() {
           <div style={{ fontSize: 13 }}>
             <strong>HELM</strong> {APP_RELEASE_VERSION}<br />
             <span style={{ color: '#6b6f85' }}>
-              Local-first personal assistant for software engineers.<br />
+              Account-backed personal assistant for software engineers.<br />
               Built with Tauri + React + TypeScript + Rust.
             </span>
           </div>
@@ -672,17 +572,10 @@ export default function SettingsSurface() {
           <div className="info-box" style={{ marginTop: 12 }}>
             Runtime status is reported where the feature actually lives:
             <br />
-            Chat shows the active assistant runtime state, Calendar labels local-only calendars, Integrations marks simulated providers, and Projects shows whether local-path actions are desktop-only or available in this build.
+            Chat shows the active assistant runtime state, Calendar labels manual providers, Integrations marks simulated providers, and Projects shows whether local-path actions are desktop-only or available in this build.
           </div>
         </div>
       </div>
-      <SyncDriftModal
-        candidates={syncDriftCandidates}
-        open={syncDriftModalOpen}
-        resolvingGroupId={resolvingSyncGroupId}
-        onClose={() => setSyncDriftModalOpen(false)}
-        onResolve={handleResolveSyncDrift}
-      />
     </>
   );
 }

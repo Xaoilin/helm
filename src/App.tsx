@@ -207,7 +207,7 @@ function AppInner() {
 
   const renderAuthContent = (variant: 'sidebar' | 'mobile') => {
     if (!supabaseReady) {
-      return <span className={`${variant}-auth-status`}>Local-first mode. Cloud sync is unavailable in this build.</span>;
+      return <span className={`${variant}-auth-status`}>Account database unavailable in this build.</span>;
     }
 
     if (authLoading) {

@@ -1,22 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
-import {
-  flushWriteQueue,
-  getSupabaseRealtimeSnapshot,
-  getSupabaseWriteQueueSnapshot,
-  isAuthenticated,
-  isSupabaseReady,
-  loadRemote,
-  saveRemote,
-  queueRemoteWrite,
-  subscribeRemoteStore,
-  subscribeSupabaseRealtimeSnapshot,
-  subscribeSupabaseWriteQueueSnapshot,
-  type RemoteStoreChange,
-  type SupabaseRealtimeSnapshot,
-  type SupabaseWriteQueueSnapshot,
-} from './supabase';
+import { v4 as uuid } from 'uuid';
+import { APP_VERSION } from '../config/release';
 import { logWarn } from '../services/logger';
-import { getSharedStoreKey, SHARED_STORE_KEYS } from './storeKeys';
 import {
   PROJECT_DEVICE_BINDINGS_STORE_KEY,
   PROJECT_PENDING_LEGACY_PATHS_STORE_KEY,
@@ -26,57 +11,80 @@ import {
   normalizeProjectRecords,
   serializeSharedProjects,
 } from './projectPersistence';
+import {
+  applyHelmMutations,
+  fetchHelmAccountSnapshot,
+  fetchHelmCollections,
+  getCurrentUserId,
+  getSupabaseRealtimeSnapshot,
+  isAuthenticated,
+  isSupabaseReady,
+  probeHelmAccountVersion,
+  subscribeHelmBroadcast,
+  subscribeSupabaseRealtimeSnapshot,
+  type SupabaseRealtimeSnapshot,
+} from './supabase';
+import { SHARED_STORE_KEYS } from './storeKeys';
+import type { HelmMutation, HelmRecord, SyncSessionStatus } from './databaseTypes';
+import { HELM_DATABASE_SCHEMA_VERSION } from './databaseTypes';
+import {
+  decodeStoreValue,
+  encodeStoreValue,
+  mergeLegacyStoreValue,
+  sanitizeLegacyStoreValue,
+  splitSettings,
+  type DeviceSettings,
+  type EncodedStoreRecord,
+} from './recordCodec';
 
 const NAMESPACE = 'helm';
 const META_PREFIX = `${NAMESPACE}:meta:`;
+export const DEVICE_SETTINGS_STORE_KEY = 'deviceSettings';
+export const CALENDAR_SYNC_REQUEST_EVENT = 'helm:calendar-sync-requested';
+
 const DEVICE_STORE_KEYS = new Set<string>([
   PROJECT_DEVICE_BINDINGS_STORE_KEY,
   PROJECT_PENDING_LEGACY_PATHS_STORE_KEY,
+  DEVICE_SETTINGS_STORE_KEY,
 ]);
-type ProjectDeviceStoreKey =
+
+type DeviceStoreKey =
   | typeof PROJECT_DEVICE_BINDINGS_STORE_KEY
-  | typeof PROJECT_PENDING_LEGACY_PATHS_STORE_KEY;
+  | typeof PROJECT_PENDING_LEGACY_PATHS_STORE_KEY
+  | typeof DEVICE_SETTINGS_STORE_KEY;
 
-let tauriAvailable: boolean | null = null;
-let remoteFlushHandlersRegistered = false;
-let remoteStoreUnsubscribe: (() => void) | null = null;
-let lastLocalWriteAt: string | null = null;
-let lastLocalWriteKey: string | null = null;
-let lastLocalWriteError: string | null = null;
-let lastRemoteReadAt: string | null = null;
-let lastRemoteReadKey: string | null = null;
-let lastRemoteReadError: string | null = null;
-let lastRemoteWriteAt: string | null = null;
-let lastRemoteWriteKey: string | null = null;
-let lastRemoteWriteError: string | null = null;
-let lastSuppressedInitialWriteKey: string | null = null;
-let lastSuppressedInitialWriteAt: string | null = null;
-let lastSyncDriftScanAt: string | null = null;
-let lastSyncDriftResolutionAt: string | null = null;
-let lastSyncDriftError: string | null = null;
-let syncDriftConflictCount = 0;
-let lastCalendarCacheCleanupAt: string | null = null;
-let lastCalendarCacheCleanupReason: string | null = null;
-let lastCalendarSyncRequestAt: string | null = null;
-let lastCalendarSyncRequestReason: string | null = null;
-const persistenceHealthSubscribers = new Set<(snapshot: PersistenceHealthSnapshot) => void>();
-const storeChangeSubscribers = new Set<(change: RemoteStoreChange) => void>();
-const lastKnownRemoteJson = new Map<string, string>();
-const suppressNextAuthenticatedSaveJson = new Map<string, string | null>();
-const remoteReadFailedKeys = new Map<string, string>();
-
-interface LocalCacheMeta {
+export interface RemoteStoreChange {
+  event: 'REMOTE_REFRESH' | 'RECONNECT';
+  namespace: string;
+  key: string;
   updatedAt: string | null;
-  dirty: boolean;
+  value: unknown;
 }
 
-interface LocalCacheSnapshot<T> {
-  value: T | null;
-  hasValue: boolean;
+export interface SupabaseWriteQueueSnapshot {
+  queuedCount: number;
+  queuedKeys: string[];
+  lastQueuedAt: string | null;
+  lastFlushStartedAt: string | null;
+  lastFlushSuccessAt: string | null;
+  lastFlushFailureAt: string | null;
+  lastFlushError: string | null;
+  lastFlushKeys: string[];
+  lastFailureKeys: string[];
+}
+
+export interface SyncSessionSnapshot {
+  status: SyncSessionStatus;
+  userId: string | null;
+  accountVersion: number;
+  lastReadyAt: string | null;
+  lastProbeAt: string | null;
+  error: string | null;
 }
 
 export interface PersistenceHealthSnapshot {
-  mode: 'database' | 'local';
+  mode: 'database' | 'blocked';
+  syncSession: SyncSessionSnapshot;
   lastLocalWriteAt: string | null;
   lastLocalWriteKey: string | null;
   lastLocalWriteError: string | null;
@@ -93,10 +101,6 @@ export interface PersistenceHealthSnapshot {
   supabaseQueue: SupabaseWriteQueueSnapshot;
   supabaseRealtime: SupabaseRealtimeSnapshot;
   localImportCandidateCount: number;
-  syncDriftConflictCount: number;
-  lastSyncDriftScanAt: string | null;
-  lastSyncDriftResolutionAt: string | null;
-  lastSyncDriftError: string | null;
   lastCalendarCacheCleanupAt: string | null;
   lastCalendarCacheCleanupReason: string | null;
   lastCalendarSyncRequestAt: string | null;
@@ -113,84 +117,78 @@ export interface LocalImportCandidate {
   sizeBytes: number;
 }
 
-export interface LocalImportResult {
-  key: string;
-  imported: boolean;
-  cleared: boolean;
-  reason: 'imported' | 'remote_exists' | 'no_local_data' | 'not_authenticated' | 'remote_write_failed';
+let tauriAvailable: boolean | null = null;
+let accountVersion = 0;
+let bootstrappedUserId: string | null = null;
+let bootstrapPromise: Promise<void> | null = null;
+let broadcastUnsubscribe: (() => void) | null = null;
+let lifecycleRegistered = false;
+let realtimeHealthRegistered = false;
+let flushPromise: Promise<void> | null = null;
+let flushPromiseEpoch: number | null = null;
+let flushScheduled = false;
+let persistenceEpoch = 0;
+let broadcastRefreshPromise: Promise<void> = Promise.resolve();
+
+const recordsByCollection = new Map<string, Map<string, HelmRecord>>();
+// Snapshot last delivered to mounted providers. Diffs are calculated against
+// this view, not a newer Broadcast-refreshed cache, so an unrelated concurrent
+// addition or field patch can never be mistaken for a local deletion/revert.
+const deliveredRecordsByCollection = new Map<string, Map<string, EncodedStoreRecord>>();
+const pendingStoreValues = new Map<string, unknown>();
+const persistenceHealthSubscribers = new Set<(snapshot: PersistenceHealthSnapshot) => void>();
+const syncSessionSubscribers = new Set<(snapshot: SyncSessionSnapshot) => void>();
+const storeChangeSubscribers = new Set<(change: RemoteStoreChange) => void>();
+
+let syncSession: SyncSessionSnapshot = {
+  status: 'blocked',
+  userId: null,
+  accountVersion: 0,
+  lastReadyAt: null,
+  lastProbeAt: null,
+  error: 'Sign in to load HELM data.',
+};
+let writeQueueSnapshot: SupabaseWriteQueueSnapshot = {
+  queuedCount: 0,
+  queuedKeys: [],
+  lastQueuedAt: null,
+  lastFlushStartedAt: null,
+  lastFlushSuccessAt: null,
+  lastFlushFailureAt: null,
+  lastFlushError: null,
+  lastFlushKeys: [],
+  lastFailureKeys: [],
+};
+let lastLocalWriteAt: string | null = null;
+let lastLocalWriteKey: string | null = null;
+let lastLocalWriteError: string | null = null;
+let lastRemoteReadAt: string | null = null;
+let lastRemoteReadKey: string | null = null;
+let lastRemoteReadError: string | null = null;
+let lastRemoteWriteAt: string | null = null;
+let lastRemoteWriteKey: string | null = null;
+let lastRemoteWriteError: string | null = null;
+let lastCalendarCacheCleanupAt: string | null = null;
+let lastCalendarCacheCleanupReason: string | null = null;
+let lastCalendarSyncRequestAt: string | null = null;
+let lastCalendarSyncRequestReason: string | null = null;
+
+class StalePersistenceSessionError extends Error {
+  constructor() {
+    super('The HELM account changed while database work was in flight.');
+    this.name = 'StalePersistenceSessionError';
+  }
 }
 
-export type SyncDriftKind = 'identical' | 'local_only' | 'remote_only' | 'conflict' | 'unreadable';
-export type SyncResolutionChoice = 'keep_database' | 'use_device';
-export type SyncDriftImpact = 'user_data' | 'user_preference' | 'system_metadata' | 'unreadable';
-
-export interface SyncDriftDiffItem {
-  key: string;
-  keyLabel: string;
-  id: string;
-  label: string;
-  detail: string;
-  fieldPath: string;
-  fieldLabel: string;
-  localValue: string | null;
-  remoteValue: string | null;
-  impact: SyncDriftImpact;
-  autoResolution?: 'keep_database';
+function isCurrentPersistenceSession(epoch: number, userId: string): boolean {
+  return epoch === persistenceEpoch
+    && getCurrentUserId() === userId
+    && bootstrappedUserId === userId;
 }
 
-export interface SyncDriftDiff {
-  localOnly: SyncDriftDiffItem[];
-  remoteOnly: SyncDriftDiffItem[];
-  changed: SyncDriftDiffItem[];
-  unchangedCount: number;
+function assertCurrentPersistenceSession(epoch: number, userId: string): void {
+  if (!isCurrentPersistenceSession(epoch, userId)) throw new StalePersistenceSessionError();
 }
-
-export interface SyncDriftSideSummary {
-  hasValue: boolean;
-  source: 'database' | 'tauri' | 'localStorage' | 'mixed' | 'none';
-  sizeBytes: number;
-  updatedAt: string | null;
-  redactedJson: string;
-}
-
-export interface SyncDriftKeySummary {
-  key: string;
-  label: string;
-  description: string;
-  kind: SyncDriftKind;
-  local: SyncDriftSideSummary;
-  remote: SyncDriftSideSummary;
-}
-
-export interface SyncDriftCandidate {
-  groupId: string;
-  label: string;
-  description: string;
-  keys: SyncDriftKeySummary[];
-  kind: SyncDriftKind;
-  requiresUserChoice: boolean;
-  recommendedChoice: SyncResolutionChoice;
-  local: SyncDriftSideSummary;
-  remote: SyncDriftSideSummary;
-  diff: SyncDriftDiff;
-  conflictHash: string;
-  canUseDevice: boolean;
-  userChoiceCount: number;
-  autoResolvedCount: number;
-  hasOnlySystemMetadata: boolean;
-  summary: string;
-}
-
-export interface SyncResolutionResult {
-  groupId: string;
-  choice: SyncResolutionChoice;
-  resolved: boolean;
-  clearedKeys: string[];
-  savedKeys: string[];
-  error: string | null;
-}
-
-export const CALENDAR_SYNC_REQUEST_EVENT = 'helm:calendar-sync-requested';
 
 async function isTauri(): Promise<boolean> {
   if (tauriAvailable !== null) return tauriAvailable;
@@ -198,7 +196,6 @@ async function isTauri(): Promise<boolean> {
     await invoke('get_app_data_dir');
     tauriAvailable = true;
   } catch {
-    logWarn('Persistence', 'Tauri detection failed');
     tauriAvailable = false;
   }
   return tauriAvailable;
@@ -228,7 +225,6 @@ function assertSharedStoreKeyIsNotDeviceOnly(key: string): void {
 
 async function prepareSharedStoreValue(key: string, value: unknown): Promise<unknown> {
   if (key !== 'projects') return value;
-
   const now = new Date().toISOString();
   const projects = normalizeProjectRecords(value, now);
   const [storedBindings, storedPendingPaths] = await Promise.all([
@@ -246,9 +242,7 @@ async function prepareSharedStoreValue(key: string, value: unknown): Promise<unk
       if (!(await isTauri())) return null;
       try {
         const canonicalRoot = await invoke<string>('canonicalize_project_path', { path: projectRoot });
-        return typeof canonicalRoot === 'string' && canonicalRoot.trim()
-          ? canonicalRoot.trim()
-          : null;
+        return typeof canonicalRoot === 'string' && canonicalRoot.trim() ? canonicalRoot.trim() : null;
       } catch {
         return null;
       }
@@ -261,68 +255,293 @@ async function prepareSharedStoreValue(key: string, value: unknown): Promise<unk
   if (JSON.stringify(existingPendingPaths) !== JSON.stringify(migration.pendingPaths)) {
     await saveDeviceStore(PROJECT_PENDING_LEGACY_PATHS_STORE_KEY, migration.pendingPaths);
   }
-
   return serializeSharedProjects(projects);
 }
 
-function readLocalCache<T>(key: string): LocalCacheSnapshot<T> {
-  const raw = localStorage.getItem(getDataKey(key));
-  if (raw === null) {
-    return { value: null, hasValue: false };
+function publishSyncSession(patch: Partial<SyncSessionSnapshot>): void {
+  syncSession = { ...syncSession, ...patch };
+  const snapshot = { ...syncSession };
+  syncSessionSubscribers.forEach(listener => listener(snapshot));
+  notifyPersistenceHealthSubscribers();
+}
+
+function publishWriteQueue(patch: Partial<SupabaseWriteQueueSnapshot> = {}): void {
+  writeQueueSnapshot = {
+    ...writeQueueSnapshot,
+    ...patch,
+    queuedCount: pendingStoreValues.size + (flushPromise ? 1 : 0),
+    queuedKeys: [...pendingStoreValues.keys()].sort(),
+  };
+  notifyPersistenceHealthSubscribers();
+}
+
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => [key, stableValue(entry)]));
+  }
+  return value;
+}
+
+function valuesEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(stableValue(a)) === JSON.stringify(stableValue(b));
+}
+
+function replaceAllRecordCache(records: HelmRecord[]): void {
+  recordsByCollection.clear();
+  for (const record of records) putRecordCache(record);
+}
+
+function putRecordCache(record: HelmRecord): void {
+  let collection = recordsByCollection.get(record.collection);
+  if (!collection) {
+    collection = new Map();
+    recordsByCollection.set(record.collection, collection);
+  }
+  collection.set(record.recordId, record);
+}
+
+function replaceCollectionCache(collection: string, records: HelmRecord[]): void {
+  recordsByCollection.delete(collection);
+  for (const record of records) putRecordCache(record);
+}
+
+function encodedCache(collection: string): EncodedStoreRecord[] {
+  return [...(recordsByCollection.get(collection)?.values() || [])]
+    .filter(record => record.deletedAt === null)
+    .map(record => ({
+      recordId: record.recordId,
+      payload: record.payload,
+      position: record.position,
+    }));
+}
+
+function copyEncodedRecords(records: EncodedStoreRecord[]): Map<string, EncodedStoreRecord> {
+  return new Map(records.map(record => [record.recordId, {
+    recordId: record.recordId,
+    payload: structuredClone(record.payload),
+    position: record.position,
+  }]));
+}
+
+function decodedCache(collection: string): unknown {
+  return decodeStoreValue(collection, encodedCache(collection));
+}
+
+function patchForPayload(
+  collection: string,
+  recordId: string,
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): HelmMutation[] {
+  const set: Record<string, unknown> = {};
+  const unset: string[] = [];
+  const mutations: HelmMutation[] = [];
+  for (const [key, value] of Object.entries(after)) {
+    if (valuesEqual(before[key], value)) continue;
+    if (
+      isAtomicCounter(collection, recordId, key)
+      && typeof before[key] === 'number'
+      && typeof value === 'number'
+      && value !== before[key]
+    ) {
+      mutations.push({
+        op: 'increment',
+        collection,
+        recordId,
+        field: key,
+        amount: value - before[key],
+      });
+    } else {
+      set[key] = value;
+    }
+  }
+  for (const key of Object.keys(before)) {
+    if (!(key in after)) unset.push(key);
+  }
+  if (Object.keys(set).length > 0 || unset.length > 0) {
+    mutations.unshift({ op: 'patch', collection, recordId, set, unset });
+  }
+  return mutations;
+}
+
+function isAtomicCounter(collection: string, recordId: string, field: string): boolean {
+  return (
+    collection === 'gamification'
+    && (
+      (recordId === 'profile' && (field === 'totalXp' || field === 'totalTasksCompleted'))
+      || (recordId.startsWith('habit:') && field === 'count')
+    )
+  ) || (collection === 'assistantCorrections' && field === 'appliedCount');
+}
+
+function buildStoreMutations(collection: string, desiredValue: unknown): HelmMutation[] {
+  const currentRecords = encodedCache(collection);
+  const delivered = deliveredRecordsByCollection.get(collection) ?? copyEncodedRecords(currentRecords);
+  const desiredRecords = encodeStoreValue(collection, desiredValue);
+  const desired = new Map(desiredRecords.map(record => [record.recordId, record]));
+  const operations: HelmMutation[] = [];
+
+  for (const record of desiredRecords) {
+    const existing = delivered.get(record.recordId);
+    if (!existing) {
+      const tombstone = recordsByCollection.get(collection)?.get(record.recordId);
+      if (tombstone?.deletedAt) {
+        operations.push({ op: 'restore', collection, recordId: record.recordId });
+        operations.push(...patchForPayload(
+          collection,
+          record.recordId,
+          tombstone.payload,
+          record.payload,
+        ));
+      } else {
+        operations.push({
+          op: 'create',
+          collection,
+          recordId: record.recordId,
+          payload: record.payload,
+          position: record.position,
+        });
+      }
+      continue;
+    }
+    operations.push(...patchForPayload(collection, record.recordId, existing.payload, record.payload));
   }
 
+  for (const record of delivered.values()) {
+    if (!desired.has(record.recordId)) {
+      operations.push({ op: 'delete', collection, recordId: record.recordId });
+    }
+  }
+
+  const currentOrder = [...delivered.values()]
+    .filter(record => record.position !== null)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map(record => record.recordId);
+  const desiredOrder = desiredRecords
+    .filter(record => record.position !== null)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map(record => record.recordId);
+  if (!valuesEqual(currentOrder, desiredOrder) && desiredOrder.length > 0) {
+    operations.push({ op: 'reorder', collection, orderedRecordIds: desiredOrder });
+  }
+  return operations;
+}
+
+function applyMutationResult(records: HelmRecord[], version: number): void {
+  for (const record of records) putRecordCache(record);
+  accountVersion = Math.max(accountVersion, version);
+  publishSyncSession({ accountVersion });
+}
+
+async function applyWithIdempotentRetry(requestId: string, operations: HelmMutation[]) {
   try {
-    return {
-      value: JSON.parse(raw) as T,
-      hasValue: true,
-    };
-  } catch {
-    logWarn('Persistence', 'Local cache JSON parse failed');
-    return {
-      value: null,
-      hasValue: false,
-    };
+    return await applyHelmMutations(requestId, operations);
+  } catch (firstError) {
+    if (!shouldRetryMutation(firstError)) throw firstError;
+    return applyHelmMutations(requestId, operations);
   }
 }
 
-function readLocalCacheMeta(key: string): LocalCacheMeta {
-  const raw = localStorage.getItem(getMetaKey(key));
-  if (!raw) {
-    return {
-      updatedAt: null,
-      dirty: false,
-    };
+function shouldRetryMutation(error: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+  const candidate = error as { status?: unknown; code?: unknown; message?: unknown };
+  const status = typeof candidate?.status === 'number' ? candidate.status : null;
+  if (status === 408 || status === 429 || (status !== null && status >= 500)) return true;
+  const message = String(candidate?.message || error || '').toLowerCase();
+  return /fetch|network|socket|timeout|timed out|connection|econnreset/.test(message);
+}
+
+async function commitStoreValues(
+  values: Map<string, unknown>,
+  epoch = persistenceEpoch,
+  userId = getCurrentUserId(),
+): Promise<string[]> {
+  if (!userId) throw new StalePersistenceSessionError();
+  assertCurrentPersistenceSession(epoch, userId);
+  const operations = [...values.entries()].flatMap(([collection, value]) => buildStoreMutations(collection, value));
+  if (operations.length === 0) return [];
+  const requestId = uuid();
+  const result = await applyWithIdempotentRetry(requestId, operations);
+  assertCurrentPersistenceSession(epoch, userId);
+  applyMutationResult(result.changes, result.accountVersion);
+  for (const [collection, value] of values) {
+    deliveredRecordsByCollection.set(collection, copyEncodedRecords(encodeStoreValue(collection, value)));
   }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<LocalCacheMeta>;
-    return {
-      updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : null,
-      dirty: parsed.dirty === true,
-    };
-  } catch {
-    logWarn('Persistence', 'Local cache metadata parse failed');
-    return {
-      updatedAt: null,
-      dirty: false,
-    };
-  }
+  return [...new Set(operations.map(operation => operation.collection))];
 }
 
-function writeLocalCacheMeta(key: string, meta: LocalCacheMeta): void {
-  localStorage.setItem(getMetaKey(key), JSON.stringify(meta));
+async function flushPendingStores(): Promise<void> {
+  const epoch = persistenceEpoch;
+  const userId = getCurrentUserId();
+  if (!userId) return;
+  if (flushPromise && flushPromiseEpoch === epoch) return flushPromise;
+  const operation = (async () => {
+    while (pendingStoreValues.size > 0 && isCurrentPersistenceSession(epoch, userId)) {
+      const batch = new Map(pendingStoreValues);
+      pendingStoreValues.clear();
+      const keys = [...batch.keys()].sort();
+      publishWriteQueue({
+        lastFlushStartedAt: new Date().toISOString(),
+        lastFlushKeys: keys,
+        lastFlushError: null,
+      });
+      try {
+        const changedCollections = await commitStoreValues(batch, epoch, userId);
+        const completedAt = new Date().toISOString();
+        lastRemoteWriteAt = completedAt;
+        lastRemoteWriteKey = changedCollections.at(-1) ?? keys.at(-1) ?? null;
+        lastRemoteWriteError = null;
+        publishWriteQueue({
+          lastFlushSuccessAt: completedAt,
+          lastFlushError: null,
+          lastFailureKeys: [],
+        });
+      } catch (error) {
+        if (error instanceof StalePersistenceSessionError) break;
+        const message = error instanceof Error ? error.message : String(error);
+        lastRemoteWriteError = message;
+        publishWriteQueue({
+          lastFlushFailureAt: new Date().toISOString(),
+          lastFlushError: message,
+          lastFailureKeys: keys,
+        });
+        publishSyncSession({
+          status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'blocked' : 'reconnecting',
+          error: `Database write failed: ${message}`,
+        });
+        if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+          await refreshDatabasePersistence();
+        }
+        break;
+      }
+    }
+  })().finally(() => {
+    if (flushPromise === operation) {
+      flushPromise = null;
+      flushPromiseEpoch = null;
+      publishWriteQueue();
+    }
+  });
+  flushPromise = operation;
+  flushPromiseEpoch = epoch;
+  return operation;
 }
 
-function removeLocalCacheValue(key: string): void {
-  localStorage.removeItem(getDataKey(key));
-  localStorage.removeItem(getMetaKey(key));
+function scheduleFlush(): void {
+  if (flushScheduled) return;
+  flushScheduled = true;
+  const epoch = persistenceEpoch;
+  queueMicrotask(() => {
+    flushScheduled = false;
+    if (epoch === persistenceEpoch) void flushPendingStores();
+  });
 }
 
-function isInitialEmptyStoreValue(value: unknown): boolean {
-  if (value === null || value === undefined) return true;
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === 'object') return true;
-  return false;
+export async function flushPendingRemoteMutations(): Promise<void> {
+  await flushPendingStores();
 }
 
 async function readTauriRaw(key: string): Promise<string | null> {
@@ -334,967 +553,522 @@ async function readTauriRaw(key: string): Promise<string | null> {
   }
 }
 
-function parseImportRaw(raw: string | null): { value: unknown; hasValue: boolean; sizeBytes: number; parseError: boolean } {
-  if (raw === null) {
-    return { value: null, hasValue: false, sizeBytes: 0, parseError: false };
-  }
-
+function localRawSnapshot(raw: string | null): { hasValue: boolean; value: unknown; parseError: boolean; sizeBytes: number } {
+  if (raw === null) return { hasValue: false, value: null, parseError: false, sizeBytes: 0 };
   try {
-    const value = JSON.parse(raw);
-    return {
-      value,
-      hasValue: value !== null,
-      sizeBytes: new Blob([raw]).size,
-      parseError: false,
-    };
+    return { hasValue: true, value: JSON.parse(raw), parseError: false, sizeBytes: new Blob([raw]).size };
   } catch {
-    logWarn('Persistence', 'Local import JSON parse failed');
-    return { value: null, hasValue: false, sizeBytes: raw.length, parseError: true };
+    return { hasValue: false, value: raw, parseError: true, sizeBytes: new Blob([raw]).size };
   }
 }
 
-async function readLocalImportValue(key: string): Promise<{ value: unknown; hasValue: boolean; source: 'tauri' | 'localStorage' | null; sizeBytes: number }> {
-  const tauri = parseImportRaw(await readTauriRaw(key));
-  if (tauri.hasValue) {
-    return { ...tauri, source: 'tauri' };
-  }
-
-  const rawLocal = localStorage.getItem(getDataKey(key));
-  const local = parseImportRaw(rawLocal);
-  if (local.hasValue) {
-    return { ...local, source: 'localStorage' };
-  }
-
-  return { value: null, hasValue: false, source: null, sizeBytes: 0 };
-}
-
-interface SyncDriftGroupDefinition {
-  groupId: string;
-  label: string;
-  description: string;
-  keys: string[];
-  policy?: 'user_resolved' | 'external_cache';
-}
-
-interface LocalDriftValue {
+async function readLegacyLocalValue(key: string): Promise<{
+  raw: string | null;
   value: unknown;
   hasValue: boolean;
-  source: 'tauri' | 'localStorage' | null;
-  sizeBytes: number;
   parseError: boolean;
+  source: 'localStorage' | 'tauri' | null;
+}> {
+  const browserRaw = localStorage.getItem(getDataKey(key));
+  const browser = localRawSnapshot(browserRaw);
+  if (browser.hasValue || browser.parseError) return { ...browser, raw: browserRaw, source: 'localStorage' };
+  const tauriRaw = await readTauriRaw(key);
+  const tauri = localRawSnapshot(tauriRaw);
+  return { ...tauri, raw: tauriRaw, source: tauri.hasValue || tauri.parseError ? 'tauri' : null };
 }
 
-interface RemoteDriftValue {
-  value: unknown;
-  hasValue: boolean;
-  updatedAt: string | null;
-  sizeBytes: number;
+function quarantineLegacyValue(key: string, raw: string): void {
+  const quarantineKey = `${NAMESPACE}:device:legacy-quarantine:${key}:${Date.now()}`;
+  localStorage.setItem(quarantineKey, raw);
 }
 
-interface SyncDriftKeyScan {
-  key: string;
-  label: string;
-  description: string;
-  kind: SyncDriftKind;
-  local: LocalDriftValue;
-  remote: RemoteDriftValue;
-  normalizedLocalValue: unknown;
-  normalizedRemoteValue: unknown;
-  ignoredDifferenceCount: number;
-}
+async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<void> {
+  assertCurrentPersistenceSession(epoch, userId);
+  const desired = new Map<string, unknown>();
+  const keysToClear: string[] = [];
+  let deviceSettings = await loadDeviceStore<DeviceSettings>(DEVICE_SETTINGS_STORE_KEY) ?? {};
+  let deviceSettingsChanged = false;
 
-interface SyncDriftGroupScan {
-  definition: SyncDriftGroupDefinition;
-  entries: SyncDriftKeyScan[];
-  kind: SyncDriftKind;
-}
-
-const SYNC_DRIFT_GROUPS: SyncDriftGroupDefinition[] = [
-  { groupId: 'settings', label: 'Settings', description: 'Theme, assistant, voice, and provider settings.', keys: ['settings'] },
-  { groupId: 'integrations', label: 'Integrations', description: 'Integration connection status and metadata.', keys: ['integrations'] },
-  { groupId: 'conversations', label: 'Chat conversations', description: 'Saved Lina chat threads.', keys: ['conversations'] },
-  { groupId: 'calendar', label: 'Calendar', description: 'Calendar accounts, sources, and events mirrored from connected providers.', keys: ['calendarAccounts', 'calendarSources', 'calendarEvents'], policy: 'external_cache' },
-  { groupId: 'capture', label: 'Captured items', description: 'Inbox captures awaiting review.', keys: ['captureItems'] },
-  { groupId: 'clock', label: 'Clock workspace', description: 'Timers and stopwatches.', keys: ['clock'] },
-  { groupId: 'trips', label: 'Trips', description: 'Trips, legs, itinerary, bookings, and trip budget data.', keys: ['trips', 'tripLegs', 'tripItineraryItems', 'tripBookings', 'tripBudgetEntries'] },
-  { groupId: 'projects', label: 'Projects', description: 'Project portfolio and project wiki pages.', keys: ['projects', 'projectPages'] },
-  { groupId: 'tasks', label: 'Tasks', description: 'Tasks, habits, goals, and board state.', keys: ['tasks'] },
-  { groupId: 'dashboard', label: 'Dashboard feedback', description: 'Up Next feedback and dismissal history.', keys: ['dashboardFocusFeedback'] },
-  { groupId: 'knowledge', label: 'Knowledge', description: 'Knowledge topics, notes, and lifestyle tracker items.', keys: ['knowledgeTopics', 'knowledgeEntries', 'lifestyleItems'] },
-  { groupId: 'health', label: 'Health', description: 'Fast-food journal entries.', keys: ['healthFastFoodEntries'] },
-  { groupId: 'finance', label: 'Finance', description: 'Finance accounts, transactions, budgets, and savings goals.', keys: ['financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals'] },
-  { groupId: 'profile', label: 'Profile progress', description: 'Gamification and classified prayer progress.', keys: ['gamification', 'prayerTracking'] },
-  { groupId: 'assistant', label: 'Assistant memory', description: 'Lina corrections and action audit history.', keys: ['assistantCorrections', 'assistantActivityLog'] },
-];
-
-const SYNC_DRIFT_GROUP_BY_ID = new Map(SYNC_DRIFT_GROUPS.map(group => [group.groupId, group]));
-const TOKEN_LIKE_PATTERN = /[A-Za-z0-9_-]{24,}/g;
-const SENSITIVE_KEY_PATTERN = /(apiKey|anonKey|accessToken|refreshToken|providerToken|secret|password|credential|clientSecret|privateKey)/i;
-const OMIT_SYNC_FIELD = Symbol('omit-sync-field');
-const SYSTEM_METADATA_STORE_KEYS = new Set(['integrations', 'dashboardFocusFeedback', 'assistantActivityLog']);
-const GENERIC_METADATA_FIELDS = new Set(['createdAt', 'updatedAt']);
-const FIELD_LABELS: Record<string, string> = {
-  accountId: 'Account',
-  allDay: 'All-day',
-  amount: 'Amount',
-  arriveAt: 'Arrival',
-  balance: 'Balance',
-  boardOrder: 'Board order',
-  category: 'Category',
-  city: 'City',
-  color: 'Color',
-  completed: 'Completed',
-  completedAt: 'Completed time',
-  content: 'Content',
-  date: 'Date',
-  deadline: 'Deadline',
-  description: 'Description',
-  dueDate: 'Due date',
-  end: 'End time',
-  endDate: 'End date',
-  icon: 'Icon',
-  isPinned: 'Pinned',
-  location: 'Location',
-  monthlyLimit: 'Monthly limit',
-  name: 'Name',
-  notes: 'Notes',
-  priority: 'Priority',
-  provider: 'Provider',
-  sortOrder: 'Sort order',
-  start: 'Start time',
-  startDate: 'Start date',
-  status: 'Status',
-  tags: 'Tags',
-  targetAmount: 'Target amount',
-  title: 'Title',
-  topicId: 'Topic',
-  type: 'Type',
-  visible: 'Visibility',
-  workflowState: 'Workflow state',
-};
-const SETTINGS_SYSTEM_METADATA_FIELDS = new Set([
-  'deepgramApiKey',
-  'elevenLabsApiKey',
-  'elevenLabsVoiceId',
-  'googleOAuthClientId',
-  'microphoneDeviceId',
-  'supabaseAnonKey',
-  'supabaseUrl',
-]);
-const CALENDAR_ACCOUNT_SYSTEM_FIELDS = new Set([
-  'authExpiresAt',
-  'authProvider',
-  'authStatus',
-  'connected',
-  'lastAuthCheckAt',
-  'lastAuthError',
-  'lastSyncTime',
-  'mocked',
-  'syncError',
-]);
-const CALENDAR_SOURCE_SYSTEM_FIELDS = new Set(['accessRole', 'googleCalendarId']);
-const CALENDAR_EVENT_SYSTEM_FIELDS = new Set(['googleCalendarId', 'googleEventId', 'pendingSync']);
-const ASSISTANT_CORRECTION_SYSTEM_FIELDS = new Set(['lastAppliedAt']);
-
-function stableStringify(value: unknown): string {
-  if (value === undefined) return 'undefined';
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value) ?? 'undefined';
-  }
-
-  if (Array.isArray(value)) {
-    return `[${value.map(item => stableStringify(item)).join(',')}]`;
-  }
-
-  const record = value as Record<string, unknown>;
-  return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(',')}}`;
-}
-
-function valuesEqual(a: unknown, b: unknown): boolean {
-  return stableStringify(a) === stableStringify(b);
-}
-
-function sanitizeProjectValueForSyncInspection(value: unknown): unknown {
-  return serializeSharedProjects(normalizeProjectRecords(value, '1970-01-01T00:00:00.000Z'));
-}
-
-function isIgnoredMetadataPath(key: string, path: string[]): boolean {
-  if (SYSTEM_METADATA_STORE_KEYS.has(key)) return true;
-
-  const field = path[path.length - 1];
-  if (!field) return false;
-  if (SENSITIVE_KEY_PATTERN.test(field) || GENERIC_METADATA_FIELDS.has(field)) return true;
-
-  switch (key) {
-    case 'settings':
-      return SETTINGS_SYSTEM_METADATA_FIELDS.has(field);
-    case 'calendarAccounts':
-      return CALENDAR_ACCOUNT_SYSTEM_FIELDS.has(field);
-    case 'calendarSources':
-      return CALENDAR_SOURCE_SYSTEM_FIELDS.has(field);
-    case 'calendarEvents':
-      return CALENDAR_EVENT_SYSTEM_FIELDS.has(field);
-    case 'assistantCorrections':
-      return ASSISTANT_CORRECTION_SYSTEM_FIELDS.has(field);
-    default:
-      return false;
-  }
-}
-
-function normalizeSyncDriftValue(key: string, value: unknown, path: string[] = []): unknown {
-  if (isIgnoredMetadataPath(key, path)) return OMIT_SYNC_FIELD;
-
-  const inspectedValue = key === 'projects' && path.length === 0
-    ? sanitizeProjectValueForSyncInspection(value)
-    : value;
-
-  if (Array.isArray(inspectedValue)) {
-    const normalizedItems = inspectedValue
-      .map((item, index) => normalizeSyncDriftValue(key, item, [...path, String(index)]))
-      .filter(item => item !== OMIT_SYNC_FIELD);
-
-    if (hasIdRecords(normalizedItems)) {
-      return [...normalizedItems].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  for (const item of SHARED_STORE_KEYS) {
+    const legacy = await readLegacyLocalValue(item.key);
+    assertCurrentPersistenceSession(epoch, userId);
+    if (!legacy.source) continue;
+    if (legacy.parseError) {
+      quarantineLegacyValue(item.key, legacy.raw || '');
+      keysToClear.push(item.key);
+      continue;
     }
-
-    return normalizedItems;
-  }
-
-  if (isRecord(inspectedValue)) {
-    const normalizedEntries = Object.entries(inspectedValue)
-      .map(([childKey, childValue]) => [
-        childKey,
-        normalizeSyncDriftValue(key, childValue, [...path, childKey]),
-      ] as const)
-      .filter(([, childValue]) => childValue !== OMIT_SYNC_FIELD);
-
-    return Object.fromEntries(normalizedEntries);
-  }
-
-  return inspectedValue;
-}
-
-function byteSize(value: unknown): number {
-  try {
-    return new Blob([JSON.stringify(value)]).size;
-  } catch {
-    return stableStringify(value).length;
-  }
-}
-
-function redactValue(value: unknown, path = ''): unknown {
-  if (typeof value === 'string') {
-    return SENSITIVE_KEY_PATTERN.test(path) ? '[redacted]' : value.replace(TOKEN_LIKE_PATTERN, '[redacted]');
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item, index) => redactValue(item, `${path}.${index}`));
-  }
-
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, child]) => [
-      key,
-      redactValue(child, path ? `${path}.${key}` : key),
-    ]));
-  }
-
-  return value;
-}
-
-function redactedJson(value: unknown): string {
-  try {
-    return JSON.stringify(redactValue(value), null, 2);
-  } catch {
-    return '"[unreadable]"';
-  }
-}
-
-function displayValue(value: unknown): string {
-  if (typeof value === 'string') return value.replace(TOKEN_LIKE_PATTERN, '[redacted]');
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (value === null || value === undefined) return 'Empty';
-  return 'Nested data';
-}
-
-function displaySummaryValue(value: unknown): string {
-  if (value === undefined) return 'missing';
-  if (value === null) return 'empty';
-  if (typeof value === 'string') {
-    const redacted = value.replace(TOKEN_LIKE_PATTERN, '[redacted]');
-    return redacted.length > 80 ? `"${redacted.slice(0, 77)}..."` : `"${redacted}"`;
-  }
-  if (typeof value === 'boolean') return value ? 'on' : 'off';
-  if (typeof value === 'number') return String(value);
-  if (Array.isArray(value)) {
-    if (value.length === 0) return 'empty list';
-    if (value.every(item => typeof item === 'string' || typeof item === 'number')) {
-      return value.slice(0, 4).map(String).join(', ') + (value.length > 4 ? `, +${value.length - 4} more` : '');
+    const inspectedLegacy = sanitizeLegacyStoreValue(item.key, legacy.value);
+    if (inspectedLegacy.ambiguous && legacy.raw !== null) {
+      quarantineLegacyValue(item.key, legacy.raw);
     }
-    return `${value.length} ${value.length === 1 ? 'item' : 'items'}`;
-  }
-  return 'nested data';
-}
-
-function formatFieldLabel(path: string[]): string {
-  const field = path[path.length - 1] || '';
-  if (FIELD_LABELS[field]) return FIELD_LABELS[field];
-  return field
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, letter => letter.toUpperCase()) || 'Value';
-}
-
-function syncDriftImpactForField(key: string, path: string[]): SyncDriftImpact {
-  if (isIgnoredMetadataPath(key, path)) return 'system_metadata';
-  if (key === 'settings' || key === 'calendarAccounts' || key === 'calendarSources') {
-    return 'user_preference';
-  }
-  return 'user_data';
-}
-
-function countLeafDifferences(local: unknown, remote: unknown): number {
-  if (valuesEqual(local, remote)) return 0;
-
-  if (hasIdRecords(local) && hasIdRecords(remote)) {
-    const localById = new Map(local.map(item => [String(item.id), item]));
-    const remoteById = new Map(remote.map(item => [String(item.id), item]));
-    const ids = new Set([...localById.keys(), ...remoteById.keys()]);
-    let count = 0;
-    ids.forEach(id => {
-      const localItem = localById.get(id);
-      const remoteItem = remoteById.get(id);
-      count += localItem && remoteItem ? countLeafDifferences(localItem, remoteItem) : 1;
-    });
-    return count;
-  }
-
-  if (isRecord(local) && isRecord(remote)) {
-    const fields = new Set([...Object.keys(local), ...Object.keys(remote)]);
-    let count = 0;
-    fields.forEach(field => {
-      count += countLeafDifferences(local[field], remote[field]);
-    });
-    return count;
-  }
-
-  return 1;
-}
-
-function countIgnoredFieldDifferences(key: string, local: unknown, remote: unknown): number {
-  if (valuesEqual(local, remote)) return 0;
-  const normalizedLocal = normalizeSyncDriftValue(key, local);
-  const normalizedRemote = normalizeSyncDriftValue(key, remote);
-  if (valuesEqual(normalizedLocal, normalizedRemote)) return Math.max(1, countLeafDifferences(local, remote));
-  return Math.max(0, countLeafDifferences(local, remote) - countLeafDifferences(normalizedLocal, normalizedRemote));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function itemId(value: unknown, fallback: string): string {
-  if (isRecord(value) && (typeof value.id === 'string' || typeof value.id === 'number')) {
-    return String(value.id);
-  }
-  return fallback;
-}
-
-function itemLabel(value: unknown): string {
-  if (isRecord(value)) {
-    for (const key of ['title', 'name', 'email', 'provider', 'summary', 'id']) {
-      const candidate = value[key];
-      if (typeof candidate === 'string' && candidate.trim()) return candidate;
-      if (typeof candidate === 'number') return String(candidate);
-    }
-  }
-  return displayValue(value);
-}
-
-function hasIdRecords(value: unknown): value is Array<Record<string, unknown>> {
-  return Array.isArray(value)
-    && value.every(item => isRecord(item) && (typeof item.id === 'string' || typeof item.id === 'number'));
-}
-
-function diffItem(
-  entry: SyncDriftKeyScan,
-  id: string,
-  label: string,
-  detail: string,
-  options: {
-    fieldPath?: string;
-    fieldLabel?: string;
-    localValue?: unknown;
-    remoteValue?: unknown;
-    impact?: SyncDriftImpact;
-    autoResolution?: 'keep_database';
-  } = {},
-): SyncDriftDiffItem {
-  const fieldPath = options.fieldPath || `${entry.key}.${id}`;
-  const fieldLabel = options.fieldLabel || entry.label;
-  const impact = options.impact || syncDriftImpactForField(entry.key, fieldPath.split('.').slice(1));
-  return {
-    key: entry.key,
-    keyLabel: entry.label,
-    id,
-    label,
-    detail,
-    fieldPath,
-    fieldLabel,
-    localValue: options.localValue === undefined ? null : displaySummaryValue(options.localValue),
-    remoteValue: options.remoteValue === undefined ? null : displaySummaryValue(options.remoteValue),
-    impact,
-    autoResolution: options.autoResolution,
-  };
-}
-
-function collectionItems(entry: SyncDriftKeyScan, value: unknown, detail: string): SyncDriftDiffItem[] {
-  const localOnly = detail.includes('device');
-  const remoteOnly = detail.includes('database') || detail.includes('Supabase');
-  if (Array.isArray(value)) {
-    return value.map((item, index) => diffItem(entry, itemId(item, `${entry.key}-${index}`), itemLabel(item), detail, {
-      localValue: localOnly ? item : undefined,
-      remoteValue: remoteOnly ? item : undefined,
-      fieldPath: `${entry.key}.${itemId(item, `${entry.key}-${index}`)}`,
-      fieldLabel: entry.label,
-      impact: syncDriftImpactForField(entry.key, []),
-    }));
-  }
-
-  if (isRecord(value)) {
-    return Object.keys(value)
-      .sort()
-      .map(key => diffItem(entry, `${entry.key}.${key}`, `${entry.label}: ${formatFieldLabel([key])}`, detail, {
-        fieldPath: `${entry.key}.${key}`,
-        fieldLabel: formatFieldLabel([key]),
-        localValue: localOnly ? value[key] : undefined,
-        remoteValue: remoteOnly ? value[key] : undefined,
-        impact: syncDriftImpactForField(entry.key, [key]),
-      }));
-  }
-
-  return [diffItem(entry, entry.key, entry.label, detail, {
-    fieldPath: entry.key,
-    fieldLabel: entry.label,
-    localValue: localOnly ? value : undefined,
-    remoteValue: remoteOnly ? value : undefined,
-    impact: syncDriftImpactForField(entry.key, []),
-  })];
-}
-
-interface SyncDriftFieldChange {
-  id: string;
-  label: string;
-  path: string[];
-  localValue: unknown;
-  remoteValue: unknown;
-  kind: 'local_only' | 'remote_only' | 'changed';
-}
-
-function collectFieldChanges(
-  key: string,
-  local: unknown,
-  remote: unknown,
-  path: string[] = [],
-  labelHint?: string,
-): SyncDriftFieldChange[] {
-  if (isIgnoredMetadataPath(key, path) || valuesEqual(
-    normalizeSyncDriftValue(key, local, path),
-    normalizeSyncDriftValue(key, remote, path),
-  )) {
-    return [];
-  }
-
-  if (hasIdRecords(local) && hasIdRecords(remote)) {
-    const localById = new Map(local.map(item => [String(item.id), item]));
-    const remoteById = new Map(remote.map(item => [String(item.id), item]));
-    const ids = Array.from(new Set([...localById.keys(), ...remoteById.keys()])).sort();
-    return ids.flatMap(id => {
-      const localItem = localById.get(id);
-      const remoteItem = remoteById.get(id);
-      const itemLabelValue = itemLabel(localItem || remoteItem);
-      if (localItem && !remoteItem) {
-        return [{
-          id,
-          label: itemLabelValue,
-          path: [...path, id],
-          localValue: localItem,
-          remoteValue: undefined,
-          kind: 'local_only' as const,
-        }];
-      }
-      if (!localItem && remoteItem) {
-        return [{
-          id,
-          label: itemLabelValue,
-          path: [...path, id],
-          localValue: undefined,
-          remoteValue: remoteItem,
-          kind: 'remote_only' as const,
-        }];
-      }
-      return collectFieldChanges(key, localItem, remoteItem, [...path, id], itemLabelValue);
-    });
-  }
-
-  if (isRecord(local) && isRecord(remote)) {
-    const fields = Array.from(new Set([...Object.keys(local), ...Object.keys(remote)])).sort();
-    return fields.flatMap(field => {
-      if (isIgnoredMetadataPath(key, [...path, field])) return [];
-      const hasLocal = field in local;
-      const hasRemote = field in remote;
-      if (hasLocal && !hasRemote) {
-        return [{
-          id: [...path, field].join('.') || field,
-          label: labelHint || itemLabel(local),
-          path: [...path, field],
-          localValue: local[field],
-          remoteValue: undefined,
-          kind: 'local_only' as const,
-        }];
-      }
-      if (!hasLocal && hasRemote) {
-        return [{
-          id: [...path, field].join('.') || field,
-          label: labelHint || itemLabel(remote),
-          path: [...path, field],
-          localValue: undefined,
-          remoteValue: remote[field],
-          kind: 'remote_only' as const,
-        }];
-      }
-      return collectFieldChanges(key, local[field], remote[field], [...path, field], labelHint || itemLabel(local));
-    });
-  }
-
-  return [{
-    id: path.join('.') || key,
-    label: labelHint || displayValue(local),
-    path,
-    localValue: local,
-    remoteValue: remote,
-    kind: 'changed',
-  }];
-}
-
-function fieldChangeToDiffItem(entry: SyncDriftKeyScan, change: SyncDriftFieldChange): SyncDriftDiffItem {
-  const fieldLabel = formatFieldLabel(change.path);
-  const fieldPath = `${entry.key}${change.path.length > 0 ? `.${change.path.join('.')}` : ''}`;
-  const impact = syncDriftImpactForField(entry.key, change.path);
-
-  if (change.kind === 'local_only') {
-    return diffItem(entry, change.id, change.label, 'This item exists only on this device.', {
-      fieldPath,
-      fieldLabel,
-      localValue: change.localValue,
-      impact,
-    });
-  }
-
-  if (change.kind === 'remote_only') {
-    return diffItem(entry, change.id, change.label, 'This item exists only in the database.', {
-      fieldPath,
-      fieldLabel,
-      remoteValue: change.remoteValue,
-      impact,
-    });
-  }
-
-  return diffItem(
-    entry,
-    change.id,
-    change.label,
-    `${fieldLabel}: database ${displaySummaryValue(change.remoteValue)}, device ${displaySummaryValue(change.localValue)}.`,
-    {
-      fieldPath,
-      fieldLabel,
-      localValue: change.localValue,
-      remoteValue: change.remoteValue,
-      impact,
-    },
-  );
-}
-
-function buildValueDiff(entry: SyncDriftKeyScan): SyncDriftDiff {
-  const diff: SyncDriftDiff = {
-    localOnly: [],
-    remoteOnly: [],
-    changed: [],
-    unchangedCount: 0,
-  };
-  const localValue = entry.key === 'projects' && entry.local.hasValue
-    ? sanitizeProjectValueForSyncInspection(entry.local.value)
-    : entry.local.value;
-  const remoteValue = entry.key === 'projects' && entry.remote.hasValue
-    ? sanitizeProjectValueForSyncInspection(entry.remote.value)
-    : entry.remote.value;
-
-  if (entry.local.parseError) {
-    diff.changed.push(diffItem(entry, entry.key, entry.label, 'This device has unreadable JSON.', {
-      fieldPath: entry.key,
-      fieldLabel: entry.label,
-      impact: 'unreadable',
-    }));
-    return diff;
-  }
-
-  if (entry.local.hasValue && !entry.remote.hasValue) {
-    diff.localOnly.push(...collectionItems(entry, localValue, 'Only on this device.'));
-    return diff;
-  }
-
-  if (!entry.local.hasValue && entry.remote.hasValue) {
-    diff.remoteOnly.push(...collectionItems(entry, remoteValue, 'Only in database.'));
-    return diff;
-  }
-
-  if (!entry.local.hasValue || !entry.remote.hasValue) {
-    return diff;
-  }
-
-  if (valuesEqual(entry.normalizedLocalValue, entry.normalizedRemoteValue)) {
-    diff.unchangedCount += 1;
-    return diff;
-  }
-
-  const fieldChanges = collectFieldChanges(entry.key, localValue, remoteValue);
-  fieldChanges.forEach(change => {
-    const item = fieldChangeToDiffItem(entry, change);
-    if (item.impact === 'system_metadata') return;
-    if (change.kind === 'local_only') {
-      diff.localOnly.push(item);
-    } else if (change.kind === 'remote_only') {
-      diff.remoteOnly.push(item);
-    } else {
-      diff.changed.push(item);
-    }
-  });
-
-  if (fieldChanges.length === 0) {
-    diff.unchangedCount += 1;
-  }
-
-  return diff;
-}
-
-function mergeDiffs(entries: SyncDriftKeyScan[]): SyncDriftDiff {
-  return entries.reduce<SyncDriftDiff>((merged, entry) => {
-    const next = buildValueDiff(entry);
-    merged.localOnly.push(...next.localOnly);
-    merged.remoteOnly.push(...next.remoteOnly);
-    merged.changed.push(...next.changed);
-    merged.unchangedCount += next.unchangedCount;
-    return merged;
-  }, {
-    localOnly: [],
-    remoteOnly: [],
-    changed: [],
-    unchangedCount: 0,
-  });
-}
-
-function actionableDiffCount(diff: SyncDriftDiff): number {
-  return [...diff.localOnly, ...diff.remoteOnly, ...diff.changed]
-    .filter(item => item.impact === 'user_data' || item.impact === 'user_preference' || item.impact === 'unreadable')
-    .length;
-}
-
-function buildSyncDriftSummary(label: string, diff: SyncDriftDiff, userChoiceCount: number, autoResolvedCount: number): string {
-  if (userChoiceCount === 0 && autoResolvedCount > 0) {
-    return `${label} only has system metadata differences. Supabase will be kept automatically.`;
-  }
-
-  const changed = diff.changed.length;
-  const localOnly = diff.localOnly.length;
-  const remoteOnly = diff.remoteOnly.length;
-  const parts: string[] = [];
-  if (changed > 0) parts.push(`${changed} changed ${changed === 1 ? 'field' : 'fields'}`);
-  if (localOnly > 0) parts.push(`${localOnly} only on this device`);
-  if (remoteOnly > 0) parts.push(`${remoteOnly} only in the database`);
-
-  const base = parts.length > 0
-    ? `${label}: ${parts.join(', ')} need your choice.`
-    : `${label} needs your choice.`;
-
-  return autoResolvedCount > 0
-    ? `${base} ${autoResolvedCount} system ${autoResolvedCount === 1 ? 'difference' : 'differences'} will follow Supabase.`
-    : base;
-}
-
-async function readLocalDriftValue(key: string): Promise<LocalDriftValue> {
-  const tauri = parseImportRaw(await readTauriRaw(key));
-  if (tauri.hasValue || tauri.parseError) {
-    return { ...tauri, source: 'tauri' };
-  }
-
-  const local = parseImportRaw(localStorage.getItem(getDataKey(key)));
-  if (local.hasValue || local.parseError) {
-    return { ...local, source: 'localStorage' };
-  }
-
-  return { value: null, hasValue: false, source: null, sizeBytes: 0, parseError: false };
-}
-
-async function readRemoteDriftValue(key: string): Promise<RemoteDriftValue> {
-  const remote = await loadRemote(NAMESPACE, key);
-  if (!remote) {
-    return { value: null, hasValue: false, updatedAt: null, sizeBytes: 0 };
-  }
-  return {
-    value: remote.value,
-    hasValue: true,
-    updatedAt: remote.updatedAt,
-    sizeBytes: byteSize(remote.value),
-  };
-}
-
-function buildSideSummary(
-  entries: SyncDriftKeyScan[],
-  side: 'local' | 'remote',
-): SyncDriftSideSummary {
-  const values: Record<string, unknown> = {};
-  const sources = new Set<string>();
-  let sizeBytes = 0;
-  let updatedAt: string | null = null;
-
-  entries.forEach(entry => {
-    const value = entry[side];
-    if (!value.hasValue) return;
-    const inspectedValue = entry.key === 'projects'
-      ? sanitizeProjectValueForSyncInspection(value.value)
-      : value.value;
-    values[entry.key] = inspectedValue;
-    sizeBytes += byteSize(inspectedValue);
-    if (side === 'local') {
-      sources.add((value as LocalDriftValue).source || 'none');
-    } else {
-      sources.add('database');
-      const remoteUpdatedAt = (value as RemoteDriftValue).updatedAt;
-      if (remoteUpdatedAt && (!updatedAt || new Date(remoteUpdatedAt).getTime() > new Date(updatedAt).getTime())) {
-        updatedAt = remoteUpdatedAt;
+    if (item.key === 'settings') {
+      const split = splitSettings(inspectedLegacy.value);
+      if (Object.keys(split.device).length > 0) {
+        deviceSettings = { ...split.device, ...deviceSettings };
+        deviceSettingsChanged = true;
       }
     }
-  });
-
-  const source = sources.size === 0
-    ? 'none'
-    : sources.size === 1
-      ? Array.from(sources)[0] as SyncDriftSideSummary['source']
-      : 'mixed';
-  const hasValue = Object.keys(values).length > 0;
-  const jsonValue = entries.length === 1 ? values[entries[0].key] : values;
-
-  return {
-    hasValue,
-    source,
-    sizeBytes,
-    updatedAt,
-    redactedJson: hasValue ? redactedJson(jsonValue) : 'null',
-  };
-}
-
-function buildKeySummary(entry: SyncDriftKeyScan): SyncDriftKeySummary {
-  return {
-    key: entry.key,
-    label: entry.label,
-    description: entry.description,
-    kind: entry.kind,
-    local: buildSideSummary([entry], 'local'),
-    remote: buildSideSummary([entry], 'remote'),
-  };
-}
-
-function combineGroupKind(entries: SyncDriftKeyScan[]): SyncDriftKind {
-  const hasUnreadable = entries.some(entry => entry.kind === 'unreadable');
-  const hasConflict = entries.some(entry => entry.kind === 'conflict');
-  const hasLocalOnly = entries.some(entry => entry.kind === 'local_only');
-  const hasRemoteOnly = entries.some(entry => entry.kind === 'remote_only');
-
-  if (hasUnreadable) return 'unreadable';
-  if (hasConflict || (hasLocalOnly && hasRemoteOnly)) return 'conflict';
-  if (hasLocalOnly) return 'local_only';
-  if (hasRemoteOnly) return 'remote_only';
-  return 'identical';
-}
-
-function buildConflictHash(scan: SyncDriftGroupScan): string {
-  const serialized = stableStringify({
-    groupId: scan.definition.groupId,
-    kind: scan.kind,
-    keys: scan.entries.map(entry => ({
-      key: entry.key,
-      kind: entry.kind,
-      local: entry.local.hasValue ? stableStringify(entry.normalizedLocalValue) : entry.local.parseError ? 'unreadable' : null,
-      remote: entry.remote.hasValue ? stableStringify(entry.normalizedRemoteValue) : null,
-    })),
-  });
-  let hash = 0;
-  for (let index = 0; index < serialized.length; index += 1) {
-    hash = ((hash << 5) - hash + serialized.charCodeAt(index)) | 0;
+    const databaseValue = decodedCache(item.key);
+    const merged = await prepareSharedStoreValue(
+      item.key,
+      mergeLegacyStoreValue(item.key, databaseValue, inspectedLegacy.value),
+    );
+    assertCurrentPersistenceSession(epoch, userId);
+    if (!valuesEqual(databaseValue, merged)) desired.set(item.key, merged);
+    keysToClear.push(item.key);
   }
-  return Math.abs(hash).toString(16);
+
+  if (deviceSettingsChanged) {
+    assertCurrentPersistenceSession(epoch, userId);
+    await saveDeviceStore(DEVICE_SETTINGS_STORE_KEY, deviceSettings);
+    assertCurrentPersistenceSession(epoch, userId);
+  }
+  if (desired.size > 0) await commitStoreValues(desired, epoch, userId);
+  for (const key of keysToClear) {
+    assertCurrentPersistenceSession(epoch, userId);
+    await clearLocalStoreCopy(key, false);
+  }
+  if (keysToClear.some(key => key.startsWith('calendar'))) {
+    requestCalendarProviderRefresh('legacy_database_cutover');
+  }
+  if (keysToClear.length > 0) {
+    lastCalendarCacheCleanupAt = new Date().toISOString();
+    lastCalendarCacheCleanupReason = 'Legacy shared copies retired after database verification.';
+  }
 }
 
-function buildSyncDriftCandidate(scan: SyncDriftGroupScan): SyncDriftCandidate {
-  const diff = mergeDiffs(scan.entries);
-  const userChoiceCount = scan.kind === 'unreadable'
-    ? Math.max(1, actionableDiffCount(diff))
-    : actionableDiffCount(diff);
-  const autoResolvedCount = scan.entries.reduce((sum, entry) => sum + entry.ignoredDifferenceCount, 0);
-  const hasOnlySystemMetadata = userChoiceCount === 0 && autoResolvedCount > 0;
-  return {
-    groupId: scan.definition.groupId,
-    label: scan.definition.label,
-    description: scan.definition.description,
-    keys: scan.entries.map(buildKeySummary),
-    kind: scan.kind,
-    requiresUserChoice: scan.kind === 'unreadable' || userChoiceCount > 0,
-    recommendedChoice: 'keep_database',
-    local: buildSideSummary(scan.entries, 'local'),
-    remote: buildSideSummary(scan.entries, 'remote'),
-    diff,
-    conflictHash: buildConflictHash(scan),
-    canUseDevice: scan.kind !== 'unreadable',
-    userChoiceCount,
-    autoResolvedCount,
-    hasOnlySystemMetadata,
-    summary: buildSyncDriftSummary(scan.definition.label, diff, userChoiceCount, autoResolvedCount),
-  };
+function versionParts(value: string): number[] {
+  return value.replace(/^v/, '').split('.').map(part => Number.parseInt(part, 10) || 0);
 }
 
-async function scanSyncDriftGroup(definition: SyncDriftGroupDefinition): Promise<SyncDriftGroupScan> {
-  const entries = await Promise.all(definition.keys.map(async key => {
-    const storeKey = getSharedStoreKey(key);
-    const local = await readLocalDriftValue(key);
-    let remote: RemoteDriftValue = { value: null, hasValue: false, updatedAt: null, sizeBytes: 0 };
-    try {
-      remote = await readRemoteDriftValue(key);
-      rememberRemoteRead(key, null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      rememberRemoteRead(key, message);
-      throw error;
+function versionAtLeast(actual: string, minimum: string): boolean {
+  const left = versionParts(actual);
+  const right = versionParts(minimum);
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    if ((left[index] || 0) > (right[index] || 0)) return true;
+    if ((left[index] || 0) < (right[index] || 0)) return false;
+  }
+  return true;
+}
+
+async function hydrateDatabaseSnapshot(epoch: number, userId: string): Promise<void> {
+  const snapshot = await fetchHelmAccountSnapshot();
+  assertCurrentPersistenceSession(epoch, userId);
+  if (snapshot.state.schemaVersion !== HELM_DATABASE_SCHEMA_VERSION) {
+    throw new Error(`HELM database schema ${snapshot.state.schemaVersion} is not supported by this client.`);
+  }
+  if (!versionAtLeast(APP_VERSION, snapshot.state.minimumClientVersion)) {
+    throw new Error(`Update HELM to ${snapshot.state.minimumClientVersion} or later.`);
+  }
+  replaceAllRecordCache(snapshot.records);
+  accountVersion = snapshot.state.accountVersion;
+  lastRemoteReadAt = new Date().toISOString();
+  lastRemoteReadKey = 'account';
+  lastRemoteReadError = null;
+}
+
+async function refreshCollectionsFromBroadcast(
+  collections: string[],
+  nextVersion: number,
+  epoch: number,
+  userId: string,
+): Promise<void> {
+  assertCurrentPersistenceSession(epoch, userId);
+  if (nextVersion > accountVersion + 1 || collections.length === 0) {
+    await hydrateDatabaseSnapshot(epoch, userId);
+  } else {
+    const records = await fetchHelmCollections(collections);
+    assertCurrentPersistenceSession(epoch, userId);
+    for (const collection of collections) {
+      replaceCollectionCache(collection, records.filter(record => record.collection === collection));
     }
+    accountVersion = Math.max(accountVersion, nextVersion);
+    lastRemoteReadAt = new Date().toISOString();
+    lastRemoteReadKey = collections.at(-1) ?? 'account';
+    lastRemoteReadError = null;
+  }
+  publishSyncSession({ status: 'ready', accountVersion, error: null, lastReadyAt: new Date().toISOString() });
+}
 
-    const normalizedLocalValue = local.hasValue ? normalizeSyncDriftValue(key, local.value) : null;
-    const normalizedRemoteValue = remote.hasValue ? normalizeSyncDriftValue(key, remote.value) : null;
-    const ignoredDifferenceCount = local.hasValue && remote.hasValue
-      ? countIgnoredFieldDifferences(key, local.value, remote.value)
-      : 0;
-    const kind: SyncDriftKind = local.parseError
-      ? 'unreadable'
-      : local.hasValue && remote.hasValue
-        ? valuesEqual(normalizedLocalValue, normalizedRemoteValue) ? 'identical' : 'conflict'
-        : local.hasValue
-          ? 'local_only'
-          : remote.hasValue
-            ? 'remote_only'
-            : 'identical';
-
-    return {
-      key,
-      label: storeKey?.label || key,
-      description: storeKey?.description || 'App data.',
-      kind,
-      local,
-      remote,
-      normalizedLocalValue,
-      normalizedRemoteValue,
-      ignoredDifferenceCount,
+function waitForBroadcastReady(epoch: number, userId: string): Promise<void> {
+  const current = getSupabaseRealtimeSnapshot();
+  if (current.state === 'subscribed') return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let unsubscribe = () => {};
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      globalThis.clearTimeout(timeout);
+      unsubscribe();
+      if (error) reject(error);
+      else resolve();
     };
-  }));
-
-  return {
-    definition,
-    entries,
-    kind: combineGroupKind(entries),
-  };
+    const timeout = globalThis.setTimeout(() => {
+      finish(new Error('The private HELM database update channel did not become ready.'));
+    }, 10_000);
+    const removeSubscription = subscribeSupabaseRealtimeSnapshot(snapshot => {
+      if (!isCurrentPersistenceSession(epoch, userId)) {
+        finish(new StalePersistenceSessionError());
+      } else if (snapshot.state === 'subscribed') {
+        finish();
+      } else if (snapshot.state === 'error' || snapshot.state === 'timed_out' || snapshot.state === 'closed') {
+        finish(new Error(snapshot.lastError || `The private HELM update channel is ${snapshot.state}.`));
+      }
+    });
+    unsubscribe = removeSubscription;
+    if (settled) unsubscribe();
+  });
 }
 
-async function autoResolveSafeSyncDrift(scan: SyncDriftGroupScan): Promise<void> {
-  if (scan.kind === 'identical') {
-    await Promise.all(scan.entries
-      .filter(entry => entry.local.hasValue)
-      .map(entry => clearLocalStoreCopy(entry.key)));
+async function startBroadcastSubscription(epoch: number, userId: string): Promise<void> {
+  assertCurrentPersistenceSession(epoch, userId);
+  broadcastUnsubscribe?.();
+  broadcastRefreshPromise = Promise.resolve();
+  broadcastUnsubscribe = subscribeHelmBroadcast(event => {
+    if (!isCurrentPersistenceSession(epoch, userId)) return;
+    broadcastRefreshPromise = broadcastRefreshPromise.then(async () => {
+      assertCurrentPersistenceSession(epoch, userId);
+      if (event.accountVersion <= accountVersion) return;
+      const collections = [...new Set(event.changes.map(change => change.collection))];
+      await refreshCollectionsFromBroadcast(collections, event.accountVersion, epoch, userId);
+      for (const collection of collections) {
+        const change: RemoteStoreChange = {
+          event: 'REMOTE_REFRESH',
+          namespace: NAMESPACE,
+          key: collection,
+          updatedAt: new Date().toISOString(),
+          value: null,
+        };
+        storeChangeSubscribers.forEach(listener => listener(change));
+      }
+    }).catch(error => {
+      if (error instanceof StalePersistenceSessionError) return;
+      const message = error instanceof Error ? error.message : String(error);
+      lastRemoteReadError = message;
+      publishSyncSession({ status: 'reconnecting', error: message });
+    });
+  });
+  await waitForBroadcastReady(epoch, userId);
+}
+
+function registerLifecycleHandlers(): void {
+  if (lifecycleRegistered || typeof window === 'undefined') return;
+  lifecycleRegistered = true;
+  window.addEventListener('offline', () => {
+    publishSyncSession({ status: 'blocked', error: 'HELM needs an internet connection to load account data.' });
+  });
+  window.addEventListener('online', () => {
+    if (!isAuthenticated()) return;
+    void refreshDatabasePersistence();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && isAuthenticated()) {
+      void refreshDatabasePersistence();
+    }
+  });
+  window.setInterval(() => {
+    if (!isAuthenticated() || syncSession.status !== 'ready') return;
+    void probeHelmAccountVersion().then(version => {
+      publishSyncSession({ lastProbeAt: new Date().toISOString() });
+      if (version > accountVersion) void refreshDatabasePersistence();
+    }).catch(error => {
+      const message = error instanceof Error ? error.message : String(error);
+      publishSyncSession({ status: 'reconnecting', error: `Database probe failed: ${message}` });
+    });
+  }, 15_000);
+}
+
+function registerRealtimeHealth(): void {
+  if (realtimeHealthRegistered) return;
+  realtimeHealthRegistered = true;
+  subscribeSupabaseRealtimeSnapshot(snapshot => {
+    notifyPersistenceHealthSubscribers();
+    if (
+      syncSession.status === 'ready'
+      && (snapshot.state === 'closed' || snapshot.state === 'error' || snapshot.state === 'timed_out')
+    ) {
+      publishSyncSession({
+        status: 'reconnecting',
+        error: snapshot.lastError || 'The private database update channel disconnected.',
+      });
+    }
+  });
+}
+
+export async function bootstrapDatabasePersistence(): Promise<void> {
+  const userId = getCurrentUserId();
+  if (!isSupabaseReady() || !isAuthenticated() || !userId) {
+    resetDatabasePersistence('Sign in to load HELM data.');
     return;
   }
-
-  if (scan.kind !== 'local_only') return;
-
-  for (const entry of scan.entries) {
-    if (!entry.local.hasValue) continue;
-    const sharedValue = await prepareSharedStoreValue(entry.key, entry.local.value);
-    const success = await saveRemote(NAMESPACE, entry.key, sharedValue);
-    if (!success) {
-      throw new Error(`Supabase import write failed for ${entry.key}.`);
-    }
-    lastKnownRemoteJson.set(entry.key, JSON.stringify(sharedValue));
-    rememberRemoteWrite(entry.key, null);
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    if (bootstrappedUserId !== userId) resetDatabasePersistence('Switching HELM accounts.');
+    publishSyncSession({ status: 'blocked', userId, error: 'HELM needs an internet connection to load account data.' });
+    return;
   }
+  if (bootstrapPromise && bootstrappedUserId === userId) return bootstrapPromise;
 
-  await Promise.all(scan.entries
-    .filter(entry => entry.local.hasValue)
-    .map(entry => clearLocalStoreCopy(entry.key)));
+  if (bootstrappedUserId !== userId || (syncSession.userId && syncSession.userId !== userId)) {
+    resetDatabasePersistence('Switching HELM accounts.');
+  }
+  bootstrappedUserId = userId;
+  const epoch = ++persistenceEpoch;
+  publishSyncSession({ status: 'bootstrapping', userId, error: null, lastProbeAt: new Date().toISOString() });
+  const operation: Promise<void> = (async () => {
+    registerLifecycleHandlers();
+    registerRealtimeHealth();
+    await hydrateDatabaseSnapshot(epoch, userId);
+    await migrateLegacyLocalCopies(epoch, userId);
+    await startBroadcastSubscription(epoch, userId);
+    const latestVersion = await probeHelmAccountVersion();
+    assertCurrentPersistenceSession(epoch, userId);
+    if (latestVersion > accountVersion) await hydrateDatabaseSnapshot(epoch, userId);
+    assertCurrentPersistenceSession(epoch, userId);
+    publishSyncSession({
+      status: 'ready',
+      userId,
+      accountVersion,
+      lastReadyAt: new Date().toISOString(),
+      error: null,
+    });
+  })().catch(error => {
+    if (error instanceof StalePersistenceSessionError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    lastRemoteReadError = message;
+    publishSyncSession({
+      status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'blocked' : 'reconnecting',
+      userId,
+      error: message,
+    });
+    throw error;
+  }).finally(() => {
+    if (bootstrapPromise === operation) bootstrapPromise = null;
+  });
+  bootstrapPromise = operation;
+  return operation;
 }
 
-async function clearIdenticalSyncDriftEntries(scan: SyncDriftGroupScan): Promise<void> {
-  await Promise.all(scan.entries
-    .filter(entry => entry.kind === 'identical' && entry.local.hasValue)
-    .map(entry => clearLocalStoreCopy(entry.key)));
+export async function refreshDatabasePersistence(): Promise<void> {
+  const userId = getCurrentUserId();
+  if (!userId || !isAuthenticated()) {
+    resetDatabasePersistence('Sign in to load HELM data.');
+    return;
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    publishSyncSession({ status: 'blocked', userId, error: 'HELM needs an internet connection to load account data.' });
+    return;
+  }
+  if (bootstrappedUserId !== userId) {
+    await bootstrapDatabasePersistence();
+    return;
+  }
+  const epoch = ++persistenceEpoch;
+  publishSyncSession({ status: 'reconnecting', userId, error: null, lastProbeAt: new Date().toISOString() });
+  try {
+    await hydrateDatabaseSnapshot(epoch, userId);
+    await startBroadcastSubscription(epoch, userId);
+    const latestVersion = await probeHelmAccountVersion();
+    assertCurrentPersistenceSession(epoch, userId);
+    if (latestVersion > accountVersion) await hydrateDatabaseSnapshot(epoch, userId);
+    assertCurrentPersistenceSession(epoch, userId);
+    publishSyncSession({
+      status: 'ready',
+      accountVersion,
+      lastReadyAt: new Date().toISOString(),
+      error: null,
+    });
+    const change: RemoteStoreChange = {
+      event: 'RECONNECT',
+      namespace: NAMESPACE,
+      key: '*',
+      updatedAt: new Date().toISOString(),
+      value: null,
+    };
+    storeChangeSubscribers.forEach(listener => listener(change));
+  } catch (error) {
+    if (error instanceof StalePersistenceSessionError) return;
+    const message = error instanceof Error ? error.message : String(error);
+    lastRemoteReadError = message;
+    publishSyncSession({ status: 'reconnecting', error: message });
+  }
+}
+
+export function resetDatabasePersistence(error = 'HELM account data is unavailable.'): void {
+  persistenceEpoch += 1;
+  broadcastUnsubscribe?.();
+  broadcastUnsubscribe = null;
+  broadcastRefreshPromise = Promise.resolve();
+  recordsByCollection.clear();
+  deliveredRecordsByCollection.clear();
+  pendingStoreValues.clear();
+  flushPromise = null;
+  flushPromiseEpoch = null;
+  flushScheduled = false;
+  bootstrapPromise = null;
+  accountVersion = 0;
+  bootstrappedUserId = null;
+  publishWriteQueue();
+  publishSyncSession({
+    status: 'blocked',
+    userId: null,
+    accountVersion: 0,
+    error,
+  });
+}
+
+export function getSyncSessionSnapshot(): SyncSessionSnapshot {
+  return { ...syncSession };
+}
+
+export function subscribeSyncSession(listener: (snapshot: SyncSessionSnapshot) => void): () => void {
+  syncSessionSubscribers.add(listener);
+  listener({ ...syncSession });
+  return () => syncSessionSubscribers.delete(listener);
+}
+
+export function subscribeStoreChanges(listener: (change: RemoteStoreChange) => void): () => void {
+  storeChangeSubscribers.add(listener);
+  return () => storeChangeSubscribers.delete(listener);
+}
+
+export function subscribeStoreKey(key: string, listener: (change: RemoteStoreChange) => void): () => void {
+  return subscribeStoreChanges(change => {
+    if (change.key === key || change.key === '*') listener(change);
+  });
+}
+
+export async function loadStore<T>(key: string): Promise<T | null> {
+  assertSharedStoreKeyIsNotDeviceOnly(key);
+  if (!isSupabaseReady() || !isAuthenticated() || syncSession.status !== 'ready') return null;
+  try {
+    const encoded = encodedCache(key);
+    deliveredRecordsByCollection.set(key, copyEncodedRecords(encoded));
+    const value = decodeStoreValue(key, encoded) as T | null;
+    lastRemoteReadAt = new Date().toISOString();
+    lastRemoteReadKey = key;
+    lastRemoteReadError = null;
+    notifyPersistenceHealthSubscribers();
+    return value;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    lastRemoteReadError = message;
+    publishSyncSession({ status: 'reconnecting', error: message });
+    return null;
+  }
+}
+
+export async function saveStore<T>(key: string, value: T): Promise<void> {
+  assertSharedStoreKeyIsNotDeviceOnly(key);
+  if (!isSupabaseReady() || !isAuthenticated() || syncSession.status !== 'ready') {
+    const message = 'Shared HELM data can only be changed while the signed-in database session is ready.';
+    lastRemoteWriteError = message;
+    notifyPersistenceHealthSubscribers();
+    return;
+  }
+  try {
+    const sharedValue = await prepareSharedStoreValue(key, value);
+    if (valuesEqual(decodedCache(key), sharedValue)) return;
+    pendingStoreValues.set(key, sharedValue);
+    publishWriteQueue({ lastQueuedAt: new Date().toISOString() });
+    scheduleFlush();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    lastRemoteWriteError = message;
+    publishSyncSession({ status: 'reconnecting', error: message });
+  }
+}
+
+export async function clearLocalStoreCopy(key: string, notify = true): Promise<void> {
+  localStorage.removeItem(getDataKey(key));
+  localStorage.removeItem(getMetaKey(key));
+  try {
+    if (await isTauri()) await invoke('delete_store', { key });
+  } catch {
+    logWarn('Persistence', `Tauri legacy delete failed for ${key}`);
+  }
+  if (notify) notifyPersistenceHealthSubscribers();
+}
+
+export async function listLocalImportCandidates(): Promise<LocalImportCandidate[]> {
+  const candidates: LocalImportCandidate[] = [];
+  for (const item of SHARED_STORE_KEYS) {
+    const browser = localRawSnapshot(localStorage.getItem(getDataKey(item.key)));
+    const tauri = localRawSnapshot(await readTauriRaw(item.key));
+    if (!browser.hasValue && !browser.parseError && !tauri.hasValue && !tauri.parseError) continue;
+    candidates.push({
+      key: item.key,
+      label: item.label,
+      description: item.description,
+      localStorage: browser.hasValue || browser.parseError,
+      tauri: tauri.hasValue || tauri.parseError,
+      remoteExists: syncSession.status === 'ready' ? encodedCache(item.key).length > 0 : null,
+      sizeBytes: Math.max(browser.sizeBytes, tauri.sizeBytes),
+    });
+  }
+  return candidates;
+}
+
+export async function loadDeviceStore<T>(key: DeviceStoreKey): Promise<T | null> {
+  try {
+    if (await isTauri()) {
+      const raw = await invoke<string>('read_store', { key: getDeviceTauriKey(key) });
+      const parsed = JSON.parse(raw) as T | null;
+      if (parsed !== null) return parsed;
+    }
+  } catch {
+    logWarn('Persistence', `Tauri device-only read failed for ${key}`);
+  }
+  const raw = localStorage.getItem(getDeviceDataKey(key));
+  if (raw === null) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    logWarn('Persistence', `Device-only cache JSON parse failed for ${key}`);
+    return null;
+  }
+}
+
+export async function saveDeviceStore<T>(key: DeviceStoreKey, value: T): Promise<void> {
+  const json = JSON.stringify(value);
+  try {
+    if (await isTauri()) await invoke('write_store', { key: getDeviceTauriKey(key), value: json });
+  } catch {
+    logWarn('Persistence', `Tauri device-only write failed for ${key}`);
+  }
+  localStorage.setItem(getDeviceDataKey(key), json);
+  lastLocalWriteAt = new Date().toISOString();
+  lastLocalWriteKey = key;
+  lastLocalWriteError = null;
+  notifyPersistenceHealthSubscribers();
 }
 
 function requestCalendarProviderRefresh(reason: string): void {
   lastCalendarSyncRequestAt = new Date().toISOString();
   lastCalendarSyncRequestReason = reason;
-  notifyPersistenceHealthSubscribers();
-
-  if (typeof window === 'undefined') return;
-
-  window.dispatchEvent(new CustomEvent(CALENDAR_SYNC_REQUEST_EVENT, {
-    detail: { reason },
-  }));
+  window.dispatchEvent(new CustomEvent(CALENDAR_SYNC_REQUEST_EVENT, { detail: { reason } }));
 }
 
-async function autoResolveExternalCacheSyncDrift(scan: SyncDriftGroupScan): Promise<void> {
-  const localEntries = scan.entries.filter(entry => entry.local.hasValue || entry.local.parseError);
-  if (localEntries.length === 0) return;
-
-  await Promise.all(localEntries.map(entry => clearLocalStoreCopy(entry.key)));
-  lastSyncDriftResolutionAt = new Date().toISOString();
-  lastCalendarCacheCleanupAt = lastSyncDriftResolutionAt;
-  lastCalendarCacheCleanupReason = `${scan.definition.label} follows its connected provider and Supabase cache.`;
-  requestCalendarProviderRefresh(`sync_drift_${scan.definition.groupId}`);
+function countLegacyCandidates(): number {
+  return SHARED_STORE_KEYS.reduce((count, item) => (
+    localStorage.getItem(getDataKey(item.key)) !== null ? count + 1 : count
+  ), 0);
 }
 
-function readDirtyKeys(): string[] {
-  const dirtyKeys: string[] = [];
-
-  try {
-    for (let index = 0; index < localStorage.length; index += 1) {
-      const storageKey = localStorage.key(index);
-      if (!storageKey?.startsWith(META_PREFIX)) continue;
-      const key = storageKey.slice(META_PREFIX.length);
-      if (readLocalCacheMeta(key).dirty) {
-        dirtyKeys.push(key);
-      }
-    }
-  } catch {
-    logWarn('Persistence', 'Local cache metadata scan failed');
-  }
-
-  return dirtyKeys.sort();
-}
-
-function countLocalImportCandidates(): number {
-  try {
-    return SHARED_STORE_KEYS.filter(item => localStorage.getItem(getDataKey(item.key)) !== null).length;
-  } catch {
-    return 0;
-  }
+function copyWriteQueueSnapshot(): SupabaseWriteQueueSnapshot {
+  return {
+    ...writeQueueSnapshot,
+    queuedKeys: [...writeQueueSnapshot.queuedKeys],
+    lastFlushKeys: [...writeQueueSnapshot.lastFlushKeys],
+    lastFailureKeys: [...writeQueueSnapshot.lastFailureKeys],
+  };
 }
 
 function buildPersistenceHealthSnapshot(): PersistenceHealthSnapshot {
   return {
-    mode: isSupabaseReady() && isAuthenticated() ? 'database' : 'local',
+    mode: syncSession.status === 'ready' ? 'database' : 'blocked',
+    syncSession: { ...syncSession },
     lastLocalWriteAt,
     lastLocalWriteKey,
     lastLocalWriteError,
@@ -1304,17 +1078,13 @@ function buildPersistenceHealthSnapshot(): PersistenceHealthSnapshot {
     lastRemoteWriteAt,
     lastRemoteWriteKey,
     lastRemoteWriteError,
-    remoteReadFailedKeys: Array.from(remoteReadFailedKeys.keys()).sort(),
-    lastSuppressedInitialWriteKey,
-    lastSuppressedInitialWriteAt,
-    dirtyKeys: readDirtyKeys(),
-    supabaseQueue: getSupabaseWriteQueueSnapshot(),
+    remoteReadFailedKeys: lastRemoteReadError ? [lastRemoteReadKey || 'account'] : [],
+    lastSuppressedInitialWriteKey: null,
+    lastSuppressedInitialWriteAt: null,
+    dirtyKeys: [],
+    supabaseQueue: copyWriteQueueSnapshot(),
     supabaseRealtime: getSupabaseRealtimeSnapshot(),
-    localImportCandidateCount: countLocalImportCandidates(),
-    syncDriftConflictCount,
-    lastSyncDriftScanAt,
-    lastSyncDriftResolutionAt,
-    lastSyncDriftError,
+    localImportCandidateCount: countLegacyCandidates(),
     lastCalendarCacheCleanupAt,
     lastCalendarCacheCleanupReason,
     lastCalendarSyncRequestAt,
@@ -1327,38 +1097,6 @@ function notifyPersistenceHealthSubscribers(): void {
   persistenceHealthSubscribers.forEach(listener => listener(snapshot));
 }
 
-function rememberLocalWrite(key: string, error: string | null): void {
-  lastLocalWriteKey = key;
-  lastLocalWriteAt = error ? lastLocalWriteAt : new Date().toISOString();
-  lastLocalWriteError = error;
-  notifyPersistenceHealthSubscribers();
-}
-
-function rememberRemoteRead(key: string, error: string | null): void {
-  lastRemoteReadKey = key;
-  lastRemoteReadAt = new Date().toISOString();
-  lastRemoteReadError = error;
-  if (error) {
-    remoteReadFailedKeys.set(key, error);
-  } else {
-    remoteReadFailedKeys.delete(key);
-  }
-  notifyPersistenceHealthSubscribers();
-}
-
-function rememberRemoteWrite(key: string, error: string | null): void {
-  lastRemoteWriteKey = key;
-  lastRemoteWriteAt = new Date().toISOString();
-  lastRemoteWriteError = error;
-  notifyPersistenceHealthSubscribers();
-}
-
-function rememberSuppressedInitialWrite(key: string): void {
-  lastSuppressedInitialWriteKey = key;
-  lastSuppressedInitialWriteAt = new Date().toISOString();
-  notifyPersistenceHealthSubscribers();
-}
-
 export function getPersistenceHealthSnapshot(): PersistenceHealthSnapshot {
   return buildPersistenceHealthSnapshot();
 }
@@ -1368,480 +1106,5 @@ export function subscribePersistenceHealth(
 ): () => void {
   persistenceHealthSubscribers.add(listener);
   listener(buildPersistenceHealthSnapshot());
-
-  const unsubscribeQueue = subscribeSupabaseWriteQueueSnapshot(() => {
-    notifyPersistenceHealthSubscribers();
-  });
-  const unsubscribeRealtime = subscribeSupabaseRealtimeSnapshot(() => {
-    notifyPersistenceHealthSubscribers();
-  });
-
-  return () => {
-    persistenceHealthSubscribers.delete(listener);
-    unsubscribeQueue();
-    unsubscribeRealtime();
-  };
-}
-
-function ensureRemoteFlushHandlers(): void {
-  if (remoteFlushHandlersRegistered || typeof window === 'undefined') return;
-
-  const flushQueuedWrites = () => {
-    void flushWriteQueue();
-  };
-
-  window.addEventListener('beforeunload', flushQueuedWrites);
-  window.addEventListener('pagehide', flushQueuedWrites);
-
-  if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') {
-        void flushWriteQueue();
-      }
-    });
-  }
-
-  remoteFlushHandlersRegistered = true;
-}
-
-function ensureRemoteStoreSubscription(): void {
-  if (remoteStoreUnsubscribe || !isSupabaseReady() || !isAuthenticated()) return;
-
-  remoteStoreUnsubscribe = subscribeRemoteStore(NAMESPACE, change => {
-    storeChangeSubscribers.forEach(listener => listener(change));
-    notifyPersistenceHealthSubscribers();
-  });
-}
-
-export function subscribeStoreChanges(listener: (change: RemoteStoreChange) => void): () => void {
-  storeChangeSubscribers.add(listener);
-  ensureRemoteStoreSubscription();
-
-  return () => {
-    storeChangeSubscribers.delete(listener);
-    if (storeChangeSubscribers.size === 0 && remoteStoreUnsubscribe) {
-      remoteStoreUnsubscribe();
-      remoteStoreUnsubscribe = null;
-    }
-  };
-}
-
-export function subscribeStoreKey(key: string, listener: (change: RemoteStoreChange) => void): () => void {
-  return subscribeStoreChanges(change => {
-    if (change.key === key) {
-      listener(change);
-    }
-  });
-}
-
-export async function clearLocalStoreCopy(key: string): Promise<void> {
-  removeLocalCacheValue(key);
-  try {
-    if (await isTauri()) {
-      await invoke('delete_store', { key });
-    }
-  } catch {
-    logWarn('Persistence', `Tauri delete failed for ${key}`);
-  }
-  notifyPersistenceHealthSubscribers();
-}
-
-export async function listLocalImportCandidates(): Promise<LocalImportCandidate[]> {
-  const candidates: LocalImportCandidate[] = [];
-  const authenticated = isSupabaseReady() && isAuthenticated();
-
-  for (const item of SHARED_STORE_KEYS) {
-    const rawLocal = localStorage.getItem(getDataKey(item.key));
-    const local = parseImportRaw(rawLocal);
-    const tauri = parseImportRaw(await readTauriRaw(item.key));
-    if (!local.hasValue && !tauri.hasValue) continue;
-
-    let remoteExists: boolean | null = null;
-    if (authenticated) {
-      try {
-        remoteExists = Boolean(await loadRemote(NAMESPACE, item.key));
-      } catch (error) {
-        remoteExists = null;
-        logWarn('Persistence', `Could not check remote import state for ${item.key}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    candidates.push({
-      key: item.key,
-      label: item.label,
-      description: item.description,
-      localStorage: local.hasValue,
-      tauri: tauri.hasValue,
-      remoteExists,
-      sizeBytes: Math.max(local.sizeBytes, tauri.sizeBytes),
-    });
-  }
-
-  return candidates;
-}
-
-export async function importLocalStoreCandidate(
-  key: string,
-  options: { replace?: boolean } = {},
-): Promise<LocalImportResult> {
-  if (!isSupabaseReady() || !isAuthenticated()) {
-    return { key, imported: false, cleared: false, reason: 'not_authenticated' };
-  }
-
-  const storeKey = getSharedStoreKey(key);
-  if (!storeKey) {
-    return { key, imported: false, cleared: false, reason: 'no_local_data' };
-  }
-
-  const local = await readLocalImportValue(key);
-  if (!local.hasValue) {
-    return { key, imported: false, cleared: false, reason: 'no_local_data' };
-  }
-
-  try {
-    const remote = await loadRemote(NAMESPACE, key);
-    if (remote && !options.replace) {
-      return { key, imported: false, cleared: false, reason: 'remote_exists' };
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    rememberRemoteRead(key, message);
-    return { key, imported: false, cleared: false, reason: 'remote_write_failed' };
-  }
-
-  const sharedValue = await prepareSharedStoreValue(key, local.value);
-  const success = await saveRemote(NAMESPACE, key, sharedValue);
-  if (!success) {
-    rememberRemoteWrite(key, 'Supabase import write failed.');
-    return { key, imported: false, cleared: false, reason: 'remote_write_failed' };
-  }
-
-  lastKnownRemoteJson.set(key, JSON.stringify(sharedValue));
-  rememberRemoteWrite(key, null);
-  await clearLocalStoreCopy(key);
-  return { key, imported: true, cleared: true, reason: 'imported' };
-}
-
-export async function listSyncDriftCandidates(): Promise<SyncDriftCandidate[]> {
-  if (!isSupabaseReady() || !isAuthenticated()) {
-    syncDriftConflictCount = 0;
-    lastSyncDriftScanAt = new Date().toISOString();
-    lastSyncDriftError = null;
-    notifyPersistenceHealthSubscribers();
-    return [];
-  }
-
-  lastSyncDriftScanAt = new Date().toISOString();
-  lastSyncDriftError = null;
-  const candidates: SyncDriftCandidate[] = [];
-
-  try {
-    for (const definition of SYNC_DRIFT_GROUPS) {
-      const scan = await scanSyncDriftGroup(definition);
-      const hasLocalData = scan.entries.some(entry => entry.local.hasValue || entry.local.parseError);
-      if (!hasLocalData) continue;
-
-      if (definition.policy === 'external_cache') {
-        if (scan.kind === 'local_only') {
-          await autoResolveSafeSyncDrift(scan);
-          requestCalendarProviderRefresh(`sync_drift_${definition.groupId}_local_import`);
-        } else {
-          await autoResolveExternalCacheSyncDrift(scan);
-        }
-        continue;
-      }
-
-      if (scan.kind === 'identical' || scan.kind === 'local_only') {
-        await autoResolveSafeSyncDrift(scan);
-        continue;
-      }
-
-      if (scan.kind === 'remote_only') {
-        await clearIdenticalSyncDriftEntries(scan);
-        continue;
-      }
-
-      if (scan.kind === 'conflict' || scan.kind === 'unreadable') {
-        const candidate = buildSyncDriftCandidate(scan);
-        if (candidate.requiresUserChoice) {
-          candidates.push(candidate);
-        } else {
-          await autoResolveSafeSyncDrift({ ...scan, kind: 'identical' });
-        }
-      }
-    }
-
-    syncDriftConflictCount = candidates.length;
-    notifyPersistenceHealthSubscribers();
-    return candidates;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    lastSyncDriftError = message.replace(TOKEN_LIKE_PATTERN, '[redacted]');
-    syncDriftConflictCount = candidates.length;
-    notifyPersistenceHealthSubscribers();
-    logWarn('Persistence', `Sync drift scan failed: ${lastSyncDriftError}`);
-    return candidates;
-  }
-}
-
-export async function resolveSyncDriftCandidate(
-  groupId: string,
-  choice: SyncResolutionChoice,
-): Promise<SyncResolutionResult> {
-  const definition = SYNC_DRIFT_GROUP_BY_ID.get(groupId);
-  if (!definition || !isSupabaseReady() || !isAuthenticated()) {
-    return {
-      groupId,
-      choice,
-      resolved: false,
-      clearedKeys: [],
-      savedKeys: [],
-      error: !definition ? 'Unknown sync drift group.' : 'Supabase is not ready or the user is not signed in.',
-    };
-  }
-
-  const scan = await scanSyncDriftGroup(definition);
-  const clearedKeys: string[] = [];
-  const savedKeys: string[] = [];
-
-  try {
-    if (definition.policy === 'external_cache') {
-      await autoResolveExternalCacheSyncDrift(scan);
-      return {
-        groupId,
-        choice: 'keep_database',
-        resolved: true,
-        clearedKeys: scan.entries
-          .filter(entry => entry.local.hasValue || entry.local.parseError)
-          .map(entry => entry.key),
-        savedKeys: [],
-        error: null,
-      };
-    }
-
-    if (choice === 'use_device') {
-      const unreadable = scan.entries.find(entry => entry.local.parseError);
-      if (unreadable) {
-        throw new Error(`${unreadable.label} has unreadable local data.`);
-      }
-
-      for (const entry of scan.entries) {
-        if (!entry.local.hasValue) continue;
-        const sharedValue = await prepareSharedStoreValue(entry.key, entry.local.value);
-        const success = await saveRemote(NAMESPACE, entry.key, sharedValue);
-        if (!success) {
-          throw new Error(`Supabase write failed for ${entry.label}.`);
-        }
-        lastKnownRemoteJson.set(entry.key, JSON.stringify(sharedValue));
-        rememberRemoteWrite(entry.key, null);
-        savedKeys.push(entry.key);
-      }
-    }
-
-    for (const entry of scan.entries) {
-      if (!entry.local.hasValue && !entry.local.parseError) continue;
-      await clearLocalStoreCopy(entry.key);
-      clearedKeys.push(entry.key);
-    }
-
-    lastSyncDriftResolutionAt = new Date().toISOString();
-    lastSyncDriftError = null;
-    syncDriftConflictCount = Math.max(0, syncDriftConflictCount - 1);
-    notifyPersistenceHealthSubscribers();
-    return {
-      groupId,
-      choice,
-      resolved: true,
-      clearedKeys,
-      savedKeys,
-      error: null,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    lastSyncDriftError = message.replace(TOKEN_LIKE_PATTERN, '[redacted]');
-    notifyPersistenceHealthSubscribers();
-    logWarn('Persistence', `Sync drift resolution failed: ${lastSyncDriftError}`);
-    return {
-      groupId,
-      choice,
-      resolved: false,
-      clearedKeys,
-      savedKeys,
-      error: lastSyncDriftError,
-    };
-  }
-}
-
-/**
- * Load data. When authenticated with Supabase, the database is the
- * source of truth and local persistent storage is ignored.
- *
- * Priority:
- *   Authenticated: Supabase only
- *   Not authenticated: Tauri → localStorage
- */
-export async function loadStore<T>(key: string): Promise<T | null> {
-  assertSharedStoreKeyIsNotDeviceOnly(key);
-
-  if (isSupabaseReady() && isAuthenticated()) {
-    try {
-      const remote = await loadRemote<T>(NAMESPACE, key);
-      rememberRemoteRead(key, null);
-      if (remote) {
-        const remoteJson = JSON.stringify(remote.value);
-        suppressNextAuthenticatedSaveJson.set(key, remoteJson);
-        lastKnownRemoteJson.set(key, remoteJson);
-        return remote.value;
-      }
-      suppressNextAuthenticatedSaveJson.set(key, null);
-      lastKnownRemoteJson.delete(key);
-      return null;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      suppressNextAuthenticatedSaveJson.set(key, null);
-      rememberRemoteRead(key, message);
-      logWarn('Persistence', `Supabase load failed for ${key}: ${message}`);
-      return null;
-    }
-  }
-
-  // Not authenticated - local-first mode
-
-  // 1. Try Tauri file store
-  try {
-    if (await isTauri()) {
-      const raw = await invoke<string>('read_store', { key });
-      const parsed = JSON.parse(raw);
-      return parsed as T;
-    }
-  } catch { logWarn('Persistence', 'Tauri read failed'); }
-
-  // 2. Try localStorage
-  const localCache = readLocalCache<T>(key);
-  if (localCache.hasValue) {
-    return localCache.value;
-  }
-
-  return null;
-}
-
-/**
- * Save data. Signed-in users write to Supabase only. Signed-out users
- * write to the local-first Tauri/localStorage store.
- */
-export async function saveStore<T>(key: string, value: T): Promise<void> {
-  assertSharedStoreKeyIsNotDeviceOnly(key);
-
-  const sharedValue = await prepareSharedStoreValue(key, value) as T;
-  const json = JSON.stringify(sharedValue);
-  const updatedAt = new Date().toISOString();
-  const authenticated = isSupabaseReady() && isAuthenticated();
-
-  if (authenticated) {
-    if (lastKnownRemoteJson.get(key) === json) {
-      suppressNextAuthenticatedSaveJson.delete(key);
-      return;
-    }
-
-    if (suppressNextAuthenticatedSaveJson.has(key)) {
-      const loadedJson = suppressNextAuthenticatedSaveJson.get(key);
-      if (loadedJson === json || (loadedJson === null && isInitialEmptyStoreValue(sharedValue))) {
-        suppressNextAuthenticatedSaveJson.delete(key);
-        rememberSuppressedInitialWrite(key);
-        return;
-      }
-      suppressNextAuthenticatedSaveJson.delete(key);
-    }
-
-    const readFailure = remoteReadFailedKeys.get(key);
-    if (readFailure) {
-      const message = `Skipped Supabase write for ${key} because the last database read failed: ${readFailure}`;
-      rememberRemoteWrite(key, message);
-      logWarn('Persistence', message);
-      return;
-    }
-
-    ensureRemoteFlushHandlers();
-    ensureRemoteStoreSubscription();
-    queueRemoteWrite(NAMESPACE, key, sharedValue, {
-      updatedAt,
-      onSettled: ({ success }) => {
-        if (!success) {
-          rememberRemoteWrite(key, getSupabaseWriteQueueSnapshot().lastFlushError || 'Supabase write failed.');
-          return;
-        }
-        lastKnownRemoteJson.set(key, json);
-        rememberRemoteWrite(key, null);
-      },
-    });
-    notifyPersistenceHealthSubscribers();
-    return;
-  }
-
-  // 1. Try Tauri
-  try {
-    if (await isTauri()) {
-      await invoke('write_store', { key, value: json });
-    }
-  } catch { logWarn('Persistence', 'Tauri write failed'); }
-
-  // 2. Always write to localStorage (fast cache)
-  try {
-    localStorage.setItem(getDataKey(key), json);
-    writeLocalCacheMeta(key, {
-      updatedAt,
-      dirty: authenticated,
-    });
-    rememberLocalWrite(key, null);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    rememberLocalWrite(key, message);
-    logWarn('Persistence', `Local cache write failed: ${message}`);
-    throw error;
-  }
-}
-
-/**
- * Device-only stores deliberately bypass Supabase, shared imports, sync-drift
- * scans, and the shared local cache namespace.
- */
-export async function loadDeviceStore<T>(
-  key: ProjectDeviceStoreKey,
-): Promise<T | null> {
-  try {
-    if (await isTauri()) {
-      const raw = await invoke<string>('read_store', { key: getDeviceTauriKey(key) });
-      const parsed = JSON.parse(raw) as T | null;
-      if (parsed !== null) return parsed;
-    }
-  } catch {
-    logWarn('Persistence', `Tauri device-only read failed for ${key}`);
-  }
-
-  const raw = localStorage.getItem(getDeviceDataKey(key));
-  if (raw === null) return null;
-
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    logWarn('Persistence', `Device-only cache JSON parse failed for ${key}`);
-    return null;
-  }
-}
-
-export async function saveDeviceStore<T>(
-  key: ProjectDeviceStoreKey,
-  value: T,
-): Promise<void> {
-  const json = JSON.stringify(value);
-
-  try {
-    if (await isTauri()) {
-      await invoke('write_store', { key: getDeviceTauriKey(key), value: json });
-    }
-  } catch {
-    logWarn('Persistence', `Tauri device-only write failed for ${key}`);
-  }
-
-  localStorage.setItem(getDeviceDataKey(key), json);
+  return () => persistenceHealthSubscribers.delete(listener);
 }

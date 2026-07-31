@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { toAssistantToolName } from '../src/assistant/toolSchemas';
 import { expect, test } from './support/helm-fixture';
 
@@ -70,12 +71,7 @@ test('tracks prayer outcomes, warns globally, persists stats, and clarifies chat
   await expect(page.locator('.chat-message.assistant').last()).toContainText('On time or late?');
   await chatInput.fill('late');
   await chatInput.press('Enter');
-  await expect.poll(async () => page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem('helm:prayerTracking') || '{"records":{}}') as {
-      records: Record<string, { status?: string }>;
-    };
-    return state.records['2026-07-28::Dhuhr']?.status;
-  })).toBe('late');
+  await expect.poll(() => prayerStatus(page, '2026-07-28::Dhuhr')).toBe('late');
 
   await page.waitForFunction(() => Boolean((window as Window & {
     __helmVoiceAssistantDebug?: { submitVoiceTranscript?: (text: string) => void };
@@ -91,12 +87,7 @@ test('tracks prayer outcomes, warns globally, persists stats, and clarifies chat
       __helmVoiceAssistantDebug?: { submitVoiceTranscript?: (text: string) => void };
     }).__helmVoiceAssistantDebug?.submitVoiceTranscript?.('on time');
   });
-  await expect.poll(async () => page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem('helm:prayerTracking') || '{"records":{}}') as {
-      records: Record<string, { status?: string }>;
-    };
-    return state.records['2026-07-28::Asr']?.status;
-  })).toBe('on_time');
+  await expect.poll(() => prayerStatus(page, '2026-07-28::Asr')).toBe('on_time');
 
   await page.getByRole('button', { name: 'Navigate to Dashboard' }).click();
   await expect(page.getByText('On time').first()).toBeVisible();
@@ -108,3 +99,21 @@ test('tracks prayer outcomes, warns globally, persists stats, and clarifies chat
   await expect(page.getByRole('button', { name: 'Talk to Lina' })).toBeVisible();
   await expect(page.locator('.va-bubble')).toBeHidden();
 });
+
+async function prayerStatus(page: Page, prayerId: string) {
+  return page.evaluate(async id => {
+    const response = await fetch('/__helm_e2e_db');
+    if (!response.ok) throw new Error('Could not read the HELM database fixture.');
+    const rows = await response.json() as Array<{
+      collection: string;
+      deleted_at: string | null;
+      payload: { status?: string };
+      record_id: string;
+    }>;
+    return rows.find(row => (
+      row.collection === 'prayerTracking'
+      && row.record_id === `record:${id}`
+      && row.deleted_at === null
+    ))?.payload.status;
+  }, prayerId);
+}

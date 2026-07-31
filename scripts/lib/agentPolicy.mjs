@@ -9,6 +9,7 @@ export const REQUIRED_CI_CHECKS = [
   'unit',
   'e2e',
   'build',
+  'database',
   'native',
   'codex-review',
 ]
@@ -97,6 +98,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
     "needs.unit.result == 'success'",
     "needs.e2e.result == 'success'",
     "needs.build.result == 'success'",
+    "needs.database.result == 'success'",
     "needs.native.result == 'success'",
     "needs['codex-review'].result == 'success'",
     'group: helm-auto-promote-master',

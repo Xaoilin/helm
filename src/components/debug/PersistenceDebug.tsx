@@ -49,7 +49,9 @@ export default function PersistenceDebug() {
           alignItems: 'start',
         }}
       >
-        <Field label="Mode" value={snapshot.mode === 'database' ? 'Supabase database' : 'Local-first'} />
+        <Field label="Mode" value={snapshot.mode === 'database' ? 'Supabase database' : 'Database blocked'} />
+        <Field label="Session" value={snapshot.syncSession.status} />
+        <Field label="Account version" value={String(snapshot.syncSession.accountVersion)} />
         <Field label="Last remote read" value={snapshot.lastRemoteReadKey || 'None'} />
         <Field label="Last remote read error" value={snapshot.lastRemoteReadError || 'None'} />
         <Field label="Last remote write" value={snapshot.lastRemoteWriteKey || 'None'} />
@@ -59,10 +61,6 @@ export default function PersistenceDebug() {
         <Field label="Realtime" value={snapshot.supabaseRealtime.state} />
         <Field label="Realtime error" value={snapshot.supabaseRealtime.lastError || 'None'} />
         <Field label="Local import candidates" value={String(candidates.length)} />
-        <Field label="Sync drift conflicts" value={String(snapshot.syncDriftConflictCount)} />
-        <Field label="Last drift scan" value={snapshot.lastSyncDriftScanAt || 'None'} />
-        <Field label="Last drift resolution" value={snapshot.lastSyncDriftResolutionAt || 'None'} />
-        <Field label="Last drift error" value={snapshot.lastSyncDriftError || 'None'} />
         <Field label="Calendar cache cleanup" value={snapshot.lastCalendarCacheCleanupAt || 'None'} />
         <Field label="Calendar cleanup reason" value={snapshot.lastCalendarCacheCleanupReason || 'None'} />
         <Field label="Calendar refresh requested" value={snapshot.lastCalendarSyncRequestAt || 'None'} />
@@ -71,7 +69,7 @@ export default function PersistenceDebug() {
       {candidates.length > 0 && (
         <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#d9dcef' }}>
-            {snapshot.mode === 'database' ? 'Local copies available for import' : 'Local store keys on this device'}
+            Legacy shared copies awaiting automatic retirement
           </div>
           {previewCandidates.map(candidate => (
             <div
