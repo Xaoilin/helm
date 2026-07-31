@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.2.82",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "agent:fast": "node ./scripts/run-agent-fast.mjs",
     "agent:local-gate": "npm run agent:fast",

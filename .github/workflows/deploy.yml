@@ -50,7 +50,7 @@ jobs:
           ref: ${{ inputs.deploy_sha || github.event.workflow_run.head_sha || 'master' }}
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - name: Wait for authoritative database cutover
