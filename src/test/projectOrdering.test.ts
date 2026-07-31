@@ -59,6 +59,7 @@ describe('project catalogue ordering mutations', () => {
     expect(sectionIds(result.projects, 'projects')).toEqual(['zulu', 'alpha']);
     expect(result.projects.find(item => item.id === 'zulu')?.sortOrder).toBe(0);
     expect(result.projects.find(item => item.id === 'alpha')?.sortOrder).toBe(1);
+    expect(result.projects.map(item => item.id)).toEqual(['zulu', 'alpha']);
   });
 
   it('appends pin and unpin transitions to their destination sections', () => {

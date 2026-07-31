@@ -26,6 +26,10 @@ export default defineConfig({
   },
   webServer: {
     command: `npm exec vite -- --host 127.0.0.1 --port ${port} --strictPort`,
+    env: {
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'helm-test-publishable-key',
+      VITE_SUPABASE_URL: 'https://helm.test.supabase.co',
+    },
     url: baseURL,
     reuseExistingServer: false,
     timeout: 15_000,

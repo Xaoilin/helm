@@ -19,7 +19,7 @@ HELM uses a branch-to-production flow for personal use:
 2. The branch bumps the app version above `origin/master` once, before iterative policy checks.
 3. `npm run agent:fast` selects the smallest safe feedback loop from every change against `origin/master`, including staged, unstaged, and untracked files.
 4. The pre-push hook runs the single full local gate, `npm run check`, once.
-5. CI runs stable `agent-policy`, `lint`, `typecheck`, `unit`, `e2e`, `build`, `native`, and `codex-review` checks. Draft PRs do not consume runners, and a newer PR run cancels its predecessor.
+5. CI runs stable `agent-policy`, `database`, `lint`, `typecheck`, `unit`, `e2e`, `build`, `native`, and `codex-review` checks. Draft PRs do not consume runners, and a newer PR run cancels its predecessor.
 6. `codex-review` fails the PR for P0 or P1 findings when a review completes, allows P2/P3 findings to remain advisory, and treats missing keys, quota exhaustion, or provider failures as advisory unavailable.
 7. Frontend-only PRs satisfy `native` without starting macOS/Windows. Native-impact PRs require both cached platform jobs.
 8. `auto-promote` records the tested PR merge-tree, squash-merges, and proves that the resulting `master` tree is byte-for-byte identical.

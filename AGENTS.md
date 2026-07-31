@@ -30,11 +30,11 @@ Do not stack primitive commands around `agent:fast` or `check`. Run a focused fa
 ## Non-Negotiable Invariants
 
 - `src/types/domain.ts` owns app data shapes.
-- Preserve signed-in Supabase precedence and signed-out Tauri-first persistence.
+- Shared app data is signed-in, database-authoritative, and online-only. Tauri persistence is limited to explicitly machine-bound state.
 - Never derive local dates by slicing UTC ISO strings; use the established helpers.
 - Calendar data remains account -> source -> event, with intentional multi-account support.
 - Voice and chat share the assistant runtime; do not add separate mutation paths.
-- Credentials are not an encrypted vault. Keep status and UI copy truthful.
+- Secret values belong in the account-owned Supabase Vault path. Never place plaintext in shared records, browser storage, Broadcast payloads, logs, exports, assistant context, or durable memory.
 - Project catalogue metadata may sync; absolute paths, approvals, fingerprints, processes, and logs remain device-only.
 - Native project execution uses Rust-normalised approved profile IDs, canonical containment, explicit fingerprinted environment, bounded logs, process-group cleanup, and native confirmation. Never execute renderer-supplied shell text.
 - Do not swallow errors. Surface user-actionable failures and preserve diagnostics for opaque integrations.

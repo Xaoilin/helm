@@ -7,7 +7,7 @@
 - Run `npm run handoff:check` at the end of every completed feature handoff. If it fails, the work is not done yet unless the user explicitly asked for a local-only or unmerged outcome or an external access blocker prevents completion.
 - Do not call a user-facing change live, shipped, or deployed until it is merged to `master`, the deployment has succeeded, and the deployed result has been verified directly. `npm run handoff:check` is the required proof point for that state, and meaningful feature work should not be handed off as complete before that proof exists.
 - When meaningful work is ready and the user did not ask to keep it local, continue through PR creation, automated gates, merge, deploy, and verification instead of waiting for a separate release instruction.
-- For personal-app feature delivery, non-draft same-repo `codex/*` PRs into `master` auto-promote after `agent-policy`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and the stable `native` check pass. `codex-review` must not block solely because OpenAI quota, credentials, or provider availability are unavailable. Manual human PR approval is not required unless the user explicitly asks for it.
+- For personal-app feature delivery, non-draft same-repo `codex/*` PRs into `master` auto-promote after `agent-policy`, `database`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and the stable `native` check pass. `codex-review` must not block solely because OpenAI quota, credentials, or provider availability are unavailable. Manual human PR approval is not required unless the user explicitly asks for it.
 - After a task branch is merged, delete it locally and on `origin`. If any branch remains unmerged, call out its status explicitly instead of leaving stale topic branches around.
 - If the user explicitly asks to keep work local or unmerged, follow that request.
 - Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
@@ -74,15 +74,15 @@ For assistant-planning changes, the release bar is higher than generic unit cove
 
 ## CI And Branch Protection
 
-- The CI workflow job names are part of the contract with GitHub branch protection. Keep them as `lint`, `typecheck`, `unit`, `e2e`, `build`, `agent-policy`, `native`, and `codex-review`.
-- `master` should stay protected with pull requests required, zero required human approvals, and those eight checks required before merge. The `codex-review` check must degrade to a passing advisory-unavailable result when OpenAI quota or service availability prevents review output.
+- The CI workflow job names are part of the contract with GitHub branch protection. Keep them as `lint`, `typecheck`, `unit`, `e2e`, `build`, `database`, `agent-policy`, `native`, and `codex-review`.
+- `master` should stay protected with pull requests required, zero required human approvals, and those nine checks required before merge. The `codex-review` check must degrade to a passing advisory-unavailable result when OpenAI quota or service availability prevents review output.
 - Pull-request runs cancel older runs for the same PR and do not consume runners while draft. Frontend-only PRs skip the macOS/Windows matrix, but the stable `native` aggregator still reports success. The detector normalizes synchronized release-version fields, so the mandatory version bump alone does not make a frontend PR native. Rust, dependency, build, or native-workflow changes require both platforms and use Cargo caches.
 - `auto-promote` must stay limited to non-draft, same-repo `codex/*` pull requests targeting `master`. It records the exact tested merge-tree, squash-merges, verifies that the resulting `master` tree is identical, deletes the branch, and dispatches verification-only `CI` with the source run and PR identity. Only the verified receipt dispatches both deployment workflows.
 - Verification-only CI must fail closed for a checkout or live-`master` tree mismatch, unsuccessful or wrong source run, wrong PR, or any missing/failed required source job. Auto-promotion and receipt-gated deploy dispatch share one FIFO repository queue; dispatch titles deduplicate retries, and deploy workflows check out the verified squash SHA rather than mutable `master`. Direct pushes and ordinary manual dispatches run the full suite.
 - `codex-review` is a blocking automated review gate only when it successfully returns P0/P1 findings. Missing `OPENAI_API_KEY`, quota exhaustion, provider failures, or malformed review output should produce warnings and must not block the release cycle.
 - The non-required `assistant-benchmark` CI job now runs on pushes to `master` and blocks deployment if the live hosted benchmark thresholds fail.
 - The normal landing path is therefore a small branch and PR into `master`, not direct commits to `master` or long-lived finished changes sitting only locally.
-- If a Supabase change depends on a new migration, ship the migration rollout in the same release path as the code that depends on it. Prefer keeping `SUPABASE_DB_PASSWORD` configured so `supabase db push` can run non-interactively; when that secret is unavailable, provide an equally automatic fallback in the release workflow so production cannot end up with new hosted code but missing schema.
+- If a Supabase change depends on a new migration, ship the migration rollout in the same release path as the code that depends on it. Keep `SUPABASE_DB_PASSWORD` configured so `supabase db push` can run non-interactively. Database-authoritative cutovers also require a verified `HELM_DATABASE_BACKUP_SHA256`; migration-history repair is allowed only after the live historical schema proves equivalent. Pages waits for the database verification contract and fails closed rather than publishing a client ahead of its schema.
 - Deploy should continue to run only for `master`. The deploy workflows support both the normal successful-`CI` `workflow_run` path and the verified-receipt `workflow_dispatch` path; final handoff is still gated by `npm run handoff:check` verifying successful CI, deploys, and the live bundle version for the same `origin/master` head.
 
 ## Testing Expectations
@@ -181,12 +181,12 @@ After the feature works end to end, do one more rendered review that focuses on 
 ## Security Notes
 
 - API keys are currently client-side configuration for a single-user MVP. Do not describe this as production-grade secret handling.
-- Do not imply HELM includes a secure general-purpose credential vault. Project local paths and other app metadata are plain local-first records, not hardened secret storage.
+- Do not imply HELM includes a secure general-purpose credential vault. Project paths, approvals, runtime state, and API keys are explicit device-only data and must never enter shared records.
 - Hosted-assistant browser calls currently use the build's configured Supabase project access key. Keep the UI copy truthful about that architecture, and if tighter access control is needed later, move the OpenAI call behind a server-side auth boundary instead of implying the browser path is private.
 - Avoid `dangerouslySetInnerHTML` and preserve React's default escaping protections.
 - Keep the Tauri CSP enabled and narrowly scoped. The native project approval dialog is the user-presence trust boundary; renderer confirmation alone is not sufficient for process launch.
 - Keep generic native persistence on its strict store-key allowlist and runtime approvals inside the isolated `project-runtime` directory. A shared/device store addition must update the declarations and allowlist together; the agent-policy gate enforces parity.
-- If the product ever moves beyond single-user local-first usage, secrets and privileged API calls need a server-side redesign.
+- Shared table access must remain account-isolated by RLS; direct writes stay revoked and all mutations derive ownership from `auth.uid()` inside the transactional RPC.
 
 ## UI And UX Rules
 

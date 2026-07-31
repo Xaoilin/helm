@@ -87,76 +87,29 @@ function buildLocalItem(input: SystemHealthInput): HealthItem {
   if (!appLoaded) {
     return {
       id: 'local',
-      label: 'Local data',
-      headline: 'Loading local data',
-      detail: 'Lina is opening the local-first store.',
+      label: 'Account data',
+      headline: 'Loading database data',
+      detail: 'Lina is opening the latest account state from Supabase.',
       tone: 'checking',
     };
   }
 
   if (persistence.mode === 'database') {
-    const conflictCount = persistence.syncDriftConflictCount || 0;
-    if (conflictCount > 0) {
-      return {
-        id: 'local',
-        label: 'Local data',
-        headline: 'User data differences need review',
-        detail: `${plural(conflictCount, 'section')} has meaningful database and device differences waiting in Settings. System metadata is cleaned up automatically.`,
-        tone: 'attention',
-        action: { kind: 'settings', label: 'Open Settings' },
-      };
-    }
-
-    const importCandidateCount = persistence.localImportCandidateCount || 0;
-    if (importCandidateCount > 0) {
-      return {
-        id: 'local',
-        label: 'Local data',
-        headline: 'Finishing sync',
-        detail: `${plural(importCandidateCount, 'local copy', 'local copies')} will be cleaned up or imported when Settings scans sync drift.`,
-        tone: 'syncing',
-        action: { kind: 'settings', label: 'Open Settings' },
-      };
-    }
-
     return {
       id: 'local',
-      label: 'Local data',
-      headline: 'Synced with Supabase',
-      detail: 'Signed-in app data is read from Supabase, and this device has no unresolved data differences.',
+      label: 'Account data',
+      headline: 'Database state loaded',
+      detail: 'Shared HELM data is attached to the signed-in account. Device storage is limited to machine-bound settings and project permissions.',
       tone: 'healthy',
-    };
-  }
-
-  if (persistence.lastLocalWriteError) {
-    return {
-      id: 'local',
-      label: 'Local data',
-      headline: 'Local save needs attention',
-      detail: sanitizeHealthDetail(persistence.lastLocalWriteError),
-      tone: 'attention',
-      action: { kind: 'settings', label: 'Open Settings' },
-    };
-  }
-
-  if (persistence.lastLocalWriteAt) {
-    return {
-      id: 'local',
-      label: 'Local data',
-      headline: 'Local data saved',
-      detail: 'Your latest app data is in the local cache.',
-      tone: 'healthy',
-      meta: formatCheckedAt(persistence.lastLocalWriteAt),
     };
   }
 
   return {
     id: 'local',
-    label: 'Local data',
-    headline: 'Local save pending',
-    detail: 'No local write has completed in this session yet.',
-    tone: 'attention',
-    action: { kind: 'refresh', label: 'Refresh status' },
+    label: 'Account data',
+    headline: 'Database connection required',
+    detail: sanitizeHealthDetail(persistence.syncSession?.error) || 'HELM does not open shared data from an offline device copy.',
+    tone: 'offline',
   };
 }
 
@@ -170,9 +123,9 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
     return {
       id: 'supabase',
       label: 'Supabase',
-      headline: 'Local-only',
-      detail: 'Supabase is not configured, so app data stays local on this device.',
-      tone: 'local',
+      headline: 'Database unavailable',
+      detail: 'Supabase configuration is required before HELM can open shared account data.',
+      tone: 'offline',
       action: { kind: 'settings', label: 'Open Settings' },
     };
   }
@@ -191,9 +144,9 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
     return {
       id: 'supabase',
       label: 'Supabase',
-      headline: 'Local-only',
-      detail: 'Sign in to sync this device with Supabase.',
-      tone: 'local',
+      headline: 'Sign in required',
+      detail: 'Sign in to load the database state attached to your HELM account.',
+      tone: 'offline',
       action: { kind: 'sign-in', label: 'Sign in' },
     };
   }
@@ -221,8 +174,8 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
       label: 'Supabase',
       headline: 'Syncing to Supabase',
       detail: lastError
-        ? `Retrying after the last sync attempt failed: ${lastError}`
-        : `${detailParts.join(' and ')} waiting to sync.`,
+        ? `The last database mutation failed: ${lastError}`
+        : `${detailParts.join(' and ')} being committed.`,
       tone: 'syncing',
       action: { kind: 'refresh', label: 'Refresh status' },
     };
@@ -233,8 +186,8 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
     label: 'Supabase',
     headline: 'Database source of truth',
     detail: persistence.supabaseRealtime?.state === 'subscribed'
-      ? 'Signed-in app data is saved in Supabase and realtime refresh is connected.'
-      : 'Signed-in app data is saved in Supabase. Realtime refresh is best-effort.',
+      ? 'The account database probe passed and its private realtime channel is authenticated.'
+      : 'The database is authoritative; realtime reconnect is still being established.',
     tone: 'healthy',
     meta: formatCheckedAt(persistence.lastRemoteWriteAt || persistence.supabaseQueue.lastFlushSuccessAt),
   };
@@ -248,8 +201,8 @@ function buildCalendarItem(input: SystemHealthInput): HealthItem {
     return {
       id: 'calendar',
       label: 'Google Calendar',
-      headline: 'Calendar local-only',
-      detail: 'No Google Calendar account is connected.',
+      headline: 'No external calendar',
+      detail: 'Manual calendar records remain in your HELM account database; no Google Calendar account is connected.',
       tone: 'local',
       action: { kind: 'integrations', label: 'Open Integrations' },
     };

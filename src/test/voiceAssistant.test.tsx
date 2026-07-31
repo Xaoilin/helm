@@ -83,6 +83,12 @@ vi.mock('../services/assistantRuntime', () => ({
   processAssistantCommand: (...args: unknown[]) => processAssistantCommandMock(...args),
 }));
 
+vi.mock('../store/persistence', async importOriginal => {
+  const actual = await importOriginal<typeof import('../store/persistence')>();
+  const { createLocalPersistenceMock } = await import('./localPersistenceMock');
+  return createLocalPersistenceMock(actual);
+});
+
 function renderAssistant(options: { settings?: Partial<Settings>; children?: ReactNode } = {}) {
   if (options.settings) {
     localStorage.setItem('helm:settings', JSON.stringify(options.settings));

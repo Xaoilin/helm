@@ -1,6 +1,6 @@
 # HELM
 
-HELM is a local-first desktop assistant app called Lina. It combines calendar, tasks and habits, a multi-clock workspace for timers and stopwatches, finance tracking, knowledge management, prayer times, voice input, and chat into one Tauri + React application for a single-user workflow.
+HELM is an account-backed desktop assistant app called Lina. Shared data belongs to the signed-in account, uses Supabase as its only source of truth, and is unavailable offline. Machine paths, native approvals, process state, and runtime logs remain local to each device. Passwords and project secrets use an encrypted account-owned vault.
 
 ## Stack
 
@@ -8,7 +8,7 @@ HELM is a local-first desktop assistant app called Lina. It combines calendar, t
 - React 19
 - TypeScript 5
 - Vite 8
-- Supabase for optional sign-in and sync
+- Supabase for required account identity and shared persistence
 - Ollama, Deepgram, ElevenLabs, and OpenWakeWord for assistant features
 
 ## Quick Start
@@ -24,11 +24,13 @@ Open the app in the browser for web development, or run the Tauri shell separate
 
 ```bash
 npm run agent:fast
+npm run test:database
 npm run check
 npm run test:e2e:smoke
 npm run test:e2e
 npm run test:e2e:visual -- --surface projects --viewports 390x844,1440x900
 npm run test:native
+npm run test:database
 npm run build:web
 npm run handoff:check
 npm run llm-compare
@@ -57,13 +59,14 @@ Behavioral E2E and screenshot evidence are separate. `test:e2e` blocks on behavi
 ## Current Product Reality
 
 - Google Calendar OAuth and sync are real.
-- Supabase auth and sync are real when configured; signed-in shared app data is database-backed rather than device-local.
+- Supabase auth and database-authoritative persistence are required for shared app data. Devices converge automatically without conflict prompts or durable offline queues.
+- The Secrets surface stores account-owned credentials through constrained RPCs backed by Supabase Vault. Values are masked by default, fetched one at a time for Reveal/Copy, and cleared from the UI on hide, navigation, backgrounding, sign-out, or account switch.
 - Hosted GPT-5.4 assistant replies are real when Supabase is configured, the `assistant-openai` Edge Function is deployed, and the live planner is available.
 - Ollama-powered assistant responses are real when Ollama is running locally.
 - Voice input shows a live transcript preview while recording when Deepgram or the browser fallback is available, then confirms the final command after you stop.
-- A dedicated Clock surface provides a neat multi-clock workspace with on-demand timers and stopwatches, custom names, selectable alarm sounds, eye-catching finish alerts, and local-first persistence.
+- A dedicated Clock surface provides a neat multi-clock workspace with on-demand timers and stopwatches, custom names, selectable alarm sounds, eye-catching finish alerts, and account-backed persistence.
 - Several integrations remain placeholder or simulated.
-- Credentials and API-key-like settings stored locally or synced through Supabase are not encrypted vault storage in this MVP.
+- Existing Deepgram and ElevenLabs device keys are copied into the vault non-destructively on first use when a matching account secret does not already exist. Original device settings remain available during migration.
 
 Use [docs/feature-status.md](docs/feature-status.md) for the authoritative feature-by-feature status instead of inferring from UI copy.
 
@@ -86,13 +89,15 @@ For automated deploys on merge, add these GitHub repository secrets so `.github/
 
 - `SUPABASE_ACCESS_TOKEN`
 - `SUPABASE_PROJECT_REF`
+- `SUPABASE_DB_PASSWORD`
+- `HELM_DATABASE_BACKUP_SHA256` for the verified pre-cutover logical backup
 - `OPENAI_API_KEY`
 
 The function is intended for signed-in HELM users. If hosted AI is not configured or the user is signed out, Lina uses local Ollama only when a live Ollama planner is available and otherwise refuses to guess.
 
 ## Working Rules
 
-- Keep the app local-first.
+- Keep shared state and secrets database-authoritative and online-only; keep machine-bound execution material device-local.
 - Do not describe placeholder features as real.
 - Update code, docs, and user-facing copy together when behavior changes.
 - Keep assistant behavior shared across chat and voice.
@@ -100,7 +105,7 @@ The function is intended for signed-in HELM users. If hosted AI is not configure
 ## Deployment And CI
 
 - Install local Git hooks with `npm run hooks:install` if you want the pre-commit and pre-push gates in this checkout.
-- Pull requests should satisfy `agent-policy`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and the stable `native` aggregator.
+- Pull requests should satisfy `agent-policy`, `database`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and the stable `native` aggregator.
 - `codex-review` is useful extra review coverage, but OpenAI quota or provider availability is not a release dependency; unavailable review output is reported as a warning.
 - Non-draft same-repo `codex/*` pull requests into `master` auto-promote after those automated gates pass. Manual PR approval is intentionally not required for this personal-app workflow.
 - Auto-promotion records the tested PR merge tree. After squash merge, verification-only CI proves that `master` has that exact tree and revalidates the successful source jobs before the release is accepted. Direct pushes and ordinary manual CI dispatches still run the full suite.

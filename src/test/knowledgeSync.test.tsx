@@ -1,45 +1,17 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  flushWriteQueueMock,
-  getSupabaseRealtimeSnapshotMock,
-  getSupabaseWriteQueueSnapshotMock,
-  isAuthenticatedMock,
-  isSupabaseReadyMock,
-  loadRemoteMock,
-  queueRemoteWriteMock,
-  saveRemoteMock,
-  subscribeRemoteStoreMock,
-  subscribeSupabaseRealtimeSnapshotMock,
-  subscribeSupabaseWriteQueueSnapshotMock,
-} = vi.hoisted(() => ({
-  flushWriteQueueMock: vi.fn(),
-  getSupabaseRealtimeSnapshotMock: vi.fn(),
-  getSupabaseWriteQueueSnapshotMock: vi.fn(),
-  isAuthenticatedMock: vi.fn(),
-  isSupabaseReadyMock: vi.fn(),
-  loadRemoteMock: vi.fn(),
-  queueRemoteWriteMock: vi.fn(),
-  saveRemoteMock: vi.fn(),
-  subscribeRemoteStoreMock: vi.fn(),
-  subscribeSupabaseRealtimeSnapshotMock: vi.fn(),
-  subscribeSupabaseWriteQueueSnapshotMock: vi.fn(),
-}));
+const { loadStoreMock } = vi.hoisted(() => ({ loadStoreMock: vi.fn() }));
 
-vi.mock('../store/supabase', () => ({
-  flushWriteQueue: flushWriteQueueMock,
-  getSupabaseRealtimeSnapshot: getSupabaseRealtimeSnapshotMock,
-  getSupabaseWriteQueueSnapshot: getSupabaseWriteQueueSnapshotMock,
-  isAuthenticated: isAuthenticatedMock,
-  isSupabaseReady: isSupabaseReadyMock,
-  loadRemote: loadRemoteMock,
-  queueRemoteWrite: queueRemoteWriteMock,
-  saveRemote: saveRemoteMock,
-  subscribeRemoteStore: subscribeRemoteStoreMock,
-  subscribeSupabaseRealtimeSnapshot: subscribeSupabaseRealtimeSnapshotMock,
-  subscribeSupabaseWriteQueueSnapshot: subscribeSupabaseWriteQueueSnapshotMock,
-}));
+vi.mock('../store/persistence', async importOriginal => {
+  const actual = await importOriginal<typeof import('../store/persistence')>();
+  return {
+    ...actual,
+    loadStore: loadStoreMock,
+    saveStore: vi.fn(async () => undefined),
+    subscribeStoreKey: vi.fn(() => () => {}),
+  };
+});
 
 import { KnowledgeProvider, useKnowledgeContext } from '../store/contexts/KnowledgeContext';
 
@@ -49,56 +21,28 @@ function KnowledgeProbe() {
   return <div>{knowledge.knowledgeEntries.map(entry => entry.title).join(', ') || 'No entries'}</div>;
 }
 
-describe('KnowledgeProvider signed-in sync', () => {
+describe('KnowledgeProvider signed-in database state', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
-    isSupabaseReadyMock.mockReturnValue(true);
-    isAuthenticatedMock.mockReturnValue(true);
-    queueRemoteWriteMock.mockImplementation(() => {});
-    subscribeRemoteStoreMock.mockReturnValue(() => {});
-    flushWriteQueueMock.mockResolvedValue(undefined);
-    getSupabaseRealtimeSnapshotMock.mockReturnValue({
-      state: 'unavailable',
-      lastEventAt: null,
-      lastStatusAt: null,
-      lastError: null,
-    });
-    getSupabaseWriteQueueSnapshotMock.mockReturnValue({
-      queuedCount: 0,
-      queuedKeys: [],
-      lastQueuedAt: null,
-      lastFlushStartedAt: null,
-      lastFlushSuccessAt: null,
-      lastFlushFailureAt: null,
-      lastFlushError: null,
-      lastFlushKeys: [],
-      lastFailureKeys: [],
-    });
-    subscribeSupabaseWriteQueueSnapshotMock.mockImplementation(() => () => {});
-    subscribeSupabaseRealtimeSnapshotMock.mockImplementation(() => () => {});
-  });
-
-  it('renders Supabase knowledge entries instead of conflicting local entries', async () => {
-    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
-    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => {
-      if (key === 'knowledgeEntries') {
-        return {
-          value: [{
+    loadStoreMock.mockImplementation(async (key: string) => (
+      key === 'knowledgeEntries'
+        ? [{
             id: 'remote',
             topicId: 'topic-1',
-            title: 'Remote note',
-            content: 'Remote content',
+            title: 'Database note',
+            content: 'Database content',
             sources: [],
             tags: [],
             createdAt: '2026-05-01T10:00:00.000Z',
             updatedAt: '2026-05-01T10:00:00.000Z',
-          }],
-          updatedAt: '2026-05-01T10:00:00.000Z',
-        };
-      }
-      return null;
-    });
+          }]
+        : null
+    ));
+  });
+
+  it('renders database entries without consulting a conflicting browser copy', async () => {
+    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Device note' }]));
 
     render(
       <KnowledgeProvider>
@@ -106,7 +50,8 @@ describe('KnowledgeProvider signed-in sync', () => {
       </KnowledgeProvider>,
     );
 
-    expect(await screen.findByText('Remote note')).toBeInTheDocument();
-    expect(screen.queryByText('Local note')).not.toBeInTheDocument();
+    expect(await screen.findByText('Database note')).toBeInTheDocument();
+    expect(screen.queryByText('Device note')).not.toBeInTheDocument();
+    expect(loadStoreMock).toHaveBeenCalledWith('knowledgeEntries');
   });
 });

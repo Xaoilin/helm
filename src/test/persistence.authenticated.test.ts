@@ -1,616 +1,272 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { invoke } from '@tauri-apps/api/core';
+import type { HelmRealtimeEvent, HelmRecord } from '../store/databaseTypes';
 
-const {
-  flushWriteQueueMock,
-  getSupabaseRealtimeSnapshotMock,
-  getSupabaseWriteQueueSnapshotMock,
-  isAuthenticatedMock,
-  isSupabaseReadyMock,
-  loadRemoteMock,
-  queueRemoteWriteMock,
-  saveRemoteMock,
-  subscribeRemoteStoreMock,
-  subscribeSupabaseRealtimeSnapshotMock,
-  subscribeSupabaseWriteQueueSnapshotMock,
-} = vi.hoisted(() => ({
-  flushWriteQueueMock: vi.fn(),
-  getSupabaseRealtimeSnapshotMock: vi.fn(),
-  getSupabaseWriteQueueSnapshotMock: vi.fn(),
-  isAuthenticatedMock: vi.fn(),
-  isSupabaseReadyMock: vi.fn(),
-  loadRemoteMock: vi.fn(),
-  queueRemoteWriteMock: vi.fn(),
-  saveRemoteMock: vi.fn(),
-  subscribeRemoteStoreMock: vi.fn(),
-  subscribeSupabaseRealtimeSnapshotMock: vi.fn(),
-  subscribeSupabaseWriteQueueSnapshotMock: vi.fn(),
+const mocks = vi.hoisted(() => ({
+  apply: vi.fn(),
+  fetchCollections: vi.fn(),
+  fetchSnapshot: vi.fn(),
+  probeVersion: vi.fn(),
+  realtimeListener: null as ((event: HelmRealtimeEvent) => void) | null,
+  currentUserId: '11111111-1111-4111-8111-111111111111',
 }));
 
 vi.mock('../store/supabase', () => ({
-  flushWriteQueue: flushWriteQueueMock,
-  getSupabaseRealtimeSnapshot: getSupabaseRealtimeSnapshotMock,
-  getSupabaseWriteQueueSnapshot: getSupabaseWriteQueueSnapshotMock,
-  isAuthenticated: isAuthenticatedMock,
-  isSupabaseReady: isSupabaseReadyMock,
-  loadRemote: loadRemoteMock,
-  queueRemoteWrite: queueRemoteWriteMock,
-  saveRemote: saveRemoteMock,
-  subscribeRemoteStore: subscribeRemoteStoreMock,
-  subscribeSupabaseRealtimeSnapshot: subscribeSupabaseRealtimeSnapshotMock,
-  subscribeSupabaseWriteQueueSnapshot: subscribeSupabaseWriteQueueSnapshotMock,
+  applyHelmMutations: mocks.apply,
+  fetchHelmAccountSnapshot: mocks.fetchSnapshot,
+  fetchHelmCollections: mocks.fetchCollections,
+  getCurrentUserId: vi.fn(() => mocks.currentUserId),
+  getSupabaseRealtimeSnapshot: vi.fn(() => ({
+    state: 'subscribed',
+    lastEventAt: null,
+    lastStatusAt: '2026-07-31T12:00:00.000Z',
+    lastError: null,
+  })),
+  isAuthenticated: vi.fn(() => true),
+  isSupabaseReady: vi.fn(() => true),
+  probeHelmAccountVersion: mocks.probeVersion,
+  subscribeHelmBroadcast: vi.fn((listener: (event: HelmRealtimeEvent) => void) => {
+    mocks.realtimeListener = listener;
+    return () => { mocks.realtimeListener = null; };
+  }),
+  subscribeSupabaseRealtimeSnapshot: vi.fn(() => () => {}),
 }));
 
 import {
-  importLocalStoreCandidate,
-  listLocalImportCandidates,
-  listSyncDriftCandidates,
-  loadDeviceStore,
+  bootstrapDatabasePersistence,
+  flushPendingRemoteMutations,
+  getPersistenceHealthSnapshot,
+  getSyncSessionSnapshot,
   loadStore,
-  resolveSyncDriftCandidate,
-  saveDeviceStore,
+  resetDatabasePersistence,
   saveStore,
 } from '../store/persistence';
-import { PROJECT_DEVICE_BINDINGS_STORE_KEY } from '../store/projectPersistence';
 
-describe('Persistence layer in authenticated mode', () => {
+const USER_ID = '11111111-1111-4111-8111-111111111111';
+const SECOND_USER_ID = '22222222-2222-4222-8222-222222222222';
+
+function row(
+  collection: string,
+  recordId: string,
+  payload: Record<string, unknown>,
+  options: Partial<HelmRecord> = {},
+): HelmRecord {
+  return {
+    userId: options.userId ?? USER_ID,
+    collection,
+    recordId,
+    payload,
+    position: options.position ?? null,
+    revision: options.revision ?? 1,
+    accountVersion: options.accountVersion ?? 1,
+    createdAt: options.createdAt ?? '2026-07-31T12:00:00.000Z',
+    updatedAt: options.updatedAt ?? '2026-07-31T12:00:00.000Z',
+    deletedAt: options.deletedAt ?? null,
+  };
+}
+
+function snapshot(records: HelmRecord[] = [], accountVersion = 1, userId = USER_ID) {
+  return {
+    state: {
+      userId,
+      schemaVersion: 1,
+      accountVersion,
+      minimumClientVersion: '0.2.82',
+      migratedAt: '2026-07-31T12:00:00.000Z',
+      updatedAt: '2026-07-31T12:00:00.000Z',
+    },
+    records,
+  };
+}
+
+describe('authenticated database persistence', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
-    isSupabaseReadyMock.mockReturnValue(true);
-    isAuthenticatedMock.mockReturnValue(true);
-    loadRemoteMock.mockResolvedValue(null);
-    saveRemoteMock.mockResolvedValue(true);
-    queueRemoteWriteMock.mockImplementation(() => {});
-    subscribeRemoteStoreMock.mockReturnValue(() => {});
-    flushWriteQueueMock.mockResolvedValue(undefined);
-    getSupabaseRealtimeSnapshotMock.mockReturnValue({
-      state: 'unavailable',
-      lastEventAt: null,
-      lastStatusAt: null,
-      lastError: null,
-    });
-    getSupabaseWriteQueueSnapshotMock.mockReturnValue({
-      queuedCount: 0,
-      queuedKeys: [],
-      lastQueuedAt: null,
-      lastFlushStartedAt: null,
-      lastFlushSuccessAt: null,
-      lastFlushFailureAt: null,
-      lastFlushError: null,
-      lastFlushKeys: [],
-      lastFailureKeys: [],
-    });
-    subscribeSupabaseWriteQueueSnapshotMock.mockImplementation(() => () => {});
-    subscribeSupabaseRealtimeSnapshotMock.mockImplementation(() => () => {});
-  });
-
-  it('loads remote data even when localStorage has conflicting data', async () => {
-    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
-    loadRemoteMock.mockResolvedValueOnce({
-      value: [{ id: 'remote', title: 'Remote canonical note' }],
-      updatedAt: '2026-05-01T10:00:00.000Z',
-    });
-
-    const loaded = await loadStore<Array<{ id: string; title: string }>>('knowledgeEntries');
-
-    expect(loaded).toEqual([{ id: 'remote', title: 'Remote canonical note' }]);
-    expect(loadRemoteMock).toHaveBeenCalledWith('helm', 'knowledgeEntries');
-  });
-
-  it('does not fall back to local data when the remote key is missing', async () => {
-    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
-    loadRemoteMock.mockResolvedValueOnce(null);
-
-    const loaded = await loadStore<Array<{ id: string; title: string }>>('knowledgeEntries');
-
-    expect(loaded).toBeNull();
-  });
-
-  it('queues authenticated writes without writing localStorage or Tauri storage', async () => {
-    await saveStore('tasks', [{ id: 'task-1', title: 'Database task' }]);
-
-    expect(queueRemoteWriteMock).toHaveBeenCalledWith(
-      'helm',
-      'tasks',
-      [{ id: 'task-1', title: 'Database task' }],
-      expect.objectContaining({
-        updatedAt: expect.any(String),
-        onSettled: expect.any(Function),
-      }),
-    );
-    expect(localStorage.setItem).not.toHaveBeenCalled();
-    expect(invoke).not.toHaveBeenCalledWith('write_store', expect.anything());
-  });
-
-  it('keeps project device bindings local even while authenticated', async () => {
-    const bindings = [{
-      catalogKey: 'catalog:project-1',
-      projectRoot: '/device/project-1',
-      source: 'user' as const,
-      adoptedAt: '2026-07-29T12:00:00.000Z',
-      updatedAt: '2026-07-29T12:00:00.000Z',
-      runProfiles: [],
-    }];
-
-    await saveDeviceStore(PROJECT_DEVICE_BINDINGS_STORE_KEY, bindings);
-    const loaded = await loadDeviceStore(PROJECT_DEVICE_BINDINGS_STORE_KEY);
-
-    expect(loaded).toEqual(bindings);
-    expect(localStorage.getItem('helm:device:projectDeviceBindings')).toBe(JSON.stringify(bindings));
-    expect(queueRemoteWriteMock).not.toHaveBeenCalled();
-    expect(saveRemoteMock).not.toHaveBeenCalled();
-    expect(loadRemoteMock).not.toHaveBeenCalledWith('helm', PROJECT_DEVICE_BINDINGS_STORE_KEY);
-
-    const candidates = await listLocalImportCandidates();
-    expect(candidates.some(candidate => candidate.key === PROJECT_DEVICE_BINDINGS_STORE_KEY)).toBe(false);
-  });
-
-  it('sanitizes legacy device fields before a shared project write', async () => {
-    await saveStore('projects', [{
-      id: 'project-1',
-      name: 'Project',
-      localPath: '/device/private-project',
-      projectRoot: '/device/private-project',
-      summary: '',
-      status: 'active',
-      tags: [],
-      isPinned: false,
-      createdAt: '2026-07-29T12:00:00.000Z',
-      updatedAt: '2026-07-29T12:00:00.000Z',
-    }]);
-
-    const queuedValue = queueRemoteWriteMock.mock.calls.at(-1)?.[2] as Array<Record<string, unknown>>;
-    expect(queuedValue[0]).not.toHaveProperty('localPath');
-    expect(queuedValue[0]).not.toHaveProperty('projectRoot');
-    expect(JSON.stringify(queuedValue)).not.toContain('/device/private-project');
-  });
-
-  it('suppresses the provider initial save after a remote miss instead of creating a default row', async () => {
-    loadRemoteMock.mockResolvedValueOnce(null);
-
-    await loadStore('knowledgeEntries');
-    await saveStore('knowledgeEntries', []);
-
-    expect(queueRemoteWriteMock).not.toHaveBeenCalled();
-  });
-
-  it('does not suppress the first real write when it differs from the loaded database value', async () => {
-    loadRemoteMock.mockResolvedValueOnce({
-      value: [{ id: 'event-cached', title: 'Cached meeting' }],
-      updatedAt: '2026-05-07T12:00:00.000Z',
-    });
-
-    await loadStore('calendarEvents');
-    await saveStore('calendarEvents', [
-      { id: 'event-cached', title: 'Cached meeting' },
-      { id: 'event-google', title: 'Fetched from Google' },
-    ]);
-
-    expect(queueRemoteWriteMock).toHaveBeenCalledWith(
-      'helm',
-      'calendarEvents',
-      [
-        { id: 'event-cached', title: 'Cached meeting' },
-        { id: 'event-google', title: 'Fetched from Google' },
-      ],
-      expect.objectContaining({
-        updatedAt: expect.any(String),
-        onSettled: expect.any(Function),
-      }),
-    );
-  });
-
-  it('does not suppress a non-empty array write after a remote miss', async () => {
-    loadRemoteMock.mockResolvedValueOnce(null);
-
-    await loadStore('calendarEvents');
-    await saveStore('calendarEvents', [
-      { id: 'event-google', title: 'Fetched from Google' },
-    ]);
-
-    expect(queueRemoteWriteMock).toHaveBeenCalledWith(
-      'helm',
-      'calendarEvents',
-      [
-        { id: 'event-google', title: 'Fetched from Google' },
-      ],
-      expect.objectContaining({
-        updatedAt: expect.any(String),
-        onSettled: expect.any(Function),
-      }),
-    );
-  });
-
-  it('flushes queued remote writes on beforeunload after an authenticated save', async () => {
-    await saveStore('financeAccounts', [{ id: 'account-1', name: 'Database account' }]);
-
-    window.dispatchEvent(new Event('beforeunload'));
-
-    expect(flushWriteQueueMock).toHaveBeenCalled();
-  });
-
-  it('lists local import candidates without importing them automatically', async () => {
-    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
-    loadRemoteMock.mockResolvedValue(null);
-
-    const candidates = await listLocalImportCandidates();
-
-    expect(candidates).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        key: 'knowledgeEntries',
-        remoteExists: false,
-      }),
-    ]));
-    expect(saveRemoteMock).not.toHaveBeenCalled();
-  });
-
-  it('imports a selected local candidate only when the database key is empty', async () => {
-    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
-    loadRemoteMock.mockResolvedValueOnce(null);
-
-    const result = await importLocalStoreCandidate('knowledgeEntries');
-
-    expect(result).toMatchObject({ imported: true, cleared: true, reason: 'imported' });
-    expect(saveRemoteMock).toHaveBeenCalledWith('helm', 'knowledgeEntries', [{ id: 'local', title: 'Local note' }]);
-    expect(localStorage.getItem('helm:knowledgeEntries')).toBeNull();
-  });
-
-  it('does not adopt a legacy project path when native canonicalization is unavailable', async () => {
-    localStorage.setItem('helm:projects', JSON.stringify([{
-      id: 'legacy-project',
-      name: 'Legacy Project',
-      localPath: '/device/legacy-project',
-      summary: '',
-      status: 'active',
-      tags: [],
-      isPinned: false,
-      createdAt: '2026-07-29T12:00:00.000Z',
-      updatedAt: '2026-07-29T12:00:00.000Z',
-    }]));
-    loadRemoteMock.mockResolvedValueOnce(null);
-
-    const result = await importLocalStoreCandidate('projects');
-
-    expect(result).toMatchObject({ imported: true, cleared: true, reason: 'imported' });
-    const sharedWrite = saveRemoteMock.mock.calls.at(-1)?.[2] as Array<Record<string, unknown>>;
-    expect(sharedWrite[0]).not.toHaveProperty('localPath');
-    expect(JSON.stringify(sharedWrite)).not.toContain('/device/legacy-project');
-    expect(localStorage.getItem('helm:device:projectDeviceBindings') || '').not.toContain('/device/legacy-project');
-    expect(localStorage.getItem('helm:device:projectPendingLegacyPaths') || '').toContain('/device/legacy-project');
-    expect(localStorage.getItem('helm:projects')).toBeNull();
-  });
-
-  it('requires replace=true before overwriting an existing database key during import', async () => {
-    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
-    loadRemoteMock.mockResolvedValueOnce({
-      value: [{ id: 'remote', title: 'Remote note' }],
-      updatedAt: '2026-05-01T10:00:00.000Z',
-    });
-
-    const result = await importLocalStoreCandidate('knowledgeEntries');
-
-    expect(result).toMatchObject({ imported: false, reason: 'remote_exists' });
-    expect(saveRemoteMock).not.toHaveBeenCalled();
-  });
-
-  it('clears identical local sync drift without prompting', async () => {
-    localStorage.setItem('helm:settings', JSON.stringify({ theme: 'dark', telemetry: false }));
-    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
-      key === 'settings'
-        ? { value: { telemetry: false, theme: 'dark' }, updatedAt: '2026-05-01T10:00:00.000Z' }
-        : null
-    ));
-
-    const candidates = await listSyncDriftCandidates();
-
-    expect(candidates).toEqual([]);
-    expect(localStorage.getItem('helm:settings')).toBeNull();
-    expect(saveRemoteMock).not.toHaveBeenCalled();
-  });
-
-  it('auto-imports local-only sync drift when the database group is empty', async () => {
-    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'local', title: 'Local note' }]));
-    loadRemoteMock.mockResolvedValue(null);
-
-    const candidates = await listSyncDriftCandidates();
-
-    expect(candidates).toEqual([]);
-    expect(saveRemoteMock).toHaveBeenCalledWith('helm', 'knowledgeEntries', [{ id: 'local', title: 'Local note' }]);
-    expect(localStorage.getItem('helm:knowledgeEntries')).toBeNull();
-  });
-
-  it('clears metadata-only integration drift without prompting', async () => {
-    localStorage.setItem('helm:integrations', JSON.stringify([
-      {
-        id: 'int-google',
-        icon: 'calendar',
-        name: 'Google Calendar',
-        provider: 'google',
-        status: 'connected',
-        description: 'Sync Google Calendar events',
-        configuredAt: '2026-04-26T18:55:19.267Z',
-      },
-    ]));
-    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
-      key === 'integrations'
-        ? {
-          value: [{
-            id: 'int-google',
-            icon: 'calendar',
-            name: 'Google Calendar',
-            provider: 'google',
-            status: 'connected',
-            description: 'Sync Google Calendar events',
-            configuredAt: '2026-05-06T10:31:06.224Z',
-          }],
-          updatedAt: '2026-05-06T10:31:06.224Z',
-        }
-        : null
-    ));
-
-    const candidates = await listSyncDriftCandidates();
-
-    expect(candidates).toEqual([]);
-    expect(localStorage.getItem('helm:integrations')).toBeNull();
-    expect(saveRemoteMock).not.toHaveBeenCalled();
-  });
-
-  it('ignores calendar account sync and auth metadata drift', async () => {
-    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
-      id: 'account-1',
-      name: 'Google',
-      email: 'sync@example.com',
-      provider: 'google',
-      isPrimary: true,
-      connected: false,
-      mocked: false,
-      lastSyncTime: '2026-04-26T18:55:19.267Z',
-      lastAuthError: 'Expired token',
-    }]));
-    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
-      key === 'calendarAccounts'
-        ? {
-          value: [{
-            id: 'account-1',
-            name: 'Google',
-            email: 'sync@example.com',
-            provider: 'google',
-            isPrimary: true,
-            connected: true,
-            mocked: false,
-            lastSyncTime: '2026-05-06T10:31:06.224Z',
-            lastAuthError: null,
-          }],
-          updatedAt: '2026-05-06T10:31:06.224Z',
-        }
-        : null
-    ));
-
-    const candidates = await listSyncDriftCandidates();
-
-    expect(candidates).toEqual([]);
-    expect(localStorage.getItem('helm:calendarAccounts')).toBeNull();
-  });
-
-  it('clears identical local keys even when a grouped database-only key exists', async () => {
-    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{
-      id: 'account-1',
-      name: 'Google',
-      email: 'sync@example.com',
-      provider: 'google',
-      isPrimary: true,
-    }]));
-    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => {
-      if (key === 'calendarAccounts') {
-        return {
-          value: [{
-            id: 'account-1',
-            name: 'Google',
-            email: 'sync@example.com',
-            provider: 'google',
-            isPrimary: true,
-          }],
-          updatedAt: '2026-05-06T10:31:06.224Z',
-        };
-      }
-      if (key === 'calendarSources') {
-        return {
-          value: [{
-            id: 'source-1',
-            accountId: 'account-1',
-            name: 'Primary calendar',
-            visible: true,
-          }],
-          updatedAt: '2026-05-06T10:31:06.224Z',
-        };
-      }
-      return null;
-    });
-
-    const candidates = await listSyncDriftCandidates();
-
-    expect(candidates).toEqual([]);
-    expect(localStorage.getItem('helm:calendarAccounts')).toBeNull();
-    expect(saveRemoteMock).not.toHaveBeenCalled();
-  });
-
-  it('returns a grouped conflict when database and device values differ', async () => {
-    localStorage.setItem('helm:knowledgeEntries', JSON.stringify([{ id: 'note-1', title: 'Local note' }]));
-    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
-      key === 'knowledgeEntries'
-        ? { value: [{ id: 'note-1', title: 'Remote note' }], updatedAt: '2026-05-01T10:00:00.000Z' }
-        : null
-    ));
-
-    const candidates = await listSyncDriftCandidates();
-
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0]).toMatchObject({
-      groupId: 'knowledge',
-      kind: 'conflict',
-      recommendedChoice: 'keep_database',
-      requiresUserChoice: true,
-    });
-    expect(candidates[0].diff.changed[0]).toMatchObject({
-      key: 'knowledgeEntries',
-      label: 'Local note',
-      fieldLabel: 'Title',
-      localValue: '"Local note"',
-      remoteValue: '"Remote note"',
-      impact: 'user_data',
-    });
-    expect(candidates[0].summary).toContain('Knowledge: 1 changed field');
-  });
-
-  it('cleans Google calendar drift instead of asking for a database/device choice', async () => {
-    const refreshSpy = vi.fn();
-    window.addEventListener('helm:calendar-sync-requested', refreshSpy);
-    localStorage.setItem('helm:calendarEvents', JSON.stringify([{
-      id: 'event-1',
-      sourceId: 'source-1',
-      title: 'Planning',
-      description: '',
-      start: '2026-05-06T11:00:00.000Z',
-      end: '2026-05-06T12:00:00.000Z',
-      allDay: false,
-      pendingSync: 'update',
-    }]));
-    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
-      key === 'calendarEvents'
-        ? {
-          value: [{
-            id: 'event-1',
-            sourceId: 'source-1',
-            title: 'Planning',
-            description: '',
-            start: '2026-05-06T10:00:00.000Z',
-            end: '2026-05-06T11:00:00.000Z',
-            allDay: false,
-          }],
-          updatedAt: '2026-05-06T10:31:06.224Z',
-        }
-        : null
-    ));
-
-    const candidates = await listSyncDriftCandidates();
-
-    expect(candidates).toEqual([]);
-    expect(localStorage.getItem('helm:calendarEvents')).toBeNull();
-    expect(refreshSpy).toHaveBeenCalled();
-    window.removeEventListener('helm:calendar-sync-requested', refreshSpy);
-  });
-
-  it('clears unreadable calendar cache without surfacing a user conflict', async () => {
-    localStorage.setItem('helm:calendarEvents', '{not json');
-    loadRemoteMock.mockResolvedValue(null);
-
-    const candidates = await listSyncDriftCandidates();
-
-    expect(candidates).toEqual([]);
-    expect(localStorage.getItem('helm:calendarEvents')).toBeNull();
-  });
-
-  it('surfaces unreadable local JSON without allowing device overwrite', async () => {
-    localStorage.setItem('helm:settings', '{not json');
-    loadRemoteMock.mockResolvedValue(null);
-
-    const candidates = await listSyncDriftCandidates();
-
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0]).toMatchObject({
-      groupId: 'settings',
-      kind: 'unreadable',
-      canUseDevice: false,
-    });
-  });
-
-  it('redacts token-like and credential fields in drift JSON previews', async () => {
-    localStorage.setItem('helm:settings', JSON.stringify({
-      theme: 'dark',
-      deepgramApiKey: 'sk-proj_abcdefghijklmnopqrstuvwxyz123456',
+    mocks.realtimeListener = null;
+    mocks.currentUserId = USER_ID;
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    mocks.fetchSnapshot.mockResolvedValue(snapshot());
+    mocks.fetchCollections.mockResolvedValue([]);
+    mocks.probeVersion.mockResolvedValue(1);
+    mocks.apply.mockImplementation(async (requestId: string) => ({
+      requestId,
+      accountVersion: 2,
+      changes: [],
     }));
-    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
-      key === 'settings'
-        ? {
-          value: {
-            theme: 'light',
-            deepgramApiKey: 'sk-proj_remoteabcdefghijklmnopqrstuvwxyz',
-          },
-          updatedAt: '2026-05-01T10:00:00.000Z',
-        }
-        : null
-    ));
-
-    const candidates = await listSyncDriftCandidates();
-
-    expect(candidates[0].local.redactedJson).toContain('[redacted]');
-    expect(candidates[0].local.redactedJson).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
-    expect(candidates[0].remote.redactedJson).not.toContain('remoteabcdefghijklmnopqrstuvwxyz');
+    resetDatabasePersistence();
   });
 
-  it('excludes project device fields from drift comparisons and previews', async () => {
-    localStorage.setItem('helm:projects', JSON.stringify([{
-      id: 'project-1',
-      catalogKey: 'fixture:project-1',
-      name: 'Local name',
-      localPath: '/device/private-project',
-      projectRoot: '/device/private-project',
-      approvedProfiles: [{ fingerprint: 'device-only' }],
-      summary: '',
-      status: 'active',
-      tags: [],
-      isPinned: false,
-      createdAt: '2026-07-29T12:00:00.000Z',
-      updatedAt: '2026-07-29T12:00:00.000Z',
-    }]));
-    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => (
-      key === 'projects'
-        ? {
-          value: [{
-            id: 'project-1',
-            catalogKey: 'fixture:project-1',
-            name: 'Remote name',
-            summary: '',
-            status: 'active',
-            tags: [],
-            isPinned: false,
-            createdAt: '2026-07-29T12:00:00.000Z',
-            updatedAt: '2026-07-29T12:00:00.000Z',
-          }],
-          updatedAt: '2026-07-29T12:00:00.000Z',
-        }
-        : null
-    ));
+  it('bootstraps exclusively from the signed-in database', async () => {
+    localStorage.setItem('helm:tasks', JSON.stringify([{ id: 'legacy-task', title: 'Legacy' }]));
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([
+      row('tasks', 'database-task', { id: 'database-task', title: 'Database' }, { position: 0 }),
+    ]));
 
-    const candidates = await listSyncDriftCandidates();
-    const preview = JSON.stringify(candidates);
+    await bootstrapDatabasePersistence();
+    const tasks = await loadStore<Array<{ id: string; title: string }>>('tasks');
 
-    expect(candidates).toHaveLength(1);
-    expect(preview).not.toContain('/device/private-project');
-    expect(preview).not.toContain('device-only');
+    expect(tasks?.map(task => task.id)).toContain('database-task');
+    expect(localStorage.getItem('helm:tasks')).toBeNull();
+    expect(getSyncSessionSnapshot().status).toBe('ready');
   });
 
-  it('resolves grouped calendar drift by clearing all local calendar copies when keeping database', async () => {
-    localStorage.setItem('helm:calendarAccounts', JSON.stringify([{ id: 'account-local', name: 'Local' }]));
-    localStorage.setItem('helm:calendarSources', JSON.stringify([{ id: 'source-local', accountId: 'account-local', name: 'Local source' }]));
-    localStorage.setItem('helm:calendarEvents', JSON.stringify([{ id: 'event-local', sourceId: 'source-local', title: 'Local event' }]));
-    loadRemoteMock.mockImplementation(async (_namespace: string, key: string) => {
-      if (key === 'calendarAccounts') return { value: [{ id: 'account-remote', name: 'Remote' }], updatedAt: '2026-05-01T10:00:00.000Z' };
-      if (key === 'calendarSources') return { value: [{ id: 'source-remote', accountId: 'account-remote', name: 'Remote source' }], updatedAt: '2026-05-01T10:00:00.000Z' };
-      if (key === 'calendarEvents') return { value: [{ id: 'event-remote', sourceId: 'source-remote', title: 'Remote event' }], updatedAt: '2026-05-01T10:00:00.000Z' };
-      return null;
-    });
+  it('does not delete or revert concurrent database changes absent from the delivered screen', async () => {
+    const original = row('tasks', 'task-1', {
+      id: 'task-1',
+      title: 'Original title',
+      completed: false,
+    }, { position: 0 });
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([original]));
+    await bootstrapDatabasePersistence();
+    await loadStore('tasks');
 
-    const result = await resolveSyncDriftCandidate('calendar', 'keep_database');
-
-    expect(result).toMatchObject({
-      resolved: true,
-      clearedKeys: ['calendarAccounts', 'calendarSources', 'calendarEvents'],
-      savedKeys: [],
+    mocks.fetchCollections.mockResolvedValue([
+      row('tasks', 'task-1', {
+        id: 'task-1',
+        title: 'Concurrent title',
+        completed: false,
+      }, { position: 0, revision: 2, accountVersion: 2 }),
+      row('tasks', 'task-2', {
+        id: 'task-2',
+        title: 'Concurrent addition',
+        completed: false,
+      }, { position: 1, accountVersion: 2 }),
+    ]);
+    mocks.realtimeListener?.({
+      requestId: '22222222-2222-4222-8222-222222222222',
+      accountVersion: 2,
+      changes: [
+        { collection: 'tasks', recordId: 'task-1', revision: 2, deletedAt: null },
+        { collection: 'tasks', recordId: 'task-2', revision: 1, deletedAt: null },
+      ],
     });
-    expect(localStorage.getItem('helm:calendarAccounts')).toBeNull();
-    expect(localStorage.getItem('helm:calendarSources')).toBeNull();
-    expect(localStorage.getItem('helm:calendarEvents')).toBeNull();
+    await vi.waitFor(() => expect(mocks.fetchCollections).toHaveBeenCalled());
+
+    await saveStore('tasks', [{
+      id: 'task-1',
+      title: 'Original title',
+      completed: true,
+    }]);
+    await flushPendingRemoteMutations();
+
+    const operations = mocks.apply.mock.calls.at(-1)?.[1];
+    expect(operations).toEqual([{ op: 'patch', collection: 'tasks', recordId: 'task-1', set: { completed: true }, unset: [] }]);
+    expect(JSON.stringify(operations)).not.toContain('task-2');
+    expect(JSON.stringify(operations)).not.toContain('Concurrent title');
+  });
+
+  it('retries an unknown-outcome network failure once with the same request id', async () => {
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([
+      row('tasks', 'task-1', { id: 'task-1', title: 'Original' }, { position: 0 }),
+    ]));
+    mocks.apply
+      .mockRejectedValueOnce(new Error('network request failed'))
+      .mockImplementationOnce(async (requestId: string) => ({ requestId, accountVersion: 2, changes: [] }));
+    await bootstrapDatabasePersistence();
+    await loadStore('tasks');
+
+    await saveStore('tasks', [{ id: 'task-1', title: 'Updated' }]);
+    await flushPendingRemoteMutations();
+
+    expect(mocks.apply).toHaveBeenCalledTimes(2);
+    expect(mocks.apply.mock.calls[0][0]).toBe(mocks.apply.mock.calls[1][0]);
+    expect(mocks.apply.mock.calls[0][0]).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('rolls back a failed optimistic write by refetching database truth', async () => {
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([
+      row('tasks', 'task-1', { id: 'task-1', title: 'Database truth' }, { position: 0 }),
+    ]));
+    mocks.apply.mockRejectedValueOnce(Object.assign(new Error('mutation rejected'), { status: 400 }));
+    await bootstrapDatabasePersistence();
+    await loadStore('tasks');
+
+    await saveStore('tasks', [{ id: 'task-1', title: 'Optimistic title' }]);
+    await flushPendingRemoteMutations();
+
+    expect(mocks.fetchSnapshot).toHaveBeenCalledTimes(2);
+    expect(getSyncSessionSnapshot().status).toBe('ready');
+    await expect(loadStore('tasks')).resolves.toEqual([
+      { id: 'task-1', title: 'Database truth' },
+    ]);
+    expect(getPersistenceHealthSnapshot().supabaseQueue.queuedCount).toBe(0);
+  });
+
+  it('blocks shared viewing and changes as soon as the browser goes offline', async () => {
+    await bootstrapDatabasePersistence();
+    window.dispatchEvent(new Event('offline'));
+
+    await expect(loadStore('tasks')).resolves.toBeNull();
+    await saveStore('tasks', [{ id: 'task-1' }]);
+    await flushPendingRemoteMutations();
+
+    expect(getSyncSessionSnapshot().status).toBe('blocked');
+    expect(mocks.apply).not.toHaveBeenCalled();
+  });
+
+  it('destroys the previous account cache before an account switch can render', async () => {
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([
+      row('tasks', 'account-a-task', { id: 'account-a-task', title: 'Account A' }, { position: 0 }),
+    ]));
+    await bootstrapDatabasePersistence();
+    await expect(loadStore('tasks')).resolves.toEqual([
+      { id: 'account-a-task', title: 'Account A' },
+    ]);
+
+    mocks.currentUserId = SECOND_USER_ID;
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([
+      row('tasks', 'account-b-task', { id: 'account-b-task', title: 'Account B' }, {
+        position: 0,
+        userId: SECOND_USER_ID,
+      }),
+    ], 1, SECOND_USER_ID));
+    const switching = bootstrapDatabasePersistence();
+
+    await expect(loadStore('tasks')).resolves.toBeNull();
+    await switching;
+    await expect(loadStore('tasks')).resolves.toEqual([
+      { id: 'account-b-task', title: 'Account B' },
+    ]);
+  });
+
+  it('restores a tombstone explicitly instead of trying to recreate it', async () => {
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([
+      row('tasks', 'task-restored', { id: 'task-restored', title: 'Before delete' }, {
+        position: 0,
+        deletedAt: '2026-07-31T12:10:00.000Z',
+      }),
+    ]));
+    await bootstrapDatabasePersistence();
+    await loadStore('tasks');
+
+    await saveStore('tasks', [{ id: 'task-restored', title: 'Restored safely' }]);
+    await flushPendingRemoteMutations();
+
+    const operations = mocks.apply.mock.calls.at(-1)?.[1] as Array<{ op: string }>;
+    expect(operations.map(operation => operation.op)).toEqual(['restore', 'patch', 'reorder']);
+    expect(operations.some(operation => operation.op === 'create')).toBe(false);
+  });
+
+  it('closes the snapshot-to-Broadcast race with an authoritative version probe', async () => {
+    mocks.fetchSnapshot
+      .mockResolvedValueOnce(snapshot([
+        row('tasks', 'task-1', { id: 'task-1', title: 'Initial snapshot' }, { position: 0 }),
+      ], 1))
+      .mockResolvedValueOnce(snapshot([
+        row('tasks', 'task-1', { id: 'task-1', title: 'Missed committed update' }, {
+          position: 0,
+          revision: 2,
+          accountVersion: 2,
+        }),
+      ], 2));
+    mocks.probeVersion.mockResolvedValue(2);
+
+    await bootstrapDatabasePersistence();
+
+    expect(mocks.fetchSnapshot).toHaveBeenCalledTimes(2);
+    expect(getSyncSessionSnapshot().accountVersion).toBe(2);
+    await expect(loadStore('tasks')).resolves.toEqual([
+      { id: 'task-1', title: 'Missed committed update' },
+    ]);
   });
 });

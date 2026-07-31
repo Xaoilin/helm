@@ -54,12 +54,22 @@ function applySectionOrder(
   updatedAt: string,
 ): Project[] {
   const orderById = new Map(orderedProjectIds.map((id, index) => [id, index]));
-
-  return projects.map(project => {
+  const updated = projects.map(project => {
     if (getProjectCatalogueSection(project) !== section) return project;
     const sortOrder = orderById.get(project.id);
     if (sortOrder === undefined || project.sortOrder === sortOrder) return project;
     return { ...project, sortOrder, updatedAt };
+  });
+  const sectionRank: Record<ProjectCatalogueSection, number> = {
+    pinned: 0,
+    projects: 1,
+    archived: 2,
+  };
+  return updated.sort((left, right) => {
+    const leftSection = getProjectCatalogueSection(left);
+    const rightSection = getProjectCatalogueSection(right);
+    return sectionRank[leftSection] - sectionRank[rightSection]
+      || compareProjectCatalogueOrder(left, right);
   });
 }
 

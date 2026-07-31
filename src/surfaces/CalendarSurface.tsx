@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
 import { useGoogleSync } from '../hooks/useGoogleSync';
 import { appendGoogleCalendarDiagnosticEvent } from '../services/googleCalendarDiagnosticEvents';
@@ -74,6 +74,13 @@ export default function CalendarSurface() {
   const googleAccounts = app.calendarAccounts.filter(isGoogleCalendarAccount);
   const { syncState, lastSyncTime, syncError, triggerSync } = useGoogleSync();
   const hasGoogleAccounts = googleAccounts.length > 0;
+  const [syncStatusNow, setSyncStatusNow] = useState(() => new Date());
+
+  useEffect(() => {
+    if (!lastSyncTime) return undefined;
+    const interval = window.setInterval(() => setSyncStatusNow(new Date()), 60_000);
+    return () => window.clearInterval(interval);
+  }, [lastSyncTime]);
 
   // Visible sources
   const visibleSourceIds = useMemo(
@@ -396,7 +403,7 @@ export default function CalendarSurface() {
     }
     if (syncState === 'error') return <span className="sync-indicator error">{syncError || 'Google sync error'}</span>;
     if (lastSyncTime) {
-      const ago = Math.round((Date.now() - new Date(lastSyncTime).getTime()) / 60000);
+      const ago = Math.round((syncStatusNow.getTime() - new Date(lastSyncTime).getTime()) / 60000);
       const timeText = ago < 1 ? 'just now' : ago < 60 ? `${ago}m ago` : `${Math.round(ago / 60)}h ago`;
       return <span className="sync-indicator synced">Synced from Google {timeText}</span>;
     }
@@ -440,7 +447,7 @@ export default function CalendarSurface() {
             {hasGoogleAccounts ? (
               <span style={{ marginLeft: 8 }}>{syncStatusText()}</span>
             ) : (
-               <span className="mocked-indicator" style={{ marginLeft: 8 }} role="status">Local-only data &ndash; not synced</span>
+               <span className="mocked-indicator" style={{ marginLeft: 8 }} role="status">Manual calendar &ndash; no external provider sync</span>
              )}
           </div>
         </div>
@@ -758,7 +765,7 @@ export default function CalendarSurface() {
                         </h3>
                         <div className="card-subtitle">
                           {acc.email} &middot; {acc.provider}
-                          {acc.mocked && ' (local only)'}
+                          {acc.mocked && ' (manual provider)'}
                           {isGoogleAcc && acc.lastSyncTime && ` \u00b7 Synced from Google ${new Date(acc.lastSyncTime).toLocaleString()}`}
                           {isGoogleAcc && acc.lastAuthCheckAt && ` \u00b7 Access checked ${new Date(acc.lastAuthCheckAt).toLocaleString()}`}
                           {isGoogleAcc && ` \u00b7 Credential status ${getGoogleCalendarCredentialStatusLabel(acc)}`}

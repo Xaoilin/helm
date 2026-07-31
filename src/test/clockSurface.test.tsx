@@ -16,6 +16,12 @@ vi.mock('../services/clockAudio', () => ({
   stopTimerAlarm: vi.fn(),
 }));
 
+vi.mock('../store/persistence', async importOriginal => {
+  const actual = await importOriginal<typeof import('../store/persistence')>();
+  const { createLocalPersistenceMock } = await import('./localPersistenceMock');
+  return createLocalPersistenceMock(actual);
+});
+
 function renderClockSurface() {
   return render(
     <AppProvider>

@@ -10,6 +10,12 @@ import { toLocalDateStr } from '../services/financeHelpers';
 import { setPrayerReminderReceipt } from '../services/prayerTracking';
 import { usePrayerContext } from '../store/contexts/PrayerContext';
 
+vi.mock('../store/persistence', async importOriginal => {
+  const actual = await importOriginal<typeof import('../store/persistence')>();
+  const { createLocalPersistenceMock } = await import('./localPersistenceMock');
+  return createLocalPersistenceMock(actual);
+});
+
 function makeContext(): AssistantCommandContext {
   return {
     calendarAccounts: [],

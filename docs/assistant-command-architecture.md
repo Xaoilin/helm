@@ -28,15 +28,15 @@ Implemented pieces:
 - structured pending confirmations stored as validated tool-call batches plus grounded entity references
 - typed pending prayer completions shared by chat and voice, so an omitted prayer outcome asks `On time or late?` and a strict local follow-up resumes the stored tool call without a second model request
 - final assistant replies narrated from verified execution results instead of surfacing executor templates directly
-- local-first assistant activity entries for chat and voice mutations, with actor/source transcript, execution details, and undo metadata where the executor can provide a grounded inverse operation
+- account-backed assistant activity entries for chat and voice mutations, with actor/source transcript, execution details, and undo metadata where the executor can provide a grounded inverse operation
 - benchmark example retrieval from a 200-plus command corpus
 - expanded debug traces that capture the planning bundle, raw planner response, model turn, validator verdict, validated plan, pending confirmation state, raw narration response, and execution payloads
 
 Still intentionally lightweight:
 
-- entity ranking is heuristic and local-first rather than embedding-backed
+- entity ranking is an on-device heuristic rather than embedding-backed
 - prayer-based time resolution uses the currently loaded prayer snapshot only
-- exact transcript corrections such as "No, I said ..." now persist as local-first assistant memory, but a broader teaching-loop memory and richer semantic reuse are still future work
+- exact transcript corrections such as "No, I said ..." now persist as account-backed assistant memory, but a broader teaching-loop memory and richer semantic reuse are still future work
 
 ## Shipped Cutover
 
@@ -210,7 +210,7 @@ If confidence is low, the target is ambiguous, or the action is destructive, Lin
 
 For write actions, Lina should only describe success after the deterministic local mutation succeeds. For reveal actions, the executor should pass a typed navigation request that allows the UI to open the correct tab, clear restrictive filters, and reveal or highlight the resolved entity.
 For view-only task navigation, the executor should use the same typed Tasks surface-state payload even when no task id is involved so "show me all my tasks" is explicit and testable instead of being approximated to a generic surface jump.
-Activity entries are persisted through the same local-first store as other app data. The Activity surface is the user-facing audit trail; the floating Lina panel also surfaces the latest recent action with an Undo shortcut when the entry is still undoable.
+Activity entries are persisted as account-owned records through the same transactional database path as other shared data. The Activity surface is the user-facing audit trail; the floating Lina panel also surfaces the latest recent action with an Undo shortcut when the entry is still undoable.
 
 Prayer completion is a domain-owned exception to generic binary task completion. The planner may pass `prayerStatus: on_time | late` only when the user states it explicitly. Otherwise the executor performs no mutation and creates a typed pending prayer action. The resolved action calls the shared prayer mutation once, and its undo payload restores task state, gamification, and canonical prayer tracking together. Ordinary tasks continue through the existing completion path.
 
@@ -243,7 +243,7 @@ The current implementation now covers a lightweight version of this for transcri
 
 - exact utterance corrections such as "No, I said delete all of the tasks related to mirrors"
 - phrase replacements derived from that correction, such as `minors` -> `mirrors`
-- local-first persistence shared by chat and voice
+- account-backed persistence shared by chat and voice
 
 Broader semantic teaching, plan reuse, and larger evaluation coverage are still future work.
 

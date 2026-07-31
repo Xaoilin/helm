@@ -46,7 +46,7 @@ export default function ClockSurface() {
       <div className="surface-header">
         <div>
           <h1>Clock</h1>
-          <div className="subtitle">Build a neat workspace of named timers and stopwatches that persist through HELM&apos;s local-first store</div>
+          <div className="subtitle">Build a neat workspace of named timers and stopwatches saved to your HELM account</div>
         </div>
       </div>
 
@@ -294,6 +294,7 @@ function TimerCard({
       </div>
 
       <ClockNameField
+        key={`${timer.id}:${timer.label}`}
         inputId={`clock-timer-name-${timer.id}`}
         label="Name"
         value={timer.label}
@@ -511,6 +512,7 @@ function StopwatchCard({
       </div>
 
       <ClockNameField
+        key={`${stopwatch.id}:${stopwatch.label}`}
         inputId={`clock-stopwatch-name-${stopwatch.id}`}
         label="Name"
         value={stopwatch.label}
@@ -593,10 +595,6 @@ function ClockNameField({
   onCommit: (value: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
-
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
 
   const commit = () => {
     if (draft === value) return;

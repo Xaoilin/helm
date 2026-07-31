@@ -91,7 +91,7 @@ ${checkJobs}
         run: node ./scripts/verify-ci-receipt.mjs dispatch-deploys
   auto-promote:
     name: auto-promote
-    if: always() && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'master' && startsWith(github.event.pull_request.head.ref, 'codex/') && needs.lint.result == 'success' && needs['agent-policy'].result == 'success' && needs.typecheck.result == 'success' && needs.unit.result == 'success' && needs.e2e.result == 'success' && needs.build.result == 'success' && needs.native.result == 'success' && needs['codex-review'].result == 'success'
+    if: always() && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'master' && startsWith(github.event.pull_request.head.ref, 'codex/') && needs.lint.result == 'success' && needs['agent-policy'].result == 'success' && needs.typecheck.result == 'success' && needs.unit.result == 'success' && needs.e2e.result == 'success' && needs.build.result == 'success' && needs.database.result == 'success' && needs.native.result == 'success' && needs['codex-review'].result == 'success'
     concurrency:
       group: helm-auto-promote-master
       cancel-in-progress: false

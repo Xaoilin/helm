@@ -65,7 +65,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run lint
@@ -83,7 +83,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       - run: npm run agent:policy
 
   typecheck:
@@ -97,7 +97,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run typecheck
@@ -117,7 +117,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run test -- --config vite.config.ts --shard=${{ matrix.shard }}/2
@@ -157,7 +157,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - name: Verify hosted browser
@@ -198,10 +198,32 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build
+
+  database:
+    name: database
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' ||
+        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Start isolated Supabase Postgres
+        run: npx supabase start
+      - name: Verify HELM migrations, RLS, concurrency semantics, and legacy preservation
+        run: npm run test:database
+      - name: Stop isolated Supabase Postgres
+        if: always()
+        run: npx supabase stop --no-backup
 
   native-platform:
     name: native-${{ matrix.os }}
@@ -496,6 +518,7 @@ jobs:
       needs.unit.result == 'success' &&
       needs.e2e.result == 'success' &&
       needs.build.result == 'success' &&
+      needs.database.result == 'success' &&
       needs.native.result == 'success' &&
       needs['codex-review'].result == 'success'
     runs-on: ubuntu-latest
@@ -510,6 +533,7 @@ jobs:
       - unit
       - e2e
       - build
+      - database
       - native
       - codex-review
     permissions:

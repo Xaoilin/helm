@@ -1,7 +1,14 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import type { Settings, Integration } from '../../types/domain';
 import { DEFAULT_ASSISTANT_PROVIDER } from '../../config';
-import { loadStore, saveStore } from '../persistence';
+import {
+  DEVICE_SETTINGS_STORE_KEY,
+  loadDeviceStore,
+  loadStore,
+  saveDeviceStore,
+  saveStore,
+} from '../persistence';
+import { splitSettings, type DeviceSettings } from '../recordCodec';
 
 // ── Defaults ──
 const defaultSettings: Settings = {
@@ -48,30 +55,25 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const [s, i] = await Promise.all([
+      const [s, i, device] = await Promise.all([
         loadStore<Settings>('settings'),
         loadStore<Integration[]>('integrations'),
+        loadDeviceStore<DeviceSettings>(DEVICE_SETTINGS_STORE_KEY),
       ]);
-      setSettings({ ...defaultSettings, ...(s ?? {}) });
+      setSettings({ ...defaultSettings, ...(s ?? {}), ...(device ?? {}) });
       setIntegrations(i ?? defaultIntegrations);
       setLoaded(true);
     })();
   }, []);
 
   useEffect(() => { if (loaded) saveStore('settings', settings); }, [settings, loaded]);
+  useEffect(() => {
+    if (loaded) void saveDeviceStore(DEVICE_SETTINGS_STORE_KEY, splitSettings(settings).device);
+  }, [settings, loaded]);
   useEffect(() => { if (loaded) saveStore('integrations', integrations); }, [integrations, loaded]);
 
   const updateSettings = useCallback((updates: Partial<Settings>) => {
-    setSettings(prev => {
-      const newSettings = { ...prev, ...updates };
-      // Re-init Supabase if connection settings changed
-      if (updates.supabaseUrl !== undefined || updates.supabaseAnonKey !== undefined) {
-        import('../supabase').then(({ initSupabase }) => {
-          initSupabase(newSettings.supabaseUrl || '', newSettings.supabaseAnonKey || '');
-        });
-      }
-      return newSettings;
-    });
+    setSettings(prev => ({ ...prev, ...updates }));
   }, []);
 
   const updateIntegration = useCallback((id: string, updates: Partial<Integration>) => {
