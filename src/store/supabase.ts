@@ -211,6 +211,9 @@ const HELM_RECORD_COLUMNS = [
   'deleted_at',
 ].join(',');
 
+const HELM_RECORD_PAGE_SIZE = 1_000;
+const HELM_SNAPSHOT_ATTEMPTS = 3;
+
 function mapRecord(row: HelmRecordRow): HelmRecord {
   return {
     userId: row.user_id,
@@ -235,6 +238,57 @@ function mapAccountState(row: HelmAccountStateRow): HelmAccountState {
     migratedAt: row.migrated_at,
     updatedAt: row.updated_at,
   };
+}
+
+async function fetchHelmAccountStateRow(
+  database: SupabaseClient,
+  userId: string,
+): Promise<HelmAccountStateRow | null> {
+  const { data, error } = await database
+    .from('helm_account_state')
+    .select('user_id,schema_version,account_version,minimum_client_version,migrated_at,updated_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as HelmAccountStateRow | null;
+}
+
+async function fetchAllHelmRecordRows(
+  database: SupabaseClient,
+  userId: string,
+  collections?: string[],
+): Promise<HelmRecordRow[]> {
+  const rows: HelmRecordRow[] = [];
+  let offset = 0;
+  let expectedCount: number | null = null;
+
+  while (true) {
+    let query = database
+      .from('helm_records')
+      .select(HELM_RECORD_COLUMNS, { count: 'exact' })
+      .eq('user_id', userId);
+    if (collections) query = query.in('collection', collections);
+
+    const { data, error, count } = await query
+      .order('collection', { ascending: true })
+      .order('record_id', { ascending: true })
+      .range(offset, offset + HELM_RECORD_PAGE_SIZE - 1);
+    if (error) throw error;
+
+    const page = (data || []) as unknown as HelmRecordRow[];
+    if (typeof count === 'number') expectedCount = count;
+    rows.push(...page);
+
+    if (expectedCount !== null && rows.length >= expectedCount) return rows;
+    if (page.length === 0) {
+      if (expectedCount !== null && rows.length < expectedCount) {
+        throw new Error('HELM could not read the complete database record set.');
+      }
+      return rows;
+    }
+    if (expectedCount === null && page.length < HELM_RECORD_PAGE_SIZE) return rows;
+    offset += page.length;
+  }
 }
 
 const SECRET_KINDS = new Set<SecretKind>([
@@ -349,36 +403,31 @@ export async function fetchHelmAccountSnapshot(): Promise<{
 }> {
   const database = requireClient();
   const userId = currentUserId!;
-  const [recordResponse, stateResponse] = await Promise.all([
-    database
-      .from('helm_records')
-      .select(HELM_RECORD_COLUMNS)
-      .eq('user_id', userId),
-    database
-      .from('helm_account_state')
-      .select('user_id,schema_version,account_version,minimum_client_version,migrated_at,updated_at')
-      .eq('user_id', userId)
-      .maybeSingle(),
-  ]);
-  if (recordResponse.error) throw recordResponse.error;
-  if (stateResponse.error) throw stateResponse.error;
-  if (!stateResponse.data && (recordResponse.data || []).length > 0) {
-    throw new Error('HELM account state is missing for existing database records.');
+  for (let attempt = 0; attempt < HELM_SNAPSHOT_ATTEMPTS; attempt += 1) {
+    const stateBefore = await fetchHelmAccountStateRow(database, userId);
+    const rows = await fetchAllHelmRecordRows(database, userId);
+    const stateAfter = await fetchHelmAccountStateRow(database, userId);
+
+    if (!stateAfter && rows.length > 0) {
+      throw new Error('HELM account state is missing for existing database records.');
+    }
+    if (stateBefore?.account_version !== stateAfter?.account_version) continue;
+
+    return {
+      state: stateAfter
+        ? mapAccountState(stateAfter)
+        : {
+            userId,
+            schemaVersion: HELM_DATABASE_SCHEMA_VERSION,
+            accountVersion: 0,
+            minimumClientVersion: '0.2.83',
+            migratedAt: null,
+            updatedAt: new Date(0).toISOString(),
+          },
+      records: rows.map(mapRecord),
+    };
   }
-  const state = stateResponse.data
-    ? mapAccountState(stateResponse.data as HelmAccountStateRow)
-    : {
-        userId,
-        schemaVersion: HELM_DATABASE_SCHEMA_VERSION,
-        accountVersion: 0,
-        minimumClientVersion: '0.2.82',
-        migratedAt: null,
-        updatedAt: new Date(0).toISOString(),
-      };
-  return {
-    state,
-    records: ((recordResponse.data || []) as unknown as HelmRecordRow[]).map(mapRecord),
-  };
+  throw new Error('HELM database changed while the account snapshot was loading. Please retry.');
 }
 
 export async function probeHelmAccountVersion(): Promise<number> {
@@ -396,13 +445,12 @@ export async function probeHelmAccountVersion(): Promise<number> {
 export async function fetchHelmCollections(collections: string[]): Promise<HelmRecord[]> {
   if (collections.length === 0) return [];
   const database = requireClient();
-  const { data, error } = await database
-    .from('helm_records')
-    .select(HELM_RECORD_COLUMNS)
-    .eq('user_id', currentUserId!)
-    .in('collection', [...new Set(collections)]);
-  if (error) throw error;
-  return ((data || []) as unknown as HelmRecordRow[]).map(mapRecord);
+  const rows = await fetchAllHelmRecordRows(
+    database,
+    currentUserId!,
+    [...new Set(collections)],
+  );
+  return rows.map(mapRecord);
 }
 
 function mapMutationResult(value: unknown, requestId: string): HelmMutationResult {

@@ -164,7 +164,7 @@ const [migrationRows, verificationRows] = await Promise.all([
         where state.user_id is null
       ),
       'minimumClientVersionsCorrect', coalesce((
-        select bool_and(minimum_client_version = '0.2.82' and schema_version = 1)
+        select bool_and(minimum_client_version = '0.2.83' and schema_version = 1)
         from public.helm_account_state
       ), true),
       'legacySnapshotsMatchManifest', not exists (
