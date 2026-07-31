@@ -2,15 +2,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
-  const recordResult = { data: [] as unknown[], error: null as unknown };
+  const recordResult = { data: [] as unknown[], error: null as unknown, count: 0 as number | null };
   const stateResult = { data: null as unknown, error: null as unknown };
-  const collectionResult = { data: [] as unknown[], error: null as unknown };
-  const recordQuery = {
-    in: vi.fn(async () => collectionResult),
-    then: (resolve: (value: unknown) => unknown, reject: (error: unknown) => unknown) => (
-      Promise.resolve(recordResult).then(resolve, reject)
-    ),
-  };
+  const collectionResult = { data: [] as unknown[], error: null as unknown, count: 0 as number | null };
+  const recordPages: Array<{ data: unknown[]; error: unknown; count: number | null }> = [];
+  const collectionPages: Array<{ data: unknown[]; error: unknown; count: number | null }> = [];
+  const recordRanges: Array<[number, number]> = [];
+  const collectionRanges: Array<[number, number]> = [];
   const channel = {
     on: vi.fn(),
     subscribe: vi.fn(),
@@ -27,9 +25,29 @@ const mocks = vi.hoisted(() => {
     channel: vi.fn(() => channel),
     from: vi.fn((table: string) => ({
       select: vi.fn(() => ({
-        eq: vi.fn(() => table === 'helm_account_state'
-          ? { maybeSingle: vi.fn(async () => stateResult) }
-          : recordQuery),
+        eq: vi.fn(() => {
+          if (table === 'helm_account_state') {
+            return { maybeSingle: vi.fn(async () => stateResult) };
+          }
+          let collectionQuery = false;
+          const query = {
+            in: vi.fn(),
+            order: vi.fn(),
+            range: vi.fn(async (from: number, to: number) => {
+              const pages = collectionQuery ? collectionPages : recordPages;
+              const ranges = collectionQuery ? collectionRanges : recordRanges;
+              const fallback = collectionQuery ? collectionResult : recordResult;
+              ranges.push([from, to]);
+              return pages.shift() ?? fallback;
+            }),
+          };
+          query.in.mockImplementation(() => {
+            collectionQuery = true;
+            return query;
+          });
+          query.order.mockReturnValue(query);
+          return query;
+        }),
       })),
     })),
     realtime: { setAuth: vi.fn(async () => undefined) },
@@ -39,7 +57,11 @@ const mocks = vi.hoisted(() => {
   return {
     channel,
     client,
+    collectionPages,
+    collectionRanges,
     collectionResult,
+    recordPages,
+    recordRanges,
     recordResult,
     stateResult,
   };
@@ -52,6 +74,7 @@ vi.mock('@supabase/supabase-js', () => ({
 import {
   applyHelmMutations,
   fetchHelmAccountSnapshot,
+  fetchHelmCollections,
   initSupabase,
   isSupabaseReady,
   listHelmSecrets,
@@ -71,10 +94,16 @@ describe('Supabase account record API', () => {
     mocks.channel.subscribe.mockReturnValue(mocks.channel);
     mocks.recordResult.data = [];
     mocks.recordResult.error = null;
+    mocks.recordResult.count = 0;
     mocks.stateResult.data = null;
     mocks.stateResult.error = null;
     mocks.collectionResult.data = [];
     mocks.collectionResult.error = null;
+    mocks.collectionResult.count = 0;
+    mocks.recordPages.length = 0;
+    mocks.collectionPages.length = 0;
+    mocks.recordRanges.length = 0;
+    mocks.collectionRanges.length = 0;
     mocks.client.rpc.mockResolvedValue({ data: null, error: null });
     initSupabase('', '');
     setCurrentUserId(null);
@@ -103,6 +132,7 @@ describe('Supabase account record API', () => {
       updated_at: '2026-07-31T11:00:00.000Z',
       deleted_at: null,
     }];
+    mocks.recordResult.count = 1;
     mocks.stateResult.data = {
       user_id: USER_ID,
       schema_version: 1,
@@ -121,6 +151,49 @@ describe('Supabase account record API', () => {
       recordId: 'task-1',
       revision: 3,
     });
+  });
+
+  it('paginates complete account snapshots and collection refreshes beyond the API row cap', async () => {
+    initSupabase('https://test.supabase.co', 'publishable-key');
+    setCurrentUserId(USER_ID);
+    mocks.stateResult.data = {
+      user_id: USER_ID,
+      schema_version: 1,
+      account_version: 8,
+      minimum_client_version: '0.2.83',
+      migrated_at: '2026-07-31T09:00:00.000Z',
+      updated_at: '2026-07-31T11:00:00.000Z',
+    };
+    const rows = Array.from({ length: 1_001 }, (_, index) => ({
+      user_id: USER_ID,
+      collection: 'prayerTracking',
+      record_id: `record:${String(index).padStart(4, '0')}`,
+      payload: { id: `record-${index}` },
+      position: null,
+      revision: 1,
+      account_version: 8,
+      created_at: '2026-07-31T10:00:00.000Z',
+      updated_at: '2026-07-31T11:00:00.000Z',
+      deleted_at: null,
+    }));
+    mocks.recordPages.push(
+      { data: rows.slice(0, 1_000), error: null, count: rows.length },
+      { data: rows.slice(1_000), error: null, count: rows.length },
+    );
+
+    const snapshot = await fetchHelmAccountSnapshot();
+
+    expect(snapshot.records).toHaveLength(1_001);
+    expect(mocks.recordRanges).toEqual([[0, 999], [1_000, 1_999]]);
+
+    mocks.collectionPages.push(
+      { data: rows.slice(0, 1_000), error: null, count: rows.length },
+      { data: rows.slice(1_000), error: null, count: rows.length },
+    );
+    const collection = await fetchHelmCollections(['prayerTracking', 'prayerTracking']);
+
+    expect(collection).toHaveLength(1_001);
+    expect(mocks.collectionRanges).toEqual([[0, 999], [1_000, 1_999]]);
   });
 
   it('calls only the constrained transactional RPC without a caller user id', async () => {
