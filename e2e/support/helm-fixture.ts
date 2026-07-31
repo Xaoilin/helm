@@ -5,6 +5,7 @@ import {
 } from '@playwright/test';
 import { encodeStoreValue } from '../../src/store/recordCodec';
 import type { HelmMutation } from '../../src/store/databaseTypes';
+import type { SecretKind } from '../../src/types/domain';
 
 export type HelmScenarioName =
   | 'empty'
@@ -26,6 +27,7 @@ export type AssistantMockHandler = (
 interface EmptyScenarioOptions {
   storage?: Record<string, unknown>;
   surface?: string;
+  secrets?: SecretFixture[];
 }
 
 interface ProjectsScenarioOptions extends EmptyScenarioOptions {
@@ -46,8 +48,23 @@ interface DatabaseScenarioOptions {
   email?: string;
   localStorage?: Record<string, unknown>;
   stores?: Record<string, unknown>;
+  secrets?: SecretFixture[];
   surface?: string;
   userId?: string;
+}
+
+export interface SecretFixture {
+  secretId?: string;
+  label: string;
+  kind: SecretKind;
+  environment?: string | null;
+  projectCatalogKeys?: string[];
+  value: string;
+  username?: string | null;
+  url?: string | null;
+  notes?: string | null;
+  sourceRef?: string | null;
+  archivedAt?: string | null;
 }
 
 interface SignedInSyncScenarioOptions extends EmptyScenarioOptions {
@@ -262,6 +279,7 @@ async function installScenario<Name extends HelmScenarioName>(
     await installDatabaseScenario(page, name, {
       localStorage: normalized.local,
       stores: normalized.stores,
+      secrets: options.secrets,
       surface: options.surface,
     });
     return;
@@ -395,7 +413,7 @@ async function installDatabaseScenario(
       },
     },
   }, options.surface);
-  await mockHelmDatabase(page, userId, options.stores || {});
+  await mockHelmDatabase(page, userId, options.stores || {}, options.secrets || []);
 }
 
 async function seedStorage(
@@ -450,15 +468,44 @@ interface MockDatabaseRow {
   deleted_at: string | null;
 }
 
+interface MockSecretRecord extends SecretFixture {
+  secretId: string;
+  environment: string | null;
+  projectCatalogKeys: string[];
+  sourceRef: string | null;
+  revision: number;
+  accountVersion: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+}
+
 async function mockHelmDatabase(
   page: Page,
   userId: string,
   stores: Record<string, unknown>,
+  secretFixtures: SecretFixture[],
 ): Promise<void> {
   await mockHelmRealtime(page);
   const timestamp = '2026-07-31T12:00:00.000Z';
   let accountVersion = 1;
   const rows = new Map<string, MockDatabaseRow>();
+  const secrets = new Map<string, MockSecretRecord>();
+  secretFixtures.forEach((fixture, index) => {
+    const secretId = fixture.secretId || `88888888-8888-4888-8888-${String(index + 1).padStart(12, '0')}`;
+    secrets.set(secretId, {
+      ...fixture,
+      secretId,
+      environment: fixture.environment || null,
+      projectCatalogKeys: fixture.projectCatalogKeys || [],
+      sourceRef: fixture.sourceRef || null,
+      revision: 1,
+      accountVersion,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      archivedAt: fixture.archivedAt || null,
+    });
+  });
   for (const [collection, value] of Object.entries(stores)) {
     for (const record of encodeStoreValue(collection, value)) {
       const row: MockDatabaseRow = {
@@ -530,6 +577,107 @@ async function mockHelmDatabase(
         changes: changed.map(toMutationResponseRow),
       }),
     });
+  });
+
+  const secretSummary = (secret: MockSecretRecord) => ({
+    secretId: secret.secretId,
+    label: secret.label,
+    kind: secret.kind,
+    environment: secret.environment,
+    projectCatalogKeys: secret.projectCatalogKeys,
+    sourceRef: secret.sourceRef,
+    revision: secret.revision,
+    accountVersion: secret.accountVersion,
+    createdAt: secret.createdAt,
+    updatedAt: secret.updatedAt,
+    archivedAt: secret.archivedAt,
+  });
+
+  await page.route('https://helm.test.supabase.co/rest/v1/rpc/list_helm_secrets', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        accountVersion,
+        secrets: [...secrets.values()]
+          .sort((left, right) => left.label.localeCompare(right.label))
+          .map(secretSummary),
+      }),
+    });
+  });
+
+  await page.route('https://helm.test.supabase.co/rest/v1/rpc/reveal_helm_secret', async route => {
+    const request = route.request().postDataJSON() as { p_secret_id?: string };
+    const secret = request.p_secret_id ? secrets.get(request.p_secret_id) : undefined;
+    if (!secret) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'Secret unavailable.' }) });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        secretId: secret.secretId,
+        value: secret.value,
+        username: secret.username || null,
+        url: secret.url || null,
+        notes: secret.notes || null,
+      }),
+    });
+  });
+
+  await page.route('https://helm.test.supabase.co/rest/v1/rpc/save_helm_secret', async route => {
+    const request = route.request().postDataJSON() as {
+      p_secret_id?: string | null;
+      p_label?: string;
+      p_kind?: SecretKind;
+      p_environment?: string | null;
+      p_project_catalog_keys?: string[];
+      p_value?: string | null;
+      p_username?: string | null;
+      p_url?: string | null;
+      p_notes?: string | null;
+      p_source_ref?: string | null;
+    };
+    const existing = request.p_secret_id ? secrets.get(request.p_secret_id) : undefined;
+    accountVersion += 1;
+    const secretId = existing?.secretId
+      || `88888888-8888-4888-8888-${String(secrets.size + 1).padStart(12, '0')}`;
+    const now = new Date().toISOString();
+    const secret: MockSecretRecord = {
+      secretId,
+      label: request.p_label || existing?.label || 'Secret',
+      kind: request.p_kind || existing?.kind || 'other',
+      environment: request.p_environment || null,
+      projectCatalogKeys: request.p_project_catalog_keys || [],
+      value: request.p_value || existing?.value || '',
+      username: request.p_username || null,
+      url: request.p_url || null,
+      notes: request.p_notes || null,
+      sourceRef: request.p_source_ref || null,
+      revision: existing ? existing.revision + 1 : 1,
+      accountVersion,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      archivedAt: existing?.archivedAt || null,
+    };
+    secrets.set(secretId, secret);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(secretSummary(secret)) });
+  });
+
+  await page.route('https://helm.test.supabase.co/rest/v1/rpc/set_helm_secret_archived', async route => {
+    const request = route.request().postDataJSON() as { p_secret_id?: string; p_archived?: boolean };
+    const secret = request.p_secret_id ? secrets.get(request.p_secret_id) : undefined;
+    if (!secret) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'Secret unavailable.' }) });
+      return;
+    }
+    accountVersion += 1;
+    secret.revision += 1;
+    secret.accountVersion = accountVersion;
+    secret.updatedAt = new Date().toISOString();
+    secret.archivedAt = request.p_archived ? secret.updatedAt : null;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(secretSummary(secret)) });
   });
 }
 

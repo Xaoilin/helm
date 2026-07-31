@@ -218,6 +218,53 @@ export interface ProjectPage {
   updatedAt: string;
 }
 
+// ── Secrets ──
+export type SecretKind =
+  | 'password'
+  | 'api_key'
+  | 'access_token'
+  | 'database'
+  | 'private_key'
+  | 'webhook'
+  | 'other';
+
+export interface HelmSecretSummary {
+  secretId: string;
+  label: string;
+  kind: SecretKind;
+  environment: string | null;
+  projectCatalogKeys: string[];
+  sourceRef: string | null;
+  revision: number;
+  accountVersion: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+}
+
+export interface HelmSecretDetail {
+  secretId: string;
+  value: string;
+  username: string | null;
+  url: string | null;
+  notes: string | null;
+}
+
+export interface SaveHelmSecretInput {
+  secretId?: string;
+  label: string;
+  kind: SecretKind;
+  environment?: string | null;
+  projectCatalogKeys: string[];
+  /** Omit on update to retain the existing encrypted value. */
+  value?: string | null;
+  username?: string | null;
+  url?: string | null;
+  notes?: string | null;
+  /** Stable import identity. This is not editable from the HELM UI. */
+  sourceRef?: string | null;
+}
+
 // ── Trips ──
 export type TripStatus = 'planning' | 'booked' | 'in_trip' | 'completed' | 'archived';
 export type TripBookingKind = 'transport' | 'stay';
@@ -890,6 +937,7 @@ export type Surface =
   | 'clock'
   | 'trips'
   | 'projects'
+  | 'secrets'
   | 'tasks'
   | 'finance'
   | 'health'

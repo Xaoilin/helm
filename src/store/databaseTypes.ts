@@ -80,3 +80,11 @@ export interface HelmRealtimeEvent {
   accountVersion: number;
   changes: HelmRealtimeChange[];
 }
+
+export interface HelmSecretRealtimeEvent {
+  requestId: string;
+  accountVersion: number;
+  secretId: string;
+  revision: number;
+  archivedAt: string | null;
+}

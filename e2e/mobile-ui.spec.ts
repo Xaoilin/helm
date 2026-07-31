@@ -45,6 +45,7 @@ const surfaces = [
   'Clock',
   'Trips',
   'Projects',
+  'Secrets',
   'Tasks',
   'Finance',
   'Health',
@@ -172,7 +173,25 @@ test.describe('Opt-in visual evidence', () => {
   test.describe.configure({ timeout: 300_000 });
 
   test('@visual captures requested surface snapshots', async ({ page, scenario }) => {
-    await scenario('empty');
+    await scenario('empty', {
+      secrets: [
+        {
+          label: 'HELM production database password',
+          kind: 'database',
+          environment: 'production',
+          projectCatalogKeys: ['catalog:helm'],
+          value: 'visual-fixture-value',
+          username: 'postgres',
+        },
+        {
+          label: 'Deployment webhook',
+          kind: 'webhook',
+          environment: 'production',
+          projectCatalogKeys: ['catalog:helm'],
+          value: 'visual-fixture-webhook',
+        },
+      ],
+    });
 
     for (const viewport of visualViewports()) {
       mkdirSync(path.join(screenshotRoot, viewport.name), { recursive: true });

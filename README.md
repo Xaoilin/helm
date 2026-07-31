@@ -1,6 +1,6 @@
 # HELM
 
-HELM is an account-backed desktop assistant app called Lina. Shared data belongs to the signed-in account, uses Supabase as its only source of truth, and is unavailable offline. Machine paths, native approvals, runtime logs, and device credentials remain local to each device.
+HELM is an account-backed desktop assistant app called Lina. Shared data belongs to the signed-in account, uses Supabase as its only source of truth, and is unavailable offline. Machine paths, native approvals, process state, and runtime logs remain local to each device. Passwords and project secrets use an encrypted account-owned vault.
 
 ## Stack
 
@@ -60,12 +60,13 @@ Behavioral E2E and screenshot evidence are separate. `test:e2e` blocks on behavi
 
 - Google Calendar OAuth and sync are real.
 - Supabase auth and database-authoritative persistence are required for shared app data. Devices converge automatically without conflict prompts or durable offline queues.
+- The Secrets surface stores account-owned credentials through constrained RPCs backed by Supabase Vault. Values are masked by default, fetched one at a time for Reveal/Copy, and cleared from the UI on hide, navigation, backgrounding, sign-out, or account switch.
 - Hosted GPT-5.4 assistant replies are real when Supabase is configured, the `assistant-openai` Edge Function is deployed, and the live planner is available.
 - Ollama-powered assistant responses are real when Ollama is running locally.
 - Voice input shows a live transcript preview while recording when Deepgram or the browser fallback is available, then confirms the final command after you stop.
 - A dedicated Clock surface provides a neat multi-clock workspace with on-demand timers and stopwatches, custom names, selectable alarm sounds, eye-catching finish alerts, and account-backed persistence.
 - Several integrations remain placeholder or simulated.
-- API keys and device integration settings remain device-local and are not an encrypted vault in this MVP.
+- Existing Deepgram and ElevenLabs device keys are copied into the vault non-destructively on first use when a matching account secret does not already exist. Original device settings remain available during migration.
 
 Use [docs/feature-status.md](docs/feature-status.md) for the authoritative feature-by-feature status instead of inferring from UI copy.
 
@@ -96,7 +97,7 @@ The function is intended for signed-in HELM users. If hosted AI is not configure
 
 ## Working Rules
 
-- Keep shared state database-authoritative and online-only; keep machine-bound execution material device-local.
+- Keep shared state and secrets database-authoritative and online-only; keep machine-bound execution material device-local.
 - Do not describe placeholder features as real.
 - Update code, docs, and user-facing copy together when behavior changes.
 - Keep assistant behavior shared across chat and voice.

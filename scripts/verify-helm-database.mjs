@@ -27,18 +27,20 @@ const [migrationRows, verificationRows] = await Promise.all([
           and c.relkind = 'r'
           and c.relname = any(array[
             'helm_account_state', 'helm_records',
-            'helm_mutation_receipts', 'helm_legacy_quarantine'
+            'helm_mutation_receipts', 'helm_legacy_quarantine',
+            'helm_secret_entries', 'helm_secret_mutation_receipts'
           ])
       ),
       'allHelmTablesUseRls', (
-        select count(*) = 4 and bool_and(c.relrowsecurity)
+        select count(*) = 6 and bool_and(c.relrowsecurity)
         from pg_class c
         join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public'
           and c.relkind = 'r'
           and c.relname = any(array[
             'helm_account_state', 'helm_records',
-            'helm_mutation_receipts', 'helm_legacy_quarantine'
+            'helm_mutation_receipts', 'helm_legacy_quarantine',
+            'helm_secret_entries', 'helm_secret_mutation_receipts'
           ])
       ),
       'authenticatedRecordsRead', has_table_privilege('authenticated', 'public.helm_records', 'select'),
@@ -52,12 +54,61 @@ const [migrationRows, verificationRows] = await Promise.all([
         or has_table_privilege('anon', 'public.helm_records', 'update')
         or has_table_privilege('anon', 'public.helm_records', 'delete'),
       'authenticatedReceiptRead', has_table_privilege('authenticated', 'public.helm_mutation_receipts', 'select'),
+      'authenticatedSecretMetadataAccess',
+        has_table_privilege('authenticated', 'public.helm_secret_entries', 'select')
+        or has_table_privilege('authenticated', 'public.helm_secret_entries', 'insert')
+        or has_table_privilege('authenticated', 'public.helm_secret_entries', 'update')
+        or has_table_privilege('authenticated', 'public.helm_secret_entries', 'delete'),
+      'anonymousSecretMetadataAccess',
+        has_table_privilege('anon', 'public.helm_secret_entries', 'select')
+        or has_table_privilege('anon', 'public.helm_secret_entries', 'insert')
+        or has_table_privilege('anon', 'public.helm_secret_entries', 'update')
+        or has_table_privilege('anon', 'public.helm_secret_entries', 'delete'),
+      'authenticatedSecretReceiptRead', has_table_privilege(
+        'authenticated', 'public.helm_secret_mutation_receipts', 'select'
+      ),
       'authenticatedRpcExecute', has_function_privilege(
         'authenticated', 'public.apply_helm_mutations(uuid,jsonb)', 'execute'
       ),
       'anonymousRpcExecute', has_function_privilege(
         'anon', 'public.apply_helm_mutations(uuid,jsonb)', 'execute'
       ),
+      'authenticatedSecretRpcExecute',
+        has_function_privilege('authenticated', 'public.list_helm_secrets()', 'execute')
+        and has_function_privilege('authenticated', 'public.reveal_helm_secret(uuid)', 'execute')
+        and has_function_privilege(
+          'authenticated',
+          'public.save_helm_secret(uuid,uuid,text,text,text,text[],text,text,text,text,text)',
+          'execute'
+        )
+        and has_function_privilege(
+          'authenticated', 'public.set_helm_secret_archived(uuid,uuid,boolean)', 'execute'
+        ),
+      'anonymousSecretRpcExecute',
+        has_function_privilege('anon', 'public.list_helm_secrets()', 'execute')
+        or has_function_privilege('anon', 'public.reveal_helm_secret(uuid)', 'execute')
+        or has_function_privilege(
+          'anon',
+          'public.save_helm_secret(uuid,uuid,text,text,text,text[],text,text,text,text,text)',
+          'execute'
+        )
+        or has_function_privilege(
+          'anon', 'public.set_helm_secret_archived(uuid,uuid,boolean)', 'execute'
+        ),
+      'secretRpcsAreSecurityDefiner', (
+        select count(*) = 4 and bool_and(p.prosecdef)
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = any(array[
+            'list_helm_secrets', 'reveal_helm_secret',
+            'save_helm_secret', 'set_helm_secret_archived'
+          ])
+      ),
+      'vaultInstalled', exists (
+        select 1 from pg_extension where extname = 'supabase_vault'
+      ),
+      'authenticatedVaultUsage', has_schema_privilege('authenticated', 'vault', 'usage'),
       'rpcIsSecurityDefiner', (
         select p.prosecdef
         from pg_proc p
@@ -248,15 +299,23 @@ if (!verification || typeof verification !== 'object') {
 }
 
 const expected = {
-  helmTableCount: 4,
+  helmTableCount: 6,
   allHelmTablesUseRls: true,
   authenticatedRecordsRead: true,
   authenticatedRecordsWrite: false,
   anonymousRecordsRead: false,
   anonymousRecordsWrite: false,
   authenticatedReceiptRead: false,
+  authenticatedSecretMetadataAccess: false,
+  anonymousSecretMetadataAccess: false,
+  authenticatedSecretReceiptRead: false,
   authenticatedRpcExecute: true,
   anonymousRpcExecute: false,
+  authenticatedSecretRpcExecute: true,
+  anonymousSecretRpcExecute: false,
+  secretRpcsAreSecurityDefiner: true,
+  vaultInstalled: true,
+  authenticatedVaultUsage: false,
   rpcIsSecurityDefiner: true,
   accountReadPolicies: 2,
   privateBroadcastPolicy: true,

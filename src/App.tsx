@@ -9,6 +9,7 @@ import ClockSurface from './surfaces/ClockSurface';
 import TripsSurface from './surfaces/TripsSurface';
 import TasksSurface from './surfaces/TasksSurface';
 import ProjectsSurface from './surfaces/ProjectsSurface';
+import SecretsSurface from './surfaces/SecretsSurface';
 import FinanceSurface from './surfaces/FinanceSurface';
 import HealthSurface from './surfaces/HealthSurface';
 import KnowledgeSurface from './surfaces/KnowledgeSurface';
@@ -43,6 +44,7 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'clock', label: 'Clock', icon: '\u23F1\uFE0F' },
   { surface: 'trips', label: 'Trips', icon: '\u{1F6EB}' },
   { surface: 'projects', label: 'Projects', icon: '\u{1F4CB}' },
+  { surface: 'secrets', label: 'Secrets', icon: '\u{1F510}' },
   { surface: 'tasks', label: 'Tasks', icon: '\u2705' },
   { surface: 'finance', label: 'Finance', icon: '\u{1F4B7}' },
   { surface: 'health', label: 'Health', icon: '\u{1F34E}' },
@@ -191,6 +193,7 @@ function AppInner() {
         case 'clock': return <ClockSurface />;
         case 'trips': return <TripsSurface />;
         case 'projects': return <ProjectsSurface />;
+        case 'secrets': return <SecretsSurface />;
         case 'tasks': return <TasksSurface />;
         case 'finance': return <FinanceSurface />;
         case 'health': return <HealthSurface />;

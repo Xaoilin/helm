@@ -14,6 +14,7 @@ try {
   run([
     'test', 'db', '--local',
     'supabase/tests/helm_database_authoritative.sql',
+    'supabase/tests/helm_secret_vault.sql',
     'supabase/tests/helm_legacy_migration.sql',
   ])
   await runConcurrencyScenario()

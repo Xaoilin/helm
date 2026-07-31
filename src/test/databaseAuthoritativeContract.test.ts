@@ -6,6 +6,10 @@ const migration = readFileSync(
   new URL('../../supabase/migrations/20260731142920_helm_database_authoritative_persistence.sql', import.meta.url),
   'utf8',
 );
+const secretMigration = readFileSync(
+  new URL('../../supabase/migrations/20260731173151_helm_secret_vault.sql', import.meta.url),
+  'utf8',
+);
 const persistence = readFileSync(new URL('../store/persistence.ts', import.meta.url), 'utf8');
 
 describe('database-authoritative persistence contract', () => {
@@ -40,5 +44,26 @@ describe('database-authoritative persistence contract', () => {
     expect(persistence).not.toMatch(/invoke\(['"]write_store['"],\s*\{\s*key\s*\}/);
     expect(persistence).not.toContain('SyncDriftModal');
     expect(persistence).toContain("syncSession.status !== 'ready'");
+  });
+
+  it('stores secret values in Vault and exposes only account-derived RPCs', () => {
+    expect(secretMigration).toContain('create extension if not exists supabase_vault with schema vault');
+    expect(secretMigration).toContain('create table public.helm_secret_entries');
+    expect(secretMigration).toContain('vault_secret_id uuid not null unique');
+    expect(secretMigration).toContain('select vault.create_secret(');
+    expect(secretMigration).toContain('join vault.decrypted_secrets');
+    expect(secretMigration).toContain("v_user_id uuid := (select auth.uid())");
+    expect(secretMigration).not.toMatch(/save_helm_secret\s*\([^)]*user_id/is);
+    expect(secretMigration).toContain('revoke all on public.helm_secret_entries from public, anon, authenticated');
+    expect(secretMigration).toContain('grant execute on function public.reveal_helm_secret(uuid) to authenticated');
+  });
+
+  it('broadcasts only secret identifiers and versions', () => {
+    const broadcast = secretMigration.slice(secretMigration.indexOf('perform realtime.send('));
+    expect(broadcast).toContain("'helm_secrets_changed'");
+    expect(broadcast).toContain("'secretId', v_entry.secret_id");
+    expect(broadcast).toContain("'accountVersion', v_next_version");
+    expect(broadcast).not.toMatch(/'value'\s*,/);
+    expect(broadcast).not.toContain('v_payload');
   });
 });

@@ -35,6 +35,7 @@ The navigable surfaces are:
 - Clock
 - Tasks
 - Projects
+- Secrets
 - Finance
 - Health
 - Knowledge
@@ -104,6 +105,7 @@ That navigation payload lets chat and voice hand the UI enough context to open a
 - calendar accounts, sources, and events
 - tasks, goals, daily habits, first-class prayer tasks, and project-linked workflow metadata
 - projects and project wiki pages
+- encrypted secret metadata and one-at-a-time revealed secret details
 - multi-timer and multi-stopwatch Clock state, including per-timer alarm sound selection
 - knowledge topics, entries, and lifestyle items
 - fast-food health log entries
@@ -126,7 +128,7 @@ That navigation payload lets chat and voice hand the UI enough context to open a
 
 Legacy `helm:<shared-key>` browser and Tauri snapshots are one-time migration inputs only. Matching database records win, safe missing fields and valid local-only records are added, counters are never summed, malformed data is quarantined outside the runtime, and the device copy is removed only after the database commit is confirmed. No conflict chooser is shown.
 
-Absolute project roots, native approvals, fingerprints, process state, logs, microphones, local model endpoints, and API keys use explicit device-only stores. They never enter shared records.
+Absolute project roots, native approvals, fingerprints, process state, logs, microphones, and local model endpoints use explicit device-only stores. They never enter shared records. Passwords and API credentials use the separate account-owned Vault path described below; existing device integration keys are preserved only as non-destructive migration/runtime inputs.
 
 ### Desktop boundary
 
@@ -141,8 +143,15 @@ The Tauri side is intentionally narrow. Rust commands handle app-data directory 
 - account-isolated reads from `helm_account_state` and `helm_records`
 - idempotent transactional calls to `apply_helm_mutations`
 - private account Broadcast subscriptions plus version probes
+- account-owned secret list, one-at-a-time reveal, save, archive, and restore RPCs backed by Supabase Vault
 
 `src/AppRoot.tsx` blocks the provider tree until that database session is ready. Auth-account changes clear the previous cache before bootstrap, while same-user token refreshes keep the current account identity.
+
+### Secrets vault
+
+`src/surfaces/SecretsSurface.tsx` is a deliberately small personal credential manager. `helm_secret_entries` stores searchable account-owned metadata and only a UUID reference to an encrypted `vault.secrets` row. Plaintext is accepted and returned only through security-definer RPCs that derive ownership from `auth.uid()`; callers cannot supply a user ID and cannot directly access either metadata tables or the Vault schema.
+
+The list RPC never decrypts values. Reveal fetches one active secret only, and the client clears decrypted state on Hide, surface unmount, window backgrounding, page hide, sign-out, or account switch. Private Broadcast messages contain only the request ID, secret ID, revision, archive marker, and account version. Stable `source_ref` values make legacy imports additive and idempotent without prompting the user; matching database entries win and originals are not deleted during this release.
 
 ## Integrations And External Services
 
@@ -234,6 +243,7 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 - Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, Islamic prayer tasks, routine habits, and completed work for easier scanning, with collapsible section headers for long lists. Legacy prayer habits are normalized into first-class prayer tasks on load. Canonical prayer outcome records are keyed by local prayer date and prayer name rather than task ID, so task deletion or recreation does not erase history. Old checked prayer entries migrate idempotently as `unclassified`; HELM never invents legacy on-time status or missed days.
 - Prayer tracking and reminders are specified in `docs/prayer-tracking-and-reminders.md`. `PrayerProvider` owns schedule freshness, canonical outcomes, the shared completion selector, stats, reminders, and Prayer Debug diagnostics. UI, chat, and voice all use the same completion mutation; Lina asks `On time or late?` when status is omitted, and undo restores task, XP, and prayer tracking together.
 - Projects is a reference-first account catalogue. Searchable cards and an accessible drawer/sheet expose live links, repositories, documentation, setup references, and portable run recipes; Board, Milestones, and Wiki remain available through Manage project. Shared records are keyed by stable `catalogKey`. Device roots, approvals, process state, and logs use separate device-only persistence and never enter Supabase or assistant context. Web HELM is copy/reference-only; the desktop runner accepts only native-approved structured profiles.
+- Secrets is an account-owned encrypted credential catalogue. It supports search and project/type/environment filters, immediate Reveal/Hide/Copy, metadata editing, and reversible Archive/Restore without a second master-password prompt. It intentionally has no bulk export, sharing, autofill, permanent delete, offline view, or assistant access.
 - Clock persists multiple active timer and stopwatch records plus per-timer alarm preferences in the signed-in account database.
 - Health persists reflection entries in the signed-in account database while keeping the quick-entry and recent-history workflow in one view.
 - Knowledge contains both a topic-entry knowledge base and the lifestyle tracker.
@@ -254,4 +264,4 @@ The Vite README is still the default template, so the docs in this folder and `A
 - Entity retrieval and benchmark example retrieval are still heuristic, so improvements should be measured before changing prompts or capability metadata.
 - Some integrations are real and some are still mock or placeholder paths, so docs must distinguish between them carefully.
 - Large surface components still exist, even though state has already been split into domain providers.
-- Shared records are account-isolated by RLS and constrained RPCs, but HELM is not a general-purpose secret vault. Machine paths and credentials remain explicit device-only data.
+- Shared records and secret metadata are account-isolated by RLS and constrained RPCs. Secret plaintext is encrypted through Supabase Vault and is intentionally excluded from general shared-record, logging, export, Broadcast, and assistant paths.

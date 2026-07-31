@@ -25,7 +25,7 @@ import {
   type SupabaseRealtimeSnapshot,
 } from './supabase';
 import { SHARED_STORE_KEYS } from './storeKeys';
-import type { HelmMutation, HelmRecord, SyncSessionStatus } from './databaseTypes';
+import type { HelmMutation, HelmRecord, HelmSecretRealtimeEvent, SyncSessionStatus } from './databaseTypes';
 import { HELM_DATABASE_SCHEMA_VERSION } from './databaseTypes';
 import {
   decodeStoreValue,
@@ -139,6 +139,7 @@ const pendingStoreValues = new Map<string, unknown>();
 const persistenceHealthSubscribers = new Set<(snapshot: PersistenceHealthSnapshot) => void>();
 const syncSessionSubscribers = new Set<(snapshot: SyncSessionSnapshot) => void>();
 const storeChangeSubscribers = new Set<(change: RemoteStoreChange) => void>();
+const secretChangeSubscribers = new Set<(event: HelmSecretRealtimeEvent) => void>();
 
 let syncSession: SyncSessionSnapshot = {
   status: 'blocked',
@@ -749,6 +750,36 @@ async function startBroadcastSubscription(epoch: number, userId: string): Promis
       lastRemoteReadError = message;
       publishSyncSession({ status: 'reconnecting', error: message });
     });
+  }, event => {
+    if (!isCurrentPersistenceSession(epoch, userId)) return;
+    broadcastRefreshPromise = broadcastRefreshPromise.then(async () => {
+      assertCurrentPersistenceSession(epoch, userId);
+      if (event.accountVersion > accountVersion + 1) {
+        await hydrateDatabaseSnapshot(epoch, userId);
+        const change: RemoteStoreChange = {
+          event: 'RECONNECT',
+          namespace: NAMESPACE,
+          key: '*',
+          updatedAt: new Date().toISOString(),
+          value: null,
+        };
+        storeChangeSubscribers.forEach(listener => listener(change));
+      } else if (event.accountVersion > accountVersion) {
+        accountVersion = event.accountVersion;
+        publishSyncSession({
+          status: 'ready',
+          accountVersion,
+          error: null,
+          lastReadyAt: new Date().toISOString(),
+        });
+      }
+      secretChangeSubscribers.forEach(listener => listener(event));
+    }).catch(error => {
+      if (error instanceof StalePersistenceSessionError) return;
+      const message = error instanceof Error ? error.message : String(error);
+      lastRemoteReadError = message;
+      publishSyncSession({ status: 'reconnecting', error: message });
+    });
   });
   await waitForBroadcastReady(epoch, userId);
 }
@@ -931,6 +962,13 @@ export function subscribeSyncSession(listener: (snapshot: SyncSessionSnapshot) =
 export function subscribeStoreChanges(listener: (change: RemoteStoreChange) => void): () => void {
   storeChangeSubscribers.add(listener);
   return () => storeChangeSubscribers.delete(listener);
+}
+
+export function subscribeHelmSecretChanges(
+  listener: (event: HelmSecretRealtimeEvent) => void,
+): () => void {
+  secretChangeSubscribers.add(listener);
+  return () => secretChangeSubscribers.delete(listener);
 }
 
 export function subscribeStoreKey(key: string, listener: (change: RemoteStoreChange) => void): () => void {
