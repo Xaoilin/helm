@@ -173,6 +173,7 @@ test.describe('Opt-in visual evidence', () => {
   test.describe.configure({ timeout: 300_000 });
 
   test('@visual captures requested surface snapshots', async ({ page, scenario }) => {
+    test.skip(visualSurfaceFilter() === 'sync', 'The sync evidence has a dedicated visual scenario.');
     await scenario('empty', {
       secrets: [
         {
@@ -270,6 +271,42 @@ test.describe('Opt-in visual evidence', () => {
           fullPage: true,
         });
       }
+    }
+  });
+
+  test('@visual captures seamless offline continuity', async ({ context, page, scenario }) => {
+    test.skip(
+      Boolean(visualSurfaceFilter() && !['secrets', 'sync'].includes(visualSurfaceFilter())),
+      'A different visual surface was requested.',
+    );
+    await scenario('empty', {
+      surface: 'secrets',
+      secrets: [{
+        label: 'HELM production database password',
+        kind: 'database',
+        environment: 'production',
+        projectCatalogKeys: ['catalog:helm'],
+        value: 'visual-fixture-value',
+        username: 'postgres',
+      }],
+    });
+    const syncRoot = path.join(screenshotRoot, 'sync');
+    mkdirSync(syncRoot, { recursive: true });
+
+    for (const viewport of visualViewports()) {
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
+      await context.setOffline(true);
+      await expect(page.getByTestId('sync-status-banner')).toContainText('Offline');
+      await expect(page.getByRole('heading', { name: 'HELM is reconnecting' })).toHaveCount(0);
+      await expectNoAccidentalOverflow(page);
+      await page.screenshot({
+        path: path.join(syncRoot, `${viewport.name}-offline-read-only.png`),
+        fullPage: true,
+      });
+      await context.setOffline(false);
+      await expect(page.getByTestId('sync-status-banner')).toHaveCount(0);
     }
   });
 });

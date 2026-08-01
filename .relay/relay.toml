@@ -1,0 +1,52 @@
+schema = "relay/project-config/v1"
+defaultProfile = "safety-first"
+retentionDays = 30
+artifactRoots = ["test-results", "playwright-report"]
+
+[security]
+requireProvenNetworkIsolation = false
+outputLimitBytes = 16777216
+excerptLimitBytes = 4096
+extraEnvironmentKeys = []
+
+[aiProvider]
+argv = ["/Users/xaoilin/.local/bin/relay-codex-provider"]
+executableSha256 = "aeeeac46d60162a80306e045e820abd7cc6d16048233908ae60f8ee8a4a04298"
+network = "declared"
+timeoutSeconds = 900
+
+[[checks]]
+id = "complete"
+criteria = ["continuity", "coalescing", "domain-updates", "safe-errors", "multi-client", "release"]
+argv = ["npm", "run", "check"]
+cwd = "."
+timeoutSeconds = 1800
+acceptedExitCodes = [0]
+artifactGlobs = ["test-results/check/timings.json"]
+externalEvidence = false
+network = "forbidden"
+severity = "critical"
+
+[[checks]]
+id = "database"
+criteria = ["atomic-snapshot", "release"]
+argv = ["npm", "run", "test:database"]
+cwd = "."
+timeoutSeconds = 1200
+acceptedExitCodes = [0]
+artifactGlobs = []
+externalEvidence = false
+network = "forbidden"
+severity = "critical"
+
+[[checks]]
+id = "handoff"
+criteria = ["release"]
+argv = ["npm", "run", "handoff:check"]
+cwd = "."
+timeoutSeconds = 600
+acceptedExitCodes = [0]
+artifactGlobs = []
+externalEvidence = true
+network = "declared"
+severity = "critical"

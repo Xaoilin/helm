@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { v4 as uuid } from 'uuid';
 import type { CalendarAccount, CalendarSource, CalendarEvent } from '../../types/domain';
 import { loadStore, saveStore } from '../persistence';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 import {
   clearGoogleCalendarAuth,
   getGoogleCalendarAuthPatch,
@@ -64,6 +65,17 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       setLoaded(true);
     })();
   }, []);
+
+  useRemoteStoreRefresh(['calendarAccounts', 'calendarSources', 'calendarEvents'], async () => {
+    const [accounts, sources, events] = await Promise.all([
+      loadStore<CalendarAccount[]>('calendarAccounts'),
+      loadStore<CalendarSource[]>('calendarSources'),
+      loadStore<CalendarEvent[]>('calendarEvents'),
+    ]);
+    setCalendarAccounts(normalizeCalendarAccounts(accounts ?? []));
+    setCalendarSources(sources ?? []);
+    setCalendarEvents(events ?? []);
+  });
 
   // Persist
   useEffect(() => { if (loaded) saveStore('calendarAccounts', calendarAccounts); }, [calendarAccounts, loaded]);

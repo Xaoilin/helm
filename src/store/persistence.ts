@@ -77,13 +77,27 @@ export interface SyncSessionSnapshot {
   status: SyncSessionStatus;
   userId: string | null;
   accountVersion: number;
+  hasUsableSnapshot: boolean;
+  readOnly: boolean;
+  reason: SyncSessionReason;
   lastReadyAt: string | null;
   lastProbeAt: string | null;
   error: string | null;
 }
 
+export type SyncSessionReason =
+  | 'signed_out'
+  | 'configuration'
+  | 'switching_account'
+  | 'offline'
+  | 'database_unavailable'
+  | 'realtime_unavailable'
+  | 'incompatible_schema'
+  | 'client_update_required'
+  | null;
+
 export interface PersistenceHealthSnapshot {
-  mode: 'database' | 'blocked';
+  mode: 'database' | 'read-only' | 'blocked';
   syncSession: SyncSessionSnapshot;
   lastLocalWriteAt: string | null;
   lastLocalWriteKey: string | null;
@@ -122,13 +136,26 @@ let accountVersion = 0;
 let bootstrappedUserId: string | null = null;
 let bootstrapPromise: Promise<void> | null = null;
 let broadcastUnsubscribe: (() => void) | null = null;
+let broadcastSubscriptionEpoch: number | null = null;
+let broadcastSubscriptionUserId: string | null = null;
+let broadcastStartPromise: Promise<void> | null = null;
 let lifecycleRegistered = false;
 let realtimeHealthRegistered = false;
 let flushPromise: Promise<void> | null = null;
 let flushPromiseEpoch: number | null = null;
 let flushScheduled = false;
 let persistenceEpoch = 0;
-let broadcastRefreshPromise: Promise<void> = Promise.resolve();
+let refreshPromise: Promise<void> | null = null;
+let refreshQueued = false;
+let refreshNeedsSnapshot = false;
+let refreshNeedsRealtime = false;
+const refreshNeedsCollections = new Set<string>();
+let refreshTargetVersion = 0;
+let refreshActiveSnapshot = false;
+let refreshActiveRealtime = false;
+let refreshActiveTargetVersion = 0;
+let recoveryTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+let recoveryAttempt = 0;
 
 const recordsByCollection = new Map<string, Map<string, HelmRecord>>();
 // Snapshot last delivered to mounted providers. Diffs are calculated against
@@ -145,6 +172,9 @@ let syncSession: SyncSessionSnapshot = {
   status: 'blocked',
   userId: null,
   accountVersion: 0,
+  hasUsableSnapshot: false,
+  readOnly: true,
+  reason: 'signed_out',
   lastReadyAt: null,
   lastProbeAt: null,
   error: 'Sign in to load HELM data.',
@@ -178,6 +208,19 @@ class StalePersistenceSessionError extends Error {
   constructor() {
     super('The HELM account changed while database work was in flight.');
     this.name = 'StalePersistenceSessionError';
+  }
+}
+
+class SyncCompatibilityError extends Error {
+  readonly reason: Extract<SyncSessionReason, 'incompatible_schema' | 'client_update_required'>;
+
+  constructor(
+    reason: Extract<SyncSessionReason, 'incompatible_schema' | 'client_update_required'>,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'SyncCompatibilityError';
+    this.reason = reason;
   }
 }
 
@@ -264,6 +307,67 @@ function publishSyncSession(patch: Partial<SyncSessionSnapshot>): void {
   const snapshot = { ...syncSession };
   syncSessionSubscribers.forEach(listener => listener(snapshot));
   notifyPersistenceHealthSubscribers();
+}
+
+function hasUsableSnapshotFor(userId: string): boolean {
+  return syncSession.hasUsableSnapshot
+    && syncSession.userId === userId
+    && bootstrappedUserId === userId;
+}
+
+function clearRecoveryTimer(): void {
+  if (recoveryTimer !== null) globalThis.clearTimeout(recoveryTimer);
+  recoveryTimer = null;
+}
+
+function publishReady(userId: string): void {
+  clearRecoveryTimer();
+  recoveryAttempt = 0;
+  publishSyncSession({
+    status: 'ready',
+    userId,
+    accountVersion,
+    hasUsableSnapshot: true,
+    readOnly: false,
+    reason: null,
+    lastReadyAt: new Date().toISOString(),
+    error: null,
+  });
+}
+
+function publishDegraded(
+  userId: string,
+  reason: Exclude<SyncSessionReason, 'signed_out' | 'configuration' | 'switching_account' | null>,
+  error: string,
+): void {
+  const usable = hasUsableSnapshotFor(userId);
+  const fatal = reason === 'incompatible_schema' || reason === 'client_update_required';
+  publishSyncSession({
+    status: usable && !fatal ? 'reconnecting' : 'blocked',
+    userId,
+    accountVersion,
+    hasUsableSnapshot: usable,
+    readOnly: true,
+    reason,
+    error,
+  });
+}
+
+function publishStoreChanges(
+  keys: Iterable<string>,
+  event: RemoteStoreChange['event'] = 'REMOTE_REFRESH',
+): void {
+  const updatedAt = new Date().toISOString();
+  for (const key of new Set(keys)) {
+    const change: RemoteStoreChange = {
+      event,
+      namespace: NAMESPACE,
+      key,
+      updatedAt,
+      value: null,
+    };
+    storeChangeSubscribers.forEach(listener => listener(change));
+  }
 }
 
 function publishWriteQueue(patch: Partial<SupabaseWriteQueueSnapshot> = {}): void {
@@ -509,10 +613,12 @@ async function flushPendingStores(): Promise<void> {
           lastFlushError: message,
           lastFailureKeys: keys,
         });
-        publishSyncSession({
-          status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'blocked' : 'reconnecting',
-          error: `Database write failed: ${message}`,
-        });
+        publishDegraded(
+          userId,
+          typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'database_unavailable',
+          `Database write failed: ${message}`,
+        );
+        publishStoreChanges(keys, 'RECONNECT');
         if (typeof navigator === 'undefined' || navigator.onLine !== false) {
           await refreshDatabasePersistence();
         }
@@ -583,7 +689,7 @@ function quarantineLegacyValue(key: string, raw: string): void {
   localStorage.setItem(quarantineKey, raw);
 }
 
-async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<void> {
+async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<string[]> {
   assertCurrentPersistenceSession(epoch, userId);
   const desired = new Map<string, unknown>();
   const keysToClear: string[] = [];
@@ -625,7 +731,9 @@ async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<
     await saveDeviceStore(DEVICE_SETTINGS_STORE_KEY, deviceSettings);
     assertCurrentPersistenceSession(epoch, userId);
   }
-  if (desired.size > 0) await commitStoreValues(desired, epoch, userId);
+  const changedCollections = desired.size > 0
+    ? await commitStoreValues(desired, epoch, userId)
+    : [];
   for (const key of keysToClear) {
     assertCurrentPersistenceSession(epoch, userId);
     await clearLocalStoreCopy(key, false);
@@ -637,6 +745,7 @@ async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<
     lastCalendarCacheCleanupAt = new Date().toISOString();
     lastCalendarCacheCleanupReason = 'Legacy shared copies retired after database verification.';
   }
+  return changedCollections;
 }
 
 function versionParts(value: string): number[] {
@@ -653,20 +762,38 @@ function versionAtLeast(actual: string, minimum: string): boolean {
   return true;
 }
 
-async function hydrateDatabaseSnapshot(epoch: number, userId: string): Promise<void> {
+async function hydrateDatabaseSnapshot(epoch: number, userId: string): Promise<string[]> {
   const snapshot = await fetchHelmAccountSnapshot();
   assertCurrentPersistenceSession(epoch, userId);
   if (snapshot.state.schemaVersion !== HELM_DATABASE_SCHEMA_VERSION) {
-    throw new Error(`HELM database schema ${snapshot.state.schemaVersion} is not supported by this client.`);
+    throw new SyncCompatibilityError(
+      'incompatible_schema',
+      `HELM database schema ${snapshot.state.schemaVersion} is not supported by this client.`,
+    );
   }
   if (!versionAtLeast(APP_VERSION, snapshot.state.minimumClientVersion)) {
-    throw new Error(`Update HELM to ${snapshot.state.minimumClientVersion} or later.`);
+    throw new SyncCompatibilityError(
+      'client_update_required',
+      `Update HELM to ${snapshot.state.minimumClientVersion} or later.`,
+    );
   }
+  if (snapshot.state.accountVersion < accountVersion) return [];
+  const collectionKeys = new Set([
+    ...SHARED_STORE_KEYS.map(item => item.key),
+    ...recordsByCollection.keys(),
+    ...snapshot.records.map(record => record.collection),
+  ]);
+  const previousValues = new Map(
+    [...collectionKeys].map(collection => [collection, decodedCache(collection)]),
+  );
   replaceAllRecordCache(snapshot.records);
   accountVersion = snapshot.state.accountVersion;
   lastRemoteReadAt = new Date().toISOString();
   lastRemoteReadKey = 'account';
   lastRemoteReadError = null;
+  return [...collectionKeys].filter(collection => (
+    !valuesEqual(previousValues.get(collection), decodedCache(collection))
+  ));
 }
 
 async function refreshCollectionsFromBroadcast(
@@ -674,10 +801,11 @@ async function refreshCollectionsFromBroadcast(
   nextVersion: number,
   epoch: number,
   userId: string,
-): Promise<void> {
+): Promise<string[]> {
   assertCurrentPersistenceSession(epoch, userId);
+  let changedCollections = collections;
   if (nextVersion > accountVersion + 1 || collections.length === 0) {
-    await hydrateDatabaseSnapshot(epoch, userId);
+    changedCollections = await hydrateDatabaseSnapshot(epoch, userId);
   } else {
     const records = await fetchHelmCollections(collections);
     assertCurrentPersistenceSession(epoch, userId);
@@ -689,7 +817,7 @@ async function refreshCollectionsFromBroadcast(
     lastRemoteReadKey = collections.at(-1) ?? 'account';
     lastRemoteReadError = null;
   }
-  publishSyncSession({ status: 'ready', accountVersion, error: null, lastReadyAt: new Date().toISOString() });
+  return changedCollections;
 }
 
 function waitForBroadcastReady(epoch: number, userId: string): Promise<void> {
@@ -723,91 +851,107 @@ function waitForBroadcastReady(epoch: number, userId: string): Promise<void> {
   });
 }
 
-async function startBroadcastSubscription(epoch: number, userId: string): Promise<void> {
+interface DatabaseRefreshRequest {
+  collections?: string[];
+  snapshot?: boolean;
+  realtime?: boolean;
+  targetVersion?: number;
+}
+
+function reasonForDatabaseError(error: unknown): Exclude<SyncSessionReason, 'signed_out' | 'configuration' | 'switching_account' | null> {
+  if (error instanceof SyncCompatibilityError) return error.reason;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
+  return 'database_unavailable';
+}
+
+function scheduleRecovery(request: DatabaseRefreshRequest = { snapshot: true, realtime: true }): void {
+  if (
+    recoveryTimer !== null
+    || !isAuthenticated()
+    || !getCurrentUserId()
+    || syncSession.reason === 'incompatible_schema'
+    || syncSession.reason === 'client_update_required'
+    || (typeof navigator !== 'undefined' && navigator.onLine === false)
+  ) return;
+  const delay = Math.min(1_000 * (2 ** recoveryAttempt), 30_000);
+  recoveryAttempt += 1;
+  recoveryTimer = globalThis.setTimeout(() => {
+    recoveryTimer = null;
+    void requestDatabaseRefresh(request);
+  }, delay);
+}
+
+function handleDatabaseFailure(error: unknown, userId: string): void {
+  if (error instanceof StalePersistenceSessionError) return;
+  const message = error instanceof Error ? error.message : String(error);
+  lastRemoteReadError = message;
+  const reason = reasonForDatabaseError(error);
+  publishDegraded(userId, reason, message);
+  if (reason !== 'incompatible_schema' && reason !== 'client_update_required') {
+    scheduleRecovery({ snapshot: true, realtime: true });
+  }
+}
+
+async function ensureBroadcastSubscription(epoch: number, userId: string): Promise<void> {
   assertCurrentPersistenceSession(epoch, userId);
+  const current = getSupabaseRealtimeSnapshot();
+  if (
+    broadcastUnsubscribe
+    && broadcastSubscriptionEpoch === epoch
+    && broadcastSubscriptionUserId === userId
+    && current.state === 'subscribed'
+  ) return;
+  if (
+    broadcastStartPromise
+    && broadcastSubscriptionEpoch === epoch
+    && broadcastSubscriptionUserId === userId
+  ) return broadcastStartPromise;
+
   broadcastUnsubscribe?.();
-  broadcastRefreshPromise = Promise.resolve();
+  broadcastSubscriptionEpoch = epoch;
+  broadcastSubscriptionUserId = userId;
   broadcastUnsubscribe = subscribeHelmBroadcast(event => {
     if (!isCurrentPersistenceSession(epoch, userId)) return;
-    broadcastRefreshPromise = broadcastRefreshPromise.then(async () => {
-      assertCurrentPersistenceSession(epoch, userId);
-      if (event.accountVersion <= accountVersion) return;
-      const collections = [...new Set(event.changes.map(change => change.collection))];
-      await refreshCollectionsFromBroadcast(collections, event.accountVersion, epoch, userId);
-      for (const collection of collections) {
-        const change: RemoteStoreChange = {
-          event: 'REMOTE_REFRESH',
-          namespace: NAMESPACE,
-          key: collection,
-          updatedAt: new Date().toISOString(),
-          value: null,
-        };
-        storeChangeSubscribers.forEach(listener => listener(change));
-      }
-    }).catch(error => {
-      if (error instanceof StalePersistenceSessionError) return;
-      const message = error instanceof Error ? error.message : String(error);
-      lastRemoteReadError = message;
-      publishSyncSession({ status: 'reconnecting', error: message });
+    const collections = [...new Set(event.changes.map(change => change.collection))];
+    void requestDatabaseRefresh({
+      collections,
+      snapshot: collections.length === 0,
+      targetVersion: event.accountVersion,
     });
   }, event => {
     if (!isCurrentPersistenceSession(epoch, userId)) return;
-    broadcastRefreshPromise = broadcastRefreshPromise.then(async () => {
-      assertCurrentPersistenceSession(epoch, userId);
-      if (event.accountVersion > accountVersion + 1) {
-        await hydrateDatabaseSnapshot(epoch, userId);
-        const change: RemoteStoreChange = {
-          event: 'RECONNECT',
-          namespace: NAMESPACE,
-          key: '*',
-          updatedAt: new Date().toISOString(),
-          value: null,
-        };
-        storeChangeSubscribers.forEach(listener => listener(change));
-      } else if (event.accountVersion > accountVersion) {
-        accountVersion = event.accountVersion;
-        publishSyncSession({
-          status: 'ready',
-          accountVersion,
-          error: null,
-          lastReadyAt: new Date().toISOString(),
-        });
-      }
+    void requestDatabaseRefresh({ targetVersion: event.accountVersion }).then(() => {
       secretChangeSubscribers.forEach(listener => listener(event));
-    }).catch(error => {
-      if (error instanceof StalePersistenceSessionError) return;
-      const message = error instanceof Error ? error.message : String(error);
-      lastRemoteReadError = message;
-      publishSyncSession({ status: 'reconnecting', error: message });
     });
   });
-  await waitForBroadcastReady(epoch, userId);
+  const operation = waitForBroadcastReady(epoch, userId).finally(() => {
+    if (broadcastStartPromise === operation) broadcastStartPromise = null;
+  });
+  broadcastStartPromise = operation;
+  return operation;
 }
 
 function registerLifecycleHandlers(): void {
   if (lifecycleRegistered || typeof window === 'undefined') return;
   lifecycleRegistered = true;
   window.addEventListener('offline', () => {
-    publishSyncSession({ status: 'blocked', error: 'HELM needs an internet connection to load account data.' });
+    const userId = getCurrentUserId();
+    if (userId) publishDegraded(userId, 'offline', 'The browser is offline.');
   });
   window.addEventListener('online', () => {
     if (!isAuthenticated()) return;
-    void refreshDatabasePersistence();
+    clearRecoveryTimer();
+    void requestDatabaseRefresh({ realtime: true });
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && isAuthenticated()) {
-      void refreshDatabasePersistence();
+      void requestDatabaseRefresh();
     }
   });
   window.setInterval(() => {
-    if (!isAuthenticated() || syncSession.status !== 'ready') return;
-    void probeHelmAccountVersion().then(version => {
-      publishSyncSession({ lastProbeAt: new Date().toISOString() });
-      if (version > accountVersion) void refreshDatabasePersistence();
-    }).catch(error => {
-      const message = error instanceof Error ? error.message : String(error);
-      publishSyncSession({ status: 'reconnecting', error: `Database probe failed: ${message}` });
-    });
+    const userId = getCurrentUserId();
+    if (!userId || !hasUsableSnapshotFor(userId) || syncSession.readOnly) return;
+    void requestDatabaseRefresh();
   }, 15_000);
 }
 
@@ -817,13 +961,17 @@ function registerRealtimeHealth(): void {
   subscribeSupabaseRealtimeSnapshot(snapshot => {
     notifyPersistenceHealthSubscribers();
     if (
-      syncSession.status === 'ready'
+      syncSession.hasUsableSnapshot
       && (snapshot.state === 'closed' || snapshot.state === 'error' || snapshot.state === 'timed_out')
     ) {
-      publishSyncSession({
-        status: 'reconnecting',
-        error: snapshot.lastError || 'The private database update channel disconnected.',
-      });
+      const userId = getCurrentUserId();
+      if (!userId) return;
+      publishDegraded(
+        userId,
+        'realtime_unavailable',
+        snapshot.lastError || `The private database update channel is ${snapshot.state}.`,
+      );
+      scheduleRecovery({ realtime: true });
     }
   });
 }
@@ -831,49 +979,62 @@ function registerRealtimeHealth(): void {
 export async function bootstrapDatabasePersistence(): Promise<void> {
   const userId = getCurrentUserId();
   if (!isSupabaseReady() || !isAuthenticated() || !userId) {
-    resetDatabasePersistence('Sign in to load HELM data.');
-    return;
-  }
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    if (bootstrappedUserId !== userId) resetDatabasePersistence('Switching HELM accounts.');
-    publishSyncSession({ status: 'blocked', userId, error: 'HELM needs an internet connection to load account data.' });
+    resetDatabasePersistence(
+      isSupabaseReady() ? 'Sign in to load HELM data.' : 'HELM database configuration is unavailable.',
+      isSupabaseReady() ? 'signed_out' : 'configuration',
+    );
     return;
   }
   if (bootstrapPromise && bootstrappedUserId === userId) return bootstrapPromise;
 
   if (bootstrappedUserId !== userId || (syncSession.userId && syncSession.userId !== userId)) {
-    resetDatabasePersistence('Switching HELM accounts.');
+    resetDatabasePersistence('Switching HELM accounts.', 'switching_account');
+  } else if (hasUsableSnapshotFor(userId)) {
+    await requestDatabaseRefresh({ realtime: true });
+    return;
   }
   bootstrappedUserId = userId;
   const epoch = ++persistenceEpoch;
-  publishSyncSession({ status: 'bootstrapping', userId, error: null, lastProbeAt: new Date().toISOString() });
+  publishSyncSession({
+    status: 'bootstrapping',
+    userId,
+    accountVersion: 0,
+    hasUsableSnapshot: false,
+    readOnly: true,
+    reason: null,
+    error: null,
+    lastProbeAt: new Date().toISOString(),
+  });
   const operation: Promise<void> = (async () => {
     registerLifecycleHandlers();
     registerRealtimeHealth();
-    await hydrateDatabaseSnapshot(epoch, userId);
-    await migrateLegacyLocalCopies(epoch, userId);
-    await startBroadcastSubscription(epoch, userId);
-    const latestVersion = await probeHelmAccountVersion();
-    assertCurrentPersistenceSession(epoch, userId);
-    if (latestVersion > accountVersion) await hydrateDatabaseSnapshot(epoch, userId);
-    assertCurrentPersistenceSession(epoch, userId);
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      publishDegraded(userId, 'offline', 'The browser is offline.');
+      return;
+    }
+    const changedCollections = await hydrateDatabaseSnapshot(epoch, userId);
     publishSyncSession({
-      status: 'ready',
+      status: 'reconnecting',
       userId,
       accountVersion,
-      lastReadyAt: new Date().toISOString(),
+      hasUsableSnapshot: true,
+      readOnly: true,
+      reason: null,
       error: null,
     });
+    publishStoreChanges(await migrateLegacyLocalCopies(epoch, userId));
+    await ensureBroadcastSubscription(epoch, userId);
+    const latestVersion = await probeHelmAccountVersion();
+    assertCurrentPersistenceSession(epoch, userId);
+    publishSyncSession({ lastProbeAt: new Date().toISOString() });
+    if (latestVersion > accountVersion) {
+      changedCollections.push(...await hydrateDatabaseSnapshot(epoch, userId));
+    }
+    assertCurrentPersistenceSession(epoch, userId);
+    publishReady(userId);
+    publishStoreChanges(changedCollections);
   })().catch(error => {
-    if (error instanceof StalePersistenceSessionError) throw error;
-    const message = error instanceof Error ? error.message : String(error);
-    lastRemoteReadError = message;
-    publishSyncSession({
-      status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'blocked' : 'reconnecting',
-      userId,
-      error: message,
-    });
-    throw error;
+    handleDatabaseFailure(error, userId);
   }).finally(() => {
     if (bootstrapPromise === operation) bootstrapPromise = null;
   });
@@ -881,56 +1042,142 @@ export async function bootstrapDatabasePersistence(): Promise<void> {
   return operation;
 }
 
-export async function refreshDatabasePersistence(): Promise<void> {
+function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<void> {
   const userId = getCurrentUserId();
   if (!userId || !isAuthenticated()) {
-    resetDatabasePersistence('Sign in to load HELM data.');
-    return;
+    resetDatabasePersistence('Sign in to load HELM data.', 'signed_out');
+    return Promise.resolve();
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    publishSyncSession({ status: 'blocked', userId, error: 'HELM needs an internet connection to load account data.' });
-    return;
+    publishDegraded(userId, 'offline', 'The browser is offline.');
+    return Promise.resolve();
   }
   if (bootstrappedUserId !== userId) {
-    await bootstrapDatabasePersistence();
-    return;
+    return bootstrapDatabasePersistence();
   }
-  const epoch = ++persistenceEpoch;
-  publishSyncSession({ status: 'reconnecting', userId, error: null, lastProbeAt: new Date().toISOString() });
-  try {
-    await hydrateDatabaseSnapshot(epoch, userId);
-    await startBroadcastSubscription(epoch, userId);
-    const latestVersion = await probeHelmAccountVersion();
-    assertCurrentPersistenceSession(epoch, userId);
-    if (latestVersion > accountVersion) await hydrateDatabaseSnapshot(epoch, userId);
-    assertCurrentPersistenceSession(epoch, userId);
-    publishSyncSession({
-      status: 'ready',
+  if (refreshPromise) {
+    const needsFollowUpSnapshot = request.snapshot === true && !refreshActiveSnapshot;
+    const needsFollowUpRealtime = request.realtime === true && !refreshActiveRealtime;
+    const requestedVersion = request.targetVersion ?? 0;
+    const needsFollowUpVersion = requestedVersion > Math.max(
       accountVersion,
-      lastReadyAt: new Date().toISOString(),
-      error: null,
-    });
-    const change: RemoteStoreChange = {
-      event: 'RECONNECT',
-      namespace: NAMESPACE,
-      key: '*',
-      updatedAt: new Date().toISOString(),
-      value: null,
-    };
-    storeChangeSubscribers.forEach(listener => listener(change));
-  } catch (error) {
-    if (error instanceof StalePersistenceSessionError) return;
-    const message = error instanceof Error ? error.message : String(error);
-    lastRemoteReadError = message;
-    publishSyncSession({ status: 'reconnecting', error: message });
+      refreshActiveTargetVersion,
+      refreshTargetVersion,
+    );
+    if (needsFollowUpSnapshot || needsFollowUpRealtime || needsFollowUpVersion) {
+      refreshQueued = true;
+      refreshNeedsSnapshot ||= needsFollowUpSnapshot;
+      refreshNeedsRealtime ||= needsFollowUpRealtime;
+      if (needsFollowUpVersion) {
+        refreshTargetVersion = requestedVersion;
+        request.collections?.forEach(collection => refreshNeedsCollections.add(collection));
+      }
+    }
+    return refreshPromise;
   }
+  refreshQueued = true;
+  refreshNeedsSnapshot = request.snapshot === true;
+  refreshNeedsRealtime = request.realtime === true;
+  refreshTargetVersion = request.targetVersion ?? 0;
+  refreshNeedsCollections.clear();
+  request.collections?.forEach(collection => refreshNeedsCollections.add(collection));
+
+  const epoch = persistenceEpoch;
+  const operation = (async () => {
+    while (refreshQueued) {
+      refreshQueued = false;
+      const needsSnapshot = refreshNeedsSnapshot || !hasUsableSnapshotFor(userId);
+      const requestedCollections = [...refreshNeedsCollections];
+      const requestedVersion = refreshTargetVersion;
+      refreshActiveSnapshot = needsSnapshot;
+      refreshActiveRealtime = true;
+      refreshActiveTargetVersion = requestedVersion;
+      refreshNeedsSnapshot = false;
+      refreshNeedsRealtime = false;
+      refreshNeedsCollections.clear();
+      refreshTargetVersion = 0;
+      assertCurrentPersistenceSession(epoch, userId);
+
+      const hadUsableSnapshot = hasUsableSnapshotFor(userId);
+      const changedCollections: string[] = [];
+      if (needsSnapshot) {
+        changedCollections.push(...await hydrateDatabaseSnapshot(epoch, userId));
+        if (!hadUsableSnapshot) {
+          publishSyncSession({
+            status: 'reconnecting',
+            userId,
+            accountVersion,
+            hasUsableSnapshot: true,
+            readOnly: true,
+            reason: null,
+            error: null,
+          });
+          publishStoreChanges(await migrateLegacyLocalCopies(epoch, userId));
+        }
+      } else if (requestedVersion > accountVersion) {
+        if (requestedCollections.length > 0) {
+          changedCollections.push(...await refreshCollectionsFromBroadcast(
+            requestedCollections,
+            requestedVersion,
+            epoch,
+            userId,
+          ));
+        } else if (requestedVersion > accountVersion + 1) {
+          changedCollections.push(...await hydrateDatabaseSnapshot(epoch, userId));
+        } else {
+          accountVersion = requestedVersion;
+          publishSyncSession({ accountVersion });
+        }
+      }
+
+      await ensureBroadcastSubscription(epoch, userId);
+      const latestVersion = await probeHelmAccountVersion();
+      assertCurrentPersistenceSession(epoch, userId);
+      publishSyncSession({ lastProbeAt: new Date().toISOString() });
+      if (latestVersion > accountVersion) {
+        changedCollections.push(...await hydrateDatabaseSnapshot(epoch, userId));
+      }
+      assertCurrentPersistenceSession(epoch, userId);
+      publishReady(userId);
+      publishStoreChanges(changedCollections, needsSnapshot ? 'RECONNECT' : 'REMOTE_REFRESH');
+      refreshActiveSnapshot = false;
+      refreshActiveRealtime = false;
+      refreshActiveTargetVersion = 0;
+    }
+  })().catch(error => {
+    handleDatabaseFailure(error, userId);
+  }).finally(() => {
+    if (refreshPromise === operation) {
+      refreshPromise = null;
+      refreshQueued = false;
+      refreshNeedsSnapshot = false;
+      refreshNeedsRealtime = false;
+      refreshNeedsCollections.clear();
+      refreshTargetVersion = 0;
+      refreshActiveSnapshot = false;
+      refreshActiveRealtime = false;
+      refreshActiveTargetVersion = 0;
+    }
+  });
+  refreshPromise = operation;
+  return operation;
 }
 
-export function resetDatabasePersistence(error = 'HELM account data is unavailable.'): void {
+export async function refreshDatabasePersistence(): Promise<void> {
+  await requestDatabaseRefresh({ snapshot: true, realtime: true });
+}
+
+export function resetDatabasePersistence(
+  error = 'HELM account data is unavailable.',
+  reason: Extract<SyncSessionReason, 'signed_out' | 'configuration' | 'switching_account'> = 'signed_out',
+): void {
   persistenceEpoch += 1;
+  clearRecoveryTimer();
   broadcastUnsubscribe?.();
   broadcastUnsubscribe = null;
-  broadcastRefreshPromise = Promise.resolve();
+  broadcastSubscriptionEpoch = null;
+  broadcastSubscriptionUserId = null;
+  broadcastStartPromise = null;
   recordsByCollection.clear();
   deliveredRecordsByCollection.clear();
   pendingStoreValues.clear();
@@ -938,6 +1185,16 @@ export function resetDatabasePersistence(error = 'HELM account data is unavailab
   flushPromiseEpoch = null;
   flushScheduled = false;
   bootstrapPromise = null;
+  refreshPromise = null;
+  refreshQueued = false;
+  refreshNeedsSnapshot = false;
+  refreshNeedsRealtime = false;
+  refreshNeedsCollections.clear();
+  refreshTargetVersion = 0;
+  refreshActiveSnapshot = false;
+  refreshActiveRealtime = false;
+  refreshActiveTargetVersion = 0;
+  recoveryAttempt = 0;
   accountVersion = 0;
   bootstrappedUserId = null;
   publishWriteQueue();
@@ -945,6 +1202,11 @@ export function resetDatabasePersistence(error = 'HELM account data is unavailab
     status: 'blocked',
     userId: null,
     accountVersion: 0,
+    hasUsableSnapshot: false,
+    readOnly: true,
+    reason,
+    lastReadyAt: null,
+    lastProbeAt: null,
     error,
   });
 }
@@ -979,7 +1241,8 @@ export function subscribeStoreKey(key: string, listener: (change: RemoteStoreCha
 
 export async function loadStore<T>(key: string): Promise<T | null> {
   assertSharedStoreKeyIsNotDeviceOnly(key);
-  if (!isSupabaseReady() || !isAuthenticated() || syncSession.status !== 'ready') return null;
+  const userId = getCurrentUserId();
+  if (!isSupabaseReady() || !isAuthenticated() || !userId || !hasUsableSnapshotFor(userId)) return null;
   try {
     const encoded = encodedCache(key);
     deliveredRecordsByCollection.set(key, copyEncodedRecords(encoded));
@@ -992,14 +1255,14 @@ export async function loadStore<T>(key: string): Promise<T | null> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     lastRemoteReadError = message;
-    publishSyncSession({ status: 'reconnecting', error: message });
+    publishDegraded(userId, 'database_unavailable', message);
     return null;
   }
 }
 
 export async function saveStore<T>(key: string, value: T): Promise<void> {
   assertSharedStoreKeyIsNotDeviceOnly(key);
-  if (!isSupabaseReady() || !isAuthenticated() || syncSession.status !== 'ready') {
+  if (!isSupabaseReady() || !isAuthenticated() || syncSession.status !== 'ready' || syncSession.readOnly) {
     const message = 'Shared HELM data can only be changed while the signed-in database session is ready.';
     lastRemoteWriteError = message;
     notifyPersistenceHealthSubscribers();
@@ -1014,7 +1277,8 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     lastRemoteWriteError = message;
-    publishSyncSession({ status: 'reconnecting', error: message });
+    const userId = getCurrentUserId();
+    if (userId) publishDegraded(userId, 'database_unavailable', message);
   }
 }
 
@@ -1041,7 +1305,7 @@ export async function listLocalImportCandidates(): Promise<LocalImportCandidate[
       description: item.description,
       localStorage: browser.hasValue || browser.parseError,
       tauri: tauri.hasValue || tauri.parseError,
-      remoteExists: syncSession.status === 'ready' ? encodedCache(item.key).length > 0 : null,
+      remoteExists: syncSession.hasUsableSnapshot ? encodedCache(item.key).length > 0 : null,
       sizeBytes: Math.max(browser.sizeBytes, tauri.sizeBytes),
     });
   }
@@ -1105,7 +1369,9 @@ function copyWriteQueueSnapshot(): SupabaseWriteQueueSnapshot {
 
 function buildPersistenceHealthSnapshot(): PersistenceHealthSnapshot {
   return {
-    mode: syncSession.status === 'ready' ? 'database' : 'blocked',
+    mode: syncSession.status === 'ready'
+      ? 'database'
+      : syncSession.hasUsableSnapshot ? 'read-only' : 'blocked',
     syncSession: { ...syncSession },
     lastLocalWriteAt,
     lastLocalWriteKey,

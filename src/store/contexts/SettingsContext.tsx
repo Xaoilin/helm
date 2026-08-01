@@ -9,6 +9,7 @@ import {
   saveStore,
 } from '../persistence';
 import { splitSettings, type DeviceSettings } from '../recordCodec';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 // ── Defaults ──
 const defaultSettings: Settings = {
@@ -65,6 +66,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setLoaded(true);
     })();
   }, []);
+
+  useRemoteStoreRefresh(['settings', 'integrations'], async () => {
+    const [sharedSettings, remoteIntegrations, deviceSettings] = await Promise.all([
+      loadStore<Settings>('settings'),
+      loadStore<Integration[]>('integrations'),
+      loadDeviceStore<DeviceSettings>(DEVICE_SETTINGS_STORE_KEY),
+    ]);
+    setSettings({ ...defaultSettings, ...(sharedSettings ?? {}), ...(deviceSettings ?? {}) });
+    setIntegrations(remoteIntegrations ?? defaultIntegrations);
+  });
 
   useEffect(() => { if (loaded) saveStore('settings', settings); }, [settings, loaded]);
   useEffect(() => {

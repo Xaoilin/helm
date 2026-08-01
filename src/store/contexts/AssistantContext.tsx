@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { LIMITS } from '../../config/constants';
 import type { AssistantCorrection, AssistantCorrectionScope } from '../../types/domain';
 import { loadStore, saveStore } from '../persistence';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 export interface AssistantContextValue {
   corrections: AssistantCorrection[];
@@ -42,6 +43,11 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       setLoaded(true);
     })();
   }, []);
+
+  useRemoteStoreRefresh(['assistantCorrections'], async () => {
+    const data = await loadStore<AssistantCorrection[]>('assistantCorrections');
+    setCorrections(data ?? []);
+  });
 
   useEffect(() => {
     if (loaded) {

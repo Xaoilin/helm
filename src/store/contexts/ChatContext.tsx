@@ -29,6 +29,7 @@ import { loadStore, saveStore } from '../persistence';
 import { processAssistantCommand } from '../../services/assistantRuntime';
 import { buildProviderOnlyAssistantBilling } from '../../services/assistantBilling';
 import type { AssistantConversationMessage, AssistantDialogState } from '../../services/assistantTypes';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 interface CreateConversationOptions {
   title?: string;
@@ -159,6 +160,11 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
       setLoaded(true);
     })();
   }, []);
+
+  useRemoteStoreRefresh(['conversations'], async () => {
+    const data = await loadStore<ChatConversation[]>('conversations');
+    setConversations(data ?? []);
+  });
 
   useEffect(() => { if (loaded) saveStore('conversations', conversations); }, [conversations, loaded]);
   useEffect(() => { conversationsRef.current = conversations; }, [conversations]);

@@ -64,12 +64,18 @@ test.describe('Secrets', () => {
     await expect(page.getByRole('button', { name: /delete/i })).toHaveCount(0);
   });
 
-  test('blocks the shared vault while offline and reloads database truth on reconnect', async ({ page, context }) => {
+  test('keeps the current screen read-only, clears plaintext, and recovers automatically', async ({ page, context }) => {
+    await page.getByRole('button', { name: 'Reveal' }).click();
+    await expect(page.getByText('e2e-sensitive-value')).toBeVisible();
+
     await context.setOffline(true);
-    await expect(page.getByRole('heading', { name: 'HELM is reconnecting' })).toBeVisible();
+    await expect(page.getByTestId('sync-status-banner')).toContainText('Offline');
+    await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'HELM is reconnecting' })).toHaveCount(0);
     await expect(page.getByText('e2e-sensitive-value')).toHaveCount(0);
 
     await context.setOffline(false);
+    await expect(page.getByTestId('sync-status-banner')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
     await expect(page.getByText('e2e-sensitive-value')).toHaveCount(0);
   });

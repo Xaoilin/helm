@@ -10,7 +10,12 @@ const secretMigration = readFileSync(
   new URL('../../supabase/migrations/20260731173151_helm_secret_vault.sql', import.meta.url),
   'utf8',
 );
+const snapshotMigration = readFileSync(
+  new URL('../../supabase/migrations/20260801185912_atomic_helm_account_snapshot.sql', import.meta.url),
+  'utf8',
+);
 const persistence = readFileSync(new URL('../store/persistence.ts', import.meta.url), 'utf8');
+const appRoot = readFileSync(new URL('../AppRoot.tsx', import.meta.url), 'utf8');
 
 describe('database-authoritative persistence contract', () => {
   it('defines account-owned records, versions, tombstones, and idempotency receipts', () => {
@@ -43,7 +48,27 @@ describe('database-authoritative persistence contract', () => {
     expect(persistence).not.toMatch(/localStorage\.setItem\(getDataKey/);
     expect(persistence).not.toMatch(/invoke\(['"]write_store['"],\s*\{\s*key\s*\}/);
     expect(persistence).not.toContain('SyncDriftModal');
-    expect(persistence).toContain("syncSession.status !== 'ready'");
+    expect(persistence).toContain('hasUsableSnapshot');
+    expect(persistence).toContain('readOnly');
+    expect(persistence).toContain('requestDatabaseRefresh');
+  });
+
+  it('loads one account-scoped atomic snapshot without a row-limit loop', () => {
+    expect(snapshotMigration).toContain('create or replace function public.get_helm_account_snapshot()');
+    expect(snapshotMigration).toContain('security invoker');
+    expect(snapshotMigration).toContain('where record.user_id = (select auth.uid())');
+    expect(snapshotMigration).toContain('order by record.collection, record.record_id');
+    expect(snapshotMigration).toContain('revoke all on function public.get_helm_account_snapshot() from public, anon');
+    expect(snapshotMigration).toContain('grant execute on function public.get_helm_account_snapshot() to authenticated');
+    expect(persistence).toContain('fetchHelmAccountSnapshot()');
+  });
+
+  it('keeps the mounted application after a safe snapshot becomes read-only', () => {
+    expect(appRoot).toContain('syncSession.hasUsableSnapshot');
+    expect(appRoot).toContain('<SyncStatusBanner syncSession={syncSession} />');
+    expect(appRoot).toContain('<AppProvider key={auth.authUser.id}>');
+    expect(appRoot).not.toContain('remoteGeneration');
+    expect(appRoot).not.toContain('HELM is reconnecting');
   });
 
   it('stores secret values in Vault and exposes only account-derived RPCs', () => {

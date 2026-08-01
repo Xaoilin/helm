@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { useApp } from '../store/AppContext';
-import { subscribeHelmSecretChanges } from '../store/persistence';
+import { subscribeHelmSecretChanges, subscribeSyncSession } from '../store/persistence';
 import {
   listHelmSecrets,
   revealHelmSecret,
@@ -14,6 +14,7 @@ import type {
   SaveHelmSecretInput,
   SecretKind,
 } from '../types/domain';
+import { useSyncAvailability } from '../store/SyncAvailabilityContext';
 
 const SECRET_KIND_OPTIONS: Array<{ value: SecretKind; label: string }> = [
   { value: 'password', label: 'Password' },
@@ -77,6 +78,7 @@ function safeExternalUrl(value: string): string | null {
 
 export default function SecretsSurface() {
   const app = useApp();
+  const syncAvailability = useSyncAvailability();
   const [secrets, setSecrets] = useState<HelmSecretSummary[]>([]);
   const [revealed, setRevealed] = useState<Record<string, HelmSecretDetail>>({});
   const [loading, setLoading] = useState(true);
@@ -96,6 +98,14 @@ export default function SecretsSurface() {
     setRevealed({});
     setForm(current => current ? { ...current, value: '' } : current);
   }, []);
+
+  useEffect(() => subscribeSyncSession(snapshot => {
+    if (snapshot.readOnly || !snapshot.hasUsableSnapshot) clearRevealed();
+  }), [clearRevealed]);
+
+  useEffect(() => {
+    if (syncAvailability.readOnly) clearRevealed();
+  }, [clearRevealed, syncAvailability.readOnly]);
 
   const fetchSummaries = useCallback(async () => {
     const response = await listHelmSecrets();

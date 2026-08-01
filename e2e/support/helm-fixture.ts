@@ -532,6 +532,49 @@ async function mockHelmDatabase(
     });
   });
 
+  await page.route('**/__helm_e2e_remote_write', async route => {
+    const request = route.request().postDataJSON() as { operations?: HelmMutation[] };
+    accountVersion += 1;
+    const changed = applyMockMutations(
+      rows,
+      userId,
+      accountVersion,
+      request.operations || [],
+      new Date().toISOString(),
+    );
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        accountVersion,
+        changes: changed.map(toMutationResponseRow),
+      }),
+    });
+  });
+
+  await page.route('https://helm.test.supabase.co/rest/v1/rpc/get_helm_account_snapshot**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        state: {
+          userId,
+          schemaVersion: 1,
+          accountVersion,
+          minimumClientVersion: '0.2.82',
+          migratedAt: timestamp,
+          updatedAt: timestamp,
+        },
+        records: [...rows.values()]
+          .sort((left, right) => (
+            left.collection.localeCompare(right.collection)
+            || left.record_id.localeCompare(right.record_id)
+          ))
+          .map(toMutationResponseRow),
+      }),
+    });
+  });
+
   await page.route('https://helm.test.supabase.co/rest/v1/helm_records**', async route => {
     await route.fulfill({
       status: 200,

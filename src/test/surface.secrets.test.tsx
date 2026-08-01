@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithProvider } from './surfaceTestHarness';
+import { useState } from 'react';
+import { SyncAvailabilityProvider } from '../store/SyncAvailabilityContext';
 
 const secretMocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -21,6 +23,16 @@ vi.mock('../store/supabase', async importOriginal => {
 });
 
 import SecretsSurface from '../surfaces/SecretsSurface';
+
+function DegradedSecretsHarness() {
+  const [readOnly, setReadOnly] = useState(false);
+  return (
+    <SyncAvailabilityProvider readOnly={readOnly} reason={readOnly ? 'offline' : null}>
+      <button type="button" onClick={() => setReadOnly(true)}>Go offline</button>
+      <SecretsSurface />
+    </SyncAvailabilityProvider>
+  );
+}
 
 const SUMMARY = {
   secretId: '33333333-3333-4333-8333-333333333333',
@@ -79,6 +91,17 @@ describe('SecretsSurface', () => {
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith('sensitive-test-value'));
     expect(screen.queryByText('sensitive-test-value')).not.toBeInTheDocument();
     expect(screen.getByText(`${SUMMARY.label} copied.`)).toBeInTheDocument();
+  });
+
+  it('clears revealed plaintext immediately when sync becomes read-only', async () => {
+    await act(async () => { renderWithProvider(<DegradedSecretsHarness />); });
+    await screen.findByRole('heading', { name: SUMMARY.label });
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal' }));
+    expect(await screen.findByText('sensitive-test-value')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go offline' }));
+
+    await waitFor(() => expect(screen.queryByText('sensitive-test-value')).not.toBeInTheDocument());
   });
 
   it('creates through the RPC client and archives reversibly without a delete action', async () => {

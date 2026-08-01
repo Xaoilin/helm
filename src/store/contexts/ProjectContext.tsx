@@ -36,6 +36,7 @@ import {
   setProjectArchivedInCollection,
   setProjectPinnedInCollection,
 } from '../projectOrdering';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 export interface ProjectContextValue {
   projects: Project[];
@@ -165,6 +166,33 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       setLoaded(true);
     })();
   }, []);
+
+  useRemoteStoreRefresh(['projects', 'projectPages', 'workspaces'], async () => {
+    const now = new Date().toISOString();
+    const [storedProjects, storedPages, storedBindings, storedPendingPaths, storedWorkspaces] = await Promise.all([
+      loadStore<unknown>('projects'),
+      loadStore<ProjectPage[]>('projectPages'),
+      loadDeviceStore<unknown>(PROJECT_DEVICE_BINDINGS_STORE_KEY),
+      loadDeviceStore<unknown>(PROJECT_PENDING_LEGACY_PATHS_STORE_KEY),
+      loadStore<LegacyWorkspaceRecord[]>('workspaces'),
+    ]);
+    const sourceRecords = Array.isArray(storedProjects) && storedProjects.length > 0
+      ? storedProjects
+      : (storedWorkspaces || []).map((workspace, index) => migrateLegacyWorkspaceRecord(workspace, index, now));
+    const nextProjects = normalizeProjectRecords(sourceRecords, now);
+    const migration = await migrateLegacyProjectDeviceBindings(
+      sourceRecords,
+      nextProjects,
+      normalizeProjectDeviceBindings(storedBindings, now),
+      normalizePendingLegacyProjectPaths(storedPendingPaths, now),
+      canonicalizeProjectPath,
+      now,
+    );
+    setProjects(nextProjects);
+    setProjectDeviceBindings(migration.bindings);
+    setPendingLegacyProjectPaths(migration.pendingPaths);
+    setProjectPages(ensureOverviewPages(nextProjects, storedPages || []));
+  });
 
   useEffect(() => {
     if (loaded) {

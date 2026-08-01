@@ -104,11 +104,21 @@ function buildLocalItem(input: SystemHealthInput): HealthItem {
     };
   }
 
+  if (persistence.mode === 'read-only') {
+    return {
+      id: 'local',
+      label: 'Account data',
+      headline: persistence.syncSession.reason === 'offline' ? 'Offline data available' : 'Reconnecting in the background',
+      detail: 'HELM is showing the last confirmed account data read-only and will recover automatically.',
+      tone: 'offline',
+    };
+  }
+
   return {
     id: 'local',
     label: 'Account data',
     headline: 'Database connection required',
-    detail: sanitizeHealthDetail(persistence.syncSession?.error) || 'HELM does not open shared data from an offline device copy.',
+    detail: 'HELM is waiting for a safe account snapshot from the database.',
     tone: 'offline',
   };
 }
@@ -152,12 +162,13 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
   }
 
   if (readFailureCount > 0 || persistence.lastRemoteReadError || persistence.lastRemoteWriteError) {
-    const error = sanitizeHealthDetail(persistence.lastRemoteReadError || persistence.lastRemoteWriteError);
     return {
       id: 'supabase',
       label: 'Supabase',
       headline: 'Database needs attention',
-      detail: error || `${plural(readFailureCount, 'database read')} failed.`,
+      detail: persistence.syncSession.hasUsableSnapshot
+        ? 'HELM is showing the last confirmed account data and will retry automatically.'
+        : 'HELM could not verify a safe account snapshot and will retry automatically.',
       tone: 'attention',
       action: { kind: 'refresh', label: 'Refresh status' },
     };
@@ -167,14 +178,14 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
     const detailParts = [
       queuedCount > 0 ? plural(queuedCount, 'queued write') : null,
     ].filter(Boolean);
-    const lastError = sanitizeHealthDetail(persistence.supabaseQueue.lastFlushError);
+    const lastError = Boolean(persistence.supabaseQueue.lastFlushError);
 
     return {
       id: 'supabase',
       label: 'Supabase',
       headline: 'Syncing to Supabase',
       detail: lastError
-        ? `The last database mutation failed: ${lastError}`
+        ? 'The last database mutation did not complete. HELM is reloading confirmed data.'
         : `${detailParts.join(' and ')} being committed.`,
       tone: 'syncing',
       action: { kind: 'refresh', label: 'Refresh status' },

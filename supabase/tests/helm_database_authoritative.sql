@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(27);
+select plan(37);
 
 select has_table('public', 'helm_records', 'account record table exists');
 select has_table('public', 'helm_account_state', 'account version table exists');
@@ -13,6 +13,38 @@ select has_function(
   'apply_helm_mutations',
   array['uuid', 'jsonb'],
   'transactional mutation RPC exists'
+);
+select has_function(
+  'public',
+  'get_helm_account_snapshot',
+  array[]::text[],
+  'atomic account snapshot RPC exists'
+);
+select is(
+  (
+    select routine_type
+    from information_schema.routines
+    where routine_schema = 'public' and routine_name = 'get_helm_account_snapshot'
+  ),
+  'FUNCTION',
+  'account snapshot is exposed as one function'
+);
+select is(
+  (
+    select prosecdef
+    from pg_proc
+    where oid = 'public.get_helm_account_snapshot()'::regprocedure
+  ),
+  false,
+  'account snapshot uses caller privileges (SECURITY INVOKER)'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.get_helm_account_snapshot()', 'EXECUTE'),
+  'authenticated accounts can execute the snapshot RPC'
+);
+select ok(
+  not has_function_privilege('anon', 'public.get_helm_account_snapshot()', 'EXECUTE'),
+  'anonymous callers cannot execute the snapshot RPC'
 );
 
 insert into auth.users (
@@ -206,6 +238,43 @@ select is(
   'record ownership always comes from auth.uid()'
 );
 
+reset role;
+insert into public.helm_records (
+  user_id, collection, record_id, payload, revision, account_version
+)
+select
+  '33333333-3333-4333-8333-333333333333',
+  'bulkSnapshot',
+  'record:' || lpad(series::text, 4, '0'),
+  jsonb_build_object('id', 'bulk-' || series),
+  1,
+  (select account_version from public.helm_account_state
+    where user_id = '33333333-3333-4333-8333-333333333333')
+from generate_series(1, 1001) as series;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"33333333-3333-4333-8333-333333333333","role":"authenticated","is_anonymous":false}',
+  true
+);
+
+select is(
+  jsonb_array_length(public.get_helm_account_snapshot() -> 'records'),
+  1005,
+  'one RPC returns the complete account beyond the 1,000-row API cap'
+);
+select is(
+  public.get_helm_account_snapshot() -> 'records' -> 0 ->> 'recordId',
+  'record:0001',
+  'snapshot records are ordered deterministically by collection and record id'
+);
+select is(
+  public.get_helm_account_snapshot() -> 'state' ->> 'userId',
+  '33333333-3333-4333-8333-333333333333',
+  'snapshot ownership is derived from auth.uid()'
+);
+
 select set_config(
   'request.jwt.claims',
   '{"sub":"44444444-4444-4444-8444-444444444444","role":"authenticated","is_anonymous":false}',
@@ -216,6 +285,11 @@ select is(
   (select count(*)::integer from public.helm_records),
   0,
   'RLS hides every other account record'
+);
+select is(
+  jsonb_array_length(public.get_helm_account_snapshot() -> 'records'),
+  0,
+  'cross-account snapshots expose no records'
 );
 
 reset role;
@@ -234,6 +308,12 @@ select throws_ok(
   '42501',
   'permission denied for function apply_helm_mutations',
   'anonymous sessions cannot execute the mutation RPC'
+);
+select throws_ok(
+  $$select public.get_helm_account_snapshot()$$,
+  '42501',
+  'permission denied for function get_helm_account_snapshot',
+  'anonymous sessions cannot execute the snapshot RPC'
 );
 
 reset role;

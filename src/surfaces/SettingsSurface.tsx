@@ -95,7 +95,9 @@ export default function SettingsSurface() {
             />
             <div className="sync-status-copy">
               <div className="sync-status-title">
-                {syncSession.status === 'ready' ? 'Database source of truth' : 'Refreshing database state'}
+                {syncSession.status === 'ready'
+                  ? 'Database source of truth'
+                  : syncSession.hasUsableSnapshot ? 'Last confirmed data (read-only)' : 'Loading database state'}
               </div>
               <div className="sync-status-detail">
                 {`Signed in as ${getCurrentUserId()?.slice(0, 8)}... Shared data belongs to this account and is read and written through Supabase only. HELM resolves concurrent updates automatically.`}
@@ -106,7 +108,7 @@ export default function SettingsSurface() {
                 className="btn btn-secondary btn-sm"
                 type="button"
                 onClick={() => void refreshDatabasePersistence()}
-                disabled={syncSession.status !== 'ready'}
+                disabled={syncSession.status !== 'ready' || syncSession.readOnly}
               >
                 Refresh from database
               </button>
