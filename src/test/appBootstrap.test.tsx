@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
@@ -15,10 +15,14 @@ const authState = vi.hoisted(() => ({
 }));
 
 const persistenceState = vi.hoisted(() => ({
+  listener: null as ((value: never) => void) | null,
   value: {
     status: 'blocked',
     userId: null,
     accountVersion: 0,
+    hasUsableSnapshot: false,
+    readOnly: true,
+    reason: 'signed_out',
     lastReadyAt: null,
     lastProbeAt: null,
     error: 'Sign in to load HELM data.',
@@ -36,14 +40,13 @@ vi.mock('../store/AppContext', () => ({
 
 vi.mock('../store/persistence', () => ({
   bootstrapDatabasePersistence: vi.fn(async () => undefined),
-  getPersistenceHealthSnapshot: vi.fn(() => ({ lastRemoteWriteAt: null, lastRemoteWriteKey: null })),
   getSyncSessionSnapshot: () => persistenceState.value,
   refreshDatabasePersistence: vi.fn(async () => undefined),
   resetDatabasePersistence: vi.fn(),
-  subscribeStoreChanges: vi.fn(() => () => {}),
   subscribeSyncSession: vi.fn((listener: (value: typeof persistenceState.value) => void) => {
+    persistenceState.listener = listener as never;
     listener(persistenceState.value);
-    return () => {};
+    return () => { persistenceState.listener = null; };
   }),
 }));
 
@@ -65,6 +68,9 @@ describe('BootstrappedApp', () => {
       status: 'blocked',
       userId: null,
       accountVersion: 0,
+      hasUsableSnapshot: false,
+      readOnly: true,
+      reason: 'signed_out',
       lastReadyAt: null,
       lastProbeAt: null,
       error: 'Sign in to load HELM data.',
@@ -105,6 +111,9 @@ describe('BootstrappedApp', () => {
       status: 'ready',
       userId: '11111111-1111-4111-8111-111111111111',
       accountVersion: 4,
+      hasUsableSnapshot: true,
+      readOnly: false,
+      reason: null,
       lastReadyAt: '2026-07-31T12:00:00.000Z',
       error: null,
     };
@@ -112,5 +121,47 @@ describe('BootstrappedApp', () => {
     render(<BootstrappedApp><div>Providers mounted</div></BootstrappedApp>);
 
     expect(await screen.findByText('Providers mounted')).toBeInTheDocument();
+  });
+
+  it('keeps the mounted screen and local component state during read-only recovery', async () => {
+    authState.value = {
+      ...authState.value,
+      authUser: { id: '11111111-1111-4111-8111-111111111111' },
+      bootstrapped: true,
+      loading: false,
+      sessionKey: 'signed-in:0',
+    };
+    persistenceState.value = {
+      ...persistenceState.value,
+      status: 'ready',
+      userId: '11111111-1111-4111-8111-111111111111',
+      accountVersion: 4,
+      hasUsableSnapshot: true,
+      readOnly: false,
+      reason: null,
+      error: null,
+    };
+
+    render(
+      <BootstrappedApp>
+        <label>Current screen<input aria-label="Current screen state" defaultValue="Projects" /></label>
+      </BootstrappedApp>,
+    );
+    const input = await screen.findByLabelText('Current screen state');
+    fireEvent.change(input, { target: { value: 'Projects drawer open' } });
+
+    persistenceState.value = {
+      ...persistenceState.value,
+      status: 'reconnecting',
+      readOnly: true,
+      reason: 'offline',
+      error: 'raw network error that must stay diagnostic-only',
+    };
+    act(() => persistenceState.listener?.(persistenceState.value as never));
+
+    expect(screen.getByLabelText('Current screen state')).toHaveValue('Projects drawer open');
+    expect(screen.getByText('Offline')).toBeInTheDocument();
+    expect(screen.queryByText('HELM is reconnecting')).not.toBeInTheDocument();
+    expect(screen.queryByText(/raw network error/i)).not.toBeInTheDocument();
   });
 });

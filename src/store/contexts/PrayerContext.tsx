@@ -69,6 +69,7 @@ import {
 import { getPrayerTaskName } from '../../services/prayerTasks';
 import { logError } from '../../services/logger';
 import { loadStore, saveStore } from '../persistence';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 import { useGamificationContext } from './GamificationContext';
 import { useKnowledgeContext } from './KnowledgeContext';
 import { useSettingsContext } from './SettingsContext';
@@ -538,6 +539,18 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     // Initial migration intentionally uses the first fully loaded task/profile snapshots.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gamificationCtx.loaded, taskCtx.loaded]);
+
+  useRemoteStoreRefresh(['prayerTracking'], async () => {
+    const value = await loadStore<unknown>('prayerTracking');
+    const normalized = normalizePrayerTrackingState(value, {
+      now: new Date(),
+      dailyLog: gamificationCtx.gamification.dailyLog,
+      prayerCompletionLedger: gamificationCtx.gamification.prayerCompletionLedger,
+      tasks: taskCtx.tasks,
+    });
+    trackingRef.current = normalized;
+    setTracking(normalized);
+  });
 
   useEffect(() => {
     if (loaded) void saveStore('prayerTracking', tracking);

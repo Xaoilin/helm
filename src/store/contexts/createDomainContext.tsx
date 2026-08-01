@@ -10,6 +10,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
 import { loadStore, saveStore } from '../persistence';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 // ── Collection Context (arrays of items with id) ──
 
@@ -43,6 +44,11 @@ export function createCollectionContext<T extends HasId>(storeKey: string, opts?
         setLoaded(true);
       })();
     }, []);
+
+    useRemoteStoreRefresh([storeKey], async () => {
+      const data = await loadStore<T[]>(storeKey);
+      setItems(data ?? []);
+    });
 
     useEffect(() => {
       if (loaded) saveStore(storeKey, items);
@@ -112,6 +118,11 @@ export function createSingleObjectContext<T>(storeKey: string, defaultValue: T) 
         setLoaded(true);
       })();
     }, []);
+
+    useRemoteStoreRefresh([storeKey], async () => {
+      const data = await loadStore<T>(storeKey);
+      setValue(data ?? defaultValue);
+    });
 
     useEffect(() => {
       if (loaded) saveStore(storeKey, value);

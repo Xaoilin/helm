@@ -2,19 +2,18 @@ import { useEffect, useState, type ReactNode } from 'react';
 import App from './App';
 import { AppProvider } from './store/AppContext';
 import { AuthSessionProvider, useAuthSession } from './store/AuthSessionContext';
+import { SyncAvailabilityProvider } from './store/SyncAvailabilityContext';
 import {
   bootstrapDatabasePersistence,
-  getPersistenceHealthSnapshot,
   getSyncSessionSnapshot,
   refreshDatabasePersistence,
   resetDatabasePersistence,
-  subscribeStoreChanges,
   subscribeSyncSession,
+  type SyncSessionSnapshot,
 } from './store/persistence';
 
 export function BootstrappedApp({ children }: { children?: ReactNode }) {
   const auth = useAuthSession();
-  const [remoteGeneration, setRemoteGeneration] = useState(0);
   const [syncSession, setSyncSession] = useState(() => getSyncSessionSnapshot());
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -24,7 +23,7 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
     if (!auth.supabaseReady || !auth.authUser) {
       resetDatabasePersistence(auth.supabaseReady
         ? 'Sign in to load HELM data.'
-        : 'HELM database configuration is unavailable.');
+        : 'HELM database configuration is unavailable.', auth.supabaseReady ? 'signed_out' : 'configuration');
       return;
     }
     void bootstrapDatabasePersistence().catch(() => {
@@ -33,24 +32,8 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
   }, [auth.authUser, auth.sessionKey, auth.supabaseReady]);
 
   useEffect(() => {
-    if (!auth.supabaseReady || !auth.authUser) return undefined;
-
-    return subscribeStoreChanges(change => {
-      const snapshot = getPersistenceHealthSnapshot();
-      const lastOwnWriteAt = snapshot.lastRemoteWriteAt
-        ? new Date(snapshot.lastRemoteWriteAt).getTime()
-        : 0;
-      const looksLikeOwnRecentWrite = snapshot.lastRemoteWriteKey === change.key
-        && Date.now() - lastOwnWriteAt < 5000;
-      if (!looksLikeOwnRecentWrite) {
-        setRemoteGeneration(current => current + 1);
-      }
-    });
-  }, [auth.authUser, auth.supabaseReady]);
-
-  useEffect(() => {
     function reloadAppData() {
-      setRemoteGeneration(current => current + 1);
+      void refreshDatabasePersistence();
     }
 
     window.addEventListener('helm:app-data-refresh', reloadAppData);
@@ -86,8 +69,8 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
           setActionError(null);
           try {
             await auth.signInWithGoogle();
-          } catch (error) {
-            setActionError(error instanceof Error ? error.message : String(error));
+          } catch {
+            setActionError('Sign-in could not start. Check your connection and try again.');
           }
         }}
         error={actionError}
@@ -95,23 +78,19 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
     );
   }
 
-  const currentAccountReady = syncSession.status === 'ready'
-    && syncSession.userId === auth.authUser.id;
-  if (!currentAccountReady) {
+  const fatalSyncReason = syncSession.reason === 'incompatible_schema'
+    || syncSession.reason === 'client_update_required';
+  const currentAccountUsable = syncSession.hasUsableSnapshot
+    && syncSession.userId === auth.authUser.id
+    && !fatalSyncReason;
+  if (!currentAccountUsable) {
     const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
     const switchingAccount = syncSession.userId !== auth.authUser.id;
     return (
       <OnlineGate
         eyebrow={offline ? 'Connection required' : 'Database source of truth'}
-        title={syncSession.status === 'bootstrapping' || switchingAccount ? 'Loading your HELM' : 'HELM is reconnecting'}
-        detail={switchingAccount
-          ? 'Clearing the previous account and loading this account from the database...'
-          : syncSession.error || 'Refreshing the latest account data from the database...'}
-        actionLabel={syncSession.status === 'bootstrapping' || switchingAccount ? undefined : 'Try again'}
-        onAction={syncSession.status === 'bootstrapping' || switchingAccount ? undefined : async () => {
-          setActionError(null);
-          await refreshDatabasePersistence();
-        }}
+        title={switchingAccount ? 'Loading your HELM' : fatalSyncReason ? 'HELM needs an update' : 'Connecting to HELM'}
+        detail={blockingSyncDetail(syncSession, switchingAccount, offline)}
         secondaryActionLabel="Sign out"
         onSecondaryAction={() => auth.signOut()}
         error={actionError}
@@ -120,9 +99,48 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
   }
 
   return (
-    <AppProvider key={`${auth.sessionKey}:${remoteGeneration}`}>
-      {children ?? <App />}
-    </AppProvider>
+    <SyncAvailabilityProvider readOnly={syncSession.readOnly} reason={syncSession.reason}>
+      <AppProvider key={auth.authUser.id}>
+        <SyncStatusBanner syncSession={syncSession} />
+        {children ?? <App />}
+      </AppProvider>
+    </SyncAvailabilityProvider>
+  );
+}
+
+function blockingSyncDetail(
+  syncSession: SyncSessionSnapshot,
+  switchingAccount: boolean,
+  offline: boolean,
+): string {
+  if (switchingAccount) return 'Clearing the previous account and securely loading this account...';
+  if (syncSession.reason === 'incompatible_schema') {
+    return 'This build cannot safely open the current HELM database schema.';
+  }
+  if (syncSession.reason === 'client_update_required') {
+    return 'Install the latest HELM release to open this account safely.';
+  }
+  if (offline) return 'Connect once to load this account. HELM will retry automatically.';
+  return 'Loading your account from the database. HELM will retry automatically.';
+}
+
+function SyncStatusBanner({ syncSession }: { syncSession: SyncSessionSnapshot }) {
+  if (!syncSession.readOnly || !syncSession.hasUsableSnapshot) return null;
+  const offline = syncSession.reason === 'offline';
+  const label = offline ? 'Offline' : 'Read-only';
+  const detail = offline
+    ? 'Showing your last confirmed data. HELM will reconnect automatically.'
+    : 'Showing your last confirmed data while HELM reconnects.';
+  return (
+    <div
+      className="sync-status-banner"
+      role="status"
+      aria-label={`${label}. ${detail}`}
+      data-testid="sync-status-banner"
+    >
+      <strong>{label}</strong>
+      <span>{detail}</span>
+    </div>
   );
 }
 

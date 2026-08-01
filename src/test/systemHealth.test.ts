@@ -59,6 +59,9 @@ function baseInput(overrides: InputOverrides = {}): SystemHealthInput {
         status: 'ready',
         userId: '11111111-1111-4111-8111-111111111111',
         accountVersion: 1,
+        hasUsableSnapshot: true,
+        readOnly: false,
+        reason: null,
         lastReadyAt: '2026-04-24T09:00:00.000Z',
         lastProbeAt: '2026-04-24T09:00:00.000Z',
         error: null,
@@ -160,6 +163,9 @@ describe('system health status mapping', () => {
           status: 'blocked',
           userId: null,
           accountVersion: 0,
+          hasUsableSnapshot: false,
+          readOnly: true,
+          reason: 'signed_out',
           lastReadyAt: null,
           lastProbeAt: null,
           error: 'Sign in to load HELM data.',
@@ -199,6 +205,21 @@ describe('system health status mapping', () => {
       headline: 'Syncing to Supabase',
       tone: 'syncing',
     });
+  });
+
+  it('keeps raw database errors inside diagnostics', () => {
+    const input = baseInput({
+      persistence: {
+        lastRemoteReadError: 'PostgREST failed with secret-token-12345678901234567890',
+      },
+    });
+
+    const supabase = item(input, 'supabase');
+    expect(supabase.detail).toBe(
+      'HELM is showing the last confirmed account data and will retry automatically.',
+    );
+    expect(supabase.detail).not.toContain('PostgREST');
+    expect(supabase.detail).not.toContain('secret-token');
   });
 
   it('shows Google Calendar reconnect states as needing attention', () => {

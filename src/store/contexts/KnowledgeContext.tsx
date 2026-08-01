@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { v4 as uuid } from 'uuid';
 import type { KnowledgeTopic, KnowledgeEntry, LifestyleItem } from '../../types/domain';
 import { loadStore, saveStore } from '../persistence';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 export interface KnowledgeContextValue {
   knowledgeTopics: KnowledgeTopic[];
@@ -47,6 +48,17 @@ export function KnowledgeProvider({ children }: { children: ReactNode }) {
       setLoaded(true);
     })();
   }, []);
+
+  useRemoteStoreRefresh(['knowledgeTopics', 'knowledgeEntries', 'lifestyleItems'], async () => {
+    const [topics, entries, lifestyle] = await Promise.all([
+      loadStore<KnowledgeTopic[]>('knowledgeTopics'),
+      loadStore<KnowledgeEntry[]>('knowledgeEntries'),
+      loadStore<LifestyleItem[]>('lifestyleItems'),
+    ]);
+    setKnowledgeTopics(topics ?? []);
+    setKnowledgeEntries(entries ?? []);
+    setLifestyleItems(lifestyle ?? []);
+  });
 
   useEffect(() => { if (loaded) saveStore('knowledgeTopics', knowledgeTopics); }, [knowledgeTopics, loaded]);
   useEffect(() => { if (loaded) saveStore('knowledgeEntries', knowledgeEntries); }, [knowledgeEntries, loaded]);

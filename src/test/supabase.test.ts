@@ -120,27 +120,31 @@ describe('Supabase account record API', () => {
   it('maps the authenticated account snapshot into client records', async () => {
     initSupabase('https://test.supabase.co', 'publishable-key');
     setCurrentUserId(USER_ID);
-    mocks.recordResult.data = [{
-      user_id: USER_ID,
-      collection: 'tasks',
-      record_id: 'task-1',
-      payload: { id: 'task-1', title: 'Database task' },
-      position: 0,
-      revision: 3,
-      account_version: 8,
-      created_at: '2026-07-31T10:00:00.000Z',
-      updated_at: '2026-07-31T11:00:00.000Z',
-      deleted_at: null,
-    }];
-    mocks.recordResult.count = 1;
-    mocks.stateResult.data = {
-      user_id: USER_ID,
-      schema_version: 1,
-      account_version: 8,
-      minimum_client_version: '0.2.82',
-      migrated_at: '2026-07-31T09:00:00.000Z',
-      updated_at: '2026-07-31T11:00:00.000Z',
-    };
+    mocks.client.rpc.mockResolvedValue({
+      data: {
+        state: {
+          userId: USER_ID,
+          schemaVersion: 1,
+          accountVersion: 8,
+          minimumClientVersion: '0.2.82',
+          migratedAt: '2026-07-31T09:00:00.000Z',
+          updatedAt: '2026-07-31T11:00:00.000Z',
+        },
+        records: [{
+          userId: USER_ID,
+          collection: 'tasks',
+          recordId: 'task-1',
+          payload: { id: 'task-1', title: 'Database task' },
+          position: 0,
+          revision: 3,
+          accountVersion: 8,
+          createdAt: '2026-07-31T10:00:00.000Z',
+          updatedAt: '2026-07-31T11:00:00.000Z',
+          deletedAt: null,
+        }],
+      },
+      error: null,
+    });
 
     const result = await fetchHelmAccountSnapshot();
 
@@ -151,49 +155,88 @@ describe('Supabase account record API', () => {
       recordId: 'task-1',
       revision: 3,
     });
+    expect(mocks.client.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.client.rpc).toHaveBeenCalledWith('get_helm_account_snapshot');
+    expect(mocks.client.from).not.toHaveBeenCalled();
   });
 
-  it('paginates complete account snapshots and collection refreshes beyond the API row cap', async () => {
+  it('loads over 1,000 snapshot records atomically while collection deltas remain paginated', async () => {
     initSupabase('https://test.supabase.co', 'publishable-key');
     setCurrentUserId(USER_ID);
-    mocks.stateResult.data = {
-      user_id: USER_ID,
-      schema_version: 1,
-      account_version: 8,
-      minimum_client_version: '0.2.83',
-      migrated_at: '2026-07-31T09:00:00.000Z',
-      updated_at: '2026-07-31T11:00:00.000Z',
-    };
     const rows = Array.from({ length: 1_001 }, (_, index) => ({
-      user_id: USER_ID,
+      userId: USER_ID,
       collection: 'prayerTracking',
-      record_id: `record:${String(index).padStart(4, '0')}`,
+      recordId: `record:${String(index).padStart(4, '0')}`,
       payload: { id: `record-${index}` },
       position: null,
       revision: 1,
-      account_version: 8,
-      created_at: '2026-07-31T10:00:00.000Z',
-      updated_at: '2026-07-31T11:00:00.000Z',
-      deleted_at: null,
+      accountVersion: 8,
+      createdAt: '2026-07-31T10:00:00.000Z',
+      updatedAt: '2026-07-31T11:00:00.000Z',
+      deletedAt: null,
     }));
-    mocks.recordPages.push(
-      { data: rows.slice(0, 1_000), error: null, count: rows.length },
-      { data: rows.slice(1_000), error: null, count: rows.length },
-    );
+    mocks.client.rpc.mockResolvedValue({
+      data: {
+        state: {
+          userId: USER_ID,
+          schemaVersion: 1,
+          accountVersion: 8,
+          minimumClientVersion: '0.2.83',
+          migratedAt: '2026-07-31T09:00:00.000Z',
+          updatedAt: '2026-07-31T11:00:00.000Z',
+        },
+        records: rows,
+      },
+      error: null,
+    });
 
     const snapshot = await fetchHelmAccountSnapshot();
 
     expect(snapshot.records).toHaveLength(1_001);
-    expect(mocks.recordRanges).toEqual([[0, 999], [1_000, 1_999]]);
+    expect(mocks.recordRanges).toEqual([]);
 
+    const databaseRows = rows.map(row => ({
+      user_id: row.userId,
+      collection: row.collection,
+      record_id: row.recordId,
+      payload: row.payload,
+      position: row.position,
+      revision: row.revision,
+      account_version: row.accountVersion,
+      created_at: row.createdAt,
+      updated_at: row.updatedAt,
+      deleted_at: row.deletedAt,
+    }));
     mocks.collectionPages.push(
-      { data: rows.slice(0, 1_000), error: null, count: rows.length },
-      { data: rows.slice(1_000), error: null, count: rows.length },
+      { data: databaseRows.slice(0, 1_000), error: null, count: rows.length },
+      { data: databaseRows.slice(1_000), error: null, count: rows.length },
     );
     const collection = await fetchHelmCollections(['prayerTracking', 'prayerTracking']);
 
     expect(collection).toHaveLength(1_001);
     expect(mocks.collectionRanges).toEqual([[0, 999], [1_000, 1_999]]);
+  });
+
+  it('rejects a snapshot that does not belong to the authenticated account', async () => {
+    initSupabase('https://test.supabase.co', 'publishable-key');
+    setCurrentUserId(USER_ID);
+    mocks.client.rpc.mockResolvedValue({
+      data: {
+        state: {
+          userId: '22222222-2222-4222-8222-222222222222',
+          schemaVersion: 1,
+          accountVersion: 1,
+          minimumClientVersion: '0.2.83',
+          migratedAt: null,
+          updatedAt: '2026-07-31T11:00:00.000Z',
+        },
+        records: [],
+      },
+      error: null,
+    });
+
+    await expect(fetchHelmAccountSnapshot()).rejects.toThrow('snapshot response was invalid');
+    expect(mocks.client.rpc).toHaveBeenCalledTimes(1);
   });
 
   it('calls only the constrained transactional RPC without a caller user id', async () => {

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { v4 as uuid } from 'uuid';
 import type { Task } from '../../types/domain';
 import { loadStore, saveStore } from '../persistence';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 import {
   getPrayerTaskName,
   getPrayerTaskTitle,
@@ -56,6 +57,11 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       setLoaded(true);
     })();
   }, []);
+
+  useRemoteStoreRefresh(['tasks'], async () => {
+    const data = await loadStore<Task[]>('tasks');
+    setTasks((data ?? []).map(normalizeTask));
+  });
 
   useEffect(() => { if (loaded) saveStore('tasks', tasks); }, [tasks, loaded]);
 

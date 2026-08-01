@@ -35,6 +35,7 @@ import { useProjectContext } from './ProjectContext';
 import { useSettingsContext } from './SettingsContext';
 import { useTaskContext } from './TaskContext';
 import { usePrayerContext } from './PrayerContext';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 const EMPTY_STATS = {
   overdueCount: 0,
@@ -107,6 +108,11 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
     const interval = window.setInterval(() => setNow(new Date()), TIMING.DASHBOARD_FOCUS_TICK);
     return () => window.clearInterval(interval);
   }, []);
+
+  useRemoteStoreRefresh(['dashboardFocusFeedback'], async () => {
+    const storedFeedback = await loadStore<FocusFeedback[]>('dashboardFocusFeedback');
+    setFeedback(pruneFeedback(storedFeedback ?? [], new Date()));
+  });
 
   useEffect(() => {
     (async () => {

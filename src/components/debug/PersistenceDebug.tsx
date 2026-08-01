@@ -49,8 +49,17 @@ export default function PersistenceDebug() {
           alignItems: 'start',
         }}
       >
-        <Field label="Mode" value={snapshot.mode === 'database' ? 'Supabase database' : 'Database blocked'} />
+        <Field
+          label="Mode"
+          value={snapshot.mode === 'database'
+            ? 'Supabase database'
+            : snapshot.mode === 'read-only' ? 'Database read-only' : 'Database blocked'}
+        />
         <Field label="Session" value={snapshot.syncSession.status} />
+        <Field label="Usable snapshot" value={snapshot.syncSession.hasUsableSnapshot ? 'Yes' : 'No'} />
+        <Field label="Read-only" value={snapshot.syncSession.readOnly ? 'Yes' : 'No'} />
+        <Field label="Normalized reason" value={snapshot.syncSession.reason || 'None'} />
+        <Field label="Raw sync error" value={snapshot.syncSession.error || 'None'} />
         <Field label="Account version" value={String(snapshot.syncSession.accountVersion)} />
         <Field label="Last remote read" value={snapshot.lastRemoteReadKey || 'None'} />
         <Field label="Last remote read error" value={snapshot.lastRemoteReadError || 'None'} />

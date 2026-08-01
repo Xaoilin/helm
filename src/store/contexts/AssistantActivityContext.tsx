@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { LIMITS } from '../../config/constants';
 import type { AssistantActivityDraft, AssistantActivityEntry } from '../../types/domain';
 import { loadStore, saveStore } from '../persistence';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 export interface AssistantActivityContextValue {
   assistantActivityLog: AssistantActivityEntry[];
@@ -40,6 +41,11 @@ export function AssistantActivityProvider({ children }: { children: ReactNode })
       setLoaded(true);
     })();
   }, []);
+
+  useRemoteStoreRefresh(['assistantActivityLog'], async () => {
+    const data = await loadStore<AssistantActivityEntry[]>('assistantActivityLog');
+    setAssistantActivityLog((data ?? []).map(normalizeActivity).slice(0, LIMITS.ASSISTANT_ACTIVITY_LOG));
+  });
 
   useEffect(() => {
     if (loaded) {

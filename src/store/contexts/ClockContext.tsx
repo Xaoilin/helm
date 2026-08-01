@@ -13,6 +13,7 @@ import {
 import { playTimerAlarm, primeTimerAlarmAudio, stopTimerAlarm } from '../../services/clockAudio';
 import { loadStore, saveStore } from '../persistence';
 import type { ClockState, ClockTimerSound, ClockTimerStatus } from '../../types/domain';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 interface ClockContextValue {
   clock: ClockState;
@@ -63,6 +64,11 @@ export function ClockProvider({ children }: { children: ReactNode }) {
       mounted = false;
     };
   }, []);
+
+  useRemoteStoreRefresh(['clock'], async () => {
+    const stored = await loadStore<ClockState>('clock');
+    setClock(normaliseClockState(stored));
+  });
 
   useEffect(() => {
     if (!loaded) return;

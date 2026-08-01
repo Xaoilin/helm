@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   fetchCollections: vi.fn(),
   fetchSnapshot: vi.fn(),
   probeVersion: vi.fn(),
+  subscribeBroadcast: vi.fn(),
   realtimeListener: null as ((event: HelmRealtimeEvent) => void) | null,
   currentUserId: '11111111-1111-4111-8111-111111111111',
 }));
@@ -24,10 +25,7 @@ vi.mock('../store/supabase', () => ({
   isAuthenticated: vi.fn(() => true),
   isSupabaseReady: vi.fn(() => true),
   probeHelmAccountVersion: mocks.probeVersion,
-  subscribeHelmBroadcast: vi.fn((listener: (event: HelmRealtimeEvent) => void) => {
-    mocks.realtimeListener = listener;
-    return () => { mocks.realtimeListener = null; };
-  }),
+  subscribeHelmBroadcast: mocks.subscribeBroadcast,
   subscribeSupabaseRealtimeSnapshot: vi.fn(() => () => {}),
 }));
 
@@ -37,6 +35,7 @@ import {
   getPersistenceHealthSnapshot,
   getSyncSessionSnapshot,
   loadStore,
+  refreshDatabasePersistence,
   resetDatabasePersistence,
   saveStore,
 } from '../store/persistence';
@@ -88,6 +87,10 @@ describe('authenticated database persistence', () => {
     mocks.fetchSnapshot.mockResolvedValue(snapshot());
     mocks.fetchCollections.mockResolvedValue([]);
     mocks.probeVersion.mockResolvedValue(1);
+    mocks.subscribeBroadcast.mockImplementation((listener: (event: HelmRealtimeEvent) => void) => {
+      mocks.realtimeListener = listener;
+      return () => { mocks.realtimeListener = null; };
+    });
     mocks.apply.mockImplementation(async (requestId: string) => ({
       requestId,
       accountVersion: 2,
@@ -192,16 +195,103 @@ describe('authenticated database persistence', () => {
     expect(getPersistenceHealthSnapshot().supabaseQueue.queuedCount).toBe(0);
   });
 
-  it('blocks shared viewing and changes as soon as the browser goes offline', async () => {
+  it('keeps the last confirmed snapshot visible read-only when the browser goes offline', async () => {
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([
+      row('tasks', 'task-1', { id: 'task-1', title: 'Still visible' }, { position: 0 }),
+    ]));
     await bootstrapDatabasePersistence();
     window.dispatchEvent(new Event('offline'));
 
-    await expect(loadStore('tasks')).resolves.toBeNull();
+    await expect(loadStore('tasks')).resolves.toEqual([{ id: 'task-1', title: 'Still visible' }]);
     await saveStore('tasks', [{ id: 'task-1' }]);
     await flushPendingRemoteMutations();
 
-    expect(getSyncSessionSnapshot().status).toBe('blocked');
+    expect(getSyncSessionSnapshot()).toMatchObject({
+      status: 'reconnecting',
+      hasUsableSnapshot: true,
+      readOnly: true,
+      reason: 'offline',
+    });
     expect(mocks.apply).not.toHaveBeenCalled();
+  });
+
+  it('coalesces overlapping full refreshes without restarting a healthy realtime channel', async () => {
+    await bootstrapDatabasePersistence();
+    const initialSubscriptionCount = mocks.subscribeBroadcast.mock.calls.length;
+    let resolveSnapshot!: (value: ReturnType<typeof snapshot>) => void;
+    mocks.fetchSnapshot.mockClear();
+    mocks.fetchSnapshot.mockImplementationOnce(() => new Promise(resolve => {
+      resolveSnapshot = resolve;
+    }));
+
+    const refreshes = [
+      refreshDatabasePersistence(),
+      refreshDatabasePersistence(),
+      refreshDatabasePersistence(),
+    ];
+    expect(mocks.fetchSnapshot).toHaveBeenCalledTimes(1);
+    resolveSnapshot(snapshot([], 1));
+    await Promise.all(refreshes);
+
+    expect(mocks.fetchSnapshot).toHaveBeenCalledTimes(1);
+    expect(mocks.subscribeBroadcast).toHaveBeenCalledTimes(initialSubscriptionCount);
+    expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false });
+  });
+
+  it('coalesces a realtime event into an active refresh instead of overlapping reads', async () => {
+    await bootstrapDatabasePersistence();
+    const readOrder: string[] = [];
+    let resolveSnapshot!: (value: ReturnType<typeof snapshot>) => void;
+    mocks.fetchSnapshot.mockImplementationOnce(() => new Promise(resolve => {
+      readOrder.push('snapshot-start');
+      resolveSnapshot = value => {
+        readOrder.push('snapshot-finish');
+        resolve(value);
+      };
+    }));
+    mocks.fetchCollections.mockImplementationOnce(async () => {
+      readOrder.push('collections');
+      return [row('tasks', 'remote-task', { id: 'remote-task', title: 'Remote' }, {
+        position: 0,
+        accountVersion: 2,
+      })];
+    });
+
+    const refresh = refreshDatabasePersistence();
+    mocks.realtimeListener?.({
+      requestId: '33333333-3333-4333-8333-333333333333',
+      accountVersion: 2,
+      changes: [{ collection: 'tasks', recordId: 'remote-task', revision: 1, deletedAt: null }],
+    });
+    expect(readOrder).toEqual(['snapshot-start']);
+
+    resolveSnapshot(snapshot([], 1));
+    await refresh;
+
+    expect(readOrder).toEqual(['snapshot-start', 'snapshot-finish', 'collections']);
+    expect(getSyncSessionSnapshot()).toMatchObject({ accountVersion: 2, status: 'ready' });
+  });
+
+  it('recovers a degraded snapshot automatically with bounded backoff', async () => {
+    vi.useFakeTimers();
+    try {
+      await bootstrapDatabasePersistence();
+      mocks.fetchSnapshot
+        .mockRejectedValueOnce(new Error('network unavailable'))
+        .mockResolvedValueOnce(snapshot([
+          row('tasks', 'task-recovered', { id: 'task-recovered', title: 'Recovered' }, { position: 0, accountVersion: 2 }),
+        ], 2));
+      mocks.probeVersion.mockResolvedValue(2);
+
+      await refreshDatabasePersistence();
+      expect(getSyncSessionSnapshot()).toMatchObject({ readOnly: true, reason: 'database_unavailable' });
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.waitFor(() => expect(getSyncSessionSnapshot().status).toBe('ready'));
+      await expect(loadStore('tasks')).resolves.toEqual([{ id: 'task-recovered', title: 'Recovered' }]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('destroys the previous account cache before an account switch can render', async () => {

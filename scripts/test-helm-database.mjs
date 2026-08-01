@@ -139,7 +139,70 @@ async function runConcurrencyScenario() {
     $$;
   `)
 
-  console.log('Concurrent database sessions: 3 assertions passed')
+  const beforeSnapshot = await runAuthenticatedSnapshot(claims)
+  const snapshotWriter = runSql(`
+    begin;
+    set local application_name = 'helm_snapshot_writer';
+    set local role authenticated;
+    select set_config('request.jwt.claims', '${claims}', true);
+    select public.apply_helm_mutations(
+      'cccccccc-cccc-4ccc-8ccc-ccccccccccc6',
+      '[{"op":"create","collection":"tasks","recordId":"snapshot-atomic","payload":{"id":"snapshot-atomic","title":"Atomic snapshot","completed":false}}]'::jsonb
+    );
+    select pg_sleep(0.6);
+    commit;
+  `)
+  await waitForSnapshotWriter()
+  const duringSnapshot = await runAuthenticatedSnapshot(claims)
+  await snapshotWriter
+  const afterSnapshot = await runAuthenticatedSnapshot(claims)
+
+  const beforeVersion = beforeSnapshot.state?.accountVersion
+  const duringVersion = duringSnapshot.state?.accountVersion
+  const afterVersion = afterSnapshot.state?.accountVersion
+  const duringIds = new Set((duringSnapshot.records || []).map(record => record.recordId))
+  const afterIds = new Set((afterSnapshot.records || []).map(record => record.recordId))
+  if (duringVersion !== beforeVersion || duringIds.has('snapshot-atomic')) {
+    throw new Error('The atomic snapshot exposed part of an uncommitted write.')
+  }
+  if (afterVersion !== beforeVersion + 1 || !afterIds.has('snapshot-atomic')) {
+    throw new Error('The atomic snapshot did not expose the complete committed write.')
+  }
+  if (afterSnapshot.records.length !== beforeSnapshot.records.length + 1) {
+    throw new Error('The committed atomic snapshot was incomplete.')
+  }
+
+  console.log('Concurrent database sessions: 6 assertions passed')
+}
+
+async function runAuthenticatedSnapshot(claims) {
+  const output = await runSqlOutput(`
+    begin;
+    set local role authenticated;
+    select set_config('request.jwt.claims', '${claims}', true);
+    select public.get_helm_account_snapshot()::text;
+    commit;
+  `)
+  const snapshot = output
+    .split('\n')
+    .map(line => line.trim())
+    .find(line => line.startsWith('{') && line.includes('"state"') && line.includes('"records"'))
+  if (!snapshot) throw new Error('The atomic snapshot RPC did not return JSON.')
+  return JSON.parse(snapshot)
+}
+
+async function waitForSnapshotWriter() {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const output = await runSqlOutput(`
+      select count(*)
+      from pg_stat_activity
+      where application_name = 'helm_snapshot_writer'
+        and wait_event = 'PgSleep';
+    `)
+    if (output.trim().split('\n').at(-1) === '1') return
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+  throw new Error('Timed out waiting for the snapshot concurrency writer.')
 }
 
 async function runAuthenticatedMutation(claims, sql) {
@@ -168,6 +231,29 @@ function runSql(sql) {
     child.once('exit', (code) => {
       if (code === 0) resolve()
       else reject(new Error(`Concurrent database SQL failed with exit code ${code}.`))
+    })
+    child.stdin.end(sql)
+  })
+}
+
+function runSqlOutput(sql) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'docker',
+      ['exec', '-i', 'supabase_db_helm', 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-qAt'],
+      {
+        cwd: process.cwd(),
+        env: process.env,
+        stdio: ['pipe', 'pipe', 'inherit'],
+      },
+    )
+    let output = ''
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', chunk => { output += chunk })
+    child.once('error', reject)
+    child.once('exit', code => {
+      if (code === 0) resolve(output)
+      else reject(new Error(`Database SQL failed with exit code ${code}.`))
     })
     child.stdin.end(sql)
   })

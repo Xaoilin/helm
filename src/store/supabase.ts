@@ -12,7 +12,6 @@ import type {
   HelmRecord,
   HelmSecretRealtimeEvent,
 } from './databaseTypes';
-import { HELM_DATABASE_SCHEMA_VERSION } from './databaseTypes';
 import type {
   HelmSecretDetail,
   HelmSecretSummary,
@@ -189,15 +188,6 @@ interface HelmRecordRow {
   deleted_at: string | null;
 }
 
-interface HelmAccountStateRow {
-  user_id: string;
-  schema_version: number;
-  account_version: number;
-  minimum_client_version: string;
-  migrated_at: string | null;
-  updated_at: string;
-}
-
 const HELM_RECORD_COLUMNS = [
   'user_id',
   'collection',
@@ -212,7 +202,6 @@ const HELM_RECORD_COLUMNS = [
 ].join(',');
 
 const HELM_RECORD_PAGE_SIZE = 1_000;
-const HELM_SNAPSHOT_ATTEMPTS = 3;
 
 function mapRecord(row: HelmRecordRow): HelmRecord {
   return {
@@ -227,30 +216,6 @@ function mapRecord(row: HelmRecordRow): HelmRecord {
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
   };
-}
-
-function mapAccountState(row: HelmAccountStateRow): HelmAccountState {
-  return {
-    userId: row.user_id,
-    schemaVersion: row.schema_version,
-    accountVersion: row.account_version,
-    minimumClientVersion: row.minimum_client_version,
-    migratedAt: row.migrated_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-async function fetchHelmAccountStateRow(
-  database: SupabaseClient,
-  userId: string,
-): Promise<HelmAccountStateRow | null> {
-  const { data, error } = await database
-    .from('helm_account_state')
-    .select('user_id,schema_version,account_version,minimum_client_version,migrated_at,updated_at')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (error) throw error;
-  return data as HelmAccountStateRow | null;
 }
 
 async function fetchAllHelmRecordRows(
@@ -403,31 +368,60 @@ export async function fetchHelmAccountSnapshot(): Promise<{
 }> {
   const database = requireClient();
   const userId = currentUserId!;
-  for (let attempt = 0; attempt < HELM_SNAPSHOT_ATTEMPTS; attempt += 1) {
-    const stateBefore = await fetchHelmAccountStateRow(database, userId);
-    const rows = await fetchAllHelmRecordRows(database, userId);
-    const stateAfter = await fetchHelmAccountStateRow(database, userId);
+  const { data, error } = await database.rpc('get_helm_account_snapshot');
+  if (error) throw error;
 
-    if (!stateAfter && rows.length > 0) {
-      throw new Error('HELM account state is missing for existing database records.');
-    }
-    if (stateBefore?.account_version !== stateAfter?.account_version) continue;
-
-    return {
-      state: stateAfter
-        ? mapAccountState(stateAfter)
-        : {
-            userId,
-            schemaVersion: HELM_DATABASE_SCHEMA_VERSION,
-            accountVersion: 0,
-            minimumClientVersion: '0.2.83',
-            migratedAt: null,
-            updatedAt: new Date(0).toISOString(),
-          },
-      records: rows.map(mapRecord),
-    };
+  const snapshot = asRecord(data);
+  const state = asRecord(snapshot.state);
+  if (
+    state.userId !== userId
+    || typeof state.schemaVersion !== 'number'
+    || typeof state.accountVersion !== 'number'
+    || typeof state.minimumClientVersion !== 'string'
+    || typeof state.updatedAt !== 'string'
+    || !Array.isArray(snapshot.records)
+  ) {
+    throw new Error('The HELM account snapshot response was invalid.');
   }
-  throw new Error('HELM database changed while the account snapshot was loading. Please retry.');
+
+  const records = snapshot.records.map(value => {
+    const record = asRecord(value);
+    if (
+      record.userId !== userId
+      || typeof record.collection !== 'string'
+      || typeof record.recordId !== 'string'
+      || typeof record.revision !== 'number'
+      || typeof record.accountVersion !== 'number'
+      || typeof record.createdAt !== 'string'
+      || typeof record.updatedAt !== 'string'
+    ) {
+      throw new Error('The HELM account snapshot contained an invalid record.');
+    }
+    return {
+      userId,
+      collection: record.collection,
+      recordId: record.recordId,
+      payload: asRecord(record.payload),
+      position: typeof record.position === 'number' ? record.position : null,
+      revision: record.revision,
+      accountVersion: record.accountVersion,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      deletedAt: typeof record.deletedAt === 'string' ? record.deletedAt : null,
+    } satisfies HelmRecord;
+  });
+
+  return {
+    state: {
+      userId,
+      schemaVersion: state.schemaVersion,
+      accountVersion: state.accountVersion,
+      minimumClientVersion: state.minimumClientVersion,
+      migratedAt: typeof state.migratedAt === 'string' ? state.migratedAt : null,
+      updatedAt: state.updatedAt,
+    },
+    records,
+  };
 }
 
 export async function probeHelmAccountVersion(): Promise<number> {

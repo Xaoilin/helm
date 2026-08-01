@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { v4 as uuid } from 'uuid';
 import type { FinanceAccount, Transaction, FinanceBudget, SavingsGoal } from '../../types/domain';
 import { loadStore, saveStore } from '../persistence';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 export interface FinanceContextValue {
   financeAccounts: FinanceAccount[];
@@ -53,6 +54,19 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       setLoaded(true);
     })();
   }, []);
+
+  useRemoteStoreRefresh(['financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals'], async () => {
+    const [accounts, txs, budgets, goals] = await Promise.all([
+      loadStore<FinanceAccount[]>('financeAccounts'),
+      loadStore<Transaction[]>('transactions'),
+      loadStore<FinanceBudget[]>('financeBudgets'),
+      loadStore<SavingsGoal[]>('savingsGoals'),
+    ]);
+    setFinanceAccounts(accounts ?? []);
+    setTransactions(txs ?? []);
+    setFinanceBudgets(budgets ?? []);
+    setSavingsGoals(goals ?? []);
+  });
 
   useEffect(() => { if (loaded) saveStore('financeAccounts', financeAccounts); }, [financeAccounts, loaded]);
   useEffect(() => { if (loaded) saveStore('transactions', transactions); }, [transactions, loaded]);

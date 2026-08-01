@@ -16,6 +16,7 @@ import type {
 } from '../../types/domain';
 import { TRIP_BUDGET } from '../../config/constants';
 import { loadStore, saveStore } from '../persistence';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 interface TripContextValue {
   trips: Trip[];
@@ -241,6 +242,36 @@ export function TripProvider({ children }: { children: ReactNode }) {
       setLoaded(true);
     })();
   }, []);
+
+  useRemoteStoreRefresh(
+    ['trips', 'tripLegs', 'tripItineraryItems', 'tripBookings', 'tripBudgetEntries'],
+    async () => {
+      const [storedTrips, storedLegs, storedItems, storedBookings, storedBudgetEntries] = await Promise.all([
+        loadStore<Trip[]>('trips'),
+        loadStore<TripLeg[]>('tripLegs'),
+        loadStore<TripItineraryItem[]>('tripItineraryItems'),
+        loadStore<TripBooking[]>('tripBookings'),
+        loadStore<TripBudgetEntry[]>('tripBudgetEntries'),
+      ]);
+      const nextTrips = (storedTrips || []).map((trip, index) => normalizeTrip(trip, `Trip ${index + 1}`));
+      const tripIds = new Set(nextTrips.map(trip => trip.id));
+      const nextLegs = (storedLegs || [])
+        .filter(leg => tripIds.has(leg.tripId))
+        .map((leg, index) => normalizeTripLeg(leg, index));
+      const legIds = new Set(nextLegs.map(leg => leg.id));
+      setTrips(nextTrips);
+      setTripLegs(nextLegs);
+      setTripItineraryItems((storedItems || [])
+        .filter(item => tripIds.has(item.tripId) && legIds.has(item.legId))
+        .map((item, index) => normalizeTripItineraryItem(item, index)));
+      setTripBookings((storedBookings || [])
+        .filter(booking => tripIds.has(booking.tripId))
+        .map(normalizeTripBooking));
+      setTripBudgetEntries((storedBudgetEntries || [])
+        .filter(entry => tripIds.has(entry.tripId))
+        .map(normalizeTripBudgetEntry));
+    },
+  );
 
   useEffect(() => {
     if (loaded) {

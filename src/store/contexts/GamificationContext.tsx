@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import type { GamificationProfile } from '../../types/domain';
 import { loadStore, saveStore } from '../persistence';
 import { DEFAULT_PROFILE, backfillPrayerLog as backfillPrayerLogFn } from '../../services/gamification';
+import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 export interface GamificationContextValue {
   gamification: GamificationProfile;
@@ -29,6 +30,11 @@ export function GamificationProvider({ children }: { children: ReactNode }) {
       setLoaded(true);
     })();
   }, []);
+
+  useRemoteStoreRefresh(['gamification'], async () => {
+    const data = await loadStore<GamificationProfile>('gamification');
+    setGamification(data ?? DEFAULT_PROFILE);
+  });
 
   useEffect(() => { if (loaded) saveStore('gamification', gamification); }, [gamification, loaded]);
 

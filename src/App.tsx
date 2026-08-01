@@ -35,6 +35,7 @@ import {
 } from './services/googleCalendarAuthManager';
 import { useReleaseRefresh } from './hooks/useReleaseRefresh';
 import { useOptionalAuthSession } from './store/AuthSessionContext';
+import { useSyncAvailability } from './store/SyncAvailabilityContext';
 
 const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'dashboard', label: 'Dashboard', icon: '\u{1F3E0}' },
@@ -62,6 +63,7 @@ const MOBILE_MORE_ITEMS = NAV_ITEMS.filter(item => !PRIMARY_MOBILE_NAV.includes(
 
 function AppInner() {
   const app = useApp();
+  const { readOnly } = useSyncAvailability();
   const authSession = useOptionalAuthSession();
   const authUser = authSession?.authUser ?? null;
   const authLoading = authSession?.loading ?? false;
@@ -77,9 +79,10 @@ function AppInner() {
   useReleaseRefresh();
 
   const openCaptureModal = useCallback((source: CaptureItemSource) => {
+    if (readOnly) return;
     setQuickCaptureText('');
     setCaptureModalSource(source);
-  }, []);
+  }, [readOnly]);
 
   const closeCaptureModal = useCallback(() => {
     setCaptureModalSource(null);
@@ -88,7 +91,7 @@ function AppInner() {
 
   const submitQuickCapture = useCallback(() => {
     const content = quickCaptureText.trim();
-    if (!content || !captureModalSource) return;
+    if (readOnly || !content || !captureModalSource) return;
 
     app.addCaptureItem({
       content,
@@ -100,7 +103,7 @@ function AppInner() {
     closeCaptureModal();
     setCaptureNotice('Captured to Inbox.');
     window.setTimeout(() => setCaptureNotice(''), TIMING.TOAST_LIFETIME);
-  }, [app, captureModalSource, closeCaptureModal, quickCaptureText]);
+  }, [app, captureModalSource, closeCaptureModal, quickCaptureText, readOnly]);
 
   useEffect(() => {
     if (!captureModalSource) return;
@@ -133,6 +136,7 @@ function AppInner() {
   }, [mobileMoreOpen]);
 
   useEffect(() => {
+    if (readOnly) return;
     for (const account of app.calendarAccounts) {
       if (!isGoogleCalendarAccount(account)) continue;
 
@@ -142,9 +146,10 @@ function AppInner() {
         app.updateCalendarAccount(account.id, patch);
       }
     }
-  }, [app, app.calendarAccounts, authUser?.email]);
+  }, [app, app.calendarAccounts, authUser?.email, readOnly]);
 
   useEffect(() => {
+    if (readOnly) return;
     const googleIntegration = app.integrations.find(integration => integration.provider === 'google');
     if (!googleIntegration) return;
 
@@ -169,7 +174,7 @@ function AppInner() {
           : googleIntegration.configuredAt,
       });
     }
-  }, [app, app.calendarAccounts, app.integrations]);
+  }, [app, app.calendarAccounts, app.integrations, readOnly]);
 
   const handleSignIn = async () => {
     try {
@@ -254,6 +259,7 @@ function AppInner() {
             type="button"
             className="sidebar-capture-button"
             onClick={() => openCaptureModal('quick_button')}
+            disabled={readOnly}
             title="Quick capture (Ctrl+Shift+K)"
           >
             <span aria-hidden="true">+</span>
@@ -287,7 +293,12 @@ function AppInner() {
           {renderAuthContent('sidebar')}
         </div>
       </nav>
-      <main className="main-content" aria-label={`${app.surface} surface`}>
+      <main
+        className="main-content"
+        aria-label={`${app.surface} surface`}
+        aria-disabled={readOnly || undefined}
+        inert={readOnly || undefined}
+      >
         {renderSurface()}
       </main>
       {mobileMoreOpen && (
@@ -358,8 +369,8 @@ function AppInner() {
           <span className="mobile-nav-label">More</span>
         </button>
       </nav>
-      <PrayerGlobalOverlays />
-      <VoiceAssistant />
+      {!readOnly && <PrayerGlobalOverlays />}
+      {!readOnly && <VoiceAssistant />}
       {captureNotice && (
         <div className="capture-toast" role="status">
           {captureNotice}
