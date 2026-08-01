@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(37);
+select plan(38);
 
 select has_table('public', 'helm_records', 'account record table exists');
 select has_table('public', 'helm_account_state', 'account version table exists');
@@ -99,6 +99,13 @@ select lives_ok(
     ]'::jsonb
   )$$,
   'multi-domain mutations commit through one RPC'
+);
+
+select is(
+  (select minimum_client_version from public.helm_account_state
+    where user_id = '33333333-3333-4333-8333-333333333333'),
+  '0.2.83',
+  'successful mutations cannot downgrade the complete-snapshot client floor'
 );
 
 select is(

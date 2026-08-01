@@ -184,10 +184,11 @@ const [migrationRows, verificationRows] = await Promise.all([
         where current.row_count <> (state.legacy_manifest ->> 'rowCount')::bigint
           or current.snapshot_sha256 <> state.legacy_manifest ->> 'snapshotSha256'
       ),
-      'ordinaryLegacyCollectionsExact', not exists (
+      'ordinaryLegacyCollectionsAccounted', not exists (
         select 1
         from public.kv_store kv
         join auth.users account on account.id::text = kv.user_id::text
+        join public.helm_account_state state on state.user_id = account.id
         join lateral (
           select
             count(*)::bigint as record_count,
@@ -241,6 +242,16 @@ const [migrationRows, verificationRows] = await Promise.all([
           ])
           and (expected.record_count, expected.payload_sha256)
             is distinct from (actual.record_count, actual.payload_sha256)
+          and not exists (
+            select 1
+            from public.helm_mutation_receipts receipt
+            cross join lateral jsonb_array_elements(
+              coalesce(receipt.result -> 'changes', '[]'::jsonb)
+            ) change
+            where receipt.user_id = account.id
+              and receipt.applied_at >= coalesce(state.migrated_at, '-infinity'::timestamptz)
+              and change ->> 'collection' = kv.key
+          )
       ),
       'goldenCatalogueCurrent', coalesce((
         select
@@ -325,7 +336,7 @@ const expected = {
   legacyAccountsMissingState: 0,
   minimumClientVersionsCorrect: true,
   legacySnapshotsMatchManifest: true,
-  ordinaryLegacyCollectionsExact: true,
+  ordinaryLegacyCollectionsAccounted: true,
   goldenCatalogueCurrent: true,
   legacyAccountIsolationCurrent: true,
   unownedLegacyRowsStayUnattached: true,
