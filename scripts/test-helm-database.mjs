@@ -5,6 +5,7 @@ import process from 'node:process'
 const supabaseCli = process.platform === 'win32'
   ? 'node_modules/.bin/supabase.cmd'
   : 'node_modules/.bin/supabase'
+const snapshotWriterLockKey = 202608030294
 
 let failure = null
 try {
@@ -141,6 +142,7 @@ async function runConcurrencyScenario() {
   `)
 
   const beforeSnapshot = await runAuthenticatedSnapshot(claims)
+  const snapshotWriterGate = await openSnapshotWriterGate()
   const snapshotWriter = runSql(`
     begin;
     set local application_name = 'helm_snapshot_writer';
@@ -150,12 +152,21 @@ async function runConcurrencyScenario() {
       'cccccccc-cccc-4ccc-8ccc-ccccccccccc6',
       '[{"op":"create","collection":"tasks","recordId":"snapshot-atomic","payload":{"id":"snapshot-atomic","title":"Atomic snapshot","completed":false}}]'::jsonb
     );
-    select pg_sleep(0.6);
+    select pg_advisory_xact_lock(${snapshotWriterLockKey});
     commit;
   `)
-  await waitForSnapshotWriter()
-  const duringSnapshot = await runAuthenticatedSnapshot(claims)
+  let duringSnapshot
+  let samplingFailure = null
+  try {
+    await waitForSnapshotWriter()
+    duringSnapshot = await runAuthenticatedSnapshot(claims)
+  } catch (error) {
+    samplingFailure = error
+  } finally {
+    await snapshotWriterGate.release()
+  }
   await snapshotWriter
+  if (samplingFailure) throw samplingFailure
   const afterSnapshot = await runAuthenticatedSnapshot(claims)
 
   const beforeVersion = beforeSnapshot.state?.accountVersion
@@ -198,12 +209,66 @@ async function waitForSnapshotWriter() {
       select count(*)
       from pg_stat_activity
       where application_name = 'helm_snapshot_writer'
-        and wait_event = 'PgSleep';
+        and wait_event_type = 'Lock'
+        and wait_event = 'advisory';
     `)
     if (output.trim().split('\n').at(-1) === '1') return
     await new Promise(resolve => setTimeout(resolve, 20))
   }
   throw new Error('Timed out waiting for the snapshot concurrency writer.')
+}
+
+function openSnapshotWriterGate() {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'docker',
+      ['exec', '-i', 'supabase_db_helm', 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-qAt'],
+      {
+        cwd: process.cwd(),
+        env: process.env,
+        stdio: ['pipe', 'pipe', 'inherit'],
+      },
+    )
+    let output = ''
+    let ready = false
+    let released = false
+    let exitError = null
+    let finishExit
+    const exited = new Promise(resolveExit => { finishExit = resolveExit })
+
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', chunk => {
+      output += chunk
+      if (ready || !output.split('\n').includes('helm_snapshot_gate_ready')) return
+      ready = true
+      resolve({
+        release: async () => {
+          if (!released) {
+            released = true
+            child.stdin.end(`select pg_advisory_unlock(${snapshotWriterLockKey});\n`)
+          }
+          await exited
+          if (exitError) throw exitError
+        },
+      })
+    })
+    child.once('error', error => {
+      exitError = error
+      finishExit()
+      if (!ready) reject(error)
+    })
+    child.once('exit', code => {
+      if (code !== 0) {
+        exitError = new Error(`Snapshot advisory-lock gate failed with exit code ${code}.`)
+      }
+      finishExit()
+      if (!ready) reject(exitError || new Error('Snapshot advisory-lock gate exited before it was ready.'))
+    })
+    child.stdin.write(`
+      select pg_advisory_lock(${snapshotWriterLockKey});
+      select 'helm_snapshot_gate_ready';
+    `)
+  })
 }
 
 async function runAuthenticatedMutation(claims, sql) {
