@@ -287,6 +287,36 @@ export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
   }
 }
 
+export function evaluateSupabaseOAuthOrigin(rawWorkflow) {
+  const failures = []
+  const passes = []
+  const productionSiteUrl = 'https://xaoilin.github.io/helm'
+  const expectedPatch = `--data '{"site_url":"${productionSiteUrl}","oauth_server_enabled":true,"oauth_server_allow_dynamic_registration":true,"oauth_server_authorization_path":"/helm/oauth/consent"}'`
+  const expectedVerification = `.site_url == "${productionSiteUrl}"`
+
+  if (!rawWorkflow.includes(expectedPatch)) {
+    failures.push(
+      `Supabase deploy workflow must configure the production OAuth Site URL in the same fail-closed PATCH as the OAuth server settings: ${productionSiteUrl}.`,
+    )
+  } else {
+    passes.push('Supabase deploy workflow configures the production Sabah One OAuth origin atomically.')
+  }
+
+  if (!rawWorkflow.includes(expectedVerification)) {
+    failures.push(
+      `Supabase deploy workflow must verify the returned production OAuth Site URL: ${productionSiteUrl}.`,
+    )
+  } else {
+    passes.push('Supabase deploy workflow verifies the returned production Sabah One OAuth origin.')
+  }
+
+  return {
+    failures,
+    passes,
+    ok: failures.length === 0,
+  }
+}
+
 export function evaluateNativeStoreAllowlist(rootDir) {
   const failures = []
   const passes = []
@@ -363,6 +393,12 @@ export function evaluateAgentPolicy(rootDir) {
     failures.push(...deployResult.failures)
     passes.push(...deployResult.passes)
   }
+
+  const supabaseOAuthOriginResult = evaluateSupabaseOAuthOrigin(
+    readFileSync(resolve(rootDir, '.github', 'workflows', 'deploy-supabase-assistant.yml'), 'utf8'),
+  )
+  failures.push(...supabaseOAuthOriginResult.failures)
+  passes.push(...supabaseOAuthOriginResult.passes)
 
   const nativeStoreResult = evaluateNativeStoreAllowlist(rootDir)
   failures.push(...nativeStoreResult.failures)
