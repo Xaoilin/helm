@@ -46,7 +46,7 @@ export default function ClockSurface() {
       <div className="surface-header">
         <div>
           <h1>Clock</h1>
-          <div className="subtitle">Build a neat workspace of named timers and stopwatches saved to your HELM account</div>
+          <div className="subtitle">Build a neat workspace of named timers and stopwatches saved to your Sabah One account</div>
         </div>
       </div>
 
@@ -451,7 +451,7 @@ function TimerCard({
 
       <div className="clock-note">
         {timerRunning
-          ? 'Keeps counting even if you switch to another HELM surface.'
+          ? 'Keeps counting even if you switch to another Sabah One surface.'
           : timerAlerting
             ? 'This card keeps pulsing until you acknowledge it or restart the timer.'
             : timer.status === 'completed'
@@ -526,7 +526,7 @@ function StopwatchCard({
         </div>
         <div className="clock-subdisplay">
           {stopwatchRunning
-            ? 'Keeps counting if you switch to another HELM surface.'
+            ? 'Keeps counting if you switch to another Sabah One surface.'
             : stopwatchElapsedMs > 0
               ? 'Paused and ready to resume.'
               : 'Start fresh whenever you are ready.'}

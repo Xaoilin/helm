@@ -344,7 +344,7 @@ interface DatabaseRow {
 async function databaseRows(page: Page): Promise<DatabaseRow[]> {
   return page.evaluate(async () => {
     const response = await fetch('/__helm_e2e_db');
-    if (!response.ok) throw new Error('Could not read the HELM database fixture.');
+    if (!response.ok) throw new Error('Could not read the Sabah One database fixture.');
     return response.json() as Promise<DatabaseRow[]>;
   });
 }

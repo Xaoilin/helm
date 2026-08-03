@@ -25,7 +25,7 @@ const persistenceState = vi.hoisted(() => ({
     reason: 'signed_out',
     lastReadyAt: null,
     lastProbeAt: null,
-    error: 'Sign in to load HELM data.',
+    error: 'Sign in to load Sabah One data.',
   },
 }));
 
@@ -73,7 +73,7 @@ describe('BootstrappedApp', () => {
       reason: 'signed_out',
       lastReadyAt: null,
       lastProbeAt: null,
-      error: 'Sign in to load HELM data.',
+      error: 'Sign in to load Sabah One data.',
     };
   });
 
@@ -161,7 +161,7 @@ describe('BootstrappedApp', () => {
 
     expect(screen.getByLabelText('Current screen state')).toHaveValue('Projects drawer open');
     expect(screen.getByText('Offline')).toBeInTheDocument();
-    expect(screen.queryByText('HELM is reconnecting')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sabah One is reconnecting')).not.toBeInTheDocument();
     expect(screen.queryByText(/raw network error/i)).not.toBeInTheDocument();
   });
 });

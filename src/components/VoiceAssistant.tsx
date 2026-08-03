@@ -336,7 +336,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
         calendarEvents: app.calendarEvents,
         projects: app.projects,
         tasks: app.tasks,
-        captureItems: app.captureItems,
+        inventoryItems: app.inventoryItems,
+        inventoryNeeds: app.inventoryNeeds,
         financeAccounts: app.financeAccounts,
         transactions: app.transactions,
         knowledgeEntries: app.knowledgeEntries,
@@ -372,7 +373,10 @@ export default function VoiceAssistant({ prayerData }: Props) {
           updateCalendarEvent: app.updateCalendarEvent,
           addTransaction: app.addTransaction,
           addKnowledgeEntry: app.addKnowledgeEntry,
-          addCaptureItem: app.addCaptureItem,
+          addInventoryItem: app.addInventoryItem,
+          adjustInventoryQuantity: app.adjustInventoryQuantity,
+          addInventoryNeed: app.addInventoryNeed,
+          completeInventoryNeed: app.completeInventoryNeed,
           updateGamification: app.updateGamification,
           completePrayer: (prayerName, status, taskId) =>
             app.completePrayer(

@@ -705,7 +705,7 @@ function buildFocusMessages(candidates: FocusCandidate[], now: Date) {
     {
       role: 'system' as const,
       content: [
-        'You choose the single best next thing for HELM dashboard focus.',
+        'You choose the single best next thing for Sabah One dashboard focus.',
         'Only choose from the provided candidate ids.',
         'Prefer the most actionable and time-aware item.',
         'Meeting prep should only win when it truly beats starting task work.',

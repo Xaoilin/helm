@@ -36,7 +36,7 @@ describe('chat export helpers', () => {
   it('formats a conversation as markdown with metadata and transcript roles', () => {
     const markdown = formatConversationAsMarkdown(conversation, new Date(2026, 3, 13, 9, 6, 0));
 
-    expect(markdown).toContain('# HELM Chat Export');
+    expect(markdown).toContain('# Sabah One Chat Export');
     expect(markdown).toContain('- Conversation: Delete my Internet task.');
     expect(markdown).toContain('- Conversation ID: conv-1');
     expect(markdown).toContain('- Messages: 2 messages');
@@ -50,7 +50,7 @@ describe('chat export helpers', () => {
   it('builds a Codex-friendly markdown filename from the conversation title', () => {
     const fileName = buildConversationExportFilename(conversation, new Date(2026, 3, 13, 9, 6, 0));
 
-    expect(fileName).toBe('helm-chat-delete-my-internet-task-2026-04-13-0906.md');
+    expect(fileName).toBe('sabah-one-chat-delete-my-internet-task-2026-04-13-0906.md');
   });
 
   it('downloads the exported markdown as a .md file', () => {
@@ -62,7 +62,7 @@ describe('chat export helpers', () => {
 
     const artifact = downloadConversationAsMarkdown(conversation, new Date(2026, 3, 13, 9, 6, 0));
 
-    expect(artifact.fileName).toBe('helm-chat-delete-my-internet-task-2026-04-13-0906.md');
+    expect(artifact.fileName).toBe('sabah-one-chat-delete-my-internet-task-2026-04-13-0906.md');
     expect(artifact.markdown).toContain('## Transcript');
     expect(createObjectUrl).toHaveBeenCalledTimes(1);
     expect(appendChild).toHaveBeenCalledTimes(1);

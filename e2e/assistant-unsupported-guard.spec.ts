@@ -74,7 +74,7 @@ test('should show the validated clarify reply instead of a raw hosted unsupporte
   await input.press('Enter');
 
   const assistantReply = page.locator('.chat-message.assistant').last();
-  await expect(assistantReply).toContainText('I can help inside HELM, but I cannot control device or internet settings from here.');
+  await expect(assistantReply).toContainText('I can help inside Sabah One, but I cannot control device or internet settings from here.');
   await expect(assistantReply).not.toContainText('mark the task');
   await expect(assistantReply).not.toContainText('as done');
 });

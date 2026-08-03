@@ -273,7 +273,7 @@ export const BADGES: BadgeDef[] = [
   { id: 'weekend-warrior', name: 'Weekend Warrior', emoji: '\u{1F3D6}', description: 'Complete a task on Saturday or Sunday', rarity: 'common' },
   { id: 'monday-motivation', name: 'Monday Motivation', emoji: '\u{1F4AA}', description: 'Complete a task on Monday', rarity: 'common' },
   { id: 'five-in-a-row', name: 'Five in a Row', emoji: '\u{1F3B0}', description: 'Complete 5 tasks without a break', rarity: 'common' },
-  { id: 'first-week', name: 'First Week', emoji: '\u{1F4C5}', description: 'Use HELM for 7 days', rarity: 'common' },
+  { id: 'first-week', name: 'First Week', emoji: '\u{1F4C5}', description: 'Use Sabah One for 7 days', rarity: 'common' },
 
   // ══════════════════════════════════════════
   // MID GAME — Building momentum (rare, 30 badges)
@@ -324,7 +324,7 @@ export const BADGES: BadgeDef[] = [
   { id: 'badge-25', name: 'Trophy Room', emoji: '\u{1F3E0}', description: 'Earn 25 badges', rarity: 'rare' },
   { id: 'categories-3', name: 'Diversified', emoji: '\u{1F4DA}', description: 'Have goals in 3+ categories', rarity: 'rare' },
   { id: 'full-day', name: 'Full Day', emoji: '\u{1F31E}', description: 'Complete tasks + habits + check calendar in one day', rarity: 'rare' },
-  { id: 'first-month', name: 'Monthly Member', emoji: '\u{1F4C6}', description: 'Use HELM for 30 days', rarity: 'rare' },
+  { id: 'first-month', name: 'Monthly Member', emoji: '\u{1F4C6}', description: 'Use Sabah One for 30 days', rarity: 'rare' },
 
   // ══════════════════════════════════════════
   // LATE GAME — Mastery (epic, 25 badges)
@@ -373,7 +373,7 @@ export const BADGES: BadgeDef[] = [
   { id: 'high-priority-50', name: 'Crisis Manager', emoji: '\u{1F3E5}', description: 'Complete 50 high-priority tasks', rarity: 'epic' },
 
   // Time
-  { id: 'three-months', name: 'Quarterly Review', emoji: '\u{1F4CA}', description: 'Use HELM for 90 days', rarity: 'epic' },
+  { id: 'three-months', name: 'Quarterly Review', emoji: '\u{1F4CA}', description: 'Use Sabah One for 90 days', rarity: 'epic' },
   { id: 'night-shift', name: 'Night Shift', emoji: '\u{1F303}', description: 'Complete a task after midnight', rarity: 'epic' },
   { id: 'dawn-warrior', name: 'Dawn Warrior', emoji: '\u{1F304}', description: 'Complete a task before 6am', rarity: 'epic' },
   { id: 'every-hour', name: 'Around the Clock', emoji: '\u{1F570}', description: 'Complete tasks in 12+ different hours', rarity: 'epic' },
@@ -408,7 +408,7 @@ export const BADGES: BadgeDef[] = [
   { id: 'badge-100', name: 'Platinum', emoji: '\u{1F3C6}', description: 'Earn all 100 badges', rarity: 'legendary' },
 
   // Ultimate
-  { id: 'year-member', name: 'Founding Member', emoji: '\u{1F3F5}', description: 'Use HELM for 365 days', rarity: 'legendary' },
+  { id: 'year-member', name: 'Founding Member', emoji: '\u{1F3F5}', description: 'Use Sabah One for 365 days', rarity: 'legendary' },
   { id: 'perfect-quarter', name: 'Perfect Quarter', emoji: '\u{1F48E}', description: 'Complete all habits every day for 90 days', rarity: 'legendary' },
   { id: 'streak-500', name: 'Eternal Flame', emoji: '\u{1F30B}', description: '500-day streak', rarity: 'legendary' },
   { id: 'xp-50000', name: 'XP Overlord', emoji: '\u{1F4A0}', description: 'Earn 50,000 XP total', rarity: 'legendary' },

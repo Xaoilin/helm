@@ -68,7 +68,7 @@ describe('database-authoritative persistence contract', () => {
     expect(appRoot).toContain('<SyncStatusBanner syncSession={syncSession} />');
     expect(appRoot).toContain('<AppProvider key={auth.authUser.id}>');
     expect(appRoot).not.toContain('remoteGeneration');
-    expect(appRoot).not.toContain('HELM is reconnecting');
+    expect(appRoot).not.toContain('Sabah One is reconnecting');
   });
 
   it('stores secret values in Vault and exposes only account-derived RPCs', () => {

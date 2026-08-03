@@ -103,7 +103,7 @@ test('tracks prayer outcomes, warns globally, persists stats, and clarifies chat
 async function prayerStatus(page: Page, prayerId: string) {
   return page.evaluate(async id => {
     const response = await fetch('/__helm_e2e_db');
-    if (!response.ok) throw new Error('Could not read the HELM database fixture.');
+    if (!response.ok) throw new Error('Could not read the Sabah One database fixture.');
     const rows = await response.json() as Array<{
       collection: string;
       deleted_at: string | null;

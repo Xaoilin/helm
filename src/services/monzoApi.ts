@@ -15,7 +15,7 @@ import { monzoBreaker } from './serviceBreakers';
 
 const MONZO_API = 'https://api.monzo.com';
 
-// ── Category mapping: Monzo → HELM ──
+// ── Category mapping: Monzo → Sabah One ──
 
 const CATEGORY_MAP: Record<string, TransactionCategory> = {
   groceries: 'groceries',
@@ -114,13 +114,13 @@ export async function fetchMonzoTransactions(token: string, accountId: string, s
   return (data.transactions || []).filter(tx => !tx.decline_reason);
 }
 
-/** Convert a Monzo transaction to HELM's Transaction format. */
+/** Convert a Monzo transaction to Sabah One's Transaction format. */
 export function mapMonzoTransaction(
   monzoTx: MonzoTransaction,
   helmAccountId: string,
 ): Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'> {
   const isIncome = monzoTx.amount > 0;
-  const amount = Math.abs(monzoTx.amount); // always positive in HELM
+  const amount = Math.abs(monzoTx.amount); // always positive in Sabah One
   const description = monzoTx.merchant?.name || monzoTx.description || '';
   const category = isIncome ? 'other-income' as TransactionCategory : mapCategory(monzoTx.category);
   const date = toLocalDateStr(new Date(monzoTx.created));

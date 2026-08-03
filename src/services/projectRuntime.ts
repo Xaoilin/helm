@@ -73,7 +73,7 @@ export async function createProjectRunFingerprint(
   recipe: ProjectRunRecipe,
 ): Promise<string> {
   if (!(await canUseProjectRuntime())) {
-    throw new Error('Project command fingerprints are only available in the HELM desktop app.');
+    throw new Error('Project command fingerprints are only available in the Sabah One desktop app.');
   }
   return invoke<string>('fingerprint_project_profile', {
     input: projectProfileInput(projectId, projectRoot, recipe),
@@ -108,7 +108,7 @@ export async function approveProjectProfile(
   recipe: ProjectRunRecipe,
 ): Promise<ApprovedProjectProfile> {
   if (!(await canUseProjectRuntime())) {
-    throw new Error('Project commands can only run in the HELM desktop app.');
+    throw new Error('Project commands can only run in the Sabah One desktop app.');
   }
 
   try {
@@ -167,7 +167,7 @@ export async function startProjectProfile(
   onEvent: (event: ProjectRuntimeEvent) => void,
 ): Promise<ProjectSessionSnapshot> {
   if (!(await canUseProjectRuntime())) {
-    throw new Error('Project commands can only run in the HELM desktop app.');
+    throw new Error('Project commands can only run in the Sabah One desktop app.');
   }
 
   const channel = new Channel<ProjectRuntimeEvent>();
@@ -186,7 +186,7 @@ export async function startProjectProfile(
 
 export async function stopProjectSession(profileId: string): Promise<ProjectSessionSnapshot> {
   if (!(await canUseProjectRuntime())) {
-    throw new Error('Project commands can only run in the HELM desktop app.');
+    throw new Error('Project commands can only run in the Sabah One desktop app.');
   }
   try {
     return await invoke<ProjectSessionSnapshot>('stop_project_session', { profileId });

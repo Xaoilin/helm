@@ -46,7 +46,7 @@ function makePlanForCase(benchmarkCase: AssistantBenchmarkCase) {
     case 'unsupported-1':
       return {
         mode: 'clarify',
-        assistantMessage: 'Email actions are not available in HELM yet.',
+        assistantMessage: 'Email actions are not available in Sabah One yet.',
         toolCalls: [],
       };
     default:

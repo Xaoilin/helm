@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "HELM",
-  "version": "0.2.85",
+  "productName": "Sabah One",
+  "version": "0.2.86",
   "identifier": "com.helm.app",
   "build": {
     "frontendDist": "../dist",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "HELM",
+        "title": "Sabah One",
         "width": 1280,
         "height": 860,
         "minWidth": 900,

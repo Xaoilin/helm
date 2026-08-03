@@ -1,7 +1,7 @@
 import { APP_RELEASE_VERSION } from '../config/release';
 import type { ChatConversation, ChatMessage } from '../types/domain';
 
-const EXPORT_FILENAME_PREFIX = 'helm-chat';
+const EXPORT_FILENAME_PREFIX = 'sabah-one-chat';
 const FALLBACK_FILENAME_STEM = 'conversation';
 const MAX_FILENAME_TITLE_LENGTH = 48;
 
@@ -78,7 +78,7 @@ export function formatConversationAsMarkdown(
     : '_No messages yet._';
 
   return [
-    '# HELM Chat Export',
+    '# Sabah One Chat Export',
     '',
     `- Release: ${APP_RELEASE_VERSION}`,
     `- Conversation: ${conversation.title}`,

@@ -168,7 +168,7 @@ describe('system health status mapping', () => {
           reason: 'signed_out',
           lastReadyAt: null,
           lastProbeAt: null,
-          error: 'Sign in to load HELM data.',
+          error: 'Sign in to load Sabah One data.',
         },
       },
       supabase: {
@@ -216,7 +216,7 @@ describe('system health status mapping', () => {
 
     const supabase = item(input, 'supabase');
     expect(supabase.detail).toBe(
-      'HELM is showing the last confirmed account data and will retry automatically.',
+      'Sabah One is showing the last confirmed account data and will retry automatically.',
     );
     expect(supabase.detail).not.toContain('PostgREST');
     expect(supabase.detail).not.toContain('secret-token');

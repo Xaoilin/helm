@@ -22,8 +22,8 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
   useEffect(() => {
     if (!auth.supabaseReady || !auth.authUser) {
       resetDatabasePersistence(auth.supabaseReady
-        ? 'Sign in to load HELM data.'
-        : 'HELM database configuration is unavailable.', auth.supabaseReady ? 'signed_out' : 'configuration');
+        ? 'Sign in to load Sabah One data.'
+        : 'Sabah One database configuration is unavailable.', auth.supabaseReady ? 'signed_out' : 'configuration');
       return;
     }
     void bootstrapDatabasePersistence().catch(() => {
@@ -44,7 +44,7 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
 
   if (!auth.bootstrapped) {
     return (
-      <OnlineGate eyebrow="HELM" title="Loading your account" detail="Checking your secure HELM session..." />
+      <OnlineGate eyebrow="SABAH ONE" title="Loading your account" detail="Checking your secure Sabah One session..." />
     );
   }
 
@@ -52,7 +52,7 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
     return (
       <OnlineGate
         eyebrow="Database required"
-        title="HELM cannot open account data"
+        title="Sabah One cannot open account data"
         detail="This build is missing its Supabase project configuration. Shared data is never opened from a device fallback."
       />
     );
@@ -61,9 +61,9 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
   if (!auth.authUser) {
     return (
       <OnlineGate
-        eyebrow="Your HELM account"
+        eyebrow="Your Sabah One account"
         title="Sign in to continue"
-        detail="HELM stores shared data in your signed-in database account. Offline and anonymous data changes are not supported."
+        detail="Sabah One stores shared data in your signed-in database account. Offline and anonymous data changes are not supported."
         actionLabel="Continue with Google"
         onAction={async () => {
           setActionError(null);
@@ -89,7 +89,7 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
     return (
       <OnlineGate
         eyebrow={offline ? 'Connection required' : 'Database source of truth'}
-        title={switchingAccount ? 'Loading your HELM' : fatalSyncReason ? 'HELM needs an update' : 'Connecting to HELM'}
+        title={switchingAccount ? 'Loading Sabah One' : fatalSyncReason ? 'Sabah One needs an update' : 'Connecting to Sabah One'}
         detail={blockingSyncDetail(syncSession, switchingAccount, offline)}
         secondaryActionLabel="Sign out"
         onSecondaryAction={() => auth.signOut()}
@@ -115,13 +115,13 @@ function blockingSyncDetail(
 ): string {
   if (switchingAccount) return 'Clearing the previous account and securely loading this account...';
   if (syncSession.reason === 'incompatible_schema') {
-    return 'This build cannot safely open the current HELM database schema.';
+    return 'This build cannot safely open the current Sabah One database schema.';
   }
   if (syncSession.reason === 'client_update_required') {
-    return 'Install the latest HELM release to open this account safely.';
+    return 'Install the latest Sabah One release to open this account safely.';
   }
-  if (offline) return 'Connect once to load this account. HELM will retry automatically.';
-  return 'Loading your account from the database. HELM will retry automatically.';
+  if (offline) return 'Connect once to load this account. Sabah One will retry automatically.';
+  return 'Loading your account from the database. Sabah One will retry automatically.';
 }
 
 function SyncStatusBanner({ syncSession }: { syncSession: SyncSessionSnapshot }) {
@@ -129,8 +129,8 @@ function SyncStatusBanner({ syncSession }: { syncSession: SyncSessionSnapshot })
   const offline = syncSession.reason === 'offline';
   const label = offline ? 'Offline' : 'Read-only';
   const detail = offline
-    ? 'Showing your last confirmed data. HELM will reconnect automatically.'
-    : 'Showing your last confirmed data while HELM reconnects.';
+    ? 'Showing your last confirmed data. Sabah One will reconnect automatically.'
+    : 'Showing your last confirmed data while Sabah One reconnects.';
   return (
     <div
       className="sync-status-banner"
@@ -168,7 +168,7 @@ function OnlineGate({
   return (
     <main className="online-gate">
       <section className="online-gate-card" aria-live="polite">
-        <div className="online-gate-mark" aria-hidden="true">H</div>
+        <div className="online-gate-mark" aria-hidden="true">S1</div>
         <div className="online-gate-eyebrow">{eyebrow}</div>
         <h1>{title}</h1>
         <p>{detail}</p>

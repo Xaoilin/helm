@@ -15,7 +15,7 @@ describe('SettingsSurface', () => {
     expect(screen.getByText('About')).toBeInTheDocument();
   });
 
-  it('should show HELM version', async () => {
+  it('should show Sabah One version', async () => {
     await act(async () => { renderWithProvider(<SettingsSurface />); });
     expect(screen.getByText(APP_RELEASE_VERSION)).toBeInTheDocument();
   });

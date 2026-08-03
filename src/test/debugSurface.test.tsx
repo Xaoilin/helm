@@ -91,7 +91,7 @@ describe('DebugSurface AI diagnostics', () => {
       activeProvider: 'hosted',
       state: 'ready',
       headline: 'Hosted AI ready',
-      detail: 'Intent planning is powered by OpenAI GPT-5.4 through HELM\'s hosted assistant.',
+      detail: 'Intent planning is powered by OpenAI GPT-5.4 through Sabah One\'s hosted assistant.',
     });
     vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'available', model: 'gpt-5.4' });
     vi.mocked(chatWithHostedAssistant).mockResolvedValue('READY');
@@ -248,7 +248,7 @@ describe('DebugSurface AI diagnostics', () => {
     expect(chatWithHostedAssistant).toHaveBeenCalledWith([
       {
         role: 'system',
-        content: 'You are a HELM hosted assistant smoke test. Always return JSON with reply set to READY.',
+        content: 'You are a Sabah One hosted assistant smoke test. Always return JSON with reply set to READY.',
       },
       {
         role: 'user',

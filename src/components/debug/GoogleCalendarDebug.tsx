@@ -328,7 +328,7 @@ export default function GoogleCalendarDebug() {
       </div>
 
       <div className="card" style={{ padding: 20 }}>
-        <h3 style={{ marginTop: 0, fontSize: 16 }}>HELM Auth Context</h3>
+        <h3 style={{ marginTop: 0, fontSize: 16 }}>Sabah One Auth Context</h3>
         <div style={{ display: 'grid', gap: 6, fontSize: 13 }}>
           <DebugField label="Supabase ready" value={snapshot.supabaseReady ? 'Yes' : 'No'} />
           <DebugField label="Auth bootstrapped" value={snapshot.authSessionBootstrapped ? 'Yes' : 'No'} />

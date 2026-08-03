@@ -14,9 +14,6 @@ import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, formatGBP, parseToPence, toLocal
 import type {
   CalendarEvent,
   CalendarSource,
-  CaptureClassification,
-  CaptureItem,
-  CaptureItemSource,
   FinanceAccount,
   GamificationProfile,
   KnowledgeTopic,
@@ -29,6 +26,11 @@ import type {
   AssistantActivityEntityReference,
   AssistantUndoOperation,
 } from '../types/domain';
+import {
+  normalizeInventoryItemDraft,
+  normalizeInventoryNeedDraft,
+  normalizeInventoryQuantity,
+} from '../inventory/inventoryModel';
 import { getCapabilityDefinition } from './capabilities';
 import { canApplyLocalCalendarMutation } from '../services/calendarProviderSync';
 import {
@@ -94,7 +96,8 @@ function cloneContext(context: AssistantCommandContext): AssistantCommandContext
     calendarAccounts: [...context.calendarAccounts],
     calendarSources: [...context.calendarSources],
     calendarEvents: [...context.calendarEvents],
-    captureItems: [...(context.captureItems || [])],
+    inventoryItems: [...(context.inventoryItems || [])],
+    inventoryNeeds: [...(context.inventoryNeeds || [])],
     tasks: [...context.tasks],
     financeAccounts: [...context.financeAccounts],
     transactions: [...context.transactions],
@@ -171,25 +174,12 @@ function asPrayerCompletionStatus(value: unknown): PrayerCompletionStatus | unde
   return value === 'on_time' || value === 'late' ? value : undefined;
 }
 
-function asCaptureClassification(value: unknown): CaptureClassification {
-  switch (value) {
-    case 'task':
-    case 'project_note':
-    case 'calendar_idea':
-    case 'trip_item':
-    case 'health_log':
-    case 'knowledge_entry':
-      return value;
-    case 'unknown':
-    default:
-      return 'unknown';
+function asFiniteNumber(value: unknown, label: string, allowNegative = false): number {
+  const result = Number(asString(value));
+  if (!Number.isFinite(result) || (!allowNegative && result < 0)) {
+    throw new Error(`${label} must be a finite ${allowNegative ? '' : 'non-negative '}number.`);
   }
-}
-
-function activityToCaptureSource(activity: AssistantActivitySource | undefined): CaptureItemSource {
-  if (activity?.actor === 'voice') return 'voice';
-  if (activity?.actor === 'chat') return 'chat';
-  return 'manual';
+  return result;
 }
 
 function asTaskCategory(value: unknown): Task['category'] | 'any' {
@@ -389,84 +379,135 @@ function executeSingleStep(
   activity?: AssistantActivitySource,
 ): ClarifyOutcome | ExecutedStepOutcome {
   switch (step.capability) {
-    case 'capture.add_item': {
-      if (!handlers.addCaptureItem) {
-        return { kind: 'clarify', reason: 'Capture Inbox is not available in this surface.' };
-      }
-
-      const content = asString(step.args.content);
-      if (!content) {
-        return { kind: 'clarify', reason: 'What should I capture?' };
-      }
-
-      const classification = asCaptureClassification(step.args.classification);
-      const status: CaptureItem['status'] = classification === 'unknown' ? 'unprocessed' : 'classified';
-      const id = handlers.addCaptureItem({
-        content,
-        source: activityToCaptureSource(activity),
-        classification,
-        status,
-        sourceSurface: activity?.surface || context.currentSurface,
-        conversationId: activity?.conversationId,
-        processedAt: status === 'classified' ? getNow(context).toISOString() : undefined,
-      });
-      const now = getNow(context).toISOString();
-      const item: CaptureItem = {
-        id,
-        content,
-        source: activityToCaptureSource(activity),
-        classification,
-        status,
-        sourceSurface: activity?.surface || context.currentSurface,
-        conversationId: activity?.conversationId,
-        processedAt: status === 'classified' ? now : undefined,
-        createdAt: now,
-        updatedAt: now,
-      };
-      context.captureItems = [item, ...(context.captureItems || [])];
-
-      const label = content.length > 48 ? `${content.slice(0, 45)}...` : content;
-      const ref = makeEntityReference('capture_item', id, label, 'inbox', 1);
-      const summary = 'Captured item in Inbox.';
-      const facts = [
-        `Captured: ${label}.`,
-        `Classification: ${classification}.`,
-        `Source: ${item.source}.`,
-      ];
-      recordAssistantActivity(handlers, activity, {
-        domain: 'capture',
-        action: 'saved',
-        summary,
-        details: facts,
-        refs: [ref],
-        undoOperation: { type: 'capture.delete', id },
-      });
-
+    case 'inventory.lookup': {
+      const query = asString(step.args.query).toLocaleLowerCase();
+      if (!query) return { kind: 'clarify', reason: 'What should I check in Inventory?' };
+      const matches = (context.inventoryItems || []).filter(item => !item.archivedAt && [
+        item.name, item.brand, item.model, item.location, item.category,
+        ...item.tags, ...Object.keys(item.specifications), ...Object.values(item.specifications),
+      ].some(value => (value || '').toLocaleLowerCase().includes(query)));
+      const needs = (context.inventoryNeeds || []).filter(need => (
+        need.status === 'needed' || need.status === 'ordered'
+      ) && need.name.toLocaleLowerCase().includes(query));
+      const refs = matches.slice(0, 5).map(item => (
+        makeEntityReference('inventory_item', item.id, item.name, 'inventory', 1)
+      ));
+      const facts = matches.length > 0
+        ? matches.slice(0, 8).map(item => `${item.name}: ${item.quantity} ${item.unit}${item.location ? ` at ${item.location}` : ''}.`)
+        : [`No owned Inventory items matched “${asString(step.args.query)}”.`];
+      if (needs.length > 0) facts.push(`${needs.length} matching open need${needs.length === 1 ? '' : 's'}.`);
+      const summary = matches.length > 0
+        ? `Found ${matches.length} owned Inventory match${matches.length === 1 ? '' : 'es'}.`
+        : 'No owned Inventory match found.';
       return {
-        stepResult: {
-          callId,
-          capability: step.capability,
-          status: 'completed',
-          summary,
-          entityRefs: [ref],
-        },
-        toolResult: {
-          callId,
-          capability: step.capability,
-          status: 'completed',
-          summary,
-          facts,
-          entityRefs: [ref],
-        },
+        stepResult: { callId, capability: step.capability, status: 'completed', summary, entityRefs: refs },
+        toolResult: { callId, capability: step.capability, status: 'completed', summary, facts, entityRefs: refs },
+        refs,
+      };
+    }
+
+    case 'inventory.add_item': {
+      if (!handlers.addInventoryItem) return { kind: 'clarify', reason: 'Inventory editing is unavailable in this surface.' };
+      const now = getNow(context).toISOString();
+      const draft = normalizeInventoryItemDraft({
+        name: asString(step.args.name),
+        quantity: asFiniteNumber(step.args.quantity, 'Quantity'),
+        unit: asString(step.args.unit),
+        category: asString(step.args.category) as never,
+        trackingMode: asString(step.args.trackingMode) as never,
+        condition: (asString(step.args.condition) || 'unknown') as never,
+        brand: asString(step.args.brand) || undefined,
+        model: asString(step.args.model) || undefined,
+        location: asString(step.args.location) || undefined,
+        projectCatalogKeys: Array.isArray(step.args.projectCatalogKeys) ? step.args.projectCatalogKeys : [],
+        specifications: {},
+        tags: [],
+        notes: '',
+        lastVerifiedAt: now,
+      }, now);
+      const id = handlers.addInventoryItem(draft);
+      context.inventoryItems = [...(context.inventoryItems || []), { ...draft, id, createdAt: now, updatedAt: now }];
+      const ref = makeEntityReference('inventory_item', id, draft.name, 'inventory', 1);
+      const summary = `Added ${draft.name} to Inventory.`;
+      const facts = [`Owned: ${draft.quantity} ${draft.unit}.`, `Category: ${draft.category}.`];
+      recordAssistantActivity(handlers, activity, { domain: 'inventory', action: 'created', summary, details: facts, refs: [ref] });
+      return {
+        stepResult: { callId, capability: step.capability, status: 'completed', summary, entityRefs: [ref] },
+        toolResult: { callId, capability: step.capability, status: 'completed', summary, facts, entityRefs: [ref] },
         refs: [ref],
-        undoToken: JSON.stringify({ type: 'capture.delete', id }),
+      };
+    }
+
+    case 'inventory.adjust_quantity': {
+      if (!handlers.adjustInventoryQuantity) return { kind: 'clarify', reason: 'Inventory editing is unavailable in this surface.' };
+      const itemId = asString(step.args.itemId);
+      const item = (context.inventoryItems || []).find(entry => entry.id === itemId && !entry.archivedAt);
+      if (!item) return { kind: 'clarify', reason: 'Which Inventory item should I adjust?' };
+      const delta = asFiniteNumber(step.args.delta, 'Quantity adjustment', true);
+      const nextQuantity = normalizeInventoryQuantity(item.quantity + delta);
+      handlers.adjustInventoryQuantity(item.id, delta);
+      item.quantity = nextQuantity;
+      item.lastVerifiedAt = getNow(context).toISOString();
+      const ref = makeEntityReference('inventory_item', item.id, item.name, 'inventory', 1);
+      const summary = `Updated ${item.name} to ${nextQuantity} ${item.unit}.`;
+      recordAssistantActivity(handlers, activity, { domain: 'inventory', action: 'updated', summary, details: [`Adjustment: ${delta}.`], refs: [ref] });
+      return {
+        stepResult: { callId, capability: step.capability, status: 'completed', summary, entityRefs: [ref] },
+        toolResult: { callId, capability: step.capability, status: 'completed', summary, facts: [`New quantity: ${nextQuantity} ${item.unit}.`], entityRefs: [ref] },
+        refs: [ref],
+      };
+    }
+
+    case 'inventory.add_need': {
+      if (!handlers.addInventoryNeed) return { kind: 'clarify', reason: 'Inventory editing is unavailable in this surface.' };
+      const draft = normalizeInventoryNeedDraft({
+        name: asString(step.args.name),
+        requiredQuantity: asFiniteNumber(step.args.requiredQuantity, 'Required quantity'),
+        unit: asString(step.args.unit),
+        linkedItemId: asString(step.args.linkedItemId) || undefined,
+        projectCatalogKey: asString(step.args.projectCatalogKey) || undefined,
+        priority: (asString(step.args.priority) || 'normal') as never,
+        status: 'needed',
+        specifications: {},
+        notes: asString(step.args.notes),
+      });
+      const id = handlers.addInventoryNeed(draft);
+      const now = getNow(context).toISOString();
+      context.inventoryNeeds = [...(context.inventoryNeeds || []), { ...draft, id, createdAt: now, updatedAt: now }];
+      const ref = makeEntityReference('inventory_need', id, draft.name, 'inventory', 1);
+      const summary = `Added a need for ${draft.name}.`;
+      const facts = [`Needed: ${draft.requiredQuantity} ${draft.unit}.`, `Priority: ${draft.priority}.`];
+      recordAssistantActivity(handlers, activity, { domain: 'inventory', action: 'created', summary, details: facts, refs: [ref] });
+      return {
+        stepResult: { callId, capability: step.capability, status: 'completed', summary, entityRefs: [ref] },
+        toolResult: { callId, capability: step.capability, status: 'completed', summary, facts, entityRefs: [ref] },
+        refs: [ref],
+      };
+    }
+
+    case 'inventory.complete_need': {
+      if (!handlers.completeInventoryNeed) return { kind: 'clarify', reason: 'Inventory editing is unavailable in this surface.' };
+      const needId = asString(step.args.needId);
+      const need = (context.inventoryNeeds || []).find(entry => entry.id === needId);
+      if (!need || need.status === 'dismissed') return { kind: 'clarify', reason: 'Which open Inventory need was acquired?' };
+      handlers.completeInventoryNeed(need.id);
+      need.status = 'acquired';
+      need.acquiredAt = getNow(context).toISOString();
+      const ref = makeEntityReference('inventory_need', need.id, need.name, 'inventory', 1);
+      const summary = `Marked ${need.name} acquired.`;
+      const facts = [`Added ${need.requiredQuantity} ${need.unit} to owned stock and closed the need.`];
+      recordAssistantActivity(handlers, activity, { domain: 'inventory', action: 'completed', summary, details: facts, refs: [ref] });
+      return {
+        stepResult: { callId, capability: step.capability, status: 'completed', summary, entityRefs: [ref] },
+        toolResult: { callId, capability: step.capability, status: 'completed', summary, facts, entityRefs: [ref] },
+        refs: [ref],
       };
     }
 
     case 'navigation.go_to_surface': {
       const surfaceValue = step.args.surface;
       if (typeof surfaceValue !== 'string') {
-        return { kind: 'clarify', reason: 'Which part of HELM should I open?' };
+        return { kind: 'clarify', reason: 'Which part of Sabah One should I open?' };
       }
 
       const surface = surfaceValue as Surface;

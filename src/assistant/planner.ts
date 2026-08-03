@@ -59,7 +59,7 @@ export interface PlannerResult {
 
 type PlannerProvider = 'hosted' | 'ollama';
 type GuardrailIntent =
-  | 'capture_item'
+  | 'inventory'
   | 'delete_task'
   | 'complete_task'
   | 'reveal_task'
@@ -143,17 +143,17 @@ const RESPONSES = {
     en: 'Which finance account should I use?',
     ar: 'أي حساب مالي تريدين أن أستخدمه؟',
   },
-  captureClarify: {
-    en: 'What should I capture?',
-    ar: 'ماذا تريدين أن أحفظ في صندوق الالتقاط؟',
+  inventoryClarify: {
+    en: 'Which Inventory item or need do you mean?',
+    ar: 'أي عنصر أو احتياج في المخزون تقصدين؟',
   },
   validatorRejected: {
     en: 'I did not get a safe grounded action plan for that request, so I need to clarify first.',
     ar: 'لم أحصل على خطة إجراء مؤرضة وآمنة لهذا الطلب، لذلك أحتاج إلى توضيح أولاً.',
   },
   unsupportedDeviceControl: {
-    en: 'I can help inside HELM, but I cannot control device or internet settings from here.',
-    ar: 'أستطيع المساعدة داخل HELM، لكن لا يمكنني التحكم في إعدادات الجهاز أو الإنترنت من هنا.',
+    en: 'I can help inside Sabah One, but I cannot control device or internet settings from here.',
+    ar: 'أستطيع المساعدة داخل Sabah One، لكن لا يمكنني التحكم في إعدادات الجهاز أو الإنترنت من هنا.',
   },
 };
 
@@ -230,7 +230,7 @@ function derivePlannerHintIntent(transcript: string): GuardrailIntent {
   if (/(?:\bmove\b|\bpush\b|\breschedule\b)/i.test(lower)) return 'reschedule_event';
   if (/(?:\bschedule\b|\bcreate\b|\bbook\b|\badd\b).+\b(?:meeting|event|appointment|call|calendar)\b/i.test(lower)) return 'create_event';
   if (/(?:\bspent\b|\bpaid\b|\brecord\b|\blog\b|\bincome\b|\bexpense\b|\bearned\b|\breceived\b)/i.test(lower)) return 'record_transaction';
-  if (/(?:\bcapture\b|\bdump\b|\bremember\b|\bjot\b|\bnote this\b|\bsave to inbox\b|\binbox this\b)/i.test(lower)) return 'capture_item';
+  if (/(?:\binventory\b|\bin stock\b|\bdo i have\b|\balready own\b|\bneed more\b|\bmark.+acquired\b)/i.test(lower)) return 'inventory';
   if (/(?:\bsave\b|\bknowledge entry\b|\bknowledge note\b|\bcreate note\b|\badd note\b).+\b(?:topic|knowledge|note)\b/i.test(lower)) return 'create_knowledge';
   if (/(?:\badd task\b|\bcreate task\b|\bnew task\b|\bhabit\b|\bgoal\b)/i.test(lower)) return 'create_task';
   if (/(?:\bopen\b|\bgo to\b|\bswitch to\b|\btake me to\b|\bshow\b)/i.test(lower)) return 'navigate';
@@ -252,8 +252,8 @@ function deriveUnsupportedGuardrail(transcript: string): UnsupportedGuardrail {
 
 function guardrailCapabilityIds(intent: GuardrailIntent): CapabilityId[] {
   switch (intent) {
-    case 'capture_item':
-      return ['capture.add_item'];
+    case 'inventory':
+      return ['inventory.lookup', 'inventory.add_item', 'inventory.adjust_quantity', 'inventory.add_need', 'inventory.complete_need'];
     case 'delete_task':
       return ['tasks.delete_matching'];
     case 'complete_task':
@@ -293,8 +293,8 @@ function guardrailClarifyMessage(intent: GuardrailIntent, lang: AssistantLang): 
       return RESPONSES.rescheduleClarify[lang];
     case 'record_transaction':
       return RESPONSES.financeClarify[lang];
-    case 'capture_item':
-      return RESPONSES.captureClarify[lang];
+    case 'inventory':
+      return RESPONSES.inventoryClarify[lang];
     case 'create_knowledge':
       return RESPONSES.knowledgeClarify[lang];
     default:
@@ -588,6 +588,70 @@ export function buildPlanningBundle(
       : null);
   }
 
+  const inventoryQuery = normaliseText(transcript);
+  const inventoryTokens = tokenise(inventoryQuery).filter(token => token.length > 2);
+  const inventoryItems = (context.inventoryItems || [])
+    .filter(item => !item.archivedAt)
+    .map(item => {
+      const haystack = normaliseText([
+        item.name, item.brand, item.model, item.location, item.category,
+        ...item.tags, ...Object.keys(item.specifications), ...Object.values(item.specifications),
+      ].filter(Boolean).join(' '));
+      const overlap = inventoryTokens.filter(token => haystack.includes(token)).length;
+      return {
+        kind: 'inventory_item' as const,
+        id: item.id,
+        label: item.name,
+        surface: 'inventory' as const,
+        score: overlap > 0 ? Math.min(1, 0.55 + overlap * 0.12) : 0,
+        detail: `${item.quantity} ${item.unit}${item.location ? `; ${item.location}` : ''}`,
+      };
+    })
+    .filter(candidate => candidate.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, MAX_CANDIDATES);
+  const recentInventoryItem = dialogState?.recentEntities.find(entity => entity.kind === 'inventory_item');
+  if (recentInventoryItem) {
+    const item = (context.inventoryItems || []).find(entry => entry.id === recentInventoryItem.id && !entry.archivedAt);
+    pushUniqueCandidate(inventoryItems, item ? {
+      kind: 'inventory_item',
+      id: item.id,
+      label: item.name,
+      surface: 'inventory',
+      score: 1,
+      detail: `${item.quantity} ${item.unit}; recent`,
+    } : null);
+  }
+
+  const inventoryNeeds = (context.inventoryNeeds || [])
+    .filter(need => need.status === 'needed' || need.status === 'ordered')
+    .map(need => {
+      const overlap = inventoryTokens.filter(token => normaliseText(need.name).includes(token)).length;
+      return {
+        kind: 'inventory_need' as const,
+        id: need.id,
+        label: need.name,
+        surface: 'inventory' as const,
+        score: overlap > 0 ? Math.min(1, 0.58 + overlap * 0.14) : 0,
+        detail: `${need.requiredQuantity} ${need.unit}; ${need.status}; ${need.priority}`,
+      };
+    })
+    .filter(candidate => candidate.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, MAX_CANDIDATES);
+  const recentInventoryNeed = dialogState?.recentEntities.find(entity => entity.kind === 'inventory_need');
+  if (recentInventoryNeed) {
+    const need = (context.inventoryNeeds || []).find(entry => entry.id === recentInventoryNeed.id);
+    pushUniqueCandidate(inventoryNeeds, need ? {
+      kind: 'inventory_need',
+      id: need.id,
+      label: need.name,
+      surface: 'inventory',
+      score: 1,
+      detail: `${need.requiredQuantity} ${need.unit}; ${need.status}; recent`,
+    } : null);
+  }
+
   const temporalReference = extractTemporalReference(transcript, context).resolution;
   const capabilityIds = capabilities.map(capability => capability.id as CapabilityId);
 
@@ -607,6 +671,8 @@ export function buildPlanningBundle(
       calendarEvents,
       calendarSources,
       financeAccounts,
+      inventoryItems,
+      inventoryNeeds,
       knowledgeTopics,
     },
     temporalCandidate: temporalReference
@@ -633,7 +699,7 @@ export function buildPlannerMessages(
   const capabilities = getLiveCapabilityDefinitions()
     .filter(capability => bundle.capabilities.some(candidate => candidate.id === capability.id));
 
-  const prompt = `You are Lina, the grounded assistant inside the HELM app.
+  const prompt = `You are Lina, the grounded assistant inside the Sabah One app.
 ${languageInstruction}
 Return only JSON that matches the provided schema.
 
@@ -660,7 +726,8 @@ Planning rules:
 - For finance.record_transaction, pass accountId when a specific account is intended or the bundle makes a default clear.
 - For navigation.go_to_surface, pass projectId when opening a specific project inside the Projects surface.
 - For knowledge.create_entry, pass topicId when a specific topic is intended or the bundle makes a default clear.
-- For capture.add_item, pass the raw user content as content and only use classification when the user states or strongly implies a target bucket.
+- Check Inventory before recommending a purchase. Inventory lookup is read-only; Inventory writes require an explicit user request.
+- For multiline or bulk Inventory input, navigate to Inventory so the user can review candidates; never silently create multiple items.
 - Prefer clarify over guessing when the correct id, time, or target is uncertain.
 - If the user asks for an unsupported action, clarify truthfully and do not approximate it to another capability.
 - For unsupported requests that ask Lina to perform work, use mode "clarify", not "answer".
@@ -872,19 +939,28 @@ export function validateModelPlan(
 
   for (const step of plan.steps) {
     switch (step.capability) {
-      case 'capture.add_item': {
-        const content = typeof step.args.content === 'string' ? step.args.content.trim() : '';
-        if (!content) {
-          return validationReject('Capture plan is missing content.', RESPONSES.captureClarify[lang]);
-        }
+      case 'inventory.lookup':
+      case 'inventory.add_item':
+      case 'inventory.add_need': {
+        normalizedSteps.push(step);
+        break;
+      }
 
-        normalizedSteps.push({
-          ...step,
-          args: {
-            ...step.args,
-            content,
-          },
-        });
+      case 'inventory.adjust_quantity': {
+        const itemId = typeof step.args.itemId === 'string' ? step.args.itemId : '';
+        const item = (context.inventoryItems || []).find(entry => entry.id === itemId && !entry.archivedAt);
+        if (!item) return validationReject('Inventory adjustment has an ungrounded item ID.', RESPONSES.inventoryClarify[lang]);
+        referencedEntities.push(makeEntityReference('inventory_item', item.id, item.name, 'inventory', 1));
+        normalizedSteps.push(step);
+        break;
+      }
+
+      case 'inventory.complete_need': {
+        const needId = typeof step.args.needId === 'string' ? step.args.needId : '';
+        const need = (context.inventoryNeeds || []).find(entry => entry.id === needId && (entry.status === 'needed' || entry.status === 'ordered'));
+        if (!need) return validationReject('Inventory completion has an ungrounded need ID.', RESPONSES.inventoryClarify[lang]);
+        referencedEntities.push(makeEntityReference('inventory_need', need.id, need.name, 'inventory', 1));
+        normalizedSteps.push(step);
         break;
       }
 

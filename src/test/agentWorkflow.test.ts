@@ -83,7 +83,7 @@ describe('agent workflow change classification', () => {
     runTemporaryGit(repo, ['add', '.'])
     runTemporaryGit(repo, [
       '-c',
-      'user.name=HELM Test',
+      'user.name=Sabah One Test',
       '-c',
       'user.email=helm@example.invalid',
       'commit',
@@ -122,7 +122,7 @@ describe('agent workflow change classification', () => {
     runTemporaryGit(repo, ['add', '.'])
     runTemporaryGit(repo, [
       '-c',
-      'user.name=HELM Test',
+      'user.name=Sabah One Test',
       '-c',
       'user.email=helm@example.invalid',
       'commit',
@@ -155,7 +155,7 @@ describe('agent workflow change classification', () => {
     runTemporaryGit(repo, ['add', '.'])
     runTemporaryGit(repo, [
       '-c',
-      'user.name=HELM Test',
+      'user.name=Sabah One Test',
       '-c',
       'user.email=helm@example.invalid',
       'commit',
@@ -188,7 +188,7 @@ describe('agent workflow change classification', () => {
     runTemporaryGit(repo, ['add', '.'])
     runTemporaryGit(repo, [
       '-c',
-      'user.name=HELM Test',
+      'user.name=Sabah One Test',
       '-c',
       'user.email=helm@example.invalid',
       'commit',
@@ -203,7 +203,7 @@ describe('agent workflow change classification', () => {
     runTemporaryGit(repo, ['add', 'branch.ts'])
     runTemporaryGit(repo, [
       '-c',
-      'user.name=HELM Test',
+      'user.name=Sabah One Test',
       '-c',
       'user.email=helm@example.invalid',
       'commit',
@@ -230,7 +230,7 @@ describe('agent workflow change classification', () => {
     runTemporaryGit(repo, ['add', '.'])
     runTemporaryGit(repo, [
       '-c',
-      'user.name=HELM Test',
+      'user.name=Sabah One Test',
       '-c',
       'user.email=helm@example.invalid',
       'commit',

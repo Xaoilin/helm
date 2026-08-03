@@ -112,8 +112,52 @@ jobs:
         run: npx supabase db push --linked --password "$SUPABASE_DB_PASSWORD" --include-all --yes
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_database == 'true' }}
-        name: Verify migration history and HELM database contract
+        name: Verify migration history and Sabah One database contract
         run: npm run database:verify
+
+      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_database == 'true' }}
+        name: Deploy Sabah One Inventory MCP
+        run: npx supabase functions deploy sabah-one-inventory-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
+
+      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_database == 'true' }}
+        name: Wait for Sabah One consent UI deployment
+        timeout-minutes: 13
+        run: |
+          expected_version="$(node -p "require('./package.json').version")"
+          for attempt in $(seq 1 72); do
+            deployed_version="$(
+              curl --fail --silent --show-error \
+                "https://xaoilin.github.io/helm/release.json?attempt=$attempt" \
+                | jq -r '.version // empty' \
+                || true
+            )"
+            if [ "$deployed_version" = "$expected_version" ]; then
+              echo "Sabah One $expected_version is serving the OAuth consent route."
+              exit 0
+            fi
+            if [ "$attempt" -lt 72 ]; then sleep 10; fi
+          done
+          echo "Sabah One $expected_version was not deployed before the OAuth enablement deadline."
+          exit 1
+
+      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_database == 'true' }}
+        name: Enable Sabah One OAuth server after Inventory boundaries are live
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data '{"oauth_server_enabled":true,"oauth_server_allow_dynamic_registration":true,"oauth_server_authorization_path":"/helm/oauth/consent"}' \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/auth"
+
+          oauth_config="$(curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/auth")"
+          jq -e '
+            .oauth_server_enabled == true
+            and .oauth_server_allow_dynamic_registration == true
+            and .oauth_server_authorization_path == "/helm/oauth/consent"
+          ' <<<"$oauth_config" >/dev/null
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_assistant == 'true' }}
         name: Sync assistant function secrets

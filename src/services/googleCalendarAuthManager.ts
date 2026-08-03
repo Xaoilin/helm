@@ -32,10 +32,10 @@ import { TIMING } from '../config/constants';
 
 export const GOOGLE_RECONNECT_REQUIRED_MESSAGE = 'Reconnect required.';
 export const GOOGLE_ACCESS_EXPIRED_MESSAGE = 'Google access expired. Reconnect this account.';
-export const GOOGLE_PROFILE_RECONNECT_MESSAGE = 'Reconnect your HELM Google sign-in to restore Calendar access.';
-export const GOOGLE_PROFILE_UPGRADE_REQUIRED_MESSAGE = 'Reconnect your HELM Google sign-in once to upgrade Calendar access in the browser.';
+export const GOOGLE_PROFILE_RECONNECT_MESSAGE = 'Reconnect your Sabah One Google sign-in to restore Calendar access.';
+export const GOOGLE_PROFILE_UPGRADE_REQUIRED_MESSAGE = 'Reconnect your Sabah One Google sign-in once to upgrade Calendar access in the browser.';
 export const GOOGLE_UPGRADE_REQUIRED_MESSAGE = 'Reconnect this Google account once to upgrade it to durable browser Calendar access.';
-export const GOOGLE_SIGN_IN_REQUIRED_MESSAGE = 'Sign in to HELM to use durable Google Calendar sync in the browser.';
+export const GOOGLE_SIGN_IN_REQUIRED_MESSAGE = 'Sign in to Sabah One to use durable Google Calendar sync in the browser.';
 export const GOOGLE_ACCESS_REVOKED_MESSAGE = 'Google access was revoked. Reconnect this account.';
 export const GOOGLE_ACCOUNT_MISMATCH_MESSAGE = 'Google returned a different account. Reconnect this account explicitly.';
 export const GOOGLE_TEMPORARY_UNAVAILABLE_MESSAGE = 'Google Calendar temporarily unavailable.';
@@ -251,7 +251,7 @@ export function getGoogleCalendarPassiveSyncEligibility(
   if (resolvedProvider === 'profile-google' && !isAuthSessionBootstrapped()) {
     return {
       eligible: false,
-      blockedReason: 'Waiting for HELM Google sign-in status to finish loading.',
+      blockedReason: 'Waiting for Sabah One Google sign-in status to finish loading.',
     };
   }
 
@@ -515,7 +515,7 @@ async function tryBootstrapProfileGoogleCredential(
     accountId: account.id,
     email: account.email,
     resolvedAuthProvider: 'profile-google',
-    message: 'Attempting to bootstrap a hosted Google Calendar credential from the signed-in HELM session.',
+    message: 'Attempting to bootstrap a hosted Google Calendar credential from the signed-in Sabah One session.',
   });
   await bootstrapGoogleCalendarProfileCredential({
     email: snapshot.email,
@@ -529,7 +529,7 @@ async function tryBootstrapProfileGoogleCredential(
     accountId: account.id,
     email: account.email,
     resolvedAuthProvider: 'profile-google',
-    message: 'Bootstrapped a hosted Google Calendar credential from the signed-in HELM session.',
+    message: 'Bootstrapped a hosted Google Calendar credential from the signed-in Sabah One session.',
   });
 }
 
@@ -780,7 +780,7 @@ export async function connectProfileGoogleCalendar(): Promise<GoogleCalendarConn
       triggerSource: 'user_action',
       email: snapshot.email,
       resolvedAuthProvider: 'profile-google',
-      message: `Linked the signed-in HELM Google account ${snapshot.email} to Google Calendar.`,
+      message: `Linked the signed-in Sabah One Google account ${snapshot.email} to Google Calendar.`,
     });
     return createConnectionResult(connected, 'profile-google');
   } catch (error) {
@@ -822,7 +822,7 @@ export async function triggerProfileGoogleReconnect(): Promise<void> {
     outcome: 'info',
     triggerSource: 'user_action',
     resolvedAuthProvider: 'profile-google',
-    message: 'Starting a HELM Google sign-in reconnect for the linked profile account.',
+    message: 'Starting a Sabah One Google sign-in reconnect for the linked profile account.',
   });
   await signInWithGoogle();
 }

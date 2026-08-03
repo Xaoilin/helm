@@ -139,7 +139,7 @@ export default function FinanceSurface() {
       let accountsSynced = 0;
       const accountsSkipped: string[] = [];
       for (const mAcc of monzoAccounts) {
-        // Find HELM account by Monzo account ID tag, or create one
+        // Find Sabah One account by Monzo account ID tag, or create one
         const monzoTag = `monzo:${mAcc.id}`;
         const helmAcc = app.financeAccounts.find(a =>
           app.transactions.some(t => t.accountId === a.id && t.tags?.includes(monzoTag))

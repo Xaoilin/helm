@@ -6,7 +6,7 @@ import {
   splitSettings,
 } from '../store/recordCodec';
 
-describe('HELM record codec', () => {
+describe('Sabah One record codec', () => {
   it('preserves stable ids and explicit collection ordering', () => {
     const projects = [
       { id: 'project-b', name: 'B', isPinned: false },
@@ -85,5 +85,14 @@ describe('HELM record codec', () => {
 
   it('rejects active array records without a stable id', () => {
     expect(() => encodeStoreValue('tasks', [{ title: 'Ambiguous task' }])).toThrow(/stable id/i);
+  });
+
+  it('keeps retired Capture payloads decode-only for recovery tooling', () => {
+    expect(decodeStoreValue('captureItems', [{
+      recordId: 'legacy-capture',
+      payload: { id: 'legacy-capture', content: 'Historical note' },
+      position: 0,
+    }])).toEqual([{ id: 'legacy-capture', content: 'Historical note' }]);
+    expect(() => encodeStoreValue('captureItems', [])).toThrow(/retired/i);
   });
 });

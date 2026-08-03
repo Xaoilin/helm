@@ -2,7 +2,7 @@
 
 ## Overview
 
-HELM is an account-backed desktop assistant for a solo operator. The in-app assistant is Lina. Shared state is online-only and database-authoritative; machine-bound execution state remains device-local.
+Sabah One is an account-backed desktop assistant for a solo operator. The in-app assistant is Lina. Shared state is online-only and database-authoritative; machine-bound execution state remains device-local.
 
 The current stack is:
 
@@ -33,14 +33,17 @@ The navigable surfaces are:
 - Chat
 - Calendar
 - Clock
+- Trips
 - Tasks
 - Projects
+- Inventory
 - Secrets
 - Finance
 - Health
 - Knowledge
 - Profile
 - Integrations
+- Activity
 - Settings
 - Debug
 
@@ -57,7 +60,7 @@ Provider stack:
 5. `ProjectProvider`
 6. `TaskProvider`
 7. `KnowledgeProvider`
-8. `CaptureProvider`
+8. `InventoryProvider`
 9. `HealthProvider`
 10. `FinanceProvider`
 11. `PrayerProvider`
@@ -76,7 +79,7 @@ State is split across:
 - `src/store/contexts/TaskContext.tsx`
 - `src/store/contexts/ChatContext.tsx`
 - `src/store/contexts/KnowledgeContext.tsx`
-- `src/store/contexts/CaptureContext.tsx`
+- `src/store/contexts/InventoryContext.tsx`
 - `src/store/contexts/HealthContext.tsx`
 - `src/store/contexts/FinanceContext.tsx`
 - `src/store/contexts/PrayerContext.tsx`
@@ -105,6 +108,7 @@ That navigation payload lets chat and voice hand the UI enough context to open a
 - calendar accounts, sources, and events
 - tasks, goals, daily habits, first-class prayer tasks, and project-linked workflow metadata
 - projects and project wiki pages
+- owned Inventory items and acquisition needs, linked to Projects by stable catalogue key
 - encrypted secret metadata and one-at-a-time revealed secret details
 - multi-timer and multi-stopwatch Clock state, including per-timer alarm sound selection
 - knowledge topics, entries, and lifestyle items
@@ -119,7 +123,7 @@ That navigation payload lets chat and voice hand the UI enough context to open a
 `src/store/persistence.ts`, `src/store/recordCodec.ts`, and `src/store/supabase.ts` enforce these boundaries:
 
 - Shared screens mount only after an authenticated database snapshot, schema/client gate, private Broadcast subscription, and post-subscription version probe succeed.
-- Signed-out, expired, or offline sessions cannot view or change shared state. HELM keeps no durable offline mutation queue.
+- Signed-out, expired, or offline sessions cannot view or change shared state. Sabah One keeps no durable offline mutation queue.
 - Arrays are stored as stable account-owned records with explicit positions. Clock, gamification, and prayer aggregates are decomposed into independently mutable records.
 - All writes are semantic `create`, `patch`, `increment`, `delete`, `restore`, or `reorder` operations sent through one idempotent transactional RPC. Direct table writes are denied.
 - Tombstones prevent stale resurrection; database commit order resolves unavoidable same-field concurrency. Reordering never deletes records.
@@ -132,7 +136,7 @@ Absolute project roots, native approvals, fingerprints, process state, logs, mic
 
 ### Desktop boundary
 
-The Tauri side is intentionally narrow. Rust commands handle app-data directory discovery, allowlisted JSON store reads and writes, cancellable process-side prayer reminder timers, project directory picking/opening, and the trusted local project runner. The runner keeps approvals in an isolated native directory, normalises and fingerprints structured executable profiles and the device runtime path, obtains native OS confirmation, revalidates canonical paths at every start, owns process-group lifecycle and bounded logs, and stops children when HELM exits. It never accepts a raw renderer shell command. Prayer deadline and eligibility rules stay in TypeScript; Rust only keeps scheduled timers alive while the HELM process is running and delivers native notifications when they fire.
+The Tauri side is intentionally narrow. Rust commands handle app-data directory discovery, allowlisted JSON store reads and writes, cancellable process-side prayer reminder timers, project directory picking/opening, and the trusted local project runner. The runner keeps approvals in an isolated native directory, normalises and fingerprints structured executable profiles and the device runtime path, obtains native OS confirmation, revalidates canonical paths at every start, owns process-group lifecycle and bounded logs, and stops children when Sabah One exits. It never accepts a raw renderer shell command. Prayer deadline and eligibility rules stay in TypeScript; Rust only keeps scheduled timers alive while the Sabah One process is running and delivers native notifications when they fire.
 
 ### Supabase
 
@@ -159,7 +163,7 @@ The list RPC never decrypts values. Reveal fetches one active secret only, and t
 
 Google identity now has two cooperating layers:
 
-- Supabase Google sign-in for HELM account auth and cloud sync
+- Supabase Google sign-in for Sabah One account auth and cloud sync
 - server-backed Google Calendar account auth managed through `src/services/googleCalendarAuthManager.ts`, `src/services/googleCalendarServerAuth.ts`, and `supabase/functions/google-calendar-oauth/`
 
 The auth manager links the matching signed-in Google profile to the same-email Calendar account when possible, while still preserving multi-account Google Calendar support for additional accounts.
@@ -170,12 +174,12 @@ Important behavior:
 - Browser Google Calendar transport is now server-backed and refreshable. The browser only obtains Google authorization codes; refresh tokens stay on the hosted Supabase side in `google_calendar_credentials`.
 - The hosted `google-calendar-oauth` function validates the Supabase session inside the function and is deployed with JWT verification disabled. This avoids Supabase Edge gateway rejects when the project issues asymmetric `ES256` access tokens.
 - Production rollout for hosted Google Calendar auth requires the matching Supabase migration to be applied before or with the function deploy. The release workflow uses the repository-pinned Supabase CLI and fails closed without the database password, verified cutover-backup digest, exact historical-schema equivalence, and passing post-migration database contract.
-- Calendar surfaces require HELM sign-in. Signed-out or offline sessions cannot open either provider-backed or manual shared calendar records.
+- Calendar surfaces require Sabah One sign-in. Signed-out or offline sessions cannot open either provider-backed or manual shared calendar records.
 - Passive sync is non-interactive. Opening Calendar or pressing `Sync` should never launch a consent or reconnect popup.
 - Reconnect-required is a confirmed failure state, not a shortcut for "cached GIS token expired". Calendar-OAuth accounts only move into reconnect-required after passive auth actually fails, a 401 comes back, or the user no longer has transport credentials to retry with.
-- Linked `profile-google` accounts stay tied to the HELM sign-in relationship, but the live Calendar transport is no longer the Supabase `provider_token`. Both linked and extra accounts use the same hosted refresh-token credential model.
+- Linked `profile-google` accounts stay tied to the Sabah One sign-in relationship, but the live Calendar transport is no longer the Supabase `provider_token`. Both linked and extra accounts use the same hosted refresh-token credential model.
 - Row-level reconnect for linked `profile-google` accounts uses the same explicit Google Calendar authorization-code path as extra Calendar accounts, so a revoked Supabase profile refresh token cannot trap the account in a failed profile-bootstrap loop.
-- Existing browser-token-only accounts are treated as legacy migration state. They keep their cached calendar data, but HELM asks for a one-time reconnect to upgrade them onto the durable hosted credential path.
+- Existing browser-token-only accounts are treated as legacy migration state. They keep their cached calendar data, but Sabah One asks for a one-time reconnect to upgrade them onto the durable hosted credential path.
 - Accounts that lose Calendar access move into account-level states such as reconnect-required or revoked instead of surfacing as a generic global outage.
 - Google Identity Services still starts the browser flow for separately connected Calendar accounts, but it now uses the authorization-code model and hands off token exchange to the hosted function.
 - Explicit Google auth UI is limited to user-initiated `Reconnect` or `+ Account` flows. Background sync and manual sync are both passive, account-bound checks.
@@ -193,7 +197,7 @@ Sources belong to accounts, and events belong to sources. Account removal must c
 Google-backed calendar accounts also carry per-account auth metadata such as provider mode, auth status, the current hosted access-token expiry, and the last auth error so the UI can distinguish reconnect problems from service outages without confusing short-lived transport expiry for full account disconnection.
 The long-lived Google sync controller now sits above the surface layer inside `src/store/AppContext.tsx` through `GoogleSyncProvider`, so tab remounts do not restart sync work.
 Passive Google sync is a live mirror for successfully fetched provider data: it upserts fresher calendars and events, relinks provider events that were cached under stale local source ids, validates account ownership before mutation, removes Google calendars no longer returned by Calendar List, and removes Google events inside the fetched window when Google no longer returns them. It preserves events outside the fetch window, local/manual calendar data, and all cached data when auth, ownership, rate limit, or event fetch failures make deletion unsafe.
-The Calendar surface's `Sync` button is a passive Google refresh: it mints or refreshes account-bound hosted access tokens, fetches each account's Google Calendar List, fetches events for the configured rolling window, updates HELM's provider cache, and never opens an OAuth prompt. The Calendar header counts visible cached events rather than all Google events returned by the API, so hidden calendars and out-of-window data are not implied to be on-screen.
+The Calendar surface's `Sync` button is a passive Google refresh: it mints or refreshes account-bound hosted access tokens, fetches each account's Google Calendar List, fetches events for the configured rolling window, updates Sabah One's provider cache, and never opens an OAuth prompt. The Calendar header counts visible cached events rather than all Google events returned by the API, so hidden calendars and out-of-window data are not implied to be on-screen.
 Google Calendar writes from the Calendar surface go to Google first. Failed Google create, update, or delete operations leave the cached event unchanged and surface account-level error state instead of creating offline `pendingSync` mutations. Lina's assistant executor also refuses to mutate Google-backed calendar sources locally, so voice and chat cannot create hidden provider-cache drift.
 The Debug surface's `Network / APIs` tab now exposes Google Calendar diagnostics as well: Supabase auth context, hosted backend readiness, credential source, hosted credential presence and health, current hosted access-token expiry, last refresh failure metadata, legacy browser-token migration state, passive-sync eligibility, trigger source, blocked reasons, wrong-account detection, skipped destructive removals, fetched event count, added/updated count, relinked cached event count, cached Google event count, visible Google event count, and a manual passive auth probe that checks access without mutating calendar sources or events.
 Google Calendar diagnostics also keep a local-only persisted runtime timeline so live failures can be explained after the fact: hosted status refreshes, code-flow starts and failures, access-token mint results, calendar-list fetches, event fetches, cache reconciliation summaries, ownership mismatches, reconnects, disconnects, and manual debug probes all emit redacted structured events with request IDs and normalized failure codes when available.
@@ -219,7 +223,7 @@ Planning providers:
 - local Ollama for desktop setups when a live Ollama model is available
 
 The runtime stays provider-agnostic at the execution layer so voice and chat do not drift apart behaviorally. That shared runtime owns task-title normalization, recent-task reveal handling such as "show me that task", grounded ID validation for mutations, and the typed navigation handoff used by the Tasks and Projects surfaces to jump to the right view and reveal the resolved entity.
-The assistant action registry in `src/assistant/capabilities.ts` is the source of truth for which actions Lina may claim and execute. The model now decides whether a turn is `reply`, `clarify`, `confirm`, or `tool_calls`, HELM validates and executes locally, and the final visible assistant reply is narrated from verified results rather than coming from executor templates.
+The assistant action registry in `src/assistant/capabilities.ts` is the source of truth for which actions Lina may claim and execute. The model now decides whether a turn is `reply`, `clarify`, `confirm`, or `tool_calls`, Sabah One validates and executes locally, and the final visible assistant reply is narrated from verified results rather than coming from executor templates.
 The Debug surface renders the registry directly and also shows the latest planning bundle, raw planner response, model turn, validator verdict, validated plan, pending confirmation state, execution payloads, raw narration response, final assistant message, and the latest dashboard-focus trace so model-backed task recommendations can be inspected when GPT picks or falls back.
 The assistant benchmark corpus and scorer now live under `src/assistant/evals/` plus `scripts/run-assistant-benchmark.ts`, and the hosted benchmark thresholds are enforced on `master` before deployment.
 
@@ -240,14 +244,22 @@ Resilience utilities already exist in `src/services/circuitBreaker.ts`, `src/ser
 - Dashboard is the daily operating view and combines agenda, prayer, habits, goals, achievements, and a compact task snapshot. The `Up Next` hero now comes from a dedicated dashboard-focus domain that ranks grounded task, habit, prayer, and near-meeting candidates locally, lets the hosted GPT model review that candidate pool once per local day when available, and falls back immediately to the local ranker when hosted AI is unavailable or invalid. Prayer tasks are driven by the live prayer schedule, so the snapshot only recommends the active sequential prayer window and never mixes expired or later prayers into the queue. Separate Jafari final deadlines drive On-time/Late outcomes and warnings. The dashboard UI distinguishes `GPT-reviewed`, `GPT unavailable`, and `Ollama mode`, only shows duration chips when they come from grounded task or calendar data rather than heuristics, and shows the current-month On-time/Late/Missed split while Profile preserves longer history.
 - Chat is persistent and conversation-based.
 - Calendar is the most integration-heavy surface and depends on account/source/event integrity.
-- Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, Islamic prayer tasks, routine habits, and completed work for easier scanning, with collapsible section headers for long lists. Legacy prayer habits are normalized into first-class prayer tasks on load. Canonical prayer outcome records are keyed by local prayer date and prayer name rather than task ID, so task deletion or recreation does not erase history. Old checked prayer entries migrate idempotently as `unclassified`; HELM never invents legacy on-time status or missed days.
+- Tasks and gamification are tightly linked through XP, streaks, and badge logic. The Tasks surface now intentionally splits into a motivating `Today` view and a calmer `All Tasks` workspace that groups overdue, due-today, upcoming, Islamic prayer tasks, routine habits, and completed work for easier scanning, with collapsible section headers for long lists. Legacy prayer habits are normalized into first-class prayer tasks on load. Canonical prayer outcome records are keyed by local prayer date and prayer name rather than task ID, so task deletion or recreation does not erase history. Old checked prayer entries migrate idempotently as `unclassified`; Sabah One never invents legacy on-time status or missed days.
 - Prayer tracking and reminders are specified in `docs/prayer-tracking-and-reminders.md`. `PrayerProvider` owns schedule freshness, canonical outcomes, the shared completion selector, stats, reminders, and Prayer Debug diagnostics. UI, chat, and voice all use the same completion mutation; Lina asks `On time or late?` when status is omitted, and undo restores task, XP, and prayer tracking together.
-- Projects is a reference-first account catalogue. Searchable cards and an accessible drawer/sheet expose live links, repositories, documentation, setup references, and portable run recipes; Board, Milestones, and Wiki remain available through Manage project. Shared records are keyed by stable `catalogKey`. Device roots, approvals, process state, and logs use separate device-only persistence and never enter Supabase or assistant context. Web HELM is copy/reference-only; the desktop runner accepts only native-approved structured profiles.
+- Projects is a reference-first account catalogue. Searchable cards and an accessible drawer/sheet expose live links, repositories, documentation, setup references, and portable run recipes; Board, Milestones, and Wiki remain available through Manage project. Shared records are keyed by stable `catalogKey`. Device roots, approvals, process state, and logs use separate device-only persistence and never enter Supabase or assistant context. Web Sabah One is copy/reference-only; the desktop runner accepts only native-approved structured profiles.
+- Inventory is a global account-backed catalogue with Owned and Needed views. Item and need payloads are bounded in TypeScript and PostgreSQL; acquisition is a single database mutation that increments or creates owned stock while closing the need. Projects expose a catalogue-key-filtered Inventory tab without creating project-local copies.
+- The former Inbox and quick-capture path has no surface, provider, assistant capability, shortcut, or writable collection. Its historical rows are tombstoned in place for recovery and cannot be restored through active app interfaces.
 - Secrets is an account-owned encrypted credential catalogue. It supports search and project/type/environment filters, immediate Reveal/Hide/Copy, metadata editing, and reversible Archive/Restore without a second master-password prompt. It intentionally has no bulk export, sharing, autofill, permanent delete, offline view, or assistant access.
 - Clock persists multiple active timer and stopwatch records plus per-timer alarm preferences in the signed-in account database.
 - Health persists reflection entries in the signed-in account database while keeping the quick-entry and recent-history workflow in one view.
 - Knowledge contains both a topic-entry knowledge base and the lifestyle tracker.
 - Integrations is the operational hub for Google Calendar and placeholder external providers.
+
+### Cross-project Inventory access
+
+`supabase/functions/sabah-one-inventory-mcp/` exposes exactly seven Inventory tools through a remote MCP endpoint. Supabase OAuth 2.1 with PKCE supplies user tokens; the function validates the token, forwards it through the normal authenticated client, and never uses a service-role credential. RLS and dedicated RPCs permit approved OAuth clients to access only `inventoryItems`, `inventoryNeeds`, and minimal project name/catalogue-key resolution. Generic snapshots, Secrets, finance, calendars, chats, settings, and broad mutation RPCs reject OAuth-client sessions.
+
+The personal plugin at `/Users/xaoilin/plugins/sabah-one-inventory` supplies the complementary planning workflow: relevant project chats check live stock before shopping recommendations, reads happen automatically, and writes require an explicit request. Bulk writes require review, while archive and ambiguous changes require confirmation.
 
 ## Testing And Operational Reality
 
@@ -257,7 +269,6 @@ The repo includes:
 - browser E2E coverage with Playwright
 - desktop and web behavior that still requires manual checks for OAuth, microphone access, wake word, native notification permission, minimized prayer reminders, and some live integrations
 
-The Vite README is still the default template, so the docs in this folder and `AGENTS.md` should be treated as the actual project guide until the README is refreshed.
 
 ## Current Architecture Risks
 

@@ -219,7 +219,7 @@ jobs:
       - run: npm ci
       - name: Start isolated Supabase Postgres
         run: npx supabase start
-      - name: Verify HELM migrations, RLS, concurrency semantics, and legacy preservation
+      - name: Verify Sabah One migrations, RLS, concurrency semantics, and legacy preservation
         run: npm run test:database
       - name: Stop isolated Supabase Postgres
         if: always()
@@ -430,7 +430,7 @@ jobs:
             - git diff --stat ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}
             - git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}
 
-            Apply HELM's AGENTS.md and docs/engineering-guide.md review rules.
+            Apply Sabah One's AGENTS.md and docs/engineering-guide.md review rules.
             Flag only actionable issues introduced by the PR.
             Use priorities:
             - P0: must not merge; data loss, secret leak, severe security issue, or broken release automation.

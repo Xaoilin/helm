@@ -72,7 +72,7 @@ export default function PrayerDebug() {
       <section className="card debug-prayer-card">
         <div className="dash-card-header"><span>Safe notification test</span></div>
         <p className="debug-prayer-help">
-          Schedules a clearly labelled test for five seconds from now. Minimize HELM after clicking to
+          Schedules a clearly labelled test for five seconds from now. Minimize Sabah One after clicking to
           verify the process timer; no prayer outcome, reminder receipt, or XP changes.
         </p>
         <div className="actions-row">
@@ -92,7 +92,7 @@ export default function PrayerDebug() {
             onClick={async () => {
               const sent = await prayer.testReminder('Fajr');
               setTestStatus(sent
-                ? 'TEST scheduled for five seconds from now. Minimize HELM now.'
+                ? 'TEST scheduled for five seconds from now. Minimize Sabah One now.'
                 : 'Test not scheduled; permission is not granted or scheduling failed.');
             }}
           >

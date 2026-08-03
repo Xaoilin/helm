@@ -11,7 +11,6 @@ export const SHARED_STORE_KEYS = [
   { key: 'calendarAccounts', label: 'Calendar accounts', description: 'Calendar account records.' },
   { key: 'calendarSources', label: 'Calendar sources', description: 'Calendars and source visibility.' },
   { key: 'calendarEvents', label: 'Calendar events', description: 'Local and synced calendar events.' },
-  { key: 'captureItems', label: 'Captured items', description: 'Inbox captures awaiting review.' },
   { key: 'clock', label: 'Clock workspace', description: 'Timers and stopwatches.' },
   { key: 'trips', label: 'Trips', description: 'Trip records.' },
   { key: 'tripLegs', label: 'Trip legs', description: 'Trip destination legs.' },
@@ -20,6 +19,8 @@ export const SHARED_STORE_KEYS = [
   { key: 'tripBudgetEntries', label: 'Trip budget', description: 'Trip budget ledger entries.' },
   { key: 'projects', label: 'Projects', description: 'Project portfolio records.' },
   { key: 'projectPages', label: 'Project pages', description: 'Project wiki pages.' },
+  { key: 'inventoryItems', label: 'Inventory items', description: 'Owned tools, equipment, materials, and stock.' },
+  { key: 'inventoryNeeds', label: 'Inventory needs', description: 'Needed, ordered, acquired, and dismissed requirements.' },
   { key: 'tasks', label: 'Tasks', description: 'Tasks, habits, goals, and board state.' },
   { key: 'dashboardFocusFeedback', label: 'Dashboard focus feedback', description: 'Up Next feedback history.' },
   { key: 'knowledgeTopics', label: 'Knowledge topics', description: 'Knowledge base topic taxonomy.' },
@@ -37,6 +38,14 @@ export const SHARED_STORE_KEYS = [
 ] as const satisfies SharedStoreKey[];
 
 export const SHARED_STORE_KEY_SET = new Set<string>(SHARED_STORE_KEYS.map(item => item.key));
+
+/** Decode-only compatibility. These collections are never imported, exported, or written. */
+export const LEGACY_SHARED_STORE_KEY_SET = new Set<string>(['captureItems']);
+
+export const KNOWN_SHARED_STORE_KEY_SET = new Set<string>([
+  ...SHARED_STORE_KEY_SET,
+  ...LEGACY_SHARED_STORE_KEY_SET,
+]);
 
 export function getSharedStoreKey(key: string): SharedStoreKey | null {
   return SHARED_STORE_KEYS.find(item => item.key === key) ?? null;

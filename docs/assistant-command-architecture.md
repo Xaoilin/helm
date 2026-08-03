@@ -19,7 +19,7 @@ Implemented pieces:
 - temporal resolution for relative dates, clock times, part-of-day phrases, and basic prayer-based references
 - normalized task-request parsing that strips conversational scaffolding before writes
 - deterministic execution for navigation, task creation/reveal/completion/deletion, calendar creation/rescheduling, finance logging, and knowledge entry creation
-- deterministic execution for universal capture inbox saves, preserving raw input for later classification instead of forcing immediate conversion into another domain
+- deterministic Inventory lookup, single-item creation, quantity adjustment, need creation, and atomic need completion; multiline input opens reviewed bulk import instead of writing silently
 - shared dialog state with confirmation handling for risky actions such as event rescheduling
 - typed assistant navigation requests so Lina can open the Tasks surface to `Today`, `All Tasks`, or `Goals`, optionally reset filters, optionally reveal and highlight a specific task, or open the Projects surface and reveal a specific project
 - model-first structured planning through hosted OpenAI or local Ollama instead of action-tag parsing
@@ -106,7 +106,11 @@ Examples:
 - `calendar.create_event`
 - `calendar.reschedule_event`
 - `finance.record_transaction`
-- `capture.add_item`
+- `inventory.lookup`
+- `inventory.add_item`
+- `inventory.adjust_quantity`
+- `inventory.add_need`
+- `inventory.complete_need`
 - `knowledge.create_entry`
 
 Prefer business actions over generic low-level mutations. The assistant should ask to "reschedule an event", not receive raw permission to patch arbitrary state.

@@ -88,7 +88,7 @@ describe('planner guardrails', () => {
     expect(validation.planningStatus).toBe('planned');
     expect(validation.plan).toEqual({
       mode: 'clarify',
-      response: 'I can help inside HELM, but I cannot control device or internet settings from here.',
+      response: 'I can help inside Sabah One, but I cannot control device or internet settings from here.',
       confidence: 0.7,
       steps: [],
     });

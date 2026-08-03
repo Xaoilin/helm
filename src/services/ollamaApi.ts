@@ -171,7 +171,7 @@ export function buildSystemPrompt(context: LLMContext, lang: AssistantLang = 'en
     ? 'Respond in Arabic (العربية). Use RTL-friendly text.'
     : 'Respond in English.';
 
-  return `You are Lina, a friendly and concise personal assistant in the HELM app.
+  return `You are Lina, a friendly and concise personal assistant in the Sabah One app.
 ${langInstruction}
 Keep responses short (2-3 sentences max for voice, slightly longer for chat).
 Today is ${today}, current time is ${timeStr}.

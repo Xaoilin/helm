@@ -453,7 +453,7 @@ export default function CalendarSurface() {
         </div>
         <div className="actions-row">
           {hasGoogleAccounts && (
-            <button className="btn btn-secondary btn-sm" onClick={() => triggerSync(true)} disabled={syncState === 'syncing'} title="Fetch the latest Google calendars and update HELM's calendar cache without opening Google sign-in">
+            <button className="btn btn-secondary btn-sm" onClick={() => triggerSync(true)} disabled={syncState === 'syncing'} title="Fetch the latest Google calendars and update Sabah One's calendar cache without opening Google sign-in">
               {syncState === 'syncing' ? <><span className="spinner" /> Syncing</> : '\u{21BB} Sync'}
             </button>
           )}
@@ -769,7 +769,7 @@ export default function CalendarSurface() {
                           {isGoogleAcc && acc.lastSyncTime && ` \u00b7 Synced from Google ${new Date(acc.lastSyncTime).toLocaleString()}`}
                           {isGoogleAcc && acc.lastAuthCheckAt && ` \u00b7 Access checked ${new Date(acc.lastAuthCheckAt).toLocaleString()}`}
                           {isGoogleAcc && ` \u00b7 Credential status ${getGoogleCalendarCredentialStatusLabel(acc)}`}
-                          {isGoogleAcc && acc.authProvider === 'profile-google' && ' \u00b7 Linked to HELM sign-in'}
+                          {isGoogleAcc && acc.authProvider === 'profile-google' && ' \u00b7 Linked to Sabah One sign-in'}
                         </div>
                         {isGoogleAcc && (acc.lastAuthError || acc.syncError) && (
                           <div style={{ fontSize: 11, marginTop: 4, color: acc.authStatus === 'error' ? '#f0c040' : '#ff6b6b' }}>

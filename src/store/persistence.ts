@@ -13,6 +13,7 @@ import {
 } from './projectPersistence';
 import {
   applyHelmMutations,
+  applyHelmInventoryMutations,
   fetchHelmAccountSnapshot,
   fetchHelmCollections,
   getCurrentUserId,
@@ -24,7 +25,7 @@ import {
   subscribeSupabaseRealtimeSnapshot,
   type SupabaseRealtimeSnapshot,
 } from './supabase';
-import { SHARED_STORE_KEYS } from './storeKeys';
+import { LEGACY_SHARED_STORE_KEY_SET, SHARED_STORE_KEYS } from './storeKeys';
 import type { HelmMutation, HelmRecord, HelmSecretRealtimeEvent, SyncSessionStatus } from './databaseTypes';
 import { HELM_DATABASE_SCHEMA_VERSION } from './databaseTypes';
 import {
@@ -177,7 +178,7 @@ let syncSession: SyncSessionSnapshot = {
   reason: 'signed_out',
   lastReadyAt: null,
   lastProbeAt: null,
-  error: 'Sign in to load HELM data.',
+  error: 'Sign in to load Sabah One data.',
 };
 let writeQueueSnapshot: SupabaseWriteQueueSnapshot = {
   queuedCount: 0,
@@ -206,7 +207,7 @@ let lastCalendarSyncRequestReason: string | null = null;
 
 class StalePersistenceSessionError extends Error {
   constructor() {
-    super('The HELM account changed while database work was in flight.');
+    super('The Sabah One account changed while database work was in flight.');
     this.name = 'StalePersistenceSessionError';
   }
 }
@@ -264,6 +265,9 @@ function getDeviceTauriKey(key: string): string {
 function assertSharedStoreKeyIsNotDeviceOnly(key: string): void {
   if (DEVICE_STORE_KEYS.has(key)) {
     throw new Error(`${key} is device-only. Use loadDeviceStore/saveDeviceStore.`);
+  }
+  if (LEGACY_SHARED_STORE_KEY_SET.has(key)) {
+    throw new Error(`${key} is retired and has no active storage interface.`);
   }
 }
 
@@ -550,6 +554,15 @@ async function applyWithIdempotentRetry(requestId: string, operations: HelmMutat
   }
 }
 
+async function applyInventoryWithIdempotentRetry(requestId: string, operations: HelmMutation[]) {
+  try {
+    return await applyHelmInventoryMutations(requestId, operations);
+  } catch (firstError) {
+    if (!shouldRetryMutation(firstError)) throw firstError;
+    return applyHelmInventoryMutations(requestId, operations);
+  }
+}
+
 function shouldRetryMutation(error: unknown): boolean {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
   const candidate = error as { status?: unknown; code?: unknown; message?: unknown };
@@ -568,10 +581,21 @@ async function commitStoreValues(
   assertCurrentPersistenceSession(epoch, userId);
   const operations = [...values.entries()].flatMap(([collection, value]) => buildStoreMutations(collection, value));
   if (operations.length === 0) return [];
-  const requestId = uuid();
-  const result = await applyWithIdempotentRetry(requestId, operations);
+  const inventoryOperations = operations.filter(operation => (
+    operation.collection === 'inventoryItems' || operation.collection === 'inventoryNeeds'
+  ));
+  const sharedOperations = operations.filter(operation => (
+    operation.collection !== 'inventoryItems' && operation.collection !== 'inventoryNeeds'
+  ));
+  const results = [];
+  if (sharedOperations.length > 0) {
+    results.push(await applyWithIdempotentRetry(uuid(), sharedOperations));
+  }
+  if (inventoryOperations.length > 0) {
+    results.push(await applyInventoryWithIdempotentRetry(uuid(), inventoryOperations));
+  }
   assertCurrentPersistenceSession(epoch, userId);
-  applyMutationResult(result.changes, result.accountVersion);
+  for (const result of results) applyMutationResult(result.changes, result.accountVersion);
   for (const [collection, value] of values) {
     deliveredRecordsByCollection.set(collection, copyEncodedRecords(encodeStoreValue(collection, value)));
   }
@@ -768,13 +792,13 @@ async function hydrateDatabaseSnapshot(epoch: number, userId: string): Promise<s
   if (snapshot.state.schemaVersion !== HELM_DATABASE_SCHEMA_VERSION) {
     throw new SyncCompatibilityError(
       'incompatible_schema',
-      `HELM database schema ${snapshot.state.schemaVersion} is not supported by this client.`,
+      `Sabah One database schema ${snapshot.state.schemaVersion} is not supported by this client.`,
     );
   }
   if (!versionAtLeast(APP_VERSION, snapshot.state.minimumClientVersion)) {
     throw new SyncCompatibilityError(
       'client_update_required',
-      `Update HELM to ${snapshot.state.minimumClientVersion} or later.`,
+      `Update Sabah One to ${snapshot.state.minimumClientVersion} or later.`,
     );
   }
   if (snapshot.state.accountVersion < accountVersion) return [];
@@ -835,7 +859,7 @@ function waitForBroadcastReady(epoch: number, userId: string): Promise<void> {
       else resolve();
     };
     const timeout = globalThis.setTimeout(() => {
-      finish(new Error('The private HELM database update channel did not become ready.'));
+      finish(new Error('The private Sabah One database update channel did not become ready.'));
     }, 10_000);
     const removeSubscription = subscribeSupabaseRealtimeSnapshot(snapshot => {
       if (!isCurrentPersistenceSession(epoch, userId)) {
@@ -843,7 +867,7 @@ function waitForBroadcastReady(epoch: number, userId: string): Promise<void> {
       } else if (snapshot.state === 'subscribed') {
         finish();
       } else if (snapshot.state === 'error' || snapshot.state === 'timed_out' || snapshot.state === 'closed') {
-        finish(new Error(snapshot.lastError || `The private HELM update channel is ${snapshot.state}.`));
+        finish(new Error(snapshot.lastError || `The private Sabah One update channel is ${snapshot.state}.`));
       }
     });
     unsubscribe = removeSubscription;
@@ -980,7 +1004,7 @@ export async function bootstrapDatabasePersistence(): Promise<void> {
   const userId = getCurrentUserId();
   if (!isSupabaseReady() || !isAuthenticated() || !userId) {
     resetDatabasePersistence(
-      isSupabaseReady() ? 'Sign in to load HELM data.' : 'HELM database configuration is unavailable.',
+      isSupabaseReady() ? 'Sign in to load Sabah One data.' : 'Sabah One database configuration is unavailable.',
       isSupabaseReady() ? 'signed_out' : 'configuration',
     );
     return;
@@ -988,7 +1012,7 @@ export async function bootstrapDatabasePersistence(): Promise<void> {
   if (bootstrapPromise && bootstrappedUserId === userId) return bootstrapPromise;
 
   if (bootstrappedUserId !== userId || (syncSession.userId && syncSession.userId !== userId)) {
-    resetDatabasePersistence('Switching HELM accounts.', 'switching_account');
+    resetDatabasePersistence('Switching Sabah One accounts.', 'switching_account');
   } else if (hasUsableSnapshotFor(userId)) {
     await requestDatabaseRefresh({ realtime: true });
     return;
@@ -1045,7 +1069,7 @@ export async function bootstrapDatabasePersistence(): Promise<void> {
 function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<void> {
   const userId = getCurrentUserId();
   if (!userId || !isAuthenticated()) {
-    resetDatabasePersistence('Sign in to load HELM data.', 'signed_out');
+    resetDatabasePersistence('Sign in to load Sabah One data.', 'signed_out');
     return Promise.resolve();
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -1168,7 +1192,7 @@ export async function refreshDatabasePersistence(): Promise<void> {
 }
 
 export function resetDatabasePersistence(
-  error = 'HELM account data is unavailable.',
+  error = 'Sabah One account data is unavailable.',
   reason: Extract<SyncSessionReason, 'signed_out' | 'configuration' | 'switching_account'> = 'signed_out',
 ): void {
   persistenceEpoch += 1;
@@ -1263,7 +1287,7 @@ export async function loadStore<T>(key: string): Promise<T | null> {
 export async function saveStore<T>(key: string, value: T): Promise<void> {
   assertSharedStoreKeyIsNotDeviceOnly(key);
   if (!isSupabaseReady() || !isAuthenticated() || syncSession.status !== 'ready' || syncSession.readOnly) {
-    const message = 'Shared HELM data can only be changed while the signed-in database session is ready.';
+    const message = 'Shared Sabah One data can only be changed while the signed-in database session is ready.';
     lastRemoteWriteError = message;
     notifyPersistenceHealthSubscribers();
     return;

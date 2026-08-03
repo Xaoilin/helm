@@ -62,7 +62,7 @@ export default function ActivitySurface() {
       <div className="surface-header">
         <div>
           <h1>Activity</h1>
-          <div className="subtitle">Audit trail for Lina actions, with undo when HELM has a grounded inverse operation.</div>
+          <div className="subtitle">Audit trail for Lina actions, with undo when Sabah One has a grounded inverse operation.</div>
         </div>
       </div>
 

@@ -18,8 +18,35 @@ timeoutSeconds = 900
 [[checks]]
 id = "complete"
 criteria = ["continuity", "coalescing", "domain-updates", "safe-errors", "multi-client", "release"]
-argv = ["npm", "run", "check"]
+argv = ["node", "scripts/run-check.mjs"]
 cwd = "."
+inputGlobs = [
+  ".github/workflows/**",
+  "README.md",
+  "docs/**",
+  "e2e/**",
+  "eslint.config.*",
+  "index.html",
+  "package.json",
+  "package-lock.json",
+  "playwright.config.*",
+  "public/**",
+  "scripts/**",
+  "src/**",
+  "src-tauri/Cargo.lock",
+  "src-tauri/Cargo.toml",
+  "src-tauri/build.rs",
+  "src-tauri/tauri.conf.json",
+  "src-tauri/capabilities/**",
+  "src-tauri/icons/**",
+  "src-tauri/src/**",
+  "supabase/functions/**",
+  "supabase/migrations/**",
+  "supabase/tests/**",
+  "tsconfig*.json",
+  "vite.config.*",
+  "vitest.config.*",
+]
 timeoutSeconds = 1800
 acceptedExitCodes = [0]
 artifactGlobs = ["test-results/check/timings.json"]
@@ -30,8 +57,16 @@ severity = "critical"
 [[checks]]
 id = "database"
 criteria = ["atomic-snapshot", "release"]
-argv = ["npm", "run", "test:database"]
+argv = ["node", "scripts/test-helm-database.mjs"]
 cwd = "."
+inputGlobs = [
+  "package.json",
+  "package-lock.json",
+  "scripts/test-helm-database.mjs",
+  "supabase/config.toml",
+  "supabase/migrations/**",
+  "supabase/tests/**",
+]
 timeoutSeconds = 1200
 acceptedExitCodes = [0]
 artifactGlobs = []
@@ -42,8 +77,21 @@ severity = "critical"
 [[checks]]
 id = "handoff"
 criteria = ["release"]
-argv = ["npm", "run", "handoff:check"]
+argv = ["node", "scripts/verify-handoff.mjs"]
 cwd = "."
+inputGlobs = [
+  ".github/workflows/**",
+  "package.json",
+  "package-lock.json",
+  "public/release.json",
+  "scripts/verify-handoff.mjs",
+  "src-tauri/Cargo.lock",
+  "src-tauri/Cargo.toml",
+  "src-tauri/tauri.conf.json",
+  "supabase/config.toml",
+  "supabase/functions/**",
+  "supabase/migrations/**",
+]
 timeoutSeconds = 600
 acceptedExitCodes = [0]
 artifactGlobs = []

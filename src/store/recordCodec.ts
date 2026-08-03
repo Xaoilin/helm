@@ -4,7 +4,7 @@ import type {
   PrayerTrackingState,
   Settings,
 } from '../types/domain';
-import { SHARED_STORE_KEY_SET } from './storeKeys';
+import { KNOWN_SHARED_STORE_KEY_SET, SHARED_STORE_KEY_SET } from './storeKeys';
 
 export interface EncodedStoreRecord {
   recordId: string;
@@ -53,8 +53,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function assertKnownCollection(collection: string): void {
-  if (!SHARED_STORE_KEY_SET.has(collection) && collection !== 'workspaces') {
+  if (!KNOWN_SHARED_STORE_KEY_SET.has(collection) && collection !== 'workspaces') {
     throw new Error(`Unknown shared store collection: ${collection}`);
+  }
+}
+
+function assertWritableCollection(collection: string): void {
+  if (!SHARED_STORE_KEY_SET.has(collection) && collection !== 'workspaces') {
+    throw new Error(`Shared store collection is retired or unknown: ${collection}`);
   }
 }
 
@@ -200,7 +206,7 @@ function encodePrayerTracking(value: unknown): EncodedStoreRecord[] {
 }
 
 export function encodeStoreValue(collection: string, value: unknown): EncodedStoreRecord[] {
-  assertKnownCollection(collection);
+  assertWritableCollection(collection);
   const sanitized = sanitizeSharedStoreValue(collection, value);
   if (SINGLETON_STORE_KEYS.has(collection)) {
     if (!isRecord(sanitized)) return [];

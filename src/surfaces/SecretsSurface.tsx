@@ -164,13 +164,13 @@ export default function SecretsSurface() {
     const candidates: Array<{ sourceRef: string; label: string; value: string | undefined; kind: SecretKind }> = [
       {
         sourceRef: 'device-settings:deepgramApiKey:v1',
-        label: 'HELM Deepgram API key',
+        label: 'Sabah One Deepgram API key',
         value: app.settings.deepgramApiKey,
         kind: 'api_key',
       },
       {
         sourceRef: 'device-settings:elevenLabsApiKey:v1',
-        label: 'HELM ElevenLabs API key',
+        label: 'Sabah One ElevenLabs API key',
         value: app.settings.elevenLabsApiKey,
         kind: 'api_key',
       },
@@ -377,7 +377,7 @@ export default function SecretsSurface() {
           <span aria-hidden="true">🔒</span>
           <div>
             <strong>Encrypted in your account database</strong>
-            <p>Values stay hidden until you reveal or copy one, and are cleared from this screen when HELM loses focus.</p>
+            <p>Values stay hidden until you reveal or copy one, and are cleared from this screen when Sabah One loses focus.</p>
           </div>
         </section>
 

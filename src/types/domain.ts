@@ -218,6 +218,64 @@ export interface ProjectPage {
   updatedAt: string;
 }
 
+// ── Inventory ──
+export type InventoryCategory =
+  | 'machine'
+  | 'tool'
+  | 'electronics'
+  | 'component'
+  | 'material'
+  | 'consumable'
+  | 'fastener'
+  | 'safety'
+  | 'storage'
+  | 'other';
+export type InventoryTrackingMode = 'durable' | 'counted' | 'measured';
+export type InventoryCondition = 'unknown' | 'new' | 'good' | 'worn' | 'needs_repair';
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  category: InventoryCategory;
+  trackingMode: InventoryTrackingMode;
+  quantity: number;
+  unit: string;
+  lowStockThreshold?: number;
+  brand?: string;
+  model?: string;
+  specifications: Record<string, string>;
+  condition: InventoryCondition;
+  location?: string;
+  tags: string[];
+  notes: string;
+  projectCatalogKeys: string[];
+  lastVerifiedAt: string;
+  archivedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type InventoryNeedPriority = 'low' | 'normal' | 'high';
+export type InventoryNeedStatus = 'needed' | 'ordered' | 'acquired' | 'dismissed';
+
+export interface InventoryNeed {
+  id: string;
+  name: string;
+  linkedItemId?: string;
+  projectCatalogKey?: string;
+  requiredQuantity: number;
+  unit: string;
+  specifications: Record<string, string>;
+  priority: InventoryNeedPriority;
+  status: InventoryNeedStatus;
+  notes: string;
+  orderedAt?: string;
+  acquiredAt?: string;
+  dismissedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Secrets ──
 export type SecretKind =
   | 'password'
@@ -261,7 +319,7 @@ export interface SaveHelmSecretInput {
   username?: string | null;
   url?: string | null;
   notes?: string | null;
-  /** Stable import identity. This is not editable from the HELM UI. */
+  /** Stable import identity. This is not editable from the Sabah One UI. */
   sourceRef?: string | null;
 }
 
@@ -659,31 +717,6 @@ export interface KnowledgeTopic {
   updatedAt: string;
 }
 
-// ── Universal Capture Inbox ──
-export type CaptureItemSource = 'chat' | 'voice' | 'shortcut' | 'quick_button' | 'manual';
-export type CaptureClassification =
-  | 'unknown'
-  | 'task'
-  | 'project_note'
-  | 'calendar_idea'
-  | 'trip_item'
-  | 'health_log'
-  | 'knowledge_entry';
-export type CaptureStatus = 'unprocessed' | 'classified' | 'archived';
-
-export interface CaptureItem {
-  id: string;
-  content: string;
-  source: CaptureItemSource;
-  classification: CaptureClassification;
-  status: CaptureStatus;
-  sourceSurface?: Surface;
-  conversationId?: string;
-  processedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 // ── Health ──
 export type FastFoodExperienceRating = 'good' | 'mixed' | 'bad' | 'awful';
 export type FastFoodSymptom =
@@ -795,7 +828,7 @@ export interface GamificationProfile {
 
 // ── Assistant Activity ──
 export type AssistantActivityActor = 'chat' | 'voice' | 'system';
-export type AssistantActivityDomain = 'assistant' | 'calendar' | 'capture' | 'finance' | 'knowledge' | 'tasks' | 'trips';
+export type AssistantActivityDomain = 'assistant' | 'calendar' | 'finance' | 'inventory' | 'knowledge' | 'tasks' | 'trips';
 export type AssistantActivityAction = 'completed' | 'created' | 'deleted' | 'recorded' | 'saved' | 'updated';
 export type AssistantActivityStatus = 'applied' | 'undone' | 'undo_failed';
 
@@ -807,7 +840,6 @@ export interface AssistantActivityEntityReference {
 }
 
 export type AssistantUndoOperation =
-  | { type: 'capture.delete'; id: string }
   | { type: 'task.delete'; id: string }
   | { type: 'task.restore'; tasks: Task[] }
   | { type: 'task.replace'; task: Task; gamification?: GamificationProfile }
@@ -932,11 +964,11 @@ export interface ClockState {
 export type Surface =
   | 'dashboard'
   | 'chat'
-  | 'inbox'
   | 'calendar'
   | 'clock'
   | 'trips'
   | 'projects'
+  | 'inventory'
   | 'secrets'
   | 'tasks'
   | 'finance'
