@@ -13,6 +13,7 @@ import {
   defaultInventorySubcategory,
   findLikelyInventoryDuplicates,
   inventoryCategoryForSubcategory,
+  inventoryMajorCategoryForRecord,
   inventorySubcategoryMeta,
   INVENTORY_SUBCATEGORY_OPTIONS,
   isInventoryLowStock,
@@ -47,6 +48,20 @@ const CONDITION_OPTIONS: InventoryCondition[] = ['unknown', 'new', 'good', 'worn
 
 function categoryMeta(category: InventoryCategory) {
   return CATEGORY_OPTIONS.find(option => option.value === category) || CATEGORY_OPTIONS.at(-1)!;
+}
+
+function groupByMajorCategory<T extends { category?: InventoryCategory; subcategory?: InventorySubcategory }>(records: T[]) {
+  const grouped = new Map<InventoryCategory, T[]>();
+  records.forEach(record => {
+    const category = inventoryMajorCategoryForRecord(record);
+    const entries = grouped.get(category);
+    if (entries) entries.push(record);
+    else grouped.set(category, [record]);
+  });
+  return CATEGORY_OPTIONS.flatMap(option => {
+    const entries = grouped.get(option.value);
+    return entries?.length ? [{ ...option, entries }] : [];
+  });
 }
 
 function InventoryPhoto({
@@ -406,7 +421,7 @@ function InventoryItemCard({ item, projectName, onEdit, onNeed }: { item: Invent
     <article className={`inventory-card ${low ? 'is-low' : ''}`}>
       <InventoryPhoto imageUrl={item.imageUrl} name={item.name} fallback={meta.icon} />
       <div className="inventory-card-main">
-        <div className="inventory-card-heading"><div><h3>{item.name}</h3><p>{[item.brand, item.model].filter(Boolean).join(' · ') || subcategory?.label || meta.label}</p></div>{low && <span className="inventory-low-badge">Low stock</span>}</div>
+        <div className="inventory-card-heading"><div><h4>{item.name}</h4><p>{[item.brand, item.model].filter(Boolean).join(' · ') || subcategory?.label || meta.label}</p></div>{low && <span className="inventory-low-badge">Low stock</span>}</div>
         <div className="inventory-card-meta"><span>{subcategory?.label || meta.label}</span><span>{item.quantity} {item.unit}</span>{item.location && <span>{item.location}</span>}<span>{item.condition.replace('_', ' ')}</span>{projectName && <span>{projectName}</span>}</div>
         {item.tags.length > 0 && <div className="inventory-tags">{item.tags.slice(0, 5).map(tag => <span key={tag}>{tag}</span>)}</div>}
         <div className="inventory-card-actions">
@@ -437,7 +452,7 @@ function InventoryNeedCard({ need, projectName, onEdit }: { need: InventoryNeed;
     <article className={`inventory-card inventory-need-card priority-${need.priority}`}>
       <InventoryPhoto imageUrl={need.imageUrl} name={need.name} fallback="＋" />
       <div className="inventory-card-main">
-        <div className="inventory-card-heading"><div><h3>{need.name}</h3><p>{subcategory?.label || meta.label} · {need.requiredQuantity} {need.unit} required{projectName ? ` · ${projectName}` : ''}</p></div><span className={`inventory-need-status status-${need.status}`}>{need.status}</span></div>
+        <div className="inventory-card-heading"><div><h4>{need.name}</h4><p>{subcategory?.label || meta.label} · {need.requiredQuantity} {need.unit} required{projectName ? ` · ${projectName}` : ''}</p></div><span className={`inventory-need-status status-${need.status}`}>{need.status}</span></div>
         {need.notes && <p className="inventory-card-notes">{need.notes}</p>}
         <div className="inventory-card-actions">
           {(need.status === 'needed' || need.status === 'ordered') && <button className="btn btn-primary btn-sm" type="button" onClick={markAcquired}>Mark acquired</button>}
@@ -471,7 +486,7 @@ export default function InventorySurface() {
   const app = useApp();
   const [view, setView] = useState<InventoryView>('owned');
   const [query, setQuery] = useState('');
-  const [subcategory, setSubcategory] = useState<'all' | InventorySubcategory>('all');
+  const [category, setCategory] = useState<'all' | InventoryCategory>('all');
   const [projectKey, setProjectKey] = useState('all');
   const [location, setLocation] = useState('all');
   const [editor, setEditor] = useState<EditorState>(null);
@@ -481,18 +496,20 @@ export default function InventorySurface() {
   const owned = useMemo(() => app.inventoryItems.filter(item => {
     if (item.archivedAt) return false;
     if (query && !searchableItem(item).includes(query.toLocaleLowerCase())) return false;
-    if (subcategory !== 'all' && item.subcategory !== subcategory) return false;
+    if (category !== 'all' && inventoryMajorCategoryForRecord(item) !== category) return false;
     if (projectKey !== 'all' && !item.projectCatalogKeys.includes(projectKey)) return false;
     if (location !== 'all' && item.location !== location) return false;
     return true;
-  }), [app.inventoryItems, query, subcategory, projectKey, location]);
+  }), [app.inventoryItems, query, category, projectKey, location]);
   const needed = useMemo(() => app.inventoryNeeds.filter(need => {
     const subcategoryLabel = inventorySubcategoryMeta(need.subcategory)?.label || '';
     if (query && !`${need.name} ${need.notes} ${need.subcategory || ''} ${subcategoryLabel}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())) return false;
-    if (subcategory !== 'all' && need.subcategory !== subcategory) return false;
+    if (category !== 'all' && inventoryMajorCategoryForRecord(need) !== category) return false;
     if (projectKey !== 'all' && need.projectCatalogKey !== projectKey) return false;
     return need.status !== 'dismissed';
-  }), [app.inventoryNeeds, query, subcategory, projectKey]);
+  }), [app.inventoryNeeds, query, category, projectKey]);
+  const ownedGroups = useMemo(() => groupByMajorCategory(owned), [owned]);
+  const neededGroups = useMemo(() => groupByMajorCategory(needed), [needed]);
   const lowCount = app.inventoryItems.filter(isInventoryLowStock).length;
   const openNeedCount = app.inventoryNeeds.filter(need => need.status === 'needed' || need.status === 'ordered').length;
 
@@ -506,14 +523,29 @@ export default function InventorySurface() {
       <section className="inventory-toolbar" aria-label="Inventory filters">
         <div className="inventory-view-tabs" role="tablist"><button className={view === 'owned' ? 'active' : ''} role="tab" aria-selected={view === 'owned'} onClick={() => setView('owned')}>Owned</button><button className={view === 'needed' ? 'active' : ''} role="tab" aria-selected={view === 'needed'} onClick={() => setView('needed')}>Needed</button></div>
         <label className="inventory-search"><span className="sr-only">Search inventory</span><input className="form-input" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search tools, stock, model, tag, location…" /></label>
-        <select className="form-select" aria-label="Filter inventory category" value={subcategory} onChange={e => setSubcategory(e.target.value as 'all' | InventorySubcategory)}><option value="all">All categories</option>{INVENTORY_SUBCATEGORY_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-        <select className="form-select" aria-label="Filter inventory project" value={projectKey} onChange={e => setProjectKey(e.target.value)}><option value="all">All projects</option>{app.projects.filter(p => p.catalogKey).map(project => <option key={project.id} value={project.catalogKey}>{project.name}</option>)}</select>
-        {view === 'owned' && <select className="form-select" aria-label="Filter inventory location" value={location} onChange={e => setLocation(e.target.value)}><option value="all">All locations</option>{locations.map(value => <option key={value} value={value}>{value}</option>)}</select>}
+        <select className="form-select inventory-category-filter" aria-label="Filter inventory category" value={category} onChange={e => setCategory(e.target.value as 'all' | InventoryCategory)}><option value="all">All major categories</option>{CATEGORY_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+        <select className="form-select inventory-project-filter" aria-label="Filter inventory project" value={projectKey} onChange={e => setProjectKey(e.target.value)}><option value="all">All projects</option>{app.projects.filter(p => p.catalogKey).map(project => <option key={project.id} value={project.catalogKey}>{project.name}</option>)}</select>
+        {view === 'owned' && <select className="form-select inventory-location-filter" aria-label="Filter inventory location" value={location} onChange={e => setLocation(e.target.value)}><option value="all">All locations</option>{locations.map(value => <option key={value} value={value}>{value}</option>)}</select>}
       </section>
       <section className="inventory-results" role="tabpanel" aria-label={`${view} inventory`}>
         <div className="inventory-results-heading"><h2>{view === 'owned' ? 'Owned catalogue' : 'Needs queue'}</h2><span>{view === 'owned' ? owned.length : needed.length} shown</span></div>
-        <div className="inventory-card-grid">
-          {view === 'owned' ? owned.map(item => <InventoryItemCard key={item.id} item={item} projectName={item.projectCatalogKeys.length === 1 ? projectNameByKey.get(item.projectCatalogKeys[0]) : undefined} onEdit={() => setEditor({ kind: 'item', item })} onNeed={() => setEditor({ kind: 'need', linkedItem: item, projectCatalogKey: item.projectCatalogKeys[0] })} />) : needed.map(need => <InventoryNeedCard key={need.id} need={need} projectName={need.projectCatalogKey ? projectNameByKey.get(need.projectCatalogKey) : undefined} onEdit={() => setEditor({ kind: 'need', need })} />)}
+        <div className="inventory-category-groups">
+          {(view === 'owned' ? ownedGroups : neededGroups).map(group => {
+            const headingId = `inventory-${view}-${group.value}-heading`;
+            return (
+              <section key={group.value} className="inventory-category-section" aria-labelledby={headingId}>
+                <header className="inventory-category-heading">
+                  <h3 id={headingId}>{group.label}</h3>
+                  <span>{group.entries.length} {group.entries.length === 1 ? 'item' : 'items'}</span>
+                </header>
+                <div className="inventory-card-grid">
+                  {view === 'owned'
+                    ? (group.entries as InventoryItem[]).map(item => <InventoryItemCard key={item.id} item={item} projectName={item.projectCatalogKeys.length === 1 ? projectNameByKey.get(item.projectCatalogKeys[0]) : undefined} onEdit={() => setEditor({ kind: 'item', item })} onNeed={() => setEditor({ kind: 'need', linkedItem: item, projectCatalogKey: item.projectCatalogKeys[0] })} />)
+                    : (group.entries as InventoryNeed[]).map(need => <InventoryNeedCard key={need.id} need={need} projectName={need.projectCatalogKey ? projectNameByKey.get(need.projectCatalogKey) : undefined} onEdit={() => setEditor({ kind: 'need', need })} />)}
+                </div>
+              </section>
+            );
+          })}
         </div>
         {(view === 'owned' ? owned.length : needed.length) === 0 && <div className="inventory-empty"><div aria-hidden="true">S1</div><h3>{query || projectKey !== 'all' ? 'No matching records' : view === 'owned' ? 'Your catalogue is ready' : 'No needs recorded'}</h3><p>{query || projectKey !== 'all' ? 'Change the filters or add a new record.' : view === 'owned' ? 'Add a tool, machine, component, material, or consumable.' : 'Record requirements here before buying.'}</p></div>}
       </section>
