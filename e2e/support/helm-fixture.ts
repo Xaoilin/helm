@@ -266,6 +266,8 @@ export const DEFAULT_INVENTORY_ITEMS = [
     id: 'inventory-m3-inserts',
     name: 'M3 heat-set inserts',
     category: 'fastener',
+    subcategory: 'screws_fasteners',
+    imageUrl: 'https://images.example.test/m3-inserts.svg',
     trackingMode: 'counted',
     quantity: 10,
     unit: 'pcs',
@@ -286,6 +288,8 @@ export const DEFAULT_INVENTORY_ITEMS = [
     id: 'inventory-digital-calipers',
     name: 'Digital calipers',
     category: 'tool',
+    subcategory: 'measuring_tools',
+    imageUrl: 'https://images.example.test/digital-calipers.svg',
     trackingMode: 'durable',
     quantity: 1,
     unit: 'item',
@@ -308,6 +312,9 @@ export const DEFAULT_INVENTORY_NEEDS = [
   {
     id: 'need-m3-inserts',
     name: 'M3 heat-set inserts',
+    category: 'fastener',
+    subcategory: 'screws_fasteners',
+    imageUrl: 'https://images.example.test/m3-inserts.svg',
     linkedItemId: 'inventory-m3-inserts',
     projectCatalogKey: 'fixture:sensor-bench',
     requiredQuantity: 50,
@@ -339,6 +346,13 @@ async function installScenario<Name extends HelmScenarioName>(
   name: Name,
   options: ScenarioOptions[Name],
 ): Promise<void> {
+  await page.route('https://images.example.test/**', route => {
+    const calipers = route.request().url().includes('calipers');
+    const body = calipers
+      ? '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320"><rect width="320" height="320" fill="white"/><path d="M58 90h204v24H58zm36 24h22v132H94zm110 0h22v82h-22z" fill="#334155"/><rect x="116" y="132" width="88" height="58" rx="8" fill="#0891b2"/><rect x="128" y="145" width="64" height="24" rx="4" fill="#cffafe"/></svg>'
+      : '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320"><rect width="320" height="320" fill="white"/><g fill="#d6a84b" stroke="#8a6323" stroke-width="5"><path d="M82 74h30v116H82z"/><path d="M68 58h58v24H68z"/><path d="M145 94h30v116h-30z"/><path d="M131 78h58v24h-58z"/><path d="M208 66h30v116h-30z"/><path d="M194 50h58v24h-58z"/></g><path d="M66 238h188" stroke="#cbd5e1" stroke-width="12" stroke-linecap="round"/></svg>';
+    return route.fulfill({ status: 200, contentType: 'image/svg+xml', body });
+  });
   await mockPrayerTimes(page);
 
   if (name === 'empty') {

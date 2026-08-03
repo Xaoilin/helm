@@ -99,7 +99,9 @@ function InventoryBridge({ children }: { children: ReactNode }) {
     } else {
       const newItemId = items.add(normalizeInventoryItemDraft({
         name: need.name,
-        category: 'other',
+        category: need.category || 'other',
+        subcategory: need.subcategory,
+        imageUrl: need.imageUrl,
         trackingMode: 'counted',
         quantity: need.requiredQuantity,
         unit: need.unit,

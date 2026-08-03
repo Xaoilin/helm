@@ -383,7 +383,7 @@ function executeSingleStep(
       const query = asString(step.args.query).toLocaleLowerCase();
       if (!query) return { kind: 'clarify', reason: 'What should I check in Inventory?' };
       const matches = (context.inventoryItems || []).filter(item => !item.archivedAt && [
-        item.name, item.brand, item.model, item.location, item.category,
+        item.name, item.brand, item.model, item.location, item.category, item.subcategory,
         ...item.tags, ...Object.keys(item.specifications), ...Object.values(item.specifications),
       ].some(value => (value || '').toLocaleLowerCase().includes(query)));
       const needs = (context.inventoryNeeds || []).filter(need => (
@@ -416,9 +416,11 @@ function executeSingleStep(
         category: asString(step.args.category) as never,
         trackingMode: asString(step.args.trackingMode) as never,
         condition: (asString(step.args.condition) || 'unknown') as never,
+        subcategory: (asString(step.args.subcategory) || undefined) as never,
         brand: asString(step.args.brand) || undefined,
         model: asString(step.args.model) || undefined,
         location: asString(step.args.location) || undefined,
+        imageUrl: asString(step.args.imageUrl) || undefined,
         projectCatalogKeys: Array.isArray(step.args.projectCatalogKeys) ? step.args.projectCatalogKeys : [],
         specifications: {},
         tags: [],
@@ -464,6 +466,9 @@ function executeSingleStep(
         name: asString(step.args.name),
         requiredQuantity: asFiniteNumber(step.args.requiredQuantity, 'Required quantity'),
         unit: asString(step.args.unit),
+        category: (asString(step.args.category) || undefined) as never,
+        subcategory: (asString(step.args.subcategory) || undefined) as never,
+        imageUrl: asString(step.args.imageUrl) || undefined,
         linkedItemId: asString(step.args.linkedItemId) || undefined,
         projectCatalogKey: asString(step.args.projectCatalogKey) || undefined,
         priority: (asString(step.args.priority) || 'normal') as never,

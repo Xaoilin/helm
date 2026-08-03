@@ -43,6 +43,8 @@ describe('Inventory model', () => {
       quantity: '100' as unknown as number,
       unit: ' pcs ',
       category: 'fastener',
+      subcategory: 'screws_fasteners',
+      imageUrl: ' https://m.media-amazon.com/images/I/example.jpg ',
       trackingMode: 'counted',
       specifications: { thread: ' M3 ' },
       condition: 'new',
@@ -54,6 +56,8 @@ describe('Inventory model', () => {
       name: 'M3 heat-set inserts',
       quantity: 100,
       unit: 'pcs',
+      subcategory: 'screws_fasteners',
+      imageUrl: 'https://m.media-amazon.com/images/I/example.jpg',
       specifications: { thread: 'M3' },
       tags: ['brass'],
       projectCatalogKeys: ['magnus'],
@@ -63,11 +67,40 @@ describe('Inventory model', () => {
       name: 'M3 heat-set inserts',
       requiredQuantity: 20,
       unit: 'pcs',
+      subcategory: 'screws_fasteners',
+      imageUrl: 'https://m.media-amazon.com/images/I/example.jpg',
       specifications: { thread: 'M3' },
       priority: 'high',
       status: 'needed',
       notes: '',
-    })).toMatchObject({ requiredQuantity: 20, priority: 'high', status: 'needed' });
+    })).toMatchObject({
+      category: 'fastener',
+      subcategory: 'screws_fasteners',
+      imageUrl: 'https://m.media-amazon.com/images/I/example.jpg',
+      requiredQuantity: 20,
+      priority: 'high',
+      status: 'needed',
+    });
+  });
+
+  it('rejects mismatched categories and unsafe product image URLs', () => {
+    expect(() => normalizeInventoryItemDraft({
+      name: 'Digital calipers',
+      category: 'tool',
+      subcategory: 'screws_fasteners',
+      imageUrl: 'https://example.com/calipers.jpg',
+    })).toThrow(/does not match/);
+    expect(() => normalizeInventoryItemDraft({
+      name: 'Digital calipers',
+      category: 'tool',
+      subcategory: 'measuring_tools',
+      imageUrl: 'http://example.com/calipers.jpg',
+    })).toThrow(/HTTPS/);
+    expect(() => normalizeInventoryNeedDraft({
+      name: 'Cabinet jacks',
+      subcategory: 'workshop_equipment',
+      imageUrl: 'https://user:secret@example.com/jacks.jpg',
+    })).toThrow(/HTTPS/);
   });
 
   it('rejects non-finite, negative, and oversized quantities', () => {
@@ -108,14 +141,35 @@ describe('Inventory model', () => {
     expect(candidates[0]).toMatchObject({
       id: 'candidate-1',
       duplicateItemIds: ['item-calipers'],
-      draft: { name: 'Digital calipers', quantity: 2, unit: 'pcs', category: 'tool' },
+      draft: {
+        name: 'Digital calipers', quantity: 2, unit: 'pcs',
+        category: 'tool', subcategory: 'measuring_tools',
+      },
     });
     expect(candidates[1].draft).toMatchObject({
       name: 'M3 heat-set inserts',
       quantity: 100,
       unit: 'pcs',
       category: 'fastener',
+      subcategory: 'screws_fasteners',
     });
-    expect(candidates[2].uncertainFields).toEqual(expect.arrayContaining(['quantity', 'unit', 'category']));
+    expect(candidates[2]).toMatchObject({
+      draft: { category: 'machine', subcategory: '3d_printers' },
+      uncertainFields: ['quantity', 'unit'],
+    });
+  });
+
+  it('prefers specific practical categories over generic words', () => {
+    const candidates = parseInventoryPaste([
+      'Inline fuse holder with 22 AWG wire',
+      'Heavy-duty cable ties',
+      'Self-adhesive magnetic tape',
+    ].join('\n'));
+
+    expect(candidates.map(candidate => candidate.draft.subcategory)).toEqual([
+      'fuses_protection',
+      'cable_management',
+      'adhesives_tapes',
+    ]);
   });
 });

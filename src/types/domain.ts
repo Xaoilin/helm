@@ -230,6 +230,38 @@ export type InventoryCategory =
   | 'safety'
   | 'storage'
   | 'other';
+export type InventorySubcategory =
+  | '3d_printers'
+  | 'other_machines'
+  | 'workshop_equipment'
+  | 'general_tools'
+  | 'hand_tools'
+  | 'power_tools'
+  | 'measuring_tools'
+  | 'screws_fasteners'
+  | 'filament'
+  | 'resin'
+  | 'wire_cable'
+  | 'connectors_terminals'
+  | 'power_supplies'
+  | 'power_modules'
+  | 'switches_relays'
+  | 'microcontrollers'
+  | 'prototyping_boards'
+  | 'fuses_protection'
+  | 'lights_alarms'
+  | 'heat_shrink_sleeving'
+  | 'cable_management'
+  | 'magnets'
+  | 'adhesives_tapes'
+  | 'mechanical_hardware'
+  | 'general_components'
+  | 'general_electronics'
+  | 'general_materials'
+  | 'general_consumables'
+  | 'storage_organisation'
+  | 'safety_equipment'
+  | 'other';
 export type InventoryTrackingMode = 'durable' | 'counted' | 'measured';
 export type InventoryCondition = 'unknown' | 'new' | 'good' | 'worn' | 'needs_repair';
 
@@ -237,6 +269,8 @@ export interface InventoryItem {
   id: string;
   name: string;
   category: InventoryCategory;
+  subcategory?: InventorySubcategory;
+  imageUrl?: string;
   trackingMode: InventoryTrackingMode;
   quantity: number;
   unit: string;
@@ -261,6 +295,9 @@ export type InventoryNeedStatus = 'needed' | 'ordered' | 'acquired' | 'dismissed
 export interface InventoryNeed {
   id: string;
   name: string;
+  category?: InventoryCategory;
+  subcategory?: InventorySubcategory;
+  imageUrl?: string;
   linkedItemId?: string;
   projectCatalogKey?: string;
   requiredQuantity: number;

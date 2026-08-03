@@ -594,7 +594,7 @@ export function buildPlanningBundle(
     .filter(item => !item.archivedAt)
     .map(item => {
       const haystack = normaliseText([
-        item.name, item.brand, item.model, item.location, item.category,
+        item.name, item.brand, item.model, item.location, item.category, item.subcategory,
         ...item.tags, ...Object.keys(item.specifications), ...Object.values(item.specifications),
       ].filter(Boolean).join(' '));
       const overlap = inventoryTokens.filter(token => haystack.includes(token)).length;
