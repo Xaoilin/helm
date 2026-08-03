@@ -11,7 +11,7 @@ extraEnvironmentKeys = []
 
 [aiProvider]
 argv = ["/Users/xaoilin/.local/bin/relay-codex-provider"]
-executableSha256 = "732518edbfb9762bc74c0cd4d59e45d7cc74bcee5c50e63e0f81b47d8dec9f8f"
+executableSha256 = "9d868ed49fb61199f5e05dce072fed1548e7803f13a7eb21796a2d61b1a67c86"
 network = "declared"
 timeoutSeconds = 900
 
