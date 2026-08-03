@@ -2,6 +2,7 @@
 import {
   evaluateCiWorkflow,
   evaluateDeployWorkflow,
+  evaluatePagesSpaFallback,
   evaluateSupabaseOAuthOrigin,
   findForbiddenLocalDateSlicingInText,
   REQUIRED_CI_CHECKS,
@@ -290,6 +291,26 @@ jq -e '
       failures: expect.arrayContaining([
         expect.stringContaining('must verify the returned pathless production OAuth Site URL'),
       ]),
+    })
+  })
+
+  it('requires the GitHub Pages SPA fallback in every production web build', () => {
+    const packageManifest = {
+      scripts: {
+        'build:web': 'vite build && node ./scripts/copy-spa-fallback.mjs',
+      },
+    }
+
+    expect(evaluatePagesSpaFallback(packageManifest).ok).toBe(true)
+    expect(evaluatePagesSpaFallback({ scripts: { 'build:web': 'vite build' } })).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining([
+        expect.stringContaining('build:web must emit the GitHub Pages SPA fallback'),
+      ]),
+    })
+    expect(evaluatePagesSpaFallback(packageManifest, false)).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining(['GitHub Pages SPA fallback script is missing.']),
     })
   })
 
