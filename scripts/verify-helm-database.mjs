@@ -164,7 +164,13 @@ const [migrationRows, verificationRows] = await Promise.all([
         where state.user_id is null
       ),
       'minimumClientVersionsCorrect', coalesce((
-        select bool_and(minimum_client_version = '0.2.83' and schema_version = 1)
+        -- 0.2.83 is the complete-snapshot floor. Accounts that have used the
+        -- Inventory RPC are intentionally advanced to its 0.2.86 floor.
+        -- Keep this an explicit allowlist so unknown or future floors fail.
+        select bool_and(
+          minimum_client_version = any(array['0.2.83', '0.2.86']::text[])
+          and schema_version = 1
+        )
         from public.helm_account_state
       ), true),
       'legacySnapshotsMatchManifest', not exists (
