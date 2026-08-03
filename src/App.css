@@ -140,6 +140,11 @@
 .inventory-results-heading { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; margin: 0 2px 12px; }
 .inventory-results-heading h2 { margin: 0; color: var(--mc-strong); font-size: 17px; }
 .inventory-results-heading span { color: var(--mc-muted); font-size: 12px; }
+.inventory-category-groups { display: grid; gap: 26px; }
+.inventory-category-section { display: grid; gap: 12px; min-width: 0; }
+.inventory-category-heading { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 0 2px 9px; border-bottom: 1px solid var(--mc-line); }
+.inventory-category-heading h3 { margin: 0; color: var(--mc-strong); font-size: 15px; letter-spacing: 0.01em; }
+.inventory-category-heading span { flex: 0 0 auto; padding: 4px 8px; border: 1px solid rgba(99, 102, 241, 0.24); border-radius: 999px; background: rgba(99, 102, 241, 0.08); color: #a5b4fc; font-size: 10px; font-weight: 700; }
 .inventory-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 
 .inventory-card {
@@ -174,7 +179,7 @@
 
 .inventory-card-main { display: grid; gap: 11px; min-width: 0; }
 .inventory-card-heading { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
-.inventory-card-heading h3 { margin: 0; color: var(--mc-strong); font-size: 15px; line-height: 1.35; }
+.inventory-card-heading h4 { margin: 0; color: var(--mc-strong); font-size: 15px; line-height: 1.35; }
 .inventory-card-heading p, .inventory-card-notes { margin: 4px 0 0; color: var(--mc-muted); font-size: 11px; line-height: 1.45; }
 .inventory-card-meta { display: flex; gap: 6px; flex-wrap: wrap; }
 .inventory-card-meta span, .inventory-tags span {
@@ -302,7 +307,9 @@
   .inventory-stats > div { justify-content: space-between; }
   .inventory-toolbar { position: static; grid-template-columns: 1fr 1fr; }
   .inventory-view-tabs, .inventory-search { grid-column: 1 / -1; }
+  .inventory-category-filter { grid-column: 1 / -1; }
   .inventory-card { grid-template-columns: 84px minmax(0, 1fr); padding: 14px; }
+  .inventory-category-groups { gap: 22px; }
   .inventory-card-visual { width: 84px; }
   .inventory-card-visual.is-compact { width: 36px; }
   .inventory-card-actions .btn { flex: 1 1 96px; }

@@ -3,6 +3,8 @@ import type { InventoryItem } from '../types/domain';
 import {
   findLikelyInventoryDuplicates,
   hasSufficientInventory,
+  inventoryMajorCategoryForRecord,
+  INVENTORY_SUBCATEGORY_OPTIONS,
   isInventoryLowStock,
   normalizeInventoryItemDraft,
   normalizeInventoryNeedDraft,
@@ -81,6 +83,13 @@ describe('Inventory model', () => {
       priority: 'high',
       status: 'needed',
     });
+  });
+
+  it('maps every detailed category into one major category', () => {
+    for (const option of INVENTORY_SUBCATEGORY_OPTIONS) {
+      expect(inventoryMajorCategoryForRecord({ subcategory: option.value })).toBe(option.category);
+    }
+    expect(inventoryMajorCategoryForRecord({})).toBe('other');
   });
 
   it('rejects mismatched categories and unsafe product image URLs', () => {

@@ -98,10 +98,13 @@ describe('InventorySurface', () => {
     const caliperPhoto = screen.getByRole('img', { name: 'Digital calipers product photo' });
     expect(caliperPhoto).toHaveAttribute('src', 'https://m.media-amazon.com/images/I/calipers.jpg');
     expect(document.querySelector('.inventory-low-badge')).toHaveTextContent('Low stock');
+    expect(screen.getByRole('heading', { name: 'Tools' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Fasteners' })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Filter inventory category'), { target: { value: 'measuring_tools' } });
+    fireEvent.change(screen.getByLabelText('Filter inventory category'), { target: { value: 'tool' } });
     expect(screen.getByRole('heading', { name: 'Digital calipers' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'M3 heat-set inserts' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Fasteners' })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Filter inventory category'), { target: { value: 'all' } });
 
     fireEvent.error(caliperPhoto);

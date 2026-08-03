@@ -89,6 +89,14 @@ export function inventoryCategoryForSubcategory(value: InventorySubcategory): In
   return option.category;
 }
 
+export function inventoryMajorCategoryForRecord(
+  value: { category?: InventoryCategory; subcategory?: InventorySubcategory },
+): InventoryCategory {
+  if (value.category) return value.category;
+  if (value.subcategory) return inventoryCategoryForSubcategory(value.subcategory);
+  return 'other';
+}
+
 export function defaultInventorySubcategory(category: InventoryCategory): InventorySubcategory {
   switch (category) {
     case 'machine': return 'other_machines';

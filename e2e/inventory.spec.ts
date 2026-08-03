@@ -17,10 +17,13 @@ test.describe('Sabah One Inventory', () => {
     await expect(inserts.getByText('Low stock', { exact: true })).toBeVisible();
     await expect(inserts.getByText('10 pcs', { exact: true })).toBeVisible();
     await expect(inserts.getByRole('img', { name: 'M3 heat-set inserts product photo' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Tools', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Fasteners', exact: true })).toBeVisible();
 
-    await page.getByLabel('Filter inventory category').selectOption('measuring_tools');
+    await page.getByLabel('Filter inventory category').selectOption('tool');
     await expect(inventoryCard(page, 'Digital calipers')).toBeVisible();
     await expect(inventoryCard(page, 'M3 heat-set inserts')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Fasteners', exact: true })).toHaveCount(0);
     await page.getByLabel('Filter inventory category').selectOption('all');
 
     await page.getByLabel('Filter inventory project').selectOption('fixture:orbit-console');
