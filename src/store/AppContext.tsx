@@ -7,7 +7,7 @@ import type {
   Task, GamificationProfile,
   DashboardFocusState,
   KnowledgeTopic, KnowledgeEntry,
-  CaptureItem,
+  InventoryItem, InventoryNeed,
   LifestyleItem,
   FastFoodLogEntry,
   FinanceAccount, Transaction, FinanceBudget, SavingsGoal,
@@ -35,7 +35,7 @@ import { ProjectProvider, useProjectContext } from './contexts/ProjectContext';
 import { TaskProvider, useTaskContext } from './contexts/TaskContext';
 import { ChatProvider, useChatContext, type ChatCrossDomainData } from './contexts/ChatContext';
 import { KnowledgeProvider, useKnowledgeContext } from './contexts/KnowledgeContext';
-import { CaptureProvider, useCaptureContext } from './contexts/CaptureContext';
+import { InventoryProvider, useInventoryContext } from './contexts/InventoryContext';
 import { HealthProvider, useHealthContext } from './contexts/HealthContext';
 import { FinanceProvider, useFinanceContext } from './contexts/FinanceContext';
 import { GamificationProvider, useGamificationContext } from './contexts/GamificationContext';
@@ -68,10 +68,11 @@ interface AppContextAPI {
   projects: Project[];
   projectDeviceBindings: ProjectDeviceBinding[];
   projectPages: ProjectPage[];
+  inventoryItems: InventoryItem[];
+  inventoryNeeds: InventoryNeed[];
   tasks: Task[];
   knowledgeTopics: KnowledgeTopic[];
   knowledgeEntries: KnowledgeEntry[];
-  captureItems: CaptureItem[];
   lifestyleItems: LifestyleItem[];
   fastFoodEntries: FastFoodLogEntry[];
   financeAccounts: FinanceAccount[];
@@ -142,6 +143,15 @@ interface AppContextAPI {
   updateProjectPage: (id: string, updates: Partial<ProjectPage>) => void;
   removeProjectPage: (id: string) => void;
 
+  addInventoryItem: (item: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  addInventoryItems: (items: Array<Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>>) => string[];
+  updateInventoryItem: (id: string, updates: Partial<Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>>) => void;
+  adjustInventoryQuantity: (id: string, delta: number) => void;
+  archiveInventoryItem: (id: string) => void;
+  addInventoryNeed: (need: Omit<InventoryNeed, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateInventoryNeed: (id: string, updates: Partial<Omit<InventoryNeed, 'id' | 'createdAt' | 'updatedAt'>>) => void;
+  completeInventoryNeed: (needId: string) => void;
+
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateTask: (id: string, updates: Partial<Task>) => void;
   removeTask: (id: string) => void;
@@ -152,10 +162,6 @@ interface AppContextAPI {
   addKnowledgeEntry: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateKnowledgeEntry: (id: string, updates: Partial<KnowledgeEntry>) => void;
   removeKnowledgeEntry: (id: string) => void;
-
-  addCaptureItem: (item: Omit<CaptureItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
-  updateCaptureItem: (id: string, updates: Partial<CaptureItem>) => void;
-  removeCaptureItem: (id: string) => void;
 
   addLifestyleItem: (item: Omit<LifestyleItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateLifestyleItem: (id: string, updates: Partial<LifestyleItem>) => void;
@@ -241,11 +247,11 @@ function isShellSurface(value: string | null): value is Surface {
   switch (value) {
     case 'dashboard':
     case 'chat':
-    case 'inbox':
     case 'calendar':
     case 'clock':
     case 'trips':
     case 'projects':
+    case 'inventory':
     case 'secrets':
     case 'tasks':
     case 'finance':
@@ -283,7 +289,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   const taskCtx = useTaskContext();
   const chat = useChatContext();
   const knowledge = useKnowledgeContext();
-  const captureCtx = useCaptureContext();
+  const inventoryCtx = useInventoryContext();
   const health = useHealthContext();
   const finance = useFinanceContext();
   const gamificationCtx = useGamificationContext();
@@ -302,6 +308,10 @@ function ShellProvider({ children }: { children: ReactNode }) {
 
   const requestAssistantNavigation = useCallback<AssistantNavigationHandler>((target) => {
     const request = normalizeAssistantNavigationRequest(target);
+    if (!isShellSurface(request.surface)) {
+      setState(current => ({ ...current, surface: 'dashboard', assistantNavigationRequest: null }));
+      return;
+    }
     setState(current => ({
       ...current,
       surface: request.surface,
@@ -354,7 +364,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     && taskCtx.loaded
     && chat.loaded
     && knowledge.loaded
-    && captureCtx.loaded
+    && inventoryCtx.loaded
     && health.loaded
     && finance.loaded
     && gamificationCtx.loaded
@@ -434,9 +444,6 @@ function ShellProvider({ children }: { children: ReactNode }) {
     try {
       const operation = entry.undoOperation;
       switch (operation.type) {
-        case 'capture.delete':
-          captureCtx.removeCaptureItem(operation.id);
-          break;
         case 'task.delete':
           taskCtx.removeTask(operation.id);
           break;
@@ -524,6 +531,8 @@ function ShellProvider({ children }: { children: ReactNode }) {
         case 'knowledge.delete_entry':
           knowledge.removeKnowledgeEntry(operation.id);
           break;
+        default:
+          throw new Error('This legacy Lina undo operation is no longer supported.');
       }
 
       activityCtx.markAssistantActivityUndone(id);
@@ -537,7 +546,6 @@ function ShellProvider({ children }: { children: ReactNode }) {
   }, [
     activityCtx,
     calendar,
-    captureCtx,
     finance,
     gamificationCtx,
     knowledge,
@@ -563,10 +571,11 @@ function ShellProvider({ children }: { children: ReactNode }) {
     projects: projectCtx.projects,
     projectDeviceBindings: projectCtx.projectDeviceBindings,
     projectPages: projectCtx.projectPages,
+    inventoryItems: inventoryCtx.inventoryItems,
+    inventoryNeeds: inventoryCtx.inventoryNeeds,
     tasks: taskCtx.tasks,
     knowledgeTopics: knowledge.knowledgeTopics,
     knowledgeEntries: knowledge.knowledgeEntries,
-    captureItems: captureCtx.captureItems,
     lifestyleItems: knowledge.lifestyleItems,
     fastFoodEntries: health.fastFoodEntries,
     financeAccounts: finance.financeAccounts,
@@ -635,6 +644,15 @@ function ShellProvider({ children }: { children: ReactNode }) {
     updateProjectPage: projectCtx.updateProjectPage,
     removeProjectPage: projectCtx.removeProjectPage,
 
+    addInventoryItem: inventoryCtx.addInventoryItem,
+    addInventoryItems: inventoryCtx.addInventoryItems,
+    updateInventoryItem: inventoryCtx.updateInventoryItem,
+    adjustInventoryQuantity: inventoryCtx.adjustInventoryQuantity,
+    archiveInventoryItem: inventoryCtx.archiveInventoryItem,
+    addInventoryNeed: inventoryCtx.addInventoryNeed,
+    updateInventoryNeed: inventoryCtx.updateInventoryNeed,
+    completeInventoryNeed: inventoryCtx.completeInventoryNeed,
+
     addTask: taskCtx.addTask,
     updateTask: taskCtx.updateTask,
     removeTask: taskCtx.removeTask,
@@ -645,9 +663,6 @@ function ShellProvider({ children }: { children: ReactNode }) {
     addKnowledgeEntry: knowledge.addKnowledgeEntry,
     updateKnowledgeEntry: knowledge.updateKnowledgeEntry,
     removeKnowledgeEntry: knowledge.removeKnowledgeEntry,
-    addCaptureItem: captureCtx.addCaptureItem,
-    updateCaptureItem: captureCtx.updateCaptureItem,
-    removeCaptureItem: captureCtx.removeCaptureItem,
     addLifestyleItem: knowledge.addLifestyleItem,
     updateLifestyleItem: knowledge.updateLifestyleItem,
     removeLifestyleItem: knowledge.removeLifestyleItem,
@@ -717,7 +732,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     projectCtx,
     taskCtx,
     knowledge,
-    captureCtx,
+    inventoryCtx,
     health,
     finance,
     settingsCtx,
@@ -736,7 +751,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
   ]);
 
   if (!allLoaded) {
-    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#8b8fa3' }}>Loading HELM...</div>;
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#8b8fa3' }}>Loading Sabah One...</div>;
   }
 
   const googleSyncApp = {
@@ -768,7 +783,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
   const gamificationCtx = useGamificationContext();
   const settingsCtx = useSettingsContext();
   const knowledge = useKnowledgeContext();
-  const captureCtx = useCaptureContext();
+  const inventoryCtx = useInventoryContext();
   const finance = useFinanceContext();
   const assistantCtx = useAssistantContext();
   const activityCtx = useAssistantActivityContext();
@@ -784,7 +799,8 @@ function ChatBridge({ children }: { children: ReactNode }) {
     transactions: finance.transactions,
     knowledgeEntries: knowledge.knowledgeEntries,
     knowledgeTopics: knowledge.knowledgeTopics,
-    captureItems: captureCtx.captureItems,
+    inventoryItems: inventoryCtx.inventoryItems,
+    inventoryNeeds: inventoryCtx.inventoryNeeds,
     lifestyleItems: knowledge.lifestyleItems,
     assistantCorrections: assistantCtx.corrections,
     gamification: gamificationCtx.gamification,
@@ -799,7 +815,10 @@ function ChatBridge({ children }: { children: ReactNode }) {
     updateCalendarEvent: calendar.updateCalendarEvent,
     addTransaction: finance.addTransaction,
     addKnowledgeEntry: knowledge.addKnowledgeEntry,
-    addCaptureItem: captureCtx.addCaptureItem,
+    addInventoryItem: inventoryCtx.addInventoryItem,
+    adjustInventoryQuantity: inventoryCtx.adjustInventoryQuantity,
+    addInventoryNeed: inventoryCtx.addInventoryNeed,
+    completeInventoryNeed: inventoryCtx.completeInventoryNeed,
     updateGamification: gamificationCtx.updateGamification,
     completePrayer: (
       prayerName,
@@ -825,8 +844,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
     knowledge.knowledgeTopics,
     knowledge.lifestyleItems,
     knowledge.addKnowledgeEntry,
-    captureCtx.captureItems,
-    captureCtx.addCaptureItem,
+    inventoryCtx,
     assistantCtx.corrections,
     assistantCtx.upsertCorrection,
     assistantCtx.noteCorrectionApplied,
@@ -849,7 +867,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             <ProjectProvider>
               <TaskProvider>
                 <KnowledgeProvider>
-                  <CaptureProvider>
+                  <InventoryProvider>
                     <HealthProvider>
                       <FinanceProvider>
                         <PrayerProvider>
@@ -867,7 +885,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         </PrayerProvider>
                       </FinanceProvider>
                     </HealthProvider>
-                  </CaptureProvider>
+                  </InventoryProvider>
                 </KnowledgeProvider>
               </TaskProvider>
             </ProjectProvider>

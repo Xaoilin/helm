@@ -60,6 +60,11 @@ describe('database-authoritative persistence boundaries', () => {
     expect(invoke).not.toHaveBeenCalledWith('write_store', expect.anything());
   });
 
+  it('exposes no active storage interface for retired Capture records', async () => {
+    await expect(loadStore('captureItems')).rejects.toThrow(/retired/i);
+    await expect(saveStore('captureItems', [{ id: 'legacy-capture' }])).rejects.toThrow(/retired/i);
+  });
+
   it('keeps explicitly device-bound settings local', async () => {
     await saveDeviceStore(DEVICE_SETTINGS_STORE_KEY, {
       microphoneDeviceId: 'device-microphone',

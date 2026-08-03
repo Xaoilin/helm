@@ -353,7 +353,7 @@ export default function IntegrationsSurface() {
       </div>
       <div className="surface-body">
         <div className="info-box">
-          Integrations connect HELM to external services. Google Calendar now uses server-backed browser credentials, so durable sync requires you to be signed into HELM.
+          Integrations connect Sabah One to external services. Google Calendar uses server-backed browser credentials, so durable sync requires you to be signed into Sabah One.
           Other integrations can be simulated for development.
         </div>
 
@@ -406,7 +406,7 @@ export default function IntegrationsSurface() {
                             {getGoogleCalendarStatusLabel(account)}
                           </span>
                           {account.authProvider === 'profile-google' && (
-                            <span style={{ fontSize: 11, color: '#8b90a8' }}>Linked to your HELM Google sign-in</span>
+                            <span style={{ fontSize: 11, color: '#8b90a8' }}>Linked to your Sabah One Google sign-in</span>
                           )}
                         </div>
                         <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 4 }}>
@@ -473,7 +473,7 @@ export default function IntegrationsSurface() {
                         {canLinkSignedInGoogle && (
                           <div className="info-box" style={{ marginBottom: 8 }}>
                             {needsProfileReconnect
-                              ? `You are signed into HELM as ${profileEmail}. Reconnect that Google sign-in once so HELM can store a durable Calendar credential.`
+                              ? `You are signed into Sabah One as ${profileEmail}. Reconnect that Google sign-in once so Sabah One can store a durable Calendar credential.`
                               : `Link your signed-in Google profile (${profileEmail}) without adding a duplicate account.`}
                           </div>
                         )}
@@ -495,17 +495,17 @@ export default function IntegrationsSurface() {
                               <li>Add <code>http://localhost:5174</code> as an Authorized JavaScript Origin</li>
                               <li>Add <code>http://localhost:5174</code> as an Authorized redirect URI because the browser code flow exchanges against the app origin</li>
                               <li>Enable the <strong>Google Calendar API</strong> in your project</li>
-                              <li>Copy the Client ID and paste it in HELM Settings</li>
+                              <li>Copy the Client ID and paste it in Sabah One Settings</li>
                               <li>Set the same Client ID plus the matching client secret as Supabase Edge Function secrets for <code>google-calendar-oauth</code></li>
                               <li>Keep the <code>google_calendar_credentials</code> migration in the repo so the release workflow can apply the hosted Google Calendar schema before durable browser sync goes live</li>
                               <li>Prefer keeping <code>SUPABASE_DB_PASSWORD</code> in GitHub Actions so broader Supabase migrations can still use <code>supabase db push</code>; if it is missing, the release workflow now falls back to the targeted hosted Google Calendar schema apply</li>
-                              <li>Deploy <code>google-calendar-oauth</code> with <code>--no-verify-jwt</code> because HELM validates the Supabase session inside the function and production sessions may use ES256 tokens</li>
+                              <li>Deploy <code>google-calendar-oauth</code> with <code>--no-verify-jwt</code> because Sabah One validates the Supabase session inside the function and production sessions may use ES256 tokens</li>
                             </ol>
                           </div>
                         )}
 
                         <div className="info-box" style={{ marginBottom: 8 }}>
-                          HELM keeps refreshable Google Calendar credentials on the server for browser sync. The one-hour Google access token lifetime shown in Debug is now just transport metadata, not your account connection lifetime.
+                          Sabah One keeps refreshable Google Calendar credentials on the server for browser sync. The one-hour Google access token lifetime shown in Debug is transport metadata, not your account connection lifetime.
                         </div>
 
                         <div className="actions-row" style={{ flexWrap: 'wrap' }}>

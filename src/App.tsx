@@ -1,9 +1,9 @@
 import './App.css';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from './store/AppContext';
 import DashboardSurface from './surfaces/DashboardSurface';
 import ChatSurface from './surfaces/ChatSurface';
-import CaptureInboxSurface from './surfaces/CaptureInboxSurface';
+import InventorySurface from './surfaces/InventorySurface';
 import CalendarSurface from './surfaces/CalendarSurface';
 import ClockSurface from './surfaces/ClockSurface';
 import TripsSurface from './surfaces/TripsSurface';
@@ -26,8 +26,7 @@ import {
   signInWithGoogle as startGoogleSignIn,
   signOut as endSupabaseSession,
 } from './store/supabase';
-import type { CaptureItemSource, Surface } from './types/domain';
-import { TIMING } from './config/constants';
+import type { Surface } from './types/domain';
 import { APP_RELEASE_LABEL, APP_RELEASE_VERSION } from './config/release';
 import {
   getGoogleCalendarAuthPatch,
@@ -40,11 +39,11 @@ import { useSyncAvailability } from './store/SyncAvailabilityContext';
 const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
   { surface: 'dashboard', label: 'Dashboard', icon: '\u{1F3E0}' },
   { surface: 'chat', label: 'Chat', icon: '\u{1F4AC}' },
-  { surface: 'inbox', label: 'Inbox', icon: '\u{1F4E5}' },
   { surface: 'calendar', label: 'Calendar', icon: '\u{1F4C5}' },
   { surface: 'clock', label: 'Clock', icon: '\u23F1\uFE0F' },
   { surface: 'trips', label: 'Trips', icon: '\u{1F6EB}' },
   { surface: 'projects', label: 'Projects', icon: '\u{1F4CB}' },
+  { surface: 'inventory', label: 'Inventory', icon: '\u{1F9F0}' },
   { surface: 'secrets', label: 'Secrets', icon: '\u{1F510}' },
   { surface: 'tasks', label: 'Tasks', icon: '\u2705' },
   { surface: 'finance', label: 'Finance', icon: '\u{1F4B7}' },
@@ -71,56 +70,8 @@ function AppInner() {
   const signOut = authSession?.signOut ?? endSupabaseSession;
   const supabaseReady = authSession?.supabaseReady ?? isSupabaseReady();
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
-  const [captureModalSource, setCaptureModalSource] = useState<CaptureItemSource | null>(null);
-  const [quickCaptureText, setQuickCaptureText] = useState('');
-  const [captureNotice, setCaptureNotice] = useState('');
-  const captureInputRef = useRef<HTMLTextAreaElement>(null);
 
   useReleaseRefresh();
-
-  const openCaptureModal = useCallback((source: CaptureItemSource) => {
-    if (readOnly) return;
-    setQuickCaptureText('');
-    setCaptureModalSource(source);
-  }, [readOnly]);
-
-  const closeCaptureModal = useCallback(() => {
-    setCaptureModalSource(null);
-    setQuickCaptureText('');
-  }, []);
-
-  const submitQuickCapture = useCallback(() => {
-    const content = quickCaptureText.trim();
-    if (readOnly || !content || !captureModalSource) return;
-
-    app.addCaptureItem({
-      content,
-      source: captureModalSource,
-      classification: 'unknown',
-      status: 'unprocessed',
-      sourceSurface: app.surface,
-    });
-    closeCaptureModal();
-    setCaptureNotice('Captured to Inbox.');
-    window.setTimeout(() => setCaptureNotice(''), TIMING.TOAST_LIFETIME);
-  }, [app, captureModalSource, closeCaptureModal, quickCaptureText, readOnly]);
-
-  useEffect(() => {
-    if (!captureModalSource) return;
-    window.setTimeout(() => captureInputRef.current?.focus(), TIMING.INPUT_FOCUS_DELAY);
-  }, [captureModalSource]);
-
-  useEffect(() => {
-    const handleCaptureShortcut = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        openCaptureModal('shortcut');
-      }
-    };
-
-    window.addEventListener('keydown', handleCaptureShortcut);
-    return () => window.removeEventListener('keydown', handleCaptureShortcut);
-  }, [openCaptureModal]);
 
   useEffect(() => {
     if (!mobileMoreOpen) return;
@@ -193,11 +144,11 @@ function AppInner() {
       switch (app.surface) {
         case 'dashboard': return <DashboardSurface />;
         case 'chat': return <ChatSurface />;
-        case 'inbox': return <CaptureInboxSurface />;
         case 'calendar': return <CalendarSurface />;
         case 'clock': return <ClockSurface />;
         case 'trips': return <TripsSurface />;
         case 'projects': return <ProjectsSurface />;
+        case 'inventory': return <InventorySurface />;
         case 'secrets': return <SecretsSurface />;
         case 'tasks': return <TasksSurface />;
         case 'finance': return <FinanceSurface />;
@@ -253,18 +204,9 @@ function AppInner() {
   return (
     <div className="app-layout">
       <nav className="sidebar" aria-label="Main navigation">
-        <div className="sidebar-logo" role="banner">HELM</div>
-        <div className="sidebar-capture">
-          <button
-            type="button"
-            className="sidebar-capture-button"
-            onClick={() => openCaptureModal('quick_button')}
-            disabled={readOnly}
-            title="Quick capture (Ctrl+Shift+K)"
-          >
-            <span aria-hidden="true">+</span>
-            <span>Capture</span>
-          </button>
+        <div className="sidebar-logo" role="banner" aria-label="Sabah One">
+          <span className="sidebar-monogram" aria-hidden="true">S1</span>
+          <span className="sidebar-wordmark">SABAH ONE</span>
         </div>
         <div className="sidebar-nav" role="navigation">
           {NAV_ITEMS.map(item => (
@@ -371,46 +313,6 @@ function AppInner() {
       </nav>
       {!readOnly && <PrayerGlobalOverlays />}
       {!readOnly && <VoiceAssistant />}
-      {captureNotice && (
-        <div className="capture-toast" role="status">
-          {captureNotice}
-        </div>
-      )}
-      {captureModalSource && (
-        <div className="capture-modal-overlay" onClick={closeCaptureModal}>
-          <div className="capture-modal" role="dialog" aria-modal="true" aria-label="Quick capture" onClick={event => event.stopPropagation()}>
-            <div className="capture-modal-header">
-              <h2>Quick capture</h2>
-              <button type="button" className="btn-icon btn-sm" onClick={closeCaptureModal} aria-label="Close quick capture">
-                &times;
-              </button>
-            </div>
-            <textarea
-              ref={captureInputRef}
-              className="form-input capture-modal-input"
-              value={quickCaptureText}
-              onChange={event => setQuickCaptureText(event.target.value)}
-              onKeyDown={event => {
-                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-                  event.preventDefault();
-                  submitQuickCapture();
-                }
-                if (event.key === 'Escape') {
-                  closeCaptureModal();
-                }
-              }}
-              aria-label="Capture text"
-              placeholder="Write capture..."
-            />
-            <div className="capture-modal-actions">
-              <button type="button" className="btn btn-secondary" onClick={closeCaptureModal}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={submitQuickCapture} disabled={!quickCaptureText.trim()}>
-                Save to Inbox
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -35,17 +35,17 @@ describe('App shell', () => {
   it('should render the sidebar with all nav items', async () => {
     await act(async () => { renderWithProvider(<App />); });
     const sidebar = screen.getByRole('navigation', { name: 'Main navigation' });
-    expect(screen.getByText('HELM')).toBeInTheDocument();
+    expect(screen.getByText('SABAH ONE')).toBeInTheDocument();
     expect(screen.getByText('Current release')).toBeInTheDocument();
     expect(screen.getByText(APP_RELEASE_VERSION)).toBeInTheDocument();
     [
       'Dashboard',
       'Chat',
-      'Inbox',
       'Calendar',
       'Clock',
       'Trips',
       'Projects',
+      'Inventory',
       'Tasks',
       'Finance',
       'Health',
@@ -76,11 +76,11 @@ describe('App shell', () => {
     await act(async () => { fireEvent.click(screen.getByText('Trips')); });
     expect(screen.getByRole('button', { name: 'Plan your first trip' })).toBeInTheDocument();
 
-    await act(async () => { fireEvent.click(screen.getByText('Inbox')); });
-    expect(screen.getByRole('heading', { name: 'Inbox' })).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByText('Inventory')); });
+    expect(screen.getByRole('heading', { name: 'Know what you have before you buy.' })).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Projects')); });
-    expect(screen.getByText('Turn HELM into your local project hub')).toBeInTheDocument();
+    expect(screen.getByText('Turn Sabah One into your local project hub')).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Health')); });
     expect(screen.getByText('Fast food journal')).toBeInTheDocument();
@@ -111,5 +111,12 @@ describe('App shell', () => {
     await act(async () => { renderWithProvider(<App />); });
 
     expect(screen.getByRole('button', { name: 'Plan your first trip' })).toBeInTheDocument();
+  });
+
+  it('falls back to Dashboard for a retired Inbox navigation value', async () => {
+    sessionStorage.setItem('helm:shell-surface', 'inbox');
+    await act(async () => { renderWithProvider(<App />); });
+    expect(screen.getByText('UP NEXT')).toBeInTheDocument();
+    expect(screen.queryByText('Inbox')).not.toBeInTheDocument();
   });
 });

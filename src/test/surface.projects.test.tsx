@@ -62,7 +62,7 @@ describe('ProjectsSurface', () => {
 
   it('should render empty state', async () => {
     await act(async () => { renderWithProvider(<ProjectsSurface />); });
-    expect(screen.getByText('Turn HELM into your local project hub')).toBeInTheDocument();
+    expect(screen.getByText('Turn Sabah One into your local project hub')).toBeInTheDocument();
   });
 
   it('should describe the reference-first project scope', async () => {
@@ -210,10 +210,56 @@ describe('ProjectsSurface', () => {
     expect(screen.getByRole('tab', { name: 'Board' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Milestones' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Wiki' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Inventory' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '← Back to all projects' }));
     const returnedCard = screen.getByRole('heading', { name: 'Orbit Console' }).closest('.project-catalog-card') as HTMLElement;
     expect(within(returnedCard).getByRole('button', { name: 'View details' })).toHaveFocus();
+  });
+
+  it('shows project-filtered owned stock and needs in the project Inventory tab', async () => {
+    seedProjectCatalogue();
+    localStorage.setItem('helm:inventoryItems', JSON.stringify([{
+      id: 'item-orbit-meter',
+      name: 'Bench multimeter',
+      category: 'machine',
+      trackingMode: 'durable',
+      quantity: 1,
+      unit: 'item',
+      specifications: {},
+      condition: 'good',
+      tags: ['electronics'],
+      notes: '',
+      projectCatalogKeys: ['fixture-orbit'],
+      lastVerifiedAt: '2026-08-03T04:00:00.000Z',
+      createdAt: '2026-08-03T04:00:00.000Z',
+      updatedAt: '2026-08-03T04:00:00.000Z',
+    }]));
+    localStorage.setItem('helm:inventoryNeeds', JSON.stringify([{
+      id: 'need-orbit-leads',
+      name: 'Silicone test leads',
+      projectCatalogKey: 'fixture-orbit',
+      requiredQuantity: 1,
+      unit: 'set',
+      specifications: {},
+      priority: 'normal',
+      status: 'needed',
+      notes: '',
+      createdAt: '2026-08-03T04:00:00.000Z',
+      updatedAt: '2026-08-03T04:00:00.000Z',
+    }]));
+
+    await act(async () => { renderWithProvider(<ProjectsSurface />); });
+    await screen.findByText('Your work, easy to find again.');
+    const orbitCard = screen.getByRole('heading', { name: 'Orbit Console' }).closest('.project-catalog-card') as HTMLElement;
+    fireEvent.click(within(orbitCard).getByRole('button', { name: 'View details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage project' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Inventory' }));
+
+    const panel = await screen.findByRole('region', { name: 'Orbit Console inventory' });
+    expect(within(panel).getByText('Bench multimeter')).toBeInTheDocument();
+    expect(within(panel).getByText('Silicone test leads')).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: 'Open global Inventory' })).toBeInTheDocument();
   });
 
   it('preserves an unavailable device binding and its approvals when other project fields are edited', async () => {

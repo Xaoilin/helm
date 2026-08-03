@@ -40,7 +40,7 @@ const behaviorViewportNames: ViewportName[] = [
 const surfaces = [
   'Dashboard',
   'Chat',
-  'Inbox',
+  'Inventory',
   'Calendar',
   'Clock',
   'Trips',
@@ -174,10 +174,10 @@ test.describe('Opt-in visual evidence', () => {
 
   test('@visual captures requested surface snapshots', async ({ page, scenario }) => {
     test.skip(visualSurfaceFilter() === 'sync', 'The sync evidence has a dedicated visual scenario.');
-    await scenario('empty', {
+    await scenario('inventory', {
       secrets: [
         {
-          label: 'HELM production database password',
+          label: 'Sabah One production database password',
           kind: 'database',
           environment: 'production',
           projectCatalogKeys: ['catalog:helm'],
@@ -211,6 +211,61 @@ test.describe('Opt-in visual evidence', () => {
           fullPage: true,
         });
       }
+    }
+  });
+
+  test('@visual captures Inventory low-stock, project filter, needs, and paste review states', async ({ page, scenario }) => {
+    test.skip(
+      Boolean(visualSurfaceFilter() && visualSurfaceFilter() !== 'inventory'),
+      'A different visual surface was requested.',
+    );
+    await scenario('inventory', { surface: 'inventory' });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const inventoryRoot = path.join(screenshotRoot, 'inventory');
+    mkdirSync(inventoryRoot, { recursive: true });
+
+    for (const viewport of visualViewports()) {
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      await expect(page.getByRole('heading', { name: 'Know what you have before you buy.' })).toBeVisible();
+      await expect(page.locator('.inventory-low-badge', { hasText: 'Low stock' })).toBeVisible();
+      await expectNoAccidentalOverflow(page);
+      await page.screenshot({
+        path: path.join(inventoryRoot, `${viewport.name}-owned-reduced-motion.png`),
+        fullPage: true,
+      });
+
+      await page.getByLabel('Filter inventory project').selectOption('fixture:sensor-bench');
+      const filteredItem = page.locator('.inventory-card').filter({ hasText: 'M3 heat-set inserts' });
+      await expect(filteredItem).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Digital calipers' })).toHaveCount(0);
+      await filteredItem.scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: path.join(inventoryRoot, `${viewport.name}-project-filtered.png`),
+        fullPage: true,
+      });
+
+      await page.getByRole('tab', { name: 'Needed' }).click();
+      const neededItem = page.locator('.inventory-need-card').filter({ hasText: 'M3 heat-set inserts' });
+      await expect(neededItem.getByText('50 pcs required', { exact: false })).toBeVisible();
+      await neededItem.scrollIntoViewIfNeeded();
+      await expectNoAccidentalOverflow(page);
+      await page.screenshot({
+        path: path.join(inventoryRoot, `${viewport.name}-needed.png`),
+        fullPage: true,
+      });
+
+      await page.getByRole('button', { name: 'Paste and review' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Paste and review' });
+      await dialog.getByPlaceholder(/digital calipers/i).fill('2x Digital calipers\n100 M4 socket-head screws');
+      await dialog.getByRole('button', { name: 'Review candidates' }).click();
+      await expect(dialog.getByText('Likely duplicate')).toBeVisible();
+      await expectNoAccidentalOverflow(page);
+      await page.screenshot({
+        path: path.join(inventoryRoot, `${viewport.name}-paste-review.png`),
+        fullPage: true,
+      });
+      await dialog.getByRole('button', { name: 'Close Paste and review' }).click();
     }
   });
 
@@ -282,7 +337,7 @@ test.describe('Opt-in visual evidence', () => {
     await scenario('empty', {
       surface: 'secrets',
       secrets: [{
-        label: 'HELM production database password',
+        label: 'Sabah One production database password',
         kind: 'database',
         environment: 'production',
         projectCatalogKeys: ['catalog:helm'],
@@ -299,7 +354,7 @@ test.describe('Opt-in visual evidence', () => {
       await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
       await context.setOffline(true);
       await expect(page.getByTestId('sync-status-banner')).toContainText('Offline');
-      await expect(page.getByRole('heading', { name: 'HELM is reconnecting' })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Sabah One is reconnecting' })).toHaveCount(0);
       await expectNoAccidentalOverflow(page);
       await page.screenshot({
         path: path.join(syncRoot, `${viewport.name}-offline-read-only.png`),
@@ -455,7 +510,7 @@ function visualViewports(): VisualViewport[] {
       return { name: value, ...viewportCatalog[value as ViewportName] };
     }
     const match = value.match(/^([1-9]\d{2,3})x([1-9]\d{2,3})$/u);
-    if (!match) throw new Error(`Unknown HELM visual viewport: ${value}`);
+    if (!match) throw new Error(`Unknown Sabah One visual viewport: ${value}`);
     return {
       name: value,
       width: Number(match[1]),
@@ -473,7 +528,7 @@ function visualSurfaces(): SurfaceName[] {
   if (!filter) return [...surfaces];
   const match = surfaces.find(surface => surface.toLowerCase() === filter);
   if (!match) {
-    throw new Error(`Unknown HELM visual surface: ${filter}`);
+    throw new Error(`Unknown Sabah One visual surface: ${filter}`);
   }
   return [match];
 }

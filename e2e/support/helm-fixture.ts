@@ -10,6 +10,7 @@ import type { SecretKind } from '../../src/types/domain';
 export type HelmScenarioName =
   | 'empty'
   | 'projects'
+  | 'inventory'
   | 'hosted-assistant'
   | 'signed-in-sync'
   | 'prayer';
@@ -32,6 +33,11 @@ interface EmptyScenarioOptions {
 
 interface ProjectsScenarioOptions extends EmptyScenarioOptions {
   projects?: unknown[];
+}
+
+interface InventoryScenarioOptions extends ProjectsScenarioOptions {
+  inventoryItems?: unknown[];
+  inventoryNeeds?: unknown[];
 }
 
 interface HostedAssistantScenarioOptions extends EmptyScenarioOptions {
@@ -85,6 +91,7 @@ interface PrayerScenarioOptions extends EmptyScenarioOptions {
 interface ScenarioOptions {
   empty: EmptyScenarioOptions;
   projects: ProjectsScenarioOptions;
+  inventory: InventoryScenarioOptions;
   'hosted-assistant': HostedAssistantScenarioOptions;
   'signed-in-sync': SignedInSyncScenarioOptions;
   prayer: PrayerScenarioOptions;
@@ -254,6 +261,66 @@ const DEFAULT_PROJECTS = [
   },
 ] as const;
 
+export const DEFAULT_INVENTORY_ITEMS = [
+  {
+    id: 'inventory-m3-inserts',
+    name: 'M3 heat-set inserts',
+    category: 'fastener',
+    trackingMode: 'counted',
+    quantity: 10,
+    unit: 'pcs',
+    lowStockThreshold: 20,
+    brand: 'Ruthex',
+    model: 'M3x5.7',
+    specifications: { thread: 'M3', material: 'brass' },
+    condition: 'new',
+    location: 'Workshop drawer',
+    tags: ['3d printing', 'hardware'],
+    notes: 'For printed assemblies.',
+    projectCatalogKeys: ['fixture:sensor-bench'],
+    lastVerifiedAt: '2026-08-03T04:00:00.000Z',
+    createdAt: '2026-08-03T04:00:00.000Z',
+    updatedAt: '2026-08-03T04:00:00.000Z',
+  },
+  {
+    id: 'inventory-digital-calipers',
+    name: 'Digital calipers',
+    category: 'tool',
+    trackingMode: 'durable',
+    quantity: 1,
+    unit: 'item',
+    lowStockThreshold: 0,
+    brand: 'Mitutoyo',
+    model: '500-196-30',
+    specifications: { range: '150 mm', resolution: '0.01 mm' },
+    condition: 'good',
+    location: 'Desk drawer',
+    tags: ['measurement'],
+    notes: '',
+    projectCatalogKeys: ['fixture:orbit-console'],
+    lastVerifiedAt: '2026-08-03T04:00:00.000Z',
+    createdAt: '2026-08-03T04:00:00.000Z',
+    updatedAt: '2026-08-03T04:00:00.000Z',
+  },
+] as const;
+
+export const DEFAULT_INVENTORY_NEEDS = [
+  {
+    id: 'need-m3-inserts',
+    name: 'M3 heat-set inserts',
+    linkedItemId: 'inventory-m3-inserts',
+    projectCatalogKey: 'fixture:sensor-bench',
+    requiredQuantity: 50,
+    unit: 'pcs',
+    specifications: { thread: 'M3', material: 'brass' },
+    priority: 'high',
+    status: 'needed',
+    notes: 'Needed for the next enclosure batch.',
+    createdAt: '2026-08-03T04:00:00.000Z',
+    updatedAt: '2026-08-03T04:00:00.000Z',
+  },
+] as const;
+
 const DEFAULT_PRAYER_TASKS = ['Fajr', 'Dhuhr', 'Asr'].map((prayerName, index) => ({
   id: `prayer-${prayerName.toLowerCase()}`,
   title: `${prayerName} Prayer`,
@@ -295,6 +362,28 @@ async function installScenario<Name extends HelmScenarioName>(
         projects: projectOptions.projects || DEFAULT_PROJECTS,
       },
       surface: projectOptions.surface,
+    });
+    return;
+  }
+
+  if (name === 'inventory') {
+    const inventoryOptions = options as InventoryScenarioOptions;
+    const normalized = normalizeScenarioStorage(inventoryOptions.storage);
+    await installDatabaseScenario(page, name, {
+      localStorage: normalized.local,
+      stores: {
+        settings: {
+          telemetry: false,
+          theme: 'dark',
+          prayerEnabled: false,
+        },
+        ...normalized.stores,
+        projects: inventoryOptions.projects || DEFAULT_PROJECTS,
+        inventoryItems: inventoryOptions.inventoryItems || DEFAULT_INVENTORY_ITEMS,
+        inventoryNeeds: inventoryOptions.inventoryNeeds || DEFAULT_INVENTORY_NEEDS,
+      },
+      secrets: inventoryOptions.secrets,
+      surface: inventoryOptions.surface,
     });
     return;
   }
@@ -488,7 +577,9 @@ async function mockHelmDatabase(
 ): Promise<void> {
   await mockHelmRealtime(page);
   const timestamp = '2026-07-31T12:00:00.000Z';
+  let activeUserId = userId;
   let accountVersion = 1;
+  let inventoryMutationCalls = 0;
   const rows = new Map<string, MockDatabaseRow>();
   const secrets = new Map<string, MockSecretRecord>();
   secretFixtures.forEach((fixture, index) => {
@@ -506,23 +597,27 @@ async function mockHelmDatabase(
       archivedAt: fixture.archivedAt || null,
     });
   });
-  for (const [collection, value] of Object.entries(stores)) {
-    for (const record of encodeStoreValue(collection, value)) {
-      const row: MockDatabaseRow = {
-        user_id: userId,
-        collection,
-        record_id: record.recordId,
-        payload: record.payload,
-        position: record.position,
-        revision: 1,
-        account_version: accountVersion,
-        created_at: timestamp,
-        updated_at: timestamp,
-        deleted_at: null,
-      };
-      rows.set(`${collection}\0${record.recordId}`, row);
+  const seedRows = (nextUserId: string, nextStores: Record<string, unknown>) => {
+    rows.clear();
+    for (const [collection, value] of Object.entries(nextStores)) {
+      for (const record of encodeStoreValue(collection, value)) {
+        const row: MockDatabaseRow = {
+          user_id: nextUserId,
+          collection,
+          record_id: record.recordId,
+          payload: record.payload,
+          position: record.position,
+          revision: 1,
+          account_version: accountVersion,
+          created_at: timestamp,
+          updated_at: timestamp,
+          deleted_at: null,
+        };
+        rows.set(`${collection}\0${record.recordId}`, row);
+      }
     }
-  }
+  };
+  seedRows(activeUserId, stores);
 
   await page.route('**/__helm_e2e_db', async route => {
     await route.fulfill({
@@ -532,12 +627,40 @@ async function mockHelmDatabase(
     });
   });
 
+  await page.route('**/__helm_e2e_metrics', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ inventoryMutationCalls }),
+    });
+  });
+
+  await page.route('**/__helm_e2e_switch_account', async route => {
+    const request = route.request().postDataJSON() as {
+      userId?: string;
+      stores?: Record<string, unknown>;
+    };
+    if (!request.userId) {
+      await route.fulfill({ status: 400, body: 'Missing userId' });
+      return;
+    }
+    activeUserId = request.userId;
+    accountVersion = 1;
+    inventoryMutationCalls = 0;
+    seedRows(activeUserId, request.stores || {});
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ userId: activeUserId }),
+    });
+  });
+
   await page.route('**/__helm_e2e_remote_write', async route => {
     const request = route.request().postDataJSON() as { operations?: HelmMutation[] };
     accountVersion += 1;
     const changed = applyMockMutations(
       rows,
-      userId,
+      activeUserId,
       accountVersion,
       request.operations || [],
       new Date().toISOString(),
@@ -558,7 +681,7 @@ async function mockHelmDatabase(
       contentType: 'application/json',
       body: JSON.stringify({
         state: {
-          userId,
+          userId: activeUserId,
           schemaVersion: 1,
           accountVersion,
           minimumClientVersion: '0.2.82',
@@ -588,7 +711,7 @@ async function mockHelmDatabase(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        user_id: userId,
+        user_id: activeUserId,
         schema_version: 1,
         account_version: accountVersion,
         minimum_client_version: '0.2.82',
@@ -606,7 +729,32 @@ async function mockHelmDatabase(
     accountVersion += 1;
     const changed = applyMockMutations(
       rows,
-      userId,
+      activeUserId,
+      accountVersion,
+      request.p_operations || [],
+      new Date().toISOString(),
+    );
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        requestId: request.p_request_id,
+        accountVersion,
+        changes: changed.map(toMutationResponseRow),
+      }),
+    });
+  });
+
+  await page.route('https://helm.test.supabase.co/rest/v1/rpc/apply_helm_inventory_mutations', async route => {
+    const request = route.request().postDataJSON() as {
+      p_operations?: HelmMutation[];
+      p_request_id?: string;
+    };
+    accountVersion += 1;
+    inventoryMutationCalls += 1;
+    const changed = applyMockMutations(
+      rows,
+      activeUserId,
       accountVersion,
       request.p_operations || [],
       new Date().toISOString(),

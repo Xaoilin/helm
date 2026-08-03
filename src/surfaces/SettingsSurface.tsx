@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
-import { isSupabaseReady, isAuthenticated, getCurrentUserId } from '../store/supabase';
+import {
+  isSupabaseReady,
+  isAuthenticated,
+  getCurrentUserId,
+  listInventoryOAuthClients,
+  revokeInventoryOAuthClient,
+  type InventoryOAuthClientApproval,
+} from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
 import { DEFAULT_ASSISTANT_PROVIDER, ELEVENLABS_API_KEY, OLLAMA_ENDPOINT } from '../config';
 import { DEFAULT_PROFILE } from '../services/gamification';
@@ -31,6 +38,8 @@ export default function SettingsSurface() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [prayerTestStatus, setPrayerTestStatus] = useState<string | null>(null);
   const [syncSession, setSyncSession] = useState(() => getSyncSessionSnapshot());
+  const [inventoryClients, setInventoryClients] = useState<InventoryOAuthClientApproval[]>([]);
+  const [inventoryClientStatus, setInventoryClientStatus] = useState('');
 
   // Goal tags
   const [newTag, setNewTag] = useState('');
@@ -74,6 +83,31 @@ export default function SettingsSurface() {
 
   useEffect(() => subscribeSyncSession(setSyncSession), []);
 
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    let cancelled = false;
+    void listInventoryOAuthClients()
+      .then(clients => { if (!cancelled) setInventoryClients(clients); })
+      .catch(error => { if (!cancelled) setInventoryClientStatus(error instanceof Error ? error.message : String(error)); });
+    return () => { cancelled = true; };
+  }, [authSyncKey]);
+
+  const revokeInventoryClient = async (client: InventoryOAuthClientApproval) => {
+    setInventoryClientStatus(`Revoking ${client.clientName}…`);
+    try {
+      await revokeInventoryOAuthClient(client.clientId);
+      setInventoryClients(current => current.map(entry => entry.clientId === client.clientId
+        ? { ...entry, revokedAt: new Date().toISOString() }
+        : entry));
+      setInventoryClientStatus(`${client.clientName} can no longer access Inventory.`);
+    } catch (error) {
+      void listInventoryOAuthClients()
+        .then(setInventoryClients)
+        .catch(() => { /* the original revocation result remains authoritative */ });
+      setInventoryClientStatus(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   return (
     <>
       <div className="surface-header">
@@ -100,7 +134,7 @@ export default function SettingsSurface() {
                   : syncSession.hasUsableSnapshot ? 'Last confirmed data (read-only)' : 'Loading database state'}
               </div>
               <div className="sync-status-detail">
-                {`Signed in as ${getCurrentUserId()?.slice(0, 8)}... Shared data belongs to this account and is read and written through Supabase only. HELM resolves concurrent updates automatically.`}
+                {`Signed in as ${getCurrentUserId()?.slice(0, 8)}... Shared data belongs to this account and is read and written through Supabase only. Sabah One resolves concurrent updates automatically.`}
               </div>
             </div>
             <div className="sync-status-actions">
@@ -118,6 +152,28 @@ export default function SettingsSurface() {
             <strong>No sync decisions required</strong>
             <span>Legacy device copies are resolved additively and retired automatically after the database confirms the result.</span>
           </div>
+        </div>
+
+        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Codex Inventory Access</h3>
+        <div className="card inventory-client-settings">
+          <div className="inventory-client-settings-intro">
+            <div>
+              <strong>Approved Inventory clients</strong>
+              <p>Each client is individually revocable. Access is limited in the database to Inventory records and minimal project name resolution.</p>
+            </div>
+            <span className="tag tag-primary">OAuth 2.1 beta</span>
+          </div>
+          <div className="inventory-client-boundary">Chats, calendars, finance, secrets, generic snapshots, and every non-Inventory RPC stay blocked.</div>
+          <div className="inventory-client-list">
+            {inventoryClients.length === 0 && <div className="inventory-empty-inline">No Codex Inventory client has been approved.</div>}
+            {inventoryClients.map(client => (
+              <div key={client.clientId} className="inventory-client-row">
+                <div><strong>{client.clientName}</strong><span>{client.clientId}</span><small>{client.revokedAt ? `Revoked ${new Date(client.revokedAt).toLocaleString()}` : `Approved ${new Date(client.approvedAt).toLocaleString()}`}</small></div>
+                <button className="btn btn-danger btn-sm" type="button" disabled={Boolean(client.revokedAt)} onClick={() => void revokeInventoryClient(client)}>{client.revokedAt ? 'Revoked' : 'Revoke'}</button>
+              </div>
+            ))}
+          </div>
+          {inventoryClientStatus && <div className="inventory-client-status" role="status">{inventoryClientStatus}</div>}
         </div>
 
         {/* Google Calendar */}
@@ -172,7 +228,7 @@ export default function SettingsSurface() {
             <div>
               <div className="prayer-settings-title">Warn before the on-time deadline</div>
               <div className="prayer-settings-copy">
-                Pulse across every HELM surface and send one native notification while HELM is running.
+                Pulse across every Sabah One surface and send one native notification while Sabah One is running.
               </div>
             </div>
             <label className="toggle">
@@ -207,7 +263,7 @@ export default function SettingsSurface() {
             <a href="https://aladhan.com/calculation-methods" target="_blank" rel="noopener noreferrer" style={{ color: '#4f5bff' }}>Learn more</a>
           </div>
           <div className="prayer-settings-runtime-note">
-            Native deadline timers continue when the HELM window is minimized. They stop when HELM is fully exited; tray and autostart are not enabled.
+            Native deadline timers continue when the Sabah One window is minimized. They stop when Sabah One is fully exited; tray and autostart are not enabled.
           </div>
           {!prayer.timezoneMatches && prayer.schedule && (
             <div className="prayer-settings-timezone-warning" role="alert">
@@ -233,7 +289,7 @@ export default function SettingsSurface() {
                 onClick={async () => {
                   const sent = await prayer.testReminder('Fajr');
                   setPrayerTestStatus(sent
-                    ? 'Labelled TEST scheduled for five seconds from now. Minimize HELM now.'
+                    ? 'Labelled TEST scheduled for five seconds from now. Minimize Sabah One now.'
                     : 'Test not scheduled. Grant notification permission first or check Prayer Debug.');
                 }}
               >
@@ -306,7 +362,7 @@ export default function SettingsSurface() {
             <div>
               <div style={{ fontSize: 13, fontWeight: 500 }}>Telemetry</div>
               <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 2 }}>
-                Send anonymous usage data to help improve HELM. No personal data is ever sent.
+                Send anonymous usage data to help improve Sabah One. No personal data is ever sent.
               </div>
             </div>
             <label className="toggle">
@@ -328,7 +384,7 @@ export default function SettingsSurface() {
               style={{ maxWidth: 120 }}
             />
             <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 4 }}>
-              How long HELM retains local conversation history and logs.
+              How long Sabah One retains local conversation history and logs.
             </div>
           </div>
         </div>
@@ -482,7 +538,7 @@ export default function SettingsSurface() {
             {ELEVENLABS_API_KEY ? 'ElevenLabs voice output configured ✓' : 'Using browser voice output (configure ElevenLabs in .env for cloned voice)'}
           </div>
           <div style={{ fontSize: 10, color: '#4a4e62', marginBottom: 10 }}>
-            Tip: if Lina mishears you, say <strong>"No, I said ..."</strong>. HELM now stores that correction locally and reuses it for future voice and chat commands.
+            Tip: if Lina mishears you, say <strong>"No, I said ..."</strong>. Sabah One stores that correction locally and reuses it for future voice and chat commands.
           </div>
           {microphones.length > 0 && (
             <div className="form-group" style={{ marginBottom: 0 }}>
@@ -562,7 +618,7 @@ export default function SettingsSurface() {
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>About</h3>
         <div className="card">
           <div style={{ fontSize: 13 }}>
-            <strong>HELM</strong> {APP_RELEASE_VERSION}<br />
+            <strong>Sabah One</strong> {APP_RELEASE_VERSION}<br />
             <span style={{ color: '#6b6f85' }}>
               Account-backed personal assistant for software engineers.<br />
               Built with Tauri + React + TypeScript + Rust.

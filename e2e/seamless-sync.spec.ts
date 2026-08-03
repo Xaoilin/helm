@@ -48,7 +48,7 @@ test.describe('Seamless database sync', () => {
     });
 
     await expect(projectDetails).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'HELM is reconnecting' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Sabah One is reconnecting' })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Close Orbit Console details' }).click();
     await page.getByRole('button', { name: 'Navigate to Tasks' }).click();

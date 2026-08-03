@@ -1,8 +1,8 @@
-import type { CaptureClassification, Surface, TaskCategory, TaskPriority } from '../types/domain';
+import type { InventoryCategory, InventoryCondition, InventoryNeedPriority, InventoryTrackingMode, Surface, TaskCategory, TaskPriority } from '../types/domain';
 
 export type ConfirmationRule = 'never' | 'always' | 'on_ambiguity';
 export type AssistantActionStatus = 'live' | 'planned' | 'disabled';
-export type AssistantActionDomain = 'navigation' | 'capture' | 'tasks' | 'calendar' | 'finance' | 'knowledge';
+export type AssistantActionDomain = 'navigation' | 'inventory' | 'tasks' | 'calendar' | 'finance' | 'knowledge';
 export type AssistantActionArgType = 'string' | 'string_array' | 'boolean' | 'enum';
 
 export interface AssistantActionArgDefinition {
@@ -31,11 +31,11 @@ export interface AssistantActionDefinition {
 const SURFACE_VALUES: readonly Surface[] = [
   'dashboard',
   'chat',
-  'inbox',
   'calendar',
   'clock',
   'trips',
   'projects',
+  'inventory',
   'secrets',
   'tasks',
   'finance',
@@ -52,43 +52,114 @@ const TASK_TAB_VALUES = ['today', 'all', 'goals'] as const;
 const TASK_PRIORITY_VALUES: readonly TaskPriority[] = ['high', 'medium', 'low'];
 const TASK_CATEGORY_VALUES: readonly TaskCategory[] = ['daily', 'prayer', 'task', 'goal'];
 const PRAYER_COMPLETION_STATUS_VALUES = ['on_time', 'late'] as const;
-const CAPTURE_CLASSIFICATION_VALUES: readonly CaptureClassification[] = [
-  'unknown',
-  'task',
-  'project_note',
-  'calendar_idea',
-  'trip_item',
-  'health_log',
-  'knowledge_entry',
+const INVENTORY_CATEGORY_VALUES: readonly InventoryCategory[] = [
+  'machine', 'tool', 'electronics', 'component', 'material',
+  'consumable', 'fastener', 'safety', 'storage', 'other',
 ];
+const INVENTORY_TRACKING_VALUES: readonly InventoryTrackingMode[] = ['durable', 'counted', 'measured'];
+const INVENTORY_CONDITION_VALUES: readonly InventoryCondition[] = ['unknown', 'new', 'good', 'worn', 'needs_repair'];
+const INVENTORY_NEED_PRIORITY_VALUES: readonly InventoryNeedPriority[] = ['low', 'normal', 'high'];
 export const ASSISTANT_ACTIONS = [
   {
-    id: 'capture.add_item',
-    title: 'Capture Inbox Item',
-    description: 'Save an unstructured thought, reminder, idea, log, note, or link into the universal Capture Inbox for later classification.',
-    domain: 'capture',
+    id: 'inventory.lookup',
+    title: 'Check Inventory',
+    description: 'Search owned stock and open needs before recommending a purchase.',
+    domain: 'inventory',
     status: 'live',
-    examples: ['Capture this: book a visa appointment', 'Dump this in my inbox: research Lisbon day trips'],
-    aliases: ['capture this', 'dump this', 'remember this', 'jot this down', 'save to inbox', 'quick capture'],
+    examples: ['Do I already have M3 inserts?', 'Check my inventory for soldering tools'],
+    aliases: ['check inventory', 'do I have', 'in stock', 'already own'],
     confirmationRule: 'never',
-    executorKey: 'capture_add_item',
-    debugSummary: 'Stores raw user-provided content in the account-backed Capture Inbox without converting it into another domain item.',
+    executorKey: 'inventory_lookup',
+    debugSummary: 'Searches live account inventory without changing it.',
     args: [
       {
-        key: 'content',
-        label: 'Content',
-        description: 'The exact raw capture text to save.',
+        key: 'query',
+        label: 'Query',
+        description: 'Item, tool, material, specification, tag, or location to find.',
         type: 'string',
         required: true,
       },
+    ],
+  },
+  {
+    id: 'inventory.add_item',
+    title: 'Add Inventory Item',
+    description: 'Add one explicitly requested owned item to account inventory.',
+    domain: 'inventory',
+    status: 'live',
+    examples: ['Add 2 digital calipers to my inventory', 'I own a Bambu Lab P1S; add it'],
+    aliases: ['add to inventory', 'I own', 'save this tool', 'add stock'],
+    confirmationRule: 'on_ambiguity',
+    executorKey: 'inventory_add_item',
+    debugSummary: 'Validates and creates one owned inventory record. Multiline bulk input routes to Inventory review.',
+    args: [
+      { key: 'name', label: 'Name', description: 'Exact item name.', type: 'string', required: true },
+      { key: 'quantity', label: 'Quantity', description: 'Finite non-negative quantity as text.', type: 'string', required: true },
+      { key: 'unit', label: 'Unit', description: 'Quantity unit.', type: 'string', required: true },
       {
-        key: 'classification',
-        label: 'Classification',
-        description: 'Optional lightweight classification for later triage.',
+        key: 'category', label: 'Category', description: 'Inventory category.',
         type: 'enum',
-        required: false,
-        values: CAPTURE_CLASSIFICATION_VALUES,
+        required: true,
+        values: INVENTORY_CATEGORY_VALUES,
       },
+      { key: 'trackingMode', label: 'Tracking mode', description: 'Durable, counted, or measured stock.', type: 'enum', required: true, values: INVENTORY_TRACKING_VALUES },
+      { key: 'condition', label: 'Condition', description: 'Current item condition.', type: 'enum', required: false, values: INVENTORY_CONDITION_VALUES },
+      { key: 'brand', label: 'Brand', description: 'Optional brand.', type: 'string', required: false },
+      { key: 'model', label: 'Model', description: 'Optional model.', type: 'string', required: false },
+      { key: 'location', label: 'Location', description: 'Optional storage location.', type: 'string', required: false },
+      { key: 'projectCatalogKeys', label: 'Projects', description: 'Stable linked project catalogue keys.', type: 'string_array', required: false },
+    ],
+  },
+  {
+    id: 'inventory.adjust_quantity',
+    title: 'Adjust Inventory Quantity',
+    description: 'Increase or decrease the quantity of one grounded inventory item.',
+    domain: 'inventory',
+    status: 'live',
+    examples: ['Add 5 to my M3 insert stock', 'I used 2 ESP32 boards'],
+    aliases: ['adjust stock', 'used from inventory', 'increase quantity', 'decrease quantity'],
+    confirmationRule: 'on_ambiguity',
+    executorKey: 'inventory_adjust_quantity',
+    debugSummary: 'Applies a finite delta while preventing negative inventory.',
+    args: [
+      { key: 'itemId', label: 'Item ID', description: 'Grounded inventory item ID.', type: 'string', required: true },
+      { key: 'delta', label: 'Delta', description: 'Signed finite quantity adjustment as text.', type: 'string', required: true },
+    ],
+  },
+  {
+    id: 'inventory.add_need',
+    title: 'Add Inventory Need',
+    description: 'Record one explicitly requested requirement for later acquisition.',
+    domain: 'inventory',
+    status: 'live',
+    examples: ['I need 20 M3 heat-set inserts for MAGNUS', 'Add a need for one soldering iron'],
+    aliases: ['need to buy', 'add inventory need', 'need more', 'shopping requirement'],
+    confirmationRule: 'on_ambiguity',
+    executorKey: 'inventory_add_need',
+    debugSummary: 'Creates one bounded need without purchasing anything.',
+    args: [
+      { key: 'name', label: 'Name', description: 'Needed item name.', type: 'string', required: true },
+      { key: 'requiredQuantity', label: 'Quantity', description: 'Finite non-negative required quantity as text.', type: 'string', required: true },
+      { key: 'unit', label: 'Unit', description: 'Quantity unit.', type: 'string', required: true },
+      { key: 'linkedItemId', label: 'Linked item', description: 'Optional grounded owned item ID.', type: 'string', required: false },
+      { key: 'projectCatalogKey', label: 'Project', description: 'Optional stable project catalogue key.', type: 'string', required: false },
+      { key: 'priority', label: 'Priority', description: 'Need priority.', type: 'enum', required: false, values: INVENTORY_NEED_PRIORITY_VALUES },
+      { key: 'notes', label: 'Notes', description: 'Optional requirement notes.', type: 'string', required: false },
+    ],
+  },
+  {
+    id: 'inventory.complete_need',
+    title: 'Mark Inventory Need Acquired',
+    description: 'Atomically add acquired stock and close one grounded need.',
+    domain: 'inventory',
+    status: 'live',
+    examples: ['Mark the M3 insert need acquired', 'I bought that soldering iron'],
+    aliases: ['mark acquired', 'bought that', 'complete inventory need'],
+    confirmationRule: 'on_ambiguity',
+    executorKey: 'inventory_complete_need',
+    debugSummary: 'Updates stock and closes the need in the same persistence batch.',
+    args: [
+      { key: 'needId', label: 'Need ID', description: 'Grounded inventory need ID.', type: 'string', required: true },
     ],
   },
   {
@@ -106,7 +177,7 @@ export const ASSISTANT_ACTIONS = [
       {
         key: 'surface',
         label: 'Surface',
-        description: 'The top-level HELM surface to open.',
+        description: 'The top-level Sabah One surface to open.',
         type: 'enum',
         required: true,
         values: SURFACE_VALUES,

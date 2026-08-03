@@ -2037,7 +2037,7 @@ export default function TripsSurface() {
           <h1>Trips</h1>
           <div className="subtitle">
             {app.trips.length === 0
-              ? 'Plan multi-country travel without leaving HELM'
+              ? 'Plan multi-country travel without leaving Sabah One'
               : `${app.trips.length} trip${app.trips.length === 1 ? '' : 's'} tracked locally`}
           </div>
         </div>
@@ -2049,7 +2049,7 @@ export default function TripsSurface() {
           <div className="empty-state" role="status">
             <div className="empty-icon">&#9992;&#65039;</div>
             <h3>Plan your first trip</h3>
-            <p>Create a travel timeline with destinations, bookings, and day plans saved to your HELM account.</p>
+            <p>Create a travel timeline with destinations, bookings, and day plans saved to your Sabah One account.</p>
             <button className="btn btn-primary" onClick={openCreateWizard}>Plan your first trip</button>
           </div>
         ) : (

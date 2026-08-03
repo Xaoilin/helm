@@ -315,7 +315,7 @@ async function getAuthenticatedUser(request: Request, requestId: string): Promis
   if (!authHeader) {
     return failure(
       'sign_in_required',
-      'Sign in to HELM to use durable Google Calendar sync in the browser.',
+      'Sign in to Sabah One to use durable Google Calendar sync in the browser.',
       {},
       createResponseMeta(requestId, { signedIn: false }),
     );
@@ -326,7 +326,7 @@ async function getAuthenticatedUser(request: Request, requestId: string): Promis
   if (error || !data.user) {
     return failure(
       'sign_in_required',
-      'Sign in to HELM to use durable Google Calendar sync in the browser.',
+      'Sign in to Sabah One to use durable Google Calendar sync in the browser.',
       {},
       createResponseMeta(requestId, { signedIn: false }),
     );
@@ -572,7 +572,7 @@ async function handleConnectedCredential(
   if (!refreshToken) {
     return failure(
       'missing_refresh_token',
-      'Google did not return a refresh token. Reconnect once more with consent so HELM can store a durable Calendar credential.',
+      'Google did not return a refresh token. Reconnect once more with consent so Sabah One can store a durable Calendar credential.',
       {
         accountEmail: resolved.accountEmail,
         credential: existing ? toCredentialStatus(existing) : undefined,
@@ -696,7 +696,7 @@ async function handleBootstrapProfileSession(
   if (!body.providerRefreshToken) {
     return failure(
       'missing_refresh_token',
-      'Your HELM Google sign-in is missing a Google refresh token. Reconnect your HELM Google sign-in once to upgrade Calendar access.',
+      'Your Sabah One Google sign-in is missing a Google refresh token. Reconnect your Sabah One Google sign-in once to upgrade Calendar access.',
       { accountEmail: normalizeEmail(body.email) },
       meta,
     );

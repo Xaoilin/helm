@@ -92,7 +92,7 @@ const DEFAULT_OPENAI_BILLING_RESULT: DiagnosticResult = {
 const SMOKE_TEST_MESSAGES = [
   {
     role: 'system' as const,
-    content: 'You are a HELM hosted assistant smoke test. Always return JSON with reply set to READY.',
+    content: 'You are a Sabah One hosted assistant smoke test. Always return JSON with reply set to READY.',
   },
   {
     role: 'user' as const,
@@ -278,7 +278,7 @@ export default function AiDebug() {
         setOllamaResult({
           state: 'warning',
           headline: 'Ollama offline',
-          detail: `HELM could not reach ${ollamaEndpoint}. Start Ollama locally or update the configured endpoint.`,
+          detail: `Sabah One could not reach ${ollamaEndpoint}. Start Ollama locally or update the configured endpoint.`,
           checkedAt,
         });
         return;
@@ -703,7 +703,7 @@ export default function AiDebug() {
       <div className="card" style={{ padding: 20 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: '#f5f7ff', marginBottom: 8 }}>Dashboard Focus Trace</div>
         <div style={{ fontSize: 13, color: '#9ea4c5' }}>
-          This shows the latest dashboard recommendation run, including whether GPT selected it or HELM fell back to the local ranker.
+          This shows the latest dashboard recommendation run, including whether GPT selected it or Sabah One fell back to the local ranker.
         </div>
 
         {!dashboardFocusTrace ? (
@@ -1014,7 +1014,7 @@ function mapHostedStatus(status: HostedAssistantConnectionStatus, checkedAt: str
       return {
         state: 'error',
         headline: 'Hosted assistant unavailable',
-        detail: status.message || 'HELM could not reach the hosted assistant.',
+        detail: status.message || 'Sabah One could not reach the hosted assistant.',
         checkedAt,
       };
   }
@@ -1177,7 +1177,7 @@ function buildSnapshotText(
   const hostedDiagnostics = getHostedAssistantDiagnostics();
 
   return [
-    'HELM AI Diagnostics Snapshot',
+    'Sabah One AI Diagnostics Snapshot',
     `Captured: ${new Date().toLocaleString()}`,
     `Origin: ${window.location.origin}`,
     `Build mode: ${import.meta.env.MODE || 'unknown'}`,

@@ -54,7 +54,7 @@ function getHostedReadyStatus(modelLabel: string): AssistantRuntimeStatus {
     activeProvider: 'hosted',
     state: 'ready',
     headline: 'Hosted AI ready',
-    detail: `Intent planning is powered by OpenAI ${modelLabel} through HELM's hosted assistant.`,
+    detail: `Intent planning is powered by OpenAI ${modelLabel} through Sabah One's hosted assistant.`,
   };
 }
 
@@ -69,7 +69,7 @@ async function getHostedStatus(settings: Pick<Settings, 'hostedModel'>): Promise
             activeProvider: 'hosted',
             state: 'ready',
             headline: 'Hosted AI ready',
-            detail: `Intent planning is powered by OpenAI ${getHostedAssistantModelLabel(status.model || hostedModel)} through HELM's hosted assistant using the configured ${formatHostedAssistantAccessMode(status.accessMode)}${isLocalhostRuntime() ? ' on localhost.' : '.'}`,
+            detail: `Intent planning is powered by OpenAI ${getHostedAssistantModelLabel(status.model || hostedModel)} through Sabah One's hosted assistant using the configured ${formatHostedAssistantAccessMode(status.accessMode)}${isLocalhostRuntime() ? ' on localhost.' : '.'}`,
           }
         : getHostedReadyStatus(getHostedAssistantModelLabel(status.model || hostedModel));
     case 'sign_in_required':
@@ -78,7 +78,7 @@ async function getHostedStatus(settings: Pick<Settings, 'hostedModel'>): Promise
       return getHostedNotConfiguredStatus();
     case 'unavailable':
     default:
-      return getHostedOfflineStatus(status.message || 'HELM could not reach the hosted assistant right now.');
+      return getHostedOfflineStatus(status.message || 'Sabah One could not reach the hosted assistant right now.');
   }
 }
 

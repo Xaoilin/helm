@@ -530,7 +530,7 @@ export default function DashboardSurface() {
             <strong>Deadline classification and reminders paused</strong>
             <span>
               The schedule timezone ({prayer.schedule.timezone || 'unknown'}) does not match this desktop ({prayer.desktopTimezone}).
-              Update the prayer location before HELM compares deadlines or schedules reminders.
+              Update the prayer location before Sabah One compares deadlines or schedules reminders.
             </span>
           </div>
         )}

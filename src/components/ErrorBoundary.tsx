@@ -53,7 +53,7 @@ export class ErrorBoundary extends Component<Props, State> {
             Something went wrong in {this.props.name}
           </h2>
           <p style={{ fontSize: 13, color: '#6b6f85', marginBottom: 16, maxWidth: 400 }}>
-            This section crashed but the rest of the app is fine.
+            Sabah One kept the rest of your workspace running.
             Try clicking retry, or navigate to a different section.
           </p>
           {this.state.error && (

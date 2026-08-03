@@ -206,7 +206,7 @@ describe('IntegrationsSurface degraded Google state', () => {
     });
   });
 
-  it('repairs a revoked HELM sign-in Google Calendar account through explicit Calendar OAuth', async () => {
+  it('repairs a revoked Sabah One sign-in Google Calendar account through explicit Calendar OAuth', async () => {
     appState.integrations = [{
       id: 'int-google',
       name: 'Google Calendar',

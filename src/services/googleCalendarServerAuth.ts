@@ -87,7 +87,7 @@ type GoogleCalendarFunctionResponse<T> =
   | GoogleCalendarFunctionSuccess<T>;
 
 const ES256_JWT_GATEWAY_ERROR_PATTERN = /unsupported jwt algorithm es256/i;
-const ES256_JWT_GATEWAY_ERROR_MESSAGE = 'Hosted Google Calendar auth rejected the HELM session token before the function ran (HTTP 401: Unsupported JWT algorithm ES256). Redeploy google-calendar-oauth with --no-verify-jwt so the function can validate Supabase auth internally.';
+const ES256_JWT_GATEWAY_ERROR_MESSAGE = 'Hosted Google Calendar auth rejected the Sabah One session token before the function ran (HTTP 401: Unsupported JWT algorithm ES256). Redeploy google-calendar-oauth with --no-verify-jwt so the function can validate Supabase auth internally.';
 const GOOGLE_CREDENTIALS_SCHEMA_CACHE_ERROR_PATTERN = /could not find the table ['"]public\.google_calendar_credentials['"] in the schema cache/i;
 const GOOGLE_CREDENTIALS_SCHEMA_CACHE_ERROR_MESSAGE = 'Hosted Google Calendar database schema is missing the google_calendar_credentials table. Apply the Supabase migration for durable Google Calendar credentials, then retry reconnecting or syncing.';
 
@@ -290,7 +290,7 @@ async function invokeGoogleCalendarOAuthFunction<T>(
   if (!accessToken) {
     const error = new GoogleCalendarOAuthFunctionError(
       'sign_in_required',
-      'Sign in to HELM to use durable Google Calendar sync in the browser.',
+      'Sign in to Sabah One to use durable Google Calendar sync in the browser.',
       { readiness: getReadinessForFailureCode('sign_in_required') },
     );
     appendGoogleCalendarDiagnosticEvent({

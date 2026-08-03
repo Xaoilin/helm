@@ -278,7 +278,7 @@ export async function downloadGoogleCalendarDiagnosticsExport(
       const handle = await savePicker({
         suggestedName: fileName,
         types: [{
-          description: 'HELM Google Calendar diagnostics report',
+          description: 'Sabah One Google Calendar diagnostics report',
           accept: {
             'application/json': ['.json'],
           },

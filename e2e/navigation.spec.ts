@@ -16,8 +16,8 @@ test.describe('Navigation', () => {
     await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
     await expect(page.locator('h1:has-text("Tasks")')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Navigate to Inbox' }).click();
-    await expect(page.locator('h1:has-text("Inbox")')).toBeVisible();
+    await page.getByRole('button', { name: 'Navigate to Inventory' }).click();
+    await expect(page.getByRole('heading', { name: 'Know what you have before you buy.' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Navigate to Settings' }).click();
     await expect(page.locator('h1:has-text("Settings")')).toBeVisible();

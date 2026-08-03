@@ -10,7 +10,8 @@ import type {
   CalendarAccount,
   CalendarEvent,
   CalendarSource,
-  CaptureItem,
+  InventoryItem,
+  InventoryNeed,
   FinanceAccount,
   GamificationProfile,
   KnowledgeEntry,
@@ -43,7 +44,8 @@ export interface ChatCrossDomainData {
   calendarEvents: CalendarEvent[];
   projects: Project[];
   tasks: Task[];
-  captureItems: CaptureItem[];
+  inventoryItems: InventoryItem[];
+  inventoryNeeds: InventoryNeed[];
   financeAccounts: FinanceAccount[];
   transactions: Transaction[];
   knowledgeEntries: KnowledgeEntry[];
@@ -67,7 +69,10 @@ export interface ChatCrossDomainData {
   updateCalendarEvent: (id: string, updates: Partial<CalendarEvent>) => void;
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => string;
   addKnowledgeEntry: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
-  addCaptureItem: (item: Omit<CaptureItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  addInventoryItem: (item: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  adjustInventoryQuantity: (id: string, delta: number) => void;
+  addInventoryNeed: (need: Omit<InventoryNeed, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  completeInventoryNeed: (needId: string) => void;
   updateGamification: (profile: GamificationProfile) => void;
   completePrayer?: (
     prayerName: PrayerName,
@@ -240,7 +245,8 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
       calendarEvents: crossDomain.calendarEvents,
       projects: crossDomain.projects,
       tasks: crossDomain.tasks,
-      captureItems: crossDomain.captureItems,
+      inventoryItems: crossDomain.inventoryItems,
+      inventoryNeeds: crossDomain.inventoryNeeds,
       financeAccounts: crossDomain.financeAccounts,
       transactions: crossDomain.transactions,
       knowledgeEntries: crossDomain.knowledgeEntries,
@@ -274,7 +280,10 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
         updateCalendarEvent: crossDomain.updateCalendarEvent,
         addTransaction: crossDomain.addTransaction,
         addKnowledgeEntry: crossDomain.addKnowledgeEntry,
-        addCaptureItem: crossDomain.addCaptureItem,
+        addInventoryItem: crossDomain.addInventoryItem,
+        adjustInventoryQuantity: crossDomain.adjustInventoryQuantity,
+        addInventoryNeed: crossDomain.addInventoryNeed,
+        completeInventoryNeed: crossDomain.completeInventoryNeed,
         updateGamification: crossDomain.updateGamification,
         completePrayer: crossDomain.completePrayer
           ? (prayerName, status, taskId) =>

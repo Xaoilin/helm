@@ -8,7 +8,7 @@ test.describe('Secrets', () => {
       surface: 'secrets',
       secrets: [{
         secretId: SECRET_ID,
-        label: 'HELM production database password',
+        label: 'Sabah One production database password',
         kind: 'database',
         environment: 'production',
         projectCatalogKeys: ['catalog:helm'],
@@ -21,7 +21,7 @@ test.describe('Secrets', () => {
   });
 
   test('@smoke reveals and hides one credential without exposing it by default', async ({ page }) => {
-    await expect(page.getByText('HELM production database password')).toBeVisible();
+    await expect(page.getByText('Sabah One production database password')).toBeVisible();
     await expect(page.getByText('e2e-sensitive-value')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Reveal' }).click();
@@ -71,7 +71,7 @@ test.describe('Secrets', () => {
     await context.setOffline(true);
     await expect(page.getByTestId('sync-status-banner')).toContainText('Offline');
     await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'HELM is reconnecting' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Sabah One is reconnecting' })).toHaveCount(0);
     await expect(page.getByText('e2e-sensitive-value')).toHaveCount(0);
 
     await context.setOffline(false);

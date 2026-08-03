@@ -25,6 +25,7 @@ import {
   type ProjectCatalogFilter,
 } from '../components/projects/projectCatalogModel';
 import { useApp } from '../store/AppContext';
+import { ProjectInventorySection } from './InventorySurface';
 import {
   compareProjectCatalogueOrder,
   getOrderedProjectsInSection,
@@ -60,7 +61,7 @@ import type {
   TaskPriority,
 } from '../types/domain';
 
-type ProjectTab = 'overview' | 'board' | 'milestones' | 'wiki';
+type ProjectTab = 'overview' | 'board' | 'milestones' | 'inventory' | 'wiki';
 type BoardColumn = 'backlog' | 'next_up' | 'in_progress' | 'blocked' | 'done';
 
 const PROJECT_STATUS_OPTIONS: ProjectStatus[] = ['planning', 'active', 'blocked', 'completed', 'archived'];
@@ -88,6 +89,7 @@ const PROJECT_TABS: Array<{ key: ProjectTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'board', label: 'Board' },
   { key: 'milestones', label: 'Milestones' },
+  { key: 'inventory', label: 'Inventory' },
   { key: 'wiki', label: 'Wiki' },
 ];
 const BOARD_COLUMNS: Array<{ key: BoardColumn; label: string }> = [
@@ -1356,7 +1358,7 @@ export default function ProjectsSurface() {
         {app.projects.length === 0 ? (
           <div className="empty-state" role="status">
             <div className="empty-icon">&#128736;</div>
-            <h3>Turn HELM into your local project hub</h3>
+            <h3>Turn Sabah One into your local project hub</h3>
             <p>Create a project to keep its live link, repository, local folder, setup notes, and management workspace easy to find again.</p>
             <button className="btn btn-primary" onClick={openCreateProject}>+ Create Project</button>
           </div>
@@ -1441,7 +1443,7 @@ export default function ProjectsSurface() {
                       <div className="actions-row" style={{ margin: 0 }}>
                         <button className="btn btn-secondary btn-sm" onClick={() => openEditProject(selectedProject)}>Edit Project</button>
                         <button className="btn btn-danger btn-sm" onClick={() => {
-                          if (window.confirm(`Remove project "${selectedProject.name}"? Linked tasks will stay in HELM but lose their project assignment.`)) {
+                          if (window.confirm(`Remove project "${selectedProject.name}"? Linked tasks will stay in Sabah One but lose their project assignment.`)) {
                             void app.removeProject(selectedProject.id)
                               .then(() => setSelectedProjectIdState(null))
                               .catch(error => {
@@ -1807,6 +1809,20 @@ export default function ProjectsSurface() {
                       </div>
                     </div>
                   )}
+
+                  {activeTab === 'inventory' && (
+                    <div
+                      id="project-panel-inventory"
+                      role="tabpanel"
+                      aria-labelledby="project-tab-inventory"
+                      tabIndex={0}
+                    >
+                      <ProjectInventorySection
+                        catalogKey={selectedProject.catalogKey || `custom:${selectedProject.id}`}
+                        projectName={selectedProject.name}
+                      />
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="card" style={{ padding: 20, color: '#8b8fa3' }}>
@@ -1823,7 +1839,7 @@ export default function ProjectsSurface() {
                 <h2 id="projects-catalog-title">Your work, easy to find again.</h2>
                 <p>
                   Open live projects, find the right repository, or remember how a local-only tool runs.
-                  HELM keeps the reference visible without turning every project into a task board.
+                  Sabah One keeps the reference visible without turning every project into a task board.
                 </p>
               </div>
               <div className="projects-catalog-stats" aria-label="Project catalogue summary">

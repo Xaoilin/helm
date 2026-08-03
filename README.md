@@ -1,6 +1,6 @@
-# HELM
+# Sabah One
 
-HELM is an account-backed desktop assistant app called Lina. Shared data belongs to the signed-in account, uses Supabase as its only source of truth, and is unavailable offline. Machine paths, native approvals, process state, and runtime logs remain local to each device. Passwords and project secrets use an encrypted account-owned vault.
+Sabah One is an account-backed desktop assistant app called Lina. Shared data belongs to the signed-in account, uses Supabase as its only source of truth, and is unavailable offline. Machine paths, native approvals, process state, and runtime logs remain local to each device. Passwords and project secrets use an encrypted account-owned vault.
 
 ## Stack
 
@@ -44,7 +44,7 @@ Behavioral E2E and screenshot evidence are separate. `test:e2e` blocks on behavi
 
 `npm run handoff:check` is the shipped-release gate. It fails unless there are no uncommitted non-generated changes, the current work is merged into `origin/master`, the `CI`, `Deploy to GitHub Pages`, and `Deploy Supabase Assistant Function` workflows have all succeeded for the deployed `master` head, the live GitHub Pages bundle is serving the current package version, and merged `codex/` branches have been cleaned up.
 
-`npm run llm-compare` compares `gpt-5.4` and `claude-sonnet-4-6` on HELM-style prompts using your local `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`, then writes a Markdown report to `test-results/`.
+`npm run llm-compare` compares `gpt-5.4` and `claude-sonnet-4-6` on Sabah One-style prompts using your local `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`, then writes a Markdown report to `test-results/`.
 
 ## Project Map
 
@@ -65,6 +65,9 @@ Behavioral E2E and screenshot evidence are separate. `test:e2e` blocks on behavi
 - Ollama-powered assistant responses are real when Ollama is running locally.
 - Voice input shows a live transcript preview while recording when Deepgram or the browser fallback is available, then confirms the final command after you stop.
 - A dedicated Clock surface provides a neat multi-clock workspace with on-demand timers and stopwatches, custom names, selectable alarm sounds, eye-catching finish alerts, and account-backed persistence.
+- Inventory is a global account-backed catalogue of owned tools, equipment, materials, stock, and open needs. Project views use stable catalogue keys, and Lina can check or update the same records.
+- The private `sabah-one-inventory` Codex plugin pairs an Inventory-planning skill with the authenticated `sabah-one-inventory-mcp` Edge Function. OAuth clients are approved per account and restricted by RLS and bounded RPCs to Inventory plus minimal project-name resolution.
+- The former Inbox and quick-capture workflow are retired. Historical capture rows are preserved only as recoverable database tombstones.
 - Several integrations remain placeholder or simulated.
 - Existing Deepgram and ElevenLabs device keys are copied into the vault non-destructively on first use when a matching account secret does not already exist. Original device settings remain available during migration.
 
@@ -78,6 +81,7 @@ One-time setup:
 
 ```bash
 supabase functions deploy assistant-openai
+supabase functions deploy sabah-one-inventory-mcp --no-verify-jwt
 ```
 
 Set these secrets in the `assistant-openai` function environment before you rely on the hosted path:
@@ -93,7 +97,9 @@ For automated deploys on merge, add these GitHub repository secrets so `.github/
 - `HELM_DATABASE_BACKUP_SHA256` for the verified pre-cutover logical backup
 - `OPENAI_API_KEY`
 
-The function is intended for signed-in HELM users. If hosted AI is not configured or the user is signed out, Lina uses local Ollama only when a live Ollama planner is available and otherwise refuses to guess.
+The function is intended for signed-in Sabah One users. If hosted AI is not configured or the user is signed out, Lina uses local Ollama only when a live Ollama planner is available and otherwise refuses to guess.
+
+The Inventory MCP requires Supabase OAuth 2.1, dynamic client registration, and the production authorization path `/helm/oauth/consent`. The release workflow enables only those three Auth settings through the Management API after the Inventory migration and MCP endpoint deploy. It does not push the local Auth configuration over the hosted project.
 
 ## Working Rules
 

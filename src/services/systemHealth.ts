@@ -99,7 +99,7 @@ function buildLocalItem(input: SystemHealthInput): HealthItem {
       id: 'local',
       label: 'Account data',
       headline: 'Database state loaded',
-      detail: 'Shared HELM data is attached to the signed-in account. Device storage is limited to machine-bound settings and project permissions.',
+      detail: 'Shared Sabah One data is attached to the signed-in account. Device storage is limited to machine-bound settings and project permissions.',
       tone: 'healthy',
     };
   }
@@ -109,7 +109,7 @@ function buildLocalItem(input: SystemHealthInput): HealthItem {
       id: 'local',
       label: 'Account data',
       headline: persistence.syncSession.reason === 'offline' ? 'Offline data available' : 'Reconnecting in the background',
-      detail: 'HELM is showing the last confirmed account data read-only and will recover automatically.',
+      detail: 'Sabah One is showing the last confirmed account data read-only and will recover automatically.',
       tone: 'offline',
     };
   }
@@ -118,7 +118,7 @@ function buildLocalItem(input: SystemHealthInput): HealthItem {
     id: 'local',
     label: 'Account data',
     headline: 'Database connection required',
-    detail: 'HELM is waiting for a safe account snapshot from the database.',
+    detail: 'Sabah One is waiting for a safe account snapshot from the database.',
     tone: 'offline',
   };
 }
@@ -134,7 +134,7 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
       id: 'supabase',
       label: 'Supabase',
       headline: 'Database unavailable',
-      detail: 'Supabase configuration is required before HELM can open shared account data.',
+      detail: 'Supabase configuration is required before Sabah One can open shared account data.',
       tone: 'offline',
       action: { kind: 'settings', label: 'Open Settings' },
     };
@@ -155,7 +155,7 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
       id: 'supabase',
       label: 'Supabase',
       headline: 'Sign in required',
-      detail: 'Sign in to load the database state attached to your HELM account.',
+      detail: 'Sign in to load the database state attached to your Sabah One account.',
       tone: 'offline',
       action: { kind: 'sign-in', label: 'Sign in' },
     };
@@ -167,8 +167,8 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
       label: 'Supabase',
       headline: 'Database needs attention',
       detail: persistence.syncSession.hasUsableSnapshot
-        ? 'HELM is showing the last confirmed account data and will retry automatically.'
-        : 'HELM could not verify a safe account snapshot and will retry automatically.',
+        ? 'Sabah One is showing the last confirmed account data and will retry automatically.'
+        : 'Sabah One could not verify a safe account snapshot and will retry automatically.',
       tone: 'attention',
       action: { kind: 'refresh', label: 'Refresh status' },
     };
@@ -185,7 +185,7 @@ function buildSupabaseItem(input: SystemHealthInput): HealthItem {
       label: 'Supabase',
       headline: 'Syncing to Supabase',
       detail: lastError
-        ? 'The last database mutation did not complete. HELM is reloading confirmed data.'
+        ? 'The last database mutation did not complete. Sabah One is reloading confirmed data.'
         : `${detailParts.join(' and ')} being committed.`,
       tone: 'syncing',
       action: { kind: 'refresh', label: 'Refresh status' },
@@ -213,7 +213,7 @@ function buildCalendarItem(input: SystemHealthInput): HealthItem {
       id: 'calendar',
       label: 'Google Calendar',
       headline: 'No external calendar',
-      detail: 'Manual calendar records remain in your HELM account database; no Google Calendar account is connected.',
+      detail: 'Manual calendar records remain in your Sabah One account database; no Google Calendar account is connected.',
       tone: 'local',
       action: { kind: 'integrations', label: 'Open Integrations' },
     };

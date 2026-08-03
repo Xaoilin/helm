@@ -505,11 +505,11 @@ test.describe('Lina Assistant', () => {
     const download = await downloadPromise;
     const downloadPath = await download.path();
 
-    expect(download.suggestedFilename()).toMatch(/^helm-chat-delete-my-internet-task-/);
+    expect(download.suggestedFilename()).toMatch(/^sabah-one-chat-delete-my-internet-task-/);
     expect(downloadPath).not.toBeNull();
 
     const markdown = readFileSync(downloadPath!, 'utf8');
-    expect(markdown).toContain('# HELM Chat Export');
+    expect(markdown).toContain('# Sabah One Chat Export');
     expect(markdown).toContain('## Transcript');
     expect(markdown).toContain('Delete my Internet task.');
     expect(markdown).toContain('I can delete that. Do you want me to continue?');

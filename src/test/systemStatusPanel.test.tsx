@@ -45,7 +45,7 @@ const {
       reason: 'signed_out',
       lastReadyAt: null,
       lastProbeAt: null,
-      error: 'Sign in to load HELM data.',
+      error: 'Sign in to load Sabah One data.',
     },
     lastLocalWriteAt: '2026-04-24T09:00:00.000Z',
     lastLocalWriteKey: 'tasks',

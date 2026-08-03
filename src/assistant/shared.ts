@@ -6,7 +6,8 @@ import type {
   CalendarAccount,
   CalendarEvent,
   CalendarSource,
-  CaptureItem,
+  InventoryItem,
+  InventoryNeed,
   FinanceAccount,
   GamificationProfile,
   KnowledgeEntry,
@@ -43,8 +44,9 @@ export type AssistantEntityKind =
   | 'calendar_event'
   | 'calendar_source'
   | 'calendar_account'
-  | 'capture_item'
   | 'finance_account'
+  | 'inventory_item'
+  | 'inventory_need'
   | 'knowledge_entry'
   | 'knowledge_topic'
   | 'project'
@@ -154,6 +156,8 @@ export interface AssistantPlanningBundle {
     calendarEvents: AssistantPlanningEntityCandidate[];
     calendarSources: AssistantPlanningEntityCandidate[];
     financeAccounts: AssistantPlanningEntityCandidate[];
+    inventoryItems: AssistantPlanningEntityCandidate[];
+    inventoryNeeds: AssistantPlanningEntityCandidate[];
     knowledgeTopics: AssistantPlanningEntityCandidate[];
   };
   temporalCandidate?: AssistantTemporalCandidate;
@@ -187,7 +191,8 @@ export interface AssistantCommandContext {
   calendarAccounts: CalendarAccount[];
   calendarSources: CalendarSource[];
   calendarEvents: CalendarEvent[];
-  captureItems?: CaptureItem[];
+  inventoryItems?: InventoryItem[];
+  inventoryNeeds?: InventoryNeed[];
   tasks: Task[];
   financeAccounts: FinanceAccount[];
   transactions: Transaction[];
@@ -217,7 +222,10 @@ export interface AssistantActionHandlers {
   noteAssistantCorrectionApplied?: (id: string) => void;
   addCalendarEvent?: (event: Omit<CalendarEvent, 'id'>) => string;
   updateCalendarEvent?: (id: string, updates: Partial<CalendarEvent>) => void;
-  addCaptureItem?: (item: Omit<CaptureItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  addInventoryItem?: (item: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  adjustInventoryQuantity?: (id: string, delta: number) => void;
+  addInventoryNeed?: (need: Omit<InventoryNeed, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  completeInventoryNeed?: (needId: string) => void;
   addTransaction?: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => string;
   addKnowledgeEntry?: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateGamification?: (profile: GamificationProfile) => void;

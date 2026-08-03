@@ -243,8 +243,8 @@ function defaultNarrationMessage(payload: Record<string, unknown>): string {
   }
 
   if (turnState === 'executed') {
-    if (firstCapability === 'capture.add_item') {
-      return 'Captured that in your Inbox.';
+    if (firstCapability === 'inventory.add_item') {
+      return 'Added that to your Inventory.';
     }
     if (firstCapability === 'tasks.open_view') {
       return "I've opened your full task list.";
@@ -375,23 +375,28 @@ describe('assistant runtime', () => {
     expect(result.message).toBe(result.assistantMessage);
   });
 
-  it('captures raw items through the shared assistant runtime', async () => {
+  it('adds one explicitly requested owned item through the shared assistant runtime', async () => {
     mockHostedAssistant(transcript => {
-      expect(transcript).toBe('capture this: research Lisbon day trips before booking flights');
+      expect(transcript).toBe('add 2 digital calipers to my inventory');
       return makeHostedToolTurn([{
-        callId: 'call_capture',
-        capability: 'capture.add_item',
+        callId: 'call_inventory_item',
+        capability: 'inventory.add_item',
         args: {
-          content: 'research Lisbon day trips before booking flights',
-          classification: 'trip_item',
+          name: 'Digital calipers',
+          quantity: '2',
+          unit: 'pcs',
+          category: 'tool',
+          trackingMode: 'counted',
+          condition: 'good',
+          location: 'Workshop drawer',
         },
       }]);
     });
 
-    const addCaptureItem = vi.fn(() => 'capture-1');
+    const addInventoryItem = vi.fn(() => 'inventory-1');
     const recordAssistantActivity = vi.fn();
     const result = await processAssistantCommand(
-      'capture this: research Lisbon day trips before booking flights',
+      'add 2 digital calipers to my inventory',
       makeContext(),
       {
         lang: 'en',
@@ -405,29 +410,30 @@ describe('assistant runtime', () => {
         handlers: {
           addTask: vi.fn(() => 'unused'),
           updateTask: vi.fn(),
-          addCaptureItem,
+          addInventoryItem,
           recordAssistantActivity,
         },
       },
     );
 
     expect(result.execution?.toolResults[0]).toEqual(expect.objectContaining({
-      capability: 'capture.add_item',
+      capability: 'inventory.add_item',
       status: 'completed',
     }));
-    expect(addCaptureItem).toHaveBeenCalledWith(expect.objectContaining({
-      content: 'research Lisbon day trips before booking flights',
-      classification: 'trip_item',
-      status: 'classified',
-      source: 'chat',
-      conversationId: 'conv-1',
+    expect(addInventoryItem).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Digital calipers',
+      quantity: 2,
+      unit: 'pcs',
+      category: 'tool',
+      trackingMode: 'counted',
+      condition: 'good',
+      location: 'Workshop drawer',
     }));
     expect(recordAssistantActivity).toHaveBeenCalledWith(expect.objectContaining({
-      domain: 'capture',
-      action: 'saved',
-      undoOperation: { type: 'capture.delete', id: 'capture-1' },
+      domain: 'inventory',
+      action: 'created',
     }));
-    expect(result.assistantMessage).toBe('Captured that in your Inbox.');
+    expect(result.assistantMessage).toBe('Added that to your Inventory.');
   });
 
   it('persists prayer completion clarification and resolves a strict follow-up locally', async () => {
@@ -853,15 +859,15 @@ describe('assistant runtime', () => {
     });
 
     expect(result.planningStatus).toBe('planned');
-    expect(result.assistantMessage).toBe('I can help inside HELM, but I cannot control device or internet settings from here.');
+    expect(result.assistantMessage).toBe('I can help inside Sabah One, but I cannot control device or internet settings from here.');
     expect(result.plan).toEqual(expect.objectContaining({
       mode: 'clarify',
-      response: 'I can help inside HELM, but I cannot control device or internet settings from here.',
+      response: 'I can help inside Sabah One, but I cannot control device or internet settings from here.',
       steps: [],
     }));
     expect(result.modelTurn).toEqual({
       mode: 'clarify',
-      assistantMessage: 'I can help inside HELM, but I cannot control device or internet settings from here.',
+      assistantMessage: 'I can help inside Sabah One, but I cannot control device or internet settings from here.',
       toolCalls: [],
     });
     expect(result.toolCalls).toEqual([]);

@@ -573,7 +573,7 @@ export function ProjectReferenceDrawer({
               <p className="project-muted-copy">
                 {desktopPathActions
                   ? 'Not linked on this device. Link the existing checkout when you want local actions.'
-                  : 'Local folders and one-click commands are available in the HELM desktop app. This web view remains a reference.'}
+                  : 'Local folders and one-click commands are available in the Sabah One desktop app. This web view remains a reference.'}
               </p>
             )}
           </section>

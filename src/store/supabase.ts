@@ -1,5 +1,5 @@
 /**
- * Supabase authentication plus HELM's account-owned record API.
+ * Supabase authentication plus Sabah One's account-owned record API.
  * Shared application data never falls back to an anonymous or local store.
  */
 import { createClient, type AuthChangeEvent, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
@@ -105,13 +105,13 @@ export function initFromEnv(): void {
   if (url && key) initSupabase(url, key);
 }
 
-export async function signInWithGoogle(): Promise<void> {
+export async function signInWithGoogle(redirectTo?: string): Promise<void> {
   if (!client) throw new Error('Supabase is not configured.');
   const { error } = await client.auth.signInWithOAuth({
     provider: 'google',
     options: {
       scopes: GOOGLE_SIGN_IN_SCOPES,
-      redirectTo: window.location.origin + (window.location.pathname.includes('/helm') ? '/helm/' : '/'),
+      redirectTo: redirectTo || window.location.origin + (window.location.pathname.includes('/helm') ? '/helm/' : '/'),
       queryParams: {
         access_type: 'offline',
         include_granted_scopes: 'true',
@@ -165,7 +165,7 @@ export function onAuthStateChange(callback: (change: AuthStateChange) => void): 
 
 function requireClient(): SupabaseClient {
   if (!client) throw new Error('Supabase is not configured.');
-  if (!currentUserId) throw new Error('A signed-in HELM account is required.');
+  if (!currentUserId) throw new Error('A signed-in Sabah One account is required.');
   return client;
 }
 
@@ -247,7 +247,7 @@ async function fetchAllHelmRecordRows(
     if (expectedCount !== null && rows.length >= expectedCount) return rows;
     if (page.length === 0) {
       if (expectedCount !== null && rows.length < expectedCount) {
-        throw new Error('HELM could not read the complete database record set.');
+        throw new Error('Sabah One could not read the complete database record set.');
       }
       return rows;
     }
@@ -310,7 +310,7 @@ export async function revealHelmSecret(secretId: string): Promise<HelmSecretDeta
   if (error) throw error;
   const result = asRecord(data);
   if (typeof result.secretId !== 'string' || typeof result.value !== 'string') {
-    throw new Error('The HELM secret response was invalid.');
+    throw new Error('The Sabah One secret response was invalid.');
   }
   return {
     secretId: result.secretId,
@@ -341,7 +341,7 @@ export async function saveHelmSecret(
   });
   if (error) throw error;
   const result = mapSecretSummary(data);
-  if (!result.secretId || !result.label) throw new Error('The HELM secret response was invalid.');
+  if (!result.secretId || !result.label) throw new Error('The Sabah One secret response was invalid.');
   return result;
 }
 
@@ -358,7 +358,7 @@ export async function setHelmSecretArchived(
   });
   if (error) throw error;
   const result = mapSecretSummary(data);
-  if (!result.secretId || !result.label) throw new Error('The HELM secret response was invalid.');
+  if (!result.secretId || !result.label) throw new Error('The Sabah One secret response was invalid.');
   return result;
 }
 
@@ -381,7 +381,7 @@ export async function fetchHelmAccountSnapshot(): Promise<{
     || typeof state.updatedAt !== 'string'
     || !Array.isArray(snapshot.records)
   ) {
-    throw new Error('The HELM account snapshot response was invalid.');
+    throw new Error('The Sabah One account snapshot response was invalid.');
   }
 
   const records = snapshot.records.map(value => {
@@ -395,7 +395,7 @@ export async function fetchHelmAccountSnapshot(): Promise<{
       || typeof record.createdAt !== 'string'
       || typeof record.updatedAt !== 'string'
     ) {
-      throw new Error('The HELM account snapshot contained an invalid record.');
+      throw new Error('The Sabah One account snapshot contained an invalid record.');
     }
     return {
       userId,
@@ -478,7 +478,7 @@ export async function applyHelmMutations(
   operations: HelmMutation[],
 ): Promise<HelmMutationResult> {
   if (operations.length === 0) {
-    throw new Error('At least one HELM mutation is required.');
+    throw new Error('At least one Sabah One mutation is required.');
   }
   const database = requireClient();
   const { data, error } = await database.rpc('apply_helm_mutations', {
@@ -490,6 +490,84 @@ export async function applyHelmMutations(
     throw error;
   }
   return mapMutationResult(data, requestId);
+}
+
+export async function applyHelmInventoryMutations(
+  requestId: string,
+  operations: HelmMutation[],
+): Promise<HelmMutationResult> {
+  if (operations.length === 0) {
+    throw new Error('At least one Sabah One Inventory mutation is required.');
+  }
+  const database = requireClient();
+  const { data, error } = await database.rpc('apply_helm_inventory_mutations', {
+    p_request_id: requestId,
+    p_operations: operations,
+  });
+  if (error) {
+    logError('Supabase', error);
+    throw error;
+  }
+  return mapMutationResult(data, requestId);
+}
+
+export interface InventoryOAuthClientApproval {
+  clientId: string;
+  clientName: string;
+  approvedAt: string;
+  revokedAt: string | null;
+}
+
+function mapInventoryOAuthClient(value: unknown): InventoryOAuthClientApproval {
+  const row = asRecord(value);
+  return {
+    clientId: String(row.clientId || ''),
+    clientName: String(row.clientName || ''),
+    approvedAt: String(row.approvedAt || ''),
+    revokedAt: typeof row.revokedAt === 'string' ? row.revokedAt : null,
+  };
+}
+
+export async function listInventoryOAuthClients(): Promise<InventoryOAuthClientApproval[]> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('list_inventory_oauth_clients');
+  if (error) throw error;
+  return Array.isArray(data) ? data.map(mapInventoryOAuthClient) : [];
+}
+
+export async function approveInventoryOAuthClient(
+  clientId: string,
+  clientName: string,
+): Promise<InventoryOAuthClientApproval> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('approve_inventory_oauth_client', {
+    p_client_id: clientId,
+    p_client_name: clientName,
+  });
+  if (error) throw error;
+  return mapInventoryOAuthClient(data);
+}
+
+export async function revokeInventoryOAuthClientAllowlist(
+  clientId: string,
+): Promise<InventoryOAuthClientApproval> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('revoke_inventory_oauth_client', {
+    p_client_id: clientId,
+  });
+  if (error) throw error;
+  return mapInventoryOAuthClient(data);
+}
+
+export async function revokeInventoryOAuthClient(clientId: string): Promise<void> {
+  const database = requireClient();
+  await revokeInventoryOAuthClientAllowlist(clientId);
+  const { error } = await database.auth.oauth.revokeGrant({ clientId });
+  if (error) {
+    throw new Error(
+      `Inventory access is blocked, but Supabase could not confirm OAuth grant revocation: ${error.message}`,
+    );
+  }
 }
 
 export type SupabaseRealtimeState =
@@ -594,7 +672,7 @@ export function subscribeHelmBroadcast(
   if (!client || !currentUserId) {
     publishRealtimeSnapshot({
       state: 'unavailable',
-      lastError: !client ? 'Supabase is not configured.' : 'No authenticated HELM account.',
+      lastError: !client ? 'Supabase is not configured.' : 'No authenticated Sabah One account.',
     });
     return () => {};
   }

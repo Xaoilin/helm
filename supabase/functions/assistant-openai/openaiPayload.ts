@@ -99,7 +99,7 @@ export function buildOpenAIResponsesPayload(
             format: {
               type: 'json_schema',
               name: 'helm_action_plan',
-              description: 'Structured action plan for HELM assistant turns.',
+              description: 'Structured action plan for Sabah One assistant turns.',
               schema: format,
               strict: true,
             },

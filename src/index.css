@@ -1,4 +1,22 @@
-/* Reset - all styling lives in App.css */
+/* Global reset and Sabah One brand tokens. */
 *, *::before, *::after {
   box-sizing: border-box;
+}
+
+:root {
+  color-scheme: dark;
+  --mc-obsidian: #080a11;
+  --mc-surface: #0f1320;
+  --mc-panel: #151a2a;
+  --mc-panel-raised: #1a2033;
+  --mc-line: #27304a;
+  --mc-text: #dce6f4;
+  --mc-strong: #f7fbff;
+  --mc-muted: #8491aa;
+  --mc-indigo: #6366f1;
+  --mc-cyan: #22d3ee;
+  --mc-success: #34d399;
+  --mc-warning: #fbbf24;
+  --mc-danger: #fb7185;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }

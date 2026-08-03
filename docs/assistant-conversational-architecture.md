@@ -5,7 +5,7 @@
 Make Lina feel like a real GPT-5.4-family-powered personal assistant:
 
 - the model understands the user's intent first
-- the model chooses grounded HELM actions or asks for clarification
+- the model chooses grounded Sabah One actions or asks for clarification
 - local code validates, confirms, and executes safely
 - the model writes the visible reply from verified results
 
@@ -21,8 +21,8 @@ That means:
 
 1. the model is first for intent recognition
 2. the model decides whether the turn is `reply`, `clarify`, `confirm`, or `tool_calls`
-3. HELM validates grounded ids, time resolution, action availability, and confirmation rules
-4. HELM executes deterministically
+3. Sabah One validates grounded ids, time resolution, action availability, and confirmation rules
+4. Sabah One executes deterministically
 5. the model narrates the verified outcome
 
 Planner text and executor templates are not meant to be shown directly to the user.
@@ -43,7 +43,7 @@ This layer does not choose the action.
 
 ### 2. Build the grounded planning bundle
 
-For every new turn, HELM builds a bundle that includes:
+For every new turn, Sabah One builds a bundle that includes:
 
 - relevant capability candidates from `src/assistant/capabilities.ts`
 - grounded entity candidates with stable ids
@@ -119,7 +119,7 @@ This is what makes Lina sound like GPT instead of a router:
 - natural confirmations
 - natural post-execution replies
 
-If model narration is unavailable, HELM falls back truthfully and minimally.
+If model narration is unavailable, Sabah One falls back truthfully and minimally.
 
 ## Provider Contract
 
@@ -131,10 +131,10 @@ The Supabase Edge Function in `supabase/functions/assistant-openai/` now support
 
 - client sends messages, response schema, and tools
 - client can also send the selected hosted model id from Settings
-- tool definitions use OpenAI-safe function names and are mapped back to HELM capability ids after the response
+- tool definitions use OpenAI-safe function names and are mapped back to Sabah One capability ids after the response
 - model returns text or tool calls
-- HELM validates and executes
-- HELM performs a narration pass for the final reply
+- Sabah One validates and executes
+- Sabah One performs a narration pass for the final reply
 
 ### Ollama
 

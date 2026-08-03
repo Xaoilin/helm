@@ -69,7 +69,7 @@ describe('ChatSurface', () => {
     });
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1);
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('# HELM Chat Export'));
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('# Sabah One Chat Export'));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('Delete my Internet task.'));
     expect(screen.getByText('Conversation copied as Markdown.')).toBeInTheDocument();
   });

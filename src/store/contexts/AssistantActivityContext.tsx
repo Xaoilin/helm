@@ -15,12 +15,19 @@ export interface AssistantActivityContextValue {
 
 const AssistantActivityCtx = createContext<AssistantActivityContextValue | null>(null);
 
-function normalizeActivity(entry: AssistantActivityEntry): AssistantActivityEntry {
+export function normalizeAssistantActivityEntry(entry: AssistantActivityEntry): AssistantActivityEntry {
+  const raw = entry as AssistantActivityEntry & {
+    domain?: string;
+    undoOperation?: { type?: string };
+  };
+  const retiredCapture = String(raw.domain) === 'capture'
+    || String(raw.undoOperation?.type) === 'capture.delete';
   return {
     ...entry,
     details: Array.isArray(entry.details) ? entry.details.filter(Boolean) : [],
     entityRefs: Array.isArray(entry.entityRefs) ? entry.entityRefs : [],
     status: entry.status || 'applied',
+    ...(retiredCapture ? { undoOperation: undefined } : {}),
   };
 }
 
@@ -37,14 +44,14 @@ export function AssistantActivityProvider({ children }: { children: ReactNode })
   useEffect(() => {
     (async () => {
       const data = await loadStore<AssistantActivityEntry[]>('assistantActivityLog');
-      setAssistantActivityLog((data ?? []).map(normalizeActivity).slice(0, LIMITS.ASSISTANT_ACTIVITY_LOG));
+      setAssistantActivityLog((data ?? []).map(normalizeAssistantActivityEntry).slice(0, LIMITS.ASSISTANT_ACTIVITY_LOG));
       setLoaded(true);
     })();
   }, []);
 
   useRemoteStoreRefresh(['assistantActivityLog'], async () => {
     const data = await loadStore<AssistantActivityEntry[]>('assistantActivityLog');
-    setAssistantActivityLog((data ?? []).map(normalizeActivity).slice(0, LIMITS.ASSISTANT_ACTIVITY_LOG));
+    setAssistantActivityLog((data ?? []).map(normalizeAssistantActivityEntry).slice(0, LIMITS.ASSISTANT_ACTIVITY_LOG));
   });
 
   useEffect(() => {
@@ -56,7 +63,7 @@ export function AssistantActivityProvider({ children }: { children: ReactNode })
   const recordAssistantActivity = useCallback((activity: AssistantActivityDraft): string => {
     const id = uuid();
     const now = activity.createdAt || new Date().toISOString();
-    const entry: AssistantActivityEntry = normalizeActivity({
+    const entry: AssistantActivityEntry = normalizeAssistantActivityEntry({
       ...activity,
       id,
       createdAt: now,

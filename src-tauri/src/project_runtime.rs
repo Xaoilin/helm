@@ -592,7 +592,7 @@ fn project_profile_confirmation(profile: &ApprovedProjectProfile) -> (String, St
             .join("\n")
     };
     let description = format!(
-        "HELM will trust this exact local command on this device.\n\n\
+        "Sabah One will trust this exact local command on this device.\n\n\
 Executable:\n{:?}\n\n\
 Arguments:\n{}\n\n\
 Working directory:\n{:?}\n\n\

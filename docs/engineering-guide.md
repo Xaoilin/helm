@@ -63,7 +63,7 @@ For assistant-planning changes, the release bar is higher than generic unit cove
 
 ## Release Versioning
 
-- HELM release versions use semver and must stay aligned across `package.json`, `package-lock.json`, `public/release.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
+- Sabah One release versions use semver and must stay aligned across `package.json`, `package-lock.json`, `public/release.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
 - The UI release badge is sourced from the build version and is intentionally pinned in the shell sidebar so the current build is always visible.
 - Web builds poll `public/release.json` on load, when a hidden tab becomes visible again, and on the configured release interval. If the deployed manifest reports a newer semver than the current bundle, the app forces a one-time page reload so users move onto the latest deployment without a manual refresh.
 - Every feature branch must include a version bump before handoff. Do not leave feature work on a branch at the previous release number.
@@ -181,7 +181,7 @@ After the feature works end to end, do one more rendered review that focuses on 
 ## Security Notes
 
 - API keys are currently client-side configuration for a single-user MVP. Do not describe this as production-grade secret handling.
-- Do not imply HELM includes a secure general-purpose credential vault. Project paths, approvals, runtime state, and API keys are explicit device-only data and must never enter shared records.
+- Do not imply Sabah One includes a secure general-purpose credential vault. Project paths, approvals, runtime state, and API keys are explicit device-only data and must never enter shared records.
 - Hosted-assistant browser calls currently use the build's configured Supabase project access key. Keep the UI copy truthful about that architecture, and if tighter access control is needed later, move the OpenAI call behind a server-side auth boundary instead of implying the browser path is private.
 - Avoid `dangerouslySetInnerHTML` and preserve React's default escaping protections.
 - Keep the Tauri CSP enabled and narrowly scoped. The native project approval dialog is the user-presence trust boundary; renderer confirmation alone is not sufficient for process launch.

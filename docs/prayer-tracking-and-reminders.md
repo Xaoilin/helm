@@ -2,9 +2,9 @@
 
 ## Scope
 
-HELM tracks the five canonical daily prayers independently from task IDs. Tasks remain the interaction surface and gamification bridge, while `PrayerTrackingState` is the durable source of truth for prayer outcomes, reminder receipts, and reporting.
+Sabah One tracks the five canonical daily prayers independently from task IDs. Tasks remain the interaction surface and gamification bridge, while `PrayerTrackingState` is the durable source of truth for prayer outcomes, reminder receipts, and reporting.
 
-The feature begins classified reporting at `trackingStartedAt`. Existing checked prayer-task entries are imported once as `unclassified`; HELM does not guess whether legacy completions were on time and does not infer misses before activation. On the first trusted activation-day schedule, HELM persists the exact canonical prayers that were still eligible. Later DST, season, or location timetable changes cannot rewrite that denominator. If no trusted activation-day snapshot exists after that date passes, unknown activation-day blanks remain excluded instead of being guessed.
+The feature begins classified reporting at `trackingStartedAt`. Existing checked prayer-task entries are imported once as `unclassified`; Sabah One does not guess whether legacy completions were on time and does not infer misses before activation. On the first trusted activation-day schedule, Sabah One persists the exact canonical prayers that were still eligible. Later DST, season, or location timetable changes cannot rewrite that denominator. If no trusted activation-day snapshot exists after that date passes, unknown activation-day blanks remain excluded instead of being guessed.
 
 ## Root Cause And Design Boundary
 
@@ -37,7 +37,7 @@ Sequential timetable windows remain separate and continue to drive Dashboard `Up
 
 Canonical types live in `src/types/domain.ts`. Pure normalization, deadline, outcome, reminder-key, and percentage logic lives in `src/services/prayerTracking.ts`. `src/store/contexts/PrayerContext.tsx` owns the live schedule, tracking state, completion dialog, reminder lifecycle, and diagnostics.
 
-Records use `<local date>::<PrayerName>` keys so deletion or recreation of a prayer task cannot erase history. The aggregate is decomposed into account-owned metadata, outcome, eligibility, and reminder-receipt records and changed through the transactional HELM mutation RPC.
+Records use `<local date>::<PrayerName>` keys so deletion or recreation of a prayer task cannot erase history. The aggregate is decomposed into account-owned metadata, outcome, eligibility, and reminder-receipt records and changed through the transactional Sabah One mutation RPC.
 
 All UI, chat, and voice entry points call the same prayer completion mutation. One completion:
 
@@ -71,9 +71,9 @@ AlAdhan schedule validation requires all five prayers plus Sunrise, Sunset, and 
 
 Deadline reminders are enabled alongside prayer notifications by default. Settings supports 5, 10, 15, or 30 minutes, with 15 minutes as the default.
 
-Eligible prayers produce one global warning across every HELM surface. Dhuhr/Asr and Maghrib/Isha are grouped when they share a deadline. The banner offers completion and a five-minute snooze; snooze is unavailable when five minutes or less remain. Completion removes the reminder immediately, while reaching the deadline closes it and materializes a Missed outcome when no completion exists.
+Eligible prayers produce one global warning across every Sabah One surface. Dhuhr/Asr and Maghrib/Isha are grouped when they share a deadline. The banner offers completion and a five-minute snooze; snooze is unavailable when five minutes or less remain. Completion removes the reminder immediately, while reaching the deadline closes it and materializes a Missed outcome when no completion exists.
 
-Desktop builds schedule the timer in the Tauri process and use native notifications, so minimizing the window does not stop the timer. The timer stops when HELM is fully exited: there is currently no tray process, autostart, or operating-system background schedule. Browser builds use an in-page timer and Web Notifications while the page remains open.
+Desktop builds schedule the timer in the Tauri process and use native notifications, so minimizing the window does not stop the timer. The timer stops when Sabah One is fully exited: there is currently no tray process, autostart, or operating-system background schedule. Browser builds use an in-page timer and Web Notifications while the page remains open.
 
 Native/Web notification delivery is deduplicated by local prayer date, canonical prayer, and deadline. Permission is requested only after an explicit user action. `prefers-reduced-motion` replaces the gentle pulse with a static high-contrast warning.
 

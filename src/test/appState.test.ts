@@ -472,40 +472,54 @@ describe('AppContext - Knowledge', () => {
   });
 });
 
-describe('AppContext - Capture Inbox', () => {
+describe('AppContext - Inventory', () => {
   beforeEach(() => { localStorage.clear(); });
 
-  it('should add, update, and remove capture items', async () => {
+  it('manages owned stock and atomically completes a linked need', async () => {
     const r = await renderWithApp();
     let itemId = '';
-
     act(() => {
-      itemId = r.api!.addCaptureItem({
-        content: 'Remember to compare ferry times for the trip.',
-        source: 'quick_button',
-        classification: 'unknown',
-        status: 'unprocessed',
-        sourceSurface: 'dashboard',
+      itemId = r.api!.addInventoryItem({
+        name: 'PLA filament',
+        category: 'material',
+        trackingMode: 'measured',
+        quantity: 0.5,
+        unit: 'kg',
+        lowStockThreshold: 0.2,
+        specifications: { diameter: '1.75 mm' },
+        condition: 'good',
+        location: 'Workshop shelf',
+        tags: ['3d printing'],
+        notes: '',
+        projectCatalogKeys: ['magnus'],
+        lastVerifiedAt: '2026-08-03T04:00:00.000Z',
       });
     });
+    expect(r.api!.inventoryItems[0]).toMatchObject({ name: 'PLA filament', quantity: 0.5, unit: 'kg' });
 
-    expect(r.api!.captureItems).toHaveLength(1);
-    expect(r.api!.captureItems[0].content).toBe('Remember to compare ferry times for the trip.');
-
+    let needId = '';
     act(() => {
-      r.api!.updateCaptureItem(itemId, {
-        classification: 'trip_item',
-        status: 'classified',
+      needId = r.api!.addInventoryNeed({
+        name: 'PLA filament',
+        linkedItemId: itemId,
+        projectCatalogKey: 'magnus',
+        requiredQuantity: 0.75,
+        unit: 'kg',
+        specifications: { diameter: '1.75 mm' },
+        priority: 'high',
+        status: 'needed',
+        notes: 'For the next print run',
       });
     });
+    act(() => { r.api!.completeInventoryNeed(needId); });
+    expect(r.api!.inventoryItems[0].quantity).toBe(1.25);
+    expect(r.api!.inventoryNeeds[0]).toMatchObject({ status: 'acquired', linkedItemId: itemId });
 
-    expect(r.api!.captureItems[0]).toMatchObject({
-      classification: 'trip_item',
-      status: 'classified',
-    });
+    act(() => { r.api!.adjustInventoryQuantity(itemId, -0.25); });
+    expect(r.api!.inventoryItems[0].quantity).toBe(1);
 
-    act(() => { r.api!.removeCaptureItem(itemId); });
-    expect(r.api!.captureItems).toHaveLength(0);
+    act(() => { r.api!.archiveInventoryItem(itemId); });
+    expect(r.api!.inventoryItems[0].archivedAt).toBeTruthy();
   });
 });
 

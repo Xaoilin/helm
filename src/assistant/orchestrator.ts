@@ -225,7 +225,7 @@ export function buildAssistantInitialTurnMessages(
       }, null, 2)}`
     : 'Pending confirmation JSON:\nnull';
 
-  const prompt = `You are Lina, the conversational assistant inside HELM.
+  const prompt = `You are Lina, the conversational assistant inside Sabah One.
 ${languageInstruction}
 Return either function tool calls or JSON matching the provided schema.
 
@@ -271,7 +271,7 @@ function buildNarrationMessages(
   return [
     {
       role: 'system',
-      content: `You are Lina, the assistant inside HELM.
+      content: `You are Lina, the assistant inside Sabah One.
 ${languageInstruction}
 Return JSON matching the provided schema.
 
