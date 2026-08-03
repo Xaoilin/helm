@@ -253,34 +253,42 @@ jobs:
     expect(evaluateDeployWorkflow(workflow, 'Deploy to GitHub Pages').ok).toBe(true)
   })
 
-  it('requires the production Sabah One OAuth origin in the Supabase patch and verification', () => {
+  it('requires the pathless production origin and /helm consent path in the Supabase OAuth config', () => {
     const workflow = `curl \\
-  --data '{"site_url":"https://xaoilin.github.io/helm","oauth_server_enabled":true,"oauth_server_allow_dynamic_registration":true,"oauth_server_authorization_path":"/helm/oauth/consent"}'
+  --data '{"site_url":"https://xaoilin.github.io","oauth_server_enabled":true,"oauth_server_allow_dynamic_registration":true,"oauth_server_authorization_path":"/helm/oauth/consent"}'
 jq -e '
-  .site_url == "https://xaoilin.github.io/helm"
+  .site_url == "https://xaoilin.github.io"
 '`
 
     expect(evaluateSupabaseOAuthOrigin(workflow).ok).toBe(true)
 
     const withoutPatchedOrigin = workflow.replace(
-      '"site_url":"https://xaoilin.github.io/helm",',
+      '"site_url":"https://xaoilin.github.io",',
       '',
     )
     expect(evaluateSupabaseOAuthOrigin(withoutPatchedOrigin)).toMatchObject({
       ok: false,
       failures: expect.arrayContaining([
-        expect.stringContaining('must configure the production OAuth Site URL'),
+        expect.stringContaining('must configure the pathless production OAuth Site URL'),
+      ]),
+    })
+
+    const withoutConsentPath = workflow.replace('/helm/oauth/consent', '/oauth/consent')
+    expect(evaluateSupabaseOAuthOrigin(withoutConsentPath)).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining([
+        expect.stringContaining('same fail-closed PATCH as the /helm consent path'),
       ]),
     })
 
     const withoutVerifiedOrigin = workflow.replace(
-      '.site_url == "https://xaoilin.github.io/helm"',
+      '.site_url == "https://xaoilin.github.io"',
       '.site_url != null',
     )
     expect(evaluateSupabaseOAuthOrigin(withoutVerifiedOrigin)).toMatchObject({
       ok: false,
       failures: expect.arrayContaining([
-        expect.stringContaining('must verify the returned production OAuth Site URL'),
+        expect.stringContaining('must verify the returned pathless production OAuth Site URL'),
       ]),
     })
   })

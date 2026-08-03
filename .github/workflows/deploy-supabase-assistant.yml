@@ -147,14 +147,14 @@ jobs:
             --request PATCH \
             --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             --header "Content-Type: application/json" \
-            --data '{"site_url":"https://xaoilin.github.io/helm","oauth_server_enabled":true,"oauth_server_allow_dynamic_registration":true,"oauth_server_authorization_path":"/helm/oauth/consent"}' \
+            --data '{"site_url":"https://xaoilin.github.io","oauth_server_enabled":true,"oauth_server_allow_dynamic_registration":true,"oauth_server_authorization_path":"/helm/oauth/consent"}' \
             "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/auth"
 
           oauth_config="$(curl --fail-with-body --silent --show-error \
             --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/auth")"
           jq -e '
-            .site_url == "https://xaoilin.github.io/helm"
+            .site_url == "https://xaoilin.github.io"
             and .oauth_server_enabled == true
             and .oauth_server_allow_dynamic_registration == true
             and .oauth_server_authorization_path == "/helm/oauth/consent"

@@ -290,13 +290,13 @@ export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
 export function evaluateSupabaseOAuthOrigin(rawWorkflow) {
   const failures = []
   const passes = []
-  const productionSiteUrl = 'https://xaoilin.github.io/helm'
-  const expectedPatch = `--data '{"site_url":"${productionSiteUrl}","oauth_server_enabled":true,"oauth_server_allow_dynamic_registration":true,"oauth_server_authorization_path":"/helm/oauth/consent"}'`
-  const expectedVerification = `.site_url == "${productionSiteUrl}"`
+  const productionSiteOrigin = 'https://xaoilin.github.io'
+  const expectedPatch = `--data '{"site_url":"${productionSiteOrigin}","oauth_server_enabled":true,"oauth_server_allow_dynamic_registration":true,"oauth_server_authorization_path":"/helm/oauth/consent"}'`
+  const expectedVerification = `.site_url == "${productionSiteOrigin}"`
 
   if (!rawWorkflow.includes(expectedPatch)) {
     failures.push(
-      `Supabase deploy workflow must configure the production OAuth Site URL in the same fail-closed PATCH as the OAuth server settings: ${productionSiteUrl}.`,
+      `Supabase deploy workflow must configure the pathless production OAuth Site URL in the same fail-closed PATCH as the /helm consent path: ${productionSiteOrigin}.`,
     )
   } else {
     passes.push('Supabase deploy workflow configures the production Sabah One OAuth origin atomically.')
@@ -304,7 +304,7 @@ export function evaluateSupabaseOAuthOrigin(rawWorkflow) {
 
   if (!rawWorkflow.includes(expectedVerification)) {
     failures.push(
-      `Supabase deploy workflow must verify the returned production OAuth Site URL: ${productionSiteUrl}.`,
+      `Supabase deploy workflow must verify the returned pathless production OAuth Site URL: ${productionSiteOrigin}.`,
     )
   } else {
     passes.push('Supabase deploy workflow verifies the returned production Sabah One OAuth origin.')
