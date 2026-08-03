@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(45);
+select plan(48);
 
 select has_table('public', 'helm_inventory_oauth_clients', 'Inventory OAuth approvals table exists');
 select has_table('public', 'helm_inventory_mutation_receipts', 'Inventory idempotency table exists');
@@ -127,7 +127,7 @@ select lives_ok(
   $$select public.apply_helm_mutations(
     'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee5',
     '[
-      {"op":"create","collection":"projects","recordId":"magnus","payload":{"id":"magnus","catalogKey":"catalog:magnus","name":"MAGNUS"}},
+      {"op":"create","collection":"projects","recordId":"magnus","payload":{"id":"magnus","catalogKey":"catalog:magnus","name":"MAGNUS","tags":["hardware","3d-printing"]}},
       {"op":"create","collection":"tasks","recordId":"private-task","payload":{"id":"private-task","title":"Private"}}
     ]'::jsonb
   )$$,
@@ -270,6 +270,25 @@ select is(
   (select (public.inventory_resolve_project('MAGNUS') -> 0) - 'summary' - 'localPath'),
   '{"id":"magnus","name":"MAGNUS","catalogKey":"catalog:magnus"}'::jsonb,
   'project resolution returns only id, name, and catalogue key'
+);
+
+select is(
+  public.inventory_resolve_project('3d-printing'),
+  '[{"id":"magnus","name":"MAGNUS","catalogKey":"catalog:magnus"}]'::jsonb,
+  'project resolution accepts an exact project tag'
+);
+
+select is(
+  public.inventory_resolve_project('3D printing'),
+  '[{"id":"magnus","name":"MAGNUS","catalogKey":"catalog:magnus"}]'::jsonb,
+  'project tag resolution normalizes separators and case'
+);
+
+select throws_ok(
+  $$select public.inventory_resolve_project('---')$$,
+  '22023',
+  'Project query is invalid.',
+  'project tag resolution rejects a query with no searchable characters'
 );
 
 select lives_ok(
