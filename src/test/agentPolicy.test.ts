@@ -2,6 +2,7 @@
 import {
   evaluateCiWorkflow,
   evaluateDeployWorkflow,
+  evaluateSupabaseOAuthOrigin,
   findForbiddenLocalDateSlicingInText,
   REQUIRED_CI_CHECKS,
 } from '../../scripts/lib/agentPolicy.mjs'
@@ -250,6 +251,38 @@ jobs:
 `
 
     expect(evaluateDeployWorkflow(workflow, 'Deploy to GitHub Pages').ok).toBe(true)
+  })
+
+  it('requires the production Sabah One OAuth origin in the Supabase patch and verification', () => {
+    const workflow = `curl \\
+  --data '{"site_url":"https://xaoilin.github.io/helm","oauth_server_enabled":true,"oauth_server_allow_dynamic_registration":true,"oauth_server_authorization_path":"/helm/oauth/consent"}'
+jq -e '
+  .site_url == "https://xaoilin.github.io/helm"
+'`
+
+    expect(evaluateSupabaseOAuthOrigin(workflow).ok).toBe(true)
+
+    const withoutPatchedOrigin = workflow.replace(
+      '"site_url":"https://xaoilin.github.io/helm",',
+      '',
+    )
+    expect(evaluateSupabaseOAuthOrigin(withoutPatchedOrigin)).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining([
+        expect.stringContaining('must configure the production OAuth Site URL'),
+      ]),
+    })
+
+    const withoutVerifiedOrigin = workflow.replace(
+      '.site_url == "https://xaoilin.github.io/helm"',
+      '.site_url != null',
+    )
+    expect(evaluateSupabaseOAuthOrigin(withoutVerifiedOrigin)).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining([
+        expect.stringContaining('must verify the returned production OAuth Site URL'),
+      ]),
+    })
   })
 
   it('flags missing automation gates', () => {
