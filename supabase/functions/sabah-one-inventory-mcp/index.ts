@@ -36,6 +36,45 @@ const itemCategorySchema = z.enum([
   'storage',
   'other',
 ]);
+const itemSubcategorySchema = z.enum([
+  '3d_printers', 'other_machines', 'workshop_equipment', 'general_tools',
+  'hand_tools', 'power_tools', 'measuring_tools', 'screws_fasteners',
+  'filament', 'resin', 'wire_cable', 'connectors_terminals',
+  'power_supplies', 'power_modules', 'switches_relays', 'microcontrollers',
+  'prototyping_boards', 'fuses_protection', 'lights_alarms',
+  'heat_shrink_sleeving', 'cable_management', 'magnets', 'adhesives_tapes',
+  'mechanical_hardware', 'general_components', 'general_electronics',
+  'general_materials', 'general_consumables', 'storage_organisation',
+  'safety_equipment', 'other',
+]);
+const subcategoryCategory = {
+  '3d_printers': 'machine', 'other_machines': 'machine',
+  'workshop_equipment': 'tool', 'general_tools': 'tool', 'hand_tools': 'tool',
+  'power_tools': 'tool', 'measuring_tools': 'tool',
+  'screws_fasteners': 'fastener', 'filament': 'material', 'resin': 'material',
+  'wire_cable': 'material', 'connectors_terminals': 'component',
+  'power_supplies': 'electronics', 'power_modules': 'component',
+  'switches_relays': 'component', 'microcontrollers': 'electronics',
+  'prototyping_boards': 'component', 'fuses_protection': 'component',
+  'lights_alarms': 'component', 'heat_shrink_sleeving': 'consumable',
+  'cable_management': 'consumable', 'magnets': 'component',
+  'adhesives_tapes': 'material', 'mechanical_hardware': 'component',
+  'general_components': 'component', 'general_electronics': 'electronics',
+  'general_materials': 'material', 'general_consumables': 'consumable',
+  'storage_organisation': 'storage', 'safety_equipment': 'safety', 'other': 'other',
+} as const;
+const imageUrlSchema = z.string().trim().min(1).max(2_048).refine(value => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:'
+      && Boolean(parsed.hostname)
+      && !parsed.username
+      && !parsed.password
+      && /^https:\/\/[^/@:\s]+(?::[0-9]{1,5})?(?:[/?#]\S*)?$/.test(value);
+  } catch {
+    return false;
+  }
+}, 'Product image URL must be a valid HTTPS address.');
 const quantitySchema = z.number().finite().nonnegative().max(1_000_000_000);
 const unitSchema = z.string().trim().min(1).max(32);
 const specificationsSchema = z.record(
@@ -53,6 +92,8 @@ const itemCandidateSchema = z.object({
   id: stableIdSchema,
   name: z.string().trim().min(1).max(160),
   category: itemCategorySchema.default('other'),
+  subcategory: itemSubcategorySchema.optional(),
+  imageUrl: imageUrlSchema.optional(),
   trackingMode: z.enum(['durable', 'counted', 'measured']).default('counted'),
   quantity: quantitySchema,
   unit: unitSchema.default('units'),
@@ -65,11 +106,17 @@ const itemCandidateSchema = z.object({
   tags: tagsSchema.default([]),
   notes: z.string().max(4_000).default(''),
   projectCatalogKeys: projectKeysSchema.default([]),
-}).strict();
+}).strict().refine(
+  value => !value.subcategory || subcategoryCategory[value.subcategory] === value.category,
+  { path: ['subcategory'], message: 'Inventory subcategory does not match its category.' },
+);
 
 const needCandidateSchema = z.object({
   id: stableIdSchema,
   name: z.string().trim().min(1).max(160),
+  category: itemCategorySchema.optional(),
+  subcategory: itemSubcategorySchema.optional(),
+  imageUrl: imageUrlSchema.optional(),
   linkedItemId: z.string().trim().min(1).max(256).optional(),
   projectCatalogKey: z.string().trim().min(1).max(160).optional(),
   requiredQuantity: quantitySchema.default(1),
@@ -78,7 +125,12 @@ const needCandidateSchema = z.object({
   priority: z.enum(['low', 'normal', 'high']).default('normal'),
   status: z.enum(['needed', 'ordered']).default('needed'),
   notes: z.string().max(4_000).default(''),
-}).strict();
+}).strict().refine(
+  value => !value.subcategory || (
+    Boolean(value.category) && subcategoryCategory[value.subcategory] === value.category
+  ),
+  { path: ['subcategory'], message: 'Inventory need subcategory requires its matching category.' },
+);
 
 interface VerifiedAccess {
   authInfo: AuthInfo;

@@ -11,6 +11,8 @@ function item(overrides: Partial<InventoryItem>): InventoryItem {
     id: 'item-inserts',
     name: 'M3 heat-set inserts',
     category: 'fastener',
+    subcategory: 'screws_fasteners',
+    imageUrl: 'https://m.media-amazon.com/images/I/inserts.jpg',
     trackingMode: 'counted',
     quantity: 10,
     unit: 'pcs',
@@ -32,6 +34,9 @@ function need(overrides: Partial<InventoryNeed> = {}): InventoryNeed {
   return {
     id: 'need-inserts',
     name: 'M3 heat-set inserts',
+    category: 'fastener',
+    subcategory: 'screws_fasteners',
+    imageUrl: 'https://m.media-amazon.com/images/I/inserts.jpg',
     linkedItemId: 'item-inserts',
     projectCatalogKey: 'fixture-orbit',
     requiredQuantity: 50,
@@ -76,6 +81,8 @@ describe('InventorySurface', () => {
         id: 'item-calipers',
         name: 'Digital calipers',
         category: 'tool',
+        subcategory: 'measuring_tools',
+        imageUrl: 'https://m.media-amazon.com/images/I/calipers.jpg',
         trackingMode: 'durable',
         quantity: 1,
         unit: 'item',
@@ -88,7 +95,18 @@ describe('InventorySurface', () => {
     await act(async () => { renderWithProvider(<InventorySurface />); });
     expect(await screen.findByRole('heading', { name: 'Know what you have before you buy.' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Digital calipers' })).toBeInTheDocument();
+    const caliperPhoto = screen.getByRole('img', { name: 'Digital calipers product photo' });
+    expect(caliperPhoto).toHaveAttribute('src', 'https://m.media-amazon.com/images/I/calipers.jpg');
     expect(document.querySelector('.inventory-low-badge')).toHaveTextContent('Low stock');
+
+    fireEvent.change(screen.getByLabelText('Filter inventory category'), { target: { value: 'measuring_tools' } });
+    expect(screen.getByRole('heading', { name: 'Digital calipers' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'M3 heat-set inserts' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Filter inventory category'), { target: { value: 'all' } });
+
+    fireEvent.error(caliperPhoto);
+    expect(screen.queryByRole('img', { name: 'Digital calipers product photo' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Digital calipers' }).closest('.inventory-card')?.querySelector('.inventory-card-visual')).not.toHaveClass('has-photo');
 
     fireEvent.change(screen.getByPlaceholderText(/Search tools, stock/i), { target: { value: 'calipers' } });
     expect(screen.getByRole('heading', { name: 'Digital calipers' })).toBeInTheDocument();
@@ -114,6 +132,7 @@ describe('InventorySurface', () => {
         id: 'item-calipers',
         name: 'Digital calipers',
         category: 'tool',
+        subcategory: 'measuring_tools',
         quantity: 1,
         lowStockThreshold: 0,
       }),

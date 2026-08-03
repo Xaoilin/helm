@@ -1,4 +1,5 @@
-import type { InventoryCategory, InventoryCondition, InventoryNeedPriority, InventoryTrackingMode, Surface, TaskCategory, TaskPriority } from '../types/domain';
+import type { InventoryCategory, InventoryCondition, InventoryNeedPriority, InventorySubcategory, InventoryTrackingMode, Surface, TaskCategory, TaskPriority } from '../types/domain';
+import { INVENTORY_SUBCATEGORY_OPTIONS } from '../inventory/inventoryModel';
 
 export type ConfirmationRule = 'never' | 'always' | 'on_ambiguity';
 export type AssistantActionStatus = 'live' | 'planned' | 'disabled';
@@ -59,6 +60,7 @@ const INVENTORY_CATEGORY_VALUES: readonly InventoryCategory[] = [
 const INVENTORY_TRACKING_VALUES: readonly InventoryTrackingMode[] = ['durable', 'counted', 'measured'];
 const INVENTORY_CONDITION_VALUES: readonly InventoryCondition[] = ['unknown', 'new', 'good', 'worn', 'needs_repair'];
 const INVENTORY_NEED_PRIORITY_VALUES: readonly InventoryNeedPriority[] = ['low', 'normal', 'high'];
+const INVENTORY_SUBCATEGORY_VALUES: readonly InventorySubcategory[] = INVENTORY_SUBCATEGORY_OPTIONS.map(option => option.value);
 export const ASSISTANT_ACTIONS = [
   {
     id: 'inventory.lookup',
@@ -104,9 +106,11 @@ export const ASSISTANT_ACTIONS = [
       },
       { key: 'trackingMode', label: 'Tracking mode', description: 'Durable, counted, or measured stock.', type: 'enum', required: true, values: INVENTORY_TRACKING_VALUES },
       { key: 'condition', label: 'Condition', description: 'Current item condition.', type: 'enum', required: false, values: INVENTORY_CONDITION_VALUES },
+      { key: 'subcategory', label: 'Category detail', description: 'Practical Inventory category such as hand tools or screws and fasteners.', type: 'enum', required: false, values: INVENTORY_SUBCATEGORY_VALUES },
       { key: 'brand', label: 'Brand', description: 'Optional brand.', type: 'string', required: false },
       { key: 'model', label: 'Model', description: 'Optional model.', type: 'string', required: false },
       { key: 'location', label: 'Location', description: 'Optional storage location.', type: 'string', required: false },
+      { key: 'imageUrl', label: 'Product image', description: 'Optional HTTPS product image URL.', type: 'string', required: false },
       { key: 'projectCatalogKeys', label: 'Projects', description: 'Stable linked project catalogue keys.', type: 'string_array', required: false },
     ],
   },
@@ -141,6 +145,9 @@ export const ASSISTANT_ACTIONS = [
       { key: 'name', label: 'Name', description: 'Needed item name.', type: 'string', required: true },
       { key: 'requiredQuantity', label: 'Quantity', description: 'Finite non-negative required quantity as text.', type: 'string', required: true },
       { key: 'unit', label: 'Unit', description: 'Quantity unit.', type: 'string', required: true },
+      { key: 'category', label: 'Group', description: 'Optional broad Inventory group.', type: 'enum', required: false, values: INVENTORY_CATEGORY_VALUES },
+      { key: 'subcategory', label: 'Category', description: 'Optional practical Inventory category.', type: 'enum', required: false, values: INVENTORY_SUBCATEGORY_VALUES },
+      { key: 'imageUrl', label: 'Product image', description: 'Optional HTTPS product image URL.', type: 'string', required: false },
       { key: 'linkedItemId', label: 'Linked item', description: 'Optional grounded owned item ID.', type: 'string', required: false },
       { key: 'projectCatalogKey', label: 'Project', description: 'Optional stable project catalogue key.', type: 'string', required: false },
       { key: 'priority', label: 'Priority', description: 'Need priority.', type: 'enum', required: false, values: INVENTORY_NEED_PRIORITY_VALUES },

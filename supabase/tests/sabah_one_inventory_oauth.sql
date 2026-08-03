@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(48);
+select plan(55);
 
 select has_table('public', 'helm_inventory_oauth_clients', 'Inventory OAuth approvals table exists');
 select has_table('public', 'helm_inventory_mutation_receipts', 'Inventory idempotency table exists');
@@ -43,6 +43,8 @@ select lives_ok(
       "op":"create","collection":"inventoryItems","recordId":"m3-inserts",
       "payload":{
         "id":"m3-inserts","name":"M3 heat-set inserts","category":"fastener",
+        "subcategory":"screws_fasteners",
+        "imageUrl":"https://m.media-amazon.com/images/I/example.jpg",
         "trackingMode":"counted","quantity":10,"unit":"pcs","lowStockThreshold":5,
         "specifications":{"thread":"M3"},"condition":"new","tags":["3d-printing"],
         "notes":"Brass","projectCatalogKeys":["catalog:magnus"],
@@ -52,6 +54,33 @@ select lives_ok(
     }]'::jsonb
   )$$,
   'first-party app can create a validated Inventory item'
+);
+
+select is(
+  (select payload ->> 'subcategory' from public.helm_records
+    where collection = 'inventoryItems' and record_id = 'm3-inserts'),
+  'screws_fasteners',
+  'a practical Inventory subcategory is persisted'
+);
+
+select throws_ok(
+  $$select public.apply_helm_inventory_mutations(
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeee14',
+    '[{"op":"patch","collection":"inventoryItems","recordId":"m3-inserts","set":{"subcategory":"hand_tools"}}]'::jsonb
+  )$$,
+  '22023',
+  'Inventory subcategory does not match its category.',
+  'a mismatched Inventory subcategory is rejected'
+);
+
+select throws_ok(
+  $$select public.apply_helm_inventory_mutations(
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeee15',
+    '[{"op":"patch","collection":"inventoryItems","recordId":"m3-inserts","set":{"imageUrl":"http://example.test/item.jpg"}}]'::jsonb
+  )$$,
+  '22023',
+  'Inventory image URL must be a valid HTTPS address.',
+  'an insecure Inventory image URL is rejected'
 );
 
 select throws_ok(
@@ -78,7 +107,10 @@ select lives_ok(
   $$select public.inventory_save_need(
     'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee3',
     '{
-      "id":"need-m3","name":"M3 heat-set inserts","linkedItemId":"m3-inserts",
+      "id":"need-m3","name":"M3 heat-set inserts","category":"fastener",
+      "subcategory":"screws_fasteners",
+      "imageUrl":"https://m.media-amazon.com/images/I/example.jpg",
+      "linkedItemId":"m3-inserts",
       "projectCatalogKey":"catalog:magnus","requiredQuantity":5,"unit":"pcs",
       "specifications":{"thread":"M3"},"priority":"high","status":"needed",
       "notes":"For the next tray","createdAt":"2026-08-03T00:00:00.000Z",
@@ -86,6 +118,21 @@ select lives_ok(
     }'::jsonb
   )$$,
   'one bounded Inventory need can be saved'
+);
+
+select throws_ok(
+  $$select public.inventory_save_need(
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeee16',
+    '{
+      "id":"need-bad-image","name":"Unsafe image","requiredQuantity":1,"unit":"pcs",
+      "specifications":{},"priority":"normal","status":"needed","notes":"",
+      "imageUrl":"https://user:secret@example.test/item.jpg",
+      "createdAt":"2026-08-03T00:00:00.000Z","updatedAt":"2026-08-03T00:00:00.000Z"
+    }'::jsonb
+  )$$,
+  '22023',
+  'Inventory image URL must be a valid HTTPS address.',
+  'credential-bearing Inventory image URLs are rejected'
 );
 
 select lives_ok(
@@ -121,6 +168,45 @@ select is(
     where collection = 'inventoryItems' and record_id = 'm3-inserts'),
   15::numeric,
   'an idempotent acquisition replay does not double stock'
+);
+
+select lives_ok(
+  $$select public.inventory_save_need(
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeee17',
+    '{
+      "id":"need-cabinet-jacks","name":"Cabinet installation arm jacks",
+      "category":"tool","subcategory":"workshop_equipment",
+      "imageUrl":"https://m.media-amazon.com/images/I/jacks.jpg",
+      "requiredQuantity":2,"unit":"pcs","specifications":{},
+      "priority":"normal","status":"needed","notes":"",
+      "createdAt":"2026-08-03T00:00:00.000Z","updatedAt":"2026-08-03T00:00:00.000Z"
+    }'::jsonb
+  )$$,
+  'an unlinked need can retain its practical category and product image'
+);
+
+select lives_ok(
+  $$select public.inventory_complete_need(
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeee18',
+    'need-cabinet-jacks',
+    'cabinet-jacks'
+  )$$,
+  'an unlinked categorized need can be acquired atomically'
+);
+
+select is(
+  (select jsonb_build_object(
+    'category', payload ->> 'category',
+    'subcategory', payload ->> 'subcategory',
+    'imageUrl', payload ->> 'imageUrl'
+  ) from public.helm_records
+    where collection = 'inventoryItems' and record_id = 'cabinet-jacks'),
+  '{
+    "category":"tool",
+    "subcategory":"workshop_equipment",
+    "imageUrl":"https://m.media-amazon.com/images/I/jacks.jpg"
+  }'::jsonb,
+  'acquisition carries need category and image into the owned catalogue'
 );
 
 select lives_ok(
@@ -216,7 +302,7 @@ select throws_ok(
 
 select is(
   (select count(*)::integer from public.helm_records),
-  2,
+  4,
   'OAuth RLS exposes only Inventory records and hides projects and tasks'
 );
 

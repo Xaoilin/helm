@@ -4,6 +4,7 @@ import type {
   InventoryItem,
   InventoryNeed,
   InventoryNeedPriority,
+  InventorySubcategory,
   InventoryTrackingMode,
 } from '../types/domain';
 
@@ -22,6 +23,7 @@ export const INVENTORY_LIMITS = {
   specifications: 30,
   specificationKey: 60,
   specificationValue: 200,
+  imageUrl: 2_048,
   quantity: 1_000_000_000,
 } as const;
 
@@ -33,11 +35,115 @@ const TRACKING_MODES = new Set<InventoryTrackingMode>(['durable', 'counted', 'me
 const CONDITIONS = new Set<InventoryCondition>(['unknown', 'new', 'good', 'worn', 'needs_repair']);
 const PRIORITIES = new Set<InventoryNeedPriority>(['low', 'normal', 'high']);
 
+export interface InventorySubcategoryOption {
+  value: InventorySubcategory;
+  label: string;
+  category: InventoryCategory;
+}
+
+export const INVENTORY_SUBCATEGORY_OPTIONS: readonly InventorySubcategoryOption[] = [
+  { value: '3d_printers', label: '3D Printers', category: 'machine' },
+  { value: 'other_machines', label: 'Other Machines', category: 'machine' },
+  { value: 'workshop_equipment', label: 'Workshop Equipment', category: 'tool' },
+  { value: 'general_tools', label: 'General Tools', category: 'tool' },
+  { value: 'hand_tools', label: 'Hand Tools', category: 'tool' },
+  { value: 'power_tools', label: 'Power Tools', category: 'tool' },
+  { value: 'measuring_tools', label: 'Measuring Tools', category: 'tool' },
+  { value: 'screws_fasteners', label: 'Screws & Fasteners', category: 'fastener' },
+  { value: 'filament', label: '3D Printing Filament', category: 'material' },
+  { value: 'resin', label: '3D Printing Resin', category: 'material' },
+  { value: 'wire_cable', label: 'Wire & Cable', category: 'material' },
+  { value: 'connectors_terminals', label: 'Connectors & Terminals', category: 'component' },
+  { value: 'power_supplies', label: 'Power Supplies', category: 'electronics' },
+  { value: 'power_modules', label: 'Power Modules', category: 'component' },
+  { value: 'switches_relays', label: 'Switches & Relays', category: 'component' },
+  { value: 'microcontrollers', label: 'Microcontrollers', category: 'electronics' },
+  { value: 'prototyping_boards', label: 'Prototyping Boards', category: 'component' },
+  { value: 'fuses_protection', label: 'Fuses & Protection', category: 'component' },
+  { value: 'lights_alarms', label: 'Lights & Alarms', category: 'component' },
+  { value: 'heat_shrink_sleeving', label: 'Heat Shrink & Sleeving', category: 'consumable' },
+  { value: 'cable_management', label: 'Cable Management', category: 'consumable' },
+  { value: 'magnets', label: 'Magnets', category: 'component' },
+  { value: 'adhesives_tapes', label: 'Adhesives & Tapes', category: 'material' },
+  { value: 'mechanical_hardware', label: 'Mechanical Hardware', category: 'component' },
+  { value: 'general_components', label: 'General Components', category: 'component' },
+  { value: 'general_electronics', label: 'General Electronics', category: 'electronics' },
+  { value: 'general_materials', label: 'General Materials', category: 'material' },
+  { value: 'general_consumables', label: 'General Consumables', category: 'consumable' },
+  { value: 'storage_organisation', label: 'Storage & Organisation', category: 'storage' },
+  { value: 'safety_equipment', label: 'Safety Equipment', category: 'safety' },
+  { value: 'other', label: 'Other', category: 'other' },
+] as const;
+
+const SUBCATEGORY_BY_VALUE = new Map(
+  INVENTORY_SUBCATEGORY_OPTIONS.map(option => [option.value, option]),
+);
+
+export function inventorySubcategoryMeta(value: InventorySubcategory | undefined): InventorySubcategoryOption | undefined {
+  return value ? SUBCATEGORY_BY_VALUE.get(value) : undefined;
+}
+
+export function inventoryCategoryForSubcategory(value: InventorySubcategory): InventoryCategory {
+  const option = SUBCATEGORY_BY_VALUE.get(value);
+  if (!option) throw new Error('Inventory subcategory is invalid.');
+  return option.category;
+}
+
+export function defaultInventorySubcategory(category: InventoryCategory): InventorySubcategory {
+  switch (category) {
+    case 'machine': return 'other_machines';
+    case 'tool': return 'general_tools';
+    case 'electronics': return 'general_electronics';
+    case 'component': return 'general_components';
+    case 'material': return 'general_materials';
+    case 'consumable': return 'general_consumables';
+    case 'fastener': return 'screws_fasteners';
+    case 'safety': return 'safety_equipment';
+    case 'storage': return 'storage_organisation';
+    case 'other': return 'other';
+  }
+}
+
 function text(value: unknown, label: string, max: number, required = false): string {
   const result = typeof value === 'string' ? value.trim() : '';
   if (required && !result) throw new Error(`${label} is required.`);
   if (result.length > max) throw new Error(`${label} must be ${max} characters or fewer.`);
   return result;
+}
+
+export function normalizeInventoryImageUrl(value: unknown): string | undefined {
+  const result = text(value, 'Image URL', INVENTORY_LIMITS.imageUrl);
+  if (!result) return undefined;
+  try {
+    const parsed = new URL(result);
+    if (
+      parsed.protocol !== 'https:'
+      || !parsed.hostname
+      || parsed.username
+      || parsed.password
+      || !/^https:\/\/[^/@:\s]+(?::[0-9]{1,5})?(?:[/?#]\S*)?$/.test(result)
+    ) {
+      throw new Error();
+    }
+  } catch {
+    throw new Error('Image URL must be a valid HTTPS address.');
+  }
+  return result;
+}
+
+function normalizeInventorySubcategory(
+  category: InventoryCategory,
+  value: unknown,
+): InventorySubcategory | undefined {
+  if (value == null || value === '') return undefined;
+  if (typeof value !== 'string' || !SUBCATEGORY_BY_VALUE.has(value as InventorySubcategory)) {
+    throw new Error('Inventory subcategory is invalid.');
+  }
+  const subcategory = value as InventorySubcategory;
+  if (inventoryCategoryForSubcategory(subcategory) !== category) {
+    throw new Error('Inventory subcategory does not match its category.');
+  }
+  return subcategory;
 }
 
 export function normalizeInventoryQuantity(value: unknown, label = 'Quantity'): number {
@@ -88,10 +194,14 @@ export function normalizeInventoryItemDraft(
   const archivedAt = input.archivedAt == null
     ? undefined
     : text(input.archivedAt, 'Archived timestamp', 64, true);
+  const subcategory = normalizeInventorySubcategory(category, input.subcategory);
+  const imageUrl = normalizeInventoryImageUrl(input.imageUrl);
 
   return {
     name: text(input.name, 'Name', INVENTORY_LIMITS.name, true),
     category,
+    ...(subcategory ? { subcategory } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
     trackingMode,
     quantity: normalizeInventoryQuantity(input.quantity ?? (trackingMode === 'durable' ? 1 : 0)),
     unit: text(input.unit ?? (trackingMode === 'durable' ? 'item' : 'pcs'), 'Unit', INVENTORY_LIMITS.unit, true),
@@ -127,8 +237,20 @@ export function normalizeInventoryNeedDraft(
     const result = text(value, label, 64);
     return result || undefined;
   };
+  const requestedSubcategory = input.subcategory;
+  const category = input.category ?? (
+    requestedSubcategory ? inventoryCategoryForSubcategory(requestedSubcategory) : undefined
+  );
+  if (category != null && !CATEGORIES.has(category)) throw new Error('Inventory category is invalid.');
+  const subcategory = category == null
+    ? undefined
+    : normalizeInventorySubcategory(category, requestedSubcategory);
+  const imageUrl = normalizeInventoryImageUrl(input.imageUrl);
   return {
     name: text(input.name, 'Name', INVENTORY_LIMITS.name, true),
+    ...(category ? { category } : {}),
+    ...(subcategory ? { subcategory } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
     ...(text(input.linkedItemId, 'Linked item', 256) ? { linkedItemId: text(input.linkedItemId, 'Linked item', 256) } : {}),
     ...(text(input.projectCatalogKey, 'Linked project', INVENTORY_LIMITS.projectKey)
       ? { projectCatalogKey: text(input.projectCatalogKey, 'Linked project', INVENTORY_LIMITS.projectKey) }
@@ -180,20 +302,41 @@ export interface InventoryPasteCandidate {
   selected: boolean;
   draft: InventoryItemDraft;
   sourceLine: string;
-  uncertainFields: Array<'name' | 'quantity' | 'unit' | 'category'>;
+  uncertainFields: Array<'name' | 'quantity' | 'unit' | 'category' | 'subcategory'>;
   duplicateItemIds: string[];
 }
 
-function inferCategory(name: string): InventoryCategory {
+function inferClassification(name: string): { category: InventoryCategory; subcategory?: InventorySubcategory } {
   const value = name.toLocaleLowerCase();
-  if (/printer|soldering station|multimeter|oscilloscope|drill|saw/.test(value)) return 'machine';
-  if (/screw|bolt|nut|washer|insert|fastener/.test(value)) return 'fastener';
-  if (/filament|resin|wire|sheet|tube|timber|wood|acrylic/.test(value)) return 'material';
-  if (/glove|goggle|mask|respirator|helmet/.test(value)) return 'safety';
-  if (/sensor|led|resistor|capacitor|connector|arduino|raspberry|pcb|motor/.test(value)) return 'electronics';
-  if (/tape|glue|flux|oil|paint|battery/.test(value)) return 'consumable';
-  if (/driver|wrench|spanner|plier|cutter|caliper|knife|hammer|tool/.test(value)) return 'tool';
-  return 'other';
+  if (/3d\s*printer|filament printer|bambu\s+lab\s+(a1|p1|x1)|elegoo\s+(centauri|neptune|saturn|mars)|prusa\s+mk|creality\s+(ender|k1)/.test(value)) return { category: 'machine', subcategory: '3d_printers' };
+  if (/cabinet jack|support rod|workshop equipment/.test(value)) return { category: 'tool', subcategory: 'workshop_equipment' };
+  if (/caliper|multimeter|oscilloscope|gauge|measuring|ruler/.test(value)) return { category: 'tool', subcategory: 'measuring_tools' };
+  if (/cordless|power tool|heat gun|electric screwdriver|drill|saw/.test(value)) return { category: 'tool', subcategory: 'power_tools' };
+  if (/driver|wrench|spanner|plier|cutter|stripper|crimp|knife|hammer|tool/.test(value)) return { category: 'tool', subcategory: 'hand_tools' };
+  if (/screw|bolt|nut|washer|insert|fastener/.test(value)) return { category: 'fastener', subcategory: 'screws_fasteners' };
+  if (/filament/.test(value)) return { category: 'material', subcategory: 'filament' };
+  if (/\bresin\b/.test(value)) return { category: 'material', subcategory: 'resin' };
+  if (/power adapter|power supply|extension lead|power box/.test(value)) return { category: 'electronics', subcategory: 'power_supplies' };
+  if (/step.?down|converter|regulator/.test(value)) return { category: 'component', subcategory: 'power_modules' };
+  if (/relay|switch/.test(value)) return { category: 'component', subcategory: 'switches_relays' };
+  if (/arduino|raspberry|pico|microcontroller/.test(value)) return { category: 'electronics', subcategory: 'microcontrollers' };
+  if (/prototype|prototyping|\bpcb\b|breadboard/.test(value)) return { category: 'component', subcategory: 'prototyping_boards' };
+  if (/fuse|circuit breaker/.test(value)) return { category: 'component', subcategory: 'fuses_protection' };
+  if (/\bled\b|light|strobe|alarm|beacon/.test(value)) return { category: 'component', subcategory: 'lights_alarms' };
+  if (/heat.?shrink|sleeving/.test(value)) return { category: 'consumable', subcategory: 'heat_shrink_sleeving' };
+  if (/cable tie|cable management/.test(value)) return { category: 'consumable', subcategory: 'cable_management' };
+  if (/connector|terminal|ferrule|\bjack\b|\bplug\b/.test(value)) return { category: 'component', subcategory: 'connectors_terminals' };
+  if (/tape|glue|adhesive/.test(value)) return { category: 'material', subcategory: 'adhesives_tapes' };
+  if (/magnet/.test(value)) return { category: 'component', subcategory: 'magnets' };
+  if (/drawer slide|bracket|hinge|mechanical hardware/.test(value)) return { category: 'component', subcategory: 'mechanical_hardware' };
+  if (/wire|cable/.test(value)) return { category: 'material', subcategory: 'wire_cable' };
+  if (/glove|goggle|mask|respirator|helmet/.test(value)) return { category: 'safety', subcategory: 'safety_equipment' };
+  if (/storage|organiser|organizer|drawer|bin/.test(value)) return { category: 'storage', subcategory: 'storage_organisation' };
+  if (/sensor|resistor|capacitor|motor|electronics?/.test(value)) return { category: 'electronics', subcategory: 'general_electronics' };
+  if (/sheet|tube|timber|wood|acrylic|material/.test(value)) return { category: 'material', subcategory: 'general_materials' };
+  if (/flux|oil|paint|battery|consumable/.test(value)) return { category: 'consumable', subcategory: 'general_consumables' };
+  if (/machine/.test(value)) return { category: 'machine', subcategory: 'other_machines' };
+  return { category: 'other', subcategory: 'other' };
 }
 
 export function parseInventoryPaste(
@@ -226,10 +369,11 @@ export function parseInventoryPaste(
       parsedQuantity = true;
     }
 
-    const category = inferCategory(name);
+    const { category, subcategory } = inferClassification(name);
     const draft = normalizeInventoryItemDraft({
       name,
       category,
+      subcategory,
       trackingMode: quantity === 1 && unit === 'item' ? 'durable' : 'counted',
       quantity,
       unit: unit === 'piece' || unit === 'pieces' || unit === 'pc' ? 'pcs' : unit,
@@ -246,7 +390,7 @@ export function parseInventoryPaste(
       sourceLine: line,
       uncertainFields: [
         ...(!parsedQuantity ? ['quantity' as const, 'unit' as const] : []),
-        ...(category === 'other' ? ['category' as const] : []),
+        ...(category === 'other' ? ['category' as const, 'subcategory' as const] : []),
       ],
       duplicateItemIds: findLikelyInventoryDuplicates(draft as InventoryItem, existingItems).map(item => item.id),
     };

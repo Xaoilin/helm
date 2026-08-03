@@ -16,6 +16,12 @@ test.describe('Sabah One Inventory', () => {
     const inserts = inventoryCard(page, 'M3 heat-set inserts');
     await expect(inserts.getByText('Low stock', { exact: true })).toBeVisible();
     await expect(inserts.getByText('10 pcs', { exact: true })).toBeVisible();
+    await expect(inserts.getByRole('img', { name: 'M3 heat-set inserts product photo' })).toBeVisible();
+
+    await page.getByLabel('Filter inventory category').selectOption('measuring_tools');
+    await expect(inventoryCard(page, 'Digital calipers')).toBeVisible();
+    await expect(inventoryCard(page, 'M3 heat-set inserts')).toHaveCount(0);
+    await page.getByLabel('Filter inventory category').selectOption('all');
 
     await page.getByLabel('Filter inventory project').selectOption('fixture:orbit-console');
     await expect(inventoryCard(page, 'Digital calipers')).toBeVisible();
@@ -103,9 +109,11 @@ test.describe('Sabah One Inventory', () => {
     await expect(page.getByRole('heading', { name: 'M3 heat-set inserts' })).toHaveCount(0);
 
     await context.setOffline(true);
+    await page.evaluate(() => window.dispatchEvent(new Event('offline')));
     await expect(page.getByTestId('sync-status-banner')).toContainText('Offline');
     await expect(page.locator('main[aria-label="inventory surface"]')).toHaveAttribute('aria-disabled', 'true');
     await context.setOffline(false);
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
     await expect(page.getByTestId('sync-status-banner')).toHaveCount(0);
     await expect(page.locator('main[aria-label="inventory surface"]')).not.toHaveAttribute('aria-disabled', 'true');
   });
