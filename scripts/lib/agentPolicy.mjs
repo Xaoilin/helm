@@ -317,6 +317,31 @@ export function evaluateSupabaseOAuthOrigin(rawWorkflow) {
   }
 }
 
+export function evaluatePagesSpaFallback(packageManifest, fallbackScriptExists = true) {
+  const failures = []
+  const passes = []
+  const expectedCommand = 'node ./scripts/copy-spa-fallback.mjs'
+  const buildWeb = packageManifest?.scripts?.['build:web']
+
+  if (typeof buildWeb !== 'string' || !buildWeb.includes(expectedCommand)) {
+    failures.push(`build:web must emit the GitHub Pages SPA fallback with ${expectedCommand}.`)
+  } else {
+    passes.push('build:web emits the GitHub Pages SPA fallback after Vite completes.')
+  }
+
+  if (!fallbackScriptExists) {
+    failures.push('GitHub Pages SPA fallback script is missing.')
+  } else {
+    passes.push('GitHub Pages SPA fallback script exists.')
+  }
+
+  return {
+    failures,
+    passes,
+    ok: failures.length === 0,
+  }
+}
+
 export function evaluateNativeStoreAllowlist(rootDir) {
   const failures = []
   const passes = []
@@ -399,6 +424,13 @@ export function evaluateAgentPolicy(rootDir) {
   )
   failures.push(...supabaseOAuthOriginResult.failures)
   passes.push(...supabaseOAuthOriginResult.passes)
+
+  const pagesSpaFallbackResult = evaluatePagesSpaFallback(
+    JSON.parse(readFileSync(resolve(rootDir, 'package.json'), 'utf8')),
+    existsSync(resolve(rootDir, 'scripts', 'copy-spa-fallback.mjs')),
+  )
+  failures.push(...pagesSpaFallbackResult.failures)
+  passes.push(...pagesSpaFallbackResult.passes)
 
   const nativeStoreResult = evaluateNativeStoreAllowlist(rootDir)
   failures.push(...nativeStoreResult.failures)
