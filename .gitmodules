@@ -1,0 +1,5 @@
+[submodule "sabah-memory"]
+	path = .ai/sabah-memory
+	url = git@github.com:Xaoilin/sabah-ai-memory.git
+	branch = main
+	ignore = all
