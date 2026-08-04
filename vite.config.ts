@@ -14,6 +14,8 @@ export function resolveAssetBase(tauriPlatform = process.env.TAURI_ENV_PLATFORM)
   return tauriPlatform ? './' : '/helm/'
 }
 
+export const vitestExcludedPaths = ['node_modules', 'e2e', '.codex_tmp/**', '.ai/**']
+
 export default defineConfig({
   plugins: [react()],
   base: resolveAssetBase(),
@@ -42,7 +44,7 @@ export default defineConfig({
     maxWorkers: process.env.CI ? 2 : 10,
     // Keep successful expected warnings out of hosted logs; failed-test output remains visible.
     silent: 'passed-only',
-    exclude: ['node_modules', 'e2e', '.codex_tmp/**'],
+    exclude: vitestExcludedPaths,
     alias: {
       'openwakeword-wasm-browser': path.resolve(rootDirectory, 'src/test/__mocks__/openwakeword.ts'),
     },
