@@ -1,5 +1,10 @@
-import { appendFileSync, readdirSync } from 'node:fs'
+import { appendFileSync } from 'node:fs'
 import { isDeepStrictEqual } from 'node:util'
+import {
+  classifyMigrationHistory,
+  formatMigrationEntries,
+  readRepositoryMigrations,
+} from './lib/migrationHistory.mjs'
 
 const managementApiBaseUrl =
   process.env.SUPABASE_MANAGEMENT_API_URL?.trim() || 'https://api.supabase.com'
@@ -7,10 +12,7 @@ const projectRef = requireEnv('SUPABASE_PROJECT_REF')
 const accessToken = requireEnv('SUPABASE_ACCESS_TOKEN')
 const migrationsDirectory = new URL('../supabase/migrations/', import.meta.url)
 const historicalVersions = ['20260415090000', '20260501090000']
-const repositoryVersions = readdirSync(migrationsDirectory)
-  .filter(name => /^\d+_.+\.sql$/u.test(name))
-  .map(name => name.slice(0, name.indexOf('_')))
-  .sort()
+const repositoryMigrations = readRepositoryMigrations(migrationsDirectory)
 
 const [{ migrationTable, audit }] = await queryDatabase(`
   select
@@ -99,20 +101,27 @@ const [{ migrationTable, audit }] = await queryDatabase(`
     ) as audit;
 `)
 
-let actualVersions = []
+let actualMigrations = []
 if (migrationTable) {
-  actualVersions = (await queryDatabase(`
-    select version
+  actualMigrations = (await queryDatabase(`
+    select version, name
     from supabase_migrations.schema_migrations
     order by version;
-  `)).map(row => String(row.version))
+  `)).map(row => ({ version: String(row.version), name: String(row.name ?? '') }))
 }
 
-const unexpectedVersions = actualVersions.filter(version => !repositoryVersions.includes(version))
-if (unexpectedVersions.length > 0) {
-  throw new Error(`Production has unexpected migration versions: ${unexpectedVersions.join(', ')}.`)
+const migrationHistory = classifyMigrationHistory({
+  repositoryMigrations,
+  actualMigrations,
+})
+if (migrationHistory.unexpectedMigrations.length > 0) {
+  throw new Error(
+    'Production has unexpected or mismatched migration entries: '
+      + `${formatMigrationEntries(migrationHistory.unexpectedMigrations)}.`,
+  )
 }
 
+const actualVersions = migrationHistory.ownedMigrations.map(migration => migration.version)
 const missingHistoricalVersions = historicalVersions.filter(version => !actualVersions.includes(version))
 const newerVersionsAlreadyTracked = actualVersions.filter(version => !historicalVersions.includes(version))
 if (missingHistoricalVersions.length > 0 && newerVersionsAlreadyTracked.length > 0) {

@@ -1,4 +1,8 @@
-import { readdirSync } from 'node:fs'
+import {
+  classifyMigrationHistory,
+  formatMigrationEntries,
+  readRepositoryMigrations,
+} from './lib/migrationHistory.mjs'
 
 const managementApiBaseUrl =
   process.env.SUPABASE_MANAGEMENT_API_URL?.trim() || 'https://api.supabase.com'
@@ -6,14 +10,11 @@ const projectRef = requireEnv('SUPABASE_PROJECT_REF')
 const accessToken = requireEnv('SUPABASE_ACCESS_TOKEN')
 const migrationsDirectory = new URL('../supabase/migrations/', import.meta.url)
 
-const expectedMigrationVersions = readdirSync(migrationsDirectory)
-  .filter(name => /^\d+_.+\.sql$/u.test(name))
-  .map(name => name.slice(0, name.indexOf('_')))
-  .sort()
+const expectedMigrations = readRepositoryMigrations(migrationsDirectory)
 
 const [migrationRows, verificationRows] = await Promise.all([
   queryDatabase(`
-    select version
+    select version, name
     from supabase_migrations.schema_migrations
     order by version;
   `),
@@ -302,11 +303,23 @@ const [migrationRows, verificationRows] = await Promise.all([
   `),
 ])
 
-const actualMigrationVersions = migrationRows.map(row => String(row.version)).sort()
-if (JSON.stringify(actualMigrationVersions) !== JSON.stringify(expectedMigrationVersions)) {
+const migrationHistory = classifyMigrationHistory({
+  repositoryMigrations: expectedMigrations,
+  actualMigrations: migrationRows.map(row => ({
+    version: String(row.version),
+    name: String(row.name ?? ''),
+  })),
+})
+if (migrationHistory.unexpectedMigrations.length > 0) {
   throw new Error(
-    `Migration history mismatch. Expected ${expectedMigrationVersions.join(', ') || 'none'}; `
-      + `found ${actualMigrationVersions.join(', ') || 'none'}.`,
+    'Migration history contains unexpected or mismatched entries: '
+      + `${formatMigrationEntries(migrationHistory.unexpectedMigrations)}.`,
+  )
+}
+if (migrationHistory.missingOwnedMigrations.length > 0) {
+  throw new Error(
+    'Migration history is missing HELM-owned entries: '
+      + `${formatMigrationEntries(migrationHistory.missingOwnedMigrations)}.`,
   )
 }
 
