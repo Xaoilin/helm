@@ -1,5 +1,5 @@
-[submodule "sabah-memory"]
-	path = .ai/sabah-memory
-	url = git@github.com:Xaoilin/sabah-ai-memory.git
+[submodule "cortex-one"]
+	path = .ai/cortex-one
+	url = git@github.com:Xaoilin/cortex-one.git
 	branch = main
 	ignore = all

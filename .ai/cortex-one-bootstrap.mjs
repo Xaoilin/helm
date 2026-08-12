@@ -7,9 +7,12 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-const MODULE_NAME = 'sabah-memory';
-const MODULE_PATH = '.ai/sabah-memory';
-const EXPECTED_IDENTITY = 'github.com/xaoilin/sabah-ai-memory';
+const MODULE_NAME = 'cortex-one';
+const MODULE_PATH = '.ai/cortex-one';
+const EXPECTED_IDENTITY = 'github.com/xaoilin/cortex-one';
+const LEGACY_MODULE_NAME = 'sabah-memory';
+const LEGACY_MODULE_PATH = '.ai/sabah-memory';
+const LEGACY_EXPECTED_IDENTITY = 'github.com/xaoilin/sabah-ai-memory';
 const NETWORK_TIMEOUT_DEFAULT_MS = 60_000;
 const CRITICAL_SCRIPTS = [
   'scripts/memory-cli.mjs',
@@ -23,14 +26,19 @@ const CRITICAL_SCRIPTS = [
 ];
 
 function networkTimeoutMs() {
-  const raw = process.env.SABAH_MEMORY_NETWORK_TIMEOUT_MS;
+  const canonical = process.env.CORTEX_ONE_NETWORK_TIMEOUT_MS;
+  const legacy = process.env.SABAH_MEMORY_NETWORK_TIMEOUT_MS;
+  if (canonical !== undefined && legacy !== undefined && canonical !== legacy) {
+    throw new Error('CORTEX_ONE_NETWORK_TIMEOUT_MS conflicts with SABAH_MEMORY_NETWORK_TIMEOUT_MS');
+  }
+  const raw = canonical ?? legacy;
   if (raw === undefined) return NETWORK_TIMEOUT_DEFAULT_MS;
   if (!/^[1-9]\d*$/.test(raw)) {
-    throw new Error('SABAH_MEMORY_NETWORK_TIMEOUT_MS must be a positive integer in milliseconds');
+    throw new Error('CORTEX_ONE_NETWORK_TIMEOUT_MS must be a positive integer in milliseconds');
   }
   const parsed = Number(raw);
   if (!Number.isSafeInteger(parsed) || parsed > 2_147_483_647) {
-    throw new Error('SABAH_MEMORY_NETWORK_TIMEOUT_MS is outside the supported integer range');
+    throw new Error('CORTEX_ONE_NETWORK_TIMEOUT_MS is outside the supported integer range');
   }
   return parsed;
 }
@@ -110,10 +118,10 @@ function strictRemoteIdentity(rawValue) {
     }
   }
   const normalized = repository.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '').toLowerCase();
-  if (normalized !== 'xaoilin/sabah-ai-memory') {
+  if (normalized !== 'xaoilin/cortex-one' && normalized !== 'xaoilin/sabah-ai-memory') {
     throw new Error(`memory repository identity mismatch (expected ${EXPECTED_IDENTITY})`);
   }
-  return EXPECTED_IDENTITY;
+  return normalized === 'xaoilin/cortex-one' ? EXPECTED_IDENTITY : LEGACY_EXPECTED_IDENTITY;
 }
 
 function configValues(root, args) {
@@ -207,13 +215,23 @@ async function main() {
   const gitmodules = path.join(projectRoot, '.gitmodules');
   if (!await assertSafePath(gitmodules, '.gitmodules', 'file')) throw new Error('.gitmodules is missing');
 
-  const moduleKey = `submodule.${MODULE_NAME}`;
+  const registration = [
+    { name: MODULE_NAME, path: MODULE_PATH },
+    { name: LEGACY_MODULE_NAME, path: LEGACY_MODULE_PATH },
+  ].find(({ name, path: modulePath }) => configValues(
+    projectRoot,
+    ['config', '-f', '.gitmodules', '--get-all', `submodule.${name}.path`],
+  ).includes(modulePath));
+  if (!registration) throw new Error('no supported Cortex One or legacy memory submodule registration exists');
+  const activeModuleName = registration.name;
+  const activeModulePath = registration.path;
+  const moduleKey = `submodule.${activeModuleName}`;
   const value = (field) => oneConfigValue(
     projectRoot,
     ['config', '-f', '.gitmodules', '--get-all', `${moduleKey}.${field}`],
     `.gitmodules ${field}`,
   );
-  if (value('path') !== MODULE_PATH) throw new Error(`memory submodule path must be ${MODULE_PATH}`);
+  if (value('path') !== activeModulePath) throw new Error(`memory submodule path must be ${activeModulePath}`);
   if (value('branch') !== 'main') throw new Error('memory submodule branch must be main');
   if (value('ignore') !== 'all') throw new Error('memory submodule ignore policy must be all');
   const declaredUrl = value('url');
@@ -221,15 +239,15 @@ async function main() {
     throw new Error('URL rewriting of the pinned .gitmodules URL is forbidden');
   }
   const pathMappings = configValues(projectRoot, ['config', '-f', '.gitmodules', '--get-regexp', '^submodule\..*\.path$']);
-  const matchingMappings = pathMappings.filter((line) => line.endsWith(` ${MODULE_PATH}`));
+  const matchingMappings = pathMappings.filter((line) => line.endsWith(` ${activeModulePath}`));
   if (matchingMappings.length !== 1 || !matchingMappings[0].startsWith(`${moduleKey}.path `)) {
-    throw new Error(`${MODULE_PATH} must be registered exactly once as ${MODULE_NAME}`);
+    throw new Error(`${activeModulePath} must be registered exactly once as ${activeModuleName}`);
   }
 
   const aiDirectory = path.join(projectRoot, '.ai');
-  const checkout = path.join(projectRoot, ...MODULE_PATH.split('/'));
+  const checkout = path.join(projectRoot, ...activeModulePath.split('/'));
   if (!await assertSafePath(aiDirectory, '.ai', 'directory')) await mkdir(aiDirectory, { recursive: false });
-  await assertSafePath(checkout, MODULE_PATH, 'directory');
+  await assertSafePath(checkout, activeModulePath, 'directory');
   const localUrl = configValues(projectRoot, ['config', '--get-all', `${moduleKey}.url`]);
   if (localUrl.length > 1) throw new Error('local memory submodule URL must have at most one value');
   if (localUrl.length === 1
@@ -237,16 +255,16 @@ async function main() {
     throw new Error('URL rewriting of the pinned local submodule URL is forbidden');
   }
 
-  const gitlink = oneConfigValue(projectRoot, ['ls-files', '--stage', '--', MODULE_PATH], 'memory gitlink');
-  const gitlinkMatch = gitlink.match(/^160000 ([a-f0-9]{40,64}) 0\t\.ai\/sabah-memory$/);
+  const gitlink = oneConfigValue(projectRoot, ['ls-files', '--stage', '--', activeModulePath], 'memory gitlink');
+  const gitlinkMatch = gitlink.match(new RegExp(`^160000 ([a-f0-9]{40,64}) 0\\t${activeModulePath.replaceAll('.', '\\.')}$`));
   if (!gitlinkMatch) throw new Error('memory path is not a stage-zero Git submodule link');
   const wasInitialized = await isIndependentGitCheckout(checkout);
   if (!wasInitialized) {
-    const disabledHooks = path.join(tmpdir(), `sabah-memory-disabled-hooks-${randomUUID()}`);
+    const disabledHooks = path.join(tmpdir(), `cortex-one-disabled-hooks-${randomUUID()}`);
     git(projectRoot, [
       '-c', `core.hooksPath=${disabledHooks}`,
-      'submodule', 'update', '--init', '--checkout', '--', MODULE_PATH,
-    ], { network: true, operation: 'Git submodule initialization for Sabah AI Memory' });
+      'submodule', 'update', '--init', '--checkout', '--', activeModulePath,
+    ], { network: true, operation: 'Git submodule initialization for Cortex One' });
   }
   if (!await isIndependentGitCheckout(checkout)) {
     throw new Error('memory submodule initialization did not produce a Git checkout');
@@ -262,7 +280,7 @@ async function main() {
   if (!await assertSafePath(cli, 'memory CLI', 'file')) {
     throw new Error('the pinned memory gitlink predates the cross-platform CLI; refresh this project with install-project once');
   }
-  process.stdout.write(`Sabah AI Memory bootstrap verified: ${checkout}\n`);
+  process.stdout.write(`Cortex One bootstrap verified: ${checkout}\n`);
 }
 
 export const bootstrapInternals = Object.freeze({
