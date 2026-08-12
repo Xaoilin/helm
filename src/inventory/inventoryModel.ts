@@ -1,6 +1,8 @@
 import type {
   InventoryCategory,
   InventoryCondition,
+  InventoryDimensionUnit,
+  InventoryDimensions,
   InventoryItem,
   InventoryNeed,
   InventoryNeedPriority,
@@ -34,6 +36,8 @@ const CATEGORIES = new Set<InventoryCategory>([
 const TRACKING_MODES = new Set<InventoryTrackingMode>(['durable', 'counted', 'measured']);
 const CONDITIONS = new Set<InventoryCondition>(['unknown', 'new', 'good', 'worn', 'needs_repair']);
 const PRIORITIES = new Set<InventoryNeedPriority>(['low', 'normal', 'high']);
+const DIMENSION_UNITS = new Set<InventoryDimensionUnit>(['mm', 'cm', 'm', 'in']);
+const DIMENSION_AXES = ['length', 'width', 'height'] as const;
 
 export interface InventorySubcategoryOption {
   value: InventorySubcategory;
@@ -182,6 +186,39 @@ function specifications(value: unknown): Record<string, string> {
   ]));
 }
 
+export function normalizeInventoryDimensions(value: unknown): InventoryDimensions | undefined {
+  if (value == null || value === '') return undefined;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Dimensions must be an object.');
+  }
+  const input = value as Record<string, unknown>;
+  const unit = typeof input.unit === 'string' ? input.unit.trim().toLowerCase() : '';
+  if (!DIMENSION_UNITS.has(unit as InventoryDimensionUnit)) {
+    throw new Error('Dimensions unit must be mm, cm, m, or in.');
+  }
+  const result: InventoryDimensions = { unit: unit as InventoryDimensionUnit };
+  let axisCount = 0;
+  for (const axis of DIMENSION_AXES) {
+    if (!(axis in input) || input[axis] === undefined) continue;
+    const axisValue = typeof input[axis] === 'number' ? input[axis] : Number(input[axis]);
+    if (!Number.isFinite(axisValue) || axisValue <= 0) {
+      throw new Error(`Dimension ${axis} must be a finite positive number.`);
+    }
+    result[axis] = axisValue;
+    axisCount += 1;
+  }
+  if (axisCount === 0) throw new Error('At least one dimension axis is required.');
+  return result;
+}
+
+export function formatInventoryDimensions(value: InventoryDimensions | undefined): string {
+  if (!value) return '';
+  return DIMENSION_AXES
+    .filter(axis => value[axis] != null)
+    .map(axis => `${value[axis]} ${value.unit}`)
+    .join(' × ');
+}
+
 export type InventoryItemDraft = Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>;
 export type InventoryNeedDraft = Omit<InventoryNeed, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -204,6 +241,7 @@ export function normalizeInventoryItemDraft(
     : text(input.archivedAt, 'Archived timestamp', 64, true);
   const subcategory = normalizeInventorySubcategory(category, input.subcategory);
   const imageUrl = normalizeInventoryImageUrl(input.imageUrl);
+  const dimensions = normalizeInventoryDimensions(input.dimensions);
 
   return {
     name: text(input.name, 'Name', INVENTORY_LIMITS.name, true),
@@ -216,6 +254,7 @@ export function normalizeInventoryItemDraft(
     ...(lowStockThreshold == null ? {} : { lowStockThreshold }),
     ...(text(input.brand, 'Brand', INVENTORY_LIMITS.brand) ? { brand: text(input.brand, 'Brand', INVENTORY_LIMITS.brand) } : {}),
     ...(text(input.model, 'Model', INVENTORY_LIMITS.model) ? { model: text(input.model, 'Model', INVENTORY_LIMITS.model) } : {}),
+    ...(dimensions ? { dimensions } : {}),
     specifications: specifications(input.specifications),
     condition,
     ...(text(input.location, 'Location', INVENTORY_LIMITS.location) ? { location: text(input.location, 'Location', INVENTORY_LIMITS.location) } : {}),
@@ -254,6 +293,7 @@ export function normalizeInventoryNeedDraft(
     ? undefined
     : normalizeInventorySubcategory(category, requestedSubcategory);
   const imageUrl = normalizeInventoryImageUrl(input.imageUrl);
+  const dimensions = normalizeInventoryDimensions(input.dimensions);
   return {
     name: text(input.name, 'Name', INVENTORY_LIMITS.name, true),
     ...(category ? { category } : {}),
@@ -265,6 +305,7 @@ export function normalizeInventoryNeedDraft(
       : {}),
     requiredQuantity: normalizeInventoryQuantity(input.requiredQuantity ?? 1, 'Required quantity'),
     unit: text(input.unit ?? 'pcs', 'Unit', INVENTORY_LIMITS.unit, true),
+    ...(dimensions ? { dimensions } : {}),
     specifications: specifications(input.specifications),
     priority,
     status,

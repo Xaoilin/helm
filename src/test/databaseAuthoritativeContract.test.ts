@@ -16,6 +16,14 @@ const snapshotMigration = readFileSync(
 );
 const persistence = readFileSync(new URL('../store/persistence.ts', import.meta.url), 'utf8');
 const appRoot = readFileSync(new URL('../AppRoot.tsx', import.meta.url), 'utf8');
+const inventoryMigration = readFileSync(
+  new URL('../../supabase/migrations/20260812193335_inventory_dimensions.sql', import.meta.url),
+  'utf8',
+);
+const inventoryMcp = readFileSync(
+  new URL('../../supabase/functions/sabah-one-inventory-mcp/index.ts', import.meta.url),
+  'utf8',
+);
 
 describe('database-authoritative persistence contract', () => {
   it('defines account-owned records, versions, tombstones, and idempotency receipts', () => {
@@ -90,5 +98,24 @@ describe('database-authoritative persistence contract', () => {
     expect(broadcast).toContain("'accountVersion', v_next_version");
     expect(broadcast).not.toMatch(/'value'\s*,/);
     expect(broadcast).not.toContain('v_payload');
+  });
+
+  it('keeps Inventory dimensions bounded and backward-compatible', () => {
+    expect(inventoryMigration).toContain('validate_inventory_dimensions');
+    expect(inventoryMigration).toContain("'length', 'width', 'height', 'unit'");
+    expect(inventoryMigration).toContain("array['mm', 'cm', 'm', 'in']");
+    expect(inventoryMigration).toContain("old.payload ? 'dimensions'");
+    expect(inventoryMigration).toContain('v_payload := v_existing.payload || v_item');
+    expect(inventoryMigration).toContain("'createdAt', v_existing.payload -> 'createdAt'");
+    expect(inventoryMcp).toContain('const dimensionsSchema');
+    expect(inventoryMcp).toContain('dimensions: dimensionsSchema.optional()');
+    expect(inventoryMcp).toContain('const existingId = Boolean(item.id)');
+  });
+
+  it('keeps bounded Inventory writes account-owned', () => {
+    expect(inventoryMigration).toContain('v_user_id := helm_private.require_inventory_actor()');
+    expect(inventoryMigration).toContain('where user_id = v_user_id');
+    expect(inventoryMigration).toContain('revoke all on function public.inventory_save_items(uuid, jsonb) from public, anon');
+    expect(inventoryMigration).toContain('grant execute on function public.inventory_save_items(uuid, jsonb) to authenticated');
   });
 });

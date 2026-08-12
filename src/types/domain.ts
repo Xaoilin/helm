@@ -264,6 +264,14 @@ export type InventorySubcategory =
   | 'other';
 export type InventoryTrackingMode = 'durable' | 'counted' | 'measured';
 export type InventoryCondition = 'unknown' | 'new' | 'good' | 'worn' | 'needs_repair';
+export type InventoryDimensionUnit = 'mm' | 'cm' | 'm' | 'in';
+
+export interface InventoryDimensions {
+  length?: number;
+  width?: number;
+  height?: number;
+  unit: InventoryDimensionUnit;
+}
 
 export interface InventoryItem {
   id: string;
@@ -277,6 +285,7 @@ export interface InventoryItem {
   lowStockThreshold?: number;
   brand?: string;
   model?: string;
+  dimensions?: InventoryDimensions;
   specifications: Record<string, string>;
   condition: InventoryCondition;
   location?: string;
@@ -302,6 +311,7 @@ export interface InventoryNeed {
   projectCatalogKey?: string;
   requiredQuantity: number;
   unit: string;
+  dimensions?: InventoryDimensions;
   specifications: Record<string, string>;
   priority: InventoryNeedPriority;
   status: InventoryNeedStatus;

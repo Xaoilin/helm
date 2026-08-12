@@ -112,6 +112,8 @@ export const ASSISTANT_ACTIONS = [
       { key: 'location', label: 'Location', description: 'Optional storage location.', type: 'string', required: false },
       { key: 'imageUrl', label: 'Product image', description: 'Optional HTTPS product image URL.', type: 'string', required: false },
       { key: 'projectCatalogKeys', label: 'Projects', description: 'Stable linked project catalogue keys.', type: 'string_array', required: false },
+      { key: 'dimensions', label: 'Dimensions', description: 'Optional JSON dimensions, for example {"length":120,"width":60,"unit":"cm"}.', type: 'string', required: false },
+      { key: 'specifications', label: 'Specifications', description: 'Optional newline-separated name: value specifications.', type: 'string', required: false },
     ],
   },
   {
@@ -151,6 +153,8 @@ export const ASSISTANT_ACTIONS = [
       { key: 'linkedItemId', label: 'Linked item', description: 'Optional grounded owned item ID.', type: 'string', required: false },
       { key: 'projectCatalogKey', label: 'Project', description: 'Optional stable project catalogue key.', type: 'string', required: false },
       { key: 'priority', label: 'Priority', description: 'Need priority.', type: 'enum', required: false, values: INVENTORY_NEED_PRIORITY_VALUES },
+      { key: 'dimensions', label: 'Dimensions', description: 'Optional JSON dimensions, for example {"length":120,"width":60,"unit":"cm"}.', type: 'string', required: false },
+      { key: 'specifications', label: 'Specifications', description: 'Optional newline-separated name: value specifications.', type: 'string', required: false },
       { key: 'notes', label: 'Notes', description: 'Optional requirement notes.', type: 'string', required: false },
     ],
   },
