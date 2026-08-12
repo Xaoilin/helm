@@ -1,0 +1,8 @@
+-- External AgentBoard migration ledger stub; intentionally contains no SQL.
+-- Production version/name: 20260803154039_hosted_agentboard_private_schema
+-- Source: whiteboarding/supabase/migrations/20260803000000_hosted_agentboard.sql
+-- Statement bytes: 29310
+-- Statement SHA-256: 9810ee5cdfd202c6181c5eb25ff878400d80b5a3cd53f34aee58256ef71baa33
+-- The live statement and reviewed source were verified byte-for-byte.
+-- Keeping this stub SQL-free prevents a fresh HELM database from installing
+-- the separately owned AgentBoard schema while satisfying the shared ledger.

@@ -120,6 +120,12 @@ if (migrationHistory.unexpectedMigrations.length > 0) {
       + `${formatMigrationEntries(migrationHistory.unexpectedMigrations)}.`,
   )
 }
+if (migrationHistory.missingExternalMigrations.length > 0) {
+  throw new Error(
+    'Production is missing required external migration ledger entries: '
+      + `${formatMigrationEntries(migrationHistory.missingExternalMigrations)}.`,
+  )
+}
 
 const actualVersions = migrationHistory.ownedMigrations.map(migration => migration.version)
 const missingHistoricalVersions = historicalVersions.filter(version => !actualVersions.includes(version))
