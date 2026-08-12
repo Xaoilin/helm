@@ -33,15 +33,12 @@ function networkTimeoutMs() {
   }
   const raw = canonical ?? legacy;
   if (raw === undefined) return NETWORK_TIMEOUT_DEFAULT_MS;
-  const source = canonical === undefined
-    ? 'SABAH_MEMORY_NETWORK_TIMEOUT_MS'
-    : 'CORTEX_ONE_NETWORK_TIMEOUT_MS';
   if (!/^[1-9]\d*$/.test(raw)) {
-    throw new Error(`${source} must be a positive integer in milliseconds`);
+    throw new Error('CORTEX_ONE_NETWORK_TIMEOUT_MS must be a positive integer in milliseconds');
   }
   const parsed = Number(raw);
   if (!Number.isSafeInteger(parsed) || parsed > 2_147_483_647) {
-    throw new Error(`${source} is outside the supported integer range`);
+    throw new Error('CORTEX_ONE_NETWORK_TIMEOUT_MS is outside the supported integer range');
   }
   return parsed;
 }
@@ -122,7 +119,7 @@ function strictRemoteIdentity(rawValue) {
   }
   const normalized = repository.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '').toLowerCase();
   if (normalized !== 'xaoilin/cortex-one' && normalized !== 'xaoilin/sabah-ai-memory') {
-    throw new Error(`memory repository identity mismatch (expected ${EXPECTED_IDENTITY} or ${LEGACY_EXPECTED_IDENTITY})`);
+    throw new Error(`memory repository identity mismatch (expected ${EXPECTED_IDENTITY})`);
   }
   return normalized === 'xaoilin/cortex-one' ? EXPECTED_IDENTITY : LEGACY_EXPECTED_IDENTITY;
 }
@@ -288,8 +285,6 @@ async function main() {
 
 export const bootstrapInternals = Object.freeze({
   isIndependentGitCheckout,
-  networkTimeoutMs,
-  strictRemoteIdentity,
 });
 
 if (process.argv[1]
