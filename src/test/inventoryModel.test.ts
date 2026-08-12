@@ -93,7 +93,7 @@ describe('Inventory model', () => {
   it('accepts partial positive dimensions while retaining arbitrary specifications', () => {
     const dimensions = normalizeInventoryDimensions({ height: '4.5', unit: 'cm' });
     expect(dimensions).toEqual({ height: 4.5, unit: 'cm' });
-    expect(formatInventoryDimensions(dimensions)).toBe('4.5 cm');
+    expect(formatInventoryDimensions(dimensions)).toBe('H 4.5 cm');
     expect(normalizeInventoryItemDraft({
       name: 'Secretlab desk',
       dimensions: { length: 160, width: 80, unit: 'cm' },

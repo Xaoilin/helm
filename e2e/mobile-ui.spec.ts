@@ -235,6 +235,21 @@ test.describe('Opt-in visual evidence', () => {
         fullPage: true,
       });
 
+      await page.getByRole('button', { name: '+ Add owned item' }).click();
+      const itemDialog = page.getByRole('dialog', { name: 'Add owned item' });
+      await itemDialog.getByRole('textbox', { name: 'Name' }).fill('Secretlab MAGNUS table');
+      await itemDialog.getByRole('spinbutton', { name: 'Dimension width' }).fill('700');
+      await itemDialog.getByRole('spinbutton', { name: 'Dimension height' }).fill('735');
+      const dimensionFields = itemDialog.locator('.inventory-dimensions');
+      await expect(dimensionFields).toBeVisible();
+      await dimensionFields.scrollIntoViewIfNeeded();
+      await expectNoAccidentalOverflow(page);
+      await page.screenshot({
+        path: path.join(inventoryRoot, `${viewport.name}-dimensions-editor.png`),
+        fullPage: true,
+      });
+      await itemDialog.getByRole('button', { name: 'Close Add owned item' }).click();
+
       await page.getByLabel('Filter inventory project').selectOption('fixture:sensor-bench');
       const filteredItem = page.locator('.inventory-card').filter({ hasText: 'M3 heat-set inserts' });
       await expect(filteredItem).toBeVisible();

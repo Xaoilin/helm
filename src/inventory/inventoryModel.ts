@@ -215,7 +215,7 @@ export function formatInventoryDimensions(value: InventoryDimensions | undefined
   if (!value) return '';
   return DIMENSION_AXES
     .filter(axis => value[axis] != null)
-    .map(axis => `${value[axis]} ${value.unit}`)
+    .map(axis => `${axis[0].toUpperCase()} ${value[axis]} ${value.unit}`)
     .join(' × ');
 }
 

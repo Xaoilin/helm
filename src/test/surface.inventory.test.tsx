@@ -100,7 +100,7 @@ describe('InventorySurface', () => {
     const caliperPhoto = screen.getByRole('img', { name: 'Digital calipers product photo' });
     expect(caliperPhoto).toHaveAttribute('src', 'https://m.media-amazon.com/images/I/calipers.jpg');
     expect(document.querySelector('.inventory-low-badge')).toHaveTextContent('Low stock');
-    expect(screen.getByRole('heading', { name: 'Digital calipers' }).closest('.inventory-card')).toHaveTextContent('20 mm × 10 mm');
+    expect(screen.getByRole('heading', { name: 'Digital calipers' }).closest('.inventory-card')).toHaveTextContent('L 20 mm × W 10 mm');
     expect(screen.getByRole('heading', { name: 'Tools' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Fasteners' })).toBeInTheDocument();
 
@@ -188,6 +188,6 @@ describe('InventorySurface', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add item' }));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Secretlab desk' })).toBeInTheDocument());
     const card = screen.getByRole('heading', { name: 'Secretlab desk' }).closest('.inventory-card');
-    expect(card).toHaveTextContent('160 cm × 80 cm');
+    expect(card).toHaveTextContent('L 160 cm × W 80 cm');
   });
 });

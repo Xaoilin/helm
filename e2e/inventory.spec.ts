@@ -21,7 +21,9 @@ test.describe('Sabah One Inventory', () => {
     await expect(page.getByRole('heading', { name: 'Fasteners', exact: true })).toBeVisible();
 
     await page.getByLabel('Filter inventory category').selectOption('tool');
-    await expect(inventoryCard(page, 'Digital calipers')).toBeVisible();
+    const calipers = inventoryCard(page, 'Digital calipers');
+    await expect(calipers).toBeVisible();
+    await expect(calipers.getByText('L 216 mm × W 76 mm × H 17 mm', { exact: true })).toBeVisible();
     await expect(inventoryCard(page, 'M3 heat-set inserts')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Fasteners', exact: true })).toHaveCount(0);
     await page.getByLabel('Filter inventory category').selectOption('all');
@@ -46,6 +48,23 @@ test.describe('Sabah One Inventory', () => {
         needStatus: rows.find(row => row.collection === 'inventoryNeeds' && row.record_id === 'need-m3-inserts')?.payload.status,
       };
     }).toEqual({ itemQuantity: 60, needStatus: 'acquired' });
+  });
+
+  test('adds partial dimensions and persists their axis meaning', async ({ page }) => {
+    await openInventory(page);
+    await page.getByRole('button', { name: '+ Add owned item' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Add owned item' });
+    await dialog.getByRole('textbox', { name: 'Name' }).fill('Secretlab MAGNUS table');
+    await dialog.getByRole('spinbutton', { name: 'Dimension width' }).fill('700');
+    await dialog.getByRole('spinbutton', { name: 'Dimension height' }).fill('735');
+    await dialog.getByRole('button', { name: 'Add item' }).click();
+
+    const desk = inventoryCard(page, 'Secretlab MAGNUS table');
+    await expect(desk.getByText('W 700 mm × H 735 mm', { exact: true })).toBeVisible();
+    await expect.poll(async () => {
+      const rows = await inventoryRows(page);
+      return rows.find(row => row.payload.name === 'Secretlab MAGNUS table')?.payload.dimensions;
+    }).toEqual({ width: 700, height: 735, unit: 'mm' });
   });
 
   test('reviews pasted candidates, warns on duplicates, and commits selected rows once', async ({ page }) => {
@@ -77,6 +96,7 @@ test.describe('Sabah One Inventory', () => {
 
     const panel = page.getByRole('region', { name: 'Sensor Bench inventory' });
     await expect(panel.getByText('M3 heat-set inserts', { exact: true })).toHaveCount(2);
+    await expect(panel.getByText('10 pcs · L 5.7 mm × W 4.6 mm', { exact: true })).toBeVisible();
     await expect(panel.getByText('Digital calipers', { exact: true })).toHaveCount(0);
     await panel.getByRole('button', { name: 'Open global Inventory' }).click();
     await expect(page.getByRole('heading', { name: 'Know what you have before you buy.' })).toBeVisible();

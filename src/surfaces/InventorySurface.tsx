@@ -172,7 +172,7 @@ function DimensionFields({
   return (
     <fieldset className="inventory-dimensions inventory-field-wide">
       <legend>Dimensions <span>(optional)</span></legend>
-      <p>Enter any measured axes; at least one value is required when used.</p>
+      <p>Enter any known axes; at least one value is required when used.</p>
       <div className="inventory-dimension-grid">
         <label className="inventory-dimension-field"><span>Length</span><input className="form-input" aria-label="Dimension length" inputMode="decimal" type="number" min="0" step="any" value={length} onChange={event => onLength(event.target.value)} placeholder="Optional" /></label>
         <label className="inventory-dimension-field"><span>Width</span><input className="form-input" aria-label="Dimension width" inputMode="decimal" type="number" min="0" step="any" value={width} onChange={event => onWidth(event.target.value)} placeholder="Optional" /></label>
@@ -553,8 +553,8 @@ export function ProjectInventorySection({ catalogKey, projectName }: { catalogKe
     <section className="project-inventory-panel" aria-label={`${projectName} inventory`}>
       <div className="project-inventory-heading"><div><div className="inventory-eyebrow">PROJECT INVENTORY</div><h2>Tools, stock, and needs</h2><p>{items.length} owned · {needs.length} open needs</p></div><button className="btn btn-primary" type="button" onClick={() => app.navigate('inventory')}>Open global Inventory</button></div>
       <div className="project-inventory-summary">
-        {items.slice(0, 8).map(item => <div key={item.id} className="project-inventory-chip"><InventoryPhoto compact imageUrl={item.imageUrl} name={item.name} fallback={categoryMeta(item.category).icon} /><strong>{item.name}</strong><small>{item.quantity} {item.unit}</small></div>)}
-        {needs.slice(0, 6).map(need => <div key={need.id} className="project-inventory-chip is-needed"><InventoryPhoto compact imageUrl={need.imageUrl} name={need.name} fallback="＋" /><strong>{need.name}</strong><small>{need.requiredQuantity} {need.unit} needed</small></div>)}
+        {items.slice(0, 8).map(item => <div key={item.id} className="project-inventory-chip"><InventoryPhoto compact imageUrl={item.imageUrl} name={item.name} fallback={categoryMeta(item.category).icon} /><strong>{item.name}</strong><small>{item.quantity} {item.unit}{formatInventoryDimensions(item.dimensions) ? ` · ${formatInventoryDimensions(item.dimensions)}` : ''}</small></div>)}
+        {needs.slice(0, 6).map(need => <div key={need.id} className="project-inventory-chip is-needed"><InventoryPhoto compact imageUrl={need.imageUrl} name={need.name} fallback="＋" /><strong>{need.name}</strong><small>{need.requiredQuantity} {need.unit} needed{formatInventoryDimensions(need.dimensions) ? ` · ${formatInventoryDimensions(need.dimensions)}` : ''}</small></div>)}
         {items.length === 0 && needs.length === 0 && <div className="inventory-empty-inline">Nothing is linked yet. Add or edit an Inventory record and select this project.</div>}
       </div>
     </section>
