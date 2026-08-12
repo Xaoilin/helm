@@ -1,7 +1,10 @@
+// @vitest-environment node
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   allowedExternalMigrations,
   classifyMigrationHistory,
+  externalMigrationLedger,
 } from '../../scripts/lib/migrationHistory.mjs'
 
 const helmMigrations = [
@@ -22,15 +25,54 @@ describe('shared Supabase migration history', () => {
     expect(result.missingOwnedMigrations).toEqual([])
   })
 
+  it('accepts exact local no-op stubs without making external migrations HELM-owned', () => {
+    const result = classifyMigrationHistory({
+      repositoryMigrations: [...helmMigrations, ...allowedExternalMigrations],
+      actualMigrations: [...helmMigrations, ...allowedExternalMigrations],
+    })
+
+    expect(result.ownedMigrations).toEqual(helmMigrations)
+    expect(result.acceptedExternalMigrations).toEqual(allowedExternalMigrations)
+    expect(result.missingOwnedMigrations).toEqual([])
+    expect(result.missingExternalMigrations).toEqual([])
+  })
+
+  it('keeps every external ledger stub SQL-free and bound to reviewed source evidence', () => {
+    for (const migration of externalMigrationLedger) {
+      const body = readFileSync(
+        new URL(
+          `../../supabase/migrations/${migration.version}_${migration.name}.sql`,
+          import.meta.url,
+        ),
+        'utf8',
+      )
+      expect(body).toContain(`Source: ${migration.sourcePath}`)
+      expect(body).toContain(`Statement bytes: ${migration.statementBytes}`)
+      expect(body).toContain(`Statement SHA-256: ${migration.statementSha256}`)
+      expect(body.replace(/^--.*$/gmu, '').trim()).toBe('')
+    }
+  })
+
   it('does not require external migrations in a HELM-only database', () => {
     const result = classifyMigrationHistory({
-      repositoryMigrations: helmMigrations,
+      repositoryMigrations: [...helmMigrations, ...allowedExternalMigrations],
       actualMigrations: helmMigrations,
     })
 
     expect(result.acceptedExternalMigrations).toEqual([])
     expect(result.unexpectedMigrations).toEqual([])
     expect(result.missingOwnedMigrations).toEqual([])
+    expect(result.missingExternalMigrations).toEqual(allowedExternalMigrations)
+  })
+
+  it('rejects a local external ledger stub with a mismatched name', () => {
+    expect(() => classifyMigrationHistory({
+      repositoryMigrations: [
+        ...helmMigrations,
+        { version: allowedExternalMigrations[0].version, name: 'wrong_local_stub' },
+      ],
+      actualMigrations: helmMigrations,
+    })).toThrow(/does not match hosted_agentboard_private_schema/u)
   })
 
   it('rejects an unknown external migration', () => {

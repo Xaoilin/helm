@@ -1,0 +1,8 @@
+-- External AgentBoard migration ledger stub; intentionally contains no SQL.
+-- Production version/name: 20260803233550_publisher_capability_rotation
+-- Source: whiteboarding/supabase/migrations/20260803000002_publisher_capability_rotation.sql
+-- Statement bytes: 9802
+-- Statement SHA-256: 95900ec5074d6313d26a9d92b9291f9636e4d1569cfb2a963c98aa715294aaac
+-- The live statement and reviewed source were verified byte-for-byte.
+-- Keeping this stub SQL-free prevents a fresh HELM database from installing
+-- the separately owned AgentBoard schema while satisfying the shared ledger.
