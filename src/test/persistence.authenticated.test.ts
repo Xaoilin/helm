@@ -183,7 +183,9 @@ describe('authenticated database persistence', () => {
     await bootstrapDatabasePersistence();
     await loadStore('inventoryItems');
 
-    const { dimensions: _legacyUnknownField, ...legacyPayload } = payload;
+    const legacyPayload = Object.fromEntries(
+      Object.entries(payload).filter(([key]) => key !== 'dimensions'),
+    );
     await saveStore('inventoryItems', [{ ...legacyPayload, notes: 'Updated by an older client' }]);
     await flushPendingRemoteMutations();
 
