@@ -105,6 +105,7 @@ function InventoryBridge({ children }: { children: ReactNode }) {
         trackingMode: 'counted',
         quantity: need.requiredQuantity,
         unit: need.unit,
+        dimensions: need.dimensions,
         specifications: need.specifications,
         condition: 'new',
         tags: [],

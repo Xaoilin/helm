@@ -226,6 +226,7 @@ describe('ProjectsSurface', () => {
       trackingMode: 'durable',
       quantity: 1,
       unit: 'item',
+      dimensions: { length: 180, width: 90, height: 45, unit: 'mm' },
       specifications: {},
       condition: 'good',
       tags: ['electronics'],
@@ -241,6 +242,7 @@ describe('ProjectsSurface', () => {
       projectCatalogKey: 'fixture-orbit',
       requiredQuantity: 1,
       unit: 'set',
+      dimensions: { length: 100, unit: 'cm' },
       specifications: {},
       priority: 'normal',
       status: 'needed',
@@ -259,6 +261,8 @@ describe('ProjectsSurface', () => {
     const panel = await screen.findByRole('region', { name: 'Orbit Console inventory' });
     expect(within(panel).getByText('Bench multimeter')).toBeInTheDocument();
     expect(within(panel).getByText('Silicone test leads')).toBeInTheDocument();
+    expect(within(panel).getByText('1 item · L 180 mm × W 90 mm × H 45 mm')).toBeInTheDocument();
+    expect(within(panel).getByText('1 set needed · L 100 cm')).toBeInTheDocument();
     expect(within(panel).getByRole('button', { name: 'Open global Inventory' })).toBeInTheDocument();
   });
 

@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { InventoryItem } from '../types/domain';
 import {
   findLikelyInventoryDuplicates,
+  formatInventoryDimensions,
   hasSufficientInventory,
   inventoryMajorCategoryForRecord,
   INVENTORY_SUBCATEGORY_OPTIONS,
   isInventoryLowStock,
   normalizeInventoryItemDraft,
+  normalizeInventoryDimensions,
   normalizeInventoryNeedDraft,
   normalizeInventoryQuantity,
   parseInventoryPaste,
@@ -49,6 +51,7 @@ describe('Inventory model', () => {
       imageUrl: ' https://m.media-amazon.com/images/I/example.jpg ',
       trackingMode: 'counted',
       specifications: { thread: ' M3 ' },
+      dimensions: { length: 12, width: 8, unit: 'mm' },
       condition: 'new',
       tags: [' brass ', 'brass'],
       notes: ' Drawer A ',
@@ -61,6 +64,7 @@ describe('Inventory model', () => {
       subcategory: 'screws_fasteners',
       imageUrl: 'https://m.media-amazon.com/images/I/example.jpg',
       specifications: { thread: 'M3' },
+      dimensions: { length: 12, width: 8, unit: 'mm' },
       tags: ['brass'],
       projectCatalogKeys: ['magnus'],
     });
@@ -74,6 +78,7 @@ describe('Inventory model', () => {
       specifications: { thread: 'M3' },
       priority: 'high',
       status: 'needed',
+      dimensions: { length: 12, width: 8, unit: 'mm' },
       notes: '',
     })).toMatchObject({
       category: 'fastener',
@@ -83,6 +88,27 @@ describe('Inventory model', () => {
       priority: 'high',
       status: 'needed',
     });
+  });
+
+  it('accepts partial positive dimensions while retaining arbitrary specifications', () => {
+    const dimensions = normalizeInventoryDimensions({ height: '4.5', unit: 'cm' });
+    expect(dimensions).toEqual({ height: 4.5, unit: 'cm' });
+    expect(formatInventoryDimensions(dimensions)).toBe('H 4.5 cm');
+    expect(normalizeInventoryItemDraft({
+      name: 'Secretlab desk',
+      dimensions: { length: 160, width: 80, unit: 'cm' },
+      specifications: { thickness: '25 mm', mounting: 'VESA', spool: 'none' },
+    })).toMatchObject({
+      dimensions: { length: 160, width: 80, unit: 'cm' },
+      specifications: { thickness: '25 mm', mounting: 'VESA', spool: 'none' },
+    });
+  });
+
+  it('rejects invalid dimensions', () => {
+    expect(() => normalizeInventoryDimensions({ unit: 'mm' })).toThrow(/at least one/i);
+    expect(() => normalizeInventoryDimensions({ length: 0, unit: 'mm' })).toThrow(/positive/);
+    expect(() => normalizeInventoryDimensions({ width: Number.NaN, unit: 'mm' })).toThrow(/finite/);
+    expect(() => normalizeInventoryDimensions({ length: 10, unit: 'yard' })).toThrow(/unit/);
   });
 
   it('maps every detailed category into one major category', () => {

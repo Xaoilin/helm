@@ -17,6 +17,7 @@ function item(overrides: Partial<InventoryItem>): InventoryItem {
     quantity: 10,
     unit: 'pcs',
     lowStockThreshold: 20,
+    dimensions: { length: 20, width: 10, unit: 'mm' },
     specifications: { thread: 'M3' },
     condition: 'new',
     location: 'Workshop drawer',
@@ -41,6 +42,7 @@ function need(overrides: Partial<InventoryNeed> = {}): InventoryNeed {
     projectCatalogKey: 'fixture-orbit',
     requiredQuantity: 50,
     unit: 'pcs',
+    dimensions: { length: 20, width: 10, unit: 'mm' },
     specifications: { thread: 'M3' },
     priority: 'high',
     status: 'needed',
@@ -98,6 +100,7 @@ describe('InventorySurface', () => {
     const caliperPhoto = screen.getByRole('img', { name: 'Digital calipers product photo' });
     expect(caliperPhoto).toHaveAttribute('src', 'https://m.media-amazon.com/images/I/calipers.jpg');
     expect(document.querySelector('.inventory-low-badge')).toHaveTextContent('Low stock');
+    expect(screen.getByRole('heading', { name: 'Digital calipers' }).closest('.inventory-card')).toHaveTextContent('L 20 mm × W 10 mm');
     expect(screen.getByRole('heading', { name: 'Tools' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Fasteners' })).toBeInTheDocument();
 
@@ -114,12 +117,17 @@ describe('InventorySurface', () => {
     fireEvent.change(screen.getByPlaceholderText(/Search tools, stock/i), { target: { value: 'calipers' } });
     expect(screen.getByRole('heading', { name: 'Digital calipers' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'M3 heat-set inserts' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Search tools, stock/i), { target: { value: '20 mm' } });
+    expect(screen.getByRole('heading', { name: 'Digital calipers' })).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(/Search tools, stock/i), { target: { value: '' } });
     fireEvent.change(screen.getByLabelText('Filter inventory project'), { target: { value: 'fixture-orbit' } });
     expect(screen.getByRole('heading', { name: 'M3 heat-set inserts' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Digital calipers' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Needed' }));
+    fireEvent.change(screen.getByPlaceholderText(/Search tools, stock/i), { target: { value: '10 mm' } });
+    expect(screen.getByRole('heading', { name: 'M3 heat-set inserts' })).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Search tools, stock/i), { target: { value: '' } });
     const needCard = screen.getByRole('heading', { name: 'M3 heat-set inserts' }).closest('.inventory-card') as HTMLElement;
     fireEvent.click(within(needCard).getByRole('button', { name: 'Mark acquired' }));
     await waitFor(() => expect(within(needCard).getByText('acquired')).toBeInTheDocument());
@@ -166,5 +174,20 @@ describe('InventorySurface', () => {
     expect(screen.getByRole('dialog', { name: 'Add owned item' })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Add owned item' })).not.toBeInTheDocument();
+  });
+
+  it('accepts dimensions in the owned-item editor and displays partial values', async () => {
+    await act(async () => { renderWithProvider(<InventorySurface />); });
+    fireEvent.click(screen.getByRole('button', { name: '+ Add owned item' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add owned item' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Name' }), { target: { value: 'Secretlab desk' } });
+    fireEvent.change(within(dialog).getByRole('spinbutton', { name: 'Dimension length' }), { target: { value: '160' } });
+    fireEvent.change(within(dialog).getByRole('spinbutton', { name: 'Dimension width' }), { target: { value: '80' } });
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Dimension unit' }), { target: { value: 'cm' } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Specifications' }), { target: { value: 'mounting: VESA\nthickness: 25 mm' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add item' }));
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Secretlab desk' })).toBeInTheDocument());
+    const card = screen.getByRole('heading', { name: 'Secretlab desk' }).closest('.inventory-card');
+    expect(card).toHaveTextContent('L 160 cm × W 80 cm');
   });
 });

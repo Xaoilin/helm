@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(55);
+select plan(64);
 
 select has_table('public', 'helm_inventory_oauth_clients', 'Inventory OAuth approvals table exists');
 select has_table('public', 'helm_inventory_mutation_receipts', 'Inventory idempotency table exists');
@@ -46,6 +46,7 @@ select lives_ok(
         "subcategory":"screws_fasteners",
         "imageUrl":"https://m.media-amazon.com/images/I/example.jpg",
         "trackingMode":"counted","quantity":10,"unit":"pcs","lowStockThreshold":5,
+        "dimensions":{"length":20,"width":10,"unit":"mm"},
         "specifications":{"thread":"M3"},"condition":"new","tags":["3d-printing"],
         "notes":"Brass","projectCatalogKeys":["catalog:magnus"],
         "lastVerifiedAt":"2026-08-03T00:00:00.000Z",
@@ -61,6 +62,13 @@ select is(
     where collection = 'inventoryItems' and record_id = 'm3-inserts'),
   'screws_fasteners',
   'a practical Inventory subcategory is persisted'
+);
+
+select is(
+  (select payload -> 'dimensions' from public.helm_records
+    where collection = 'inventoryItems' and record_id = 'm3-inserts'),
+  '{"length":20,"width":10,"unit":"mm"}'::jsonb,
+  'partial Inventory dimensions are persisted'
 );
 
 select throws_ok(
@@ -81,6 +89,16 @@ select throws_ok(
   '22023',
   'Inventory image URL must be a valid HTTPS address.',
   'an insecure Inventory image URL is rejected'
+);
+
+select throws_ok(
+  $$select public.apply_helm_inventory_mutations(
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeee51',
+    '[{"op":"patch","collection":"inventoryItems","recordId":"m3-inserts","set":{"dimensions":{"unit":"mm"}}}]'::jsonb
+  )$$,
+  '22023',
+  'Inventory dimensions require at least one positive axis.',
+  'dimensions require at least one positive axis'
 );
 
 select throws_ok(
@@ -112,6 +130,7 @@ select lives_ok(
       "imageUrl":"https://m.media-amazon.com/images/I/example.jpg",
       "linkedItemId":"m3-inserts",
       "projectCatalogKey":"catalog:magnus","requiredQuantity":5,"unit":"pcs",
+      "dimensions":{"length":20,"width":10,"unit":"mm"},
       "specifications":{"thread":"M3"},"priority":"high","status":"needed",
       "notes":"For the next tray","createdAt":"2026-08-03T00:00:00.000Z",
       "updatedAt":"2026-08-03T00:00:00.000Z"
@@ -150,6 +169,13 @@ select is(
 );
 
 select is(
+  (select payload -> 'dimensions' from public.helm_records
+    where collection = 'inventoryItems' and record_id = 'm3-inserts'),
+  '{"length":20,"width":10,"unit":"mm"}'::jsonb,
+  'linked-stock acquisition preserves owned dimensions'
+);
+
+select is(
   (select payload ->> 'status' from public.helm_records
     where collection = 'inventoryNeeds' and record_id = 'need-m3'),
   'acquired',
@@ -177,7 +203,7 @@ select lives_ok(
       "id":"need-cabinet-jacks","name":"Cabinet installation arm jacks",
       "category":"tool","subcategory":"workshop_equipment",
       "imageUrl":"https://m.media-amazon.com/images/I/jacks.jpg",
-      "requiredQuantity":2,"unit":"pcs","specifications":{},
+      "requiredQuantity":2,"unit":"pcs","dimensions":{"height":75,"unit":"cm"},"specifications":{},
       "priority":"normal","status":"needed","notes":"",
       "createdAt":"2026-08-03T00:00:00.000Z","updatedAt":"2026-08-03T00:00:00.000Z"
     }'::jsonb
@@ -198,13 +224,15 @@ select is(
   (select jsonb_build_object(
     'category', payload ->> 'category',
     'subcategory', payload ->> 'subcategory',
-    'imageUrl', payload ->> 'imageUrl'
+    'imageUrl', payload ->> 'imageUrl',
+    'dimensions', payload -> 'dimensions'
   ) from public.helm_records
     where collection = 'inventoryItems' and record_id = 'cabinet-jacks'),
-  '{
+    '{
     "category":"tool",
     "subcategory":"workshop_equipment",
-    "imageUrl":"https://m.media-amazon.com/images/I/jacks.jpg"
+    "imageUrl":"https://m.media-amazon.com/images/I/jacks.jpg",
+    "dimensions":{"height":75,"unit":"cm"}
   }'::jsonb,
   'acquisition carries need category and image into the owned catalogue'
 );
@@ -383,6 +411,7 @@ select lives_ok(
     '[{
       "id":"calipers","name":"Digital calipers","category":"tool",
       "trackingMode":"durable","quantity":1,"unit":"item",
+      "dimensions":{"length":150,"width":30,"unit":"mm"},
       "specifications":{},"condition":"good","location":"Workshop drawer",
       "tags":["measurement"],"notes":"","projectCatalogKeys":[],
       "lastVerifiedAt":"2026-08-03T00:00:00.000Z",
@@ -396,6 +425,80 @@ select is(
   (select user_id from public.helm_records where collection = 'inventoryItems' and record_id = 'calipers'),
   '88888888-8888-4888-8888-888888888888'::uuid,
   'OAuth Inventory writes derive ownership from auth.uid()'
+);
+
+select lives_ok(
+  $$select public.inventory_save_items(
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeee19',
+    '[{"id":"calipers","dimensions":{"height":45,"unit":"cm"}}]'::jsonb
+  )$$,
+  'an explicit item id can safely enrich an existing Inventory record'
+);
+
+select is(
+  (select jsonb_build_object(
+    'dimensions', payload -> 'dimensions',
+    'location', payload ->> 'location',
+    'specifications', payload -> 'specifications'
+  ) from public.helm_records
+    where collection = 'inventoryItems' and record_id = 'calipers'),
+  '{"dimensions":{"height":45,"unit":"cm"},"location":"Workshop drawer","specifications":{}}'::jsonb,
+  'item enrichment preserves unspecified existing data'
+);
+
+select lives_ok(
+  $$select public.inventory_save_items(
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeee19',
+    '[{"id":"calipers","dimensions":{"height":45,"unit":"cm"}}]'::jsonb
+  )$$,
+  'replaying an item enrichment request is idempotent'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"99999999-9999-4999-8999-999999999999","role":"authenticated","is_anonymous":false}',
+  true
+);
+select lives_ok(
+  $$select public.inventory_save_items(
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeee20',
+    '[{
+      "id":"calipers","name":"Account B calipers","category":"tool",
+      "trackingMode":"durable","quantity":1,"unit":"item","specifications":{},
+      "condition":"good","tags":[],"notes":"","projectCatalogKeys":[],
+      "lastVerifiedAt":"2026-08-03T00:00:00.000Z",
+      "createdAt":"2026-08-03T00:00:00.000Z","updatedAt":"2026-08-03T00:00:00.000Z"
+    }]'::jsonb
+  )$$,
+  'another account cannot update the first account item'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"88888888-8888-4888-8888-888888888888","role":"authenticated","is_anonymous":false}',
+  true
+);
+select is(
+  (select payload ->> 'name' from public.helm_records
+    where user_id = '88888888-8888-4888-8888-888888888888'
+      and collection = 'inventoryItems' and record_id = 'calipers'),
+  'Digital calipers',
+  'cross-account item enrichment leaves the owner record unchanged'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"88888888-8888-4888-8888-888888888888","role":"authenticated","is_anonymous":false}',
+  true
+);
+select lives_ok(
+  $$select public.approve_inventory_oauth_client('codex-inventory', 'Sabah One Inventory')$$,
+  'the first-party account can re-approve the test client'
+);
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"88888888-8888-4888-8888-888888888888","role":"authenticated","is_anonymous":false,"client_id":"codex-inventory"}',
+  true
 );
 
 select throws_ok(

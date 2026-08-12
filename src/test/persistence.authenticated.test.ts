@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../store/supabase', () => ({
   applyHelmMutations: mocks.apply,
+  applyHelmInventoryMutations: mocks.apply,
   fetchHelmAccountSnapshot: mocks.fetchSnapshot,
   fetchHelmCollections: mocks.fetchCollections,
   getCurrentUserId: vi.fn(() => mocks.currentUserId),
@@ -156,6 +157,48 @@ describe('authenticated database persistence', () => {
     expect(operations).toEqual([{ op: 'patch', collection: 'tasks', recordId: 'task-1', set: { completed: true }, unset: [] }]);
     expect(JSON.stringify(operations)).not.toContain('task-2');
     expect(JSON.stringify(operations)).not.toContain('Concurrent title');
+  });
+
+  it('preserves server-known Inventory dimensions during a partial legacy edit', async () => {
+    const payload = {
+      id: 'inventory-item-1',
+      name: 'Secretlab desk',
+      category: 'other',
+      trackingMode: 'durable',
+      quantity: 1,
+      unit: 'item',
+      dimensions: { length: 160, width: 80, unit: 'cm' },
+      specifications: { mounting: 'VESA' },
+      condition: 'new',
+      tags: [],
+      notes: '',
+      projectCatalogKeys: [],
+      lastVerifiedAt: '2026-08-01T00:00:00.000Z',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+    };
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([
+      row('inventoryItems', 'inventory-item-1', payload, { position: 0 }),
+    ]));
+    await bootstrapDatabasePersistence();
+    await loadStore('inventoryItems');
+
+    const legacyPayload = Object.fromEntries(
+      Object.entries(payload).filter(([key]) => key !== 'dimensions'),
+    );
+    await saveStore('inventoryItems', [{ ...legacyPayload, notes: 'Updated by an older client' }]);
+    await flushPendingRemoteMutations();
+
+    const operations = mocks.apply.mock.calls.at(-1)?.[1];
+    expect(operations).toEqual([{
+      op: 'patch',
+      collection: 'inventoryItems',
+      recordId: 'inventory-item-1',
+      set: {
+        notes: 'Updated by an older client',
+      },
+      unset: [],
+    }]);
   });
 
   it('retries an unknown-outcome network failure once with the same request id', async () => {

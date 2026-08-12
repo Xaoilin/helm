@@ -389,6 +389,8 @@ describe('assistant runtime', () => {
           trackingMode: 'counted',
           condition: 'good',
           location: 'Workshop drawer',
+          dimensions: '{"length":150,"width":30,"unit":"mm"}',
+          specifications: 'thread: M3\nmaterial: stainless steel',
         },
       }]);
     });
@@ -428,6 +430,8 @@ describe('assistant runtime', () => {
       trackingMode: 'counted',
       condition: 'good',
       location: 'Workshop drawer',
+      dimensions: { length: 150, width: 30, unit: 'mm' },
+      specifications: { thread: 'M3', material: 'stainless steel' },
     }));
     expect(recordAssistantActivity).toHaveBeenCalledWith(expect.objectContaining({
       domain: 'inventory',

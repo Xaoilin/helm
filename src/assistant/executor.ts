@@ -27,6 +27,7 @@ import type {
   AssistantUndoOperation,
 } from '../types/domain';
 import {
+  normalizeInventoryDimensions,
   normalizeInventoryItemDraft,
   normalizeInventoryNeedDraft,
   normalizeInventoryQuantity,
@@ -88,6 +89,40 @@ type ExecutionOutcome = ClarifyOutcome | ExecuteOutcome;
 
 function getNow(context: AssistantCommandContext): Date {
   return context.now ? new Date(context.now) : new Date();
+}
+
+function parseAssistantInventoryDimensions(value: unknown) {
+  const text = asString(value).trim();
+  if (!text) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error('Dimensions must be valid JSON.');
+  }
+  return normalizeInventoryDimensions(parsed);
+}
+
+function parseAssistantInventorySpecifications(value: unknown): Record<string, string> {
+  const text = asString(value).trim();
+  if (!text) return {};
+  if (text.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+      return parsed as Record<string, string>;
+    } catch {
+      throw new Error('Specifications JSON must be an object.');
+    }
+  }
+  const entries = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map((line, index) => {
+    const separator = line.indexOf(':');
+    if (separator <= 0 || !line.slice(separator + 1).trim()) {
+      throw new Error('Specification line ' + (index + 1) + ' must use “name: value”.');
+    }
+    return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()] as const;
+  });
+  return Object.fromEntries(entries);
 }
 
 function cloneContext(context: AssistantCommandContext): AssistantCommandContext {
@@ -384,11 +419,17 @@ function executeSingleStep(
       if (!query) return { kind: 'clarify', reason: 'What should I check in Inventory?' };
       const matches = (context.inventoryItems || []).filter(item => !item.archivedAt && [
         item.name, item.brand, item.model, item.location, item.category, item.subcategory,
-        ...item.tags, ...Object.keys(item.specifications), ...Object.values(item.specifications),
+        JSON.stringify(item.dimensions || ''), ...item.tags,
+        ...Object.keys(item.specifications), ...Object.values(item.specifications),
       ].some(value => (value || '').toLocaleLowerCase().includes(query)));
       const needs = (context.inventoryNeeds || []).filter(need => (
         need.status === 'needed' || need.status === 'ordered'
-      ) && need.name.toLocaleLowerCase().includes(query));
+      ) && [
+        need.name,
+        JSON.stringify(need.dimensions || ''),
+        ...Object.keys(need.specifications),
+        ...Object.values(need.specifications),
+      ].some(value => (value || '').toLocaleLowerCase().includes(query)));
       const refs = matches.slice(0, 5).map(item => (
         makeEntityReference('inventory_item', item.id, item.name, 'inventory', 1)
       ));
@@ -422,7 +463,8 @@ function executeSingleStep(
         location: asString(step.args.location) || undefined,
         imageUrl: asString(step.args.imageUrl) || undefined,
         projectCatalogKeys: Array.isArray(step.args.projectCatalogKeys) ? step.args.projectCatalogKeys : [],
-        specifications: {},
+        dimensions: parseAssistantInventoryDimensions(step.args.dimensions),
+        specifications: parseAssistantInventorySpecifications(step.args.specifications),
         tags: [],
         notes: '',
         lastVerifiedAt: now,
@@ -473,7 +515,8 @@ function executeSingleStep(
         projectCatalogKey: asString(step.args.projectCatalogKey) || undefined,
         priority: (asString(step.args.priority) || 'normal') as never,
         status: 'needed',
-        specifications: {},
+        dimensions: parseAssistantInventoryDimensions(step.args.dimensions),
+        specifications: parseAssistantInventorySpecifications(step.args.specifications),
         notes: asString(step.args.notes),
       });
       const id = handlers.addInventoryNeed(draft);

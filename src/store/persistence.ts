@@ -445,10 +445,18 @@ function patchForPayload(
   before: Record<string, unknown>,
   after: Record<string, unknown>,
 ): HelmMutation[] {
+  // Older clients do not know about dimensions and therefore omit the field
+  // from otherwise complete records. Keep the server-known value in the
+  // mutation so a partial/legacy edit cannot turn it into an unset operation.
+  const effectiveAfter = (
+    (collection === 'inventoryItems' || collection === 'inventoryNeeds')
+    && before.dimensions !== undefined
+    && !('dimensions' in after)
+  ) ? { ...after, dimensions: before.dimensions } : after;
   const set: Record<string, unknown> = {};
   const unset: string[] = [];
   const mutations: HelmMutation[] = [];
-  for (const [key, value] of Object.entries(after)) {
+  for (const [key, value] of Object.entries(effectiveAfter)) {
     if (valuesEqual(before[key], value)) continue;
     if (
       isAtomicCounter(collection, recordId, key)
@@ -468,7 +476,7 @@ function patchForPayload(
     }
   }
   for (const key of Object.keys(before)) {
-    if (!(key in after)) unset.push(key);
+    if (!(key in effectiveAfter)) unset.push(key);
   }
   if (Object.keys(set).length > 0 || unset.length > 0) {
     mutations.unshift({ op: 'patch', collection, recordId, set, unset });

@@ -3,6 +3,7 @@ import { useApp } from '../store/AppContext';
 import type {
   InventoryCategory,
   InventoryCondition,
+  InventoryDimensionUnit,
   InventoryItem,
   InventoryNeed,
   InventoryNeedPriority,
@@ -13,11 +14,13 @@ import {
   defaultInventorySubcategory,
   findLikelyInventoryDuplicates,
   inventoryCategoryForSubcategory,
+  formatInventoryDimensions,
   inventoryMajorCategoryForRecord,
   inventorySubcategoryMeta,
   INVENTORY_SUBCATEGORY_OPTIONS,
   isInventoryLowStock,
   normalizeInventoryItemDraft,
+  normalizeInventoryDimensions,
   normalizeInventoryNeedDraft,
   parseInventoryPaste,
   type InventoryItemDraft,
@@ -45,6 +48,7 @@ const CATEGORY_OPTIONS: Array<{ value: InventoryCategory; label: string; icon: s
 ];
 const TRACKING_OPTIONS: InventoryTrackingMode[] = ['durable', 'counted', 'measured'];
 const CONDITION_OPTIONS: InventoryCondition[] = ['unknown', 'new', 'good', 'worn', 'needs_repair'];
+const DIMENSION_UNIT_OPTIONS: InventoryDimensionUnit[] = ['mm', 'cm', 'm', 'in'];
 
 function categoryMeta(category: InventoryCategory) {
   return CATEGORY_OPTIONS.find(option => option.value === category) || CATEGORY_OPTIONS.at(-1)!;
@@ -98,7 +102,17 @@ function searchableItem(item: InventoryItem): string {
   return [
     item.name, item.category, item.subcategory, subcategory?.label,
     item.brand, item.model, item.location, item.notes,
+    formatInventoryDimensions(item.dimensions),
     ...item.tags, ...Object.keys(item.specifications), ...Object.values(item.specifications),
+  ].filter(Boolean).join(' ').toLocaleLowerCase();
+}
+
+function searchableNeed(need: InventoryNeed): string {
+  const subcategory = inventorySubcategoryMeta(need.subcategory);
+  return [
+    need.name, need.category, need.subcategory, subcategory?.label, need.notes,
+    formatInventoryDimensions(need.dimensions),
+    ...Object.keys(need.specifications), ...Object.values(need.specifications),
   ].filter(Boolean).join(' ').toLocaleLowerCase();
 }
 
@@ -115,6 +129,58 @@ function parseSpecifications(value: string): Record<string, string> {
     return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()] as const;
   });
   return Object.fromEntries(entries);
+}
+
+function parseDimensions(
+  length: string,
+  width: string,
+  height: string,
+  unit: InventoryDimensionUnit,
+) {
+  if (!length.trim() && !width.trim() && !height.trim()) return undefined;
+  return normalizeInventoryDimensions({
+    ...(length.trim() ? { length: Number(length) } : {}),
+    ...(width.trim() ? { width: Number(width) } : {}),
+    ...(height.trim() ? { height: Number(height) } : {}),
+    unit,
+  });
+}
+
+function dimensionInput(value: number | undefined): string {
+  return value == null ? '' : String(value);
+}
+
+function DimensionFields({
+  length,
+  width,
+  height,
+  unit,
+  onLength,
+  onWidth,
+  onHeight,
+  onUnit,
+}: {
+  length: string;
+  width: string;
+  height: string;
+  unit: InventoryDimensionUnit;
+  onLength: (value: string) => void;
+  onWidth: (value: string) => void;
+  onHeight: (value: string) => void;
+  onUnit: (value: InventoryDimensionUnit) => void;
+}) {
+  return (
+    <fieldset className="inventory-dimensions inventory-field-wide">
+      <legend>Dimensions <span>(optional)</span></legend>
+      <p>Enter any known axes; at least one value is required when used.</p>
+      <div className="inventory-dimension-grid">
+        <label className="inventory-dimension-field"><span>Length</span><input className="form-input" aria-label="Dimension length" inputMode="decimal" type="number" min="0" step="any" value={length} onChange={event => onLength(event.target.value)} placeholder="Optional" /></label>
+        <label className="inventory-dimension-field"><span>Width</span><input className="form-input" aria-label="Dimension width" inputMode="decimal" type="number" min="0" step="any" value={width} onChange={event => onWidth(event.target.value)} placeholder="Optional" /></label>
+        <label className="inventory-dimension-field"><span>Height</span><input className="form-input" aria-label="Dimension height" inputMode="decimal" type="number" min="0" step="any" value={height} onChange={event => onHeight(event.target.value)} placeholder="Optional" /></label>
+        <label className="inventory-dimension-field"><span>Unit</span><select className="form-select" aria-label="Dimension unit" value={unit} onChange={event => onUnit(event.target.value as InventoryDimensionUnit)}>{DIMENSION_UNIT_OPTIONS.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+      </div>
+    </fieldset>
+  );
 }
 
 function InventoryModal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
@@ -169,6 +235,10 @@ function ItemEditor({
   const [threshold, setThreshold] = useState(item?.lowStockThreshold == null ? '' : String(item.lowStockThreshold));
   const [brand, setBrand] = useState(item?.brand || '');
   const [model, setModel] = useState(item?.model || '');
+  const [dimensionLength, setDimensionLength] = useState(dimensionInput(item?.dimensions?.length));
+  const [dimensionWidth, setDimensionWidth] = useState(dimensionInput(item?.dimensions?.width));
+  const [dimensionHeight, setDimensionHeight] = useState(dimensionInput(item?.dimensions?.height));
+  const [dimensionUnit, setDimensionUnit] = useState<InventoryDimensionUnit>(item?.dimensions?.unit || 'mm');
   const [condition, setCondition] = useState<InventoryCondition>(item?.condition || 'unknown');
   const [location, setLocation] = useState(item?.location || '');
   const [tags, setTags] = useState((item?.tags || []).join(', '));
@@ -193,6 +263,7 @@ function ItemEditor({
         lowStockThreshold: threshold === '' ? undefined : Number(threshold),
         brand,
         model,
+        dimensions: parseDimensions(dimensionLength, dimensionWidth, dimensionHeight, dimensionUnit),
         specifications: parseSpecifications(specifications),
         condition,
         location,
@@ -225,6 +296,7 @@ function ItemEditor({
         <label className="inventory-field inventory-field-wide"><span>Product image URL</span><input className="form-input" inputMode="url" type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} maxLength={2048} placeholder="https://…" /></label>
         <label className="inventory-field inventory-field-wide"><span>Location</span><input className="form-input" value={location} onChange={e => setLocation(e.target.value)} maxLength={160} placeholder="Workshop drawer, office shelf…" /></label>
         <label className="inventory-field inventory-field-wide"><span>Tags</span><input className="form-input" value={tags} onChange={e => setTags(e.target.value)} placeholder="3d printing, soldering, portable" /></label>
+        <DimensionFields length={dimensionLength} width={dimensionWidth} height={dimensionHeight} unit={dimensionUnit} onLength={setDimensionLength} onWidth={setDimensionWidth} onHeight={setDimensionHeight} onUnit={setDimensionUnit} />
         <label className="inventory-field inventory-field-wide"><span>Specifications</span><textarea className="form-input" value={specifications} onChange={e => setSpecifications(e.target.value)} rows={4} placeholder={'thread: M3\nmaterial: brass'} /></label>
         <fieldset className="inventory-project-links inventory-field-wide">
           <legend>Projects</legend>
@@ -273,6 +345,10 @@ function NeedEditor({
   const [imageUrl, setImageUrl] = useState(need?.imageUrl || linkedItem?.imageUrl || '');
   const [quantity, setQuantity] = useState(String(need?.requiredQuantity ?? 1));
   const [unit, setUnit] = useState(need?.unit || linkedItem?.unit || 'pcs');
+  const [dimensionLength, setDimensionLength] = useState(dimensionInput(need?.dimensions?.length ?? linkedItem?.dimensions?.length));
+  const [dimensionWidth, setDimensionWidth] = useState(dimensionInput(need?.dimensions?.width ?? linkedItem?.dimensions?.width));
+  const [dimensionHeight, setDimensionHeight] = useState(dimensionInput(need?.dimensions?.height ?? linkedItem?.dimensions?.height));
+  const [dimensionUnit, setDimensionUnit] = useState<InventoryDimensionUnit>(need?.dimensions?.unit || linkedItem?.dimensions?.unit || 'mm');
   const [priority, setPriority] = useState<InventoryNeedPriority>(need?.priority || 'normal');
   const [projectKey, setProjectKey] = useState(need?.projectCatalogKey || projectCatalogKey || '');
   const [notes, setNotes] = useState(need?.notes || '');
@@ -291,6 +367,7 @@ function NeedEditor({
         projectCatalogKey: projectKey || undefined,
         requiredQuantity: Number(quantity),
         unit,
+        dimensions: parseDimensions(dimensionLength, dimensionWidth, dimensionHeight, dimensionUnit),
         specifications: parseSpecifications(specifications),
         priority,
         status: need?.status || 'needed',
@@ -317,6 +394,7 @@ function NeedEditor({
         <label className="inventory-field"><span>Priority</span><select className="form-select" value={priority} onChange={e => setPriority(e.target.value as InventoryNeedPriority)}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option></select></label>
         <label className="inventory-field"><span>Project</span><select className="form-select" value={projectKey} onChange={e => setProjectKey(e.target.value)}><option value="">No project</option>{app.projects.filter(project => project.catalogKey).map(project => <option key={project.id} value={project.catalogKey}>{project.name}</option>)}</select></label>
         <label className="inventory-field inventory-field-wide"><span>Product image URL</span><input className="form-input" inputMode="url" type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} maxLength={2048} placeholder="https://…" /></label>
+        <DimensionFields length={dimensionLength} width={dimensionWidth} height={dimensionHeight} unit={dimensionUnit} onLength={setDimensionLength} onWidth={setDimensionWidth} onHeight={setDimensionHeight} onUnit={setDimensionUnit} />
         <label className="inventory-field inventory-field-wide"><span>Required specifications</span><textarea className="form-input" value={specifications} onChange={e => setSpecifications(e.target.value)} rows={4} placeholder={'thread: M3\nmaterial: brass'} /></label>
         <label className="inventory-field inventory-field-wide"><span>Notes</span><textarea className="form-input" value={notes} onChange={e => setNotes(e.target.value)} maxLength={4000} rows={4} /></label>
         {error && <div className="inventory-error" role="alert">{error}</div>}
@@ -422,7 +500,7 @@ function InventoryItemCard({ item, projectName, onEdit, onNeed }: { item: Invent
       <InventoryPhoto imageUrl={item.imageUrl} name={item.name} fallback={meta.icon} />
       <div className="inventory-card-main">
         <div className="inventory-card-heading"><div><h4>{item.name}</h4><p>{[item.brand, item.model].filter(Boolean).join(' · ') || subcategory?.label || meta.label}</p></div>{low && <span className="inventory-low-badge">Low stock</span>}</div>
-        <div className="inventory-card-meta"><span>{subcategory?.label || meta.label}</span><span>{item.quantity} {item.unit}</span>{item.location && <span>{item.location}</span>}<span>{item.condition.replace('_', ' ')}</span>{projectName && <span>{projectName}</span>}</div>
+        <div className="inventory-card-meta"><span>{subcategory?.label || meta.label}</span><span>{item.quantity} {item.unit}</span>{formatInventoryDimensions(item.dimensions) && <span>{formatInventoryDimensions(item.dimensions)}</span>}{item.location && <span>{item.location}</span>}<span>{item.condition.replace('_', ' ')}</span>{projectName && <span>{projectName}</span>}</div>
         {item.tags.length > 0 && <div className="inventory-tags">{item.tags.slice(0, 5).map(tag => <span key={tag}>{tag}</span>)}</div>}
         <div className="inventory-card-actions">
           <div className="inventory-stepper" aria-label={`Adjust ${item.name} quantity`}><button type="button" onClick={() => app.adjustInventoryQuantity(item.id, -1)} disabled={item.quantity <= 0} aria-label={`Decrease ${item.name}`}>−</button><strong>{item.quantity}</strong><button type="button" onClick={() => app.adjustInventoryQuantity(item.id, 1)} aria-label={`Increase ${item.name}`}>+</button></div>
@@ -453,6 +531,7 @@ function InventoryNeedCard({ need, projectName, onEdit }: { need: InventoryNeed;
       <InventoryPhoto imageUrl={need.imageUrl} name={need.name} fallback="＋" />
       <div className="inventory-card-main">
         <div className="inventory-card-heading"><div><h4>{need.name}</h4><p>{subcategory?.label || meta.label} · {need.requiredQuantity} {need.unit} required{projectName ? ` · ${projectName}` : ''}</p></div><span className={`inventory-need-status status-${need.status}`}>{need.status}</span></div>
+        {formatInventoryDimensions(need.dimensions) && <div className="inventory-card-meta"><span>{formatInventoryDimensions(need.dimensions)}</span></div>}
         {need.notes && <p className="inventory-card-notes">{need.notes}</p>}
         <div className="inventory-card-actions">
           {(need.status === 'needed' || need.status === 'ordered') && <button className="btn btn-primary btn-sm" type="button" onClick={markAcquired}>Mark acquired</button>}
@@ -474,8 +553,8 @@ export function ProjectInventorySection({ catalogKey, projectName }: { catalogKe
     <section className="project-inventory-panel" aria-label={`${projectName} inventory`}>
       <div className="project-inventory-heading"><div><div className="inventory-eyebrow">PROJECT INVENTORY</div><h2>Tools, stock, and needs</h2><p>{items.length} owned · {needs.length} open needs</p></div><button className="btn btn-primary" type="button" onClick={() => app.navigate('inventory')}>Open global Inventory</button></div>
       <div className="project-inventory-summary">
-        {items.slice(0, 8).map(item => <div key={item.id} className="project-inventory-chip"><InventoryPhoto compact imageUrl={item.imageUrl} name={item.name} fallback={categoryMeta(item.category).icon} /><strong>{item.name}</strong><small>{item.quantity} {item.unit}</small></div>)}
-        {needs.slice(0, 6).map(need => <div key={need.id} className="project-inventory-chip is-needed"><InventoryPhoto compact imageUrl={need.imageUrl} name={need.name} fallback="＋" /><strong>{need.name}</strong><small>{need.requiredQuantity} {need.unit} needed</small></div>)}
+        {items.slice(0, 8).map(item => <div key={item.id} className="project-inventory-chip"><InventoryPhoto compact imageUrl={item.imageUrl} name={item.name} fallback={categoryMeta(item.category).icon} /><strong>{item.name}</strong><small>{item.quantity} {item.unit}{formatInventoryDimensions(item.dimensions) ? ` · ${formatInventoryDimensions(item.dimensions)}` : ''}</small></div>)}
+        {needs.slice(0, 6).map(need => <div key={need.id} className="project-inventory-chip is-needed"><InventoryPhoto compact imageUrl={need.imageUrl} name={need.name} fallback="＋" /><strong>{need.name}</strong><small>{need.requiredQuantity} {need.unit} needed{formatInventoryDimensions(need.dimensions) ? ` · ${formatInventoryDimensions(need.dimensions)}` : ''}</small></div>)}
         {items.length === 0 && needs.length === 0 && <div className="inventory-empty-inline">Nothing is linked yet. Add or edit an Inventory record and select this project.</div>}
       </div>
     </section>
@@ -502,8 +581,7 @@ export default function InventorySurface() {
     return true;
   }), [app.inventoryItems, query, category, projectKey, location]);
   const needed = useMemo(() => app.inventoryNeeds.filter(need => {
-    const subcategoryLabel = inventorySubcategoryMeta(need.subcategory)?.label || '';
-    if (query && !`${need.name} ${need.notes} ${need.subcategory || ''} ${subcategoryLabel}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())) return false;
+    if (query && !searchableNeed(need).includes(query.toLocaleLowerCase())) return false;
     if (category !== 'all' && inventoryMajorCategoryForRecord(need) !== category) return false;
     if (projectKey !== 'all' && need.projectCatalogKey !== projectKey) return false;
     return need.status !== 'dismissed';

@@ -486,6 +486,7 @@ describe('AppContext - Inventory', () => {
         quantity: 0.5,
         unit: 'kg',
         lowStockThreshold: 0.2,
+        dimensions: { height: 10, unit: 'cm' },
         specifications: { diameter: '1.75 mm' },
         condition: 'good',
         location: 'Workshop shelf',
@@ -505,6 +506,7 @@ describe('AppContext - Inventory', () => {
         projectCatalogKey: 'magnus',
         requiredQuantity: 0.75,
         unit: 'kg',
+        dimensions: { height: 10, unit: 'cm' },
         specifications: { diameter: '1.75 mm' },
         priority: 'high',
         status: 'needed',
@@ -513,7 +515,30 @@ describe('AppContext - Inventory', () => {
     });
     act(() => { r.api!.completeInventoryNeed(needId); });
     expect(r.api!.inventoryItems[0].quantity).toBe(1.25);
+    expect(r.api!.inventoryItems[0].dimensions).toEqual({ height: 10, unit: 'cm' });
     expect(r.api!.inventoryNeeds[0]).toMatchObject({ status: 'acquired', linkedItemId: itemId });
+
+    let newNeedId = '';
+    act(() => {
+      newNeedId = r.api!.addInventoryNeed({
+        name: 'Secretlab desk',
+        requiredQuantity: 1,
+        unit: 'item',
+        dimensions: { length: 160, width: 80, unit: 'cm' },
+        specifications: { mounting: 'VESA' },
+        priority: 'normal',
+        status: 'needed',
+        notes: '',
+      });
+    });
+    act(() => { r.api!.completeInventoryNeed(newNeedId); });
+    const acquiredNeed = r.api!.inventoryNeeds.find(need => need.id === newNeedId);
+    const acquiredItem = r.api!.inventoryItems.find(item => item.id === acquiredNeed?.linkedItemId);
+    expect(acquiredItem).toMatchObject({
+      name: 'Secretlab desk',
+      dimensions: { length: 160, width: 80, unit: 'cm' },
+      specifications: { mounting: 'VESA' },
+    });
 
     act(() => { r.api!.adjustInventoryQuantity(itemId, -0.25); });
     expect(r.api!.inventoryItems[0].quantity).toBe(1);

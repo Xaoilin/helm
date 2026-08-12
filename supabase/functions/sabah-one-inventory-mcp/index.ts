@@ -77,6 +77,15 @@ const imageUrlSchema = z.string().trim().min(1).max(2_048).refine(value => {
 }, 'Product image URL must be a valid HTTPS address.');
 const quantitySchema = z.number().finite().nonnegative().max(1_000_000_000);
 const unitSchema = z.string().trim().min(1).max(32);
+const dimensionsSchema = z.object({
+  length: z.number().finite().positive().optional(),
+  width: z.number().finite().positive().optional(),
+  height: z.number().finite().positive().optional(),
+  unit: z.enum(['mm', 'cm', 'm', 'in']),
+}).strict().refine(
+  value => value.length !== undefined || value.width !== undefined || value.height !== undefined,
+  'At least one positive dimension axis is required.',
+);
 const specificationsSchema = z.record(
   z.string().trim().min(1).max(60),
   z.string().trim().min(1).max(200),
@@ -90,25 +99,29 @@ const requestIdSchema = z.uuid().optional().describe(
 
 const itemCandidateSchema = z.object({
   id: stableIdSchema,
-  name: z.string().trim().min(1).max(160),
-  category: itemCategorySchema.default('other'),
+  name: z.string().trim().min(1).max(160).optional(),
+  category: itemCategorySchema.optional(),
   subcategory: itemSubcategorySchema.optional(),
   imageUrl: imageUrlSchema.optional(),
-  trackingMode: z.enum(['durable', 'counted', 'measured']).default('counted'),
-  quantity: quantitySchema,
-  unit: unitSchema.default('units'),
+  trackingMode: z.enum(['durable', 'counted', 'measured']).optional(),
+  quantity: quantitySchema.optional(),
+  unit: unitSchema.optional(),
   lowStockThreshold: quantitySchema.optional(),
   brand: z.string().trim().min(1).max(120).optional(),
   model: z.string().trim().min(1).max(120).optional(),
-  specifications: specificationsSchema.default({}),
-  condition: z.enum(['unknown', 'new', 'good', 'worn', 'needs_repair']).default('unknown'),
+  dimensions: dimensionsSchema.optional(),
+  specifications: specificationsSchema.optional(),
+  condition: z.enum(['unknown', 'new', 'good', 'worn', 'needs_repair']).optional(),
   location: z.string().trim().min(1).max(160).optional(),
-  tags: tagsSchema.default([]),
-  notes: z.string().max(4_000).default(''),
-  projectCatalogKeys: projectKeysSchema.default([]),
+  tags: tagsSchema.optional(),
+  notes: z.string().max(4_000).optional(),
+  projectCatalogKeys: projectKeysSchema.optional(),
 }).strict().refine(
-  value => !value.subcategory || subcategoryCategory[value.subcategory] === value.category,
+  value => !value.subcategory || !value.category || subcategoryCategory[value.subcategory] === value.category,
   { path: ['subcategory'], message: 'Inventory subcategory does not match its category.' },
+).refine(
+  value => Boolean(value.id) || (Boolean(value.name) && value.quantity !== undefined),
+  { message: 'New Inventory items require a name and quantity.' },
 );
 
 const needCandidateSchema = z.object({
@@ -121,6 +134,7 @@ const needCandidateSchema = z.object({
   projectCatalogKey: z.string().trim().min(1).max(160).optional(),
   requiredQuantity: quantitySchema.default(1),
   unit: unitSchema.default('units'),
+  dimensions: dimensionsSchema.optional(),
   specifications: specificationsSchema.default({}),
   priority: z.enum(['low', 'normal', 'high']).default('normal'),
   status: z.enum(['needed', 'ordered']).default('needed'),
@@ -362,7 +376,7 @@ function registerInventoryTools(server: McpServer, client: SupabaseClient): void
     'inventory_save_items',
     {
       title: 'Save Owned Inventory Items',
-      description: 'Save one or more explicitly approved owned items. Multi-item batches require prior review.',
+      description: 'Create or enrich one or more explicitly approved owned items. An explicit id updates only that account record and preserves unspecified fields. Multi-item batches require prior review.',
       inputSchema: z.object({
         requestId: requestIdSchema,
         items: z.array(itemCandidateSchema).min(1).max(100),
@@ -375,13 +389,27 @@ function registerInventoryTools(server: McpServer, client: SupabaseClient): void
         return failure(new Error('Review the multi-item candidates with the user before saving them.'));
       }
       const timestamp = new Date().toISOString();
-      const items = input.items.map(item => ({
-        ...item,
-        id: item.id ?? crypto.randomUUID(),
-        lastVerifiedAt: timestamp,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      }));
+      const items = input.items.map(item => {
+        const existingId = Boolean(item.id);
+        return {
+          ...(!existingId ? {
+            category: item.category ?? 'other',
+            trackingMode: item.trackingMode ?? 'counted',
+            quantity: item.quantity ?? 0,
+            unit: item.unit ?? 'units',
+            specifications: item.specifications ?? {},
+            condition: item.condition ?? 'unknown',
+            tags: item.tags ?? [],
+            notes: item.notes ?? '',
+            projectCatalogKeys: item.projectCatalogKeys ?? [],
+          } : {}),
+          ...item,
+          id: item.id ?? crypto.randomUUID(),
+          ...(existingId
+            ? { updatedAt: timestamp }
+            : { lastVerifiedAt: timestamp, createdAt: timestamp, updatedAt: timestamp }),
+        };
+      });
       try {
         return result(await callRpc(client, 'inventory_save_items', {
           p_request_id: input.requestId ?? crypto.randomUUID(),

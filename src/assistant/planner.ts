@@ -595,7 +595,8 @@ export function buildPlanningBundle(
     .map(item => {
       const haystack = normaliseText([
         item.name, item.brand, item.model, item.location, item.category, item.subcategory,
-        ...item.tags, ...Object.keys(item.specifications), ...Object.values(item.specifications),
+        JSON.stringify(item.dimensions || ''), ...item.tags,
+        ...Object.keys(item.specifications), ...Object.values(item.specifications),
       ].filter(Boolean).join(' '));
       const overlap = inventoryTokens.filter(token => haystack.includes(token)).length;
       return {
@@ -626,7 +627,13 @@ export function buildPlanningBundle(
   const inventoryNeeds = (context.inventoryNeeds || [])
     .filter(need => need.status === 'needed' || need.status === 'ordered')
     .map(need => {
-      const overlap = inventoryTokens.filter(token => normaliseText(need.name).includes(token)).length;
+      const haystack = normaliseText([
+        need.name,
+        JSON.stringify(need.dimensions || ''),
+        ...Object.keys(need.specifications),
+        ...Object.values(need.specifications),
+      ].join(' '));
+      const overlap = inventoryTokens.filter(token => haystack.includes(token)).length;
       return {
         kind: 'inventory_need' as const,
         id: need.id,
