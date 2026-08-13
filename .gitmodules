@@ -1,5 +1,0 @@
-[submodule "cortex-one"]
-	path = .ai/cortex-one
-	url = git@github.com:Xaoilin/cortex-one.git
-	branch = main
-	ignore = all
