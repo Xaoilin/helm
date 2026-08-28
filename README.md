@@ -1,120 +1,59 @@
 # Sabah One
 
-Sabah One is an account-backed desktop assistant app called Lina. Shared data belongs to the signed-in account, uses Supabase as its only source of truth, and is unavailable offline. Machine paths, native approvals, process state, and runtime logs remain local to each device. Passwords and project secrets use an encrypted account-owned vault.
+Sabah One is a hosted web product for a solo operator, with Lina as its in-app assistant. The supported product is the GitHub Pages website; there is no separate application runtime. Shared data belongs to the signed-in account, uses Supabase as its source of truth, and is unavailable when the account session is offline or invalid.
 
-## Stack
+## Runtime
 
-- Tauri 2
-- React 19
-- TypeScript 5
-- Vite 8
-- Supabase for required account identity and shared persistence
-- Ollama, Deepgram, ElevenLabs, and OpenWakeWord for assistant features
+- GitHub Pages for the hosted web application
+- React 19 with TypeScript 5 and Vite 8
+- Supabase Auth, database-authoritative records, Realtime Broadcast, and Edge Functions
+- Hosted OpenAI for assistant planning and narration
+- Deepgram, ElevenLabs, browser speech APIs, and browser WASM where voice features are enabled
+- Web Notifications and an in-app reminder banner while the page remains open
 
-## Quick Start
+The browser is the complete Sabah One runtime. Account data and account-owned secrets remain online and database-authoritative; browser-only session state is limited to transient UI, permission, and diagnostic state.
 
-```bash
-npm install
-npm run dev
-```
+## Using Sabah One
 
-Open the app in the browser for web development, or run the Tauri shell separately when working on desktop-specific behavior.
-
-## Core Commands
-
-```bash
-npm run agent:fast
-npm run test:database
-npm run check
-npm run test:e2e:smoke
-npm run test:e2e
-npm run test:e2e:visual -- --surface projects --viewports 390x844,1440x900
-npm run test:native
-npm run test:database
-npm run build:web
-npm run handoff:check
-npm run llm-compare
-```
-
-`npm run agent:fast` is the normal iteration loop. It compares the complete working tree with `origin/master`, then selects policy, changed-file lint, incremental typecheck, related unit tests, UI smoke tests, and native tests as needed. It prints and records timings.
-
-`npm run check` is the single full local gate. Independent lint, typecheck, unit, blocking E2E, web-build, and relevant native work runs concurrently without compiling TypeScript twice.
-
-Behavioral E2E and screenshot evidence are separate. `test:e2e` blocks on behavior and responsive overflow; `test:e2e:visual` captures only requested surfaces and viewports. Each run starts a fresh server on its own free port.
-
-`npm run handoff:check` is the shipped-release gate. It fails unless there are no uncommitted non-generated changes, the current work is merged into `origin/master`, the `CI`, `Deploy to GitHub Pages`, and `Deploy Supabase Assistant Function` workflows have all succeeded for the deployed `master` head, the live GitHub Pages bundle is serving the current package version, and merged `codex/` branches have been cleaned up.
-
-`npm run llm-compare` compares `gpt-5.4` and `claude-sonnet-4-6` on Sabah One-style prompts using your local `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`, then writes a Markdown report to `test-results/`.
+Open the deployed GitHub Pages URL in a supported browser and sign in with Supabase Auth. If a browser notification permission is denied or unavailable, the same prayer reminder remains available as an in-app banner while the page is open. Closing the page ends reminder observation; the product does not promise operating-system background delivery.
 
 ## Project Map
 
-- [AGENTS.md](AGENTS.md): short operational instructions for Codex
-- [docs/project-architecture.md](docs/project-architecture.md): app structure, provider graph, persistence, and integration boundaries
-- [docs/engineering-guide.md](docs/engineering-guide.md): workflow, Definition of Done, testing, resilience, and documentation rules
-- [docs/agentic-coding-workflow.md](docs/agentic-coding-workflow.md): agent feedback, CI, automated review, and production automation policy
-- [docs/ci-performance.md](docs/ci-performance.md): measured local and hosted validation receipts
+- [AGENTS.md](AGENTS.md): short project instructions
+- [docs/project-architecture.md](docs/project-architecture.md): hosted runtime, provider graph, persistence, and integration boundaries
+- [docs/engineering-guide.md](docs/engineering-guide.md): delivery, browser validation, resilience, security, and documentation rules
+- [docs/agentic-coding-workflow.md](docs/agentic-coding-workflow.md): branch, CI, review, and hosted deployment policy
+- [docs/ci-performance.md](docs/ci-performance.md): GitHub Actions and Pages performance evidence
 - [docs/feature-status.md](docs/feature-status.md): truthful feature matrix
-- [docs/assistant-command-architecture.md](docs/assistant-command-architecture.md): long-term assistant design direction
+- [docs/prayer-tracking-and-reminders.md](docs/prayer-tracking-and-reminders.md): prayer outcomes and page-open reminders
+- [docs/assistant-command-architecture.md](docs/assistant-command-architecture.md): grounded assistant capabilities and execution
+- [docs/assistant-conversational-architecture.md](docs/assistant-conversational-architecture.md): hosted assistant turn contract
+- [docs/voice-session-v1.md](docs/voice-session-v1.md): browser voice-session behavior
+- [docs/design/night-compass-contract.md](docs/design/night-compass-contract.md): Night Compass dashboard design contract
 
 ## Current Product Reality
 
-- Google Calendar OAuth and sync are real.
-- Supabase auth and database-authoritative persistence are required for shared app data. Devices converge automatically without conflict prompts or durable offline queues.
-- The Secrets surface stores account-owned credentials through constrained RPCs backed by Supabase Vault. Values are masked by default, fetched one at a time for Reveal/Copy, and cleared from the UI on hide, navigation, backgrounding, sign-out, or account switch.
-- Hosted GPT-5.4 assistant replies are real when Supabase is configured, the `assistant-openai` Edge Function is deployed, and the live planner is available.
-- Ollama-powered assistant responses are real when Ollama is running locally.
-- Voice input shows a live transcript preview while recording when Deepgram or the browser fallback is available, then confirms the final command after you stop.
-- A dedicated Clock surface provides a neat multi-clock workspace with on-demand timers and stopwatches, custom names, selectable alarm sounds, eye-catching finish alerts, and account-backed persistence.
-- Inventory is a global account-backed catalogue of owned tools, equipment, materials, stock, and open needs. Project views use stable catalogue keys, and Lina can check or update the same records.
-- The private `sabah-one-inventory` Codex plugin pairs an Inventory-planning skill with the authenticated `sabah-one-inventory-mcp` Edge Function. OAuth clients are approved per account and restricted by RLS and bounded RPCs to Inventory plus minimal project-name resolution.
+- Google Calendar OAuth and sync use hosted authorization and account-owned refresh credentials.
+- Supabase sign-in and database-authoritative persistence are required for shared data. Signed-out, expired, or offline sessions cannot view or change shared records, and there is no durable offline mutation queue.
+- The Secrets surface stores account-owned credentials through constrained RPCs backed by Supabase Vault. Values are masked by default, fetched one at a time for Reveal/Copy, and cleared from the UI on hide, navigation, page backgrounding, sign-out, or account switch.
+- Hosted GPT-5.4-family assistant replies are available when Supabase is configured and the `assistant-openai` Edge Function is deployed. If the hosted planner is unavailable, Lina gives an honest in-app fallback and does not guess or execute an action.
+- Chat and voice share one grounded assistant runtime. Browser speech input/output and Deepgram or ElevenLabs are capability-dependent; unavailable voice capabilities leave Chat available.
+- Clock, Inventory, Finance, Health, Knowledge, Projects, Calendar, Prayer, and the Night Compass dashboard use account-backed records where marked real in [feature status](docs/feature-status.md).
+- The private Inventory planning integration remains a narrow, account-authorized Supabase boundary and does not expose general app state or secrets.
 - The former Inbox and quick-capture workflow are retired. Historical capture rows are preserved only as recoverable database tombstones.
-- Several integrations remain placeholder or simulated.
-- Existing Deepgram and ElevenLabs device keys are copied into the vault non-destructively on first use when a matching account secret does not already exist. Original device settings remain available during migration.
+- Some integrations remain placeholder or simulated; the feature matrix is authoritative.
 
-Use [docs/feature-status.md](docs/feature-status.md) for the authoritative feature-by-feature status instead of inferring from UI copy.
+## Hosted Assistant
 
-## Hosted Assistant Deployment
+The GitHub Pages client calls the `assistant-openai` Supabase Edge Function for hosted GPT planning. The OpenAI key stays in the function environment; it is not sent to the browser. The function supports the hosted model presets exposed by Settings and returns structured turns for reply, clarification, confirmation, and tool calls.
 
-The GitHub Pages build now defaults to hosted GPT-5.4 for assistant planning. The client never receives the OpenAI key directly; it calls a Supabase Edge Function instead.
+The Inventory MCP endpoint is separately account-authorized through Supabase OAuth 2.1 with PKCE and the production consent path `/helm/oauth/consent`. Its RLS policies and dedicated RPCs limit access to Inventory records and minimal project resolution.
 
-One-time setup:
+## Delivery Rules
 
-```bash
-supabase functions deploy assistant-openai
-supabase functions deploy sabah-one-inventory-mcp --no-verify-jwt
-```
-
-Set these secrets in the `assistant-openai` function environment before you rely on the hosted path:
-
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL` (recommended: `gpt-5.4`)
-
-For automated deploys on merge, add these GitHub repository secrets so `.github/workflows/deploy-supabase-assistant.yml` can sync the function:
-
-- `SUPABASE_ACCESS_TOKEN`
-- `SUPABASE_PROJECT_REF`
-- `SUPABASE_DB_PASSWORD`
-- `HELM_DATABASE_BACKUP_SHA256` for the verified pre-cutover logical backup
-- `OPENAI_API_KEY`
-
-The function is intended for signed-in Sabah One users. If hosted AI is not configured or the user is signed out, Lina uses local Ollama only when a live Ollama planner is available and otherwise refuses to guess.
-
-The Inventory MCP requires Supabase OAuth 2.1, dynamic client registration, and the production authorization path `/helm/oauth/consent`. The release workflow enables only those three Auth settings through the Management API after the Inventory migration and MCP endpoint deploy. It does not push the local Auth configuration over the hosted project.
-
-## Working Rules
-
-- Keep shared state and secrets database-authoritative and online-only; keep machine-bound execution material device-local.
-- Do not describe placeholder features as real.
-- Update code, docs, and user-facing copy together when behavior changes.
-- Keep assistant behavior shared across chat and voice.
-
-## Deployment And CI
-
-- Install local Git hooks with `npm run hooks:install` if you want the pre-commit and pre-push gates in this checkout.
-- Pull requests should satisfy `agent-policy`, `database`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and the stable `native` aggregator.
-- `codex-review` is useful extra review coverage, but OpenAI quota or provider availability is not a release dependency; unavailable review output is reported as a warning.
-- Non-draft same-repo `codex/*` pull requests into `master` auto-promote after those automated gates pass. Manual PR approval is intentionally not required for this personal-app workflow.
-- Auto-promotion records the tested PR merge tree. After squash merge, verification-only CI proves that `master` has that exact tree and revalidates the successful source jobs before the release is accepted. Direct pushes and ordinary manual CI dispatches still run the full suite.
-- GitHub Pages and Supabase deploys remain required for `master`, and the Pages build defaults the website to hosted GPT-5.4 mode.
-- `master` is protected to require pull requests plus the automated checks before merge.
-- Before calling a web-facing change live in a handoff, run `npm run handoff:check` after the merge and deploy complete.
+- GitHub Actions is the validation authority for the hosted website. Required checks cover policy, database contracts, lint, typecheck, unit tests, browser E2E, and the web build.
+- GitHub Pages and the required Supabase Edge Function deployments publish only from the protected `master` path after the required checks pass.
+- The deployed website and `public/release.json` must identify the same version. Open tabs use the manifest to move onto a newer deployed bundle after a one-time browser reload.
+- Keep shared state and secrets account-owned, online-only, and database-authoritative.
+- Keep chat and voice on the same assistant runtime and update docs and user-facing copy when behavior changes.
+- Do not describe placeholder behavior as real, and do not call a branch-only change deployed or live.

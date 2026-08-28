@@ -1,14 +1,14 @@
-# Prayer Tracking And Deadline Reminders
+# Prayer Tracking And Page-Open Reminders
 
 ## Scope
 
-Sabah One tracks the five canonical daily prayers independently from task IDs. Tasks remain the interaction surface and gamification bridge, while `PrayerTrackingState` is the durable source of truth for prayer outcomes, deadline receipts, bounded opportunity/momentum receipts, and reporting.
+Sabah One tracks the five canonical daily prayers independently from task IDs. Tasks remain the interaction surface and gamification bridge, while `PrayerTrackingState` is the durable source of truth for prayer outcomes, deadline receipts, bounded opportunity and momentum receipts, and reporting.
 
-The feature begins classified reporting at `trackingStartedAt`. Existing checked prayer-task entries are imported once as `unclassified`; Sabah One does not guess whether legacy completions were on time and does not infer misses before activation. On the first trusted activation-day schedule, Sabah One persists the exact canonical prayers that were still eligible. Later DST, season, or location timetable changes cannot rewrite that denominator. If no trusted activation-day snapshot exists after that date passes, unknown activation-day blanks remain excluded instead of being guessed.
+The feature begins classified reporting at `trackingStartedAt`. Existing checked prayer-task entries are imported once as `unclassified`; Sabah One does not guess whether legacy completions were on time or infer misses before activation. On the first trusted activation-day schedule, Sabah One persists the exact canonical prayers that were still eligible. Later timetable changes cannot rewrite that denominator. If no trusted activation-day snapshot exists after that date passes, unknown activation-day blanks remain excluded rather than guessed.
 
 ## Root Cause And Design Boundary
 
-The five-whys investigation traced the old limitation through five layers: prayer used generic habit UI, generic habits had only binary completion, binary history stored task IDs, ID-only history could not represent absent missed days, and the live prayer schedule was never joined to the completion domain. The fix therefore introduces canonical outcome state and one schedule-owning provider instead of adding more prayer-specific conditions to generic habit components.
+The old limitation came from generic binary task history: task IDs could record completion but could not represent an absent missed day or connect that absence to a live prayer schedule. Canonical outcome state and one schedule-owning provider keep prayer rules out of generic task components.
 
 ## Outcomes And Deadlines
 
@@ -31,41 +31,32 @@ Final on-time deadlines use the Jafari rules requested by the product:
 
 The deadline is exclusive: completion before it is on time; completion at or after it is late. The UI uses the clock only to highlight the likely selection. The user's explicit On time or Late choice is authoritative.
 
-Sequential timetable windows remain separate and continue to drive Dashboard `Up Next`. A final deadline must not be reused as the active-prayer ranking window.
+Sequential timetable windows drive the Dashboard's next-prayer orientation. A final deadline must not be reused as the active-prayer ranking window.
 
 ## State And Mutations
 
-Canonical types live in `src/types/domain.ts`. Pure normalization, deadline, outcome, reminder-key, and percentage logic lives in `src/services/prayerTracking.ts`. `src/store/contexts/PrayerContext.tsx` owns the live schedule, tracking state, completion dialog, reminder lifecycle, and diagnostics.
+Canonical types live in `src/types/domain.ts`. Pure normalization, deadline, outcome, reminder-key, and percentage logic lives in `src/services/prayerTracking.ts`. `PrayerProvider` owns the live schedule, tracking state, completion dialog, reminder lifecycle, and diagnostics.
 
 Records use `<local date>::<PrayerName>` keys so deletion or recreation of a prayer task cannot erase history. The aggregate is decomposed into account-owned metadata, outcome, eligibility, and reminder-receipt records and changed through the transactional Sabah One mutation RPC.
 
-All UI, chat, and voice entry points call the same prayer completion mutation. One completion:
+All UI, chat, and voice entry points call the same prayer completion mutation. One completion writes the canonical outcome, synchronizes matching prayer-task state and the compatibility daily log, awards one-time XP, and records assistant activity when applicable. Repeated completion and task-ID churn cannot award XP again. Historical correction changes the outcome without granting XP. Assistant undo reverses only the completion-owned task, gamification, and canonical-outcome fields.
 
-1. writes the canonical outcome;
-2. synchronizes matching prayer-task state and the compatibility daily log;
-3. awards the same one-time XP for On time or Late;
-4. records assistant activity when the assistant initiated it.
-
-Repeated completion and task-ID churn must not award XP again. Historical correction changes the outcome without granting XP. Assistant undo reverses only the completion-owned task, gamification, and canonical-outcome fields. Ordinary tasks and habits keep their existing binary completion flow.
-
-Because canonical tracking and gamification use separate persisted JSON stores, each completion also writes a duplicate transaction ledger entry inside the gamification profile. On hydration, either side can reconstruct the other after an interrupted write. The ledger's rewarded receipt and compatibility daily log make recovery idempotent, including taskless completions that use a stable canonical prayer identity. Assistant undo uses guarded, field-level inverse deltas rather than replacing whole snapshots, so later prayer completions, reminder receipts, XP, and unrelated task edits survive an earlier undo.
-
-When chat or voice asks to complete a prayer without an explicit status, the shared assistant runtime persists a typed pending action and asks `On time or late?`. A strict local follow-up resolves that pending action without a second model call. Explicit status executes immediately.
+When chat or voice asks to complete a prayer without an explicit status, the shared assistant runtime stores a typed pending action and asks `On time or late?`. An in-app follow-up resolves that pending action without a second model call. Explicit status executes immediately.
 
 ## Schedule Ownership And Freshness
 
-`PrayerProvider` is the sole timetable owner. Dashboard, Focus, Tasks, Profile, chat, voice, Settings, and Debug consume its state instead of fetching separately.
+`PrayerProvider` is the sole timetable owner. Dashboard, Focus, Tasks, Profile, Chat, Voice, Settings, and Debug consume its state instead of fetching separately.
 
 The provider refreshes on:
 
 - local-date rollover;
 - prayer location changes;
-- window focus or visibility resume;
+- browser visibility resume;
 - explicit retry.
 
 Only a cache matching the current local date and selected location may be shown. If a usable timetable is unavailable, the UI says so and does not manufacture deadline state.
 
-AlAdhan schedule validation requires all five prayers plus Sunrise, Sunset, and Midnight, valid 24-hour clock ranges, and a plausible daily ordering. Reminder scheduling, deadline inference, next-prayer comparison, and clock-suggested outcomes pause when the returned IANA timezone does not match the desktop timezone; Debug and Settings expose the mismatch instead of guessing. Shared prayer history is blocked offline, and missing outcomes are never inferred without a trusted matching schedule.
+AlAdhan schedule validation requires all five prayers plus Sunrise, Sunset, and Midnight, valid 24-hour clock ranges, and a plausible daily ordering. Reminder scheduling, deadline inference, next-prayer comparison, and clock-suggested outcomes pause when the returned IANA timezone does not match the browser timezone; Debug and Settings expose the mismatch instead of guessing. Shared prayer history is blocked offline, and missing outcomes are never inferred without a trusted matching schedule.
 
 ## Reminder Lifecycle
 
@@ -73,13 +64,11 @@ Prayer opportunity and deadline reminders are enabled alongside prayer notificat
 
 Eligible prayers produce one global warning across every Sabah One surface. Dhuhr/Asr and Maghrib/Isha are grouped when they share a deadline. The banner offers completion and a single five-minute snooze; snooze is unavailable when five minutes or less remain. Completion removes the reminder immediately, while reaching the deadline closes it and materializes a Missed outcome when no completion exists.
 
-The same `PrayerProvider` builds the prayer-relative Learn and Move plan; there is no second scheduler. Learn defaults to Dhuhr, Maghrib, and Isha anchors, while Move defaults to Asr, Maghrib, and Isha. Account-owned preferences can disable a pillar or edit its allowed anchors without hiding the dashboard pillar. Simultaneous Learn/Move prompts coalesce, each logical pillar/anchor keeps its own stable receipt, Level 1 completion cancels future prompts, and 22:00-08:00 quiet hours suppress non-prayer prompts only. Each logical reminder has a hard one-snooze bound.
+The same `PrayerProvider` builds the prayer-relative Learn and Move plan; there is no second scheduler. Learn defaults to Dhuhr, Maghrib, and Isha anchors, while Move defaults to Asr, Maghrib, and Isha. Account-owned preferences can disable a pillar or edit its allowed anchors without hiding the Dashboard pillar. Simultaneous Learn/Move prompts coalesce, each logical pillar/anchor keeps its own stable receipt, Level 1 completion cancels future prompts, and 22:00-08:00 quiet hours suppress non-prayer prompts only. Each logical reminder has a hard one-snooze bound.
 
-Permission denial records the bounded attempt without retry loops and keeps an in-app warning plus Settings repair action. Missing schedules and schedule/desktop timezone mismatches produce no relative plan and remain visible in Dashboard and Settings. Process timers and permission state stay device-owned; receipts and preferences remain account-owned for idempotent relaunch reconciliation.
+The browser page owns the in-page reminder timer. When the user grants permission, Web Notifications provide an additional browser notification while the page remains open. If permission is denied, unavailable, or delivery cannot be observed, the reminder stays visible in-app with a Settings repair action. Closing the page ends reminder observation; Sabah One does not promise background delivery after the page is closed.
 
-Desktop builds schedule the timer in the Tauri process and use native notifications, so minimizing the window does not stop the timer. The timer stops when Sabah One is fully exited: there is currently no tray process, autostart, or operating-system background schedule. Browser builds use an in-page timer and Web Notifications while the page remains open.
-
-Native/Web notification delivery is deduplicated by local prayer date, canonical prayer, and deadline. Permission is requested only after an explicit user action. `prefers-reduced-motion` replaces the gentle pulse with a static high-contrast warning.
+Browser notification delivery is deduplicated by local prayer date, canonical prayer, and deadline. Permission is requested only after an explicit user action. `prefers-reduced-motion` replaces the gentle pulse with a static high-contrast warning.
 
 ## Reporting
 
@@ -93,7 +82,7 @@ The denominator includes only classified canonical opportunities: explicit On ti
 
 ## Diagnostics And Verification
 
-`Debug -> Prayer` shows schedule state and freshness, location and method, calculated deadlines, schedule/desktop timezones, next reminder, suppression reason, notification permission, latest notification key, and last error. Its labelled test uses the same process-side timer to fire five seconds later, so the window can be minimized for validation; it never changes a prayer outcome, reminder receipt, or XP.
+`Debug -> Prayer` shows schedule state and freshness, location and method, calculated deadlines, browser timezone, next reminder, suppression reason, notification permission, latest notification key, and last error. Its labelled test uses the same page timer to fire five seconds later; it never changes a prayer outcome, reminder receipt, or XP.
 
 Minimum focused coverage:
 
@@ -101,4 +90,5 @@ Minimum focused coverage:
 - schedule validation, retry, stale/offline handling, and timezone mismatch;
 - activation migration, duplicate or recreated tasks, XP dedupe, correction, assistant clarification, and undo;
 - stacked percentage totals, reminder threshold, grouping, snooze, dedupe, cancellation, resume, rollover, and reduced motion;
-- a deterministic Playwright timetable containing Sunrise, Sunset, and Midnight, with completion from a non-Dashboard reminder and reload verification.
+- a deterministic Playwright timetable containing Sunrise, Sunset, and Midnight, with completion from a non-Dashboard reminder and reload verification;
+- browser notification permission, page-open delivery, denied-permission fallback, and the explicit limitation that a closed page is not observed.

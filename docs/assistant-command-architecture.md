@@ -2,176 +2,50 @@
 
 ## Goal
 
-Make Lina understand and execute app commands in a way that feels conversational, contextual, and reliable, while staying grounded in real app state.
+Lina should understand and execute app commands conversationally, while staying grounded in real signed-in Sabah One state. Chat and Voice use one hosted assistant runtime; they never maintain separate command systems or mutation paths.
 
-For the concrete shipped conversational runtime, see `docs/assistant-conversational-architecture.md`.
+For the turn-by-turn contract, see `docs/assistant-conversational-architecture.md`.
 
 ## Current Runtime
 
-The current implementation now routes both chat and voice through a shared assistant runtime under `src/assistant/`.
+The shipped runtime in `src/assistant/` provides:
 
-Implemented pieces:
+- a source-of-truth capability registry with lifecycle status, domain, arguments, examples, aliases, preconditions, confirmation rules, and executor metadata;
+- schema-validated planning and grounded entity resolution for surfaces, tasks, projects, events, calendars, accounts, and Knowledge topics;
+- temporal resolution for relative dates, clock times, part-of-day phrases, and supported prayer references;
+- deterministic execution for navigation, task, calendar, finance, Inventory, and Knowledge actions;
+- shared confirmation, typed navigation, pending prayer completion, activity recording, and supported undo;
+- hosted GPT planning and narration through the `assistant-openai` Supabase Edge Function;
+- debug traces and a representative benchmark corpus.
 
-- a source-of-truth assistant action registry with per-action status, domain, args, examples, aliases, and executor metadata
-- schema-validated `ActionPlan` planning
-- a shared capability registry
-- entity resolution for surfaces, tasks, projects, events, calendars, accounts, and knowledge topics
-- temporal resolution for relative dates, clock times, part-of-day phrases, and basic prayer-based references
-- normalized task-request parsing that strips conversational scaffolding before writes
-- deterministic execution for navigation, task creation/reveal/completion/deletion, calendar creation/rescheduling, finance logging, and knowledge entry creation
-- deterministic Inventory lookup, single-item creation, quantity adjustment, need creation, and atomic need completion; multiline input opens reviewed bulk import instead of writing silently
-- shared dialog state with confirmation handling for risky actions such as event rescheduling
-- typed assistant navigation requests so Lina can open the Tasks surface to `Today`, `All Tasks`, or `Goals`, optionally reset filters, optionally reveal and highlight a specific task, or open the Projects surface and reveal a specific project
-- model-first structured planning through hosted OpenAI or local Ollama instead of action-tag parsing
-- model-led conversational turns that return `reply`, `clarify`, `confirm`, or `tool_calls`
-- grounded ID-based validation for task reveal, task complete, task delete, calendar reschedule, finance account selection, and knowledge topic selection
-- structured pending confirmations stored as validated tool-call batches plus grounded entity references
-- typed pending prayer completions shared by chat and voice, so an omitted prayer outcome asks `On time or late?` and a strict local follow-up resumes the stored tool call without a second model request
-- final assistant replies narrated from verified execution results instead of surfacing executor templates directly
-- account-backed assistant activity entries for chat and voice mutations, with actor/source transcript, execution details, and undo metadata where the executor can provide a grounded inverse operation
-- benchmark example retrieval from a 200-plus command corpus
-- expanded debug traces that capture the planning bundle, raw planner response, model turn, validator verdict, validated plan, pending confirmation state, raw narration response, and execution payloads
-
-Still intentionally lightweight:
-
-- entity ranking is an on-device heuristic rather than embedding-backed
-- prayer-based time resolution uses the currently loaded prayer snapshot only
-- exact transcript corrections such as "No, I said ..." now persist as account-backed assistant memory, but a broader teaching-loop memory and richer semantic reuse are still future work
-
-## Shipped Cutover
-
-The shipped runtime now uses the model as the first conversational layer for new chat and voice intents.
-
-Local code still matters, but only for the layers that should remain deterministic:
-
-- transcript normalization
-- correction-memory application
-- capability retrieval
-- grounded entity and time candidate retrieval
-- validator guardrails
-- confirmation handling
-- deterministic execution
-- debug tracing
-
-There is no longer a supported local regex action-selection path for fresh assistant turns. If no live planner is available, Lina refuses to guess.
-
-The user-visible assistant text now comes from the model's clarification, confirmation, or post-execution narration step. Internal plan transport and executor summaries are no longer meant to be shown directly.
-
-## Recommended Direction
-
-Use structured outputs from hosted OpenAI or local Ollama as the transport layer, but place them inside a grounded runtime with deterministic execution.
-
-The architecture should combine:
-
-- high-level capabilities
-- entity resolution over live app data
-- temporal resolution
-- schema-constrained planning
-- transactional execution
-- confirmation and undo
-- learning from corrections
-- an evaluation harness built from real commands
-
-Tool calling alone is not enough. Keyword matching alone is not enough. The system needs both a model-facing planning surface and an app-facing execution surface.
+When the hosted planner is unavailable, Lina gives a truthful in-app fallback and executes nothing. Direct app surfaces remain available.
 
 ## Core Design
 
 ### 1. Capability registry
 
-Create a shared registry of semantic app actions.
+Each semantic capability defines:
 
-Each capability should define:
+- a stable capability ID and lifecycle status such as `live`, `planned`, or `disabled`;
+- a domain owner and strict input schema;
+- examples, aliases, preconditions, and confirmation requirements;
+- a deterministic executor, executor key, and postcondition checks where possible.
 
-- a stable capability id
-- a lifecycle status such as `live`, `planned`, or `disabled`
-- a domain owner such as navigation, tasks, calendar, finance, or knowledge
-- a strict input schema
-- examples and aliases
-- plain-language examples
-- preconditions
-- confirmation requirements
-- a deterministic executor
-- an executor key for debug visibility
-- debug metadata rendered in the Debug surface
-- postcondition checks where possible
-
-Examples:
-
-- `navigation.go_to_surface`
-- `tasks.open_view`
-- `tasks.create_task`
-- `tasks.reveal_task`
-- `tasks.complete_matching`
-- `tasks.delete_matching`
-- `calendar.create_event`
-- `calendar.reschedule_event`
-- `finance.record_transaction`
-- `inventory.lookup`
-- `inventory.add_item`
-- `inventory.adjust_quantity`
-- `inventory.add_need`
-- `inventory.complete_need`
-- `knowledge.create_entry`
-
-Prefer business actions over generic low-level mutations. The assistant should ask to "reschedule an event", not receive raw permission to patch arbitrary state.
+Business actions are preferred over generic patches. Examples include `navigation.go_to_surface`, `tasks.create_task`, `tasks.complete_matching`, `calendar.reschedule_event`, `finance.record_transaction`, `inventory.adjust_quantity`, and `knowledge.create_entry`.
 
 ### 2. Entity resolver
 
-Build a resolver over live app state so the assistant can bind language to actual objects.
+The resolver indexes live account data, the current surface, recently mentioned entities, and relevant Projects, Tasks, Events, Calendars, Accounts, Goals, Inventory records, and Knowledge entries. Ranking may combine exact alias match, fuzzy text match, recency, current-surface bias, and embedding similarity.
 
-The resolver should index:
-
-- tasks
-- habits
-- events
-- calendars
-- accounts
-- goals
-- projects
-- knowledge entries
-- currently visible UI items
-- recently mentioned entities
-
-Ranking should combine:
-
-- exact alias match
-- fuzzy text match
-- recency
-- current-surface bias
-- embedding similarity
-
-This is what makes commands like "move it", "that task", and "my work calendar" viable.
+Grounded IDs are required for reveal, completion, deletion, rescheduling, finance-account selection, and Knowledge-topic selection. Ambiguous or missing entities produce clarification instead of a guessed mutation.
 
 ### 3. Temporal resolver
 
-The planner should not leave vague time prose unresolved.
-
-Resolve phrases like:
-
-- tomorrow after lunch
-- next Friday morning
-- before Maghrib
-- after Dhuhr
-
-Resolution should be deterministic and use:
-
-- current date
-- timezone
-- locale
-- prayer-time data
-- product rules such as working-hour defaults
+The planner must resolve phrases such as `tomorrow after lunch`, `next Friday morning`, `before Maghrib`, and `after Dhuhr` against the current date, browser timezone, locale, prayer timetable, and product rules. Unresolved time remains visible as clarification rather than being silently approximated.
 
 ### 4. Structured planner
 
-Replace action tags such as:
-
-- `[NAV:...]`
-- `[ADD_TASK:...]`
-- `[COMPLETE_TASK:...]`
-
-with a strict plan object.
-
-Example:
+Hosted GPT returns a strict structured turn rather than action tags such as `[ADD_TASK:...]`. The internal compatibility shape remains inspectable and testable:
 
 ```ts
 type ActionPlan = {
@@ -187,128 +61,53 @@ type ActionPlan = {
 }
 ```
 
-The exact schema can evolve, but the planner must stay structured, inspectable, and easy to test.
-`ActionPlan` is now primarily an internal compatibility and validation shape rather than the user-facing conversational contract.
-For hosted OpenAI structured outputs, strict nested objects must keep every declared arg key in `required`; semantically optional args should be represented as nullable fields instead of being omitted from the strict schema.
-
-Task creation is now intentionally stricter than the earlier regex-only path:
-
-- polite scaffolding such as "can you", "for me to", "called", and "new task" should be stripped from the saved title
-- vague follow-ups such as "create the task now" should clarify instead of silently creating junk records
-- create-event phrasing should not be hijacked by task creation heuristics
+Strict hosted schemas keep every declared argument required; semantically optional arguments are represented as nullable fields. Task creation strips conversational scaffolding, clarifies vague requests, and does not let task heuristics hijack event phrasing.
 
 ### 5. Transactional executor
 
-Execution should follow a deterministic pipeline:
+Execution follows a deterministic pipeline:
 
-1. validate the plan shape
-2. resolve entity references
-3. resolve temporal expressions
-4. check preconditions and confirmation rules
-5. execute the capability steps
-6. verify postconditions
-7. record an audit entry for each mutation
-8. return a final result and undo metadata where feasible
+1. validate the plan shape;
+2. resolve entity and time references;
+3. check preconditions and confirmation rules;
+4. execute capability steps through the account mutation boundary;
+5. verify postconditions;
+6. record an account-backed activity entry;
+7. return verified facts and undo metadata where feasible.
 
-If confidence is low, the target is ambiguous, or the action is destructive, Lina should clarify or confirm before mutating state.
+For destructive or ambiguous actions, Lina clarifies or confirms first. She describes success only after the mutation and verification succeed. Reveal actions return typed navigation data so the UI can open the right view, clear restrictive filters, and highlight the resolved entity.
 
-For write actions, Lina should only describe success after the deterministic local mutation succeeds. For reveal actions, the executor should pass a typed navigation request that allows the UI to open the correct tab, clear restrictive filters, and reveal or highlight the resolved entity.
-For view-only task navigation, the executor should use the same typed Tasks surface-state payload even when no task id is involved so "show me all my tasks" is explicit and testable instead of being approximated to a generic surface jump.
-Activity entries are persisted as account-owned records through the same transactional database path as other shared data. The Activity surface is the user-facing audit trail; the floating Lina panel also surfaces the latest recent action with an Undo shortcut when the entry is still undoable.
-
-Prayer completion is a domain-owned exception to generic binary task completion. The planner may pass `prayerStatus: on_time | late` only when the user states it explicitly. Otherwise the executor performs no mutation and creates a typed pending prayer action. The resolved action calls the shared prayer mutation once, and its undo payload restores task state, gamification, and canonical prayer tracking together. Ordinary tasks continue through the existing completion path.
+Prayer completion is a domain-owned exception to binary task completion. An omitted status creates a typed pending action and asks `On time or late?`; the in-app follow-up resolves it without a second model request. The shared prayer mutation updates task state, gamification, and canonical prayer tracking once.
 
 ### 6. Dialog state
 
-Keep a lightweight dialog state shared by voice and chat so the assistant can interpret:
-
-- "that one"
-- "move it"
-- "the second event"
-- "use my work calendar"
-
-Dialog state should track recent entities, recent plans, current surface, and recent clarifications.
-
-Prayer status clarification is persisted in this shared state. Replies that clearly mean On time or Late resolve locally for both chat and voice; ambiguous replies repeat the question, and cancellation clears the pending action. The clock never silently supplies the user's answer.
+Shared dialog state tracks recent entities, recent plans, current surface, recent clarifications, and pending confirmation or prayer actions. Short explicit confirmation replies resolve a stored validated batch; ambiguous replies return to the hosted model with context.
 
 ### 7. Teaching loop
 
-When the user corrects Lina, store:
+When a user corrects Lina, account-backed assistant memory may store the phrasing, accepted meaning, aliases, selected entities, and successful plan. Exact transcript corrections such as `No, I said ...` are shared between Chat and Voice. Broader semantic teaching and richer plan reuse remain future work.
 
-- the user's phrasing
-- the final accepted meaning
-- aliases
-- selected entities
-- the successful plan
+## Debug Visibility And Evaluation
 
-Retrieve these examples in future turns so the system adapts to the user's language without hardcoding more verbs.
+Debug renders the capability registry and the latest trace: transcript, effective transcript, planning bundle, model response, turn type, validator verdict, pending confirmation, execution facts, narration, and typed navigation payloads. Secret values and tokens are excluded.
 
-The current implementation now covers a lightweight version of this for transcript correction:
-
-- exact utterance corrections such as "No, I said delete all of the tasks related to mirrors"
-- phrase replacements derived from that correction, such as `minors` -> `mirrors`
-- account-backed persistence shared by chat and voice
-
-Broader semantic teaching, plan reuse, and larger evaluation coverage are still future work.
-
-## Debug Visibility
-
-The Debug surface should render the assistant action registry directly from code and show the latest assistant trace:
-
-- transcript and effective transcript
-- structured `ActionPlan`
-- executed steps
-- typed navigation payloads
-
-This makes unsupported gaps visible before they become user-facing surprises.
-
-### 8. Evaluation harness
-
-Build a benchmark from real commands.
-
-Current shipped coverage:
-
-- 200-plus representative utterances in `src/assistant/evals/benchmarkCorpus.ts`
-- benchmark dialog seeds plus grounded-id expectations for destructive, referential, and other grounded cases
-- expected plan mode
-- expected capability family
-- no-approximation coverage for unsupported and destructive intents
-- a runnable benchmark scorer in `scripts/run-assistant-benchmark.ts`
-- threshold enforcement on `master` before deployment: 100% destructive, 100% unsupported no-approximation, and 98% overall benchmark pass rate
-
-Prompt or model changes should not ship unless they improve or preserve benchmark results.
+The benchmark corpus contains representative utterances, dialog seeds, grounded-ID expectations, destructive cases, and unsupported-action no-approximation cases. The hosted benchmark is enforced before Pages exposure with thresholds of 100% destructive coverage, 100% unsupported no-approximation coverage, and 98% overall pass rate.
 
 ## Why This Beats The Alternatives
 
 ### Bigger keyword lists
 
-This increases maintenance cost without solving ambiguity, reference resolution, or context.
+They increase maintenance cost without solving ambiguity, reference resolution, or context.
 
 ### Pure free-form prompting
 
-This can sound smart while still hallucinating entities, inventing actions, or skipping confirmation boundaries.
+It can sound smart while hallucinating entities, inventing actions, or skipping confirmation boundaries.
 
 ### UI automation
 
-That is the wrong abstraction for an app we own. Lina should work with semantic app capabilities, not approximate user clicks.
+It is the wrong abstraction for an app we own. Lina should use semantic capabilities and account boundaries, not approximate clicks.
 
-## Tool Calling's Actual Role
-
-Hosted OpenAI or Ollama structured planning is still useful, but it should be the transport between the model and the capability runtime, not the entire design.
-
-The shipped runtime now follows this shape:
-
-1. retrieve relevant capabilities, entities, and examples
-2. ask the model for a conversational turn or tool call
-3. validate and ground the result locally
-4. confirm and execute deterministically
-5. generate the final user-facing response from verified results
-
-For both reads and writes, visible assistant wording should come from the model after clarification, confirmation, or execution facts are available. For writes, success should be described only after execution and verification.
-
-## Proposed Module Layout
-
-Suggested starting structure:
+## Module Layout
 
 - `src/assistant/capabilities.ts`
 - `src/assistant/entityResolver.ts`
@@ -319,32 +118,12 @@ Suggested starting structure:
 - `src/assistant/executor.ts`
 - `src/assistant/evals/`
 
-Both `voiceAssistant.ts` and `ChatContext.tsx` should delegate to this shared runtime rather than continue to own separate command systems.
-
-## Cutover Status
-
-The model-first cutover is now shipped:
-
-- chat and voice share one assistant runtime under `src/assistant/`
-- fresh intents are led by a live hosted or Ollama model first
-- local code validates, grounds, confirms, and executes
-- the model writes the visible clarification, confirmation, and post-execution reply
-- destructive or unsupported requests clarify instead of approximating to another action
-- when no live planner is available, Lina responds truthfully and executes nothing
-
 ## Design Principles
 
-- one assistant runtime for both voice and chat
-- asynchronous voice work carries the current assistant session token; closing Lina invalidates it so a late speech or planner callback cannot reopen the panel or restart listening
-- semantic capabilities instead of raw state patches
-- model-first planning with local deterministic validation and execution
-- confirmation for risky actions
-- undo where practical
-- audit every assistant mutation
-- benchmark-driven iteration
-
-## Final Recommendation
-
-Do not keep evolving the current command parser incrementally.
-
-Replace it with a grounded capability runtime that uses tool calling and structured planning, resolves real entities and time expressions, executes deterministically, learns from corrections, and is measured against a real command benchmark.
+- one assistant runtime for Chat and Voice;
+- hosted model-first intent recognition with deterministic browser validation and execution;
+- semantic capabilities instead of raw state patches;
+- confirmation for risky actions and undo where practical;
+- account-backed audit entries for assistant mutations;
+- truthful in-app fallback when hosted planning is unavailable;
+- benchmark-driven iteration and claim-matched evidence.

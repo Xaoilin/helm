@@ -6,6 +6,8 @@ Status: selected visual contract for KAN-245. This is design direction, not a pr
 
 ## Authority and boundary
 
+This contract applies to the hosted GitHub Pages dashboard rendered in the browser. It governs presentation only; account data, prayer outcomes, and reminder state still come from the established Supabase and `PrayerProvider` boundaries.
+
 The authority order is:
 
 1. Existing Sabah One domain behavior and canonical prayer records.
