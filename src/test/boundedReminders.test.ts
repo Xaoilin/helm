@@ -83,7 +83,7 @@ describe('bounded reminder plan', () => {
       item.kind === 'prayer-opportunity' && item.prayerNames[0] === 'Asr'
     ))!;
     const asrMove = reminders.find(item => item.kind === 'momentum' && item.prayerNames[0] === 'Asr')!;
-    const now = new Date(2026, 7, 28, 16, 31);
+    const now = new Date('2026-08-28T15:31:00.000Z');
 
     expect(getActiveBoundedReminder([asrPrayer, asrMove], {}, now)).toBe(asrPrayer);
   });

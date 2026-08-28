@@ -23,6 +23,11 @@ import {
   setPrayerOutcome,
   setPrayerReminderReceipt,
 } from '../services/prayerTracking';
+import {
+  getPrayerZonedDate,
+  getPrayerZonedDateTimeParts,
+  prayerZonedDateTimeToInstant,
+} from '../services/prayerTimeZone';
 
 const PRAYERS = [
   { name: 'Fajr', time: '05:00' },
@@ -43,7 +48,12 @@ function at(
   minutes = 0,
   milliseconds = 0,
 ): Date {
-  return new Date(year, month - 1, day, hours, minutes, 0, milliseconds);
+  const date = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const clock = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+  const instant = prayerZonedDateTimeToInstant(date, clock, 'Europe/London');
+  if (!instant) throw new Error(`Invalid London test instant: ${date} ${clock}`);
+  instant.setUTCMilliseconds(milliseconds);
+  return instant;
 }
 
 function schedule(date: string): PrayerScheduleDay {
@@ -318,27 +328,22 @@ describe('Jafari prayer deadline bounds', () => {
     ['Maghrib', 'Isha', 22, 0],
   ] as const)('%s remains on time until %s', (prayerName, deadlineName, hour, minute) => {
     const bounds = getPrayerDeadlineBounds(PRAYERS, '2026-04-01', prayerName, 'Europe/London');
+    const deadline = bounds ? getPrayerZonedDateTimeParts(bounds.deadlineAt, 'Europe/London') : null;
 
     expect(bounds).not.toBeNull();
     expect(bounds?.deadlineName).toBe(deadlineName);
-    expect(bounds?.deadlineAt.getFullYear()).toBe(2026);
-    expect(bounds?.deadlineAt.getMonth()).toBe(3);
-    expect(bounds?.deadlineAt.getDate()).toBe(1);
-    expect(bounds?.deadlineAt.getHours()).toBe(hour);
-    expect(bounds?.deadlineAt.getMinutes()).toBe(minute);
+    expect(deadline).toMatchObject({ year: 2026, month: 4, day: 1, hour, minute });
   });
 
   it('Isha uses next-day Jafari Midnight', () => {
     const prayerName = 'Isha' as const;
     const bounds = getPrayerDeadlineBounds(PRAYERS, '2026-04-01', prayerName, 'Europe/London');
+    const start = bounds ? getPrayerZonedDateTimeParts(bounds.startsAt, 'Europe/London') : null;
+    const deadline = bounds ? getPrayerZonedDateTimeParts(bounds.deadlineAt, 'Europe/London') : null;
 
     expect(bounds?.deadlineName).toBe('Midnight');
-    expect(bounds?.startsAt.getDate()).toBe(1);
-    expect(bounds?.startsAt.getHours()).toBe(22);
-    expect(bounds?.startsAt.getMinutes()).toBe(0);
-    expect(bounds?.deadlineAt.getDate()).toBe(2);
-    expect(bounds?.deadlineAt.getHours()).toBe(0);
-    expect(bounds?.deadlineAt.getMinutes()).toBe(40);
+    expect(start).toMatchObject({ year: 2026, month: 4, day: 1, hour: 22, minute: 0 });
+    expect(deadline).toMatchObject({ year: 2026, month: 4, day: 2, hour: 0, minute: 40 });
   });
 
   it('treats exact deadline as late and the preceding millisecond as on time', () => {
@@ -353,10 +358,8 @@ describe('Jafari prayer deadline bounds', () => {
     const bounds = getPrayerDeadlineBounds(PRAYERS, '2026-03-29', 'Isha', 'Europe/London');
 
     expect(bounds?.date).toBe('2026-03-29');
-    expect(bounds?.startsAt.getFullYear()).toBe(2026);
-    expect(bounds?.startsAt.getMonth()).toBe(2);
-    expect(bounds?.startsAt.getDate()).toBe(29);
-    expect(bounds?.deadlineAt.getDate()).toBe(30);
+    expect(bounds && getPrayerZonedDate(bounds.startsAt, 'Europe/London')).toBe('2026-03-29');
+    expect(bounds && getPrayerZonedDate(bounds.deadlineAt, 'Europe/London')).toBe('2026-03-30');
   });
 
   it('converts a London deadline across spring-forward using real zoned instants', () => {

@@ -66,7 +66,7 @@ function installPrayerMock() {
     localTimezone: 'Europe/London',
     timezoneMatches: true,
     scheduleTimezoneValid: true,
-    now: new Date(2026, 7, 28, 20, 30, 0),
+    now: new Date('2026-08-28T19:30:00.000Z'),
     today: TODAY,
     tracking,
     scheduleDays: [],
@@ -195,7 +195,7 @@ describe('NightCompassDashboard focused component contract', () => {
 
     contextMocks.prayer = {
       ...contextMocks.prayer,
-      now: new Date(2026, 7, 28, 21, 30, 0),
+      now: new Date('2026-08-28T20:30:00.000Z'),
       nextPrayer: { prayer: PRAYERS[6], minutesUntil: 15 },
     };
     rerender(<NightCompassDashboard />);
@@ -208,7 +208,7 @@ describe('NightCompassDashboard focused component contract', () => {
   it("marks tomorrow's Fajr as Next without reusing today's completed outcome", () => {
     contextMocks.prayer = {
       ...contextMocks.prayer,
-      now: new Date(2026, 7, 28, 22, 0, 0),
+      now: new Date('2026-08-28T21:00:00.000Z'),
       nextPrayer: { prayer: PRAYERS[0], minutesUntil: 420 },
     };
     const { rerender } = render(<NightCompassDashboard />);
@@ -220,7 +220,7 @@ describe('NightCompassDashboard focused component contract', () => {
 
     contextMocks.prayer = {
       ...contextMocks.prayer,
-      now: new Date(2026, 7, 28, 23, 45, 0),
+      now: new Date('2026-08-28T22:45:00.000Z'),
       nextPrayer: { prayer: PRAYERS[0], minutesUntil: 315 },
     };
     rerender(<NightCompassDashboard />);
