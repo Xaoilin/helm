@@ -65,7 +65,8 @@ function installPrayerMock() {
     scheduleError: null,
     localTimezone: 'Europe/London',
     timezoneMatches: true,
-    now: new Date(2026, 7, 28, 20, 30, 0),
+    scheduleTimezoneValid: true,
+    now: new Date('2026-08-28T19:30:00.000Z'),
     today: TODAY,
     tracking,
     scheduleDays: [],
@@ -141,6 +142,51 @@ describe('NightCompassDashboard focused component contract', () => {
     );
   });
 
+  it('uses raw London schedule time at 12:54 even when the browser reports Berlin', () => {
+    const schedule = {
+      ...contextMocks.prayer.schedule,
+      prayers: PRAYERS.map(prayer => prayer.name === 'Dhuhr'
+        ? { ...prayer, time: '13:03' }
+        : prayer),
+      timezone: 'Europe/London',
+    };
+    contextMocks.prayer = {
+      ...contextMocks.prayer,
+      schedule,
+      localTimezone: 'Europe/Berlin',
+      timezoneMatches: false,
+      scheduleTimezoneValid: true,
+      now: new Date('2026-08-28T11:54:00.000Z'),
+      nextPrayer: { prayer: schedule.prayers[2], minutesUntil: 9 },
+    };
+
+    render(<NightCompassDashboard />);
+
+    const marker = document.querySelector('.nc-now-marker') as HTMLElement;
+    const position = Number.parseFloat(marker.style.getPropertyValue('--nc-marker-position'));
+    expect(position).toBeGreaterThan(0);
+    expect(position).toBeLessThan(25);
+    expect(screen.getByText(/Now · .* to Dhuhr/u)).toBeInTheDocument();
+    expect(screen.getByText('Next prayer')).toBeInTheDocument();
+    expect(screen.queryByText('Current prayer')).not.toBeInTheDocument();
+    expect(screen.queryByText('Prayer schedule needs attention')).not.toBeInTheDocument();
+    expect(screen.getByText('Bedford · Europe/London')).toBeInTheDocument();
+  });
+
+  it('keeps the pre-Fajr marker at the start of the prayer rail', () => {
+    contextMocks.prayer = {
+      ...contextMocks.prayer,
+      now: new Date('2026-08-28T02:30:00.000Z'),
+      nextPrayer: { prayer: PRAYERS[0], minutesUntil: 90 },
+    };
+
+    render(<NightCompassDashboard />);
+
+    const marker = document.querySelector('.nc-now-marker') as HTMLElement;
+    expect(Number.parseFloat(marker.style.getPropertyValue('--nc-marker-position'))).toBe(0);
+    expect(screen.getByText(/Now · .* to Fajr/u)).toBeInTheDocument();
+  });
+
   it('moves and grows the current-time marker as the next prayer approaches', () => {
     const { rerender } = render(<NightCompassDashboard />);
     const marker = () => document.querySelector('.nc-now-marker') as HTMLElement;
@@ -149,7 +195,7 @@ describe('NightCompassDashboard focused component contract', () => {
 
     contextMocks.prayer = {
       ...contextMocks.prayer,
-      now: new Date(2026, 7, 28, 21, 30, 0),
+      now: new Date('2026-08-28T20:30:00.000Z'),
       nextPrayer: { prayer: PRAYERS[6], minutesUntil: 15 },
     };
     rerender(<NightCompassDashboard />);
@@ -162,7 +208,7 @@ describe('NightCompassDashboard focused component contract', () => {
   it("marks tomorrow's Fajr as Next without reusing today's completed outcome", () => {
     contextMocks.prayer = {
       ...contextMocks.prayer,
-      now: new Date(2026, 7, 28, 22, 0, 0),
+      now: new Date('2026-08-28T21:00:00.000Z'),
       nextPrayer: { prayer: PRAYERS[0], minutesUntil: 420 },
     };
     const { rerender } = render(<NightCompassDashboard />);
@@ -174,7 +220,7 @@ describe('NightCompassDashboard focused component contract', () => {
 
     contextMocks.prayer = {
       ...contextMocks.prayer,
-      now: new Date(2026, 7, 28, 23, 45, 0),
+      now: new Date('2026-08-28T22:45:00.000Z'),
       nextPrayer: { prayer: PRAYERS[0], minutesUntil: 315 },
     };
     rerender(<NightCompassDashboard />);

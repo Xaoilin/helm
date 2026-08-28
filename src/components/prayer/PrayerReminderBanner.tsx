@@ -1,3 +1,4 @@
+import { formatPrayerInstantTime } from '../../services/prayerTimeZone';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 
 function formatRemaining(milliseconds: number): string {
@@ -13,10 +14,7 @@ export default function PrayerReminderBanner() {
   if (!reminder) return null;
 
   const names = reminder.prayerNames.join(' and ');
-  const deadlineClock = reminder.deadlineAt.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const deadlineClock = formatPrayerInstantTime(reminder.deadlineAt, reminder.timezone);
 
   return (
     <aside className="prayer-deadline-reminder" role="alert" aria-live="assertive">

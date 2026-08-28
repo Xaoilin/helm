@@ -13,6 +13,10 @@ import {
   getPrayerDeadlineBounds,
   getPrayerOutcome,
 } from './prayerTracking';
+import {
+  getPrayerZonedDateTimeParts,
+  prayerZonedDateTimeToInstant,
+} from './prayerTimeZone';
 
 export const NON_PRAYER_QUIET_HOURS = { startHour: 22, endHour: 8 } as const;
 
@@ -32,6 +36,7 @@ export interface BoundedReminderPlan {
 export interface BuildBoundedReminderPlanInput {
   prayerDate: string;
   schedule: readonly PrayerScheduleEntry[];
+  timeZone: string;
   tracking: PrayerTrackingState;
   momentum: DailyMomentumState;
   reminderMinutes: number;
@@ -41,22 +46,27 @@ function keyPart(value: Date): number {
   return value.getTime();
 }
 
-export function isNonPrayerQuietHour(value: Date): boolean {
-  const hour = value.getHours();
+export function isNonPrayerQuietHour(value: Date, timeZone: string): boolean {
+  const hour = getPrayerZonedDateTimeParts(value, timeZone)?.hour;
+  if (hour === undefined) return true;
   return hour >= NON_PRAYER_QUIET_HOURS.startHour || hour < NON_PRAYER_QUIET_HOURS.endHour;
 }
 
-function quietHoursStart(date: string): Date {
-  const [year, month, day] = date.split('-').map(Number);
-  return new Date(year, month - 1, day, NON_PRAYER_QUIET_HOURS.startHour, 0, 0, 0);
+function quietHoursStart(date: string, timeZone: string): Date | null {
+  return prayerZonedDateTimeToInstant(
+    date,
+    `${NON_PRAYER_QUIET_HOURS.startHour}:00`,
+    timeZone,
+  );
 }
 
 function prayerStart(
   schedule: readonly PrayerScheduleEntry[],
   prayerDate: string,
   prayerName: PrayerName,
+  timeZone: string,
 ): Date | null {
-  return getPrayerDeadlineBounds(schedule, prayerDate, prayerName)?.startsAt ?? null;
+  return getPrayerDeadlineBounds(schedule, prayerDate, prayerName, timeZone)?.startsAt ?? null;
 }
 
 function momentumReceiptKey(
@@ -75,16 +85,15 @@ function opportunityReceiptKey(date: string, prayerName: PrayerName, fireAt: Dat
 export function buildBoundedReminderPlan({
   prayerDate,
   schedule,
+  timeZone,
   tracking,
   momentum,
   reminderMinutes,
 }: BuildBoundedReminderPlanInput): BoundedReminderPlan[] {
   const plans: BoundedReminderPlan[] = [];
-  const deadlineGroups = new Map<number, { deadlineAt: Date; names: PrayerName[]; deadlineName: string }>();
-
   for (const prayerName of CANONICAL_PRAYER_NAMES) {
     if (getPrayerOutcome(tracking, prayerDate, prayerName)) continue;
-    const bounds = getPrayerDeadlineBounds(schedule, prayerDate, prayerName);
+    const bounds = getPrayerDeadlineBounds(schedule, prayerDate, prayerName, timeZone);
     if (!bounds) continue;
 
     plans.push({
@@ -103,30 +112,18 @@ export function buildBoundedReminderPlan({
       body: `The ${prayerName} prayer opportunity has begun.`,
     });
 
-    const deadlineKey = bounds.deadlineAt.getTime();
-    const existing = deadlineGroups.get(deadlineKey);
-    if (existing) existing.names.push(prayerName);
-    else deadlineGroups.set(deadlineKey, {
-      deadlineAt: bounds.deadlineAt,
-      names: [prayerName],
-      deadlineName: bounds.deadlineName,
-    });
-  }
-
-  for (const group of deadlineGroups.values()) {
-    const fireAt = new Date(group.deadlineAt.getTime() - reminderMinutes * 60_000);
-    const names = group.names.join(' and ');
+    const fireAt = new Date(bounds.deadlineAt.getTime() - reminderMinutes * 60_000);
     plans.push({
-      notificationKey: `bounded:v1:prayer-deadline:${prayerDate}:${keyPart(group.deadlineAt)}`,
-      receiptKeys: group.names.map(name => `prayer:${prayerDate}:${name}:${keyPart(group.deadlineAt)}`),
+      notificationKey: `bounded:v1:prayer-deadline:${prayerDate}:${prayerName}:${keyPart(bounds.deadlineAt)}`,
+      receiptKeys: [`prayer:${prayerDate}:${prayerName}:${keyPart(bounds.deadlineAt)}`],
       date: prayerDate,
       kind: 'prayer-deadline',
       fireAt,
-      expiresAt: group.deadlineAt,
-      prayerNames: [...group.names],
+      expiresAt: bounds.deadlineAt,
+      prayerNames: [prayerName],
       pillars: [],
-      title: `${names} prayer due soon`,
-      body: `Pray ${names} before ${group.deadlineName}.`,
+      title: `${prayerName} prayer due soon`,
+      body: `Pray ${prayerName} before ${bounds.deadlineName}.`,
     });
   }
 
@@ -137,18 +134,22 @@ export function buildBoundedReminderPlan({
     pillars: DailyPillar[];
     receiptKeys: string[];
   }>();
-  const quietStart = quietHoursStart(prayerDate);
+  const quietStart = quietHoursStart(prayerDate, timeZone);
+  if (!quietStart) return plans;
 
   for (const pillar of ['learn', 'move'] as const) {
     const preference = momentum.reminderPreferences[pillar];
     if (!preference.enabled || getDailyMomentumPillarDay(momentum, prayerDate, pillar).complete) continue;
     const anchors = preference.afterPrayers
-      .map(prayerName => ({ prayerName, fireAt: prayerStart(schedule, prayerDate, prayerName) }))
+      .map(prayerName => ({
+        prayerName,
+        fireAt: prayerStart(schedule, prayerDate, prayerName, timeZone),
+      }))
       .filter((anchor): anchor is { prayerName: PrayerName; fireAt: Date } => Boolean(anchor.fireAt))
       .sort((left, right) => left.fireAt.getTime() - right.fireAt.getTime());
 
     anchors.forEach((anchor, index) => {
-      if (isNonPrayerQuietHour(anchor.fireAt)) return;
+      if (isNonPrayerQuietHour(anchor.fireAt, timeZone)) return;
       const nextAnchor = anchors[index + 1]?.fireAt;
       const expiresAt = new Date(Math.min(
         nextAnchor?.getTime() ?? Number.POSITIVE_INFINITY,

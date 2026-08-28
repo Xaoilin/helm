@@ -24,14 +24,15 @@ Final on-time deadlines use the Jafari rules requested by the product:
 | Prayer | Final on-time deadline |
 | --- | --- |
 | Fajr | Sunrise |
-| Dhuhr | Sunset |
-| Asr | Sunset |
-| Maghrib | Jafari Midnight |
+| Dhuhr | Asr |
+| Asr | Maghrib |
+| Maghrib | Isha |
 | Isha | Jafari Midnight |
 
 The deadline is exclusive: completion before it is on time; completion at or after it is late. The UI uses the clock only to highlight the likely selection. The user's explicit On time or Late choice is authoritative.
 
 Sequential timetable windows drive the Dashboard's next-prayer orientation. A final deadline must not be reused as the active-prayer ranking window.
+The raw validated schedule timezone is the authoritative prayer clock. Night Compass converts the current instant into that zone, then compares its wall-clock minutes and seconds with the displayed prayer `HH:mm` values, including the before-Fajr interval and overnight interpolation to tomorrow's Fajr. A browser timezone override may differ and remains diagnostic only.
 
 ## State And Mutations
 
@@ -54,17 +55,17 @@ The provider refreshes on:
 - browser visibility resume;
 - explicit retry.
 
-Only a cache matching the current local date and selected location may be shown. If a usable timetable is unavailable, the UI says so and does not manufacture deadline state.
+Only a cache matching the current schedule-zone date and selected location may be shown. If a usable timetable is unavailable, the UI says so and does not manufacture deadline state.
 
-AlAdhan schedule validation requires all five prayers plus Sunrise, Sunset, and Midnight, valid 24-hour clock ranges, and a plausible daily ordering. Reminder scheduling, deadline inference, next-prayer comparison, and clock-suggested outcomes pause when the returned IANA timezone does not match the browser timezone; Debug and Settings expose the mismatch instead of guessing. Shared prayer history is blocked offline, and missing outcomes are never inferred without a trusted matching schedule.
+AlAdhan schedule validation requires all five prayers plus Sunrise, Sunset, and Midnight, valid 24-hour clock ranges, a plausible daily ordering, and a valid explicit IANA timezone. The supplied timezone is preserved rather than rewritten through browser `resolvedOptions()`. Deadline instants, page-open reminder timers, next/current prayer state, countdowns, temporal dots, Focus, and clock-suggested outcomes all use that schedule timezone. Missing or invalid timezones fail closed; a valid schedule/browser mismatch does not suppress prayer state. Shared prayer history is blocked offline, and missing outcomes are never inferred without a trusted schedule.
 
 ## Reminder Lifecycle
 
 Prayer opportunity and deadline reminders are enabled alongside prayer notifications by default. Settings supports 5, 10, 15, or 30 deadline-warning minutes, with 15 minutes as the default. Opportunity notices fire at the canonical prayer start and remain exempt from non-prayer quiet hours.
 
-Eligible prayers produce one global warning across every Sabah One surface. Dhuhr/Asr and Maghrib/Isha are grouped when they share a deadline. The banner offers completion and a single five-minute snooze; snooze is unavailable when five minutes or less remain. Completion removes the reminder immediately, while reaching the deadline closes it and materializes a Missed outcome when no completion exists.
+Eligible prayers produce one global warning per prayer across every Sabah One surface. Each prayer has its own deadline and reminder; prayer reminders are never grouped with another prayer. The banner offers completion and a single five-minute snooze; snooze is unavailable when five minutes or less remain. Completion removes the reminder immediately, while reaching the deadline closes it and materializes a Missed outcome when no completion exists.
 
-The same `PrayerProvider` builds the prayer-relative Learn and Move plan; there is no second scheduler. Learn defaults to Dhuhr, Maghrib, and Isha anchors, while Move defaults to Asr, Maghrib, and Isha. Account-owned preferences can disable a pillar or edit its allowed anchors without hiding the Dashboard pillar. Simultaneous Learn/Move prompts coalesce, each logical pillar/anchor keeps its own stable receipt, Level 1 completion cancels future prompts, and 22:00-08:00 quiet hours suppress non-prayer prompts only. Each logical reminder has a hard one-snooze bound.
+The same `PrayerProvider` builds the prayer-relative Learn and Move plan; there is no second scheduler. Learn defaults to Dhuhr, Maghrib, and Isha anchors, while Move defaults to Asr, Maghrib, and Isha. Account-owned preferences can disable a pillar or edit its allowed anchors without hiding the Dashboard pillar. Simultaneous Learn/Move prompts coalesce, each logical pillar/anchor keeps its own stable receipt, Level 1 completion cancels future prompts, and schedule-zone 22:00-08:00 quiet hours suppress non-prayer prompts only. Each logical reminder has a hard one-snooze bound.
 
 The browser page owns the in-page reminder timer. When the user grants permission, Web Notifications provide an additional browser notification while the page remains open. If permission is denied, unavailable, or delivery cannot be observed, the reminder stays visible in-app with a Settings repair action. Closing the page ends reminder observation; Sabah One does not promise background delivery after the page is closed.
 
@@ -82,13 +83,13 @@ The denominator includes only classified canonical opportunities: explicit On ti
 
 ## Diagnostics And Verification
 
-`Debug -> Prayer` shows schedule state and freshness, location and method, calculated deadlines, browser timezone, next reminder, suppression reason, notification permission, latest notification key, and last error. Its labelled test uses the same page timer to fire five seconds later; it never changes a prayer outcome, reminder receipt, or XP.
+`Debug -> Prayer` shows schedule state and freshness, location and method, the authoritative prayer clock basis, browser timezone and whether it differs, calculated deadlines, next reminder, suppression reason, notification permission, latest notification key, and last error. Its labelled test uses the same page timer to fire five seconds later; it never changes a prayer outcome, reminder receipt, or XP.
 
 Minimum focused coverage:
 
-- all five deadline mappings, exact boundary, cross-midnight Isha, local dates, and DST;
-- schedule validation, retry, stale/offline handling, and timezone mismatch;
+- all five deadline mappings, exact boundary, cross-midnight Isha, schedule-zone dates, London DST boundaries, and London/Berlin instant differences;
+- schedule validation, retry, stale/offline handling, valid browser mismatch behavior, and invalid/missing timezone fail-closed behavior;
 - activation migration, duplicate or recreated tasks, XP dedupe, correction, assistant clarification, and undo;
-- stacked percentage totals, reminder threshold, grouping, snooze, dedupe, cancellation, resume, rollover, and reduced motion;
+- stacked percentage totals, reminder threshold, independent reminder plans, snooze, dedupe, cancellation, resume, rollover, and reduced motion;
 - a deterministic Playwright timetable containing Sunrise, Sunset, and Midnight, with completion from a non-Dashboard reminder and reload verification;
 - browser notification permission, page-open delivery, denied-permission fallback, and the explicit limitation that a closed page is not observed.

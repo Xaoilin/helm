@@ -11,6 +11,7 @@ import {
 } from '../../services/prayerTracking';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import type { PrayerName, PrayerOutcomeStatus } from '../../types/domain';
+import { formatPrayerInstantTime } from '../../services/prayerTimeZone';
 
 interface PrayerTimesCardProps {
   prayerData: PrayerTimesData;
@@ -56,20 +57,25 @@ export default function PrayerTimesCard({ prayerData, nextPrayer, city }: Prayer
           }
 
           const prayerName = entry.name as PrayerName;
-          const bounds = prayer.timezoneMatches
-            ? getPrayerDeadlineBounds(prayerData.prayers, prayer.today, prayerName)
+          const bounds = prayer.scheduleTimezoneValid
+            ? getPrayerDeadlineBounds(
+                prayerData.prayers,
+                prayer.today,
+                prayerName,
+                prayerData.timezone,
+              )
             : null;
           const deadlineName = getPrayerDeadlineName(prayerName);
           const deadlineTime = prayerData.prayers.find(candidate => candidate.name === deadlineName)?.time;
           const record = prayer.getOutcome(prayer.today, prayerName);
-          const opportunityIsTracked = prayer.timezoneMatches && isPrayerOpportunityTracked(
+          const opportunityIsTracked = prayer.scheduleTimezoneValid && isPrayerOpportunityTracked(
             prayer.tracking,
-            { date: prayer.today, prayers: prayerData.prayers },
+            { date: prayer.today, timezone: prayerData.timezone, prayers: prayerData.prayers },
             prayerName,
             prayer.now,
           );
           const status: DisplayedPrayerStatus = record?.status
-            || (!prayer.timezoneMatches
+            || (!prayer.scheduleTimezoneValid
               ? 'pending'
               : !opportunityIsTracked
               ? 'not_tracked'
@@ -92,10 +98,7 @@ export default function PrayerTimesCard({ prayerData, nextPrayer, city }: Prayer
                 {(bounds || deadlineTime) && (
                   <span>
                     On time until {deadlineName} {bounds
-                      ? bounds.deadlineAt.toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
+                      ? formatPrayerInstantTime(bounds.deadlineAt, prayerData.timezone)
                       : deadlineTime}
                   </span>
                 )}

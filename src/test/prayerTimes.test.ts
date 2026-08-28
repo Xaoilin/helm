@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // @vitest-environment node
 import {
   fetchPrayerTimes,
+  getNextPrayer,
   getPrayerTimes,
+  isAdhanTime,
   type PrayerTimesData,
 } from '../services/prayerTimes';
 import { toLocalDateStr } from '../services/financeHelpers';
@@ -84,6 +86,28 @@ describe('prayer time schedule loading', () => {
     expect(schedule.source).toBe('network');
   });
 
+  it('finds next prayer and adhan from the schedule timezone instant', () => {
+    const prayers = cacheData('2026-08-28').prayers.map(prayer => (
+      prayer.name === 'Dhuhr' ? { ...prayer, time: '13:03' } : prayer
+    ));
+
+    expect(getNextPrayer(
+      prayers,
+      new Date('2026-08-28T11:54:00.000Z'),
+      'Europe/London',
+    )).toMatchObject({ prayer: { name: 'Dhuhr' }, minutesUntil: 9 });
+    expect(getNextPrayer(
+      prayers,
+      new Date('2026-08-28T11:54:00.000Z'),
+      'Europe/Berlin',
+    )?.prayer.name).toBe('Asr');
+    expect(isAdhanTime(
+      prayers,
+      new Date('2026-08-28T12:03:30.000Z'),
+      'Europe/London',
+    )?.name).toBe('Dhuhr');
+  });
+
   it('rejects a schedule that omits a required deadline', async () => {
     const response = apiResponse();
     const body = await response.json();
@@ -92,6 +116,17 @@ describe('prayer time schedule loading', () => {
 
     await expect(fetchPrayerTimes('Bedford', 'United Kingdom')).rejects.toThrow(
       'omitted required timings: Sunrise',
+    );
+  });
+
+  it.each(['', 'Not/A_Timezone'])('rejects a schedule with invalid timezone %j', async timezone => {
+    const response = apiResponse();
+    const body = await response.json();
+    body.data.meta.timezone = timezone;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200 })));
+
+    await expect(fetchPrayerTimes('Bedford', 'United Kingdom')).rejects.toThrow(
+      'invalid or missing timezone',
     );
   });
 
@@ -153,6 +188,16 @@ describe('prayer time schedule loading', () => {
     const today = toLocalDateStr(new Date());
     const cached = cacheData(today);
     cached.prayers = cached.prayers.filter(prayer => prayer.name !== 'Midnight');
+    localStorage.setItem('helm:prayer-times-cache', JSON.stringify(cached));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 400 })));
+
+    await expect(getPrayerTimes('Bedford', 'United Kingdom')).rejects.toThrow('400');
+  });
+
+  it('rejects a same-day cache with an invalid timezone', async () => {
+    const today = toLocalDateStr(new Date());
+    const cached = cacheData(today);
+    cached.timezone = 'Not/A_Timezone';
     localStorage.setItem('helm:prayer-times-cache', JSON.stringify(cached));
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 400 })));
 

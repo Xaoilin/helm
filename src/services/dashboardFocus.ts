@@ -7,7 +7,6 @@ import type {
   FocusFeedback,
   FocusRecommendation,
   GamificationProfile,
-  PrayerName,
   Project,
   Settings,
   Task,
@@ -34,10 +33,6 @@ const TASK_PRIORITY_SCORE = {
 
 const ACTIONABLE_BLOCKED_PATTERN = /\b(next|reply|email|call|draft|review|ship|schedule|prepare|follow up)\b/i;
 const PREP_PRESSURE_PATTERN = /\b(call|meeting|interview|review|sync|standup|demo|presentation|doctor|appointment|travel)\b/i;
-const PRAYER_RECOMMENDATION_PAIRS: Partial<Record<PrayerName, PrayerName>> = {
-  Dhuhr: 'Asr',
-  Maghrib: 'Isha',
-};
 
 interface ScoreSignal {
   label: string;
@@ -63,6 +58,7 @@ export interface DashboardFocusEngineInput {
   feedback: FocusFeedback[];
   now: Date;
   prayerTimes?: PrayerTime[];
+  prayerTimezone?: string;
 }
 
 export interface DashboardFocusBuildResult {
@@ -280,12 +276,20 @@ function getRecentProjectMomentum(tasks: Task[], now: Date): {
   };
 }
 
-function buildStats(tasks: Task[], todayStr: string, prayerTimes: PrayerTime[] | undefined, now: Date): DashboardFocusStats {
+function buildStats(
+  tasks: Task[],
+  todayStr: string,
+  prayerTimes: PrayerTime[] | undefined,
+  prayerTimezone: string | undefined,
+  now: Date,
+): DashboardFocusStats {
   const activeTasks = tasks.filter(task => task.category !== 'goal' && !task.completed);
   const overdueCount = activeTasks.filter(task => task.category === 'task' && Boolean(task.dueDate) && task.dueDate! < todayStr).length;
   const dueTodayCount = activeTasks.filter(task => task.category === 'task' && task.dueDate === todayStr).length;
   const routinesLeft = activeTasks.filter(task => task.category === 'daily').length;
-  const remainingPrayerNames = prayerTimes ? new Set(getRemainingPrayerNames(prayerTimes, now)) : null;
+  const remainingPrayerNames = prayerTimes && prayerTimezone
+    ? new Set(getRemainingPrayerNames(prayerTimes, now, prayerTimezone))
+    : null;
   const prayersLeft = activeTasks.filter(task => {
     if (!isPrayerTask(task)) return false;
     if (!remainingPrayerNames) return true;
@@ -300,19 +304,6 @@ function buildStats(tasks: Task[], todayStr: string, prayerTimes: PrayerTime[] |
     prayersLeft,
     activeTaskCount: activeTasks.length,
   };
-}
-
-function getPrayerRecommendationPair(prayerName: PrayerName, tasks: Task[]): PrayerName | null {
-  const pairedPrayerName = PRAYER_RECOMMENDATION_PAIRS[prayerName];
-  if (!pairedPrayerName) return null;
-
-  const hasPairedPrayerTask = tasks.some(task => (
-    !task.completed
-    && isPrayerTask(task)
-    && getPrayerTaskName(task) === pairedPrayerName
-  ));
-
-  return hasPairedPrayerTask ? pairedPrayerName : null;
 }
 
 function buildTaskCandidate(
@@ -337,45 +328,34 @@ function buildTaskCandidate(
       : 'No due date yet';
 
   if (isPrayerTask(task)) {
-    if (!input.prayerTimes) return null;
+    if (!input.prayerTimes || !input.prayerTimezone) return null;
 
     const prayerName = getPrayerTaskName(task);
-    const activePrayerWindow = getActivePrayerWindow(input.prayerTimes, now);
+    const activePrayerWindow = getActivePrayerWindow(input.prayerTimes, now, input.prayerTimezone);
     if (!prayerName || !activePrayerWindow || activePrayerWindow.prayerName !== prayerName) {
       return null;
     }
 
     const windowClosesAt = activePrayerWindow.endsAt.toLocaleTimeString([], {
+      timeZone: input.prayerTimezone,
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
     });
-    const pairedPrayerName = getPrayerRecommendationPair(prayerName, input.tasks);
-    const title = pairedPrayerName
-      ? `${prayerName} + ${pairedPrayerName} Prayers`
-      : task.title;
-    const localWhy = pairedPrayerName
-      ? `This is the ${prayerName} window, so treat ${prayerName} and ${pairedPrayerName} as a paired recommendation before ${windowClosesAt}.`
-      : 'This is the current prayer window, and earlier prayers have already dropped out.';
+    const title = task.title;
+    const localWhy = 'This is the current prayer window, and earlier prayers have already dropped out.';
 
     scoreSignals.push({ label: 'Current prayer window is open', value: 108 });
     scoreSignals.push({ label: 'Prayer order is time-locked', value: 28 });
     reasoningTags.add('prayer');
     reasoningTags.add('prayer_window');
 
-    if (pairedPrayerName) {
-      scoreSignals.push({ label: `${prayerName} and ${pairedPrayerName} belong together in this slot`, value: 34 });
-      reasoningTags.add('prayer_pair');
-    }
-
     if (activePrayerWindow.minutesRemaining <= 25) {
       scoreSignals.push({ label: `Prayer window closes in ${activePrayerWindow.minutesRemaining} min`, value: 24 });
       reasoningTags.add('window_ending');
     }
 
-    subtitle = pairedPrayerName
-      ? `Pray ${prayerName} and ${pairedPrayerName} together before ${windowClosesAt}`
-      : `Prayer window open until ${windowClosesAt}`;
+    subtitle = `Prayer window open until ${windowClosesAt}`;
 
     const dismissPenalty = dismissCounts.get(candidateId) || 0;
     if (dismissPenalty > 0) {
@@ -725,7 +705,13 @@ function buildFocusMessages(candidates: FocusCandidate[], now: Date) {
 
 export function buildDashboardFocusCandidates(input: DashboardFocusEngineInput): DashboardFocusBuildResult {
   const todayStr = toLocalDateStr(input.now);
-  const stats = buildStats(input.tasks, todayStr, input.prayerTimes, input.now);
+  const stats = buildStats(
+    input.tasks,
+    todayStr,
+    input.prayerTimes,
+    input.prayerTimezone,
+    input.now,
+  );
   const { dismissCounts, recentOpens, snoozedUntil, recent } = buildFeedbackMaps(input.feedback, input.now);
   const upcomingEvents = getVisibleUpcomingEvents(input.calendarSources, input.calendarEvents, input.now);
   const nextEvent = upcomingEvents[0];

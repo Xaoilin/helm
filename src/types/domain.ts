@@ -671,7 +671,7 @@ export interface PrayerCompletionUndoData {
   gamificationAfter: GamificationProfile;
 }
 
-export type PrayerDeadlineName = 'Sunrise' | 'Sunset' | 'Midnight';
+export type PrayerDeadlineName = 'Sunrise' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha' | 'Sunset' | 'Midnight';
 
 export interface PrayerDeadlineBounds {
   date: string; // local prayer date, not necessarily deadline calendar date
@@ -688,6 +688,7 @@ export interface PrayerScheduleEntry {
 
 export interface PrayerScheduleDay {
   date: string; // local YYYY-MM-DD
+  timezone: string; // validated IANA schedule timezone
   prayers: readonly PrayerScheduleEntry[];
 }
 

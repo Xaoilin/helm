@@ -1,10 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { getPrayerDeadlineBounds } from '../../services/prayerTracking';
+import { formatPrayerInstantTime } from '../../services/prayerTimeZone';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
-
-function formatClock(date: Date): string {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
 
 export default function PrayerCompletionDialog() {
   const prayer = usePrayerContext();
@@ -75,10 +72,14 @@ export default function PrayerCompletionDialog() {
         prayer.schedule.prayers,
         pending.prayerDate || prayer.today,
         pending.prayerName,
+        prayer.schedule.timezone,
       )
     : null;
   const deadlineCopy = bounds
-    ? `The on-time window ends at ${bounds.deadlineName} (${formatClock(bounds.deadlineAt)}).`
+    ? `The on-time window ends at ${bounds.deadlineName} (${formatPrayerInstantTime(
+        bounds.deadlineAt,
+        prayer.schedule?.timezone ?? '',
+      )}).`
     : 'The current schedule is unavailable, so choose the outcome you know is correct.';
 
   return (

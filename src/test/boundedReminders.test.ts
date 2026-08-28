@@ -30,6 +30,7 @@ function plan(schedule = SCHEDULE, momentum = createDefaultDailyMomentumState())
   return buildBoundedReminderPlan({
     prayerDate: DATE,
     schedule,
+    timeZone: 'Europe/London',
     tracking: createPrayerTrackingState(new Date(2026, 7, 28, 0, 0)),
     momentum,
     reminderMinutes: 15,
@@ -37,13 +38,20 @@ function plan(schedule = SCHEDULE, momentum = createDefaultDailyMomentumState())
 }
 
 describe('bounded reminder plan', () => {
-  it('adds one opportunity and one consolidated deadline warning per unresolved prayer window', () => {
+  it('adds independent opportunity and deadline warnings for every unresolved prayer', () => {
     const reminders = plan();
     expect(reminders.filter(item => item.kind === 'prayer-opportunity')).toHaveLength(5);
-    expect(reminders.filter(item => item.kind === 'prayer-deadline')).toEqual(expect.arrayContaining([
-      expect.objectContaining({ prayerNames: ['Dhuhr', 'Asr'] }),
-      expect.objectContaining({ prayerNames: ['Maghrib', 'Isha'] }),
+    const deadlines = reminders.filter(item => item.kind === 'prayer-deadline');
+    expect(deadlines).toHaveLength(5);
+    expect(deadlines.every(item => item.prayerNames.length === 1)).toBe(true);
+    expect(new Set(deadlines.map(item => item.prayerNames[0]))).toEqual(new Set([
+      'Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha',
     ]));
+    expect(deadlines.find(item => item.prayerNames[0] === 'Fajr')?.body).toBe('Pray Fajr before Sunrise.');
+    expect(deadlines.find(item => item.prayerNames[0] === 'Dhuhr')?.body).toBe('Pray Dhuhr before Asr.');
+    expect(deadlines.find(item => item.prayerNames[0] === 'Asr')?.body).toBe('Pray Asr before Maghrib.');
+    expect(deadlines.find(item => item.prayerNames[0] === 'Maghrib')?.body).toBe('Pray Maghrib before Isha.');
+    expect(deadlines.find(item => item.prayerNames[0] === 'Isha')?.body).toBe('Pray Isha before Midnight.');
   });
 
   it('uses the configured Learn/Move anchors and coalesces simultaneous prompts', () => {
@@ -63,10 +71,10 @@ describe('bounded reminder plan', () => {
     const reminders = plan(lateSchedule);
     expect(reminders.some(item => item.kind === 'momentum' && item.prayerNames[0] === 'Isha')).toBe(false);
     expect(reminders.some(item => item.kind === 'prayer-opportunity' && item.prayerNames[0] === 'Isha')).toBe(true);
-    expect(isNonPrayerQuietHour(new Date(2026, 7, 28, 7, 59))).toBe(true);
-    expect(isNonPrayerQuietHour(new Date(2026, 7, 28, 8, 0))).toBe(false);
-    expect(isNonPrayerQuietHour(new Date(2026, 7, 28, 21, 59))).toBe(false);
-    expect(isNonPrayerQuietHour(new Date(2026, 7, 28, 22, 0))).toBe(true);
+    expect(isNonPrayerQuietHour(new Date('2026-08-28T06:59:00.000Z'), 'Europe/London')).toBe(true);
+    expect(isNonPrayerQuietHour(new Date('2026-08-28T07:00:00.000Z'), 'Europe/London')).toBe(false);
+    expect(isNonPrayerQuietHour(new Date('2026-08-28T20:59:00.000Z'), 'Europe/London')).toBe(false);
+    expect(isNonPrayerQuietHour(new Date('2026-08-28T21:00:00.000Z'), 'Europe/London')).toBe(true);
   });
 
   it('keeps an active Prayer opportunity dominant over a later momentum prompt', () => {
@@ -75,7 +83,7 @@ describe('bounded reminder plan', () => {
       item.kind === 'prayer-opportunity' && item.prayerNames[0] === 'Asr'
     ))!;
     const asrMove = reminders.find(item => item.kind === 'momentum' && item.prayerNames[0] === 'Asr')!;
-    const now = new Date(2026, 7, 28, 16, 31);
+    const now = new Date('2026-08-28T15:31:00.000Z');
 
     expect(getActiveBoundedReminder([asrPrayer, asrMove], {}, now)).toBe(asrPrayer);
   });
@@ -98,12 +106,23 @@ describe('bounded reminder plan', () => {
     const reminders = buildBoundedReminderPlan({
       prayerDate: DATE,
       schedule: SCHEDULE,
+      timeZone: 'Europe/London',
       tracking,
       momentum: completedMomentum,
       reminderMinutes: 15,
     });
     expect(reminders.some(item => item.pillars.includes('learn'))).toBe(false);
     expect(reminders.some(item => item.prayerNames.includes('Dhuhr'))).toBe(false);
+  });
+
+  it('schedules summer deadline reminders from London wall time, not Berlin wall time', () => {
+    const reminders = plan();
+    const dhuhrDeadline = reminders.find(item => (
+      item.kind === 'prayer-deadline' && item.prayerNames[0] === 'Dhuhr'
+    ));
+
+    expect(dhuhrDeadline?.expiresAt.toISOString()).toBe('2026-08-28T15:30:00.000Z');
+    expect(dhuhrDeadline?.fireAt.toISOString()).toBe('2026-08-28T15:15:00.000Z');
   });
 
   it('persists stable attempt receipts across reconciliation and enforces one snooze', () => {

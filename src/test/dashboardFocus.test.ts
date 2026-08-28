@@ -138,7 +138,7 @@ describe('dashboardFocus', () => {
     });
   });
 
-  it('recommends Dhuhr and Asr together during the Dhuhr window and drops expired prayers', () => {
+  it('recommends only Dhuhr during the Dhuhr window and drops expired prayers', () => {
     const result = buildDashboardFocusCandidates({
       tasks: [
         makeTask({
@@ -183,22 +183,23 @@ describe('dashboardFocus', () => {
       feedback: [],
       now: new Date('2026-04-16T13:20:00.000Z'),
       prayerTimes: makePrayerTimes(),
+      prayerTimezone: 'Europe/London',
     });
 
     expect(result.candidates[0]).toEqual(expect.objectContaining({
       id: 'prayer:prayer-dhuhr',
       kind: 'prayer',
-      title: 'Dhuhr + Asr Prayers',
-      subtitle: expect.stringMatching(/^Pray Dhuhr and Asr together before 4:30 p\.?m\.?$/i),
+      title: 'Dhuhr Prayer',
+      subtitle: expect.stringMatching(/^Prayer window open until 4:30 p\.?m\.?$/i),
     }));
-    expect(result.candidates[0].localWhy).toContain('Dhuhr and Asr belong together');
-    expect(result.candidates[0].reasoningTags).toContain('prayer_pair');
+    expect(result.candidates[0].localWhy).not.toMatch(/Asr/u);
+    expect(result.candidates[0].reasoningTags).not.toContain('prayer_pair');
     expect(result.candidates.some(candidate => candidate.id === 'prayer:prayer-fajr')).toBe(false);
     expect(result.candidates.some(candidate => candidate.id === 'prayer:prayer-asr')).toBe(false);
     expect(result.stats.prayersLeft).toBe(2);
   });
 
-  it('falls back to Asr alone once the Dhuhr window has passed', () => {
+  it('recommends only Asr once the Dhuhr window has passed', () => {
     const result = buildDashboardFocusCandidates({
       tasks: [
         makeTask({
@@ -234,18 +235,19 @@ describe('dashboardFocus', () => {
       feedback: [],
       now: new Date('2026-04-16T17:05:00.000Z'),
       prayerTimes: makePrayerTimes(),
+      prayerTimezone: 'Europe/London',
     });
 
     expect(result.candidates[0]).toEqual(expect.objectContaining({
       id: 'prayer:prayer-asr',
       kind: 'prayer',
       title: 'Asr Prayer',
-      subtitle: expect.stringMatching(/^Prayer window open until 8:05 p\.?m\.?$/i),
+      subtitle: expect.stringMatching(/^Prayer window open until 8:15 p\.?m\.?$/i),
     }));
     expect(result.candidates[0].reasoningTags).not.toContain('prayer_pair');
   });
 
-  it('recommends Maghrib and Isha together during the Maghrib window', () => {
+  it('recommends only Maghrib during the Maghrib window', () => {
     const result = buildDashboardFocusCandidates({
       tasks: [
         makeTask({
@@ -281,16 +283,17 @@ describe('dashboardFocus', () => {
       feedback: [],
       now: new Date('2026-04-16T20:20:00.000Z'),
       prayerTimes: makePrayerTimes(),
+      prayerTimezone: 'Europe/London',
     });
 
     expect(result.candidates[0]).toEqual(expect.objectContaining({
       id: 'prayer:prayer-maghrib',
       kind: 'prayer',
-      title: 'Maghrib + Isha Prayers',
-      subtitle: expect.stringMatching(/^Pray Maghrib and Isha together before 9:45 p\.?m\.?$/i),
+      title: 'Maghrib Prayer',
+      subtitle: expect.stringMatching(/^Prayer window open until 9:45 p\.?m\.?$/i),
     }));
-    expect(result.candidates[0].localWhy).toContain('Maghrib and Isha belong together');
-    expect(result.candidates[0].reasoningTags).toContain('prayer_pair');
+    expect(result.candidates[0].localWhy).not.toMatch(/Isha/u);
+    expect(result.candidates[0].reasoningTags).not.toContain('prayer_pair');
   });
 
   it('creates a meeting prep candidate when a visible event starts within 15 minutes', () => {

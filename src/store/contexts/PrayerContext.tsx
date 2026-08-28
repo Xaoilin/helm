@@ -32,6 +32,12 @@ import {
 } from '../../services/gamification';
 import { toLocalDateStr } from '../../services/financeHelpers';
 import {
+  formatPrayerInstantTime,
+  getPrayerZonedDate,
+  shiftPrayerDate,
+  validatePrayerTimeZone,
+} from '../../services/prayerTimeZone';
+import {
   CANONICAL_PRAYER_NAMES,
   calculatePrayerOutcomeStats,
   capturePrayerActivationDayEligibility,
@@ -110,6 +116,7 @@ export interface PrayerReminderGroup {
   deadlineAt: Date;
   minutesRemaining: number;
   canSnooze: boolean;
+  timezone: string;
 }
 
 interface ScheduledReminderGroup {
@@ -135,6 +142,7 @@ export interface PrayerDiagnostics {
   scheduleTimezone: string | null;
   localTimezone: string;
   timezoneMatches: boolean;
+  scheduleTimezoneValid: boolean;
   nextReminderAt: string | null;
   suppressionReason: string | null;
   permissionState: PrayerReminderPermissionState;
@@ -158,6 +166,7 @@ interface PrayerContextValue {
   today: string;
   localTimezone: string;
   timezoneMatches: boolean;
+  scheduleTimezoneValid: boolean;
   scheduleDays: PrayerScheduleDay[];
   stats: PrayerOutcomeStats;
   deadlines: Record<PrayerName, PrayerDeadlineBounds | null>;
@@ -197,17 +206,6 @@ interface PrayerContextValue {
 
 const PrayerCtx = createContext<PrayerContextValue | null>(null);
 
-function parseLocalDate(date: string): Date {
-  const [year, month, day] = date.split('-').map(Number);
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
-}
-
-function shiftLocalDate(date: string, days: number): string {
-  const shifted = parseLocalDate(date);
-  shifted.setDate(shifted.getDate() + days);
-  return toLocalDateStr(shifted);
-}
-
 function buildScheduleDays(
   schedule: PrayerTimesData | null,
   trackingStartedAt: string,
@@ -222,22 +220,20 @@ function buildScheduleDays(
 
   const prayers = schedule.prayers.map(({ name, time }) => ({ name, time }));
   const days: PrayerScheduleDay[] = [];
-  const cursor = parseLocalDate(firstDate);
-  const end = parseLocalDate(today);
-  while (cursor <= end) {
-    days.push({ date: toLocalDateStr(cursor), prayers });
-    cursor.setDate(cursor.getDate() + 1);
+  let cursor = firstDate;
+  while (cursor <= today) {
+    days.push({ date: cursor, timezone: schedule.timezone, prayers });
+    const next = shiftPrayerDate(cursor, 1);
+    if (!next) return [];
+    cursor = next;
   }
   return days;
 }
 
-function canonicalizeTimezone(timezone: string): string {
-  if (!timezone) return '';
-  try {
-    return new Intl.DateTimeFormat('en-GB', { timeZone: timezone }).resolvedOptions().timeZone;
-  } catch {
-    return timezone;
-  }
+export function canonicalizeTimezone(timezone: string): string {
+  // Validate the explicit zone without asking a potentially overridden Intl
+  // implementation to rewrite it through resolvedOptions().
+  return validatePrayerTimeZone(timezone);
 }
 
 function getMatchingPrayerTasks(tasks: Task[], prayerName: PrayerName): Task[] {
@@ -252,8 +248,9 @@ function getReminderGroups(
   reminderMinutes: number,
 ): Array<PrayerReminderGroup & { fireAt: Date }> {
   const scheduleByDate = new Map(schedules.map(schedule => [schedule.date, schedule]));
-  const candidates = [shiftLocalDate(today, -1), today];
-  const grouped = new Map<string, PrayerReminderGroup & { fireAt: Date }>();
+  const previousDate = shiftPrayerDate(today, -1);
+  const candidates = previousDate ? [previousDate, today] : [today];
+  const reminders: Array<PrayerReminderGroup & { fireAt: Date }> = [];
 
   for (const prayerDate of candidates) {
     const schedule = scheduleByDate.get(prayerDate);
@@ -264,19 +261,17 @@ function getReminderGroups(
       const outcome = getPrayerOutcome(tracking, prayerDate, prayerName);
       if (outcome) continue;
 
-      const bounds = getPrayerDeadlineBounds(scheduleEntries, prayerDate, prayerName);
+      const bounds = getPrayerDeadlineBounds(
+        scheduleEntries,
+        prayerDate,
+        prayerName,
+        schedule.timezone,
+      );
       if (!bounds || now >= bounds.deadlineAt) continue;
 
       const fireAt = new Date(bounds.deadlineAt.getTime() - reminderMinutes * 60_000);
-      const key = `${prayerDate}:${bounds.deadlineAt.toISOString()}`;
-      const existing = grouped.get(key);
-      if (existing) {
-        existing.prayerNames.push(prayerName);
-        continue;
-      }
-
       const minutesRemaining = Math.max(0, (bounds.deadlineAt.getTime() - now.getTime()) / 60_000);
-      grouped.set(key, {
+      reminders.push({
         prayerDate,
         prayerNames: [prayerName],
         deadlineName: bounds.deadlineName,
@@ -284,11 +279,12 @@ function getReminderGroups(
         fireAt,
         minutesRemaining,
         canSnooze: minutesRemaining > PRAYER_REMINDERS.SNOOZE_CUTOFF_MINUTES,
+        timezone: schedule.timezone,
       });
     }
   }
 
-  return [...grouped.values()].sort((left, right) => left.deadlineAt.getTime() - right.deadlineAt.getTime());
+  return reminders.sort((left, right) => left.deadlineAt.getTime() - right.deadlineAt.getTime());
 }
 
 function buildScheduledReminderGroup(
@@ -304,7 +300,7 @@ function buildScheduledReminderGroup(
   const leader = prayerNames[0];
   const deadlineIso = group.deadlineAt.toISOString();
   const fireAtIso = group.fireAt.toISOString();
-  const groupKey = `${group.prayerDate}:${group.deadlineAt.getTime()}`;
+  const groupKey = `${group.prayerDate}:${leader}:${group.deadlineAt.getTime()}`;
   const reminderKey = getBrowserReminderKey({
     prayerDate: group.prayerDate,
     prayerName: leader,
@@ -312,10 +308,10 @@ function buildScheduledReminderGroup(
   });
   const names = prayerNames.join(' and ');
   const title = `${names} prayer due soon`;
-  const body = `Pray ${names} before ${group.deadlineName} at ${group.deadlineAt.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  })}.`;
+  const body = `Pray ${names} before ${group.deadlineName} at ${formatPrayerInstantTime(
+    group.deadlineAt,
+    group.timezone,
+  )}.`;
 
   return {
     groupKey,
@@ -497,7 +493,6 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     refreshSequenceRef.current += 1;
   }, []);
 
-  const today = toLocalDateStr(now);
   const prayerEnabled = settingsCtx.settings.prayerEnabled !== false;
   const reminderEnabled = settingsCtx.settings.prayerReminderEnabled !== false;
   const reminderMinutes = settingsCtx.settings.prayerReminderMinutes ?? PRAYER_REMINDERS.DEFAULT_MINUTES;
@@ -505,15 +500,21 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const country = settingsCtx.settings.prayerCountry || 'United Kingdom';
   const localTimezone = canonicalizeTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const scheduleTimezone = canonicalizeTimezone(schedule?.timezone || '');
+  const scheduleTimezoneValid = Boolean(scheduleTimezone);
   const timezoneMatches = Boolean(scheduleTimezone && localTimezone && scheduleTimezone === localTimezone);
+  const today = scheduleTimezone
+    ? getPrayerZonedDate(now, scheduleTimezone) ?? toLocalDateStr(now)
+    : toLocalDateStr(now);
   const reminderScheduleList = useMemo(
     () => Object.values(reminderSchedules),
     [reminderSchedules],
   );
-  const reminderTimezonesMatch = reminderScheduleList.length > 0
-    && reminderScheduleList.every(candidate =>
-      canonicalizeTimezone(candidate.timezone || '') === localTimezone
-    );
+  const reminderTimezonesValid = reminderScheduleList.length > 0
+    && reminderScheduleList.every(candidate => Boolean(canonicalizeTimezone(candidate.timezone || '')));
+
+  useEffect(() => {
+    todayRef.current = today;
+  }, [today]);
 
   useEffect(() => {
     trackingRef.current = tracking;
@@ -586,14 +587,19 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     try {
       const data = await getPrayerTimes(city, country, { forceRefresh });
       if (sequence !== refreshSequenceRef.current) return;
-      if (data.date !== toLocalDateStr(new Date())) {
-        throw new Error(`Prayer schedule is for ${data.date}, not the current local date.`);
+      const timezone = canonicalizeTimezone(data.timezone);
+      const currentPrayerDate = timezone ? getPrayerZonedDate(new Date(), timezone) : null;
+      if (!timezone || !currentPrayerDate) {
+        throw new Error('Prayer schedule timezone is invalid or missing.');
+      }
+      if (data.date !== currentPrayerDate) {
+        throw new Error(`Prayer schedule is for ${data.date}, not the current schedule date.`);
       }
       setSchedule(data);
       setReminderSchedules(current => {
-        const previousDate = shiftLocalDate(data.date, -1);
+        const previousDate = shiftPrayerDate(data.date, -1);
         return {
-          ...(current[previousDate] ? { [previousDate]: current[previousDate] } : {}),
+          ...(previousDate && current[previousDate] ? { [previousDate]: current[previousDate] } : {}),
           [data.date]: data,
         };
       });
@@ -624,7 +630,9 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const tick = () => {
       const nextNow = new Date();
-      const nextToday = toLocalDateStr(nextNow);
+      const nextToday = scheduleTimezone
+        ? getPrayerZonedDate(nextNow, scheduleTimezone) ?? toLocalDateStr(nextNow)
+        : toLocalDateStr(nextNow);
       setNow(nextNow);
       if (todayRef.current !== nextToday) {
         todayRef.current = nextToday;
@@ -634,7 +642,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     };
     const interval = window.setInterval(tick, PRAYER_REMINDERS.RUNTIME_TICK_MS);
     return () => window.clearInterval(interval);
-  }, [refreshSchedule]);
+  }, [refreshSchedule, scheduleTimezone]);
 
   useEffect(() => {
     const resume = () => {
@@ -658,19 +666,20 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!loaded || !schedule || !timezoneMatches) return;
+    if (!loaded || !schedule || !scheduleTimezoneValid) return;
     commitTracking(current => {
       if (current.activationDayEligibility) return current;
       return capturePrayerActivationDayEligibility(current, {
         date: schedule.date,
+        timezone: schedule.timezone,
         prayers: schedule.prayers,
       });
     });
-  }, [commitTracking, loaded, schedule, timezoneMatches]);
+  }, [commitTracking, loaded, schedule, scheduleTimezoneValid]);
 
   const scheduleDays = useMemo(
-    () => buildScheduleDays(timezoneMatches ? schedule : null, tracking.trackingStartedAt, today),
-    [schedule, timezoneMatches, today, tracking.trackingStartedAt],
+    () => buildScheduleDays(scheduleTimezoneValid ? schedule : null, tracking.trackingStartedAt, today),
+    [schedule, scheduleTimezoneValid, today, tracking.trackingStartedAt],
   );
   const stats = useMemo(
     () => calculatePrayerOutcomeStats(tracking, scheduleDays, now),
@@ -679,28 +688,37 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const deadlines = useMemo(() => Object.fromEntries(
     CANONICAL_PRAYER_NAMES.map(prayerName => [
       prayerName,
-      schedule && timezoneMatches
-        ? getPrayerDeadlineBounds(schedule.prayers, today, prayerName)
+      schedule && scheduleTimezoneValid
+        ? getPrayerDeadlineBounds(schedule.prayers, today, prayerName, schedule.timezone)
         : null,
     ]),
-  ) as Record<PrayerName, PrayerDeadlineBounds | null>, [schedule, timezoneMatches, today]);
-  const nextPrayer = schedule && timezoneMatches ? getNextPrayer(schedule.prayers) : null;
+  ) as Record<PrayerName, PrayerDeadlineBounds | null>, [schedule, scheduleTimezoneValid, today]);
+  const nextPrayer = schedule && scheduleTimezoneValid
+    ? getNextPrayer(schedule.prayers, now, schedule.timezone)
+    : null;
 
   useEffect(() => {
-    if (!loaded || !reminderTimezonesMatch) return;
+    if (!loaded || !reminderTimezonesValid) return;
     let next = tracking;
     let changed = false;
 
-    for (const prayerDate of [shiftLocalDate(today, -1), today]) {
+    const previousDate = shiftPrayerDate(today, -1);
+    for (const prayerDate of previousDate ? [previousDate, today] : [today]) {
       const daySchedule = reminderSchedules[prayerDate];
       if (!daySchedule) continue;
       const scheduleDay = {
         date: prayerDate,
+        timezone: daySchedule.timezone,
         prayers: daySchedule.prayers,
       };
       for (const prayerName of CANONICAL_PRAYER_NAMES) {
         if (getPrayerOutcome(next, prayerDate, prayerName)) continue;
-        const bounds = getPrayerDeadlineBounds(daySchedule.prayers, prayerDate, prayerName);
+        const bounds = getPrayerDeadlineBounds(
+          daySchedule.prayers,
+          prayerDate,
+          prayerName,
+          daySchedule.timezone,
+        );
         if (
           !bounds
           || !isPrayerOpportunityTracked(next, scheduleDay, prayerName, now)
@@ -718,7 +736,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     }
 
     if (changed) commitTracking(next);
-  }, [commitTracking, loaded, now, reminderSchedules, reminderTimezonesMatch, today, tracking]);
+  }, [commitTracking, loaded, now, reminderSchedules, reminderTimezonesValid, today, tracking]);
 
   const cancelScheduledReminderForPrayer = useCallback((
     prayerDate: string,
@@ -945,9 +963,9 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
       source: 'system',
     },
   ) => {
-    const prayerDate = options.prayerDate || toLocalDateStr(new Date());
-    const bounds = schedule && timezoneMatches
-      ? getPrayerDeadlineBounds(schedule.prayers, prayerDate, prayerName)
+    const prayerDate = options.prayerDate || today;
+    const bounds = schedule && scheduleTimezoneValid
+      ? getPrayerDeadlineBounds(schedule.prayers, prayerDate, prayerName, schedule.timezone)
       : null;
     const suggestedStatus = bounds
       ? getPrayerCompletionStatusAt(bounds.deadlineAt, new Date())
@@ -958,7 +976,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
       prayerName,
       suggestedStatus,
     });
-  }, [schedule, timezoneMatches]);
+  }, [schedule, scheduleTimezoneValid, today]);
 
   const cancelPrayerCompletion = useCallback(() => {
     setPendingCompletion(null);
@@ -1079,7 +1097,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   );
 
   const activeReminder = useMemo(() => {
-    if (!prayerEnabled || !reminderEnabled || !reminderTimezonesMatch) return null;
+    if (!prayerEnabled || !reminderEnabled || !reminderTimezonesValid) return null;
     const active = reminderGroups.find(group => {
       if (now < group.fireAt || now >= group.deadlineAt) return false;
       return group.prayerNames.some(prayerName => {
@@ -1099,15 +1117,16 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     prayerEnabled,
     reminderEnabled,
     reminderGroups,
-    reminderTimezonesMatch,
+    reminderTimezonesValid,
     tracking.reminderReceipts,
   ]);
 
   const boundedReminderPlans = useMemo(() => {
-    if (!prayerEnabled || !schedule || !timezoneMatches || !momentumCtx.loaded) return [];
+    if (!prayerEnabled || !schedule || !scheduleTimezoneValid || !momentumCtx.loaded) return [];
     return buildBoundedReminderPlan({
       prayerDate: today,
       schedule: schedule.prayers,
+      timeZone: schedule.timezone,
       tracking,
       momentum: momentumCtx.state,
       reminderMinutes,
@@ -1119,7 +1138,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     reminderEnabled,
     reminderMinutes,
     schedule,
-    timezoneMatches,
+    scheduleTimezoneValid,
     today,
     tracking,
   ]);
@@ -1275,7 +1294,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
       && prayerEnabled
       && reminderEnabled
       && reminderListenerReady
-      && reminderTimezonesMatch;
+      && reminderTimezonesValid;
     const desired = new Map<string, ScheduledReminderGroup>();
     if (enabled) {
       for (const group of reminderGroups) {
@@ -1381,7 +1400,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     reminderEnabled,
     reminderListenerReady,
     reminderGroups,
-    reminderTimezonesMatch,
+    reminderTimezonesValid,
     tracking,
   ]);
 
@@ -1426,7 +1445,9 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     const deadline = new Date(reference.getTime() + PRAYER_REMINDERS.TEST_DEADLINE_MS);
     try {
       const result = await schedulePrayerReminder({
-        prayerDate: toLocalDateStr(reference),
+        prayerDate: scheduleTimezone
+          ? getPrayerZonedDate(reference, scheduleTimezone) ?? toLocalDateStr(reference)
+          : toLocalDateStr(reference),
         prayerName,
         deadlineIso: deadline.toISOString(),
         fireAtIso: fireAt.toISOString(),
@@ -1442,17 +1463,17 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
       logError('PrayerReminderTest', error);
       return false;
     }
-  }, []);
+  }, [scheduleTimezone]);
 
   useEffect(() => {
-    if (!prayerEnabled || !schedule || !timezoneMatches) return;
-    const adhan = isAdhanTime(schedule.prayers);
+    if (!prayerEnabled || !schedule || !scheduleTimezoneValid) return;
+    const adhan = isAdhanTime(schedule.prayers, now, schedule.timezone);
     if (!adhan) return;
     const key = `${today}:${adhan.name}`;
     if (shownAdhanKeysRef.current.has(key)) return;
     shownAdhanKeysRef.current.add(key);
     setAdhanPrayer(adhan);
-  }, [now, prayerEnabled, schedule, timezoneMatches, today]);
+  }, [now, prayerEnabled, schedule, scheduleTimezoneValid, today]);
 
   const dismissAdhan = useCallback(() => setAdhanPrayer(null), []);
 
@@ -1465,9 +1486,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
         ? 'No matching current-day prayer schedule is available.'
         : !scheduleTimezone
           ? 'The schedule timezone could not be verified.'
-          : !timezoneMatches
-            ? `Schedule timezone ${scheduleTimezone} does not match local browser timezone ${localTimezone}.`
-            : reminderGroups.length === 0
+          : reminderGroups.length === 0
               ? 'No incomplete prayer is currently eligible.'
               : null;
   const diagnostics = useMemo<PrayerDiagnostics>(() => ({
@@ -1480,6 +1499,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     scheduleTimezone: scheduleTimezone || null,
     localTimezone,
     timezoneMatches,
+    scheduleTimezoneValid,
     nextReminderAt: nextReminderGroup?.fireAt.toISOString() || null,
     suppressionReason,
     permissionState,
@@ -1497,6 +1517,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     scheduleError,
     scheduleStatus,
     scheduleTimezone,
+    scheduleTimezoneValid,
     suppressionReason,
     timezoneMatches,
   ]);
@@ -1511,6 +1532,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     today,
     localTimezone,
     timezoneMatches,
+    scheduleTimezoneValid,
     scheduleDays,
     stats,
     deadlines,
@@ -1566,6 +1588,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     stats,
     testReminder,
     timezoneMatches,
+    scheduleTimezoneValid,
     today,
     tracking,
     undoPrayerCompletion,
