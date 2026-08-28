@@ -22,7 +22,7 @@ const {
   speakMock,
   stopSpeakingMock,
   playReadyToneMock,
-  processAssistantCommandMock,
+  runAssistantTurnMock,
 } = vi.hoisted(() => ({
   startListeningMock: vi.fn(),
   stopListeningMock: vi.fn(),
@@ -30,7 +30,7 @@ const {
   speakMock: vi.fn().mockResolvedValue(undefined),
   stopSpeakingMock: vi.fn(),
   playReadyToneMock: vi.fn().mockResolvedValue(undefined),
-  processAssistantCommandMock: vi.fn(),
+  runAssistantTurnMock: vi.fn(),
 }));
 
 vi.mock('../hooks/useVoiceInput', () => ({
@@ -79,8 +79,8 @@ vi.mock('../services/voiceAssistant', () => ({
   playReadyTone: playReadyToneMock,
 }));
 
-vi.mock('../services/assistantRuntime', () => ({
-  processAssistantCommand: (...args: unknown[]) => processAssistantCommandMock(...args),
+vi.mock('../assistant/runtime', () => ({
+  runAssistantTurn: (...args: unknown[]) => runAssistantTurnMock(...args),
 }));
 
 vi.mock('../store/persistence', async importOriginal => {
@@ -162,7 +162,7 @@ describe('VoiceAssistant', () => {
     speakMock.mockReset().mockResolvedValue(undefined);
     stopSpeakingMock.mockReset();
     playReadyToneMock.mockReset().mockResolvedValue(undefined);
-    processAssistantCommandMock.mockReset();
+    runAssistantTurnMock.mockReset();
   });
 
   afterEach(() => {
@@ -231,7 +231,7 @@ describe('VoiceAssistant', () => {
 
   it('reopens in preparing first and then listening for a spoken follow-up', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    processAssistantCommandMock.mockResolvedValue(createAssistantResult('You have one task left today.'));
+    runAssistantTurnMock.mockResolvedValue(createAssistantResult('You have one task left today.'));
 
     await act(async () => {
       renderAssistant();
@@ -255,10 +255,10 @@ describe('VoiceAssistant', () => {
     });
 
     await waitFor(() => {
-      expect(processAssistantCommandMock).toHaveBeenCalledTimes(1);
+      expect(runAssistantTurnMock).toHaveBeenCalledTimes(1);
       expect(speakMock).toHaveBeenCalledWith('You have one task left today.');
     });
-    expect(processAssistantCommandMock).toHaveBeenCalledWith(
+    expect(runAssistantTurnMock).toHaveBeenCalledWith(
       'what do I have left today?',
       expect.anything(),
       expect.objectContaining({
@@ -298,7 +298,7 @@ describe('VoiceAssistant', () => {
       recentPlans: [],
     } as const;
 
-    processAssistantCommandMock
+    runAssistantTurnMock
       .mockResolvedValueOnce({
         ...createAssistantResult('Added "Put the mirror up in the office" to your tasks.'),
         dialogState: firstDialogState,
@@ -329,7 +329,7 @@ describe('VoiceAssistant', () => {
       await Promise.resolve();
     });
 
-    expect(processAssistantCommandMock).toHaveBeenNthCalledWith(
+    expect(runAssistantTurnMock).toHaveBeenNthCalledWith(
       2,
       'show me that task',
       expect.anything(),
@@ -373,7 +373,7 @@ describe('VoiceAssistant', () => {
     speakMock.mockImplementationOnce(() => new Promise<void>(resolve => {
       resolveSpeech = resolve;
     }));
-    processAssistantCommandMock.mockResolvedValue(
+    runAssistantTurnMock.mockResolvedValue(
       createAssistantResult('Deferred spoken answer.'),
     );
 
@@ -517,7 +517,7 @@ describe('VoiceAssistant', () => {
 
   it('creates a fresh chat conversation for each wake-word session', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    processAssistantCommandMock
+    runAssistantTurnMock
       .mockResolvedValueOnce(createAssistantResult('First answer.'))
       .mockResolvedValueOnce(createAssistantResult('Second answer.'));
 
@@ -588,7 +588,7 @@ describe('VoiceAssistant', () => {
 
   it('stores assistant billing metadata on voice-created conversation turns', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    processAssistantCommandMock.mockResolvedValue(createAssistantResult('Hosted answer.', {
+    runAssistantTurnMock.mockResolvedValue(createAssistantResult('Hosted answer.', {
       source: 'openai',
       planningSource: 'openai',
       planningStatus: 'planned',

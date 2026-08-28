@@ -7,7 +7,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { speakWithElevenLabs, speakWithBrowserTTS } from '../services/voiceAssistant';
 import { logError } from '../services/logger';
-import type { AssistantLang } from '../services/assistantTypes';
+import type { AssistantLang } from '../assistant/shared';
 
 interface UseVoiceOutputOptions {
   hasElevenLabs: boolean;

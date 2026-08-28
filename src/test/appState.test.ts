@@ -3,8 +3,8 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { AppProvider, useApp } from '../store/AppContext';
 import { createElement, type ReactNode } from 'react';
 
-const { processAssistantCommandMock } = vi.hoisted(() => ({
-  processAssistantCommandMock: vi.fn(),
+const { runAssistantTurnMock } = vi.hoisted(() => ({
+  runAssistantTurnMock: vi.fn(),
 }));
 
 vi.mock('../store/persistence', async importOriginal => {
@@ -13,15 +13,15 @@ vi.mock('../store/persistence', async importOriginal => {
   return createLocalPersistenceMock(actual);
 });
 
-vi.mock('../services/assistantRuntime', () => ({
+vi.mock('../assistant/runtime', () => ({
   isOllamaAvailable: vi.fn(),
-  resetOllamaCache: vi.fn(),
-  processAssistantCommand: processAssistantCommandMock,
+  resetOllamaAvailability: vi.fn(),
+  runAssistantTurn: runAssistantTurnMock,
 }));
 
 beforeEach(() => {
-  processAssistantCommandMock.mockReset();
-  processAssistantCommandMock.mockResolvedValue({
+  runAssistantTurnMock.mockReset();
+  runAssistantTurnMock.mockResolvedValue({
     assistantMessage: 'Opening calendar for you.',
     message: 'Opening calendar for you.',
     plan: { mode: 'act', response: 'Opening calendar for you.', confidence: 1, steps: [] },

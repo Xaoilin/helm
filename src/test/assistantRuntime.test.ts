@@ -5,13 +5,13 @@ import { executeActionPlan } from '../assistant/executor';
 import type { ActionPlan } from '../assistant/plannerSchema';
 import { toAssistantToolName } from '../assistant/toolSchemas';
 import { DEFAULT_PROFILE } from '../services/gamification';
-import { processAssistantCommand, resetOllamaCache } from '../services/assistantRuntime';
+import { runAssistantTurn, resetOllamaAvailability } from '../assistant/runtime';
 import type { HostedAssistantUsageSnapshot } from '../services/assistantBilling';
 import type {
   AssistantCommandContext,
   AssistantConversationMessage,
   AssistantDialogState,
-} from '../services/assistantTypes';
+} from '../assistant/shared';
 import type {
   CalendarAccount,
   CalendarSource,
@@ -289,7 +289,7 @@ function mockOllamaNarration(): void {
 
 describe('assistant runtime', () => {
   beforeEach(() => {
-    resetOllamaCache();
+    resetOllamaAvailability();
     vi.clearAllMocks();
     vi.mocked(testOllamaConnection).mockResolvedValue(false);
     vi.mocked(chatWithOllama).mockResolvedValue('');
@@ -312,7 +312,7 @@ describe('assistant runtime', () => {
     });
 
     const navigate = vi.fn();
-    const result = await processAssistantCommand('show me all my tasks', makeContext(), {
+    const result = await runAssistantTurn('show me all my tasks', makeContext(), {
       lang: 'en',
       provider: 'hosted',
       handlers: {
@@ -360,7 +360,7 @@ describe('assistant runtime', () => {
       () => 'Here they are. I opened every task for you.',
     );
 
-    const result = await processAssistantCommand('show me all my tasks', makeContext(), {
+    const result = await runAssistantTurn('show me all my tasks', makeContext(), {
       lang: 'en',
       provider: 'hosted',
       handlers: {
@@ -397,7 +397,7 @@ describe('assistant runtime', () => {
 
     const addInventoryItem = vi.fn(() => 'inventory-1');
     const recordAssistantActivity = vi.fn();
-    const result = await processAssistantCommand(
+    const result = await runAssistantTurn(
       'add 2 digital calipers to my inventory',
       makeContext(),
       {
@@ -489,7 +489,7 @@ describe('assistant runtime', () => {
     };
     const context = makeContext({ tasks: [prayerTask] });
 
-    const first = await processAssistantCommand('I prayed Fajr', context, {
+    const first = await runAssistantTurn('I prayed Fajr', context, {
       lang: 'en',
       provider: 'hosted',
       dialogState: makeDialogState(),
@@ -508,7 +508,7 @@ describe('assistant runtime', () => {
     }));
     expect(completePrayer).not.toHaveBeenCalled();
 
-    const ambiguous = await processAssistantCommand('around breakfast', context, {
+    const ambiguous = await runAssistantTurn('around breakfast', context, {
       lang: 'en',
       provider: 'hosted',
       dialogState: first.dialogState,
@@ -519,7 +519,7 @@ describe('assistant runtime', () => {
     expect(ambiguous.dialogState.pendingPrayerCompletion).toBeDefined();
     expect(completePrayer).not.toHaveBeenCalled();
 
-    const resolved = await processAssistantCommand('It was on time.', context, {
+    const resolved = await runAssistantTurn('It was on time.', context, {
       lang: 'en',
       provider: 'hosted',
       dialogState: ambiguous.dialogState,
@@ -591,7 +591,7 @@ describe('assistant runtime', () => {
       xpEarned: 25,
     }));
 
-    const result = await processAssistantCommand('I prayed Isha late', makeContext({
+    const result = await runAssistantTurn('I prayed Isha late', makeContext({
       tasks: [prayerTask],
     }), {
       lang: 'en',
@@ -678,7 +678,7 @@ describe('assistant runtime', () => {
         prayerName: 'Fajr',
       })],
     });
-    const first = await processAssistantCommand('I prayed Fajr', context, {
+    const first = await runAssistantTurn('I prayed Fajr', context, {
       lang: 'en',
       provider: 'hosted',
       handlers: {
@@ -687,7 +687,7 @@ describe('assistant runtime', () => {
       },
     });
 
-    const blocked = await processAssistantCommand('late', context, {
+    const blocked = await runAssistantTurn('late', context, {
       lang: 'en',
       provider: 'hosted',
       dialogState: first.dialogState,
@@ -708,7 +708,7 @@ describe('assistant runtime', () => {
 
     const updateTask = vi.fn();
     const completePrayer = vi.fn();
-    const result = await processAssistantCommand('Mark buy milk done', makeContext({
+    const result = await runAssistantTurn('Mark buy milk done', makeContext({
       tasks: [makeTask({ id: 'task-milk', title: 'Buy milk' })],
     }), {
       lang: 'en',
@@ -739,7 +739,7 @@ describe('assistant runtime', () => {
       },
     }]));
 
-    const result = await processAssistantCommand('show me all my tasks', makeContext(), {
+    const result = await runAssistantTurn('show me all my tasks', makeContext(), {
       lang: 'en',
       provider: 'hosted',
       hostedModel: 'gpt-5.4-mini',
@@ -802,7 +802,7 @@ describe('assistant runtime', () => {
       },
     ));
 
-    const result = await processAssistantCommand('show me all my tasks', makeContext(), {
+    const result = await runAssistantTurn('show me all my tasks', makeContext(), {
       lang: 'en',
       provider: 'hosted',
       handlers: {
@@ -848,7 +848,7 @@ describe('assistant runtime', () => {
       }]);
     });
 
-    const result = await processAssistantCommand('turn my internet off', makeContext({
+    const result = await runAssistantTurn('turn my internet off', makeContext({
       tasks: [
         makeTask({ id: 'task-internet', title: 'Internet' }),
       ],
@@ -893,7 +893,7 @@ describe('assistant runtime', () => {
     });
 
     const removeTask = vi.fn();
-    const first = await processAssistantCommand(
+    const first = await runAssistantTurn(
       'Delete my Internet task.',
       makeContext({
         tasks: [makeTask({ id: 'task-internet', title: 'Internet' })],
@@ -920,7 +920,7 @@ describe('assistant runtime', () => {
     ]);
     expect(removeTask).not.toHaveBeenCalled();
 
-    const second = await processAssistantCommand(
+    const second = await runAssistantTurn(
       "Yeah. That's the one.",
       makeContext({
         tasks: [makeTask({ id: 'task-internet', title: 'Internet' })],
@@ -977,7 +977,7 @@ describe('assistant runtime', () => {
     });
 
     const removeTask = vi.fn();
-    const first = await processAssistantCommand('Show me all my tasks.', makeContext(), {
+    const first = await runAssistantTurn('Show me all my tasks.', makeContext(), {
       lang: 'en',
       provider: 'hosted',
       dialogState: makeDialogState(),
@@ -989,7 +989,7 @@ describe('assistant runtime', () => {
       },
     });
 
-    const second = await processAssistantCommand(
+    const second = await runAssistantTurn(
       'Okay. I see an Internet task. Can you please delete it?',
       makeContext({
         tasks: [makeTask({ id: 'task-internet', title: 'Internet' })],
@@ -1006,7 +1006,7 @@ describe('assistant runtime', () => {
       },
     );
 
-    const third = await processAssistantCommand(
+    const third = await runAssistantTurn(
       "Yeah. That's the one.",
       makeContext({
         tasks: [makeTask({ id: 'task-internet', title: 'Internet' })],
@@ -1023,7 +1023,7 @@ describe('assistant runtime', () => {
       },
     );
 
-    const fourth = await processAssistantCommand(
+    const fourth = await runAssistantTurn(
       'Yes.',
       makeContext(),
       {
@@ -1067,7 +1067,7 @@ describe('assistant runtime', () => {
       throw new Error(`Unexpected transcript: ${transcript}`);
     });
 
-    const first = await processAssistantCommand(
+    const first = await runAssistantTurn(
       'Delete my task.',
       makeContext({
         tasks: [
@@ -1087,7 +1087,7 @@ describe('assistant runtime', () => {
       },
     );
 
-    const second = await processAssistantCommand(
+    const second = await runAssistantTurn(
       'No, the router one.',
       makeContext({
         tasks: [
@@ -1118,7 +1118,7 @@ describe('assistant runtime', () => {
     vi.mocked(testHostedAssistantConnection).mockResolvedValue({ status: 'not_configured' });
     vi.mocked(testOllamaConnection).mockResolvedValue(false);
 
-    const result = await processAssistantCommand('Delete my Internet task.', makeContext(), {
+    const result = await runAssistantTurn('Delete my Internet task.', makeContext(), {
       lang: 'en',
       provider: 'auto',
       handlers: {
@@ -1144,7 +1144,7 @@ describe('assistant runtime', () => {
     }]));
 
     const navigate = vi.fn();
-    const result = await processAssistantCommand(
+    const result = await runAssistantTurn(
       'Delete my Internet task.',
       makeContext({
         tasks: [makeTask({ id: 'task-internet', title: 'Internet' })],
@@ -1191,7 +1191,7 @@ describe('assistant runtime', () => {
     });
 
     const addKnowledgeEntry = vi.fn(() => 'entry-1');
-    const result = await processAssistantCommand('capture something thoughtful about patience', makeContext(), {
+    const result = await runAssistantTurn('capture something thoughtful about patience', makeContext(), {
       lang: 'en',
       provider: 'ollama',
       handlers: {

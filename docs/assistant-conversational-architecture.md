@@ -88,7 +88,7 @@ When Settings selects Ollama, the browser sends the same structured planning and
 
 ## Shared Runtime
 
-Chat and Voice use the same assistant runtime in `src/services/assistantRuntime.ts` and `src/assistant/runtime.ts`. They share planning, confirmation, validation, execution, narration, dialog state, correction memory, activity recording, and undo behavior.
+Chat and Voice use the same assistant runtime in `src/assistant/runtime.ts`. They share planning, confirmation, validation, execution, narration, dialog state, correction memory, activity recording, and undo behavior.
 
 ## Debug And Observability
 

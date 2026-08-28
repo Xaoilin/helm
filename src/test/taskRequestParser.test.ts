@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PROFILE } from '../services/gamification';
 import { parseTaskCreationRequest } from '../assistant/taskRequestParser';
-import type { AssistantCommandContext } from '../services/assistantTypes';
+import type { AssistantCommandContext } from '../assistant/shared';
 
 function makeContext(overrides: Partial<AssistantCommandContext> = {}): AssistantCommandContext {
   return {

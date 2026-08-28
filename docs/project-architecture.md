@@ -72,7 +72,7 @@ Calendar sync is passive and account-bound. Opening Calendar or pressing `Sync` 
 
 ### Assistant and voice
 
-Chat and voice use the shared grounded assistant runtime in `src/assistant/` and `src/services/assistantRuntime.ts`. Hosted GPT-5.4-family models provide planning and narration through `assistant-openai`, while Settings may select a configured Ollama endpoint; browser code supplies transcript normalization, capability and entity retrieval, validation, confirmation, deterministic execution, and debug tracing for both.
+Chat and voice use the shared grounded assistant runtime in `src/assistant/`. Hosted GPT-5.4-family models provide planning and narration through `assistant-openai`, while Settings may select a configured Ollama endpoint; browser code supplies transcript normalization, capability and entity retrieval, validation, confirmation, deterministic execution, and debug tracing for both.
 
 The selected planner returns `reply`, `clarify`, `confirm`, or `tool_calls`. Sabah One validates grounded IDs and temporal references, confirms risky actions, executes one semantic mutation path, verifies the result, and asks the same provider to narrate verified facts. If no live planner is available, Lina explains the unavailable capability in-app and does not guess or mutate state.
 

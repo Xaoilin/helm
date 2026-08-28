@@ -27,9 +27,9 @@ import type {
   Transaction,
 } from '../../types/domain';
 import { loadStore, saveStore } from '../persistence';
-import { processAssistantCommand } from '../../services/assistantRuntime';
+import { runAssistantTurn } from '../../assistant/runtime';
 import { buildProviderOnlyAssistantBilling } from '../../services/assistantBilling';
-import type { AssistantConversationMessage, AssistantDialogState } from '../../services/assistantTypes';
+import type { AssistantConversationMessage, AssistantDialogState } from '../../assistant/shared';
 import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 interface CreateConversationOptions {
@@ -239,7 +239,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
     setActiveConversationIdState(conversationId);
 
     const dialogState = dialogStatesRef.current[conversationId];
-    const result = await processAssistantCommand(content, {
+    const result = await runAssistantTurn(content, {
       calendarAccounts: crossDomain.calendarAccounts,
       calendarSources: crossDomain.calendarSources,
       calendarEvents: crossDomain.calendarEvents,

@@ -9,7 +9,7 @@
  */
 
 import type { CalendarEvent, Task, GamificationProfile } from '../types/domain';
-import type { AssistantLang } from './assistantTypes';
+import type { AssistantLang } from '../assistant/shared';
 import { API_TIMEOUT, LIMITS, TIMING } from '../config/constants';
 import { ollamaBreaker } from './serviceBreakers';
 import { isPrayerTask, isStandardDailyTask } from './prayerTasks';
