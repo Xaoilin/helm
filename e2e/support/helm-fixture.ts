@@ -84,6 +84,10 @@ interface SignedInSyncScenarioOptions extends EmptyScenarioOptions {
 interface PrayerScenarioOptions extends EmptyScenarioOptions {
   assistant?: AssistantMockHandler;
   now?: string;
+  prayerTimes?: {
+    failureStatus?: number;
+    timezone?: string;
+  };
   settings?: Record<string, unknown>;
   tasks?: unknown[];
 }
@@ -355,7 +359,10 @@ async function installScenario<Name extends HelmScenarioName>(
       : '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320"><rect width="320" height="320" fill="white"/><g fill="#d6a84b" stroke="#8a6323" stroke-width="5"><path d="M82 74h30v116H82z"/><path d="M68 58h58v24H68z"/><path d="M145 94h30v116h-30z"/><path d="M131 78h58v24h-58z"/><path d="M208 66h30v116h-30z"/><path d="M194 50h58v24h-58z"/></g><path d="M66 238h188" stroke="#cbd5e1" stroke-width="12" stroke-linecap="round"/></svg>';
     return route.fulfill({ status: 200, contentType: 'image/svg+xml', body });
   });
-  await mockPrayerTimes(page);
+  await mockPrayerTimes(
+    page,
+    name === 'prayer' ? (options as PrayerScenarioOptions).prayerTimes : undefined,
+  );
 
   if (name === 'empty') {
     const normalized = normalizeScenarioStorage(options.storage);
@@ -1002,8 +1009,19 @@ function toMutationResponseRow(row: MockDatabaseRow) {
   };
 }
 
-async function mockPrayerTimes(page: Page): Promise<void> {
+async function mockPrayerTimes(
+  page: Page,
+  options?: PrayerScenarioOptions['prayerTimes'],
+): Promise<void> {
   await page.route('**/api.aladhan.com/v1/timingsByCity**', async route => {
+    if (options?.failureStatus) {
+      await route.fulfill({
+        status: options.failureStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Prayer schedule fixture unavailable.' }),
+      });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1026,7 +1044,7 @@ async function mockPrayerTimes(page: Page): Promise<void> {
               year: '1448',
             },
           },
-          meta: { timezone: 'Europe/London' },
+          meta: { timezone: options?.timezone || 'Europe/London' },
         },
       }),
     });

@@ -67,10 +67,20 @@ import {
   type PrayerTimesData,
 } from '../../services/prayerTimes';
 import { getPrayerTaskName } from '../../services/prayerTasks';
+import {
+  buildBoundedReminderPlan,
+  canSnoozeBoundedReminder,
+  getActiveBoundedReminder,
+  getAttemptableBoundedReminders,
+  recordBoundedReminderAttempt,
+  snoozeBoundedReminder,
+  type BoundedReminderPlan,
+} from '../../services/boundedReminders';
 import { logError } from '../../services/logger';
-import { loadStore, saveStore } from '../persistence';
+import { loadStore, saveStore, saveStoreCommitted } from '../persistence';
 import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 import { useGamificationContext } from './GamificationContext';
+import { useDailyMomentumContext } from './DailyMomentumContext';
 import { useKnowledgeContext } from './KnowledgeContext';
 import { useSettingsContext } from './SettingsContext';
 import { useTaskContext } from './TaskContext';
@@ -154,6 +164,8 @@ interface PrayerContextValue {
   nextPrayer: ReturnType<typeof getNextPrayer>;
   pendingCompletion: PrayerCompletionRequest | null;
   activeReminder: PrayerReminderGroup | null;
+  activeBoundedReminder: BoundedReminderPlan | null;
+  canSnoozeActiveBoundedReminder: boolean;
   adhanPrayer: PrayerTime | null;
   diagnostics: PrayerDiagnostics;
   requestPrayerCompletion: (
@@ -176,6 +188,7 @@ interface PrayerContextValue {
   undoPrayerCompletion: (inverse: PrayerCompletionUndoData) => void;
   replacePrayerTracking: (state: PrayerTrackingState) => void;
   snoozeActiveReminder: () => void;
+  snoozeActiveBoundedReminder: () => void;
   retrySchedule: () => Promise<void>;
   requestReminderPermission: () => Promise<PrayerReminderPermissionRequestResult>;
   testReminder: (prayerName?: PrayerName) => Promise<boolean>;
@@ -449,6 +462,7 @@ export function usePrayerContext(): PrayerContextValue {
 export function PrayerProvider({ children }: { children: ReactNode }) {
   const taskCtx = useTaskContext();
   const gamificationCtx = useGamificationContext();
+  const momentumCtx = useDailyMomentumContext();
   const knowledge = useKnowledgeContext();
   const settingsCtx = useSettingsContext();
   const [tracking, setTracking] = useState<PrayerTrackingState>(() => createPrayerTrackingState());
@@ -474,6 +488,8 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const scheduledGroupsRef = useRef(new Map<string, ScheduledReminderGroup>());
   const scheduledGroupNamesRef = useRef(new Map<string, PrayerName[]>());
   const shownAdhanKeysRef = useRef(new Set<string>());
+  const attemptingBoundedKeysRef = useRef(new Set<string>());
+  const permissionDeferredBoundedKeysRef = useRef(new Set<string>());
   const [reminderListenerReady, setReminderListenerReady] = useState(false);
 
   useEffect(() => () => {
@@ -1064,14 +1080,20 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
 
   const activeReminder = useMemo(() => {
     if (!prayerEnabled || !reminderEnabled || !reminderTimezonesMatch) return null;
-    return reminderGroups.find(group => {
+    const active = reminderGroups.find(group => {
       if (now < group.fireAt || now >= group.deadlineAt) return false;
       return group.prayerNames.some(prayerName => {
         const receiptKey = getTrackingReminderKey(group.prayerDate, prayerName, group.deadlineAt);
         const snoozedUntil = tracking.reminderReceipts[receiptKey]?.snoozedUntil;
         return !snoozedUntil || now >= new Date(snoozedUntil);
       });
-    }) || null;
+    });
+    if (!active) return null;
+    const alreadySnoozed = active.prayerNames.some(prayerName => {
+      const receiptKey = getTrackingReminderKey(active.prayerDate, prayerName, active.deadlineAt);
+      return Boolean(tracking.reminderReceipts[receiptKey]?.snoozedUntil);
+    });
+    return { ...active, canSnooze: active.canSnooze && !alreadySnoozed };
   }, [
     now,
     prayerEnabled,
@@ -1079,6 +1101,123 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     reminderGroups,
     reminderTimezonesMatch,
     tracking.reminderReceipts,
+  ]);
+
+  const boundedReminderPlans = useMemo(() => {
+    if (!prayerEnabled || !schedule || !timezoneMatches || !momentumCtx.loaded) return [];
+    return buildBoundedReminderPlan({
+      prayerDate: today,
+      schedule: schedule.prayers,
+      tracking,
+      momentum: momentumCtx.state,
+      reminderMinutes,
+    }).filter(plan => plan.kind === 'momentum' || reminderEnabled);
+  }, [
+    momentumCtx.loaded,
+    momentumCtx.state,
+    prayerEnabled,
+    reminderEnabled,
+    reminderMinutes,
+    schedule,
+    timezoneMatches,
+    today,
+    tracking,
+  ]);
+  const boundedReminderPlansRef = useRef<readonly BoundedReminderPlan[]>(boundedReminderPlans);
+  useEffect(() => {
+    boundedReminderPlansRef.current = boundedReminderPlans;
+  }, [boundedReminderPlans]);
+
+  const activeBoundedReminder = useMemo(() => getActiveBoundedReminder(
+    boundedReminderPlans,
+    tracking.boundedReminderReceipts,
+    now,
+  ), [boundedReminderPlans, now, tracking.boundedReminderReceipts]);
+
+  const canSnoozeActiveBoundedReminder = useMemo(() => activeBoundedReminder
+    ? canSnoozeBoundedReminder(
+      tracking,
+      activeBoundedReminder,
+      new Date(now.getTime() + PRAYER_REMINDERS.SNOOZE_MINUTES * 60_000),
+    )
+    : false, [activeBoundedReminder, now, tracking]);
+
+  useEffect(() => {
+    if (!loaded || boundedReminderPlans.length === 0) return;
+    const attemptable = getAttemptableBoundedReminders(
+      boundedReminderPlans,
+      tracking.boundedReminderReceipts,
+      now,
+    ).filter(plan => (
+      !attemptingBoundedKeysRef.current.has(plan.notificationKey)
+      && !(
+        permissionState !== 'granted'
+        && permissionDeferredBoundedKeysRef.current.has(plan.notificationKey)
+      )
+    ));
+    if (attemptable.length === 0) return;
+    for (const plan of attemptable) attemptingBoundedKeysRef.current.add(plan.notificationKey);
+
+    void (async () => {
+      const permission = await getPrayerReminderPermission();
+      setPermissionState(permission);
+      if (permission === 'granted') permissionDeferredBoundedKeysRef.current.clear();
+      for (const plan of attemptable) {
+        let notified = false;
+        try {
+          const currentPlan = boundedReminderPlansRef.current.find(candidate => (
+            candidate.notificationKey === plan.notificationKey
+          ));
+          const attemptedAt = new Date();
+          if (!currentPlan || getAttemptableBoundedReminders(
+            [currentPlan],
+            trackingRef.current.boundedReminderReceipts,
+            attemptedAt,
+          ).length === 0) {
+            continue;
+          }
+          if (permission !== 'granted') {
+            permissionDeferredBoundedKeysRef.current.add(currentPlan.notificationKey);
+            setLastNotificationKey(currentPlan.notificationKey);
+            continue;
+          }
+
+          const attemptedState = recordBoundedReminderAttempt(
+            trackingRef.current,
+            currentPlan,
+            attemptedAt,
+            false,
+          );
+          await saveStoreCommitted('prayerTracking', attemptedState);
+          commitTracking(attemptedState);
+          notified = await sendPrayerNotification({ title: currentPlan.title, body: currentPlan.body });
+          if (notified) {
+            const notifiedState = recordBoundedReminderAttempt(
+              trackingRef.current,
+              currentPlan,
+              attemptedAt,
+              true,
+            );
+            await saveStoreCommitted('prayerTracking', notifiedState);
+            commitTracking(notifiedState);
+          }
+          setLastNotificationKey(currentPlan.notificationKey);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          setLastReminderError(message);
+          logError('BoundedReminder', error);
+        } finally {
+          attemptingBoundedKeysRef.current.delete(plan.notificationKey);
+        }
+      }
+    })();
+  }, [
+    boundedReminderPlans,
+    commitTracking,
+    loaded,
+    now,
+    permissionState,
+    tracking.boundedReminderReceipts,
   ]);
 
   useEffect(() => {
@@ -1263,8 +1402,16 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     commitTracking(next);
   }, [activeReminder, commitTracking]);
 
+  const snoozeActiveBoundedReminder = useCallback(() => {
+    if (!activeBoundedReminder) return;
+    const snoozedUntil = new Date(now.getTime() + PRAYER_REMINDERS.SNOOZE_MINUTES * 60_000);
+    if (!canSnoozeBoundedReminder(trackingRef.current, activeBoundedReminder, snoozedUntil)) return;
+    commitTracking(current => snoozeBoundedReminder(current, activeBoundedReminder, snoozedUntil));
+  }, [activeBoundedReminder, commitTracking, now]);
+
   const requestReminderPermission = useCallback(async () => {
     const result = await requestPrayerReminderPermission();
+    if (result === 'granted') permissionDeferredBoundedKeysRef.current.clear();
     setPermissionState(result === 'granted' ? 'granted' : result === 'unsupported' ? 'unsupported' : 'not_granted');
     return result;
   }, []);
@@ -1305,10 +1452,6 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     if (shownAdhanKeysRef.current.has(key)) return;
     shownAdhanKeysRef.current.add(key);
     setAdhanPrayer(adhan);
-    void sendPrayerNotification({
-      title: `${adhan.nameArabic} — ${adhan.name}`,
-      body: `It is time for ${adhan.name} prayer.`,
-    });
   }, [now, prayerEnabled, schedule, timezoneMatches, today]);
 
   const dismissAdhan = useCallback(() => setAdhanPrayer(null), []);
@@ -1374,6 +1517,8 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     nextPrayer,
     pendingCompletion,
     activeReminder,
+    activeBoundedReminder,
+    canSnoozeActiveBoundedReminder,
     adhanPrayer,
     diagnostics,
     requestPrayerCompletion,
@@ -1385,14 +1530,17 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     undoPrayerCompletion,
     replacePrayerTracking,
     snoozeActiveReminder,
+    snoozeActiveBoundedReminder,
     retrySchedule,
     requestReminderPermission,
     testReminder,
     dismissAdhan,
   }), [
     activeReminder,
+    activeBoundedReminder,
     adhanPrayer,
     cancelPrayerCompletion,
+    canSnoozeActiveBoundedReminder,
     completePrayer,
     confirmPrayerCompletion,
     correctPrayerOutcome,
@@ -1414,6 +1562,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     scheduleError,
     scheduleStatus,
     snoozeActiveReminder,
+    snoozeActiveBoundedReminder,
     stats,
     testReminder,
     timezoneMatches,

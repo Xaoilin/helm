@@ -13,7 +13,9 @@ describe('prayer completion reminders', () => {
     const firstRender = renderPrayerFeatureApp();
     expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
 
-    const warning = await screen.findByRole('alert');
+    const warningTitle = await screen.findByText('Pray Fajr before it is too late');
+    const warning = warningTitle.closest('[role="alert"]');
+    expect(warning).not.toBeNull();
     expect(warning).toHaveTextContent('Pray Fajr before it is too late');
     expect(warning).toHaveTextContent('Sunrise');
 

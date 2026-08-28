@@ -159,6 +159,20 @@ describe('daily Learn and Move momentum', () => {
       .toThrow(/not supported/i);
   });
 
+  it('clamps reminder anchors to the three choices editable for each pillar', () => {
+    const base = createDefaultDailyMomentumState();
+    const normalized = normalizeDailyMomentumState({
+      ...base,
+      reminderPreferences: {
+        learn: { enabled: true, afterPrayers: ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] },
+        move: { enabled: true, afterPrayers: ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] },
+      },
+    });
+
+    expect(normalized.reminderPreferences.learn.afterPrayers).toEqual(['Dhuhr', 'Maghrib', 'Isha']);
+    expect(normalized.reminderPreferences.move.afterPrayers).toEqual(['Asr', 'Maghrib', 'Isha']);
+  });
+
   it('keeps Learn and Move in independent additive profile fields', () => {
     const state = createDefaultDailyMomentumState();
     const learn = getDailyMomentumPillarState(state, 'learn');

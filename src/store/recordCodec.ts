@@ -202,6 +202,9 @@ function encodePrayerTracking(value: unknown): EncodedStoreRecord[] {
   for (const [id, entry] of Object.entries(tracking.reminderReceipts || {})) {
     records.push({ recordId: `reminder:${id}`, payload: entry as unknown as Record<string, unknown>, position: null });
   }
+  for (const [id, entry] of Object.entries(tracking.boundedReminderReceipts || {})) {
+    records.push({ recordId: `bounded:${id}`, payload: entry as unknown as Record<string, unknown>, position: null });
+  }
   return records;
 }
 
@@ -268,11 +271,14 @@ function decodePrayerTracking(records: EncodedStoreRecord[]): PrayerTrackingStat
   const activation = records.find(record => record.recordId === 'activation')?.payload;
   const tracked: PrayerTrackingState['records'] = {};
   const reminders: PrayerTrackingState['reminderReceipts'] = {};
+  const boundedReminders: PrayerTrackingState['boundedReminderReceipts'] = {};
   for (const record of records) {
     if (record.recordId.startsWith('record:')) {
       tracked[record.recordId.slice('record:'.length)] = record.payload as never;
     } else if (record.recordId.startsWith('reminder:')) {
       reminders[record.recordId.slice('reminder:'.length)] = record.payload as never;
+    } else if (record.recordId.startsWith('bounded:')) {
+      boundedReminders[record.recordId.slice('bounded:'.length)] = record.payload as never;
     }
   }
   return {
@@ -281,6 +287,7 @@ function decodePrayerTracking(records: EncodedStoreRecord[]): PrayerTrackingStat
     ...(activation ? { activationDayEligibility: activation as never } : {}),
     records: tracked,
     reminderReceipts: reminders,
+    boundedReminderReceipts: boundedReminders,
   };
 }
 
@@ -359,6 +366,10 @@ function mergeComplexLegacyStore(
   } else if (collection === 'prayerTracking') {
     merged.records = mergeRecordMap(database.records, local.records);
     merged.reminderReceipts = mergeRecordMap(database.reminderReceipts, local.reminderReceipts);
+    merged.boundedReminderReceipts = mergeRecordMap(
+      database.boundedReminderReceipts,
+      local.boundedReminderReceipts,
+    );
   }
   return merged;
 }

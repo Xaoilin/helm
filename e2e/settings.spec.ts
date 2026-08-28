@@ -15,6 +15,9 @@ test.describe('Settings', () => {
     expect(content).toContain('Data Sync');
     expect(content).toContain('Calendar');
     expect(content).toContain('Voice Assistant');
+    expect(content).toContain('Learn and Move reminders');
+    await expect(page.getByLabel('Enable Learn notifications')).toBeVisible();
+    await expect(page.getByLabel('Enable Move notifications')).toBeVisible();
   });
 
   test('should let you choose a hosted OpenAI model preset', async ({ page, scenario }) => {

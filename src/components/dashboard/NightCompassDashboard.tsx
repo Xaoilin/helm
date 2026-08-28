@@ -8,6 +8,7 @@ import {
 } from '../../services/prayerTracking';
 import { formatTimeUntil, PRAYER_NAMES } from '../../services/prayerTimes';
 import { toLocalDateStr } from '../../services/financeHelpers';
+import { getQuranMotivationForDate } from '../../services/quranMotivation';
 import type { DailyMomentumPillarDay } from '../../services/dailyMomentum';
 import { useApp } from '../../store/AppContext';
 import { useDailyMomentumContext } from '../../store/contexts/DailyMomentumContext';
@@ -186,6 +187,7 @@ export default function NightCompassDashboard() {
   const [showPrayerLog, setShowPrayerLog] = useState(false);
   const pendingPillars = useRef(new Set<DailyPillar>());
   const today = momentum.getDay();
+  const motivation = getQuranMotivationForDate(prayer.today);
 
   const prayerEnabled = app.settings.prayerEnabled !== false;
   const scheduleRepairNeeded = prayerEnabled && (
@@ -433,6 +435,18 @@ export default function NightCompassDashboard() {
           </>
         )}
       </section>
+
+      <aside className="nc-quran-motivation" aria-label="Quran-first encouragement">
+        <div className="nc-quran-motivation-heading">
+          <span className="nc-eyebrow">Quran-first encouragement</span>
+          <h2 id="nc-quran-motivation-title">{motivation.title}</h2>
+        </div>
+        <blockquote lang="ar" dir="rtl">{motivation.arabic}</blockquote>
+        <p><strong>Reviewed meaning (paraphrase):</strong> {motivation.meaningSummary}</p>
+        <a href={motivation.sourceUrl} target="_blank" rel="noreferrer">
+          Quran {motivation.reference} · Source
+        </a>
+      </aside>
 
       <div className="nc-momentum-grid">
         {renderMomentumCard('learn')}

@@ -574,7 +574,10 @@ export interface DailyMomentumProgressLog {
 
 export interface DailyMomentumReminderPreference {
   enabled: boolean;
-  localTime: string | null;
+  /** Prayer opportunities after which this pillar may prompt. */
+  afterPrayers: PrayerName[];
+  /** Legacy KAN-246 field retained for forward-compatible account reads. */
+  localTime?: string | null;
   [key: string]: unknown;
 }
 
@@ -584,6 +587,18 @@ export interface DailyMomentumState {
   logs: Record<string, DailyMomentumProgressLog>;
   reminderPreferences: Record<DailyPillar, DailyMomentumReminderPreference>;
   [key: string]: unknown;
+}
+
+export type QuranMotivationReference = '20:14' | '2:45' | '29:69' | '53:39' | '13:28' | '94:5-6';
+
+export interface QuranMotivationCard {
+  id: string;
+  title: string;
+  arabic: string;
+  reference: QuranMotivationReference;
+  /** Reviewed contextual paraphrase; never presented as a translation. */
+  meaningSummary: string;
+  sourceUrl: string;
 }
 
 // ── Prayer Tracking ──
@@ -636,6 +651,23 @@ export interface PrayerReminderReceipt {
   snoozedUntil?: string;
 }
 
+export type BoundedReminderKind = 'prayer-opportunity' | 'prayer-deadline' | 'momentum';
+
+/**
+ * Account-owned receipt for one logical reminder obligation. Coalesced
+ * notifications write one receipt per pillar so later completion cannot
+ * recreate a duplicate notification with a different presentation group.
+ */
+export interface BoundedReminderReceipt {
+  notificationKey: string;
+  date: string; // local YYYY-MM-DD
+  kind: BoundedReminderKind;
+  attemptedAt?: string;
+  notifiedAt?: string;
+  snoozedUntil?: string;
+  snoozeCount: 0 | 1;
+}
+
 export interface PrayerActivationDayEligibility {
   date: string; // local YYYY-MM-DD captured from actual activation-day schedule
   prayerNames: PrayerName[];
@@ -647,6 +679,7 @@ export interface PrayerTrackingState {
   activationDayEligibility?: PrayerActivationDayEligibility;
   records: Record<string, PrayerTrackingRecord>;
   reminderReceipts: Record<string, PrayerReminderReceipt>;
+  boundedReminderReceipts: Record<string, BoundedReminderReceipt>;
 }
 
 export interface PrayerCompletionUndoData {

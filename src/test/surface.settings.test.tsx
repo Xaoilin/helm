@@ -25,6 +25,15 @@ describe('SettingsSurface', () => {
     expect(screen.getByText('Default calendar view')).toBeInTheDocument();
   });
 
+  it('keeps editable Learn and Move reminder preferences visible beside prayer controls', async () => {
+    await act(async () => { renderWithProvider(<SettingsSurface />); });
+    expect(screen.getByText('Learn and Move reminders')).toBeInTheDocument();
+    expect(screen.getByLabelText('Enable Learn notifications')).toBeChecked();
+    expect(screen.getByLabelText('Enable Move notifications')).toBeChecked();
+    expect(screen.getByLabelText('Learn reminder prayer anchors')).toHaveTextContent('After Dhuhr');
+    expect(screen.getByLabelText('Move reminder prayer anchors')).toHaveTextContent('After Asr');
+  });
+
   it('should show assistant mode controls', async () => {
     await act(async () => { renderWithProvider(<SettingsSurface />); });
     expect(screen.getByText('Open-ended AI mode')).toBeInTheDocument();

@@ -29,10 +29,13 @@ import {
 import { usePrayerContext } from '../store/contexts/PrayerContext';
 import { PRAYER_REMINDERS } from '../config/constants';
 import { createPrayerTrackingState } from '../services/prayerTracking';
+import { useDailyMomentumContext } from '../store/contexts/DailyMomentumContext';
+import { DAILY_MOMENTUM_REMINDER_ANCHORS } from '../services/dailyMomentum';
 
 export default function SettingsSurface() {
   const app = useApp();
   const prayer = usePrayerContext();
+  const momentum = useDailyMomentumContext();
   const { settings } = app;
   const linaEnabled = settings.assistantEnabled !== false;
   const [confirmReset, setConfirmReset] = useState(false);
@@ -265,13 +268,70 @@ export default function SettingsSurface() {
           <div className="prayer-settings-runtime-note">
             Native deadline timers continue when the Sabah One window is minimized. They stop when Sabah One is fully exited; tray and autostart are not enabled.
           </div>
+          <div className="momentum-reminder-settings" aria-labelledby="momentum-reminder-settings-title">
+            <div>
+              <div id="momentum-reminder-settings-title" className="prayer-settings-title">Learn and Move reminders</div>
+              <div className="prayer-settings-copy">
+                Account-owned preferences. Prompts follow the selected prayer opportunities, coalesce when simultaneous, and stay quiet from 22:00 to 08:00.
+              </div>
+            </div>
+            {(['learn', 'move'] as const).map(pillar => {
+              const preference = momentum.state.reminderPreferences[pillar];
+              const label = pillar === 'learn' ? 'Learn' : 'Move';
+              return (
+                <fieldset key={pillar} className="momentum-reminder-pillar" disabled={!momentum.loaded || momentum.saving}>
+                  <legend>{label}</legend>
+                  <label className="momentum-reminder-enable">
+                    <input
+                      type="checkbox"
+                      checked={preference.enabled}
+                      onChange={event => void momentum.updateReminderPreference(pillar, {
+                        ...preference,
+                        enabled: event.target.checked,
+                      })}
+                    />
+                    <span>Enable {label} notifications</span>
+                  </label>
+                  <div className="momentum-reminder-anchors" aria-label={`${label} reminder prayer anchors`}>
+                    {DAILY_MOMENTUM_REMINDER_ANCHORS[pillar].map(prayerName => (
+                      <label key={prayerName}>
+                        <input
+                          type="checkbox"
+                          checked={preference.afterPrayers.includes(prayerName)}
+                          disabled={!preference.enabled}
+                          onChange={event => {
+                            const afterPrayers = event.target.checked
+                              ? [...preference.afterPrayers, prayerName]
+                              : preference.afterPrayers.filter(name => name !== prayerName);
+                            void momentum.updateReminderPreference(pillar, { ...preference, afterPrayers });
+                          }}
+                        />
+                        <span>After {prayerName}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              );
+            })}
+            {momentum.error && <div className="prayer-settings-timezone-warning" role="alert">{momentum.error}</div>}
+          </div>
           {!prayer.timezoneMatches && prayer.schedule && (
             <div className="prayer-settings-timezone-warning" role="alert">
               Reminders paused: schedule timezone {prayer.schedule.timezone || 'unknown'} does not match desktop timezone {prayer.desktopTimezone}.
             </div>
           )}
+          {prayer.scheduleStatus === 'unavailable' && (
+            <div className="prayer-settings-timezone-warning" role="alert">
+              Schedule-relative reminders are paused. {prayer.scheduleError || 'Retry the prayer schedule.'}
+            </div>
+          )}
           <div className="prayer-settings-test">
             <div className="prayer-settings-title">Notification permission and test</div>
+            {prayer.diagnostics.permissionState !== 'granted' && (
+              <div className="prayer-settings-timezone-warning" role="alert">
+                Native notifications are unavailable. In-app reminders remain visible until permission is repaired.
+              </div>
+            )}
             <div className="actions-row">
               <button
                 type="button"

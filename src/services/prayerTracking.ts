@@ -1,4 +1,5 @@
 import type {
+  BoundedReminderReceipt,
   PrayerActivationDayEligibility,
   PrayerCompletionSource,
   PrayerCompletionLedgerEntry,
@@ -22,6 +23,7 @@ import { getPrayerTaskName } from './prayerTasks';
 
 export const PRAYER_TRACKING_SCHEMA_VERSION = 1;
 export const CANONICAL_PRAYER_NAMES = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const satisfies readonly PrayerName[];
+const BOUNDED_REMINDER_KINDS = new Set(['prayer-opportunity', 'prayer-deadline', 'momentum']);
 
 const PRAYER_DEADLINES: Record<PrayerName, PrayerDeadlineName> = {
   Fajr: 'Sunrise',
@@ -295,6 +297,7 @@ export function createPrayerTrackingState(now: Date = new Date()): PrayerTrackin
     trackingStartedAt: now.toISOString(),
     records: {},
     reminderReceipts: {},
+    boundedReminderReceipts: {},
   };
 }
 
@@ -318,6 +321,7 @@ export function normalizePrayerTrackingState(
   );
   const records: Record<string, PrayerTrackingRecord> = {};
   const reminderReceipts: Record<string, PrayerReminderReceipt> = {};
+  const boundedReminderReceipts: Record<string, BoundedReminderReceipt> = {};
 
   if (isObject(raw.records)) {
     for (const candidate of Object.values(raw.records)) {
@@ -332,6 +336,32 @@ export function normalizePrayerTrackingState(
       const receipt = normalizeReminderReceipt(candidate);
       if (!receipt) continue;
       reminderReceipts[receipt.notificationKey] = receipt;
+    }
+  }
+
+  if (isObject(raw.boundedReminderReceipts)) {
+    for (const [key, candidate] of Object.entries(raw.boundedReminderReceipts)) {
+      if (
+        !isObject(candidate)
+        || candidate.notificationKey !== key
+        || typeof candidate.date !== 'string'
+        || !parseLocalDate(candidate.date)
+        || typeof candidate.kind !== 'string'
+        || !BOUNDED_REMINDER_KINDS.has(candidate.kind)
+        || (candidate.snoozeCount !== 0 && candidate.snoozeCount !== 1)
+      ) continue;
+      const attemptedAt = optionalInstant(candidate.attemptedAt);
+      const notifiedAt = optionalInstant(candidate.notifiedAt);
+      const snoozedUntil = optionalInstant(candidate.snoozedUntil);
+      boundedReminderReceipts[key] = {
+        notificationKey: key,
+        date: candidate.date,
+        kind: candidate.kind as BoundedReminderReceipt['kind'],
+        snoozeCount: candidate.snoozeCount,
+        ...(attemptedAt ? { attemptedAt } : {}),
+        ...(notifiedAt ? { notifiedAt } : {}),
+        ...(snoozedUntil ? { snoozedUntil } : {}),
+      };
     }
   }
 
@@ -402,6 +432,7 @@ export function normalizePrayerTrackingState(
     ...(activationDayEligibility ? { activationDayEligibility } : {}),
     records,
     reminderReceipts,
+    boundedReminderReceipts,
   };
 }
 
