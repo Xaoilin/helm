@@ -50,13 +50,6 @@ concurrency:
   cancel-in-progress: \${{ github.event_name == 'pull_request' }}
 jobs:
 ${checkJobs}
-  native-changes:
-    steps:
-      - run: node ./scripts/detect-ci-native-impact.mjs
-  native-platform:
-    if: needs['native-changes'].outputs.native == 'true'
-    steps:
-      - uses: actions/cache@v5
   unit-shard:
     name: unit-\${{ matrix.shard }}-of-2
     steps:
@@ -93,7 +86,7 @@ ${checkJobs}
         run: node ./scripts/verify-ci-receipt.mjs dispatch-deploys
   auto-promote:
     name: auto-promote
-    if: always() && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'master' && startsWith(github.event.pull_request.head.ref, 'codex/') && needs.lint.result == 'success' && needs['agent-policy'].result == 'success' && needs.typecheck.result == 'success' && needs.unit.result == 'success' && needs.e2e.result == 'success' && needs.build.result == 'success' && needs.database.result == 'success' && needs.native.result == 'success' && needs['codex-review'].result == 'success'
+    if: always() && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'master' && startsWith(github.event.pull_request.head.ref, 'codex/') && needs.lint.result == 'success' && needs['agent-policy'].result == 'success' && needs.typecheck.result == 'success' && needs.unit.result == 'success' && needs.e2e.result == 'success' && needs.build.result == 'success' && needs.database.result == 'success' && needs['codex-review'].result == 'success'
     concurrency:
       group: helm-auto-promote-master
       cancel-in-progress: false
@@ -133,17 +126,6 @@ describe('agent policy helpers', () => {
       ok: false,
       failures: expect.arrayContaining([
         'CI workflow auto-promote job is missing expected guard or command: always() &&',
-      ]),
-    })
-
-    const withoutNativeSuccess = validCiWorkflow().replace(
-      "&& needs.native.result == 'success'",
-      '',
-    )
-    expect(evaluateCiWorkflow(withoutNativeSuccess)).toMatchObject({
-      ok: false,
-      failures: expect.arrayContaining([
-        "CI workflow auto-promote job is missing expected guard or command: needs.native.result == 'success'",
       ]),
     })
 
@@ -321,6 +303,5 @@ jq -e '
 
     expect(result.ok).toBe(false)
     expect(result.failures).toContain('CI workflow is missing the codex-review job.')
-    expect(result.failures).toContain('CI workflow is missing the native job.')
   })
 })

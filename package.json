@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "private": true,
-  "version": "0.2.107",
+  "version": "0.2.108",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
@@ -32,7 +32,6 @@
     "test:e2e:smoke": "node ./scripts/run-playwright.mjs smoke",
     "test:e2e:ui": "node ./scripts/run-playwright.mjs blocking --ui",
     "test:e2e:visual": "node ./scripts/run-playwright.mjs visual",
-    "test:native": "rustup run 1.89.0 cargo test --locked --manifest-path src-tauri/Cargo.toml",
     "test:related": "vitest related --run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.app.json --incremental --noEmit && tsc -p tsconfig.node.json --incremental --noEmit",
@@ -43,8 +42,6 @@
     "@dnd-kit/helpers": "^0.5.0",
     "@dnd-kit/react": "^0.5.0",
     "@supabase/supabase-js": "^2.100.1",
-    "@tauri-apps/api": "2.10.1",
-    "@tauri-apps/plugin-notification": "^2.3.3",
     "openwakeword-wasm-browser": "^0.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -53,7 +50,6 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
-    "@tauri-apps/cli": "2.10.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^24.12.0",

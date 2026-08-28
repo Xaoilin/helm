@@ -1,207 +1,101 @@
 # Engineering Guide
 
-## Workflow
+## Hosted Web Delivery
 
-- Use a dedicated branch for each task. `codex/<short-description>` is the default.
-- When meaningful work is complete and relevant checks are green, use the normal branch -> commit -> PR/auto-merge -> deploy-verification flow instead of leaving finished work only in a local checkout.
-- Run `npm run handoff:check` at the end of every completed feature handoff. If it fails, the work is not done yet unless the user explicitly asked for a local-only or unmerged outcome or an external access blocker prevents completion.
-- Do not call a user-facing change live, shipped, or deployed until it is merged to `master`, the deployment has succeeded, and the deployed result has been verified directly. `npm run handoff:check` is the required proof point for that state, and meaningful feature work should not be handed off as complete before that proof exists.
-- When meaningful work is ready and the user did not ask to keep it local, continue through PR creation, automated gates, merge, deploy, and verification instead of waiting for a separate release instruction.
-- For personal-app feature delivery, non-draft same-repo `codex/*` PRs into `master` auto-promote after `agent-policy`, `database`, `codex-review`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and the stable `native` check pass. `codex-review` must not block solely because OpenAI quota, credentials, or provider availability are unavailable. Manual human PR approval is not required unless the user explicitly asks for it.
-- After a task branch is merged, delete it locally and on `origin`. If any branch remains unmerged, call out its status explicitly instead of leaving stale topic branches around.
-- If the user explicitly asks to keep work local or unmerged, follow that request.
-- Reproduce a bug before fixing it. Trace the root cause instead of patching symptoms.
-- For every bug, regression, or feature failure, do a five-whys pass before solution planning or implementation. Ask "why did this happen?" repeatedly until you identify the root cause at the correct layer, not just the first visible symptom.
-- For any visible feature work, run a dedicated UI design review pass after implementation and before the final handoff. Treat this as a separate step from functional QA so spacing, wrapping, balance, and hierarchy get reviewed deliberately instead of incidentally.
-- For integrations, auth, sync, backend-dependent features, and other opaque user-facing fixes, assume the first confident implementation may still fail in reality. Prepare for the case where a fix looks correct locally, is handed off confidently, and still fails in live use. By default, ship a Debug surface or equivalent runtime diagnostics in the same change. If that is not appropriate, document the alternate observability path explicitly in the handoff and relevant docs.
-- Add a regression test for every bug fix that changes logic.
-- Keep changes scoped. If a task spans multiple domains, prefer small coherent commits over one broad sweep.
+Sabah One is delivered as a GitHub Pages website backed by Supabase. The browser page is the product boundary; GitHub Actions is the authoritative validation and deployment boundary.
+
+The normal change flow is:
+
+1. Work on a dedicated `codex/<short-description>` branch.
+2. Keep the change within its stated ownership and preserve unrelated work.
+3. Add or update the smallest relevant regression coverage and documentation.
+4. Let the protected pull-request checks validate the exact branch contents.
+5. Have Sol integrate the accepted commit, publish the website and required Supabase functions, and verify the deployed result.
+
+A branch-only change is not deployed or live. The deployed Pages bundle, its `public/release.json` manifest, and the associated Supabase functions must describe the same product version and candidate.
 
 ## Root Cause Analysis
 
-- Use five whys as the default root-cause method for issues and broken features.
-- Start with the user-visible failure, then ask why at least five times or until the chain stops yielding a deeper causal layer.
-- Do not jump from symptom to patch. Finish the root-cause pass first, then plan the fix against the deepest validated cause.
-- If the chain reveals multiple contributing causes, fix the primary root cause first and call out the secondary causes in the handoff.
-- Include the root-cause summary in your final handoff whenever it materially explains the fix or prevents future regressions.
+Reproduce a defect from the user-visible failure, then trace its causes to the deepest validated layer before choosing a fix. Record contributing causes when they matter to future maintenance. Add a regression check for every logic defect.
 
 ## Definition Of Done
 
-A change is not done until all of the following are true:
+A feature or documentation change is ready for integration when:
 
-- code behavior is complete
-- relevant checks are green
-- manual QA has been completed for the delivered feature before reporting back, with screenshot evidence for user-facing changes when practical, and the result is included in the handoff
-- risky integration or backend-dependent fixes include enough runtime observability to explain a post-release failure without guessing
-- docs are updated in the same change
-- user-facing copy matches the actual behavior
-- `docs/feature-status.md` is updated if feature status changed
+- the scoped behavior or documentation is complete;
+- the relevant GitHub Actions checks are green;
+- visible browser behavior has been reviewed at the affected responsive widths;
+- hosted integration changes have actionable diagnostics and truthful degraded states;
+- account, security, and user-facing copy remain aligned;
+- `docs/feature-status.md` is updated when product status changes.
 
-## Verification Commands
+Only Sol can claim the overall change live after protected promotion, GitHub Pages deployment, Supabase deployment where required, and direct live verification.
 
-Use the smallest complete interface for the current stage:
+## Validation Contract
 
-- `npm run agent:fast` during implementation. It selects policy, changed-file lint, incremental typecheck, related Vitest, UI smoke, and native tests from the complete diff against `origin/master`.
-- `npm run check` once before push. It is the full local gate and runs independent checks concurrently without repeating TypeScript compilation.
-- `npm run test:e2e:visual -- --surface <name> --viewports <csv>` only when screenshot evidence is needed.
-- `npm run benchmark:assistant -- --provider hosted --enforce` when assistant planning changed and the hosted environment is available.
-- `npm run handoff:check` after merge and deployments.
+The required hosted-web checks are policy, database contract, lint, typecheck, unit, browser E2E, and web build. Browser E2E covers behavior and responsive overflow; the visual path supplies screenshot evidence for surfaces where rendered review matters. The exact commands and workflow details belong to the repository automation and CI logs, not to a second product runtime.
 
-Focused primitive commands are for diagnosis, not a second checklist around `agent:fast` or `check`.
+Assistant-planning changes also keep the benchmark corpus, dialog seeds, grounded-ID expectations, and hosted threshold enforcement current. A benchmark result is evidence for its corpus and provider path, not proof of every conversation.
 
-Install local hooks with `npm run hooks:install`. Pre-commit only rejects malformed staged diffs; pre-push runs `npm run check` once. If hooks are unavailable, run the full gate manually once. CI and branch protection remain authoritative.
+## Deployment Versioning
 
-Run `npm run handoff:check` for every completed feature handoff. If the result is failing because the work is still branch-only, undeployed, or unclean, keep going through release cleanup instead of handing the task back as complete.
-
-Before claiming a user-facing change is live or shipped, `npm run handoff:check` must pass after merge and deploy. That command fails if uncommitted non-generated changes remain, if the work is still branch-only, if the `master` CI or deploy workflows have not succeeded for the deployed head, if the live GitHub Pages bundle is not serving the current version, or if merged `codex/` branches still exist.
-
-For assistant-planning changes, the release bar is higher than generic unit coverage:
-
-- keep the 200-plus assistant benchmark corpus current with real utterances, dialog seeds, and grounded-id expectations
-- run the live hosted benchmark before release when the environment is available
-- do not ship if the assistant benchmark drops below 100% destructive intent coverage, 100% unsupported no-approximation coverage, or 98% overall pass rate
-
-## Release Versioning
-
-- Sabah One release versions use semver and must stay aligned across `package.json`, `package-lock.json`, `public/release.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
-- The UI release badge is sourced from the build version and is intentionally pinned in the shell sidebar so the current build is always visible.
-- Web builds poll `public/release.json` on load, when a hidden tab becomes visible again, and on the configured release interval. If the deployed manifest reports a newer semver than the current bundle, the app forces a one-time page reload so users move onto the latest deployment without a manual refresh.
-- Every feature branch must include a version bump before handoff. Do not leave feature work on a branch at the previous release number.
-- Use `npm version <patch|minor|major> --no-git-tag-version` for a release bump, then run `npm run version:sync` if you edited files manually. `npm run version:check` is the guardrail that catches drift before handoff and now also fails `codex/*` branches that have not bumped above `origin/master`.
-- Every handoff must call out the current release version explicitly, including branch-only or local-only work.
-- Every completed feature handoff should mention the `npm run handoff:check` result so the user can verify branch state, working tree cleanliness, and deployment status.
-- Final handoffs for shipped work should call out the release version explicitly and mention the passing `npm run handoff:check` result so the user can verify both the UI badge and the deployment state.
+- Sabah One versions use semver across `package.json`, `package-lock.json`, and `public/release.json`.
+- The web shell exposes the build version and checks the deployed manifest after load and when a hidden page becomes visible.
+- A newer deployed semver causes one browser reload, so an open page can move onto the current website without a second product runtime.
+- Deployment evidence identifies the source revision, web artifact, Supabase function state, Pages URL, and observed version.
 
 ## CI And Branch Protection
 
-- The CI workflow job names are part of the contract with GitHub branch protection. Keep them as `lint`, `typecheck`, `unit`, `e2e`, `build`, `database`, `agent-policy`, `native`, and `codex-review`.
-- `master` should stay protected with pull requests required, zero required human approvals, and those nine checks required before merge. The `codex-review` check must degrade to a passing advisory-unavailable result when OpenAI quota or service availability prevents review output.
-- Pull-request runs cancel older runs for the same PR and do not consume runners while draft. Frontend-only PRs skip the macOS/Windows matrix, but the stable `native` aggregator still reports success. The detector normalizes synchronized release-version fields, so the mandatory version bump alone does not make a frontend PR native. Rust, dependency, build, or native-workflow changes require both platforms and use Cargo caches.
-- `auto-promote` must stay limited to non-draft, same-repo `codex/*` pull requests targeting `master`. It records the exact tested merge-tree, squash-merges, verifies that the resulting `master` tree is identical, deletes the branch, and dispatches verification-only `CI` with the source run and PR identity. Only the verified receipt dispatches both deployment workflows.
-- Verification-only CI must fail closed for a checkout or live-`master` tree mismatch, unsuccessful or wrong source run, wrong PR, or any missing/failed required source job. Auto-promotion and receipt-gated deploy dispatch share one FIFO repository queue; dispatch titles deduplicate retries, and deploy workflows check out the verified squash SHA rather than mutable `master`. Direct pushes and ordinary manual dispatches run the full suite.
-- `codex-review` is a blocking automated review gate only when it successfully returns P0/P1 findings. Missing `OPENAI_API_KEY`, quota exhaustion, provider failures, or malformed review output should produce warnings and must not block the release cycle.
-- The non-required `assistant-benchmark` CI job now runs on pushes to `master` and blocks deployment if the live hosted benchmark thresholds fail.
-- The normal landing path is therefore a small branch and PR into `master`, not direct commits to `master` or long-lived finished changes sitting only locally.
-- If a Supabase change depends on a new migration, ship the migration rollout in the same release path as the code that depends on it. Keep `SUPABASE_DB_PASSWORD` configured so `supabase db push` can run non-interactively. Database-authoritative cutovers also require a verified `HELM_DATABASE_BACKUP_SHA256`; migration-history repair is allowed only after the live historical schema proves equivalent. Pages waits for the database verification contract and fails closed rather than publishing a client ahead of its schema.
-- Deploy should continue to run only for `master`. The deploy workflows support both the normal successful-`CI` `workflow_run` path and the verified-receipt `workflow_dispatch` path; final handoff is still gated by `npm run handoff:check` verifying successful CI, deploys, and the live bundle version for the same `origin/master` head.
+- `master` is protected by pull requests and the required policy, database, lint, typecheck, unit, browser E2E, web-build, and review checks.
+- Pull-request runs are tied to the exact branch tree. Draft and concurrency controls prevent stale evidence from being treated as current.
+- Same-repository `codex/*` pull requests can be promoted only after their required checks pass and the promoted tree is verified against the tested tree.
+- GitHub Pages deployment runs only for the protected `master` path. Supabase Edge Function deployment follows the same candidate identity where a function changed.
+- Automated review is advisory when the provider is unavailable; completed high-severity findings remain blocking.
+- Post-promotion verification fails closed for a source, tree, artifact, deployment, or live-version mismatch.
 
 ## Testing Expectations
 
-### Unit tests
+### Unit and contract checks
 
-- Add or update Vitest coverage for new business logic.
-- Store and state changes should be exercised at the CRUD level where practical.
-- Service tests should mock network calls and assert error handling, not only happy paths.
+Business rules, account persistence, semantic mutations, assistant validation, and provider error mapping should have focused deterministic coverage. Service checks should exercise success and failure responses without hiding diagnostics.
 
-### E2E tests
+### Browser E2E
 
-- User-facing features should have Playwright coverage when they change visible flows.
-- Navigation, CRUD flows, settings persistence, and assistant interactions are strong E2E candidates.
-- If an existing spec covers the journey, extend it instead of creating duplicate coverage.
-- `npm run test:e2e:smoke` is the rapid iteration suite; keep it around five seconds.
-- `npm run test:e2e` blocks on behavior and responsive overflow with no routine evidence screenshots.
-- `npm run test:e2e:visual -- --surface <name> --viewports <csv>` is the opt-in evidence path.
-- Every run owns a fresh server on an isolated free port. Never reuse an existing Vite process.
-- Responsive shell or surface changes must exercise `320x568`, `390x844`, `768x1024`, and desktop widths. Capture reviewed screenshots only through the visual command.
+User-facing flows should have Playwright coverage when they change visible behavior. Existing specs should be extended instead of duplicated. Responsive shell or surface work covers the repository's supported mobile, tablet, and wider browser widths, with no horizontal overflow and no clipped content at increased text zoom.
 
-### Manual testing
+### Browser review
 
-Manual QA is required before reporting back on any delivered feature. Automated coverage is not a substitute for checking the real rendered behavior of the change.
-
-Changes that touch the following areas always require a direct manual verification pass:
-
-- microphone input and speech output
-- wake-word detection
-- OAuth popup flows
-- Monzo live sync
-- time-dependent prayer and notification behavior
-- any UI or visible user flow change
-
-For user-facing changes, capture screenshot evidence when practical as part of the manual QA pass.
-
-For every delivered feature, say clearly what you verified manually, include the relevant screenshot evidence when practical, and call out what still needs a follow-up pass, if anything.
-
-### Post-feature UI design review
-
-After the feature works end to end, do one more rendered review that focuses on design quality rather than raw correctness.
-
-- Check text wrapping, truncation, overflow, and any labels or buttons that feel squashed at the widths the surface actually uses.
-- Check spacing, alignment, visual balance, card heights, and hierarchy so the feature looks intentional instead of merely functional.
-- Check the most relevant responsive width for the surface, not just the default desktop viewport.
-- For mobile-first work, include the bottom navigation, More sheet, floating Lina panel, modals/forms, and at least one scroll-heavy surface in the rendered review.
-- Check hover, focus, disabled, empty, loading, and error states when the change touches them.
-- Capture screenshot evidence after this pass so the screenshot reflects the reviewed UI, not a pre-review build.
-- If the design review finds an issue, fix it and repeat the pass before handoff.
+Direct browser review is required for visible user flows and especially for OAuth, microphone input, speech output, wake word, browser notification permission, page-open prayer reminders, and live integrations. Review loading, empty, success, disabled, and error states relevant to the change. Screenshot evidence is useful for layout claims but is not a substitute for behavior or hosted verification.
 
 ## Error Handling And Resilience
 
-- Do not swallow errors silently. Use the shared logger helpers and keep the message source obvious.
-- User-visible failures should surface in the UI through an error state, inline message, or retry path.
-- For risky external integrations, prefer structured runtime diagnostics over ad hoc console output. The goal is to explain what failed in a live environment, not just to prove the happy path locally.
-- New remote integrations should use the existing resilience utilities where they fit:
-  - `src/services/circuitBreaker.ts`
-  - `src/services/retry.ts`
-  - `src/services/serviceBreakers.ts`
-- Network calls should use established timeout constants rather than ad hoc values.
+- Do not swallow errors. Surface a user-actionable message and preserve structured diagnostics.
+- Remote integrations should use the established retry, circuit-breaker, timeout, and logging utilities where appropriate.
+- Degraded states must say what is unavailable and what the user can do in the page; the in-app reminder banner is the fallback for unavailable browser notifications.
+- Diagnostics redact tokens and secrets while retaining request IDs and normalized failure codes where available.
 
-## Code Quality Rules
+## Data And Security Invariants
 
-- Keep domain types in `src/types/domain.ts`.
-- Prefer extending the domain contexts under `src/store/contexts/` over growing the compatibility shell in `src/store/AppContext.tsx`.
-- Keep assistant logic shared across voice and chat instead of duplicating parsers, prompt rules, or mutation paths.
-- When extending the hosted planner contract, update both the semantic parser in `normalizeActionPlanArgs` and the strict `actionPlanJsonSchema` in `src/assistant/plannerSchema.ts`. Semantically optional planner args must still remain required nullable properties in the hosted schema so OpenAI structured outputs stay valid.
-- Keep the hosted OpenAI Responses payload role-correct: `system` prompts belong in `instructions`, `user` history must serialize as `input_text`, and stored `assistant` history must serialize as `output_text`. Update the shared payload helper and its tests together if this contract changes.
-- Structured planner transport must stay quarantined from the visible chat UI. If a provider returns duplicated or malformed plan JSON, salvage a single valid plan when possible; otherwise fail gracefully, execute nothing, and never render raw planner JSON as the assistant's user-facing reply.
-- Extract timing, size, and threshold literals into `src/config/constants.ts`.
-- Favor explicit, typed interfaces over loose objects and stringly typed state.
-- When a component becomes hard to read, extract subcomponents or hooks instead of stacking more branches into one file.
-- Keep lint green. If a lint rule is noisy, scope or tune it narrowly instead of weakening broader correctness rules.
-
-## Data And Domain Invariants
-
-- Use local-date-safe helpers for day-based logic. Avoid UTC string slicing for local calendar or task behavior.
-- Preserve the account -> source -> event relationship in calendar code.
-- Do not break the signed-in Supabase precedence rules in persistence.
-- Keep multi-account Google Calendar behavior intact.
-- Passive Google Calendar sync must stay non-interactive. Reconnect or consent flows should only happen from an explicit user action.
-- Calendar tab navigation must stay read-only with respect to Google auth. Surface remounts are not valid reasons to relaunch sync or GIS.
-- Treat Google Calendar auth state as account data, not as an implicit side effect of whether a cached browser token still exists.
-- Durable browser Google Calendar transport must use the hosted refresh-token path. Do not reintroduce direct browser transport based on GIS access tokens or Supabase `provider_token`.
-- Do not mark a `calendar-oauth` account as reconnect-required just because a cached GIS token expired or disappeared. Only confirmed passive auth failures, 401s, revokes, missing hosted credentials, or missing linked profile sessions after auth bootstrap should set reconnect-required.
-- Passive Google Calendar sync must be cache-preserving. Windowed fetches and partial calendar-list responses are freshness signals, not proof that local sources or events should be deleted.
-- Validate Google account ownership before mutating a multi-account sync result. If Google returns the wrong account, preserve cached data and require an explicit reconnect instead of applying cross-account data.
-- Any Google auth diagnostics must keep tokens redacted. Presence, expiry, scope, credential health, and refresh-failure metadata are fine; raw token values are not.
-- Keep project management state on the shared task model. Project boards must continue to use `Task.projectId`, `Task.workflowState`, `Task.blockedReason`, `Task.boardOrder`, and `Task.completed` instead of inventing a second parallel board record.
-- Project removal must safely unlink project-backed tasks and goals instead of deleting the underlying work items.
-- Each project should retain a lightweight overview wiki page; migrations and CRUD flows should not leave orphaned project pages behind.
-- Project catalogue records may sync names, summaries, links, display-only setup steps, portable run recipes, and preview styling. Absolute roots, native approvals, fingerprints, process state, and logs belong only in the device store and must be stripped from shared writes, imports, drift checks, and assistant context.
-- Legacy absolute paths that cannot yet be canonicalised stay in the device-only pending-path store; they become active bindings only after native verification succeeds.
-- Native project launch must execute a Rust-normalised approved profile ID, never renderer-supplied shell text. Keep native confirmation, native fingerprints, start-time canonical containment, one process group per profile, bounded output, and exit cleanup intact. Web builds and Lina navigation stay reference-only.
-
-## Security Notes
-
-- API keys are currently client-side configuration for a single-user MVP. Do not describe this as production-grade secret handling.
-- Do not imply Sabah One includes a secure general-purpose credential vault. Project paths, approvals, runtime state, and API keys are explicit device-only data and must never enter shared records.
-- Hosted-assistant browser calls currently use the build's configured Supabase project access key. Keep the UI copy truthful about that architecture, and if tighter access control is needed later, move the OpenAI call behind a server-side auth boundary instead of implying the browser path is private.
-- Avoid `dangerouslySetInnerHTML` and preserve React's default escaping protections.
-- Keep the Tauri CSP enabled and narrowly scoped. The native project approval dialog is the user-presence trust boundary; renderer confirmation alone is not sufficient for process launch.
-- Keep generic native persistence on its strict store-key allowlist and runtime approvals inside the isolated `project-runtime` directory. A shared/device store addition must update the declarations and allowlist together; the agent-policy gate enforces parity.
-- Shared table access must remain account-isolated by RLS; direct writes stay revoked and all mutations derive ownership from `auth.uid()` inside the transactional RPC.
+- Keep domain types in `src/types/domain.ts` and the account -> source -> event Calendar hierarchy.
+- Shared records are signed-in, account-owned, online-only, and database-authoritative through Supabase RLS and semantic mutation RPCs.
+- Passive Google Calendar sync stays non-interactive; explicit reconnect or consent is user initiated.
+- Hosted Calendar refresh credentials and Vault secret values never enter browser storage, shared payloads, logs, exports, Broadcast, or assistant context.
+- The assistant keeps one shared path for chat and voice, validates grounded entities, confirms risky actions, and claims success only after verified execution.
+- Project catalogue records may include names, links, documentation, and display-only guidance. They must not include private credentials or machine-specific execution state.
+- Use the established local-date-safe helpers for day-based behavior; never derive local dates by slicing UTC ISO strings.
 
 ## UI And UX Rules
 
-- Preserve the established dark theme and current component language unless a deliberate redesign is in scope.
-- Empty states should explain what the feature is for and give the user a clear next step.
-- Destructive actions must require clear confirmation.
-- Accessibility matters: keep labels, roles, keyboard interactions, and focus behavior in mind when editing UI.
-- Inspect rendered UI changes directly before reporting back instead of trusting code review alone.
-- Surface degraded states explicitly. Prefer "Ollama offline", "local-only", or "simulated connection" over vague fallback language.
+- Preserve the established dark theme and component language unless a redesign is in scope.
+- Empty, loading, and unavailable states explain the next useful action.
+- Destructive actions require clear confirmation.
+- Preserve labels, roles, keyboard access, focus behavior, responsive layout, and `prefers-reduced-motion` behavior.
+- Pair state colours with visible text. Browser-native behavior is an enhancement, not the sole route to an important outcome.
 
 ## Documentation Rules
 
-- `AGENTS.md` should stay short and operational.
-- Long-form architecture and process material belongs under `docs/`.
-- When behavior changes materially, update the relevant doc in the same change instead of letting instructions drift.
-- `README.md`, `AGENTS.md`, `docs/project-architecture.md`, `docs/engineering-guide.md`, and `docs/feature-status.md` are the active source-of-truth docs.
-- `docs/agentic-coding-workflow.md` records the current research-backed agent automation policy and should be updated when the workflow changes materially.
-- Status language is limited to `real`, `local-only/degraded`, and `placeholder/simulated`.
+- Keep `AGENTS.md` short and operational; put long-form architecture and process material under `docs/`.
+- Update the relevant document in the same change when behavior or delivery boundaries change.
+- `README.md`, `AGENTS.md`, `docs/project-architecture.md`, `docs/engineering-guide.md`, and `docs/feature-status.md` are active source-of-truth docs.
+- `docs/agentic-coding-workflow.md` records the current hosted web automation policy.
+- Status language distinguishes real behavior, degraded browser capability, and placeholder or simulated integrations.

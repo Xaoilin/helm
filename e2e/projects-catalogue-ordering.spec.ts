@@ -25,7 +25,7 @@ const seededProjects = [
     catalogKey: 'fixture:atlas',
     name: 'Atlas',
     kind: 'desktop_app',
-    summary: 'A desktop project with durable setup and launch references.',
+    summary: 'An external desktop project with durable setup and reference commands.',
     status: 'active',
     tags: ['app', 'reference'],
     isPinned: true,
@@ -57,11 +57,11 @@ const seededProjects = [
   {
     id: 'project-local-lens',
     catalogKey: 'fixture:local-lens',
-    name: 'Local Lens',
+    name: 'Reference Lens',
     kind: 'cli',
-    summary: 'A local-only project.',
+    summary: 'A CLI project reference.',
     status: 'active',
-    tags: ['local'],
+    tags: ['reference'],
     isPinned: false,
     sortOrder: 0,
     links: [],
@@ -120,7 +120,7 @@ test.describe('Projects catalogue organisation', () => {
 
     await expectSectionOrder(page, ['Pinned', 'Projects', 'Archived']);
     await expectCardOrder(pinned, ['Northstar', 'Atlas']);
-    await expectCardOrder(projects, ['Local Lens', 'Signal Lab']);
+    await expectCardOrder(projects, ['Reference Lens', 'Signal Lab']);
 
     await expect(archived.getByRole('button', { name: 'Show archived' })).toHaveAttribute('aria-expanded', 'false');
     await expect(archived.getByText('Vault Notes')).toHaveCount(0);
@@ -131,7 +131,7 @@ test.describe('Projects catalogue organisation', () => {
 
     await projects.getByRole('button', { name: 'Pin Signal Lab' }).click();
     await expectCardOrder(pinned, ['Northstar', 'Atlas', 'Signal Lab']);
-    await expectCardOrder(projects, ['Local Lens']);
+    await expectCardOrder(projects, ['Reference Lens']);
     await expect(pinned.getByRole('button', { name: 'Unpin Signal Lab' })).toBeFocused();
 
     const atlasHandle = pinned.getByRole('button', { name: 'Reorder Atlas' });
@@ -193,7 +193,7 @@ test.describe('Projects catalogue organisation', () => {
     });
 
     await section(page, 'Archived').getByRole('button', { name: 'Unarchive Atlas' }).click();
-    await expectCardOrder(section(page, 'Projects'), ['Local Lens', 'Atlas']);
+    await expectCardOrder(section(page, 'Projects'), ['Reference Lens', 'Atlas']);
 
     const restoredAtlas = await storedProject(page, 'project-atlas');
     expect(restoredAtlas).toMatchObject({
@@ -242,11 +242,11 @@ test.describe('Projects catalogue at 390px', () => {
     await touchDrag(
       page,
       reorderHandle,
-      section(page, 'Projects').getByRole('button', { name: 'Reorder Local Lens' }),
+      section(page, 'Projects').getByRole('button', { name: 'Reorder Reference Lens' }),
     );
     await expect(page.locator('.project-sr-only[role="status"]'))
       .toHaveText('Signal Lab moved to position 1 of 2 in Projects.');
-    await expectCardOrder(section(page, 'Projects'), ['Signal Lab', 'Local Lens']);
+    await expectCardOrder(section(page, 'Projects'), ['Signal Lab', 'Reference Lens']);
     await expect.poll(() => storedSectionOrder(page, 'projects')).toEqual([
       'project-signal-lab',
       'project-local-lens',

@@ -80,7 +80,7 @@ describe('App shell', () => {
     expect(screen.getByRole('heading', { name: 'Know what you have before you buy.' })).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Projects')); });
-    expect(screen.getByText('Turn Sabah One into your local project hub')).toBeInTheDocument();
+    expect(screen.getByText('Build your project reference catalogue')).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Health')); });
     expect(screen.getByText('Fast food journal')).toBeInTheDocument();

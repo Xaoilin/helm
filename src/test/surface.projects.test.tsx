@@ -1,8 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { screen, act, fireEvent, waitFor, within } from '@testing-library/react';
 import { renderWithProvider } from './surfaceTestHarness';
 import ProjectsSurface from '../surfaces/ProjectsSurface';
-import * as projectPaths from '../services/projectPaths';
 
 describe('ProjectsSurface', () => {
   beforeEach(() => { localStorage.clear(); });
@@ -62,12 +61,12 @@ describe('ProjectsSurface', () => {
 
   it('should render empty state', async () => {
     await act(async () => { renderWithProvider(<ProjectsSurface />); });
-    expect(screen.getByText('Turn Sabah One into your local project hub')).toBeInTheDocument();
+    expect(screen.getByText('Build your project reference catalogue')).toBeInTheDocument();
   });
 
   it('should describe the reference-first project scope', async () => {
     await act(async () => { renderWithProvider(<ProjectsSurface />); });
-    expect(screen.getByText(/live link, repository, local folder/i)).toBeInTheDocument();
+    expect(screen.getByText(/live link, repository, setup notes/i)).toBeInTheDocument();
   });
 
   it('should have add project button', async () => {
@@ -89,7 +88,7 @@ describe('ProjectsSurface', () => {
     const cards = document.querySelectorAll('.project-catalog-card');
     expect(cards).toHaveLength(2);
     expect(within(cards[0] as HTMLElement).getByRole('heading', { name: 'Orbit Console' })).toBeInTheDocument();
-    expect(within(cards[0] as HTMLElement).getByText('Live + local')).toBeInTheDocument();
+    expect(within(cards[0] as HTMLElement).getByText('Live')).toBeInTheDocument();
     expect(within(cards[1] as HTMLElement).getByText('Reference')).toBeInTheDocument();
   });
 
@@ -190,9 +189,9 @@ describe('ProjectsSurface', () => {
     fireEvent.click(detailsButton);
 
     const drawer = await screen.findByRole('dialog', { name: 'Orbit Console' });
-    expect(within(drawer).getByText('How to run')).toBeInTheDocument();
+    expect(within(drawer).getByText('Reference commands')).toBeInTheDocument();
     expect(within(drawer).getByText('npm run dev')).toBeInTheDocument();
-    expect(within(drawer).getByRole('button', { name: 'Desktop only' })).toBeDisabled();
+    expect(within(drawer).getByText('Commands are displayed for reference only and are never run by Sabah One.')).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Orbit Console' })).not.toBeInTheDocument();
@@ -264,55 +263,6 @@ describe('ProjectsSurface', () => {
     expect(within(panel).getByText('1 item · L 180 mm × W 90 mm × H 45 mm')).toBeInTheDocument();
     expect(within(panel).getByText('1 set needed · L 100 cm')).toBeInTheDocument();
     expect(within(panel).getByRole('button', { name: 'Open global Inventory' })).toBeInTheDocument();
-  });
-
-  it('preserves an unavailable device binding and its approvals when other project fields are edited', async () => {
-    seedProjectCatalogue();
-    const projectRoot = '/Volumes/Offline/Orbit Console';
-    localStorage.setItem('helm:device:projectDeviceBindings', JSON.stringify([{
-      catalogKey: 'fixture-orbit',
-      projectRoot,
-      source: 'user',
-      adoptedAt: '2026-07-29T12:00:00.000Z',
-      updatedAt: '2026-07-29T12:00:00.000Z',
-      runProfiles: [{
-        profileId: 'profile-orbit',
-        projectId: 'project-orbit',
-        recipeId: 'orbit-dev',
-        projectRoot,
-        workingDirectory: projectRoot,
-        executable: '/usr/local/bin/npm',
-        args: ['run', 'dev'],
-        environment: {},
-        fingerprint: 'a'.repeat(64),
-        approvedAt: '2026-07-29T12:00:00.000Z',
-      }],
-    }]));
-    vi.spyOn(projectPaths, 'canUseDesktopProjectPaths').mockResolvedValue(true);
-    const canonicalizeSpy = vi.spyOn(projectPaths, 'canonicalizeProjectPath').mockResolvedValue(null);
-
-    await act(async () => { renderWithProvider(<ProjectsSurface />); });
-    await waitFor(() => expect(canonicalizeSpy).toHaveBeenCalledWith(projectRoot));
-
-    const orbitCard = screen.getByRole('heading', { name: 'Orbit Console' }).closest('.project-catalog-card') as HTMLElement;
-    fireEvent.click(within(orbitCard).getByRole('button', { name: 'View details' }));
-    const drawer = await screen.findByRole('dialog', { name: 'Orbit Console' });
-    expect(within(drawer).getByText(/Not linked on this device/)).toBeInTheDocument();
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Edit project' }));
-
-    const pathInput = screen.getByLabelText('Folder on this device');
-    expect(pathInput).toHaveValue(projectRoot);
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Orbit Console Updated' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Project' }));
-
-    await waitFor(() => {
-      const bindings = JSON.parse(
-        localStorage.getItem('helm:device:projectDeviceBindings') || '[]',
-      ) as Array<{ projectRoot: string; runProfiles: unknown[] }>;
-      expect(bindings).toHaveLength(1);
-      expect(bindings[0].projectRoot).toBe(projectRoot);
-      expect(bindings[0].runProfiles).toHaveLength(1);
-    });
   });
 
   it('routes Edit Project pinning and archiving through catalogue transitions', async () => {

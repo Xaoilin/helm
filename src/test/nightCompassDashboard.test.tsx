@@ -63,7 +63,7 @@ function installPrayerMock() {
     },
     scheduleStatus: 'ready',
     scheduleError: null,
-    desktopTimezone: 'Europe/London',
+    localTimezone: 'Europe/London',
     timezoneMatches: true,
     now: new Date(2026, 7, 28, 20, 30, 0),
     today: TODAY,

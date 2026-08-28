@@ -1,13 +1,14 @@
 import {
   cancelAllPrayerReminders,
   cancelPrayerReminder,
+  getPrayerReminderPermission,
   onPrayerReminderFired,
   requestPrayerReminderPermission,
   schedulePrayerReminder,
   sendPrayerNotification,
   type PrayerReminderFiredEvent,
   type PrayerReminderScheduleRequest,
-} from '../services/nativePrayerReminder';
+} from '../services/browserPrayerReminder';
 
 const notificationConstructor = vi.fn();
 const requestPermission = vi.fn<() => Promise<NotificationPermission>>();
@@ -28,7 +29,7 @@ const baseRequest: PrayerReminderScheduleRequest = {
   deadlineIso: '2026-07-28T12:05:00.000Z',
 };
 
-describe('nativePrayerReminder browser fallback', () => {
+describe('browser prayer reminders', () => {
   beforeEach(async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-28T12:00:00.000Z'));
@@ -47,7 +48,7 @@ describe('nativePrayerReminder browser fallback', () => {
     vi.useRealTimers();
   });
 
-  it('fires an in-app event and Web Notification at the requested time', async () => {
+  it('fires an in-app event and Web Notification while the page is open', async () => {
     const listener = vi.fn<(event: PrayerReminderFiredEvent) => void>();
     const unlisten = await onPrayerReminderFired(listener);
 
@@ -69,7 +70,7 @@ describe('nativePrayerReminder browser fallback', () => {
     unlisten();
   });
 
-  it('fires immediately when startup occurs inside the warning window', async () => {
+  it('fires immediately when the page opens inside the warning window', async () => {
     const listener = vi.fn<(event: PrayerReminderFiredEvent) => void>();
     const unlisten = await onPrayerReminderFired(listener);
 
@@ -126,8 +127,8 @@ describe('nativePrayerReminder browser fallback', () => {
     unlisten();
   });
 
-  it('never requests permission from a background timer', async () => {
-    FakeNotification.permission = 'default';
+  it('never requests permission from a denied-permission background timer', async () => {
+    FakeNotification.permission = 'denied';
     const listener = vi.fn<(event: PrayerReminderFiredEvent) => void>();
     const unlisten = await onPrayerReminderFired(listener);
 
@@ -140,6 +141,31 @@ describe('nativePrayerReminder browser fallback', () => {
       notificationSent: false,
     }));
     unlisten();
+  });
+
+  it('keeps the in-app event path when browser notifications are unsupported', async () => {
+    const listener = vi.fn<(event: PrayerReminderFiredEvent) => void>();
+    const unlisten = await onPrayerReminderFired(listener);
+    const notification = window.Notification;
+    Reflect.deleteProperty(window, 'Notification');
+
+    try {
+      await expect(getPrayerReminderPermission()).resolves.toBe('unsupported');
+      await schedulePrayerReminder(baseRequest);
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(requestPermission).not.toHaveBeenCalled();
+      expect(listener).toHaveBeenCalledWith(expect.objectContaining({
+        notificationSent: false,
+        error: null,
+      }));
+    } finally {
+      Object.defineProperty(window, 'Notification', {
+        configurable: true,
+        value: notification,
+      });
+      unlisten();
+    }
   });
 
   it('surfaces explicit permission denial without sending a notification', async () => {

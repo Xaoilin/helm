@@ -159,11 +159,11 @@ describe('exact-tree CI receipts', () => {
 
   it('fails closed when a required job is missing or failed', () => {
     const missing = passingState()
-    missing.jobs = missing.jobs.filter(job => job.name !== 'native')
+    missing.jobs = missing.jobs.filter(job => job.name !== 'database')
     expect(evaluateCiReceipt(missing)).toMatchObject({
       ok: false,
       failures: expect.arrayContaining([
-        'Source CI is missing required job native.',
+        'Source CI is missing required job database.',
       ]),
     })
 

@@ -129,8 +129,8 @@ export interface ProjectSetupStep {
 }
 
 /**
- * A shared run recipe is a portable reference. Device roots and approvals live
- * in ProjectDeviceBinding instead of the synced Project record.
+ * A shared run recipe is a portable reference. It is displayed as catalogue
+ * guidance and is never executed by the browser runtime.
  */
 export interface ProjectRunRecipe {
   id: string;
@@ -163,11 +163,6 @@ export interface Project {
   runRecipes?: ProjectRunRecipe[];
   preview?: ProjectPreviewStyle;
   verifiedAt?: string;
-  /**
-   * @deprecated Migration input only. Normalized Project records never retain
-   * or sync an absolute local path.
-   */
-  localPath?: string;
   summary: string;
   status: ProjectStatus;
   /** Restored when a reversible archive is removed. */
@@ -178,34 +173,6 @@ export interface Project {
   sortOrder?: number;
   createdAt: string;
   updatedAt: string;
-}
-
-export type ProjectDeviceBindingSource = 'legacy' | 'user';
-
-/**
- * Opaque, device-approved execution material. This data must remain in the
- * device-only project binding store and must never enter Supabase or exports.
- */
-export interface ProjectRunProfile {
-  profileId: string;
-  projectId: string;
-  recipeId: string;
-  projectRoot: string;
-  workingDirectory: string;
-  executable: string;
-  args: string[];
-  environment: Record<string, string>;
-  fingerprint: string;
-  approvedAt: string;
-}
-
-export interface ProjectDeviceBinding {
-  catalogKey: string;
-  projectRoot: string;
-  source: ProjectDeviceBindingSource;
-  adoptedAt: string;
-  updatedAt: string;
-  runProfiles: ProjectRunProfile[];
 }
 
 export interface ProjectPage {

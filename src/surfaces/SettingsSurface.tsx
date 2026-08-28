@@ -231,7 +231,7 @@ export default function SettingsSurface() {
             <div>
               <div className="prayer-settings-title">Warn before the on-time deadline</div>
               <div className="prayer-settings-copy">
-                Pulse across every Sabah One surface and send one native notification while Sabah One is running.
+                Pulse across every Sabah One surface and send one browser notification while this page is open.
               </div>
             </div>
             <label className="toggle">
@@ -266,7 +266,7 @@ export default function SettingsSurface() {
             <a href="https://aladhan.com/calculation-methods" target="_blank" rel="noopener noreferrer" style={{ color: '#4f5bff' }}>Learn more</a>
           </div>
           <div className="prayer-settings-runtime-note">
-            Native deadline timers continue when the Sabah One window is minimized. They stop when Sabah One is fully exited; tray and autostart are not enabled.
+            Browser timers run while this page is open. They pause when the page is closed; browser notification delivery depends on permission and browser policy.
           </div>
           <div className="momentum-reminder-settings" aria-labelledby="momentum-reminder-settings-title">
             <div>
@@ -317,7 +317,7 @@ export default function SettingsSurface() {
           </div>
           {!prayer.timezoneMatches && prayer.schedule && (
             <div className="prayer-settings-timezone-warning" role="alert">
-              Reminders paused: schedule timezone {prayer.schedule.timezone || 'unknown'} does not match desktop timezone {prayer.desktopTimezone}.
+              Reminders paused: schedule timezone {prayer.schedule.timezone || 'unknown'} does not match local browser timezone {prayer.localTimezone}.
             </div>
           )}
           {prayer.scheduleStatus === 'unavailable' && (
@@ -329,7 +329,7 @@ export default function SettingsSurface() {
             <div className="prayer-settings-title">Notification permission and test</div>
             {prayer.diagnostics.permissionState !== 'granted' && (
               <div className="prayer-settings-timezone-warning" role="alert">
-                Native notifications are unavailable. In-app reminders remain visible until permission is repaired.
+                Browser notifications are unavailable. In-app reminders remain visible until permission is repaired.
               </div>
             )}
             <div className="actions-row">
@@ -689,7 +689,7 @@ export default function SettingsSurface() {
             <strong>Sabah One</strong> {APP_RELEASE_VERSION}<br />
             <span style={{ color: '#6b6f85' }}>
               Account-backed personal assistant for software engineers.<br />
-              Built with Tauri + React + TypeScript + Rust.
+              Browser-only GitHub Pages runtime built with React and TypeScript.
             </span>
           </div>
           <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 8 }}>
@@ -698,7 +698,7 @@ export default function SettingsSurface() {
           <div className="info-box" style={{ marginTop: 12 }}>
             Runtime status is reported where the feature actually lives:
             <br />
-            Chat shows the active assistant runtime state, Calendar labels manual providers, Integrations marks simulated providers, and Projects shows whether local-path actions are desktop-only or available in this build.
+            Chat shows the active assistant runtime state, Calendar labels manual providers, Integrations marks simulated providers, and Projects keeps account-backed references together.
           </div>
         </div>
       </div>

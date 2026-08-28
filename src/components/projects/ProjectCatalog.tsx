@@ -11,14 +11,9 @@ import { useSortable } from '@dnd-kit/react/sortable';
 import type {
   Project,
   ProjectCatalogueSection,
-  ProjectDeviceBinding,
   ProjectKind,
   ProjectRunRecipe,
 } from '../../types/domain';
-import type {
-  ApprovedProjectProfile,
-  ProjectSessionSnapshot,
-} from '../../services/projectRuntime';
 import { getProjectAvailability } from './projectCatalogModel';
 
 const KIND_LABELS: Record<ProjectKind, string> = {
@@ -58,12 +53,10 @@ function StatusBadge({ project }: { project: Project }) {
 
 function AvailabilityBadge({
   project,
-  binding,
 }: {
   project: Project;
-  binding?: ProjectDeviceBinding;
 }) {
-  const availability = getProjectAvailability(project, binding);
+  const availability = getProjectAvailability(project);
   return <span className={`project-badge availability-${availability.key}`}>{availability.label}</span>;
 }
 
@@ -241,7 +234,6 @@ function ProjectCardActionMenu({
 
 export function ProjectCard({
   project,
-  binding,
   activeWorkCount,
   section,
   index,
@@ -253,7 +245,6 @@ export function ProjectCard({
   onMove,
 }: {
   project: Project;
-  binding?: ProjectDeviceBinding;
   activeWorkCount: number;
   section: ProjectCatalogueSection;
   index: number;
@@ -336,7 +327,7 @@ export function ProjectCard({
 
         <div className="project-badge-row" aria-label="Project status">
           <StatusBadge project={project} />
-          <AvailabilityBadge project={project} binding={binding} />
+          <AvailabilityBadge project={project} />
           <span className="project-badge kind">{KIND_LABELS[project.kind || 'other']}</span>
         </div>
 
@@ -393,50 +384,26 @@ export function ProjectCard({
   );
 }
 
-export interface ProjectRecipeViewState {
-  fingerprint?: string;
-  profile?: ApprovedProjectProfile;
-  session?: ProjectSessionSnapshot;
-  pending?: boolean;
-  stale?: boolean;
-}
-
 export function ProjectReferenceDrawer({
   project,
-  binding,
   activeWorkCount,
   milestoneCount,
-  desktopPathActions,
-  runtimeAvailable,
-  recipeStates,
   feedback,
   onClose,
   onEdit,
   onManage,
-  onLinkFolder,
-  onOpenFolder,
   onCopy,
-  onRun,
-  onStop,
   onPinChange,
   onArchiveChange,
 }: {
   project: Project;
-  binding?: ProjectDeviceBinding;
   activeWorkCount: number;
   milestoneCount: number;
-  desktopPathActions: boolean;
-  runtimeAvailable: boolean;
-  recipeStates: Record<string, ProjectRecipeViewState>;
   feedback?: string;
   onClose: () => void;
   onEdit: () => void;
   onManage: () => void;
-  onLinkFolder: () => void;
-  onOpenFolder: () => void;
   onCopy: (value: string, label: string) => void;
-  onRun: (recipe: ProjectRunRecipe) => void;
-  onStop: (recipe: ProjectRunRecipe) => void;
   onPinChange: (pinned: boolean) => void;
   onArchiveChange: (archived: boolean) => void;
 }) {
@@ -480,12 +447,7 @@ export function ProjectReferenceDrawer({
     () => (project.links || []).filter(link => isSafeExternalUrl(link.url)),
     [project.links],
   );
-  const availability = getProjectAvailability(project, binding);
-  const sessions = Object.values(recipeStates)
-    .map(state => state.session)
-    .filter((session): session is ProjectSessionSnapshot => Boolean(session))
-    .sort((left, right) => right.startedAt.localeCompare(left.startedAt));
-  const latestSession = sessions[0];
+  const availability = getProjectAvailability(project);
 
   return (
     <div className="project-drawer-backdrop" onMouseDown={onClose}>
@@ -549,35 +511,6 @@ export function ProjectReferenceDrawer({
             </div>
           </section>
 
-          <section className="project-drawer-section">
-            <div className="project-section-heading">
-              <div>
-                <span className="project-section-kicker">This device</span>
-                <h3>Local folder</h3>
-              </div>
-              {desktopPathActions && (
-                <button className="btn btn-secondary btn-sm" type="button" onClick={onLinkFolder}>
-                  {binding?.projectRoot ? 'Change folder' : 'Link folder'}
-                </button>
-              )}
-            </div>
-            {binding?.projectRoot ? (
-              <>
-                <code className="project-command-code">{binding.projectRoot}</code>
-                <div className="project-inline-actions">
-                  <button className="btn btn-secondary btn-sm" type="button" onClick={onOpenFolder}>Open folder</button>
-                  <button className="btn btn-secondary btn-sm" type="button" onClick={() => onCopy(binding.projectRoot, 'folder path')}>Copy path</button>
-                </div>
-              </>
-            ) : (
-              <p className="project-muted-copy">
-                {desktopPathActions
-                  ? 'Not linked on this device. Link the existing checkout when you want local actions.'
-                  : 'Local folders and one-click commands are available in the Sabah One desktop app. This web view remains a reference.'}
-              </p>
-            )}
-          </section>
-
           {(project.setupSteps || []).length > 0 && (
             <section className="project-drawer-section">
               <div className="project-section-heading">
@@ -611,71 +544,30 @@ export function ProjectReferenceDrawer({
             <section className="project-drawer-section">
               <div className="project-section-heading">
                 <div>
-                  <span className="project-section-kicker">Local launch</span>
-                  <h3>How to run</h3>
+                  <span className="project-section-kicker">Reference</span>
+                  <h3>Reference commands</h3>
                 </div>
               </div>
               <div className="project-recipes">
-                {(project.runRecipes || []).map(recipe => {
-                  const state = recipeStates[recipe.id] || {};
-                  const isRunning = state.session?.status === 'running';
-                  const canRun = runtimeAvailable && Boolean(binding?.projectRoot);
-                  return (
-                    <div className="project-recipe" key={recipe.id}>
-                      <div className="project-recipe-heading">
-                        <div>
-                          <strong>{recipe.label}</strong>
-                          {recipe.prerequisites && recipe.prerequisites.length > 0 && (
-                            <p>{recipe.prerequisites.join(' · ')}</p>
-                          )}
-                        </div>
-                        <span className={`project-runtime-state ${isRunning ? 'running' : state.stale ? 'stale' : state.profile ? 'trusted' : 'idle'}`}>
-                          {isRunning ? 'Running' : state.stale ? 'Review again' : state.profile ? 'Trusted here' : 'Trust required'}
-                        </span>
-                      </div>
-                      <div className="project-command-row">
-                        <code className="project-command-code">{recipe.displayCommand || [recipe.executable, ...recipe.args].join(' ')}</code>
-                        <button className="btn btn-secondary btn-sm" type="button" onClick={() => onCopy(recipe.displayCommand || [recipe.executable, ...recipe.args].join(' '), `${recipe.label} command`)}>Copy</button>
-                      </div>
-                      <div className="project-inline-actions">
-                        {isRunning ? (
-                          <button className="btn btn-danger btn-sm" type="button" disabled={state.pending} onClick={() => onStop(recipe)}>Stop</button>
-                        ) : (
-                          <button className="btn btn-primary btn-sm" type="button" disabled={!canRun || state.pending} onClick={() => onRun(recipe)}>
-                            {state.pending ? 'Starting…' : canRun ? 'Run' : runtimeAvailable ? 'Link folder to run' : 'Desktop only'}
-                          </button>
-                        )}
-                        {isRunning && recipe.localUrl && (
-                          <a className="btn btn-secondary btn-sm" href={recipe.localUrl} target="_blank" rel="noreferrer">Open local app</a>
+                {(project.runRecipes || []).map((recipe: ProjectRunRecipe) => (
+                  <div className="project-recipe" key={recipe.id}>
+                    <div className="project-recipe-heading">
+                      <div>
+                        <strong>{recipe.label}</strong>
+                        {recipe.prerequisites && recipe.prerequisites.length > 0 && (
+                          <p>{recipe.prerequisites.join(' · ')}</p>
                         )}
                       </div>
+                      <span className="project-reference-state">Reference only</span>
                     </div>
-                  );
-                })}
-              </div>
-              <p className="project-safety-note">The first run shows the exact command and folder for approval. Any change requires approval again.</p>
-            </section>
-          )}
-
-          {latestSession && (
-            <section className="project-drawer-section">
-              <div className="project-section-heading">
-                <div>
-                  <span className="project-section-kicker">Runtime</span>
-                  <h3>Latest output</h3>
-                </div>
-                <span className={`project-runtime-state ${latestSession.status}`}>{latestSession.status}</span>
-              </div>
-              <div className="project-runtime-log" aria-live="polite" aria-label="Latest project command output">
-                {latestSession.logs.length > 0
-                  ? latestSession.logs.map((log, index) => (
-                    <div className={`project-log-line ${log.stream}`} key={`${log.timestamp}-${index}`}>
-                      <span>{log.stream}</span>
-                      <code>{log.line}</code>
+                    <div className="project-command-row">
+                      <code className="project-command-code">{recipe.displayCommand || [recipe.executable, ...recipe.args].join(' ')}</code>
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={() => onCopy(recipe.displayCommand || [recipe.executable, ...recipe.args].join(' '), `${recipe.label} command`)}>Copy</button>
                     </div>
-                  ))
-                  : <span className="project-muted-copy">Waiting for output…</span>}
+                  </div>
+                ))}
               </div>
+              <p className="project-safety-note">Commands are displayed for reference only and are never run by Sabah One.</p>
             </section>
           )}
 

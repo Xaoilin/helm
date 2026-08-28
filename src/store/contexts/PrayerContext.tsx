@@ -51,14 +51,14 @@ import {
   cancelAllPrayerReminders,
   cancelPrayerReminder,
   getPrayerReminderPermission,
-  getPrayerReminderKey as getNativeReminderKey,
+  getPrayerReminderKey as getBrowserReminderKey,
   onPrayerReminderFired,
   requestPrayerReminderPermission,
   schedulePrayerReminder,
   sendPrayerNotification,
   type PrayerReminderPermissionRequestResult,
   type PrayerReminderPermissionState,
-} from '../../services/nativePrayerReminder';
+} from '../../services/browserPrayerReminder';
 import {
   getNextPrayer,
   getPrayerTimes,
@@ -120,7 +120,7 @@ interface ScheduledReminderGroup {
   leader: PrayerName;
   deadlineIso: string;
   fireAtIso: string;
-  nativeKey: string;
+  reminderKey: string;
   title: string;
   body: string;
 }
@@ -133,7 +133,7 @@ export interface PrayerDiagnostics {
   location: string;
   method: string | null;
   scheduleTimezone: string | null;
-  desktopTimezone: string;
+  localTimezone: string;
   timezoneMatches: boolean;
   nextReminderAt: string | null;
   suppressionReason: string | null;
@@ -156,7 +156,7 @@ interface PrayerContextValue {
   scheduleError: string | null;
   now: Date;
   today: string;
-  desktopTimezone: string;
+  localTimezone: string;
   timezoneMatches: boolean;
   scheduleDays: PrayerScheduleDay[];
   stats: PrayerOutcomeStats;
@@ -305,7 +305,7 @@ function buildScheduledReminderGroup(
   const deadlineIso = group.deadlineAt.toISOString();
   const fireAtIso = group.fireAt.toISOString();
   const groupKey = `${group.prayerDate}:${group.deadlineAt.getTime()}`;
-  const nativeKey = getNativeReminderKey({
+  const reminderKey = getBrowserReminderKey({
     prayerDate: group.prayerDate,
     prayerName: leader,
     deadlineIso,
@@ -325,7 +325,7 @@ function buildScheduledReminderGroup(
     leader,
     deadlineIso,
     fireAtIso,
-    nativeKey,
+    reminderKey,
     title,
     body,
   };
@@ -503,16 +503,16 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const reminderMinutes = settingsCtx.settings.prayerReminderMinutes ?? PRAYER_REMINDERS.DEFAULT_MINUTES;
   const city = settingsCtx.settings.prayerCity || 'Bedford';
   const country = settingsCtx.settings.prayerCountry || 'United Kingdom';
-  const desktopTimezone = canonicalizeTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
+  const localTimezone = canonicalizeTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const scheduleTimezone = canonicalizeTimezone(schedule?.timezone || '');
-  const timezoneMatches = Boolean(scheduleTimezone && desktopTimezone && scheduleTimezone === desktopTimezone);
+  const timezoneMatches = Boolean(scheduleTimezone && localTimezone && scheduleTimezone === localTimezone);
   const reminderScheduleList = useMemo(
     () => Object.values(reminderSchedules),
     [reminderSchedules],
   );
   const reminderTimezonesMatch = reminderScheduleList.length > 0
     && reminderScheduleList.every(candidate =>
-      canonicalizeTimezone(candidate.timezone || '') === desktopTimezone
+      canonicalizeTimezone(candidate.timezone || '') === localTimezone
     );
 
   useEffect(() => {
@@ -727,7 +727,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     for (const [groupKey, scheduled] of scheduledGroupsRef.current) {
       if (scheduled.prayerDate !== prayerDate || !scheduled.prayerNames.includes(prayerName)) continue;
       scheduledGroupsRef.current.delete(groupKey);
-      scheduledGroupNamesRef.current.delete(scheduled.nativeKey);
+      scheduledGroupNamesRef.current.delete(scheduled.reminderKey);
       void cancelPrayerReminder({
         prayerDate: scheduled.prayerDate,
         prayerName: scheduled.leader,
@@ -1232,7 +1232,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
       const prayerNames = scheduledGroupNamesRef.current.get(event.key) || [event.prayerName];
       scheduledGroupNamesRef.current.delete(event.key);
       for (const [groupKey, scheduled] of scheduledGroupsRef.current) {
-        if (scheduled.nativeKey === event.key) {
+        if (scheduled.reminderKey === event.key) {
           scheduledGroupsRef.current.delete(groupKey);
         }
       }
@@ -1292,8 +1292,8 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
 
         if (!reminderInventoryInitializedRef.current) {
           try {
-            // A Tauri process timer can outlive a renderer reload. Clear the
-            // process inventory once, then rebuild it from persisted outcomes.
+            // Clear the in-memory browser timer inventory once, then rebuild it
+            // from persisted outcomes for this page session.
             await cancelAllPrayerReminders();
             reminderInventoryInitializedRef.current = true;
             scheduledGroupsRef.current.clear();
@@ -1326,8 +1326,8 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
           if (replacement?.signature === current.signature) continue;
 
           scheduledGroupsRef.current.delete(groupKey);
-          scheduledGroupNamesRef.current.delete(current.nativeKey);
-          if (replacement?.nativeKey === current.nativeKey) continue;
+          scheduledGroupNamesRef.current.delete(current.reminderKey);
+          if (replacement?.reminderKey === current.reminderKey) continue;
 
           try {
             await cancelPrayerReminder({
@@ -1349,7 +1349,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
           if (current?.signature === scheduled.signature) continue;
 
           scheduledGroupsRef.current.set(groupKey, scheduled);
-          scheduledGroupNamesRef.current.set(scheduled.nativeKey, [...scheduled.prayerNames]);
+          scheduledGroupNamesRef.current.set(scheduled.reminderKey, [...scheduled.prayerNames]);
           try {
             const result = await schedulePrayerReminder({
               prayerDate: scheduled.prayerDate,
@@ -1362,12 +1362,12 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
             setLastNotificationKey(result.key);
             if (result.status === 'expired' && scheduledGroupsRef.current.get(groupKey) === scheduled) {
               scheduledGroupsRef.current.delete(groupKey);
-              scheduledGroupNamesRef.current.delete(scheduled.nativeKey);
+              scheduledGroupNamesRef.current.delete(scheduled.reminderKey);
             }
           } catch (error) {
             if (scheduledGroupsRef.current.get(groupKey) === scheduled) {
               scheduledGroupsRef.current.delete(groupKey);
-              scheduledGroupNamesRef.current.delete(scheduled.nativeKey);
+              scheduledGroupNamesRef.current.delete(scheduled.reminderKey);
             }
             const message = error instanceof Error ? error.message : String(error);
             setLastReminderError(message);
@@ -1466,7 +1466,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
         : !scheduleTimezone
           ? 'The schedule timezone could not be verified.'
           : !timezoneMatches
-            ? `Schedule timezone ${scheduleTimezone} does not match desktop timezone ${desktopTimezone}.`
+            ? `Schedule timezone ${scheduleTimezone} does not match local browser timezone ${localTimezone}.`
             : reminderGroups.length === 0
               ? 'No incomplete prayer is currently eligible.'
               : null;
@@ -1478,7 +1478,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     location: `${city}, ${country}`,
     method: schedule?.method || null,
     scheduleTimezone: scheduleTimezone || null,
-    desktopTimezone,
+    localTimezone,
     timezoneMatches,
     nextReminderAt: nextReminderGroup?.fireAt.toISOString() || null,
     suppressionReason,
@@ -1488,7 +1488,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   }), [
     city,
     country,
-    desktopTimezone,
+    localTimezone,
     lastNotificationKey,
     lastReminderError,
     nextReminderGroup,
@@ -1509,7 +1509,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     scheduleError,
     now,
     today,
-    desktopTimezone,
+    localTimezone,
     timezoneMatches,
     scheduleDays,
     stats,
@@ -1545,7 +1545,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     confirmPrayerCompletion,
     correctPrayerOutcome,
     deadlines,
-    desktopTimezone,
+    localTimezone,
     diagnostics,
     dismissAdhan,
     getOutcome,

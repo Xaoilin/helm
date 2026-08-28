@@ -17,12 +17,6 @@ export function withoutLocalGitEnvironment(environment = process.env) {
   return isolated
 }
 
-const NATIVE_VERSION_FILES = new Set([
-  'src-tauri/Cargo.lock',
-  'src-tauri/Cargo.toml',
-  'src-tauri/tauri.conf.json',
-])
-
 function git(rootDir, args, { allowFailure = false } = {}) {
   try {
     return execFileSync('git', args, {
@@ -86,29 +80,6 @@ export function listChangedFiles(rootDir, preferredBase = 'origin/master') {
   }
 }
 
-function normalizeNativeReleaseVersion(filePath, source) {
-  const normalizedSource = source.replaceAll('\r\n', '\n')
-  if (filePath === 'src-tauri/Cargo.toml') {
-    return normalizedSource.replace(
-      /(\[package\][\s\S]*?\nversion\s*=\s*)"[^"]+"/u,
-      '$1"<release-version>"',
-    )
-  }
-  if (filePath === 'src-tauri/Cargo.lock') {
-    return normalizedSource.replace(
-      /(\[\[package\]\]\nname\s*=\s*"helm"\nversion\s*=\s*)"[^"]+"/u,
-      '$1"<release-version>"',
-    )
-  }
-  if (filePath === 'src-tauri/tauri.conf.json') {
-    return normalizedSource.replace(
-      /("version"\s*:\s*)"[^"]+"/u,
-      '$1"<release-version>"',
-    )
-  }
-  return normalizedSource
-}
-
 function readFileAtRef(rootDir, ref, filePath) {
   try {
     return execFileSync('git', ['show', `${ref}:${filePath}`], {
@@ -164,40 +135,17 @@ export function hasPackageRuntimeImpact(rootDir, base, files) {
   return false
 }
 
-export function hasNativeImpact(rootDir, base, files, { includeWorkflow = false } = {}) {
-  if (includeWorkflow && files.includes('.github/workflows/ci.yml')) return true
-
-  const directNativeChange = files.some(filePath => (
-    (
-      filePath.startsWith('src-tauri/')
-      || /^(?:Cargo\.toml|Cargo\.lock)$/u.test(filePath)
-    )
-    && !NATIVE_VERSION_FILES.has(filePath)
-  ))
-  if (directNativeChange) return true
-
-  for (const filePath of files.filter(file => NATIVE_VERSION_FILES.has(file))) {
-    if (hasNormalizedImpact(rootDir, base, filePath, normalizeNativeReleaseVersion)) {
-      return true
-    }
-  }
-
-  return false
-}
-
 export function classifyChanges(rootDir, files, base = null) {
   const existingFiles = files.filter(filePath => existsSync(resolve(rootDir, filePath)))
   const lintFiles = existingFiles.filter(filePath => /\.(?:[cm]?js|jsx|ts|tsx)$/u.test(filePath))
   const testInputs = existingFiles.filter(filePath => (
     /\.(?:[cm]?js|jsx|ts|tsx)$/u.test(filePath)
     && !filePath.startsWith('e2e/')
-    && !filePath.startsWith('src-tauri/')
   ))
 
   const deletedTestInput = files.some(filePath => (
     /\.(?:[cm]?js|jsx|ts|tsx)$/u.test(filePath)
     && !filePath.startsWith('e2e/')
-    && !filePath.startsWith('src-tauri/')
     && !existsSync(resolve(rootDir, filePath))
   ))
   const packageRuntimeImpact = base
@@ -229,17 +177,9 @@ export function classifyChanges(rootDir, files, base = null) {
     || filePath === 'vite.config.ts'
     || packageRuntimeImpact
   ))
-  const native = base
-    ? hasNativeImpact(rootDir, base, files)
-    : files.some(filePath => (
-      filePath.startsWith('src-tauri/')
-      || /^(?:Cargo\.toml|Cargo\.lock)$/u.test(filePath)
-    ))
-
   return {
     globalTestChange,
     lintFiles,
-    native,
     testInputs,
     typecheck,
     ui,

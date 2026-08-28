@@ -10,7 +10,6 @@ export const REQUIRED_CI_CHECKS = [
   'e2e',
   'build',
   'database',
-  'native',
   'codex-review',
 ]
 
@@ -18,7 +17,73 @@ const LOCAL_DATE_UTC_SLICING_PATTERN =
   /\.toISOString\(\)\s*\.split\(\s*['"]T['"]\s*\)\s*\[\s*0\s*\]/u
 
 const TRACKED_POLICY_PATHS = ['src', 'docs', 'AGENTS.md', 'README.md']
-const TEXT_FILE_PATTERN = /\.(?:js|jsx|mjs|cjs|ts|tsx|md|json|yml|yaml)$/u
+const TEXT_FILE_PATTERN = /\.(?:js|jsx|mjs|cjs|ts|tsx|md|json|toml|yml|yaml)$/u
+const HOSTED_WEB_POLICY_PATHS = [
+  'src',
+  'scripts',
+  '.github',
+  '.relay/relay.toml',
+  'AGENTS.md',
+  'docs',
+  'README.md',
+  '.gitignore',
+  'eslint.config.js',
+  'package.json',
+  'package-lock.json',
+  'playwright.config.ts',
+  'tsconfig.app.json',
+  'tsconfig.json',
+  'tsconfig.node.json',
+  'vite.config.ts',
+]
+const HOSTED_WEB_POLICY_EXCLUDED_PATHS = new Set([
+  'scripts/lib/agentPolicy.mjs',
+  'src/test/agentWorkflow.test.ts',
+])
+const SABAH_ONE_LOCAL_APP_SUPPORT_PATTERN = /(?:\b(?:Sabah One|HELM)\b[^\r\n]*(?:\b(?:desktop|local|native)\b[ _-]?(?:app(?:lication)?|assistant|runtime|runner|support|notification(?:s)?|path(?:s)?|project|folder|execution|timer|process)\b)|\b(?:desktop|local|native)\b[ _-]?(?:app(?:lication)?|assistant|runtime|runner|support|notification(?:s)?|path(?:s)?|project|folder|execution|timer|process)\b[^\r\n]*\b(?:Sabah One|HELM)\b|\bnative\s+(?:Sabah One|HELM)\b)/iu
+const SABAH_ONE_LOCAL_RUNTIME_API_PATTERN = /@tauri-apps|\bsrc-tauri\b|\bTAURI_[A-Z0-9_]*\b|__TAURI(?:_[A-Z0-9]+)?__|\btauri\b|\b(?:isTauri|isTauriRuntime|tauriAvailable|readTauriRaw|getDeviceTauriKey|desktopRuntimeAvailable|projectRuntime|projectPaths|nativePrayerReminder|canUseDesktopProjectPaths|canUseProjectRuntime|pickProjectDirectory|canonicalizeProjectPath|openProjectPath|createProjectRunFingerprint|approveProjectProfile|revokeProjectProfile|revokeProjectProfilesForProject|listApprovedProjectProfiles|listProjectSessions|startProjectProfile|stopProjectSession|subscribeProjectSession|canonicalize_project_path|isAbsoluteProjectRoot|normalizePendingLegacyProjectPaths|canonicalizeProjectRoot|PROJECT_PENDING_LEGACY_PATHS_STORE_KEY|localPath)\b/iu
+const FORBIDDEN_LOCAL_APP_CACHE_PATTERN = /\b(?:cargo|rustup|rust|src-tauri|tauri)\b|\bnative(?:[-_ ](?:cache|build|runtime|platform|dependencies|toolchain|target|artifacts?))\b/iu
+
+const HOSTED_WEB_POLICY_PATTERNS = {
+  source: [
+    {
+      label: 'Tauri or native runtime reference',
+      pattern: SABAH_ONE_LOCAL_RUNTIME_API_PATTERN,
+    },
+    {
+      label: 'explicit Sabah One desktop or local application support wording',
+      pattern: SABAH_ONE_LOCAL_APP_SUPPORT_PATTERN,
+    },
+  ],
+  scripts: [
+    {
+      label: 'native build or runtime tooling',
+      pattern: /@tauri-apps|\bsrc-tauri\b|\b(?:cargo|rustup)\b|\btauri(?:[-./_]|$)|\bnative-(?:impact|changes|platform)\b|\btest:native\b/iu,
+    },
+  ],
+  ci: [
+    {
+      label: 'native CI, platform, or release machinery',
+      pattern: /@tauri-apps|\bsrc-tauri\b|\b(?:cargo|rustup)\b|\btauri(?:[-./_]|$)|\bnative-(?:impact|changes|platform)\b|^\s*(?:native\s*:|name:\s*native\s*$)|\b(?:codesign|notariz(?:e|ation)?|\.dmg\b|\.msi\b|\.nsis\b)/iu,
+    },
+  ],
+  config: [
+    {
+      label: 'native build or runtime configuration',
+      pattern: /@tauri-apps|\bsrc-tauri\b|\b(?:cargo|rustup)\b|\btauri(?:[-./_]|$)|\bnative-(?:impact|changes|platform)\b|\b(?:codesign|notariz(?:e|ation)?|\.dmg\b|\.msi\b|\.nsis\b)/iu,
+    },
+  ],
+  docs: [
+    {
+      label: 'native application support wording',
+      pattern: /@tauri-apps|\bsrc-tauri\b|\b(?:cargo|rustup|tauri)\b/iu,
+    },
+    {
+      label: 'explicit Sabah One desktop or local application support wording',
+      pattern: SABAH_ONE_LOCAL_APP_SUPPORT_PATTERN,
+    },
+  ],
+}
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
@@ -35,6 +100,152 @@ export function listTrackedPolicyFiles(rootDir) {
     .split(/\r?\n/u)
     .map((line) => line.trim())
     .filter((filePath) => filePath.length > 0 && TEXT_FILE_PATTERN.test(filePath))
+}
+
+function hostedWebPolicyCategory(filePath) {
+  if (filePath.startsWith('src/')) return 'source'
+  if (filePath.startsWith('scripts/')) return 'scripts'
+  if (filePath.startsWith('.github/')) return 'ci'
+  if (filePath === 'AGENTS.md' || filePath.startsWith('docs/') || filePath === 'README.md') return 'docs'
+  return 'config'
+}
+
+function findForbiddenLocalAppCacheMachinery(filePath, text, category) {
+  if (category !== 'ci' && category !== 'config') return []
+
+  const findings = []
+  const lines = text.split(/\r?\n/u)
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const cacheStep = lines[index].match(/^(\s*)-\s+uses:\s*actions\/cache@/iu)
+    if (!cacheStep) continue
+
+    const stepIndent = cacheStep[1]
+    const nextStepPattern = new RegExp(`^${escapeRegex(stepIndent)}-\\s`, 'u')
+    let end = index + 1
+    while (end < lines.length && !nextStepPattern.test(lines[end])) end += 1
+
+    if (FORBIDDEN_LOCAL_APP_CACHE_PATTERN.test(lines.slice(index, end).join('\n'))) {
+      findings.push({
+        category,
+        filePath,
+        line: index + 1,
+        label: 'native/Cargo/Rust/src-tauri cache machinery',
+      })
+    }
+  }
+
+  return findings
+}
+
+export function listHostedWebPolicyFiles(rootDir) {
+  const output = execFileSync('git', ['ls-files', ...HOSTED_WEB_POLICY_PATHS], {
+    cwd: rootDir,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  return output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((filePath) => (
+      filePath.length > 0
+      && (filePath === '.gitignore' || TEXT_FILE_PATTERN.test(filePath))
+      && !HOSTED_WEB_POLICY_EXCLUDED_PATHS.has(filePath)
+    ))
+}
+
+export function findForbiddenHostedWebPolicyInText(filePath, text, category = hostedWebPolicyCategory(filePath)) {
+  const findings = []
+  const patterns = HOSTED_WEB_POLICY_PATTERNS[category] ?? []
+  const lines = text.split(/\r?\n/u)
+
+  lines.forEach((line, index) => {
+    for (const { label, pattern } of patterns) {
+      if (pattern.test(line)) {
+        findings.push({
+          category,
+          filePath,
+          line: index + 1,
+          label,
+        })
+        break
+      }
+    }
+  })
+
+  findings.push(...findForbiddenLocalAppCacheMachinery(filePath, text, category))
+
+  return findings
+}
+
+function packageNameFromLockPath(filePath) {
+  const packagePath = filePath.replace(/^node_modules\//u, '')
+  const parts = packagePath.split('/')
+  return parts[0]?.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
+}
+
+function isForbiddenHostedWebPackageName(packageName) {
+  return /^@tauri-apps\//iu.test(packageName)
+    || /(?:^|[-/])tauri(?:$|[-/])/iu.test(packageName)
+}
+
+export function findForbiddenHostedWebDependencies(packageManifest, packageLock) {
+  const findings = []
+  const dependencySections = [
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+    'peerDependencies',
+  ]
+
+  for (const section of dependencySections) {
+    for (const packageName of Object.keys(packageManifest?.[section] ?? {})) {
+      if (isForbiddenHostedWebPackageName(packageName)) {
+        findings.push({
+          category: 'dependencies',
+          filePath: 'package.json',
+          line: null,
+          label: `forbidden package in ${section}: ${packageName}`,
+        })
+      }
+    }
+  }
+
+  for (const packagePath of Object.keys(packageLock?.packages ?? {})) {
+    if (!packagePath.startsWith('node_modules/')) continue
+    const packageName = packageNameFromLockPath(packagePath)
+    if (packageName && isForbiddenHostedWebPackageName(packageName)) {
+      findings.push({
+        category: 'dependencies',
+        filePath: 'package-lock.json',
+        line: null,
+        label: `forbidden locked package: ${packageName}`,
+      })
+    }
+  }
+
+  return findings
+}
+
+export function findForbiddenHostedWebPackageScripts(packageManifest) {
+  const findings = []
+  for (const [scriptName, scriptCommand] of Object.entries(packageManifest?.scripts ?? {})) {
+    if (/(?:^|:)native(?:$|:)|tauri/iu.test(scriptName)) {
+      findings.push({
+        category: 'scripts',
+        filePath: `package.json#scripts.${scriptName}`,
+        line: null,
+        label: `forbidden local-app script name: ${scriptName}`,
+      })
+    }
+    findings.push(...findForbiddenHostedWebPolicyInText(
+      `package.json#scripts.${scriptName}`,
+      String(scriptCommand),
+      'scripts',
+    ))
+  }
+  return findings
 }
 
 export function findForbiddenLocalDateSlicingInText(filePath, text) {
@@ -99,7 +310,6 @@ export function evaluateCiWorkflow(rawWorkflow) {
     "needs.e2e.result == 'success'",
     "needs.build.result == 'success'",
     "needs.database.result == 'success'",
-    "needs.native.result == 'success'",
     "needs['codex-review'].result == 'success'",
     'group: helm-auto-promote-master',
     'cancel-in-progress: false',
@@ -162,8 +372,6 @@ export function evaluateCiWorkflow(rawWorkflow) {
     'converted_to_draft',
     "github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id",
     "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
-    'node ./scripts/detect-ci-native-impact.mjs',
-    'uses: actions/cache@v5',
     'npm run test -- --config vite.config.ts',
     'name: unit-${{ matrix.shard }}-of-2',
     '--shard=${{ matrix.shard }}/2',
@@ -173,7 +381,6 @@ export function evaluateCiWorkflow(rawWorkflow) {
     'npm run test:e2e -- --fully-parallel --workers=2 --shard=${{ matrix.shard }}/3 --reporter=line',
     "E2E_SHARDS_RESULT: ${{ needs['e2e-shard'].result }}",
     'google-chrome --version',
-    "needs['native-changes'].outputs.native == 'true'",
   ]
 
   for (const snippet of requiredEfficiencySnippets) {
@@ -183,7 +390,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
   }
 
   if (requiredEfficiencySnippets.every((snippet) => rawWorkflow.includes(snippet))) {
-    passes.push('CI workflow cancels stale PR runs and conditionally caches native validation.')
+    passes.push('CI workflow cancels stale PR runs and keeps the hosted web checks balanced.')
   }
 
   const requiredReceiptSnippets = [
@@ -342,38 +549,63 @@ export function evaluatePagesSpaFallback(packageManifest, fallbackScriptExists =
   }
 }
 
-export function evaluateNativeStoreAllowlist(rootDir) {
+export function evaluateHostedWebPolicy(rootDir) {
   const failures = []
   const passes = []
-  const storeKeysSource = readFileSync(resolve(rootDir, 'src', 'store', 'storeKeys.ts'), 'utf8')
-  const projectPersistenceSource = readFileSync(
-    resolve(rootDir, 'src', 'store', 'projectPersistence.ts'),
-    'utf8',
-  )
-  const commandsSource = readFileSync(resolve(rootDir, 'src-tauri', 'src', 'commands.rs'), 'utf8')
+  const findings = []
+  const trackedFiles = execFileSync('git', ['ls-files'], {
+    cwd: rootDir,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean)
 
-  const sharedKeys = [...storeKeysSource.matchAll(/\{\s*key:\s*'([^']+)'/gu)]
-    .map((match) => match[1])
-  const deviceKeys = [...projectPersistenceSource.matchAll(
-    /export const PROJECT_[A-Z_]+_STORE_KEY\s*=\s*'([^']+)'/gu,
-  )].map((match) => `device-${match[1]}`)
-  const allowlistBody = commandsSource.match(
-    /const ALLOWED_STORE_KEYS:\s*&\[&str\]\s*=\s*&\[(.*?)\];/su,
-  )?.[1] ?? ''
-  const allowedKeys = [...allowlistBody.matchAll(/"([^"]+)"/gu)].map((match) => match[1])
-  const expectedKeys = [...new Set([...sharedKeys, ...deviceKeys, 'workspaces'])].sort()
-  const actualKeys = [...new Set(allowedKeys)].sort()
-  const missing = expectedKeys.filter((key) => !actualKeys.includes(key))
-  const unexpected = actualKeys.filter((key) => !expectedKeys.includes(key))
+  if (existsSync(resolve(rootDir, 'src-tauri')) || trackedFiles.some((filePath) => (
+    filePath === 'src-tauri' || filePath.startsWith('src-tauri/')
+  ))) {
+    failures.push('Hosted-web policy forbids the src-tauri application subtree.')
+  } else {
+    passes.push('Hosted-web policy confirms that the src-tauri application subtree is absent.')
+  }
 
-  if (missing.length > 0) {
-    failures.push(`Native store allowlist is missing: ${missing.join(', ')}.`)
+  if (trackedFiles.some((filePath) => /^(?:Cargo\.toml|Cargo\.lock)$/u.test(filePath))) {
+    failures.push('Hosted-web policy forbids tracked root Cargo manifests.')
   }
-  if (unexpected.length > 0) {
-    failures.push(`Native store allowlist has undeclared keys: ${unexpected.join(', ')}.`)
+
+  for (const filePath of listHostedWebPolicyFiles(rootDir)) {
+    const absolutePath = resolve(rootDir, filePath)
+    if (!existsSync(absolutePath)) continue
+    const category = hostedWebPolicyCategory(filePath)
+    findings.push(...findForbiddenHostedWebPolicyInText(
+      filePath,
+      readFileSync(absolutePath, 'utf8'),
+      category,
+    ))
   }
-  if (missing.length === 0 && unexpected.length === 0) {
-    passes.push('Native store allowlist matches every declared shared, device, and legacy store key.')
+
+  let packageManifest
+  let packageLock
+  try {
+    packageManifest = JSON.parse(readFileSync(resolve(rootDir, 'package.json'), 'utf8'))
+    packageLock = JSON.parse(readFileSync(resolve(rootDir, 'package-lock.json'), 'utf8'))
+  } catch (error) {
+    failures.push(`Hosted-web policy could not parse package manifests: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  if (packageManifest && packageLock) {
+    findings.push(...findForbiddenHostedWebDependencies(packageManifest, packageLock))
+    findings.push(...findForbiddenHostedWebPackageScripts(packageManifest))
+  }
+
+  for (const finding of findings) {
+    const location = finding.line === null ? finding.filePath : `${finding.filePath}:${finding.line}`
+    failures.push(`Hosted-web policy found ${finding.label} at ${location}.`)
+  }
+
+  if (findings.length === 0) {
+    passes.push('Hosted-web policy scan covers source, dependencies, scripts, CI/config, and live docs.')
   }
 
   return {
@@ -432,9 +664,9 @@ export function evaluateAgentPolicy(rootDir) {
   failures.push(...pagesSpaFallbackResult.failures)
   passes.push(...pagesSpaFallbackResult.passes)
 
-  const nativeStoreResult = evaluateNativeStoreAllowlist(rootDir)
-  failures.push(...nativeStoreResult.failures)
-  passes.push(...nativeStoreResult.passes)
+  const hostedWebResult = evaluateHostedWebPolicy(rootDir)
+  failures.push(...hostedWebResult.failures)
+  passes.push(...hostedWebResult.passes)
 
   return {
     failures,

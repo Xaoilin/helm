@@ -1,7 +1,6 @@
 import { resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
-import { classifyChanges, listChangedFiles } from './lib/changedFiles.mjs'
 import {
   npmRun,
   printTimingSummary,
@@ -21,8 +20,6 @@ results.push(policy)
 if (policy.exitCode !== 0) {
   failed = true
 } else {
-  const selection = listChangedFiles(rootDir)
-  const impact = classifyChanges(rootDir, selection.files, selection.base)
   const checks = [
     npmRun('lint'),
     npmRun('typecheck'),
@@ -30,7 +27,6 @@ if (policy.exitCode !== 0) {
     npmRun('build:web'),
     npmRun('test:e2e'),
   ]
-  if (impact.native) checks.push(npmRun('test:native'))
 
   try {
     results.push(...await runGroup(checks))

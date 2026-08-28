@@ -295,7 +295,7 @@ export default function NightCompassDashboard() {
             <h2 id="nc-prayer-title">Prayer</h2>
           </div>
           <span className="nc-prayer-location">
-            {app.settings.prayerCity || 'Prayer location'} · {prayer.desktopTimezone}
+            {app.settings.prayerCity || 'Prayer location'} · {prayer.localTimezone}
           </span>
         </div>
 
@@ -414,12 +414,12 @@ export default function NightCompassDashboard() {
                 <strong>
                   {prayer.scheduleStatus === 'unavailable'
                     ? 'Prayer schedule unavailable'
-                    : 'Schedule timezone does not match this desktop'}
+                    : 'Schedule timezone does not match this browser'}
                 </strong>
                 <span>
                   {prayer.scheduleStatus === 'unavailable'
                     ? prayer.scheduleError || 'No matching current-day schedule is available.'
-                    : `Schedule: ${prayer.schedule?.timezone || 'unknown'} · Desktop: ${prayer.desktopTimezone}`}
+                    : `Schedule: ${prayer.schedule?.timezone || 'unknown'} · Browser: ${prayer.localTimezone}`}
                 </span>
                 {prayer.scheduleStatus === 'unavailable' ? (
                   <button type="button" className="nc-primary-action" onClick={() => void prayer.retrySchedule()}>
