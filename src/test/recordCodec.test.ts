@@ -5,6 +5,11 @@ import {
   mergeLegacyStoreValue,
   splitSettings,
 } from '../store/recordCodec';
+import {
+  createDefaultDailyMomentumState,
+  getDailyMomentumPillarState,
+} from '../services/dailyMomentum';
+import { DEFAULT_PROFILE } from '../services/gamification';
 
 describe('Sabah One record codec', () => {
   it('preserves stable ids and explicit collection ordering', () => {
@@ -94,5 +99,23 @@ describe('Sabah One record codec', () => {
       position: 0,
     }])).toEqual([{ id: 'legacy-capture', content: 'Historical note' }]);
     expect(() => encodeStoreValue('captureItems', [])).toThrow(/retired/i);
+  });
+
+  it('round-trips daily momentum as an additive field on the older-reader-tolerant profile record', () => {
+    const value = {
+      ...DEFAULT_PROFILE,
+      prayerCompletionLedger: {},
+      dailyMomentumLearn: {
+        ...getDailyMomentumPillarState(createDefaultDailyMomentumState(), 'learn'),
+        unknownOlderField: { retained: true },
+      },
+      dailyMomentumMove: getDailyMomentumPillarState(createDefaultDailyMomentumState(), 'move'),
+    };
+
+    const records = encodeStoreValue('gamification', value);
+
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ recordId: 'profile', position: null });
+    expect(decodeStoreValue('gamification', records)).toEqual(value);
   });
 });

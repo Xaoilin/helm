@@ -44,6 +44,7 @@ import { AssistantProvider, useAssistantContext } from './contexts/AssistantCont
 import { AssistantActivityProvider, useAssistantActivityContext } from './contexts/AssistantActivityContext';
 import { ClockProvider, useClockContext } from './contexts/ClockContext';
 import { DashboardFocusProvider, useDashboardFocusContext } from './contexts/DashboardFocusContext';
+import { DailyMomentumProvider } from './contexts/DailyMomentumContext';
 import {
   PrayerProvider,
   usePrayerContext,
@@ -862,7 +863,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <SettingsProvider>
       <GamificationProvider>
-        <CalendarProvider>
+        <DailyMomentumProvider>
+          <CalendarProvider>
           <TripProvider>
             <ProjectProvider>
               <TaskProvider>
@@ -890,7 +892,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               </TaskProvider>
             </ProjectProvider>
           </TripProvider>
-        </CalendarProvider>
+          </CalendarProvider>
+        </DailyMomentumProvider>
       </GamificationProvider>
     </SettingsProvider>
   );

@@ -145,6 +145,7 @@ let realtimeHealthRegistered = false;
 let flushPromise: Promise<void> | null = null;
 let flushPromiseEpoch: number | null = null;
 let flushScheduled = false;
+let committedRecordFieldQueue: Promise<void> = Promise.resolve();
 let persistenceEpoch = 0;
 let refreshPromise: Promise<void> | null = null;
 let refreshQueued = false;
@@ -448,11 +449,17 @@ function patchForPayload(
   // Older clients do not know about dimensions and therefore omit the field
   // from otherwise complete records. Keep the server-known value in the
   // mutation so a partial/legacy edit cannot turn it into an unset operation.
-  const effectiveAfter = (
+  let effectiveAfter = (
     (collection === 'inventoryItems' || collection === 'inventoryNeeds')
     && before.dimensions !== undefined
     && !('dimensions' in after)
   ) ? { ...after, dimensions: before.dimensions } : after;
+  if (collection === 'gamification' && recordId === 'profile') {
+    effectiveAfter = { ...effectiveAfter };
+    for (const field of ['dailyMomentumLearn', 'dailyMomentumMove']) {
+      if (before[field] !== undefined) effectiveAfter[field] = before[field];
+    }
+  }
   const set: Record<string, unknown> = {};
   const unset: string[] = [];
   const mutations: HelmMutation[] = [];
@@ -1312,6 +1319,138 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
     const userId = getCurrentUserId();
     if (userId) publishDegraded(userId, 'database_unavailable', message);
   }
+}
+
+/**
+ * Persist account data and fail unless the desired value is confirmed in the
+ * authoritative database cache. Callers must not publish optimistic shared
+ * state before this promise resolves.
+ */
+export async function saveStoreCommitted<T>(key: string, value: T): Promise<void> {
+  assertSharedStoreKeyIsNotDeviceOnly(key);
+  if (!isSupabaseReady() || !isAuthenticated() || syncSession.status !== 'ready' || syncSession.readOnly) {
+    const message = 'Shared Sabah One data can only be changed while the signed-in database session is ready.';
+    lastRemoteWriteError = message;
+    notifyPersistenceHealthSubscribers();
+    throw new Error(message);
+  }
+
+  const sharedValue = await prepareSharedStoreValue(key, value);
+  const confirmedValue = decodeStoreValue(key, encodeStoreValue(key, sharedValue));
+  if (valuesEqual(decodedCache(key), confirmedValue)) return;
+  pendingStoreValues.set(key, sharedValue);
+  publishWriteQueue({ lastQueuedAt: new Date().toISOString() });
+  await flushPendingStores();
+  if (!valuesEqual(decodedCache(key), confirmedValue)) {
+    throw new Error(lastRemoteWriteError || 'The database did not confirm the requested Sabah One change.');
+  }
+}
+
+/**
+ * Commit reserved top-level fields on one account record without replacing
+ * unrelated fields. This is the concurrency-safe path for additive profile
+ * domains that older readers already preserve in the profile summary.
+ */
+export function saveStoreRecordFieldsCommitted<T>(
+  key: string,
+  recordId: string,
+  fields: Record<string, unknown>,
+  fallbackStoreValue: T,
+): Promise<void> {
+  const operation = committedRecordFieldQueue.then(async () => {
+    assertSharedStoreKeyIsNotDeviceOnly(key);
+    if (Object.keys(fields).length === 0) return;
+    if (!isSupabaseReady() || !isAuthenticated() || syncSession.status !== 'ready' || syncSession.readOnly) {
+      const message = 'Shared Sabah One data can only be changed while the signed-in database session is ready.';
+      lastRemoteWriteError = message;
+      notifyPersistenceHealthSubscribers();
+      throw new Error(message);
+    }
+
+    await flushPendingStores();
+    if (syncSession.status !== 'ready' || syncSession.readOnly) {
+      throw new Error(lastRemoteWriteError || 'The signed-in database session became read-only before the change could commit.');
+    }
+    const epoch = persistenceEpoch;
+    const userId = getCurrentUserId();
+    if (!userId) throw new StalePersistenceSessionError();
+    assertCurrentPersistenceSession(epoch, userId);
+    const stored = recordsByCollection.get(key)?.get(recordId);
+    const operations: HelmMutation[] = [];
+    if (stored?.deletedAt) {
+      operations.push({ op: 'restore', collection: key, recordId });
+      operations.push({ op: 'patch', collection: key, recordId, set: fields, unset: [] });
+    } else if (stored) {
+      const set = Object.fromEntries(
+        Object.entries(fields).filter(([field, value]) => !valuesEqual(stored.payload[field], value)),
+      );
+      if (Object.keys(set).length > 0) {
+        operations.push({ op: 'patch', collection: key, recordId, set, unset: [] });
+      }
+    } else {
+      const fallback = encodeStoreValue(key, fallbackStoreValue)
+        .find(record => record.recordId === recordId);
+      if (!fallback) throw new Error(`${key} record ${recordId} cannot be created from the supplied fallback.`);
+      operations.push({
+        op: 'create',
+        collection: key,
+        recordId,
+        payload: { ...fallback.payload, ...fields },
+        position: fallback.position,
+      });
+    }
+    if (operations.length === 0) return;
+
+    const keys = [key];
+    publishWriteQueue({
+      lastFlushStartedAt: new Date().toISOString(),
+      lastFlushKeys: keys,
+      lastFlushError: null,
+    });
+    try {
+      const result = await applyWithIdempotentRetry(uuid(), operations);
+      assertCurrentPersistenceSession(epoch, userId);
+      applyMutationResult(result.changes, result.accountVersion);
+      const confirmed = recordsByCollection.get(key)?.get(recordId);
+      if (!confirmed || confirmed.deletedAt !== null || Object.entries(fields).some(
+        ([field, value]) => !valuesEqual(confirmed.payload[field], value),
+      )) {
+        throw new Error('The database did not confirm the requested Sabah One record fields.');
+      }
+      deliveredRecordsByCollection.set(key, copyEncodedRecords(encodedCache(key)));
+      const completedAt = new Date().toISOString();
+      lastRemoteWriteAt = completedAt;
+      lastRemoteWriteKey = key;
+      lastRemoteWriteError = null;
+      publishWriteQueue({
+        lastFlushSuccessAt: completedAt,
+        lastFlushError: null,
+        lastFailureKeys: [],
+      });
+      publishStoreChanges(keys);
+    } catch (error) {
+      if (error instanceof StalePersistenceSessionError) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      lastRemoteWriteError = message;
+      publishWriteQueue({
+        lastFlushFailureAt: new Date().toISOString(),
+        lastFlushError: message,
+        lastFailureKeys: keys,
+      });
+      publishDegraded(
+        userId,
+        typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'database_unavailable',
+        `Database write failed: ${message}`,
+      );
+      publishStoreChanges(keys, 'RECONNECT');
+      if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+        await refreshDatabasePersistence();
+      }
+      throw error;
+    }
+  });
+  committedRecordFieldQueue = operation.then(() => undefined, () => undefined);
+  return operation;
 }
 
 export async function clearLocalStoreCopy(key: string, notify = true): Promise<void> {

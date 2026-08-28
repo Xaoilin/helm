@@ -20,6 +20,10 @@ const inventoryMigration = readFileSync(
   new URL('../../supabase/migrations/20260812193335_inventory_dimensions.sql', import.meta.url),
   'utf8',
 );
+const dailyMomentumMigration = readFileSync(
+  new URL('../../supabase/migrations/20260828031717_protect_daily_momentum_profile_fields.sql', import.meta.url),
+  'utf8',
+);
 const inventoryMcp = readFileSync(
   new URL('../../supabase/functions/sabah-one-inventory-mcp/index.ts', import.meta.url),
   'utf8',
@@ -117,5 +121,14 @@ describe('database-authoritative persistence contract', () => {
     expect(inventoryMigration).toContain('where user_id = v_user_id');
     expect(inventoryMigration).toContain('revoke all on function public.inventory_save_items(uuid, jsonb) from public, anon');
     expect(inventoryMigration).toContain('grant execute on function public.inventory_save_items(uuid, jsonb) to authenticated');
+  });
+
+  it('protects additive daily momentum fields without adding a storage surface', () => {
+    expect(dailyMomentumMigration).toContain("v_collection = 'gamification'");
+    expect(dailyMomentumMigration).toContain("v_record_id = 'profile'");
+    expect(dailyMomentumMigration).toContain("array['dailyMomentumLearn', 'dailyMomentumMove']");
+    expect(dailyMomentumMigration).not.toMatch(/create\s+table/i);
+    expect(dailyMomentumMigration).not.toMatch(/grant\s+[^;]*\s+on\s+table/i);
+    expect(dailyMomentumMigration).not.toMatch(/enable\s+row\s+level\s+security/i);
   });
 });
