@@ -117,6 +117,9 @@ describe('NightCompassDashboard focused component contract', () => {
     const sequence = screen.getByLabelText('Five daily prayers');
     expect(screen.getByRole('region', { name: 'Night Compass daily dashboard' })).toBeInTheDocument();
     expect(screen.queryByRole('main')).not.toBeInTheDocument();
+    expect(within(sequence).getAllByText(/^[◒☀◓◑☾]$/u)).toHaveLength(5);
+    expect(sequence.parentElement?.querySelectorAll('.nc-now-marker')).toHaveLength(1);
+    expect(within(sequence.parentElement!).getByText(/Now · .* to Isha/u)).toBeInTheDocument();
     expect(sequence).toHaveTextContent('On time');
     expect(sequence).toHaveTextContent('Late');
     expect(sequence).toHaveTextContent('Missed');
@@ -138,13 +141,49 @@ describe('NightCompassDashboard focused component contract', () => {
     );
   });
 
+  it('moves and grows the current-time marker as the next prayer approaches', () => {
+    const { rerender } = render(<NightCompassDashboard />);
+    const marker = () => document.querySelector('.nc-now-marker') as HTMLElement;
+    const initialPosition = Number.parseFloat(marker().style.getPropertyValue('--nc-marker-position'));
+    const initialSize = Number.parseFloat(marker().style.getPropertyValue('--nc-marker-size'));
+
+    contextMocks.prayer = {
+      ...contextMocks.prayer,
+      now: new Date(2026, 7, 28, 21, 30, 0),
+      nextPrayer: { prayer: PRAYERS[6], minutesUntil: 15 },
+    };
+    rerender(<NightCompassDashboard />);
+
+    expect(Number.parseFloat(marker().style.getPropertyValue('--nc-marker-position'))).toBeGreaterThan(initialPosition);
+    expect(Number.parseFloat(marker().style.getPropertyValue('--nc-marker-size'))).toBeGreaterThan(initialSize);
+    expect(screen.getByText(/Now · 15m 0s to Isha/u)).toBeInTheDocument();
+  });
+
   it("marks tomorrow's Fajr as Next without reusing today's completed outcome", () => {
     contextMocks.prayer = {
       ...contextMocks.prayer,
       now: new Date(2026, 7, 28, 22, 0, 0),
       nextPrayer: { prayer: PRAYERS[0], minutesUntil: 420 },
     };
-    render(<NightCompassDashboard />);
+    const { rerender } = render(<NightCompassDashboard />);
+
+    const marker = () => document.querySelector('.nc-now-marker') as HTMLElement;
+    const initialPosition = Number.parseFloat(marker().style.getPropertyValue('--nc-marker-position'));
+    const initialSize = Number.parseFloat(marker().style.getPropertyValue('--nc-marker-size'));
+    expect(initialPosition).toBeGreaterThan(95);
+
+    contextMocks.prayer = {
+      ...contextMocks.prayer,
+      now: new Date(2026, 7, 28, 23, 45, 0),
+      nextPrayer: { prayer: PRAYERS[0], minutesUntil: 315 },
+    };
+    rerender(<NightCompassDashboard />);
+
+    const overnightPosition = Number.parseFloat(marker().style.getPropertyValue('--nc-marker-position'));
+    const overnightSize = Number.parseFloat(marker().style.getPropertyValue('--nc-marker-size'));
+    expect(overnightPosition).toBeLessThan(initialPosition);
+    expect(overnightPosition).toBeGreaterThan(0);
+    expect(overnightSize).toBeGreaterThan(initialSize);
 
     const fajr = screen.getByRole('button', { name: 'Fajr Prayer — Next tomorrow' });
     expect(fajr).toBeDisabled();
@@ -163,8 +202,15 @@ describe('NightCompassDashboard focused component contract', () => {
     render(<NightCompassDashboard />);
 
     const learnCard = screen.getByRole('heading', { name: 'Learn' }).closest('.nc-momentum-card')!;
-    expect(within(learnCard).getByText('L1')).toBeInTheDocument();
+    expect(within(learnCard).getByRole('heading', { name: 'Reading' })).toBeInTheDocument();
+    expect(within(learnCard).getByRole('heading', { name: 'Course' })).toBeInTheDocument();
+    expect(within(learnCard).queryByRole('combobox')).not.toBeInTheDocument();
     expect(within(learnCard).getAllByText('optional')).toHaveLength(4);
+
+    const moveCard = screen.getByRole('heading', { name: 'Move' }).closest('.nc-momentum-card')!;
+    expect(within(moveCard).getByRole('heading', { name: 'Active minutes' })).toBeInTheDocument();
+    expect(within(moveCard).getByRole('heading', { name: 'Mobility' })).toBeInTheDocument();
+    expect(within(moveCard).getByRole('heading', { name: 'Tiny circuit' })).toBeInTheDocument();
 
     const recordProgress = contextMocks.momentum.recordProgress as ReturnType<typeof vi.fn>;
     const addPage = within(learnCard).getByRole('button', { name: 'Add 1 pages' });

@@ -77,6 +77,35 @@ describe('daily Learn and Move momentum', () => {
     expect(getAchievedDailyMomentumLevel(log.template, log.progress)).toBe(5);
   });
 
+  it('tracks every configured activity independently within the same pillar and day', () => {
+    let state = createDefaultDailyMomentumState();
+    state = recordDailyMomentumProgress(state, {
+      date: '2026-08-28', pillar: 'learn', templateId: 'learn-reading', stepId: 'pages', amount: 2,
+      updatedAt: '2026-08-28T08:00:00.000Z',
+    });
+    state = recordDailyMomentumProgress(state, {
+      date: '2026-08-28', pillar: 'learn', templateId: 'learn-course', stepId: 'course-minutes', amount: 5,
+      updatedAt: '2026-08-28T08:05:00.000Z',
+    });
+    state = recordDailyMomentumProgress(state, {
+      date: '2026-08-28', pillar: 'move', templateId: 'move-mobility', stepId: 'mobility-minutes', amount: 5,
+      updatedAt: '2026-08-28T08:10:00.000Z',
+    });
+
+    const day = getDailyMomentumDay(state, '2026-08-28');
+    expect(day.learn.activities.map(activity => [activity.template.id, activity.achievedLevel])).toEqual([
+      ['learn-reading', 1],
+      ['learn-course', 1],
+    ]);
+    expect(day.move.activities.map(activity => [activity.template.id, activity.achievedLevel])).toEqual([
+      ['move-active-minutes', 0],
+      ['move-mobility', 1],
+      ['move-tiny-circuit', 0],
+    ]);
+    expect(state.logs['2026-08-28:learn'].progress.pages).toBe(2);
+    expect(state.logs['2026-08-28:learn:learn-course'].progress['course-minutes']).toBe(5);
+  });
+
   it('allows a zero-progress path change and locks the path after positive progress', () => {
     let state = selectDailyMomentumPath(createDefaultDailyMomentumState(), {
       date: '2026-08-28', pillar: 'learn', templateId: 'learn-course', updatedAt: '2026-08-28T08:00:00.000Z',

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   CANONICAL_PRAYER_NAMES,
   calculatePrayerOutcomeStats,
@@ -9,13 +9,15 @@ import {
 import { formatTimeUntil, PRAYER_NAMES } from '../../services/prayerTimes';
 import { toLocalDateStr } from '../../services/financeHelpers';
 import { getQuranMotivationForDate } from '../../services/quranMotivation';
-import type { DailyMomentumPillarDay } from '../../services/dailyMomentum';
+import type {
+  DailyMomentumActivityDay,
+  DailyMomentumPillarDay,
+} from '../../services/dailyMomentum';
 import { useApp } from '../../store/AppContext';
 import { useDailyMomentumContext } from '../../store/contexts/DailyMomentumContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import PrayerStatsCard from './PrayerStatsCard';
 import type {
-  DailyActivityTemplate,
   DailyPillar,
   PrayerName,
   PrayerOutcomeStatus,
@@ -47,35 +49,149 @@ function formatStepProgress(current: number, target: number, metric: string): st
   return `${Math.min(current, target)} / ${target} ${metric}`;
 }
 
+const PRAYER_SYMBOLS: Record<PrayerName, string> = {
+  Fajr: '◒',
+  Dhuhr: '☀',
+  Asr: '◓',
+  Maghrib: '◑',
+  Isha: '☾',
+};
+
+interface PrayerTimelineProgress {
+  markerPosition: number;
+  markerProgress: number;
+  label: string;
+}
+
+function scheduleDateAt(date: Date, time: string, dayOffset = 0): Date | null {
+  const match = /^(\d{1,2}):(\d{2})/u.exec(time.trim());
+  if (!match) return null;
+  const result = new Date(date);
+  result.setHours(Number(match[1]), Number(match[2]), 0, 0);
+  result.setDate(result.getDate() + dayOffset);
+  return result;
+}
+
+function getPrayerTimelineProgress(
+  prayerEntries: readonly { name: string; time: string }[],
+  now: Date,
+  nextPrayer: { prayer: { name: string }; minutesUntil: number } | null,
+  nextIsTomorrow: boolean,
+): PrayerTimelineProgress | null {
+  if (!nextPrayer || !Number.isFinite(now.getTime())) return null;
+  const nextIndex = CANONICAL_PRAYER_NAMES.indexOf(nextPrayer.prayer.name as PrayerName);
+  if (nextIndex < 0) return null;
+  const nextEntry = prayerEntries.find(entry => entry.name === nextPrayer.prayer.name);
+  const nextAt = nextEntry
+    ? scheduleDateAt(now, nextEntry.time, nextIsTomorrow && nextIndex === 0 ? 1 : 0)
+    : null;
+  if (!nextAt) return null;
+
+  const previousIndex = nextIsTomorrow && nextIndex === 0
+    ? CANONICAL_PRAYER_NAMES.length - 1
+    : nextIndex - 1;
+  const previousEntry = previousIndex >= 0
+    ? prayerEntries.find(entry => entry.name === CANONICAL_PRAYER_NAMES[previousIndex])
+    : null;
+  const previousAt = previousEntry
+    ? scheduleDateAt(now, previousEntry.time)
+    : new Date(nextAt.getFullYear(), nextAt.getMonth(), nextAt.getDate());
+  if (!previousAt || nextAt.getTime() <= previousAt.getTime()) return null;
+
+  const markerProgress = Math.min(
+    1,
+    Math.max(0, (now.getTime() - previousAt.getTime()) / (nextAt.getTime() - previousAt.getTime())),
+  );
+  const markerPosition = nextIsTomorrow && nextIndex === 0
+    ? Math.max(0, 100 - markerProgress * 100)
+    : Math.min(100, Math.max(0, (previousIndex + markerProgress) / (CANONICAL_PRAYER_NAMES.length - 1) * 100));
+  return {
+    markerPosition,
+    markerProgress,
+    label: `Now · ${formatTimeUntil(Math.max(0, nextPrayer.minutesUntil))} to ${nextPrayer.prayer.name}${nextIsTomorrow ? ' tomorrow' : ''}`,
+  };
+}
+
 interface MomentumCardProps {
   pillar: DailyPillar;
   day: DailyMomentumPillarDay;
-  templates: DailyActivityTemplate[];
   busy: boolean;
   contextError: string | null;
   actionError: string | null;
-  onSelectPath: (templateId: string) => void;
   onRecord: (templateId: string, stepId: string) => void;
   onReset: () => void;
+}
+
+interface MomentumActivityProps {
+  pillar: DailyPillar;
+  activity: DailyMomentumActivityDay;
+  busy: boolean;
+  onRecord: (templateId: string, stepId: string) => void;
+}
+
+function MomentumActivity({ pillar, activity, busy, onRecord }: MomentumActivityProps) {
+  const nextLevel = activity.template.levels[Math.min(activity.achievedLevel, 4)];
+  const status = activity.complete
+    ? `Level ${activity.achievedLevel} reached`
+    : activity.log
+      ? 'Level 1 in progress'
+      : 'Not started';
+
+  return (
+    <article
+      className="nc-activity-card"
+      data-template-id={activity.template.id}
+      aria-labelledby={`nc-${pillar}-${activity.template.id}-title`}
+    >
+      <div className="nc-activity-heading">
+        <div>
+          <h3 id={`nc-${pillar}-${activity.template.id}-title`}>{activity.template.label}</h3>
+          <p>{status}</p>
+        </div>
+        <span className={`nc-activity-status ${activity.complete ? 'complete' : ''}`}>
+          {activity.log ? `L${Math.max(1, activity.achievedLevel)}` : '—'}
+        </span>
+      </div>
+
+      <div className="nc-progress-controls">
+        {nextLevel.steps.map(step => {
+          const current = activity.log?.progress[step.id] ?? 0;
+          return (
+            <div className="nc-progress-row" key={step.id}>
+              <div>
+                <strong>{step.label}</strong>
+                <span>{formatStepProgress(current, step.amount, step.metric)}</span>
+              </div>
+              <button
+                type="button"
+                className="nc-compact-action"
+                disabled={busy || current >= step.amount}
+                onClick={() => onRecord(activity.template.id, step.id)}
+              >
+                {current >= step.amount ? 'Reached' : `Add 1 ${step.metric}`}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </article>
+  );
 }
 
 function MomentumCard({
   pillar,
   day,
-  templates,
   busy,
   contextError,
   actionError,
-  onSelectPath,
   onRecord,
   onReset,
 }: MomentumCardProps) {
   const [confirmingReset, setConfirmingReset] = useState(false);
-  const selected = day.selectedTemplate;
-  const nextLevel = selected?.levels[Math.min(day.achievedLevel, 4)] ?? null;
   const accentIcon = pillar === 'learn' ? '◇' : '△';
   const title = pillar === 'learn' ? 'Learn' : 'Move';
-  const emptyCopy = pillar === 'learn' ? 'Choose what to learn next' : "Plan today's movement";
+  const completedActivities = day.activities.filter(activity => activity.complete).length;
+  const hasProgress = day.activities.some(activity => activity.log);
 
   return (
     <section className={`nc-momentum-card nc-${pillar}`} aria-labelledby={`nc-${pillar}-title`}>
@@ -83,27 +199,12 @@ function MomentumCard({
         <span className="nc-momentum-icon" aria-hidden="true">{accentIcon}</span>
         <div>
           <h2 id={`nc-${pillar}-title`}>{title}</h2>
-          <p>{selected?.label ?? emptyCopy}</p>
+          <p>{completedActivities} of {day.activities.length} activities at Level 1</p>
         </div>
         <span className={`nc-level-summary ${day.complete ? 'complete' : ''}`}>
-          {day.complete ? `Level ${day.achievedLevel}` : 'Level 1 required'}
+          {day.complete ? `${completedActivities} ready` : 'Start any activity'}
         </span>
       </div>
-
-      <label className="nc-path-label">
-        <span>Today's path</span>
-        <select
-          value={selected?.id ?? ''}
-          disabled={busy || day.pathLocked}
-          onChange={event => onSelectPath(event.target.value)}
-          aria-label={`Choose ${title} path`}
-        >
-          <option value="">Choose a path</option>
-          {templates.map(template => (
-            <option key={template.id} value={template.id}>{template.label}</option>
-          ))}
-        </select>
-      </label>
 
       <div className="nc-level-track" aria-label={`${title} daily levels`}>
         {[1, 2, 3, 4, 5].map(level => (
@@ -116,37 +217,23 @@ function MomentumCard({
         ))}
       </div>
 
-      {selected && nextLevel ? (
-        <div className="nc-progress-controls">
-          {nextLevel.steps.map(step => {
-            const current = day.log?.progress[step.id] ?? 0;
-            return (
-              <div className="nc-progress-row" key={step.id}>
-                <div>
-                  <strong>{step.label}</strong>
-                  <span>{formatStepProgress(current, step.amount, step.metric)}</span>
-                </div>
-                <button
-                  type="button"
-                  className="nc-compact-action"
-                  disabled={busy || current >= step.amount}
-                  onClick={() => onRecord(selected.id, step.id)}
-                >
-                  {current >= step.amount ? 'Reached' : `Add 1 ${step.metric}`}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="nc-momentum-empty">Select one grounded path to begin Level 1.</p>
-      )}
+      <div className="nc-activity-list" aria-label={`${title} activities`}>
+        {day.activities.map(activity => (
+          <MomentumActivity
+            key={activity.template.id}
+            pillar={pillar}
+            activity={activity}
+            busy={busy}
+            onRecord={onRecord}
+          />
+        ))}
+      </div>
 
       {(contextError || actionError) && (
         <p className="nc-inline-error" role="alert">{actionError || contextError}</p>
       )}
 
-      {day.log && (
+      {hasProgress && (
         <div className="nc-reset-row">
           {confirmingReset ? (
             <>
@@ -213,6 +300,15 @@ export default function NightCompassDashboard() {
     ? getPrayerDeadlineBounds(prayer.schedule?.prayers ?? [], prayer.today, nextPrayer.prayer.name as PrayerName)
     : null;
   const nextIsTomorrow = Boolean(nextBounds && nextBounds.startsAt.getTime() + 60_000 < prayer.now.getTime());
+  const timelineProgress = useMemo(
+    () => getPrayerTimelineProgress(
+      prayer.schedule?.prayers ?? [],
+      prayer.now,
+      nextPrayer,
+      nextIsTomorrow,
+    ),
+    [nextIsTomorrow, nextPrayer, prayer.now, prayer.schedule?.prayers],
+  );
 
   const dueTasks = useMemo(() => {
     const todayString = toLocalDateStr(prayer.now);
@@ -262,14 +358,9 @@ export default function NightCompassDashboard() {
         key={pillar}
         pillar={pillar}
         day={pillarDay}
-        templates={momentum.state.templates.filter(template => template.pillar === pillar)}
         busy={!momentum.loaded || busyPillar === pillar}
         contextError={momentum.error}
         actionError={actionErrors[pillar] ?? null}
-        onSelectPath={templateId => {
-          if (!templateId) return;
-          void runMomentumAction(pillar, () => momentum.selectPath(pillar, templateId));
-        }}
         onRecord={(templateId, stepId) => {
           void runMomentumAction(pillar, () => momentum.recordProgress(pillar, templateId, stepId, 1));
         }}
@@ -345,68 +436,97 @@ export default function NightCompassDashboard() {
               ) : null}
             </div>
 
-            <div className="nc-prayer-sequence" aria-label="Five daily prayers">
-              {CANONICAL_PRAYER_NAMES.map(name => {
-                const entry = prayer.schedule?.prayers.find(candidate => candidate.name === name);
-                const bounds = prayer.schedule && prayer.timezoneMatches
-                  ? getPrayerDeadlineBounds(prayer.schedule.prayers, prayer.today, name)
-                  : null;
-                const opportunityTracked = Boolean(
-                  prayer.schedule
-                  && prayer.timezoneMatches
-                  && isPrayerOpportunityTracked(
-                    prayer.tracking,
-                    { date: prayer.today, prayers: prayer.schedule.prayers },
-                    name,
-                    prayer.now,
-                  ),
-                );
-                const isNext = Boolean(
-                  nextPrayer?.prayer.name === name
-                  && bounds
-                  && (nextIsTomorrow || bounds.startsAt.getTime() + 60_000 >= prayer.now.getTime()),
-                );
-                const isCurrent = currentPrayer?.name === name;
-                const isTomorrowOccurrence = isNext && nextIsTomorrow;
-                const outcome = isTomorrowOccurrence
-                  ? undefined
-                  : prayer.getOutcome(prayer.today, name)?.status;
-                const temporalState: PrayerTemporalState = isCurrent
-                  ? 'current'
-                  : isNext
-                  ? 'next'
-                  : !bounds
-                    ? 'pending'
-                    : prayer.now < bounds.startsAt
-                      ? 'upcoming'
-                      : opportunityTracked
-                        ? 'past'
-                        : 'not_tracked';
-                const stateLabel = outcome ? outcomeLabel(outcome) : temporalLabel(temporalState);
-                const completed = outcome === 'on_time' || outcome === 'late';
-                return (
-                  <button
-                    type="button"
-                    key={name}
-                    className={`nc-prayer-item temporal-${temporalState} ${outcome ? `outcome-${outcome}` : ''}`}
-                    disabled={completed || isTomorrowOccurrence}
-                    aria-label={isTomorrowOccurrence
-                      ? `${name} Prayer — Next tomorrow`
-                      : outcome === 'unclassified'
-                        ? `Classify ${name} Prayer — Legacy record`
-                        : completed
-                          ? `${name} Prayer — completed, ${stateLabel}`
-                          : `Complete ${name} Prayer`}
-                    aria-current={isCurrent || (!currentPrayer && isNext) ? 'true' : undefined}
-                    onClick={() => prayer.requestPrayerCompletion(name, { source: 'dashboard' })}
-                  >
-                    <span className="nc-prayer-name">{name}</span>
-                    <span className="nc-prayer-arabic">{entry?.nameArabic ?? PRAYER_NAMES[name]?.arabic}</span>
-                    <time>{entry?.time ?? '—'}</time>
-                    <span className="nc-prayer-state">{stateLabel}</span>
-                  </button>
-                );
-              })}
+            <div className="nc-prayer-timeline">
+              <div className="nc-prayer-rail" aria-hidden="true">
+                <span
+                  className="nc-prayer-rail-progress"
+                  style={{ width: `${timelineProgress?.markerPosition ?? 0}%` }}
+                />
+                {timelineProgress && (
+                  <span
+                    className="nc-now-marker"
+                    style={{
+                      '--nc-marker-position': `${timelineProgress.markerPosition}%`,
+                      '--nc-marker-progress': timelineProgress.markerProgress,
+                      '--nc-marker-size': `${10 + timelineProgress.markerProgress * 8}px`,
+                      '--nc-marker-glow': `${10 + timelineProgress.markerProgress * 20}px`,
+                    } as CSSProperties}
+                  />
+                )}
+              </div>
+
+              <ol className="nc-prayer-sequence" aria-label="Five daily prayers">
+                {CANONICAL_PRAYER_NAMES.map(name => {
+                  const entry = prayer.schedule?.prayers.find(candidate => candidate.name === name);
+                  const bounds = prayer.schedule && prayer.timezoneMatches
+                    ? getPrayerDeadlineBounds(prayer.schedule.prayers, prayer.today, name)
+                    : null;
+                  const opportunityTracked = Boolean(
+                    prayer.schedule
+                    && prayer.timezoneMatches
+                    && isPrayerOpportunityTracked(
+                      prayer.tracking,
+                      { date: prayer.today, prayers: prayer.schedule.prayers },
+                      name,
+                      prayer.now,
+                    ),
+                  );
+                  const isNext = Boolean(
+                    nextPrayer?.prayer.name === name
+                    && bounds
+                    && (nextIsTomorrow || bounds.startsAt.getTime() + 60_000 >= prayer.now.getTime()),
+                  );
+                  const isCurrent = currentPrayer?.name === name;
+                  const isTomorrowOccurrence = isNext && nextIsTomorrow;
+                  const outcome = isTomorrowOccurrence
+                    ? undefined
+                    : prayer.getOutcome(prayer.today, name)?.status;
+                  const temporalState: PrayerTemporalState = isCurrent
+                    ? 'current'
+                    : isNext
+                    ? 'next'
+                    : !bounds
+                      ? 'pending'
+                      : prayer.now < bounds.startsAt
+                        ? 'upcoming'
+                        : opportunityTracked
+                          ? 'past'
+                          : 'not_tracked';
+                  const stateLabel = outcome ? outcomeLabel(outcome) : temporalLabel(temporalState);
+                  const completed = outcome === 'on_time' || outcome === 'late';
+                  return (
+                    <li className="nc-prayer-node" key={name}>
+                      <button
+                        type="button"
+                        className={`nc-prayer-item temporal-${temporalState} ${outcome ? `outcome-${outcome}` : ''}`}
+                        disabled={completed || isTomorrowOccurrence}
+                        aria-label={isTomorrowOccurrence
+                          ? `${name} Prayer — Next tomorrow`
+                          : outcome === 'unclassified'
+                            ? `Classify ${name} Prayer — Legacy record`
+                            : completed
+                              ? `${name} Prayer — completed, ${stateLabel}`
+                              : `Complete ${name} Prayer`}
+                        aria-current={isCurrent || (!currentPrayer && isNext) ? 'true' : undefined}
+                        onClick={() => prayer.requestPrayerCompletion(name, { source: 'dashboard' })}
+                      >
+                        <span className="nc-prayer-name">{name}</span>
+                        <span className="nc-prayer-symbol" aria-hidden="true">{PRAYER_SYMBOLS[name]}</span>
+                        <span className="nc-prayer-arabic">{entry?.nameArabic ?? PRAYER_NAMES[name]?.arabic}</span>
+                        <time>{entry?.time ?? '—'}</time>
+                        <span className="nc-prayer-state">{stateLabel}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              <p className="nc-prayer-timeline-caption" aria-live="polite">
+                <span className="nc-now-caption-key" aria-hidden="true" />
+                {timelineProgress?.label ?? (scheduleLoading
+                  ? 'Now · prayer timeline loading…'
+                  : 'Now · prayer timeline waiting for a schedule')}
+              </p>
             </div>
 
             {scheduleRepairNeeded && (

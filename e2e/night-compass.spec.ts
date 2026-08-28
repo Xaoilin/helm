@@ -112,6 +112,11 @@ test.describe('Night Compass acceptance', () => {
       const dashboard = page.getByRole('region', { name: 'Night Compass daily dashboard' });
       await expect(dashboard).toBeVisible();
       await expect(page.locator('.nc-prayer-item')).toHaveCount(5);
+      await expect(page.locator('.nc-prayer-symbol')).toHaveCount(5);
+      await expect(page.locator('.nc-now-marker')).toHaveCount(1);
+      await expect(page.getByText(/Now · .* to /u)).toBeVisible();
+      await expect(page.locator('.nc-activity-card')).toHaveCount(5);
+      await expect(page.locator('.nc-momentum-card select')).toHaveCount(0);
       await expect(page.getByText(longTask().title)).toHaveCount(1);
       const motivation = page.getByRole('complementary', { name: 'Quran-first encouragement' });
       await expect(motivation).toBeVisible();

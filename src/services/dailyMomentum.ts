@@ -257,11 +257,13 @@ function normalizeProgressLog(value: unknown, key: string): DailyMomentumProgres
   if (typeof value.pillar !== 'string' || !PILLARS.has(value.pillar as DailyPillar)) {
     throw new Error(`Daily momentum log ${key} has an unsupported pillar.`);
   }
-  if (key !== getDailyMomentumLogKey(value.date, value.pillar as DailyPillar)) {
-    throw new Error(`Daily momentum log ${key} does not match its date and pillar.`);
-  }
   const template = normalizeDailyActivityTemplate(value.template);
   if (template.pillar !== value.pillar) throw new Error(`Daily momentum log ${key} has a mismatched template.`);
+  const legacyKey = getDailyMomentumLogKey(value.date, value.pillar as DailyPillar);
+  const activityKey = getDailyMomentumActivityLogKey(value.date, value.pillar as DailyPillar, template.id);
+  if (key !== legacyKey && key !== activityKey) {
+    throw new Error(`Daily momentum log ${key} does not match its date, pillar, and activity.`);
+  }
   if (!isRecord(value.progress)) throw new Error(`Daily momentum log ${key} must contain progress values.`);
   const progress: Record<string, number> = {};
   for (const [stepId, amount] of Object.entries(value.progress)) {
@@ -364,6 +366,16 @@ export function getDailyMomentumLogKey(date: string, pillar: DailyPillar): strin
   return `${date}:${pillar}`;
 }
 
+export function getDailyMomentumActivityLogKey(
+  date: string,
+  pillar: DailyPillar,
+  templateId: string,
+): string {
+  assertLocalDate(date);
+  assertNonEmptyString(templateId, 'Daily activity template id');
+  return `${getDailyMomentumLogKey(date, pillar)}:${templateId}`;
+}
+
 export function getDailyMomentumLocalDate(referenceDate = new Date()): string {
   return toLocalDateStr(referenceDate);
 }
@@ -392,6 +404,40 @@ export interface DailyMomentumPillarDay {
   achievedLevel: 0 | 1 | 2 | 3 | 4 | 5;
   complete: boolean;
   pathLocked: boolean;
+  activities: DailyMomentumActivityDay[];
+}
+
+export interface DailyMomentumActivityDay {
+  template: DailyActivityTemplate;
+  log: DailyMomentumProgressLog | null;
+  achievedLevel: 0 | 1 | 2 | 3 | 4 | 5;
+  complete: boolean;
+  pathLocked: boolean;
+}
+
+function findActivityLog(
+  state: DailyMomentumState,
+  date: string,
+  pillar: DailyPillar,
+  templateId: string,
+): { key: string; log: DailyMomentumProgressLog } | null {
+  const activityKey = getDailyMomentumActivityLogKey(date, pillar, templateId);
+  const activityLog = state.logs[activityKey];
+  if (activityLog) return { key: activityKey, log: activityLog };
+
+  const legacyKey = getDailyMomentumLogKey(date, pillar);
+  const legacyLog = state.logs[legacyKey];
+  return legacyLog?.template.id === templateId
+    ? { key: legacyKey, log: legacyLog }
+    : null;
+}
+
+function getPillarDateLogEntries(
+  state: DailyMomentumState,
+  date: string,
+  pillar: DailyPillar,
+): Array<[string, DailyMomentumProgressLog]> {
+  return Object.entries(state.logs).filter(([, log]) => log.date === date && log.pillar === pillar);
 }
 
 export function getDailyMomentumPillarDay(
@@ -400,16 +446,33 @@ export function getDailyMomentumPillarDay(
   pillar: DailyPillar,
 ): DailyMomentumPillarDay {
   const normalized = normalizeDailyMomentumState(state);
-  const log = normalized.logs[getDailyMomentumLogKey(date, pillar)] ?? null;
-  const achievedLevel = log ? getAchievedDailyMomentumLevel(log.template, log.progress) : 0;
+  const templates = normalized.templates.filter(template => template.pillar === pillar);
+  const activities = templates.map<DailyMomentumActivityDay>(template => {
+    const activityLog = findActivityLog(normalized, date, pillar, template.id);
+    const log = activityLog?.log ?? null;
+    const achievedLevel = log ? getAchievedDailyMomentumLevel(log.template, log.progress) : 0;
+    return {
+      template,
+      log,
+      achievedLevel,
+      complete: achievedLevel >= 1,
+      pathLocked: Boolean(log && Object.values(log.progress).some(amount => amount > 0)),
+    };
+  });
+  const primary = activities.find(activity => activity.log) ?? activities[0] ?? null;
+  const achievedLevel = activities.reduce<0 | 1 | 2 | 3 | 4 | 5>(
+    (highest, activity) => Math.max(highest, activity.achievedLevel) as 0 | 1 | 2 | 3 | 4 | 5,
+    0,
+  );
   return {
     pillar,
     date,
-    log,
-    selectedTemplate: log?.template ?? null,
+    log: primary?.log ?? null,
+    selectedTemplate: primary?.log?.template ?? null,
     achievedLevel,
-    complete: achievedLevel >= 1,
-    pathLocked: Boolean(log && Object.values(log.progress).some(amount => amount > 0)),
+    complete: activities.some(activity => activity.complete),
+    pathLocked: activities.some(activity => activity.pathLocked),
+    activities,
   };
 }
 
@@ -436,12 +499,19 @@ export function selectDailyMomentumPath(
   input: { date: string; pillar: DailyPillar; templateId: string; updatedAt?: string },
 ): DailyMomentumState {
   const normalized = normalizeDailyMomentumState(state);
-  const key = getDailyMomentumLogKey(input.date, input.pillar);
-  const existing = normalized.logs[key];
-  if (existing && existing.template.id !== input.templateId && hasPositiveProgress(existing)) {
+  const legacyKey = getDailyMomentumLogKey(input.date, input.pillar);
+  const legacyExisting = normalized.logs[legacyKey];
+  if (legacyExisting && legacyExisting.template.id !== input.templateId && hasPositiveProgress(legacyExisting)) {
     throw new Error(`Today's ${input.pillar} path is locked after positive progress.`);
   }
   const template = normalizeDailyActivityTemplate(findTemplate(normalized, input.pillar, input.templateId));
+  const existingEntry = findActivityLog(normalized, input.date, input.pillar, input.templateId);
+  const dateEntries = getPillarDateLogEntries(normalized, input.date, input.pillar);
+  const key = existingEntry?.key
+    ?? (dateEntries.length === 0 || (dateEntries.length === 1 && legacyExisting && !hasPositiveProgress(legacyExisting))
+      ? legacyKey
+      : getDailyMomentumActivityLogKey(input.date, input.pillar, input.templateId));
+  const existing = existingEntry?.log;
   const updatedAt = input.updatedAt ?? new Date().toISOString();
   assertTimestamp(updatedAt);
   return {
@@ -453,7 +523,7 @@ export function selectDailyMomentumPath(
         date: input.date,
         pillar: input.pillar,
         template,
-        progress: existing?.template.id === template.id ? { ...existing.progress } : {},
+        progress: existing ? { ...existing.progress } : {},
         updatedAt,
       },
     },
@@ -474,27 +544,40 @@ export function recordDailyMomentumProgress(
   if (!Number.isFinite(input.amount) || input.amount <= 0) {
     throw new Error('Daily momentum progress increments must be positive.');
   }
-  let next = selectDailyMomentumPath(state, input);
-  const key = getDailyMomentumLogKey(input.date, input.pillar);
-  const log = next.logs[key];
+  const normalized = normalizeDailyMomentumState(state);
+  const template = normalizeDailyActivityTemplate(findTemplate(normalized, input.pillar, input.templateId));
+  const existingEntry = findActivityLog(normalized, input.date, input.pillar, input.templateId);
+  const legacyKey = getDailyMomentumLogKey(input.date, input.pillar);
+  const key = existingEntry?.key
+    ?? (getPillarDateLogEntries(normalized, input.date, input.pillar).length === 0
+      ? legacyKey
+      : getDailyMomentumActivityLogKey(input.date, input.pillar, input.templateId));
+  const log: DailyMomentumProgressLog = existingEntry?.log ?? {
+    date: input.date,
+    pillar: input.pillar,
+    template,
+    progress: {},
+    updatedAt: input.updatedAt ?? new Date().toISOString(),
+  };
   const stepTargets = log.template.levels.flatMap(level => level.steps).filter(step => step.id === input.stepId);
   if (stepTargets.length === 0) throw new Error(`${log.template.label} does not use progress step ${input.stepId}.`);
   const cap = Math.max(...stepTargets.map(step => step.amount));
-  next = {
-    ...next,
+  const updatedAt = input.updatedAt ?? new Date().toISOString();
+  assertTimestamp(updatedAt);
+  return {
+    ...normalized,
     logs: {
-      ...next.logs,
+      ...normalized.logs,
       [key]: {
         ...log,
         progress: {
           ...log.progress,
           [input.stepId]: Math.min(cap, (log.progress[input.stepId] ?? 0) + input.amount),
         },
-        updatedAt: input.updatedAt ?? new Date().toISOString(),
+        updatedAt,
       },
     },
   };
-  return next;
 }
 
 export function resetDailyMomentumPillar(
@@ -504,7 +587,9 @@ export function resetDailyMomentumPillar(
   if (input.confirmed !== true) throw new Error('Daily momentum reset requires confirmation.');
   const normalized = normalizeDailyMomentumState(state);
   const logs = { ...normalized.logs };
-  delete logs[getDailyMomentumLogKey(input.date, input.pillar)];
+  for (const [key, log] of Object.entries(logs)) {
+    if (log.date === input.date && log.pillar === input.pillar) delete logs[key];
+  }
   return { ...normalized, logs };
 }
 
