@@ -9,7 +9,7 @@ V1 is intentionally turn-based:
 1. The user says `Hey Lina`.
 2. Lina speaks a short acknowledgement.
 3. Lina listens for one spoken turn.
-4. The shared hosted assistant runtime processes the request.
+4. The shared grounded assistant runtime processes the request with the configured live planner.
 5. Lina speaks the answer.
 6. Lina reopens the microphone for a follow-up turn.
 7. The session ends on silence, a stop phrase, or a manual close.
@@ -61,7 +61,7 @@ Each turn follows this sequence:
 5. allow a short settle window for a thinking pause;
 6. use a longer safety stop only if no reliable boundary arrives;
 7. transcribe the final utterance;
-8. run the shared hosted assistant runtime;
+8. run the shared grounded assistant runtime;
 9. speak Lina's response;
 10. reopen the microphone for the next turn.
 

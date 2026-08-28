@@ -4,7 +4,7 @@
 
 Make Lina feel like a GPT-5.4-family-powered personal assistant while keeping every action grounded in current Sabah One account state:
 
-- the hosted model understands intent first;
+- the configured live planner understands intent first;
 - the model chooses grounded actions or asks for clarification;
 - browser code validates, confirms, and executes safely;
 - the model writes the visible reply from verified results.
@@ -13,7 +13,7 @@ This is the shipped conversational runtime for both Chat and Voice.
 
 ## Core Rule
 
-Hosted GPT is the conversational brain. Browser code is the deterministic safety and execution layer.
+A configured hosted GPT or Ollama planner is the conversational brain. Browser code is the deterministic safety and execution layer.
 
 1. The model recognizes intent.
 2. The model returns `reply`, `clarify`, `confirm`, or `tool_calls`.
@@ -40,9 +40,9 @@ For every new turn, Sabah One supplies:
 - benchmark examples for similar requests;
 - pending confirmation context when applicable.
 
-### 3. Ask the hosted model for the turn type
+### 3. Ask the configured planner for the turn type
 
-The model receives the planning bundle, allowed tool schemas, conversation history, and any pending confirmation state. It must return one of `reply`, `clarify`, `confirm`, or `tool_calls`.
+The selected hosted GPT or Ollama planner receives the planning bundle, allowed tool schemas, conversation history, and any pending confirmation state. It must return one of `reply`, `clarify`, `confirm`, or `tool_calls`.
 
 ### 4. Validate in the browser
 
@@ -68,7 +68,7 @@ The shared account mutation boundary records assistant activity for supported wr
 
 ### 7. Narrate from verified results
 
-After execution, the hosted model receives verified turn facts and writes the visible reply. If hosted narration is unavailable, Sabah One uses a truthful, minimal in-app fallback and does not claim an unverified success.
+After execution, the selected planner receives verified turn facts and writes the visible reply. If narration is unavailable, Sabah One uses a truthful, minimal in-app fallback and does not claim an unverified success.
 
 ## Hosted Provider Contract
 
@@ -81,6 +81,10 @@ The `assistant-openai` Supabase Edge Function supports a tool-capable `turn` act
 - Sabah One validates, executes, and performs a narration pass from verified facts.
 
 The OpenAI key remains in the Edge Function environment and never enters the browser. If the hosted function or model is unavailable, Lina presents an in-app unavailable state, refuses to guess, and leaves direct app surfaces available.
+
+## Ollama Provider Contract
+
+When Settings selects Ollama, the browser sends the same structured planning and narration requests to the configured Ollama HTTP endpoint. Auto may use it when hosted planning is unavailable. Ollama never bypasses grounding, confirmation, deterministic execution, or verified-result narration; if the endpoint is unreachable, Lina refuses to guess.
 
 ## Shared Runtime
 
@@ -103,7 +107,7 @@ This keeps failures diagnosable without guessing which layer spoke. Tokens and s
 
 - No destructive action without the capability's required confirmation.
 - No unsupported-action approximation.
-- No guessing when the hosted planner is unavailable.
+- No guessing when no live configured planner is available.
 - No success claim before deterministic execution and verification succeed.
 - No raw planner JSON or executor template strings as the normal visible reply.
 - No second mutation path for Voice.

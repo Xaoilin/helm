@@ -50,13 +50,6 @@ concurrency:
   cancel-in-progress: \${{ github.event_name == 'pull_request' }}
 jobs:
 ${checkJobs}
-  native-changes:
-    steps:
-      - run: node ./scripts/detect-ci-native-impact.mjs
-  native-platform:
-    if: needs['native-changes'].outputs.native == 'true'
-    steps:
-      - uses: actions/cache@v5
   unit-shard:
     name: unit-\${{ matrix.shard }}-of-2
     steps:

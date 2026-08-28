@@ -8,6 +8,7 @@ Sabah One is a hosted web product for a solo operator, with Lina as its in-app a
 - React 19 with TypeScript 5 and Vite 8
 - Supabase Auth, database-authoritative records, Realtime Broadcast, and Edge Functions
 - Hosted OpenAI for assistant planning and narration
+- An optional configured Ollama endpoint for assistant planning and narration
 - Deepgram, ElevenLabs, browser speech APIs, and browser WASM where voice features are enabled
 - Web Notifications and an in-app reminder banner while the page remains open
 
@@ -36,16 +37,18 @@ Open the deployed GitHub Pages URL in a supported browser and sign in with Supab
 - Google Calendar OAuth and sync use hosted authorization and account-owned refresh credentials.
 - Supabase sign-in and database-authoritative persistence are required for shared data. Signed-out, expired, or offline sessions cannot view or change shared records, and there is no durable offline mutation queue.
 - The Secrets surface stores account-owned credentials through constrained RPCs backed by Supabase Vault. Values are masked by default, fetched one at a time for Reveal/Copy, and cleared from the UI on hide, navigation, page backgrounding, sign-out, or account switch.
-- Hosted GPT-5.4-family assistant replies are available when Supabase is configured and the `assistant-openai` Edge Function is deployed. If the hosted planner is unavailable, Lina gives an honest in-app fallback and does not guess or execute an action.
+- Hosted GPT-5.4-family assistant replies are available when Supabase is configured and the `assistant-openai` Edge Function is deployed. Settings can instead select Ollama, and Auto may use a reachable configured Ollama endpoint when hosted planning is unavailable. If no live planner is available, Lina gives an honest in-app fallback and does not guess or execute an action.
 - Chat and voice share one grounded assistant runtime. Browser speech input/output and Deepgram or ElevenLabs are capability-dependent; unavailable voice capabilities leave Chat available.
 - Clock, Inventory, Finance, Health, Knowledge, Projects, Calendar, Prayer, and the Night Compass dashboard use account-backed records where marked real in [feature status](docs/feature-status.md).
 - The private Inventory planning integration remains a narrow, account-authorized Supabase boundary and does not expose general app state or secrets.
 - The former Inbox and quick-capture workflow are retired. Historical capture rows are preserved only as recoverable database tombstones.
 - Some integrations remain placeholder or simulated; the feature matrix is authoritative.
 
-## Hosted Assistant
+## Assistant Providers
 
 The GitHub Pages client calls the `assistant-openai` Supabase Edge Function for hosted GPT planning. The OpenAI key stays in the function environment; it is not sent to the browser. The function supports the hosted model presets exposed by Settings and returns structured turns for reply, clarification, confirmation, and tool calls.
+
+The browser can also call the Ollama HTTP endpoint configured in Settings. Ollama uses the same structured planning, validation, deterministic execution, and verified-narration contract; it is an optional assistant provider, not a separate product runtime.
 
 The Inventory MCP endpoint is separately account-authorized through Supabase OAuth 2.1 with PKCE and the production consent path `/helm/oauth/consent`. Its RLS policies and dedicated RPCs limit access to Inventory records and minimal project resolution.
 

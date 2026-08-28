@@ -2,7 +2,7 @@
 
 ## Goal
 
-Lina should understand and execute app commands conversationally, while staying grounded in real signed-in Sabah One state. Chat and Voice use one hosted assistant runtime; they never maintain separate command systems or mutation paths.
+Lina should understand and execute app commands conversationally, while staying grounded in real signed-in Sabah One state. Chat and Voice use one grounded assistant runtime; they never maintain separate command systems or mutation paths.
 
 For the turn-by-turn contract, see `docs/assistant-conversational-architecture.md`.
 
@@ -15,10 +15,10 @@ The shipped runtime in `src/assistant/` provides:
 - temporal resolution for relative dates, clock times, part-of-day phrases, and supported prayer references;
 - deterministic execution for navigation, task, calendar, finance, Inventory, and Knowledge actions;
 - shared confirmation, typed navigation, pending prayer completion, activity recording, and supported undo;
-- hosted GPT planning and narration through the `assistant-openai` Supabase Edge Function;
+- hosted GPT planning and narration through the `assistant-openai` Supabase Edge Function, or the configured Ollama endpoint;
 - debug traces and a representative benchmark corpus.
 
-When the hosted planner is unavailable, Lina gives a truthful in-app fallback and executes nothing. Direct app surfaces remain available.
+When no configured planner is available, Lina gives a truthful in-app fallback and executes nothing. Direct app surfaces remain available.
 
 ## Core Design
 

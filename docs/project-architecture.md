@@ -10,6 +10,7 @@ The current stack is:
 - GitHub Pages for the deployed website
 - Supabase Auth, account records, private Realtime Broadcast, and Edge Functions
 - Hosted OpenAI through the `assistant-openai` Edge Function
+- Optional Ollama planning through the endpoint configured in Settings
 - Google Calendar, AlAdhan, Monzo, Deepgram, and ElevenLabs integrations
 - Browser speech APIs, Web Notifications, and browser WASM where supported
 
@@ -71,9 +72,9 @@ Calendar sync is passive and account-bound. Opening Calendar or pressing `Sync` 
 
 ### Assistant and voice
 
-Chat and voice use the shared grounded assistant runtime in `src/assistant/` and `src/services/assistantRuntime.ts`. Hosted GPT-5.4-family models provide planning and narration through `assistant-openai`; browser code supplies transcript normalization, capability and entity retrieval, validation, confirmation, deterministic execution, and debug tracing.
+Chat and voice use the shared grounded assistant runtime in `src/assistant/` and `src/services/assistantRuntime.ts`. Hosted GPT-5.4-family models provide planning and narration through `assistant-openai`, while Settings may select a configured Ollama endpoint; browser code supplies transcript normalization, capability and entity retrieval, validation, confirmation, deterministic execution, and debug tracing for both.
 
-The model returns `reply`, `clarify`, `confirm`, or `tool_calls`. Sabah One validates grounded IDs and temporal references, confirms risky actions, executes one semantic mutation path, verifies the result, and asks the hosted model to narrate verified facts. If the hosted planner is unavailable, Lina explains the unavailable capability in-app and does not guess or mutate state.
+The selected planner returns `reply`, `clarify`, `confirm`, or `tool_calls`. Sabah One validates grounded IDs and temporal references, confirms risky actions, executes one semantic mutation path, verifies the result, and asks the same provider to narrate verified facts. If no live planner is available, Lina explains the unavailable capability in-app and does not guess or mutate state.
 
 Voice capabilities use Deepgram speech-to-text, ElevenLabs speech output, and browser speech fallbacks. Wake-word and speech features remain capability-dependent; Chat and the other surfaces remain available when a voice capability is unavailable.
 

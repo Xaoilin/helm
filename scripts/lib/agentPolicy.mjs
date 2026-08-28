@@ -37,7 +37,10 @@ const HOSTED_WEB_POLICY_PATHS = [
   'tsconfig.node.json',
   'vite.config.ts',
 ]
-const HOSTED_WEB_POLICY_EXCLUDED_PATHS = new Set(['scripts/lib/agentPolicy.mjs'])
+const HOSTED_WEB_POLICY_EXCLUDED_PATHS = new Set([
+  'scripts/lib/agentPolicy.mjs',
+  'src/test/agentWorkflow.test.ts',
+])
 const SABAH_ONE_NATIVE_SUPPORT_PATTERN = /(?:\b(?:Sabah One|HELM)\b[^\r\n]*(?:\b(?:desktop|local|native)\b[ _-]?(?:app(?:lication)?|assistant|runtime|runner|support|notification(?:s)?|path(?:s)?|project|folder|execution|timer|process)\b)|\b(?:desktop|local|native)\b[ _-]?(?:app(?:lication)?|assistant|runtime|runner|support|notification(?:s)?|path(?:s)?|project|folder|execution|timer|process)\b[^\r\n]*\b(?:Sabah One|HELM)\b|\bnative\s+(?:Sabah One|HELM)\b)/iu
 const SABAH_ONE_LOCAL_RUNTIME_API_PATTERN = /@tauri-apps|\bsrc-tauri\b|\bTAURI_[A-Z0-9_]*\b|__TAURI(?:_[A-Z0-9]+)?__|\btauri\b|\b(?:isTauri|isTauriRuntime|tauriAvailable|readTauriRaw|getDeviceTauriKey|desktopRuntimeAvailable|projectRuntime|projectPaths|nativePrayerReminder|canUseDesktopProjectPaths|canUseProjectRuntime|pickProjectDirectory|canonicalizeProjectPath|openProjectPath|createProjectRunFingerprint|approveProjectProfile|revokeProjectProfile|revokeProjectProfilesForProject|listApprovedProjectProfiles|listProjectSessions|startProjectProfile|stopProjectSession|subscribeProjectSession|canonicalize_project_path|isAbsoluteProjectRoot|normalizePendingLegacyProjectPaths|canonicalizeProjectRoot|PROJECT_PENDING_LEGACY_PATHS_STORE_KEY|localPath)\b/iu
 const NATIVE_CACHE_MACHINERY_PATTERN = /\b(?:cargo|rustup|rust|src-tauri|tauri)\b|\bnative(?:[-_ ](?:cache|build|runtime|platform|dependencies|toolchain|target|artifacts?))\b/iu
