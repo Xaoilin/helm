@@ -246,7 +246,7 @@ test.describe('Night Compass acceptance', () => {
     });
   });
 
-  test('@visual pauses mismatched-timezone reminders without hiding dashboard pillars', async ({ page, scenario }) => {
+  test('@visual uses the schedule timezone without hiding dashboard pillars', async ({ page, scenario }) => {
     test.skip(
       Boolean(process.env.HELM_E2E_VISUAL_SURFACE && process.env.HELM_E2E_VISUAL_SURFACE !== 'dashboard'),
       'A different visual surface was requested.',
@@ -259,8 +259,12 @@ test.describe('Night Compass acceptance', () => {
     await page.setViewportSize(acceptanceViewports[2]);
     await page.goto('/');
 
-    await expect(page.getByText('Schedule timezone does not match this browser')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Repair prayer settings' })).toBeVisible();
+    await expect(page.getByText('Bedford · America/New_York')).toBeVisible();
+    await expect(page.getByText('Schedule timezone does not match this browser')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Repair prayer settings' })).toHaveCount(0);
+    await expect(page.locator('.nc-now-marker')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Complete Dhuhr Prayer' })).toHaveText(/Next/u);
+    await expect(page.getByText(/Now · .* to Dhuhr/u)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Prayer', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Learn', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Move', exact: true })).toBeVisible();
