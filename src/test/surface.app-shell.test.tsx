@@ -74,22 +74,22 @@ describe('App shell', () => {
     await act(async () => { renderWithProvider(<App />); });
 
     await act(async () => { fireEvent.click(screen.getByText('Trips')); });
-    expect(screen.getByRole('button', { name: 'Plan your first trip' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Plan your first trip' })).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Inventory')); });
-    expect(screen.getByRole('heading', { name: 'Know what you have before you buy.' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Know what you have before you buy.' })).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Projects')); });
-    expect(screen.getByText('Build your project reference catalogue')).toBeInTheDocument();
+    expect(await screen.findByText('Build your project reference catalogue')).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Health')); });
-    expect(screen.getByText('Fast food journal')).toBeInTheDocument();
+    expect(await screen.findByText('Fast food journal')).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Activity')); });
-    expect(screen.getByText('No Lina actions logged yet')).toBeInTheDocument();
+    expect(await screen.findByText('No Lina actions logged yet')).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByText('Settings')); });
-    expect(screen.getByText('About')).toBeInTheDocument();
+    expect(await screen.findByText('About')).toBeInTheDocument();
   });
 
   it('restores the active surface after the shell remounts', async () => {

@@ -1,23 +1,8 @@
 import './App.css';
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
+import type { ComponentType } from 'react';
 import { useApp } from './store/AppContext';
 import DashboardSurface from './surfaces/DashboardSurface';
-import ChatSurface from './surfaces/ChatSurface';
-import InventorySurface from './surfaces/InventorySurface';
-import CalendarSurface from './surfaces/CalendarSurface';
-import ClockSurface from './surfaces/ClockSurface';
-import TripsSurface from './surfaces/TripsSurface';
-import TasksSurface from './surfaces/TasksSurface';
-import ProjectsSurface from './surfaces/ProjectsSurface';
-import SecretsSurface from './surfaces/SecretsSurface';
-import FinanceSurface from './surfaces/FinanceSurface';
-import HealthSurface from './surfaces/HealthSurface';
-import KnowledgeSurface from './surfaces/KnowledgeSurface';
-import ProfileSurface from './surfaces/ProfileSurface';
-import IntegrationsSurface from './surfaces/IntegrationsSurface';
-import ActivitySurface from './surfaces/ActivitySurface';
-import SettingsSurface from './surfaces/SettingsSurface';
-import DebugSurface from './surfaces/DebugSurface';
 import VoiceAssistant from './components/VoiceAssistant';
 import PrayerGlobalOverlays from './components/prayer/PrayerGlobalOverlays';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -36,25 +21,37 @@ import { useReleaseRefresh } from './hooks/useReleaseRefresh';
 import { useOptionalAuthSession } from './store/AuthSessionContext';
 import { useSyncAvailability } from './store/SyncAvailabilityContext';
 
-const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = [
-  { surface: 'dashboard', label: 'Dashboard', icon: '\u{1F3E0}' },
-  { surface: 'chat', label: 'Chat', icon: '\u{1F4AC}' },
-  { surface: 'calendar', label: 'Calendar', icon: '\u{1F4C5}' },
-  { surface: 'clock', label: 'Clock', icon: '\u23F1\uFE0F' },
-  { surface: 'trips', label: 'Trips', icon: '\u{1F6EB}' },
-  { surface: 'projects', label: 'Projects', icon: '\u{1F4CB}' },
-  { surface: 'inventory', label: 'Inventory', icon: '\u{1F9F0}' },
-  { surface: 'secrets', label: 'Secrets', icon: '\u{1F510}' },
-  { surface: 'tasks', label: 'Tasks', icon: '\u2705' },
-  { surface: 'finance', label: 'Finance', icon: '\u{1F4B7}' },
-  { surface: 'health', label: 'Health', icon: '\u{1F34E}' },
-  { surface: 'knowledge', label: 'Knowledge', icon: '\u{1F4DA}' },
-  { surface: 'profile', label: 'Profile', icon: '\u{1F3C6}' },
-  { surface: 'integrations', label: 'Integrations', icon: '\u{1F50C}' },
-  { surface: 'activity', label: 'Activity', icon: '\u{1F4DD}' },
-  { surface: 'settings', label: 'Settings', icon: '\u2699\uFE0F' },
-  { surface: 'debug', label: 'Debug', icon: '\u{1F41E}' },
-];
+type SurfaceDefinition = {
+  label: string;
+  icon: string;
+  component: ComponentType;
+};
+
+const SURFACE_REGISTRY = {
+  dashboard: { label: 'Dashboard', icon: '\u{1F3E0}', component: DashboardSurface },
+  chat: { label: 'Chat', icon: '\u{1F4AC}', component: lazy(() => import('./surfaces/ChatSurface')) },
+  calendar: { label: 'Calendar', icon: '\u{1F4C5}', component: lazy(() => import('./surfaces/CalendarSurface')) },
+  clock: { label: 'Clock', icon: '\u23F1\uFE0F', component: lazy(() => import('./surfaces/ClockSurface')) },
+  trips: { label: 'Trips', icon: '\u{1F6EB}', component: lazy(() => import('./surfaces/TripsSurface')) },
+  projects: { label: 'Projects', icon: '\u{1F4CB}', component: lazy(() => import('./surfaces/ProjectsSurface')) },
+  inventory: { label: 'Inventory', icon: '\u{1F9F0}', component: lazy(() => import('./surfaces/InventorySurface')) },
+  secrets: { label: 'Secrets', icon: '\u{1F510}', component: lazy(() => import('./surfaces/SecretsSurface')) },
+  tasks: { label: 'Tasks', icon: '\u2705', component: lazy(() => import('./surfaces/TasksSurface')) },
+  finance: { label: 'Finance', icon: '\u{1F4B7}', component: lazy(() => import('./surfaces/FinanceSurface')) },
+  health: { label: 'Health', icon: '\u{1F34E}', component: lazy(() => import('./surfaces/HealthSurface')) },
+  knowledge: { label: 'Knowledge', icon: '\u{1F4DA}', component: lazy(() => import('./surfaces/KnowledgeSurface')) },
+  profile: { label: 'Profile', icon: '\u{1F3C6}', component: lazy(() => import('./surfaces/ProfileSurface')) },
+  integrations: { label: 'Integrations', icon: '\u{1F50C}', component: lazy(() => import('./surfaces/IntegrationsSurface')) },
+  activity: { label: 'Activity', icon: '\u{1F4DD}', component: lazy(() => import('./surfaces/ActivitySurface')) },
+  settings: { label: 'Settings', icon: '\u2699\uFE0F', component: lazy(() => import('./surfaces/SettingsSurface')) },
+  debug: { label: 'Debug', icon: '\u{1F41E}', component: lazy(() => import('./surfaces/DebugSurface')) },
+} satisfies Record<Surface, SurfaceDefinition>;
+
+const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = (Object.keys(SURFACE_REGISTRY) as Surface[]).map(surface => ({
+  surface,
+  label: SURFACE_REGISTRY[surface].label,
+  icon: SURFACE_REGISTRY[surface].icon,
+}));
 
 const PRIMARY_MOBILE_NAV: Surface[] = ['dashboard', 'chat', 'calendar', 'tasks'];
 const MOBILE_NAV_ITEMS = NAV_ITEMS.filter(item => PRIMARY_MOBILE_NAV.includes(item.surface));
@@ -140,28 +137,14 @@ function AppInner() {
   };
 
   const renderSurface = () => {
-    const surface = (() => {
-      switch (app.surface) {
-        case 'dashboard': return <DashboardSurface />;
-        case 'chat': return <ChatSurface />;
-        case 'calendar': return <CalendarSurface />;
-        case 'clock': return <ClockSurface />;
-        case 'trips': return <TripsSurface />;
-        case 'projects': return <ProjectsSurface />;
-        case 'inventory': return <InventorySurface />;
-        case 'secrets': return <SecretsSurface />;
-        case 'tasks': return <TasksSurface />;
-        case 'finance': return <FinanceSurface />;
-        case 'health': return <HealthSurface />;
-        case 'knowledge': return <KnowledgeSurface />;
-        case 'profile': return <ProfileSurface />;
-        case 'integrations': return <IntegrationsSurface />;
-        case 'activity': return <ActivitySurface />;
-        case 'settings': return <SettingsSurface />;
-        case 'debug': return <DebugSurface />;
-      }
-    })();
-    return <ErrorBoundary name={app.surface} key={app.surface}>{surface}</ErrorBoundary>;
+    const SurfaceComponent = SURFACE_REGISTRY[app.surface].component;
+    return (
+      <ErrorBoundary name={app.surface} key={app.surface}>
+        <Suspense fallback={<div role="status" aria-live="polite">Loading surface...</div>}>
+          <SurfaceComponent />
+        </Suspense>
+      </ErrorBoundary>
+    );
   };
 
   const renderAuthContent = (variant: 'sidebar' | 'mobile') => {
