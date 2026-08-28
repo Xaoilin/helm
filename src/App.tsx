@@ -3,7 +3,6 @@ import { lazy, Suspense, useState, useEffect } from 'react';
 import type { ComponentType } from 'react';
 import { useApp } from './store/AppContext';
 import DashboardSurface from './surfaces/DashboardSurface';
-import VoiceAssistant from './components/VoiceAssistant';
 import PrayerGlobalOverlays from './components/prayer/PrayerGlobalOverlays';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
@@ -56,6 +55,7 @@ const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = (Object.k
 const PRIMARY_MOBILE_NAV: Surface[] = ['dashboard', 'chat', 'calendar', 'tasks'];
 const MOBILE_NAV_ITEMS = NAV_ITEMS.filter(item => PRIMARY_MOBILE_NAV.includes(item.surface));
 const MOBILE_MORE_ITEMS = NAV_ITEMS.filter(item => !PRIMARY_MOBILE_NAV.includes(item.surface));
+const VoiceAssistant = lazy(() => import('./components/VoiceAssistant'));
 
 function AppInner() {
   const app = useApp();
@@ -295,7 +295,11 @@ function AppInner() {
         </button>
       </nav>
       {!readOnly && <PrayerGlobalOverlays />}
-      {!readOnly && <VoiceAssistant />}
+      {!readOnly && (
+        <Suspense fallback={null}>
+          <VoiceAssistant />
+        </Suspense>
+      )}
     </div>
   );
 }
