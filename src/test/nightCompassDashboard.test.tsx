@@ -141,6 +141,46 @@ describe('NightCompassDashboard focused component contract', () => {
     );
   });
 
+  it('keeps the marker before displayed Dhuhr at 12:22 when Dhuhr is 13:03', () => {
+    const schedule = {
+      ...contextMocks.prayer.schedule,
+      prayers: PRAYERS.map(prayer => prayer.name === 'Dhuhr'
+        ? { ...prayer, time: '13:03' }
+        : prayer),
+      timezone: 'Europe/London',
+    };
+    contextMocks.prayer = {
+      ...contextMocks.prayer,
+      schedule,
+      localTimezone: 'Europe/London',
+      timezoneMatches: true,
+      now: new Date('2026-08-28T11:22:23.000Z'),
+      nextPrayer: { prayer: schedule.prayers[2], minutesUntil: 41 },
+    };
+
+    render(<NightCompassDashboard />);
+
+    const marker = document.querySelector('.nc-now-marker') as HTMLElement;
+    const position = Number.parseFloat(marker.style.getPropertyValue('--nc-marker-position'));
+    expect(position).toBeGreaterThan(0);
+    expect(position).toBeLessThan(25);
+    expect(screen.getByText(/Now · .* to Dhuhr/u)).toBeInTheDocument();
+  });
+
+  it('keeps the pre-Fajr marker at the start of the prayer rail', () => {
+    contextMocks.prayer = {
+      ...contextMocks.prayer,
+      now: new Date('2026-08-28T02:30:00.000Z'),
+      nextPrayer: { prayer: PRAYERS[0], minutesUntil: 90 },
+    };
+
+    render(<NightCompassDashboard />);
+
+    const marker = document.querySelector('.nc-now-marker') as HTMLElement;
+    expect(Number.parseFloat(marker.style.getPropertyValue('--nc-marker-position'))).toBe(0);
+    expect(screen.getByText(/Now · .* to Fajr/u)).toBeInTheDocument();
+  });
+
   it('moves and grows the current-time marker as the next prayer approaches', () => {
     const { rerender } = render(<NightCompassDashboard />);
     const marker = () => document.querySelector('.nc-now-marker') as HTMLElement;

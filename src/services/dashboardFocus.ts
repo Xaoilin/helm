@@ -7,7 +7,6 @@ import type {
   FocusFeedback,
   FocusRecommendation,
   GamificationProfile,
-  PrayerName,
   Project,
   Settings,
   Task,
@@ -34,10 +33,6 @@ const TASK_PRIORITY_SCORE = {
 
 const ACTIONABLE_BLOCKED_PATTERN = /\b(next|reply|email|call|draft|review|ship|schedule|prepare|follow up)\b/i;
 const PREP_PRESSURE_PATTERN = /\b(call|meeting|interview|review|sync|standup|demo|presentation|doctor|appointment|travel)\b/i;
-const PRAYER_RECOMMENDATION_PAIRS: Partial<Record<PrayerName, PrayerName>> = {
-  Dhuhr: 'Asr',
-  Maghrib: 'Isha',
-};
 
 interface ScoreSignal {
   label: string;
@@ -302,19 +297,6 @@ function buildStats(tasks: Task[], todayStr: string, prayerTimes: PrayerTime[] |
   };
 }
 
-function getPrayerRecommendationPair(prayerName: PrayerName, tasks: Task[]): PrayerName | null {
-  const pairedPrayerName = PRAYER_RECOMMENDATION_PAIRS[prayerName];
-  if (!pairedPrayerName) return null;
-
-  const hasPairedPrayerTask = tasks.some(task => (
-    !task.completed
-    && isPrayerTask(task)
-    && getPrayerTaskName(task) === pairedPrayerName
-  ));
-
-  return hasPairedPrayerTask ? pairedPrayerName : null;
-}
-
 function buildTaskCandidate(
   task: Task,
   input: DashboardFocusEngineInput,
@@ -350,32 +332,20 @@ function buildTaskCandidate(
       minute: '2-digit',
       hour12: true,
     });
-    const pairedPrayerName = getPrayerRecommendationPair(prayerName, input.tasks);
-    const title = pairedPrayerName
-      ? `${prayerName} + ${pairedPrayerName} Prayers`
-      : task.title;
-    const localWhy = pairedPrayerName
-      ? `This is the ${prayerName} window, so treat ${prayerName} and ${pairedPrayerName} as a paired recommendation before ${windowClosesAt}.`
-      : 'This is the current prayer window, and earlier prayers have already dropped out.';
+    const title = task.title;
+    const localWhy = 'This is the current prayer window, and earlier prayers have already dropped out.';
 
     scoreSignals.push({ label: 'Current prayer window is open', value: 108 });
     scoreSignals.push({ label: 'Prayer order is time-locked', value: 28 });
     reasoningTags.add('prayer');
     reasoningTags.add('prayer_window');
 
-    if (pairedPrayerName) {
-      scoreSignals.push({ label: `${prayerName} and ${pairedPrayerName} belong together in this slot`, value: 34 });
-      reasoningTags.add('prayer_pair');
-    }
-
     if (activePrayerWindow.minutesRemaining <= 25) {
       scoreSignals.push({ label: `Prayer window closes in ${activePrayerWindow.minutesRemaining} min`, value: 24 });
       reasoningTags.add('window_ending');
     }
 
-    subtitle = pairedPrayerName
-      ? `Pray ${prayerName} and ${pairedPrayerName} together before ${windowClosesAt}`
-      : `Prayer window open until ${windowClosesAt}`;
+    subtitle = `Prayer window open until ${windowClosesAt}`;
 
     const dismissPenalty = dismissCounts.get(candidateId) || 0;
     if (dismissPenalty > 0) {

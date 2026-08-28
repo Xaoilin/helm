@@ -27,9 +27,9 @@ const BOUNDED_REMINDER_KINDS = new Set(['prayer-opportunity', 'prayer-deadline',
 
 const PRAYER_DEADLINES: Record<PrayerName, PrayerDeadlineName> = {
   Fajr: 'Sunrise',
-  Dhuhr: 'Sunset',
-  Asr: 'Sunset',
-  Maghrib: 'Midnight',
+  Dhuhr: 'Asr',
+  Asr: 'Maghrib',
+  Maghrib: 'Isha',
   Isha: 'Midnight',
 };
 

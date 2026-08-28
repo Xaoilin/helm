@@ -231,12 +231,15 @@ function buildScheduleDays(
   return days;
 }
 
-function canonicalizeTimezone(timezone: string): string {
+export function canonicalizeTimezone(timezone: string): string {
   if (!timezone) return '';
   try {
-    return new Intl.DateTimeFormat('en-GB', { timeZone: timezone }).resolvedOptions().timeZone;
-  } catch {
+    // Validate the explicit zone without asking a potentially overridden
+    // Intl implementation to rewrite it through resolvedOptions().
+    new Intl.DateTimeFormat('en-GB', { timeZone: timezone }).format();
     return timezone;
+  } catch {
+    return '';
   }
 }
 
@@ -253,7 +256,7 @@ function getReminderGroups(
 ): Array<PrayerReminderGroup & { fireAt: Date }> {
   const scheduleByDate = new Map(schedules.map(schedule => [schedule.date, schedule]));
   const candidates = [shiftLocalDate(today, -1), today];
-  const grouped = new Map<string, PrayerReminderGroup & { fireAt: Date }>();
+  const reminders: Array<PrayerReminderGroup & { fireAt: Date }> = [];
 
   for (const prayerDate of candidates) {
     const schedule = scheduleByDate.get(prayerDate);
@@ -268,15 +271,8 @@ function getReminderGroups(
       if (!bounds || now >= bounds.deadlineAt) continue;
 
       const fireAt = new Date(bounds.deadlineAt.getTime() - reminderMinutes * 60_000);
-      const key = `${prayerDate}:${bounds.deadlineAt.toISOString()}`;
-      const existing = grouped.get(key);
-      if (existing) {
-        existing.prayerNames.push(prayerName);
-        continue;
-      }
-
       const minutesRemaining = Math.max(0, (bounds.deadlineAt.getTime() - now.getTime()) / 60_000);
-      grouped.set(key, {
+      reminders.push({
         prayerDate,
         prayerNames: [prayerName],
         deadlineName: bounds.deadlineName,
@@ -288,7 +284,7 @@ function getReminderGroups(
     }
   }
 
-  return [...grouped.values()].sort((left, right) => left.deadlineAt.getTime() - right.deadlineAt.getTime());
+  return reminders.sort((left, right) => left.deadlineAt.getTime() - right.deadlineAt.getTime());
 }
 
 function buildScheduledReminderGroup(
@@ -304,7 +300,7 @@ function buildScheduledReminderGroup(
   const leader = prayerNames[0];
   const deadlineIso = group.deadlineAt.toISOString();
   const fireAtIso = group.fireAt.toISOString();
-  const groupKey = `${group.prayerDate}:${group.deadlineAt.getTime()}`;
+  const groupKey = `${group.prayerDate}:${leader}:${group.deadlineAt.getTime()}`;
   const reminderKey = getBrowserReminderKey({
     prayerDate: group.prayerDate,
     prayerName: leader,

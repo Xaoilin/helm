@@ -37,13 +37,20 @@ function plan(schedule = SCHEDULE, momentum = createDefaultDailyMomentumState())
 }
 
 describe('bounded reminder plan', () => {
-  it('adds one opportunity and one consolidated deadline warning per unresolved prayer window', () => {
+  it('adds independent opportunity and deadline warnings for every unresolved prayer', () => {
     const reminders = plan();
     expect(reminders.filter(item => item.kind === 'prayer-opportunity')).toHaveLength(5);
-    expect(reminders.filter(item => item.kind === 'prayer-deadline')).toEqual(expect.arrayContaining([
-      expect.objectContaining({ prayerNames: ['Dhuhr', 'Asr'] }),
-      expect.objectContaining({ prayerNames: ['Maghrib', 'Isha'] }),
+    const deadlines = reminders.filter(item => item.kind === 'prayer-deadline');
+    expect(deadlines).toHaveLength(5);
+    expect(deadlines.every(item => item.prayerNames.length === 1)).toBe(true);
+    expect(new Set(deadlines.map(item => item.prayerNames[0]))).toEqual(new Set([
+      'Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha',
     ]));
+    expect(deadlines.find(item => item.prayerNames[0] === 'Fajr')?.body).toBe('Pray Fajr before Sunrise.');
+    expect(deadlines.find(item => item.prayerNames[0] === 'Dhuhr')?.body).toBe('Pray Dhuhr before Asr.');
+    expect(deadlines.find(item => item.prayerNames[0] === 'Asr')?.body).toBe('Pray Asr before Maghrib.');
+    expect(deadlines.find(item => item.prayerNames[0] === 'Maghrib')?.body).toBe('Pray Maghrib before Isha.');
+    expect(deadlines.find(item => item.prayerNames[0] === 'Isha')?.body).toBe('Pray Isha before Midnight.');
   });
 
   it('uses the configured Learn/Move anchors and coalesces simultaneous prompts', () => {

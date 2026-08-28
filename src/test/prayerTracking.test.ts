@@ -312,8 +312,9 @@ describe('prayer tracking state', () => {
 describe('Jafari prayer deadline bounds', () => {
   it.each([
     ['Fajr', 'Sunrise', 6, 30],
-    ['Dhuhr', 'Sunset', 20, 0],
-    ['Asr', 'Sunset', 20, 0],
+    ['Dhuhr', 'Asr', 16, 0],
+    ['Asr', 'Maghrib', 20, 15],
+    ['Maghrib', 'Isha', 22, 0],
   ] as const)('%s remains on time until %s', (prayerName, deadlineName, hour, minute) => {
     const bounds = getPrayerDeadlineBounds(PRAYERS, '2026-04-01', prayerName);
 
@@ -326,16 +327,14 @@ describe('Jafari prayer deadline bounds', () => {
     expect(bounds?.deadlineAt.getMinutes()).toBe(minute);
   });
 
-  it.each([
-    ['Maghrib', 20, 15],
-    ['Isha', 22, 0],
-  ] as const)('%s uses next-day Jafari Midnight', (prayerName, startHour, startMinute) => {
+  it('Isha uses next-day Jafari Midnight', () => {
+    const prayerName = 'Isha' as const;
     const bounds = getPrayerDeadlineBounds(PRAYERS, '2026-04-01', prayerName);
 
     expect(bounds?.deadlineName).toBe('Midnight');
     expect(bounds?.startsAt.getDate()).toBe(1);
-    expect(bounds?.startsAt.getHours()).toBe(startHour);
-    expect(bounds?.startsAt.getMinutes()).toBe(startMinute);
+    expect(bounds?.startsAt.getHours()).toBe(22);
+    expect(bounds?.startsAt.getMinutes()).toBe(0);
     expect(bounds?.deadlineAt.getDate()).toBe(2);
     expect(bounds?.deadlineAt.getHours()).toBe(0);
     expect(bounds?.deadlineAt.getMinutes()).toBe(40);

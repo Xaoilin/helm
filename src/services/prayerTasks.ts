@@ -14,7 +14,7 @@ const PRAYER_TITLE_PATTERNS: Record<PrayerName, RegExp> = {
 const PRAYER_WINDOW_ENDS: Record<PrayerName, string> = {
   Fajr: 'Sunrise',
   Dhuhr: 'Asr',
-  Asr: 'Sunset',
+  Asr: 'Maghrib',
   Maghrib: 'Isha',
   Isha: 'Midnight',
 };

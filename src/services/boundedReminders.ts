@@ -80,8 +80,6 @@ export function buildBoundedReminderPlan({
   reminderMinutes,
 }: BuildBoundedReminderPlanInput): BoundedReminderPlan[] {
   const plans: BoundedReminderPlan[] = [];
-  const deadlineGroups = new Map<number, { deadlineAt: Date; names: PrayerName[]; deadlineName: string }>();
-
   for (const prayerName of CANONICAL_PRAYER_NAMES) {
     if (getPrayerOutcome(tracking, prayerDate, prayerName)) continue;
     const bounds = getPrayerDeadlineBounds(schedule, prayerDate, prayerName);
@@ -103,30 +101,18 @@ export function buildBoundedReminderPlan({
       body: `The ${prayerName} prayer opportunity has begun.`,
     });
 
-    const deadlineKey = bounds.deadlineAt.getTime();
-    const existing = deadlineGroups.get(deadlineKey);
-    if (existing) existing.names.push(prayerName);
-    else deadlineGroups.set(deadlineKey, {
-      deadlineAt: bounds.deadlineAt,
-      names: [prayerName],
-      deadlineName: bounds.deadlineName,
-    });
-  }
-
-  for (const group of deadlineGroups.values()) {
-    const fireAt = new Date(group.deadlineAt.getTime() - reminderMinutes * 60_000);
-    const names = group.names.join(' and ');
+    const fireAt = new Date(bounds.deadlineAt.getTime() - reminderMinutes * 60_000);
     plans.push({
-      notificationKey: `bounded:v1:prayer-deadline:${prayerDate}:${keyPart(group.deadlineAt)}`,
-      receiptKeys: group.names.map(name => `prayer:${prayerDate}:${name}:${keyPart(group.deadlineAt)}`),
+      notificationKey: `bounded:v1:prayer-deadline:${prayerDate}:${prayerName}:${keyPart(bounds.deadlineAt)}`,
+      receiptKeys: [`prayer:${prayerDate}:${prayerName}:${keyPart(bounds.deadlineAt)}`],
       date: prayerDate,
       kind: 'prayer-deadline',
       fireAt,
-      expiresAt: group.deadlineAt,
-      prayerNames: [...group.names],
+      expiresAt: bounds.deadlineAt,
+      prayerNames: [prayerName],
       pillars: [],
-      title: `${names} prayer due soon`,
-      body: `Pray ${names} before ${group.deadlineName}.`,
+      title: `${prayerName} prayer due soon`,
+      body: `Pray ${prayerName} before ${bounds.deadlineName}.`,
     });
   }
 

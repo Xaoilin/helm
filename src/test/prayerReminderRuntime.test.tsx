@@ -179,7 +179,7 @@ describe('prayer reminder runtime reconciliation', () => {
     sessionStorage.clear();
   });
 
-  it('replaces changed lead times and removes a completed member from a paired reminder', async () => {
+  it('replaces lead times and independently schedules each prayer reminder', async () => {
     render(<AppProvider><RuntimeHarness /></AppProvider>);
     await waitFor(() => expect(screen.getByTestId('schedule-state')).toHaveTextContent('ready:Bedford'));
     await waitFor(() => expect(callsFor('Fajr')).toHaveLength(1));
@@ -192,14 +192,24 @@ describe('prayer reminder runtime reconciliation', () => {
     const replacedFajr = callsFor('Fajr').at(-1)!;
     expect(Date.parse(replacedFajr.deadlineIso) - Date.parse(replacedFajr.fireAtIso)).toBe(30 * 60_000);
 
-    const paired = callsFor('Dhuhr').at(-1)!;
-    expect(paired.body).toContain('Dhuhr and Asr');
+    const dhuhr = callsFor('Dhuhr').at(-1)!;
+    const asr = callsFor('Asr').at(-1)!;
+    expect(dhuhr.body).toContain('Dhuhr');
+    expect(dhuhr.body).not.toContain('Dhuhr and Asr');
+    expect(asr.body).toContain('Asr');
+    expect(asr.body).not.toContain('Asr and Dhuhr');
+    expectLocalClock(dhuhr.deadlineIso, 16, 30);
+    expectLocalClock(asr.deadlineIso, 20, 15);
     fireEvent.click(screen.getByRole('button', { name: 'Complete Asr' }));
 
-    await waitFor(() => expect(callsFor('Dhuhr').at(-1)?.body).not.toContain('Asr'));
+    await waitFor(() => expect(reminderMocks.cancel).toHaveBeenCalledWith(expect.objectContaining({
+      prayerDate: '2026-07-28',
+      prayerName: 'Asr',
+    })));
+    expect(callsFor('Dhuhr').at(-1)?.body).not.toContain('Dhuhr and Asr');
     expect(reminderMocks.cancel).toHaveBeenCalledWith(expect.objectContaining({
       prayerDate: '2026-07-28',
-      prayerName: 'Dhuhr',
+      prayerName: 'Asr',
     }));
   });
 
@@ -229,12 +239,13 @@ describe('prayer reminder runtime reconciliation', () => {
     expect(reminderMocks.cancelAll.mock.calls.length + reminderMocks.cancel.mock.calls.length).toBeGreaterThan(0);
   });
 
-  it('retains the previous-day Isha group across local-date rollover', async () => {
+  it('retains the previous-day Isha reminder across local-date rollover', async () => {
     vi.setSystemTime(new Date(2026, 6, 28, 23, 50, 0));
     render(<AppProvider><RuntimeHarness /></AppProvider>);
     await waitFor(() => expect(screen.getByTestId('schedule-state')).toHaveTextContent('ready:Bedford:2026-07-28'));
-    await waitFor(() => expect(callsFor('Maghrib').at(-1)?.body).toContain('Maghrib and Isha'));
-    const previousDeadline = callsFor('Maghrib').at(-1)!.deadlineIso;
+    await waitFor(() => expect(callsFor('Isha').at(-1)?.body).toContain('Isha'));
+    expect(callsFor('Isha').at(-1)?.body).not.toContain('Maghrib');
+    const previousDeadline = callsFor('Isha').at(-1)!.deadlineIso;
 
     reminderMocks.cancelAll.mockClear();
     reminderMocks.cancel.mockClear();
@@ -245,7 +256,7 @@ describe('prayer reminder runtime reconciliation', () => {
     expect(reminderMocks.cancelAll).not.toHaveBeenCalled();
     expect(reminderMocks.cancel).not.toHaveBeenCalledWith(expect.objectContaining({
       prayerDate: '2026-07-28',
-      prayerName: 'Maghrib',
+      prayerName: 'Isha',
       deadlineIso: previousDeadline,
     }));
   });

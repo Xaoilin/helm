@@ -63,52 +63,87 @@ interface PrayerTimelineProgress {
   label: string;
 }
 
-function scheduleDateAt(date: Date, time: string, dayOffset = 0): Date | null {
-  const match = /^(\d{1,2}):(\d{2})/u.exec(time.trim());
+const DAY_SECONDS = 24 * 60 * 60;
+const DISPLAYED_CLOCK_PATTERN = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/u;
+
+function parseDisplayedClockSeconds(time: string): number | null {
+  const match = DISPLAYED_CLOCK_PATTERN.exec(time.trim());
   if (!match) return null;
-  const result = new Date(date);
-  result.setHours(Number(match[1]), Number(match[2]), 0, 0);
-  result.setDate(result.getDate() + dayOffset);
-  return result;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3] ?? 0);
+  if (hours > 23 || minutes > 59 || seconds > 59) return null;
+  return hours * 60 * 60 + minutes * 60 + seconds;
+}
+
+function getDisplayedWallClockSeconds(now: Date, timeZone?: string): number | null {
+  if (!Number.isFinite(now.getTime())) return null;
+
+  try {
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      ...(timeZone ? { timeZone } : {}),
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+    const parts = formatter.formatToParts(now);
+    const hours = Number(parts.find(part => part.type === 'hour')?.value);
+    const minutes = Number(parts.find(part => part.type === 'minute')?.value);
+    const seconds = Number(parts.find(part => part.type === 'second')?.value);
+    if (
+      !Number.isFinite(hours)
+      || !Number.isFinite(minutes)
+      || !Number.isFinite(seconds)
+      || hours > 23
+      || minutes > 59
+      || seconds > 59
+    ) return null;
+    return hours * 60 * 60 + minutes * 60 + seconds + now.getMilliseconds() / 1000;
+  } catch {
+    return null;
+  }
 }
 
 function getPrayerTimelineProgress(
   prayerEntries: readonly { name: string; time: string }[],
   now: Date,
-  nextPrayer: { prayer: { name: string }; minutesUntil: number } | null,
-  nextIsTomorrow: boolean,
+  timeZone?: string,
 ): PrayerTimelineProgress | null {
-  if (!nextPrayer || !Number.isFinite(now.getTime())) return null;
-  const nextIndex = CANONICAL_PRAYER_NAMES.indexOf(nextPrayer.prayer.name as PrayerName);
-  if (nextIndex < 0) return null;
-  const nextEntry = prayerEntries.find(entry => entry.name === nextPrayer.prayer.name);
-  const nextAt = nextEntry
-    ? scheduleDateAt(now, nextEntry.time, nextIsTomorrow && nextIndex === 0 ? 1 : 0)
-    : null;
-  if (!nextAt) return null;
+  const nowSeconds = getDisplayedWallClockSeconds(now, timeZone);
+  if (nowSeconds === null) return null;
 
-  const previousIndex = nextIsTomorrow && nextIndex === 0
-    ? CANONICAL_PRAYER_NAMES.length - 1
-    : nextIndex - 1;
-  const previousEntry = previousIndex >= 0
-    ? prayerEntries.find(entry => entry.name === CANONICAL_PRAYER_NAMES[previousIndex])
-    : null;
-  const previousAt = previousEntry
-    ? scheduleDateAt(now, previousEntry.time)
-    : new Date(nextAt.getFullYear(), nextAt.getMonth(), nextAt.getDate());
-  if (!previousAt || nextAt.getTime() <= previousAt.getTime()) return null;
+  const prayerTimes = CANONICAL_PRAYER_NAMES.map(name => {
+    const entry = prayerEntries.find(candidate => candidate.name === name);
+    const seconds = entry ? parseDisplayedClockSeconds(entry.time) : null;
+    return { name, seconds };
+  });
+  if (prayerTimes.some(prayer => prayer.seconds === null)) return null;
+  for (let index = 1; index < prayerTimes.length; index += 1) {
+    if (prayerTimes[index].seconds! <= prayerTimes[index - 1].seconds!) return null;
+  }
+
+  let nextIndex = prayerTimes.findIndex(prayer => prayer.seconds! - nowSeconds > -60);
+  const nextIsTomorrow = nextIndex < 0;
+  if (nextIsTomorrow) nextIndex = 0;
+  const previousIndex = nextIsTomorrow ? prayerTimes.length - 1 : nextIndex - 1;
+  const previousSeconds = previousIndex >= 0 ? prayerTimes[previousIndex].seconds! : 0;
+  const nextSeconds = prayerTimes[nextIndex].seconds! + (nextIsTomorrow ? DAY_SECONDS : 0);
+  if (nextSeconds <= previousSeconds) return null;
 
   const markerProgress = Math.min(
     1,
-    Math.max(0, (now.getTime() - previousAt.getTime()) / (nextAt.getTime() - previousAt.getTime())),
+    Math.max(0, (nowSeconds - previousSeconds) / (nextSeconds - previousSeconds)),
   );
-  const markerPosition = nextIsTomorrow && nextIndex === 0
+  const markerPosition = nextIsTomorrow
     ? Math.max(0, 100 - markerProgress * 100)
-    : Math.min(100, Math.max(0, (previousIndex + markerProgress) / (CANONICAL_PRAYER_NAMES.length - 1) * 100));
+    : Math.min(100, Math.max(0, (previousIndex + markerProgress) / (prayerTimes.length - 1) * 100));
+  const minutesUntil = Math.max(0, (nextSeconds - nowSeconds) / 60);
   return {
     markerPosition,
     markerProgress,
-    label: `Now · ${formatTimeUntil(Math.max(0, nextPrayer.minutesUntil))} to ${nextPrayer.prayer.name}${nextIsTomorrow ? ' tomorrow' : ''}`,
+    label: `Now · ${formatTimeUntil(minutesUntil)} to ${prayerTimes[nextIndex].name}${nextIsTomorrow ? ' tomorrow' : ''}`,
   };
 }
 
@@ -301,13 +336,10 @@ export default function NightCompassDashboard() {
     : null;
   const nextIsTomorrow = Boolean(nextBounds && nextBounds.startsAt.getTime() + 60_000 < prayer.now.getTime());
   const timelineProgress = useMemo(
-    () => getPrayerTimelineProgress(
-      prayer.schedule?.prayers ?? [],
-      prayer.now,
-      nextPrayer,
-      nextIsTomorrow,
-    ),
-    [nextIsTomorrow, nextPrayer, prayer.now, prayer.schedule?.prayers],
+    () => prayer.schedule && prayer.timezoneMatches
+      ? getPrayerTimelineProgress(prayer.schedule.prayers, prayer.now, prayer.schedule.timezone)
+      : null,
+    [prayer.now, prayer.schedule, prayer.timezoneMatches],
   );
 
   const dueTasks = useMemo(() => {
