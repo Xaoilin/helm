@@ -13,6 +13,16 @@ vi.mock('../store/persistence', async importOriginal => {
     saveStore: async (key: string, value: unknown) => {
       localStorage.setItem(`helm:${key}`, JSON.stringify(value));
     },
+    saveStoreRecordFieldsCommitted: async (
+      key: string,
+      _recordId: string,
+      fields: Record<string, unknown>,
+      fallback: Record<string, unknown>,
+    ) => {
+      const raw = localStorage.getItem(`helm:${key}`);
+      const current = raw === null ? fallback : JSON.parse(raw);
+      localStorage.setItem(`helm:${key}`, JSON.stringify({ ...current, ...fields }));
+    },
     loadDeviceStore: async (key: string) => {
       const raw = localStorage.getItem(`helm:device:${key}`);
       return raw === null ? null : JSON.parse(raw);

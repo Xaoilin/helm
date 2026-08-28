@@ -38,7 +38,7 @@ describe('prayer completion selectors', () => {
 
   it('opens the shared selector from the Dashboard prayer habit card', async () => {
     renderPrayerFeatureApp();
-    await screen.findByRole('heading', { name: 'Good morning' });
+    await screen.findByRole('heading', { name: 'Night Compass' });
     expect(screen.getByText('🙏 Prayer outcomes · Current month')).toBeInTheDocument();
     expect(screen.getByText(/Current month · Classified opportunities only/)).toBeInTheDocument();
 

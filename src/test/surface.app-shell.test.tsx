@@ -67,7 +67,7 @@ describe('App shell', () => {
 
   it('should default to Dashboard surface', async () => {
     await act(async () => { renderWithProvider(<App />); });
-    expect(screen.getByText('UP NEXT')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Night Compass' })).toBeInTheDocument();
   });
 
   it('should navigate between surfaces', async () => {
@@ -116,7 +116,7 @@ describe('App shell', () => {
   it('falls back to Dashboard for a retired Inbox navigation value', async () => {
     sessionStorage.setItem('helm:shell-surface', 'inbox');
     await act(async () => { renderWithProvider(<App />); });
-    expect(screen.getByText('UP NEXT')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Night Compass' })).toBeInTheDocument();
     expect(screen.queryByText('Inbox')).not.toBeInTheDocument();
   });
 });

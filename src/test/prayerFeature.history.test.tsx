@@ -62,13 +62,11 @@ describe('prayer completion history', () => {
 
     renderPrayerFeatureApp();
     await flushPrayerFeatureUpdates();
-    screen.getByRole('heading', { name: 'Good morning' });
-    screen.getByText('Prayer Times — Bedford', { exact: false });
-
-    const prayerTimesCard = screen.getByText('Prayer Times — Bedford', { exact: false })
-      .closest('.prayer-times-card');
-    expect(prayerTimesCard).toHaveTextContent('Before tracking');
-    expect(prayerTimesCard?.querySelector('.prayer-outcome-badge.missed')).toBeNull();
+    screen.getByRole('heading', { name: 'Night Compass' });
+    const fajrCard = screen.getByText('Fajr', { selector: '.nc-prayer-name' })
+      .closest('.nc-prayer-item');
+    expect(fajrCard).toHaveTextContent('Before tracking');
+    expect(fajrCard).not.toHaveTextContent('Missed');
 
     fireEvent.click(screen.getByRole('button', { name: 'Correct history' }));
     const fajrCorrection = screen.getByLabelText('Fajr outcome on Today');
@@ -91,7 +89,7 @@ describe('prayer completion history', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Navigate to Dashboard' }));
     await flushPrayerFeatureUpdates();
-    screen.getByRole('heading', { name: 'Good morning' });
+    screen.getByRole('heading', { name: 'Night Compass' });
     fireEvent.click(screen.getByRole('button', { name: 'Correct history' }));
     const fajrCorrection = screen.getByLabelText('Fajr outcome on Today');
     const dhuhrCorrection = screen.getByLabelText('Dhuhr outcome on Today');
@@ -174,7 +172,7 @@ describe('prayer completion history', () => {
 
     renderPrayerFeatureApp();
     await flushPrayerFeatureUpdates();
-    screen.getByRole('heading', { name: 'Good morning' });
+    screen.getByRole('heading', { name: 'Night Compass' });
     fireEvent.click(screen.getByRole('button', { name: 'Correct history' }));
     const correction = screen.getByLabelText('Fajr outcome on Today');
 
