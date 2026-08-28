@@ -113,6 +113,10 @@ test.describe('Night Compass acceptance', () => {
       await expect(dashboard).toBeVisible();
       await expect(page.locator('.nc-prayer-item')).toHaveCount(5);
       await expect(page.getByText(longTask().title)).toHaveCount(1);
+      const motivation = page.getByRole('complementary', { name: 'Quran-first encouragement' });
+      await expect(motivation).toBeVisible();
+      await expect(motivation.getByText('Reviewed meaning (paraphrase):')).toBeVisible();
+      await expect(motivation.getByRole('link', { name: /Quran .* Source/u })).toHaveAttribute('href', /^https:\/\/quran\.com\//u);
 
       const metrics = await page.evaluate(() => {
         const rect = (selector: string) => {
@@ -122,6 +126,7 @@ test.describe('Night Compass acceptance', () => {
         const prayer = rect('.nc-prayer-card');
         const learn = rect('.nc-learn');
         const move = rect('.nc-move');
+        const motivation = rect('.nc-quran-motivation');
         const tasks = rect('.nc-tasks-card');
         return {
           viewport: { width: innerWidth, height: innerHeight },
@@ -132,6 +137,7 @@ test.describe('Night Compass acceptance', () => {
           prayer,
           learn,
           move,
+          motivation,
           tasks,
           meaningfulRunningAnimations: document.querySelector('.nc-dashboard')?.getAnimations({ subtree: true })
             .filter(animation => {
@@ -143,6 +149,8 @@ test.describe('Night Compass acceptance', () => {
       expect(metrics.document.scrollWidth).toBeLessThanOrEqual(metrics.document.clientWidth + 1);
       expect(metrics.prayer?.y).toBeLessThan(metrics.learn?.y ?? Number.POSITIVE_INFINITY);
       expect(metrics.prayer?.height).toBeGreaterThan(metrics.learn?.height ?? 0);
+      expect(metrics.prayer?.y).toBeLessThan(metrics.motivation?.y ?? Number.POSITIVE_INFINITY);
+      expect(metrics.motivation?.y).toBeLessThan(metrics.learn?.y ?? Number.POSITIVE_INFINITY);
       expect(metrics.meaningfulRunningAnimations).toBe(0);
       if (viewport.width === 1440) {
         expect((metrics.prayer?.height ?? 0) / (viewport.height - (metrics.prayer?.y ?? 0)))
@@ -168,6 +176,98 @@ test.describe('Night Compass acceptance', () => {
         path: path.join(evidenceRoot, `${viewport.name}-dashboard-full.png`),
       });
     }
+  });
+
+  test('@visual keeps the permission fallback actionable without hiding any pillar', async ({ page, scenario }) => {
+    test.skip(
+      Boolean(process.env.HELM_E2E_VISUAL_SURFACE && process.env.HELM_E2E_VISUAL_SURFACE !== 'dashboard'),
+      'A different visual surface was requested.',
+    );
+    await scenario('prayer', {
+      surface: 'dashboard',
+      now: '2026-07-28T15:31:00.000Z',
+    });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    mkdirSync(evidenceRoot, { recursive: true });
+
+    for (const viewport of [acceptanceViewports[0], acceptanceViewports[2]]) {
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      const reminder = page.getByRole('alert').filter({ hasText: 'Native notifications are unavailable' });
+      await expect(reminder).toBeVisible();
+      await expect(reminder.getByRole('button', { name: 'Repair notifications' })).toBeVisible();
+      await expect(reminder.getByRole('button', { name: 'Snooze once' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Prayer', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Learn', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Move', exact: true })).toBeVisible();
+      const width = await page.evaluate(() => ({
+        client: document.documentElement.clientWidth,
+        scroll: document.documentElement.scrollWidth,
+      }));
+      expect(width.scroll).toBeLessThanOrEqual(width.client + 1);
+      await reminder.screenshot({
+        path: path.join(evidenceRoot, `${viewport.name}-permission-fallback.png`),
+      });
+    }
+  });
+
+  test('@visual keeps schedule failure actionable and the dashboard intact', async ({ page, scenario }) => {
+    test.skip(
+      Boolean(process.env.HELM_E2E_VISUAL_SURFACE && process.env.HELM_E2E_VISUAL_SURFACE !== 'dashboard'),
+      'A different visual surface was requested.',
+    );
+    await scenario('prayer', {
+      surface: 'dashboard',
+      now: '2026-07-28T15:31:00.000Z',
+      prayerTimes: { failureStatus: 503 },
+    });
+    await page.setViewportSize(acceptanceViewports[2]);
+    await page.goto('/');
+
+    const failure = page.getByText('Prayer schedule unavailable');
+    await expect(failure).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: 'Retry schedule' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Prayer', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Learn', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Move', exact: true })).toBeVisible();
+    const width = await page.evaluate(() => ({
+      client: document.documentElement.clientWidth,
+      scroll: document.documentElement.scrollWidth,
+    }));
+    expect(width.scroll).toBeLessThanOrEqual(width.client + 1);
+    await page.screenshot({
+      path: path.join(evidenceRoot, '390x844-schedule-failure.png'),
+      fullPage: false,
+    });
+  });
+
+  test('@visual pauses mismatched-timezone reminders without hiding dashboard pillars', async ({ page, scenario }) => {
+    test.skip(
+      Boolean(process.env.HELM_E2E_VISUAL_SURFACE && process.env.HELM_E2E_VISUAL_SURFACE !== 'dashboard'),
+      'A different visual surface was requested.',
+    );
+    await scenario('prayer', {
+      surface: 'dashboard',
+      now: '2026-07-28T15:31:00.000Z',
+      prayerTimes: { timezone: 'America/New_York' },
+    });
+    await page.setViewportSize(acceptanceViewports[2]);
+    await page.goto('/');
+
+    await expect(page.getByText('Schedule timezone does not match this desktop')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Repair prayer settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Prayer', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Learn', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Move', exact: true })).toBeVisible();
+    const width = await page.evaluate(() => ({
+      client: document.documentElement.clientWidth,
+      scroll: document.documentElement.scrollWidth,
+    }));
+    expect(width.scroll).toBeLessThanOrEqual(width.client + 1);
+    await page.screenshot({
+      path: path.join(evidenceRoot, '390x844-timezone-mismatch.png'),
+      fullPage: false,
+    });
   });
 
   test('proves keyboard behavior, reduced-motion meaning, contrast, and the owning mobile scroller', async ({ page, scenario }) => {

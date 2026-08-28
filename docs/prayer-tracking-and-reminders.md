@@ -2,7 +2,7 @@
 
 ## Scope
 
-Sabah One tracks the five canonical daily prayers independently from task IDs. Tasks remain the interaction surface and gamification bridge, while `PrayerTrackingState` is the durable source of truth for prayer outcomes, reminder receipts, and reporting.
+Sabah One tracks the five canonical daily prayers independently from task IDs. Tasks remain the interaction surface and gamification bridge, while `PrayerTrackingState` is the durable source of truth for prayer outcomes, deadline receipts, bounded opportunity/momentum receipts, and reporting.
 
 The feature begins classified reporting at `trackingStartedAt`. Existing checked prayer-task entries are imported once as `unclassified`; Sabah One does not guess whether legacy completions were on time and does not infer misses before activation. On the first trusted activation-day schedule, Sabah One persists the exact canonical prayers that were still eligible. Later DST, season, or location timetable changes cannot rewrite that denominator. If no trusted activation-day snapshot exists after that date passes, unknown activation-day blanks remain excluded instead of being guessed.
 
@@ -69,9 +69,13 @@ AlAdhan schedule validation requires all five prayers plus Sunrise, Sunset, and 
 
 ## Reminder Lifecycle
 
-Deadline reminders are enabled alongside prayer notifications by default. Settings supports 5, 10, 15, or 30 minutes, with 15 minutes as the default.
+Prayer opportunity and deadline reminders are enabled alongside prayer notifications by default. Settings supports 5, 10, 15, or 30 deadline-warning minutes, with 15 minutes as the default. Opportunity notices fire at the canonical prayer start and remain exempt from non-prayer quiet hours.
 
-Eligible prayers produce one global warning across every Sabah One surface. Dhuhr/Asr and Maghrib/Isha are grouped when they share a deadline. The banner offers completion and a five-minute snooze; snooze is unavailable when five minutes or less remain. Completion removes the reminder immediately, while reaching the deadline closes it and materializes a Missed outcome when no completion exists.
+Eligible prayers produce one global warning across every Sabah One surface. Dhuhr/Asr and Maghrib/Isha are grouped when they share a deadline. The banner offers completion and a single five-minute snooze; snooze is unavailable when five minutes or less remain. Completion removes the reminder immediately, while reaching the deadline closes it and materializes a Missed outcome when no completion exists.
+
+The same `PrayerProvider` builds the prayer-relative Learn and Move plan; there is no second scheduler. Learn defaults to Dhuhr, Maghrib, and Isha anchors, while Move defaults to Asr, Maghrib, and Isha. Account-owned preferences can disable a pillar or edit its allowed anchors without hiding the dashboard pillar. Simultaneous Learn/Move prompts coalesce, each logical pillar/anchor keeps its own stable receipt, Level 1 completion cancels future prompts, and 22:00-08:00 quiet hours suppress non-prayer prompts only. Each logical reminder has a hard one-snooze bound.
+
+Permission denial records the bounded attempt without retry loops and keeps an in-app warning plus Settings repair action. Missing schedules and schedule/desktop timezone mismatches produce no relative plan and remain visible in Dashboard and Settings. Process timers and permission state stay device-owned; receipts and preferences remain account-owned for idempotent relaunch reconciliation.
 
 Desktop builds schedule the timer in the Tauri process and use native notifications, so minimizing the window does not stop the timer. The timer stops when Sabah One is fully exited: there is currently no tray process, autostart, or operating-system background schedule. Browser builds use an in-page timer and Web Notifications while the page remains open.
 

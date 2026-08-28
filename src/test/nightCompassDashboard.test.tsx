@@ -130,6 +130,12 @@ describe('NightCompassDashboard focused component contract', () => {
     expect(contextMocks.prayer.requestPrayerCompletion).toHaveBeenCalledWith('Maghrib', { source: 'dashboard' });
     expect(screen.getAllByText(LONG_TASK)).toHaveLength(1);
     expect(screen.getByRole('heading', { name: 'Tasks' }).closest('.nc-tasks-card')).toHaveTextContent('1 due or overdue');
+    const motivation = screen.getByRole('complementary', { name: /Quran-first encouragement/i });
+    expect(motivation).toHaveTextContent('Reviewed meaning (paraphrase)');
+    expect(within(motivation).getByRole('link', { name: /Quran .* Source/i })).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^https:\/\/quran\.com\//u),
+    );
   });
 
   it("marks tomorrow's Fajr as Next without reusing today's completed outcome", () => {

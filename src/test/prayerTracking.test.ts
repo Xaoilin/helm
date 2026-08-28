@@ -88,6 +88,7 @@ describe('prayer tracking state', () => {
       trackingStartedAt: activatedAt.toISOString(),
       records: {},
       reminderReceipts: {},
+      boundedReminderReceipts: {},
     });
     expect(CANONICAL_PRAYER_NAMES).toEqual(['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']);
   });

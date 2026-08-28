@@ -8,6 +8,7 @@ import type {
   DailyMomentumReminderPreference,
   DailyMomentumState,
   DailyPillar,
+  PrayerName,
   ProgressMetric,
 } from '../types/domain';
 import { toLocalDateStr } from './financeHelpers';
@@ -16,6 +17,11 @@ export const DAILY_MOMENTUM_SCHEMA_VERSION = 1;
 
 const PILLARS = new Set<DailyPillar>(['learn', 'move']);
 const METRICS = new Set<ProgressMetric>(['pages', 'minutes', 'rounds']);
+const PRAYER_NAMES = new Set(['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']);
+export const DAILY_MOMENTUM_REMINDER_ANCHORS: Record<DailyPillar, readonly PrayerName[]> = {
+  learn: ['Dhuhr', 'Maghrib', 'Isha'],
+  move: ['Asr', 'Maghrib', 'Isha'],
+};
 const LOCAL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const LOCAL_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
@@ -208,8 +214,8 @@ export function createDefaultDailyMomentumState(): DailyMomentumState {
     templates: createDefaultDailyActivityTemplates(),
     logs: {},
     reminderPreferences: {
-      learn: { enabled: false, localTime: null },
-      move: { enabled: false, localTime: null },
+      learn: { enabled: true, afterPrayers: ['Dhuhr', 'Maghrib', 'Isha'] },
+      move: { enabled: true, afterPrayers: ['Asr', 'Maghrib', 'Isha'] },
     },
   };
 }
@@ -217,16 +223,32 @@ export function createDefaultDailyMomentumState(): DailyMomentumState {
 function normalizeReminderPreference(
   value: unknown,
   fallback: DailyMomentumReminderPreference,
+  pillar: DailyPillar,
 ): DailyMomentumReminderPreference {
   if (value === undefined) return { ...fallback };
   if (!isRecord(value) || typeof value.enabled !== 'boolean') {
     throw new Error('Daily momentum reminder preferences must include an enabled flag.');
   }
-  const localTime = value.localTime ?? null;
-  if (localTime !== null && (typeof localTime !== 'string' || !LOCAL_TIME_PATTERN.test(localTime))) {
+  const rawAfterPrayers = value.afterPrayers ?? fallback.afterPrayers;
+  if (
+    !Array.isArray(rawAfterPrayers)
+    || rawAfterPrayers.some(prayer => typeof prayer !== 'string' || !PRAYER_NAMES.has(prayer))
+  ) {
+    throw new Error('Daily momentum reminder anchors must use canonical prayer names.');
+  }
+  const allowedAnchors = new Set<PrayerName>(DAILY_MOMENTUM_REMINDER_ANCHORS[pillar]);
+  const afterPrayers = [...new Set(rawAfterPrayers)]
+    .filter((prayer): prayer is PrayerName => allowedAnchors.has(prayer as PrayerName));
+  const localTime = value.localTime ?? fallback.localTime;
+  if (localTime !== undefined && localTime !== null && (typeof localTime !== 'string' || !LOCAL_TIME_PATTERN.test(localTime))) {
     throw new Error('Daily momentum reminder times must use local HH:MM values.');
   }
-  return { ...value, enabled: value.enabled, localTime };
+  return {
+    ...value,
+    enabled: value.enabled,
+    afterPrayers,
+    ...(localTime === undefined ? {} : { localTime }),
+  };
 }
 
 function normalizeProgressLog(value: unknown, key: string): DailyMomentumProgressLog {
@@ -292,8 +314,8 @@ export function normalizeDailyMomentumState(value: unknown): DailyMomentumState 
     logs,
     reminderPreferences: {
       ...(reminderValues ?? {}),
-      learn: normalizeReminderPreference(reminderValues?.learn, fallbackReminders.learn),
-      move: normalizeReminderPreference(reminderValues?.move, fallbackReminders.move),
+      learn: normalizeReminderPreference(reminderValues?.learn, fallbackReminders.learn, 'learn'),
+      move: normalizeReminderPreference(reminderValues?.move, fallbackReminders.move, 'move'),
     },
   };
 }
@@ -517,7 +539,7 @@ export function setDailyMomentumReminderPreference(
     ...normalized,
     reminderPreferences: {
       ...normalized.reminderPreferences,
-      [pillar]: normalizeReminderPreference(value, normalized.reminderPreferences[pillar]),
+      [pillar]: normalizeReminderPreference(value, normalized.reminderPreferences[pillar], pillar),
     },
   };
 }
