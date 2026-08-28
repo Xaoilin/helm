@@ -10,7 +10,6 @@ export const REQUIRED_CI_CHECKS = [
   'e2e',
   'build',
   'database',
-  'native',
   'codex-review',
 ]
 
@@ -41,9 +40,9 @@ const HOSTED_WEB_POLICY_EXCLUDED_PATHS = new Set([
   'scripts/lib/agentPolicy.mjs',
   'src/test/agentWorkflow.test.ts',
 ])
-const SABAH_ONE_NATIVE_SUPPORT_PATTERN = /(?:\b(?:Sabah One|HELM)\b[^\r\n]*(?:\b(?:desktop|local|native)\b[ _-]?(?:app(?:lication)?|assistant|runtime|runner|support|notification(?:s)?|path(?:s)?|project|folder|execution|timer|process)\b)|\b(?:desktop|local|native)\b[ _-]?(?:app(?:lication)?|assistant|runtime|runner|support|notification(?:s)?|path(?:s)?|project|folder|execution|timer|process)\b[^\r\n]*\b(?:Sabah One|HELM)\b|\bnative\s+(?:Sabah One|HELM)\b)/iu
+const SABAH_ONE_LOCAL_APP_SUPPORT_PATTERN = /(?:\b(?:Sabah One|HELM)\b[^\r\n]*(?:\b(?:desktop|local|native)\b[ _-]?(?:app(?:lication)?|assistant|runtime|runner|support|notification(?:s)?|path(?:s)?|project|folder|execution|timer|process)\b)|\b(?:desktop|local|native)\b[ _-]?(?:app(?:lication)?|assistant|runtime|runner|support|notification(?:s)?|path(?:s)?|project|folder|execution|timer|process)\b[^\r\n]*\b(?:Sabah One|HELM)\b|\bnative\s+(?:Sabah One|HELM)\b)/iu
 const SABAH_ONE_LOCAL_RUNTIME_API_PATTERN = /@tauri-apps|\bsrc-tauri\b|\bTAURI_[A-Z0-9_]*\b|__TAURI(?:_[A-Z0-9]+)?__|\btauri\b|\b(?:isTauri|isTauriRuntime|tauriAvailable|readTauriRaw|getDeviceTauriKey|desktopRuntimeAvailable|projectRuntime|projectPaths|nativePrayerReminder|canUseDesktopProjectPaths|canUseProjectRuntime|pickProjectDirectory|canonicalizeProjectPath|openProjectPath|createProjectRunFingerprint|approveProjectProfile|revokeProjectProfile|revokeProjectProfilesForProject|listApprovedProjectProfiles|listProjectSessions|startProjectProfile|stopProjectSession|subscribeProjectSession|canonicalize_project_path|isAbsoluteProjectRoot|normalizePendingLegacyProjectPaths|canonicalizeProjectRoot|PROJECT_PENDING_LEGACY_PATHS_STORE_KEY|localPath)\b/iu
-const NATIVE_CACHE_MACHINERY_PATTERN = /\b(?:cargo|rustup|rust|src-tauri|tauri)\b|\bnative(?:[-_ ](?:cache|build|runtime|platform|dependencies|toolchain|target|artifacts?))\b/iu
+const FORBIDDEN_LOCAL_APP_CACHE_PATTERN = /\b(?:cargo|rustup|rust|src-tauri|tauri)\b|\bnative(?:[-_ ](?:cache|build|runtime|platform|dependencies|toolchain|target|artifacts?))\b/iu
 
 const HOSTED_WEB_POLICY_PATTERNS = {
   source: [
@@ -53,7 +52,7 @@ const HOSTED_WEB_POLICY_PATTERNS = {
     },
     {
       label: 'explicit Sabah One desktop or local application support wording',
-      pattern: SABAH_ONE_NATIVE_SUPPORT_PATTERN,
+      pattern: SABAH_ONE_LOCAL_APP_SUPPORT_PATTERN,
     },
   ],
   scripts: [
@@ -65,7 +64,7 @@ const HOSTED_WEB_POLICY_PATTERNS = {
   ci: [
     {
       label: 'native CI, platform, or release machinery',
-      pattern: /@tauri-apps|\bsrc-tauri\b|\b(?:cargo|rustup)\b|\btauri(?:[-./_]|$)|\bnative-(?:impact|changes|platform)\b|\b(?:codesign|notariz(?:e|ation)?|\.dmg\b|\.msi\b|\.nsis\b)/iu,
+      pattern: /@tauri-apps|\bsrc-tauri\b|\b(?:cargo|rustup)\b|\btauri(?:[-./_]|$)|\bnative-(?:impact|changes|platform)\b|^\s*(?:native\s*:|name:\s*native\s*$)|\b(?:codesign|notariz(?:e|ation)?|\.dmg\b|\.msi\b|\.nsis\b)/iu,
     },
   ],
   config: [
@@ -81,7 +80,7 @@ const HOSTED_WEB_POLICY_PATTERNS = {
     },
     {
       label: 'explicit Sabah One desktop or local application support wording',
-      pattern: SABAH_ONE_NATIVE_SUPPORT_PATTERN,
+      pattern: SABAH_ONE_LOCAL_APP_SUPPORT_PATTERN,
     },
   ],
 }
@@ -111,7 +110,7 @@ function hostedWebPolicyCategory(filePath) {
   return 'config'
 }
 
-function findForbiddenNativeCacheMachinery(filePath, text, category) {
+function findForbiddenLocalAppCacheMachinery(filePath, text, category) {
   if (category !== 'ci' && category !== 'config') return []
 
   const findings = []
@@ -126,7 +125,7 @@ function findForbiddenNativeCacheMachinery(filePath, text, category) {
     let end = index + 1
     while (end < lines.length && !nextStepPattern.test(lines[end])) end += 1
 
-    if (NATIVE_CACHE_MACHINERY_PATTERN.test(lines.slice(index, end).join('\n'))) {
+    if (FORBIDDEN_LOCAL_APP_CACHE_PATTERN.test(lines.slice(index, end).join('\n'))) {
       findings.push({
         category,
         filePath,
@@ -175,7 +174,7 @@ export function findForbiddenHostedWebPolicyInText(filePath, text, category = ho
     }
   })
 
-  findings.push(...findForbiddenNativeCacheMachinery(filePath, text, category))
+  findings.push(...findForbiddenLocalAppCacheMachinery(filePath, text, category))
 
   return findings
 }
@@ -232,6 +231,14 @@ export function findForbiddenHostedWebDependencies(packageManifest, packageLock)
 export function findForbiddenHostedWebPackageScripts(packageManifest) {
   const findings = []
   for (const [scriptName, scriptCommand] of Object.entries(packageManifest?.scripts ?? {})) {
+    if (/(?:^|:)native(?:$|:)|tauri/iu.test(scriptName)) {
+      findings.push({
+        category: 'scripts',
+        filePath: `package.json#scripts.${scriptName}`,
+        line: null,
+        label: `forbidden local-app script name: ${scriptName}`,
+      })
+    }
     findings.push(...findForbiddenHostedWebPolicyInText(
       `package.json#scripts.${scriptName}`,
       String(scriptCommand),
@@ -303,7 +310,6 @@ export function evaluateCiWorkflow(rawWorkflow) {
     "needs.e2e.result == 'success'",
     "needs.build.result == 'success'",
     "needs.database.result == 'success'",
-    "needs.native.result == 'success'",
     "needs['codex-review'].result == 'success'",
     'group: helm-auto-promote-master',
     'cancel-in-progress: false',
@@ -543,49 +549,6 @@ export function evaluatePagesSpaFallback(packageManifest, fallbackScriptExists =
   }
 }
 
-export function evaluateHostedWebCompatibilityJob(rawWorkflow) {
-  const failures = []
-  const passes = []
-  const jobStart = rawWorkflow.search(/^  native:\s*$/mu)
-
-  if (jobStart < 0) {
-    failures.push('Hosted-web compatibility context is missing the native job.')
-    return { failures, passes, ok: false }
-  }
-
-  const bodyStart = rawWorkflow.indexOf('\n', jobStart) + 1
-  const nextJob = rawWorkflow.slice(bodyStart).search(/^  [A-Za-z0-9_-]+:\s*$/mu)
-  const jobBody = nextJob < 0
-    ? rawWorkflow.slice(bodyStart)
-    : rawWorkflow.slice(bodyStart, bodyStart + nextJob)
-  const forbiddenJobPatterns = [
-    ['job dependencies', /^\s{4}needs:/mu],
-    ['matrix or platform fan-out', /^\s{4}(?:strategy|matrix):/mu],
-    ['native platform runner', /^\s{4}runs-on:\s*(?:macos|windows|\$\{\{\s*matrix\.os)/imu],
-    ['checkout action', /actions\/checkout@/iu],
-    ['cache action', /actions\/cache@/iu],
-    ['cache configuration', /^\s{4}cache:/mu],
-    ['native toolchain command', /\b(?:cargo|rustup)\b/iu],
-    ['build or test command', /\bnpm\s+run\s+(?:build|test)(?::[A-Za-z0-9_-]+)?\b|\b(?:cargo|rustup)\b/iu],
-  ]
-
-  for (const [label, pattern] of forbiddenJobPatterns) {
-    if (pattern.test(jobBody)) {
-      failures.push(`Hosted-web compatibility native job must not contain ${label}.`)
-    }
-  }
-
-  if (failures.length === 0) {
-    passes.push('Hosted-web compatibility native job is a no-op with no build, test, cache, or native platform machinery.')
-  }
-
-  return {
-    failures,
-    passes,
-    ok: failures.length === 0,
-  }
-}
-
 export function evaluateHostedWebPolicy(rootDir) {
   const failures = []
   const passes = []
@@ -621,11 +584,6 @@ export function evaluateHostedWebPolicy(rootDir) {
       category,
     ))
   }
-
-  const ciWorkflow = readFileSync(resolve(rootDir, '.github', 'workflows', 'ci.yml'), 'utf8')
-  const compatibilityResult = evaluateHostedWebCompatibilityJob(ciWorkflow)
-  failures.push(...compatibilityResult.failures)
-  passes.push(...compatibilityResult.passes)
 
   let packageManifest
   let packageLock

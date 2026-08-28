@@ -209,17 +209,6 @@ jobs:
         if: always()
         run: npx supabase stop --no-backup
 
-  native:
-    name: native
-    if: >-
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event_name != 'workflow_dispatch' ||
-        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
-    runs-on: ubuntu-latest
-    steps:
-      - name: Keep branch-protection compatibility context
-        run: echo "The native context is retained for branch protection; HELM supports hosted web delivery only."
-
   receipt:
     name: receipt
     if: >-
@@ -433,8 +422,7 @@ jobs:
 
   auto-promote:
     name: auto-promote
-    # `always()` prevents a skipped compatibility context from suppressing this
-    # job. Explicit direct-result guards keep promotion fail closed.
+    # `always()` allows explicit direct-result guards to keep promotion fail closed.
     if: >-
       always() &&
       github.event_name == 'pull_request' &&
@@ -449,7 +437,6 @@ jobs:
       needs.e2e.result == 'success' &&
       needs.build.result == 'success' &&
       needs.database.result == 'success' &&
-      needs.native.result == 'success' &&
       needs['codex-review'].result == 'success'
     runs-on: ubuntu-latest
     concurrency:
@@ -464,7 +451,6 @@ jobs:
       - e2e
       - build
       - database
-      - native
       - codex-review
     permissions:
       actions: write

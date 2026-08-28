@@ -10,7 +10,6 @@ import {
   withoutLocalGitEnvironment,
 } from '../../scripts/lib/changedFiles.mjs'
 import {
-  evaluateHostedWebCompatibilityJob,
   findForbiddenHostedWebDependencies,
   findForbiddenHostedWebPackageScripts,
   findForbiddenHostedWebPolicyInText,
@@ -194,14 +193,17 @@ describe('agent workflow change classification', () => {
       '- uses: actions/cache@v4\n  with:\n    path: ~/.cargo\n    key: native-cargo-${{ runner.os }}',
       'ci',
     ).length).toBeGreaterThan(0)
-    expect(evaluateHostedWebCompatibilityJob(`  native:\n    name: native\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hosted-web-compatibility`)).toMatchObject({ ok: true })
-    expect(evaluateHostedWebCompatibilityJob(`  native:\n    name: native\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/cache@v4\n        with:\n          path: ~/.cargo\n      - run: npm run test:native`)).toMatchObject({ ok: false })
+    expect(findForbiddenHostedWebPolicyInText(
+      '.github/workflows/ci.yml',
+      '  native:\n    name: native',
+      'ci',
+    )).not.toEqual([])
     expect(findForbiddenHostedWebDependencies(
       { dependencies: { [forbiddenPackage]: '2.10.1' } },
       { packages: { [`node_modules/${forbiddenPackage}`]: {} } },
     )).toHaveLength(2)
     expect(findForbiddenHostedWebPackageScripts({
-      scripts: { native: 'cargo test' },
+      scripts: { native: 'echo compatibility' },
     })).toHaveLength(1)
   })
 })
