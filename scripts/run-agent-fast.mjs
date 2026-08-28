@@ -59,8 +59,6 @@ if (policyResult.exitCode !== 0) {
     selected.push(npmRun('test:related', impact.testInputs, { label: 'related unit tests' }))
   }
   if (impact.ui) selected.push(npmRun('test:e2e:smoke', [], { label: 'UI smoke tests' }))
-  if (impact.native) selected.push(npmRun('test:native', [], { label: 'native tests' }))
-
   const selectedLabels = new Set(selected.map(item => item.label))
   for (const label of [
     'changed-file lint',
@@ -68,7 +66,6 @@ if (policyResult.exitCode !== 0) {
     'related unit tests',
     'unit tests (global config changed)',
     'UI smoke tests',
-    'native tests',
   ]) {
     if (!selectedLabels.has(label)) {
       results.push({ durationMs: null, exitCode: null, label })

@@ -10,8 +10,8 @@ const packageJson = JSON.parse(
 ) as { version: string }
 const rootDirectory = fileURLToPath(new URL('.', import.meta.url))
 
-export function resolveAssetBase(tauriPlatform = process.env.TAURI_ENV_PLATFORM): string {
-  return tauriPlatform ? './' : '/helm/'
+export function resolveAssetBase(): string {
+  return '/helm/'
 }
 
 export const vitestExcludedPaths = ['node_modules', 'e2e', '.codex_tmp/**', '.ai/**']
@@ -29,9 +29,6 @@ export default defineConfig({
     forwardConsole: {
       unhandledErrors: true,
       logLevels: [],
-    },
-    watch: {
-      ignored: ['**/src-tauri/target/**'],
     },
   },
   test: {

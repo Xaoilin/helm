@@ -28,10 +28,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Tauri build output
-src-tauri/target/
-src-tauri/gen/
-
 # Supabase CLI local cache
 supabase/.temp/
 

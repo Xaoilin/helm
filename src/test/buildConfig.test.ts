@@ -4,12 +4,7 @@ import { resolveAssetBase, vitestExcludedPaths } from '../../vite.config'
 
 describe('build asset base', () => {
   it('keeps GitHub Pages under /helm/', () => {
-    expect(resolveAssetBase(undefined)).toBe('/helm/')
-  })
-
-  it('uses relative assets inside a Tauri bundle', () => {
-    expect(resolveAssetBase('darwin')).toBe('./')
-    expect(resolveAssetBase('windows')).toBe('./')
+    expect(resolveAssetBase()).toBe('/helm/')
   })
 })
 

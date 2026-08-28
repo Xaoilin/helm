@@ -38,22 +38,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  native-changes:
-    name: native-changes
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    outputs:
-      native: ${{ steps.detect.outputs.native }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - id: detect
-        name: Detect native-impact changes
-        env:
-          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: node ./scripts/detect-ci-native-impact.mjs
-
   lint:
     name: lint
     if: >-
@@ -225,70 +209,16 @@ jobs:
         if: always()
         run: npx supabase stop --no-backup
 
-  native-platform:
-    name: native-${{ matrix.os }}
-    needs: native-changes
-    if: >-
-      always() &&
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event_name != 'workflow_dispatch' ||
-        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == '')) &&
-      (github.event_name != 'pull_request' || needs['native-changes'].outputs.native == 'true')
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v5
-      - name: Restore Cargo cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-      - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.89.0 --profile minimal --no-self-update
-      - name: Test native runtime
-        run: cargo +1.89.0 test --locked --manifest-path src-tauri/Cargo.toml
-
   native:
     name: native
-    needs:
-      - native-changes
-      - native-platform
     if: >-
-      always() &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event_name != 'workflow_dispatch' ||
         (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
     runs-on: ubuntu-latest
     steps:
-      - name: Require applicable native validation
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          NATIVE_CHANGE_RESULT: ${{ needs['native-changes'].result }}
-          NATIVE_IMPACT: ${{ needs['native-changes'].outputs.native }}
-          NATIVE_PLATFORM_RESULT: ${{ needs['native-platform'].result }}
-        run: |
-          if [ "$EVENT_NAME" = "pull_request" ] && [ "$NATIVE_CHANGE_RESULT" != "success" ]; then
-            echo "Native-impact detection did not complete successfully."
-            exit 1
-          fi
-
-          if [ "$EVENT_NAME" != "pull_request" ] || [ "$NATIVE_IMPACT" = "true" ]; then
-            if [ "$NATIVE_PLATFORM_RESULT" != "success" ]; then
-              echo "Required macOS and Windows native validation did not pass."
-              exit 1
-            fi
-            echo "Required native validation passed."
-          else
-            echo "No native-impact changes detected; native matrix skipped."
-          fi
+      - name: Keep branch-protection compatibility context
+        run: echo "The native context is retained for branch protection; HELM supports hosted web delivery only."
 
   receipt:
     name: receipt
@@ -503,8 +433,8 @@ jobs:
 
   auto-promote:
     name: auto-promote
-    # `always()` prevents a skipped transitive native matrix from suppressing
-    # this job. Explicit direct-result guards keep promotion fail closed.
+    # `always()` prevents a skipped compatibility context from suppressing this
+    # job. Explicit direct-result guards keep promotion fail closed.
     if: >-
       always() &&
       github.event_name == 'pull_request' &&
