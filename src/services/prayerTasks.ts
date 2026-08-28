@@ -1,5 +1,10 @@
 import type { PrayerName, Task, TaskCategory } from '../types/domain';
 import type { PrayerTime } from './prayerTimes';
+import {
+  getPrayerZonedDate,
+  prayerZonedDateTimeToInstant,
+  shiftPrayerDate,
+} from './prayerTimeZone';
 
 export const PRAYER_TASK_ORDER: PrayerName[] = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
@@ -24,13 +29,6 @@ export interface PrayerWindow {
   startsAt: Date;
   endsAt: Date;
   minutesRemaining: number;
-}
-
-function parseTimeOnDate(baseDate: Date, timeStr: string): Date {
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  const next = new Date(baseDate);
-  next.setHours(hours, minutes, 0, 0);
-  return next;
 }
 
 export function inferPrayerNameFromTaskTitle(title: string): PrayerName | null {
@@ -84,16 +82,23 @@ export function getPrayerWindow(
   prayers: PrayerTime[],
   prayerName: PrayerName,
   now: Date,
+  timeZone: string,
 ): PrayerWindow | null {
   const startEntry = prayers.find(prayer => prayer.name === prayerName);
   const endEntry = prayers.find(prayer => prayer.name === PRAYER_WINDOW_ENDS[prayerName]);
 
   if (!startEntry || !endEntry) return null;
 
-  const startsAt = parseTimeOnDate(now, startEntry.time);
-  const endsAt = parseTimeOnDate(now, endEntry.time);
+  const date = getPrayerZonedDate(now, timeZone);
+  if (!date) return null;
+  const startsAt = prayerZonedDateTimeToInstant(date, startEntry.time, timeZone);
+  let endsAt = prayerZonedDateTimeToInstant(date, endEntry.time, timeZone);
+  if (!startsAt || !endsAt) return null;
   if (endsAt <= startsAt) {
-    endsAt.setDate(endsAt.getDate() + 1);
+    if (PRAYER_WINDOW_ENDS[prayerName] !== 'Midnight') return null;
+    const nextDate = shiftPrayerDate(date, 1);
+    endsAt = nextDate ? prayerZonedDateTimeToInstant(nextDate, endEntry.time, timeZone) : null;
+    if (!endsAt || endsAt <= startsAt) return null;
   }
 
   if (now < startsAt || now >= endsAt) {
@@ -108,25 +113,39 @@ export function getPrayerWindow(
   };
 }
 
-export function getActivePrayerWindow(prayers: PrayerTime[], now: Date): PrayerWindow | null {
+export function getActivePrayerWindow(
+  prayers: PrayerTime[],
+  now: Date,
+  timeZone: string,
+): PrayerWindow | null {
   for (const prayerName of PRAYER_TASK_ORDER) {
-    const window = getPrayerWindow(prayers, prayerName, now);
+    const window = getPrayerWindow(prayers, prayerName, now, timeZone);
     if (window) return window;
   }
 
   return null;
 }
 
-export function getRemainingPrayerNames(prayers: PrayerTime[], now: Date): PrayerName[] {
+export function getRemainingPrayerNames(
+  prayers: PrayerTime[],
+  now: Date,
+  timeZone: string,
+): PrayerName[] {
+  const date = getPrayerZonedDate(now, timeZone);
+  if (!date) return [];
   return PRAYER_TASK_ORDER.filter(prayerName => {
     const startEntry = prayers.find(prayer => prayer.name === prayerName);
     const endEntry = prayers.find(prayer => prayer.name === PRAYER_WINDOW_ENDS[prayerName]);
     if (!startEntry || !endEntry) return false;
 
-    const endsAt = parseTimeOnDate(now, endEntry.time);
-    const startsAt = parseTimeOnDate(now, startEntry.time);
+    const startsAt = prayerZonedDateTimeToInstant(date, startEntry.time, timeZone);
+    let endsAt = prayerZonedDateTimeToInstant(date, endEntry.time, timeZone);
+    if (!startsAt || !endsAt) return false;
     if (endsAt <= startsAt) {
-      endsAt.setDate(endsAt.getDate() + 1);
+      if (PRAYER_WINDOW_ENDS[prayerName] !== 'Midnight') return false;
+      const nextDate = shiftPrayerDate(date, 1);
+      endsAt = nextDate ? prayerZonedDateTimeToInstant(nextDate, endEntry.time, timeZone) : null;
+      if (!endsAt || endsAt <= startsAt) return false;
     }
 
     return now < endsAt;

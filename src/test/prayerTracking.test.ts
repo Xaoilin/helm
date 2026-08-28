@@ -47,7 +47,7 @@ function at(
 }
 
 function schedule(date: string): PrayerScheduleDay {
-  return { date, prayers: PRAYERS };
+  return { date, timezone: 'Europe/London', prayers: PRAYERS };
 }
 
 function scheduleWithTimes(
@@ -56,6 +56,7 @@ function scheduleWithTimes(
 ): PrayerScheduleDay {
   return {
     date,
+    timezone: 'Europe/London',
     prayers: PRAYERS.map(prayer => ({
       ...prayer,
       time: times[prayer.name] ?? prayer.time,
@@ -316,7 +317,7 @@ describe('Jafari prayer deadline bounds', () => {
     ['Asr', 'Maghrib', 20, 15],
     ['Maghrib', 'Isha', 22, 0],
   ] as const)('%s remains on time until %s', (prayerName, deadlineName, hour, minute) => {
-    const bounds = getPrayerDeadlineBounds(PRAYERS, '2026-04-01', prayerName);
+    const bounds = getPrayerDeadlineBounds(PRAYERS, '2026-04-01', prayerName, 'Europe/London');
 
     expect(bounds).not.toBeNull();
     expect(bounds?.deadlineName).toBe(deadlineName);
@@ -329,7 +330,7 @@ describe('Jafari prayer deadline bounds', () => {
 
   it('Isha uses next-day Jafari Midnight', () => {
     const prayerName = 'Isha' as const;
-    const bounds = getPrayerDeadlineBounds(PRAYERS, '2026-04-01', prayerName);
+    const bounds = getPrayerDeadlineBounds(PRAYERS, '2026-04-01', prayerName, 'Europe/London');
 
     expect(bounds?.deadlineName).toBe('Midnight');
     expect(bounds?.startsAt.getDate()).toBe(1);
@@ -349,7 +350,7 @@ describe('Jafari prayer deadline bounds', () => {
   });
 
   it('keeps local calendar dates through a DST transition instead of slicing UTC dates', () => {
-    const bounds = getPrayerDeadlineBounds(PRAYERS, '2026-03-29', 'Isha');
+    const bounds = getPrayerDeadlineBounds(PRAYERS, '2026-03-29', 'Isha', 'Europe/London');
 
     expect(bounds?.date).toBe('2026-03-29');
     expect(bounds?.startsAt.getFullYear()).toBe(2026);
@@ -358,12 +359,36 @@ describe('Jafari prayer deadline bounds', () => {
     expect(bounds?.deadlineAt.getDate()).toBe(30);
   });
 
+  it('converts a London deadline across spring-forward using real zoned instants', () => {
+    const schedule = PRAYERS.map(prayer => {
+      if (prayer.name === 'Fajr') return { ...prayer, time: '00:30' };
+      if (prayer.name === 'Sunrise') return { ...prayer, time: '02:30' };
+      return prayer;
+    });
+    const bounds = getPrayerDeadlineBounds(
+      schedule,
+      '2026-03-29',
+      'Fajr',
+      'Europe/London',
+    );
+
+    expect(bounds?.startsAt.toISOString()).toBe('2026-03-29T00:30:00.000Z');
+    expect(bounds?.deadlineAt.toISOString()).toBe('2026-03-29T01:30:00.000Z');
+    expect(bounds!.deadlineAt.getTime() - bounds!.startsAt.getTime()).toBe(60 * 60_000);
+  });
+
   it('returns null when schedule lacks required events or has invalid clock data', () => {
-    expect(getPrayerDeadlineBounds([{ name: 'Fajr', time: '05:00' }], '2026-04-01', 'Fajr')).toBeNull();
+    expect(getPrayerDeadlineBounds(
+      [{ name: 'Fajr', time: '05:00' }],
+      '2026-04-01',
+      'Fajr',
+      'Europe/London',
+    )).toBeNull();
     expect(getPrayerDeadlineBounds([
       { name: 'Fajr', time: '25:00' },
       { name: 'Sunrise', time: '06:30' },
-    ], '2026-04-01', 'Fajr')).toBeNull();
+    ], '2026-04-01', 'Fajr', 'Europe/London')).toBeNull();
+    expect(getPrayerDeadlineBounds(PRAYERS, '2026-04-01', 'Fajr', '')).toBeNull();
   });
 });
 
@@ -391,6 +416,7 @@ describe('activation-day eligibility snapshot', () => {
 
     const partial = capturePrayerActivationDayEligibility(state, {
       date: '2026-07-01',
+      timezone: 'Europe/London',
       prayers: [{ name: 'Fajr', time: '04:00' }],
     });
     const wrongDay = capturePrayerActivationDayEligibility(
@@ -515,6 +541,7 @@ describe('activation-day eligibility snapshot', () => {
 
     expect(isPrayerOpportunityTracked(state, {
       date: '2026-07-01',
+      timezone: 'Europe/London',
       prayers: [{ name: 'Fajr', time: '04:00' }],
     }, 'Fajr')).toBe(false);
   });
@@ -695,7 +722,11 @@ describe('prayer outcome stats', () => {
 
     const result = calculatePrayerOutcomeStats(
       state,
-      [{ date: '2026-04-01', prayers: [{ name: 'Fajr', time: '05:00' }] }],
+      [{
+        date: '2026-04-01',
+        timezone: 'Europe/London',
+        prayers: [{ name: 'Fajr', time: '05:00' }],
+      }],
       at(2026, 4, 1, 7),
     );
 

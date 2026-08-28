@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CANONICAL_PRAYER_NAMES } from '../../services/prayerTracking';
+import { formatPrayerInstantTime } from '../../services/prayerTimeZone';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 
 function display(value: string | number | boolean | null | undefined): string {
@@ -22,9 +23,12 @@ export default function PrayerDebug() {
     ['Location', diagnostics.location],
     ['Method', diagnostics.method],
     ['Schedule timezone', diagnostics.scheduleTimezone],
+    ['Prayer clock basis', diagnostics.scheduleTimezoneValid ? diagnostics.scheduleTimezone : null],
     ['Local browser timezone', diagnostics.localTimezone],
     ['Timezone matches', diagnostics.timezoneMatches],
-    ['Next reminder fire', diagnostics.nextReminderAt ? new Date(diagnostics.nextReminderAt).toLocaleString() : null],
+    ['Next reminder fire', diagnostics.nextReminderAt && diagnostics.scheduleTimezone
+      ? new Date(diagnostics.nextReminderAt).toLocaleString([], { timeZone: diagnostics.scheduleTimezone })
+      : null],
     ['Suppression reason', diagnostics.suppressionReason],
     ['Notification permission', diagnostics.permissionState],
     ['Last notification key', diagnostics.lastNotificationKey],
@@ -60,7 +64,7 @@ export default function PrayerDebug() {
                 <strong>{prayerName}</strong>
                 <span>
                   {bounds
-                    ? `${bounds.startsAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} → ${bounds.deadlineName} ${bounds.deadlineAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    ? `${formatPrayerInstantTime(bounds.startsAt, prayer.schedule?.timezone ?? '')} → ${bounds.deadlineName} ${formatPrayerInstantTime(bounds.deadlineAt, prayer.schedule?.timezone ?? '')}`
                     : 'Unavailable'}
                 </span>
               </div>

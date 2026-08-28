@@ -315,9 +315,9 @@ export default function SettingsSurface() {
             })}
             {momentum.error && <div className="prayer-settings-timezone-warning" role="alert">{momentum.error}</div>}
           </div>
-          {!prayer.timezoneMatches && prayer.schedule && (
+          {!prayer.scheduleTimezoneValid && prayer.schedule && (
             <div className="prayer-settings-timezone-warning" role="alert">
-              Reminders paused: schedule timezone {prayer.schedule.timezone || 'unknown'} does not match local browser timezone {prayer.localTimezone}.
+              Reminders paused: the schedule timezone is invalid or missing.
             </div>
           )}
           {prayer.scheduleStatus === 'unavailable' && (

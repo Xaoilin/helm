@@ -17,7 +17,12 @@
 import { API_TIMEOUT } from '../config/constants';
 import { prayerTimesBreaker } from './serviceBreakers';
 import { withRetry } from './retry';
-import { toLocalDateStr } from './financeHelpers';
+import {
+  getPrayerZonedDate,
+  prayerZonedDateTimeToInstant,
+  shiftPrayerDate,
+  validatePrayerTimeZone,
+} from './prayerTimeZone';
 
 const API_BASE = 'https://api.aladhan.com/v1';
 const CACHE_KEY = 'helm:prayer-times-cache';
@@ -157,14 +162,21 @@ export async function fetchPrayerTimes(city: string, country: string): Promise<P
 
   const hijri = data.date?.hijri;
   const hijriDate = hijri ? `${hijri.day} ${hijri.month?.en || ''} ${hijri.year}` : '';
+  const timezone = validatePrayerTimeZone(
+    typeof data.meta?.timezone === 'string' ? data.meta.timezone : '',
+  );
+  const date = timezone ? getPrayerZonedDate(new Date(), timezone) : null;
+  if (!timezone || !date) {
+    throw new Error('Prayer times API returned an invalid or missing timezone');
+  }
 
   return {
     prayers,
-    date: toLocalDateStr(new Date()),
+    date,
     hijriDate,
     city,
     country,
-    timezone: typeof data.meta?.timezone === 'string' ? data.meta.timezone : '',
+    timezone,
     method: 'Shia Ithna-Ashari, Leva Institute, Qum',
     fetchedAt: new Date().toISOString(),
     source: 'network',
@@ -178,7 +190,7 @@ export interface GetPrayerTimesOptions {
 function readPrayerTimesCache(
   city: string,
   country: string,
-  todayStr: string,
+  now: Date,
 ): PrayerTimesData | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
@@ -187,16 +199,18 @@ function readPrayerTimesCache(
     const cached = JSON.parse(raw) as unknown;
     if (
       !isCompletePrayerTimesData(cached)
-      || cached.date !== todayStr
       || cached.city !== city
       || cached.country !== country
     ) {
       return null;
     }
 
+    const timezone = validatePrayerTimeZone(cached.timezone);
+    if (!timezone || cached.date !== getPrayerZonedDate(now, timezone)) return null;
+
     return {
       ...cached,
-      timezone: cached.timezone || '',
+      timezone,
       source: 'cache',
     };
   } catch {
@@ -210,8 +224,8 @@ export async function getPrayerTimes(
   country: string,
   options: GetPrayerTimesOptions = {},
 ): Promise<PrayerTimesData> {
-  const todayStr = toLocalDateStr(new Date());
-  const cached = readPrayerTimesCache(city, country, todayStr);
+  const now = new Date();
+  const cached = readPrayerTimesCache(city, country, now);
 
   if (cached && !options.forceRefresh) return cached;
 
@@ -226,22 +240,20 @@ export async function getPrayerTimes(
   }
 }
 
-/** Parse "HH:MM" time string to today's Date object. */
-export function parseTimeToDate(timeStr: string): Date {
-  const [h, m] = timeStr.split(':').map(Number);
-  const d = new Date();
-  d.setHours(h, m, 0, 0);
-  return d;
-}
-
 /** Find the next upcoming prayer (wajib only). */
-export function getNextPrayer(prayers: PrayerTime[]): { prayer: PrayerTime; minutesUntil: number } | null {
-  const now = new Date();
+export function getNextPrayer(
+  prayers: PrayerTime[],
+  now: Date,
+  timeZone: string,
+): { prayer: PrayerTime; minutesUntil: number } | null {
+  const prayerDate = getPrayerZonedDate(now, timeZone);
+  if (!prayerDate) return null;
   const wajibPrayers = prayers.filter(p => p.type === 'prayer');
 
   for (const prayer of wajibPrayers) {
-    const prayerDate = parseTimeToDate(prayer.time);
-    const diff = (prayerDate.getTime() - now.getTime()) / 60000;
+    const prayerInstant = prayerZonedDateTimeToInstant(prayerDate, prayer.time, timeZone);
+    if (!prayerInstant) return null;
+    const diff = (prayerInstant.getTime() - now.getTime()) / 60000;
     if (diff > -1) { // allow 1 min grace
       return { prayer, minutesUntil: Math.max(0, diff) };
     }
@@ -250,8 +262,11 @@ export function getNextPrayer(prayers: PrayerTime[]): { prayer: PrayerTime; minu
   // All prayers passed — next is tomorrow's Fajr
   const fajr = wajibPrayers.find(p => p.name === 'Fajr');
   if (fajr) {
-    const tomorrow = parseTimeToDate(fajr.time);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowDate = shiftPrayerDate(prayerDate, 1);
+    const tomorrow = tomorrowDate
+      ? prayerZonedDateTimeToInstant(tomorrowDate, fajr.time, timeZone)
+      : null;
+    if (!tomorrow) return null;
     const diff = (tomorrow.getTime() - now.getTime()) / 60000;
     return { prayer: fajr, minutesUntil: Math.round(diff) };
   }
@@ -260,13 +275,15 @@ export function getNextPrayer(prayers: PrayerTime[]): { prayer: PrayerTime; minu
 }
 
 /** Check if a prayer is happening right now (within 1 minute window). */
-export function isAdhanTime(prayers: PrayerTime[]): PrayerTime | null {
-  const now = new Date();
+export function isAdhanTime(prayers: PrayerTime[], now: Date, timeZone: string): PrayerTime | null {
+  const prayerDate = getPrayerZonedDate(now, timeZone);
+  if (!prayerDate) return null;
   const wajib = prayers.filter(p => p.type === 'prayer');
 
   for (const prayer of wajib) {
-    const prayerDate = parseTimeToDate(prayer.time);
-    const diffMs = now.getTime() - prayerDate.getTime();
+    const prayerInstant = prayerZonedDateTimeToInstant(prayerDate, prayer.time, timeZone);
+    if (!prayerInstant) return null;
+    const diffMs = now.getTime() - prayerInstant.getTime();
     // Within 0-60 seconds after prayer time
     if (diffMs >= 0 && diffMs < 60000) {
       return prayer;

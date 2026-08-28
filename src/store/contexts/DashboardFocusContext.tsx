@@ -100,9 +100,10 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
     [taskCtx.tasks],
   );
   const shouldLoadPrayerTimes = hasPrayerTasks || settingsCtx.settings.prayerEnabled !== false;
-  const activePrayerTimes = shouldLoadPrayerTimes
+  const activePrayerTimes = shouldLoadPrayerTimes && prayerCtx.scheduleTimezoneValid
     ? prayerCtx.schedule?.prayers
     : undefined;
+  const activePrayerTimezone = activePrayerTimes ? prayerCtx.schedule?.timezone : undefined;
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(new Date()), TIMING.DASHBOARD_FOCUS_TICK);
@@ -168,6 +169,7 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
     feedback,
     now,
     prayerTimes: activePrayerTimes,
+    prayerTimezone: activePrayerTimezone,
   }), [
     taskCtx.tasks,
     calendar.calendarSources,
@@ -177,6 +179,7 @@ export function DashboardFocusProvider({ children }: { children: ReactNode }) {
     feedback,
     now,
     activePrayerTimes,
+    activePrayerTimezone,
   ]);
 
   const recordFeedback = useCallback((entry: Omit<FocusFeedback, 'id' | 'createdAt'>) => {

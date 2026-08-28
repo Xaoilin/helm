@@ -58,6 +58,7 @@ export interface DashboardFocusEngineInput {
   feedback: FocusFeedback[];
   now: Date;
   prayerTimes?: PrayerTime[];
+  prayerTimezone?: string;
 }
 
 export interface DashboardFocusBuildResult {
@@ -275,12 +276,20 @@ function getRecentProjectMomentum(tasks: Task[], now: Date): {
   };
 }
 
-function buildStats(tasks: Task[], todayStr: string, prayerTimes: PrayerTime[] | undefined, now: Date): DashboardFocusStats {
+function buildStats(
+  tasks: Task[],
+  todayStr: string,
+  prayerTimes: PrayerTime[] | undefined,
+  prayerTimezone: string | undefined,
+  now: Date,
+): DashboardFocusStats {
   const activeTasks = tasks.filter(task => task.category !== 'goal' && !task.completed);
   const overdueCount = activeTasks.filter(task => task.category === 'task' && Boolean(task.dueDate) && task.dueDate! < todayStr).length;
   const dueTodayCount = activeTasks.filter(task => task.category === 'task' && task.dueDate === todayStr).length;
   const routinesLeft = activeTasks.filter(task => task.category === 'daily').length;
-  const remainingPrayerNames = prayerTimes ? new Set(getRemainingPrayerNames(prayerTimes, now)) : null;
+  const remainingPrayerNames = prayerTimes && prayerTimezone
+    ? new Set(getRemainingPrayerNames(prayerTimes, now, prayerTimezone))
+    : null;
   const prayersLeft = activeTasks.filter(task => {
     if (!isPrayerTask(task)) return false;
     if (!remainingPrayerNames) return true;
@@ -319,15 +328,16 @@ function buildTaskCandidate(
       : 'No due date yet';
 
   if (isPrayerTask(task)) {
-    if (!input.prayerTimes) return null;
+    if (!input.prayerTimes || !input.prayerTimezone) return null;
 
     const prayerName = getPrayerTaskName(task);
-    const activePrayerWindow = getActivePrayerWindow(input.prayerTimes, now);
+    const activePrayerWindow = getActivePrayerWindow(input.prayerTimes, now, input.prayerTimezone);
     if (!prayerName || !activePrayerWindow || activePrayerWindow.prayerName !== prayerName) {
       return null;
     }
 
     const windowClosesAt = activePrayerWindow.endsAt.toLocaleTimeString([], {
+      timeZone: input.prayerTimezone,
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
@@ -695,7 +705,13 @@ function buildFocusMessages(candidates: FocusCandidate[], now: Date) {
 
 export function buildDashboardFocusCandidates(input: DashboardFocusEngineInput): DashboardFocusBuildResult {
   const todayStr = toLocalDateStr(input.now);
-  const stats = buildStats(input.tasks, todayStr, input.prayerTimes, input.now);
+  const stats = buildStats(
+    input.tasks,
+    todayStr,
+    input.prayerTimes,
+    input.prayerTimezone,
+    input.now,
+  );
   const { dismissCounts, recentOpens, snoozedUntil, recent } = buildFeedbackMaps(input.feedback, input.now);
   const upcomingEvents = getVisibleUpcomingEvents(input.calendarSources, input.calendarEvents, input.now);
   const nextEvent = upcomingEvents[0];

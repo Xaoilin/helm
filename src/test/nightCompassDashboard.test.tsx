@@ -65,6 +65,7 @@ function installPrayerMock() {
     scheduleError: null,
     localTimezone: 'Europe/London',
     timezoneMatches: true,
+    scheduleTimezoneValid: true,
     now: new Date(2026, 7, 28, 20, 30, 0),
     today: TODAY,
     tracking,
@@ -141,7 +142,7 @@ describe('NightCompassDashboard focused component contract', () => {
     );
   });
 
-  it('keeps the marker before displayed Dhuhr at 12:22 when Dhuhr is 13:03', () => {
+  it('uses raw London schedule time at 12:54 even when the browser reports Berlin', () => {
     const schedule = {
       ...contextMocks.prayer.schedule,
       prayers: PRAYERS.map(prayer => prayer.name === 'Dhuhr'
@@ -152,10 +153,11 @@ describe('NightCompassDashboard focused component contract', () => {
     contextMocks.prayer = {
       ...contextMocks.prayer,
       schedule,
-      localTimezone: 'Europe/London',
-      timezoneMatches: true,
-      now: new Date('2026-08-28T11:22:23.000Z'),
-      nextPrayer: { prayer: schedule.prayers[2], minutesUntil: 41 },
+      localTimezone: 'Europe/Berlin',
+      timezoneMatches: false,
+      scheduleTimezoneValid: true,
+      now: new Date('2026-08-28T11:54:00.000Z'),
+      nextPrayer: { prayer: schedule.prayers[2], minutesUntil: 9 },
     };
 
     render(<NightCompassDashboard />);
@@ -165,6 +167,10 @@ describe('NightCompassDashboard focused component contract', () => {
     expect(position).toBeGreaterThan(0);
     expect(position).toBeLessThan(25);
     expect(screen.getByText(/Now · .* to Dhuhr/u)).toBeInTheDocument();
+    expect(screen.getByText('Next prayer')).toBeInTheDocument();
+    expect(screen.queryByText('Current prayer')).not.toBeInTheDocument();
+    expect(screen.queryByText('Prayer schedule needs attention')).not.toBeInTheDocument();
+    expect(screen.getByText('Bedford · Europe/London')).toBeInTheDocument();
   });
 
   it('keeps the pre-Fajr marker at the start of the prayer rail', () => {

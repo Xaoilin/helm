@@ -1,7 +1,6 @@
 import { act, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DashboardSurface from '../surfaces/DashboardSurface';
-import { toLocalDateStr } from '../services/financeHelpers';
 import { renderWithProvider } from './surfaceTestHarness';
 
 const PRAYER_NAMES = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
@@ -43,34 +42,51 @@ describe('DashboardSurface Night Compass', () => {
     }
   });
 
-  it('keeps all five prayers visible with an actionable timezone repair state', async () => {
+  it('orients raw London prayer state at 11:54Z when the browser reports Berlin', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-08-28T11:54:00.000Z'));
+    const actualOptions = new Intl.DateTimeFormat().resolvedOptions();
+    const resolvedOptions = vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+      .mockReturnValue({ ...actualOptions, timeZone: 'Europe/Berlin' });
     localStorage.setItem('helm:prayer-times-cache', JSON.stringify({
       prayers: [
         { name: 'Fajr', nameArabic: 'Fajr', time: '05:00', type: 'prayer' },
         { name: 'Sunrise', nameArabic: 'Sunrise', time: '06:45', type: 'event' },
-        { name: 'Dhuhr', nameArabic: 'Dhuhr', time: '13:00', type: 'prayer' },
+        { name: 'Dhuhr', nameArabic: 'Dhuhr', time: '13:03', type: 'prayer' },
         { name: 'Asr', nameArabic: 'Asr', time: '16:30', type: 'prayer' },
         { name: 'Sunset', nameArabic: 'Sunset', time: '20:00', type: 'event' },
         { name: 'Maghrib', nameArabic: 'Maghrib', time: '20:15', type: 'prayer' },
         { name: 'Isha', nameArabic: 'Isha', time: '21:45', type: 'prayer' },
         { name: 'Midnight', nameArabic: 'Midnight', time: '00:15', type: 'event' },
       ],
-      date: toLocalDateStr(new Date()),
+      date: '2026-08-28',
       hijriDate: '12 Safar 1448',
       city: 'Bedford',
       country: 'United Kingdom',
-      timezone: 'America/New_York',
+      timezone: 'Europe/London',
       method: 'Shia Ithna-Ashari, Leva Institute, Qum',
       fetchedAt: new Date().toISOString(),
       source: 'cache',
     }));
 
-    await act(async () => { renderWithProvider(<DashboardSurface />); });
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Schedule timezone does not match this browser');
-    expect(within(alert).getByRole('button', { name: 'Repair prayer settings' })).toBeInTheDocument();
-    for (const name of PRAYER_NAMES) {
-      expect(screen.getByText(name, { selector: '.nc-prayer-name' })).toBeInTheDocument();
+    let unmount: () => void = () => undefined;
+    try {
+      await act(async () => {
+        ({ unmount } = renderWithProvider(<DashboardSurface />));
+      });
+      expect(await screen.findByText('Bedford · Europe/London')).toBeInTheDocument();
+      expect(screen.getByText('Next prayer')).toBeInTheDocument();
+      expect(screen.queryByText('Current prayer')).not.toBeInTheDocument();
+      expect(screen.queryByText('Schedule timezone does not match this browser')).not.toBeInTheDocument();
+      const marker = document.querySelector('.nc-now-marker') as HTMLElement;
+      expect(Number.parseFloat(marker.style.getPropertyValue('--nc-marker-position'))).toBeLessThan(25);
+      for (const name of PRAYER_NAMES) {
+        expect(screen.getByText(name, { selector: '.nc-prayer-name' })).toBeInTheDocument();
+      }
+    } finally {
+      await act(async () => unmount());
+      resolvedOptions.mockRestore();
+      vi.useRealTimers();
     }
   });
 

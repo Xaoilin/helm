@@ -20,6 +20,7 @@ import type {
 } from '../types/domain';
 import { toLocalDateStr } from './financeHelpers';
 import { getPrayerTaskName } from './prayerTasks';
+import { prayerZonedDateTimeToInstant, shiftPrayerDate } from './prayerTimeZone';
 
 export const PRAYER_TRACKING_SCHEMA_VERSION = 1;
 export const CANONICAL_PRAYER_NAMES = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const satisfies readonly PrayerName[];
@@ -40,7 +41,6 @@ export function getPrayerDeadlineName(prayerName: PrayerName): PrayerDeadlineNam
 const PRAYER_NAME_SET = new Set<string>(CANONICAL_PRAYER_NAMES);
 const OUTCOME_STATUS_SET = new Set<string>(['on_time', 'late', 'missed', 'unclassified']);
 const LOCAL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
-const CLOCK_TIME_PATTERN = /^(\d{1,2}):(\d{2})(?::\d{2})?/;
 
 type LegacyPrayerTask = Pick<Task, 'id' | 'category' | 'title' | 'prayerName'>;
 
@@ -117,19 +117,6 @@ function normalizeInstant(value: unknown, fallback: string): string {
 
 function optionalInstant(value: unknown): string | undefined {
   return parseInstant(value)?.toISOString();
-}
-
-function parseClockOnDate(date: Date, time: string): Date | null {
-  const match = CLOCK_TIME_PATTERN.exec(time.trim());
-  if (!match) return null;
-
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  if (hours > 23 || minutes > 59) return null;
-
-  const parsed = new Date(date);
-  parsed.setHours(hours, minutes, 0, 0);
-  return parsed;
 }
 
 function findScheduleEntry(prayers: readonly PrayerScheduleEntry[], name: string): PrayerScheduleEntry | undefined {
@@ -452,7 +439,7 @@ export function capturePrayerActivationDayEligibility(
   if (scheduleDay.date !== activationDate) return normalized;
 
   const bounds = CANONICAL_PRAYER_NAMES.map(prayerName =>
-    getPrayerDeadlineBounds(scheduleDay.prayers, scheduleDay.date, prayerName)
+    getPrayerDeadlineBounds(scheduleDay.prayers, scheduleDay.date, prayerName, scheduleDay.timezone)
   );
   if (bounds.some(candidate => candidate === null)) return normalized;
 
@@ -578,21 +565,25 @@ export function getPrayerDeadlineBounds(
   prayers: readonly PrayerScheduleEntry[],
   date: string,
   prayerName: PrayerName,
+  timeZone: string,
 ): PrayerDeadlineBounds | null {
-  const localDate = requireLocalDate(date);
+  if (!shiftPrayerDate(date, 0)) return null;
   const deadlineName = getPrayerDeadlineName(prayerName);
   const startEntry = findScheduleEntry(prayers, prayerName);
   const deadlineEntry = findScheduleEntry(prayers, deadlineName);
   if (!startEntry || !deadlineEntry) return null;
 
-  const startsAt = parseClockOnDate(localDate, startEntry.time);
-  const deadlineAt = parseClockOnDate(localDate, deadlineEntry.time);
+  const startsAt = prayerZonedDateTimeToInstant(date, startEntry.time, timeZone);
+  let deadlineAt = prayerZonedDateTimeToInstant(date, deadlineEntry.time, timeZone);
   if (!startsAt || !deadlineAt) return null;
   if (deadlineAt <= startsAt && deadlineName !== 'Midnight') {
     return null;
   }
   if (deadlineAt <= startsAt) {
-    deadlineAt.setDate(deadlineAt.getDate() + 1);
+    const nextDate = shiftPrayerDate(date, 1);
+    if (!nextDate) return null;
+    deadlineAt = prayerZonedDateTimeToInstant(nextDate, deadlineEntry.time, timeZone);
+    if (!deadlineAt || deadlineAt <= startsAt) return null;
   }
 
   return {
@@ -635,6 +626,7 @@ export function isPrayerOpportunityTracked(
     scheduleDay.prayers,
     scheduleDay.date,
     prayerName,
+    scheduleDay.timezone,
   );
   if (!bounds) return false;
 
@@ -685,7 +677,12 @@ export function calculatePrayerOutcomeStats(
     for (const prayerName of CANONICAL_PRAYER_NAMES) {
       const record = getPrayerOutcome(normalized, scheduleDay.date, prayerName);
       if (record) countedRecordKeys.add(getPrayerRecordKey(scheduleDay.date, prayerName));
-      const bounds = getPrayerDeadlineBounds(scheduleDay.prayers, scheduleDay.date, prayerName);
+      const bounds = getPrayerDeadlineBounds(
+        scheduleDay.prayers,
+        scheduleDay.date,
+        prayerName,
+        scheduleDay.timezone,
+      );
       let status: PrayerOutcomeStatus | 'pending' | null = null;
       let inferred = false;
 

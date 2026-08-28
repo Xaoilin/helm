@@ -183,6 +183,7 @@ describe('dashboardFocus', () => {
       feedback: [],
       now: new Date('2026-04-16T13:20:00.000Z'),
       prayerTimes: makePrayerTimes(),
+      prayerTimezone: 'Europe/London',
     });
 
     expect(result.candidates[0]).toEqual(expect.objectContaining({
@@ -234,6 +235,7 @@ describe('dashboardFocus', () => {
       feedback: [],
       now: new Date('2026-04-16T17:05:00.000Z'),
       prayerTimes: makePrayerTimes(),
+      prayerTimezone: 'Europe/London',
     });
 
     expect(result.candidates[0]).toEqual(expect.objectContaining({
@@ -281,6 +283,7 @@ describe('dashboardFocus', () => {
       feedback: [],
       now: new Date('2026-04-16T20:20:00.000Z'),
       prayerTimes: makePrayerTimes(),
+      prayerTimezone: 'Europe/London',
     });
 
     expect(result.candidates[0]).toEqual(expect.objectContaining({

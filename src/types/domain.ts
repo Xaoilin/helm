@@ -688,6 +688,7 @@ export interface PrayerScheduleEntry {
 
 export interface PrayerScheduleDay {
   date: string; // local YYYY-MM-DD
+  timezone: string; // validated IANA schedule timezone
   prayers: readonly PrayerScheduleEntry[];
 }
 

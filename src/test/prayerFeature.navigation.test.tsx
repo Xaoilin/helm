@@ -8,7 +8,7 @@ import {
 installPrayerFeatureHarness();
 
 describe('prayer completion navigation', () => {
-  it('pauses deadline inference and clock suggestions on a timezone mismatch', async () => {
+  it('uses a valid schedule timezone for clock suggestions despite a browser mismatch', async () => {
     localStorage.setItem('helm:prayer-times-cache', JSON.stringify({
       prayers: [
         { name: 'Fajr', nameArabic: 'Fajr', time: '05:00', type: 'prayer' },
@@ -32,16 +32,13 @@ describe('prayer completion navigation', () => {
 
     renderPrayerFeatureApp();
     await screen.findByRole('heading', { name: 'Night Compass' });
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Schedule timezone does not match this browser',
-    );
+    expect(screen.queryByText('Schedule timezone does not match this browser')).not.toBeInTheDocument();
 
     const fajrRow = screen.getByText('Fajr', { selector: '.nc-prayer-name' }).closest('.nc-prayer-item');
-    expect(fajrRow).toHaveTextContent('Schedule pending');
-    expect(fajrRow).not.toHaveTextContent('Before tracking');
+    expect(fajrRow).toHaveTextContent('Next');
     fireEvent.click(screen.getByRole('button', { name: 'Complete Fajr Prayer' }));
     expect(await screen.findByRole('dialog', { name: 'How was Fajr prayed?' })).toBeInTheDocument();
-    expect(screen.queryByText('Likely from the clock')).not.toBeInTheDocument();
+    expect(screen.getByText('Likely from the clock')).toBeInTheDocument();
   });
 
   it('opens the shared selector from the prayer-first Dashboard', async () => {

@@ -9,6 +9,10 @@ import {
 import { formatTimeUntil, PRAYER_NAMES } from '../../services/prayerTimes';
 import { toLocalDateStr } from '../../services/financeHelpers';
 import { getQuranMotivationForDate } from '../../services/quranMotivation';
+import {
+  formatPrayerInstantTime,
+  getPrayerZonedClockSeconds,
+} from '../../services/prayerTimeZone';
 import type {
   DailyMomentumActivityDay,
   DailyMomentumPillarDay,
@@ -77,41 +81,12 @@ function parseDisplayedClockSeconds(time: string): number | null {
   return hours * 60 * 60 + minutes * 60 + seconds;
 }
 
-function getDisplayedWallClockSeconds(now: Date, timeZone?: string): number | null {
-  if (!Number.isFinite(now.getTime())) return null;
-
-  try {
-    const formatter = new Intl.DateTimeFormat('en-GB', {
-      ...(timeZone ? { timeZone } : {}),
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hourCycle: 'h23',
-    });
-    const parts = formatter.formatToParts(now);
-    const hours = Number(parts.find(part => part.type === 'hour')?.value);
-    const minutes = Number(parts.find(part => part.type === 'minute')?.value);
-    const seconds = Number(parts.find(part => part.type === 'second')?.value);
-    if (
-      !Number.isFinite(hours)
-      || !Number.isFinite(minutes)
-      || !Number.isFinite(seconds)
-      || hours > 23
-      || minutes > 59
-      || seconds > 59
-    ) return null;
-    return hours * 60 * 60 + minutes * 60 + seconds + now.getMilliseconds() / 1000;
-  } catch {
-    return null;
-  }
-}
-
 function getPrayerTimelineProgress(
   prayerEntries: readonly { name: string; time: string }[],
   now: Date,
-  timeZone?: string,
+  timeZone: string,
 ): PrayerTimelineProgress | null {
-  const nowSeconds = getDisplayedWallClockSeconds(now, timeZone);
+  const nowSeconds = getPrayerZonedClockSeconds(now, timeZone);
   if (nowSeconds === null) return null;
 
   const prayerTimes = CANONICAL_PRAYER_NAMES.map(name => {
@@ -314,16 +289,21 @@ export default function NightCompassDashboard() {
   const prayerEnabled = app.settings.prayerEnabled !== false;
   const scheduleRepairNeeded = prayerEnabled && (
     prayer.scheduleStatus === 'unavailable'
-    || Boolean(prayer.schedule && !prayer.timezoneMatches)
+    || Boolean(prayer.schedule && !prayer.scheduleTimezoneValid)
   );
   const scheduleLoading = prayerEnabled && !prayer.schedule
     && prayer.scheduleStatus !== 'unavailable';
-  const nextPrayer = prayer.schedule && prayer.timezoneMatches ? prayer.nextPrayer : null;
-  const currentPrayer = prayer.schedule && prayer.timezoneMatches
+  const nextPrayer = prayer.schedule && prayer.scheduleTimezoneValid ? prayer.nextPrayer : null;
+  const currentPrayer = prayer.schedule && prayer.scheduleTimezoneValid
     ? [...CANONICAL_PRAYER_NAMES].reverse().map(name => ({
         name,
         entry: prayer.schedule!.prayers.find(candidate => candidate.name === name),
-        bounds: getPrayerDeadlineBounds(prayer.schedule!.prayers, prayer.today, name),
+        bounds: getPrayerDeadlineBounds(
+          prayer.schedule!.prayers,
+          prayer.today,
+          name,
+          prayer.schedule!.timezone,
+        ),
       })).find(candidate => (
         candidate.entry
         && candidate.bounds
@@ -332,14 +312,19 @@ export default function NightCompassDashboard() {
       )) ?? null
     : null;
   const nextBounds = nextPrayer
-    ? getPrayerDeadlineBounds(prayer.schedule?.prayers ?? [], prayer.today, nextPrayer.prayer.name as PrayerName)
+    ? getPrayerDeadlineBounds(
+        prayer.schedule?.prayers ?? [],
+        prayer.today,
+        nextPrayer.prayer.name as PrayerName,
+        prayer.schedule?.timezone ?? '',
+      )
     : null;
   const nextIsTomorrow = Boolean(nextBounds && nextBounds.startsAt.getTime() + 60_000 < prayer.now.getTime());
   const timelineProgress = useMemo(
-    () => prayer.schedule && prayer.timezoneMatches
+    () => prayer.schedule && prayer.scheduleTimezoneValid
       ? getPrayerTimelineProgress(prayer.schedule.prayers, prayer.now, prayer.schedule.timezone)
       : null,
-    [prayer.now, prayer.schedule, prayer.timezoneMatches],
+    [prayer.now, prayer.schedule, prayer.scheduleTimezoneValid],
   );
 
   const dueTasks = useMemo(() => {
@@ -418,7 +403,7 @@ export default function NightCompassDashboard() {
             <h2 id="nc-prayer-title">Prayer</h2>
           </div>
           <span className="nc-prayer-location">
-            {app.settings.prayerCity || 'Prayer location'} · {prayer.localTimezone}
+            {app.settings.prayerCity || 'Prayer location'} · {prayer.schedule?.timezone || prayer.localTimezone}
           </span>
         </div>
 
@@ -453,17 +438,17 @@ export default function NightCompassDashboard() {
               ) : null}
               {currentPrayer?.bounds ? (
                 <small>
-                  On time until {currentPrayer.bounds.deadlineName} at {currentPrayer.bounds.deadlineAt.toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  On time until {currentPrayer.bounds.deadlineName} at {formatPrayerInstantTime(
+                    currentPrayer.bounds.deadlineAt,
+                    prayer.schedule?.timezone ?? '',
+                  )}
                 </small>
               ) : nextPrayer && nextBounds && !nextIsTomorrow ? (
                 <small>
-                  On time until {nextBounds.deadlineName} at {nextBounds.deadlineAt.toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  On time until {nextBounds.deadlineName} at {formatPrayerInstantTime(
+                    nextBounds.deadlineAt,
+                    prayer.schedule?.timezone ?? '',
+                  )}
                 </small>
               ) : null}
             </div>
@@ -490,15 +475,24 @@ export default function NightCompassDashboard() {
               <ol className="nc-prayer-sequence" aria-label="Five daily prayers">
                 {CANONICAL_PRAYER_NAMES.map(name => {
                   const entry = prayer.schedule?.prayers.find(candidate => candidate.name === name);
-                  const bounds = prayer.schedule && prayer.timezoneMatches
-                    ? getPrayerDeadlineBounds(prayer.schedule.prayers, prayer.today, name)
+                  const bounds = prayer.schedule && prayer.scheduleTimezoneValid
+                    ? getPrayerDeadlineBounds(
+                        prayer.schedule.prayers,
+                        prayer.today,
+                        name,
+                        prayer.schedule.timezone,
+                      )
                     : null;
                   const opportunityTracked = Boolean(
                     prayer.schedule
-                    && prayer.timezoneMatches
+                    && prayer.scheduleTimezoneValid
                     && isPrayerOpportunityTracked(
                       prayer.tracking,
-                      { date: prayer.today, prayers: prayer.schedule.prayers },
+                      {
+                        date: prayer.today,
+                        timezone: prayer.schedule.timezone,
+                        prayers: prayer.schedule.prayers,
+                      },
                       name,
                       prayer.now,
                     ),
@@ -566,12 +560,12 @@ export default function NightCompassDashboard() {
                 <strong>
                   {prayer.scheduleStatus === 'unavailable'
                     ? 'Prayer schedule unavailable'
-                    : 'Schedule timezone does not match this browser'}
+                    : 'Schedule timezone is invalid'}
                 </strong>
                 <span>
                   {prayer.scheduleStatus === 'unavailable'
                     ? prayer.scheduleError || 'No matching current-day schedule is available.'
-                    : `Schedule: ${prayer.schedule?.timezone || 'unknown'} · Browser: ${prayer.localTimezone}`}
+                    : 'A validated IANA timezone is required for prayer clock calculations.'}
                 </span>
                 {prayer.scheduleStatus === 'unavailable' ? (
                   <button type="button" className="nc-primary-action" onClick={() => void prayer.retrySchedule()}>

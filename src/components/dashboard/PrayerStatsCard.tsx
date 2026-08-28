@@ -4,7 +4,7 @@ import {
   getPrayerDeadlineBounds,
   isPrayerOpportunityTracked,
 } from '../../services/prayerTracking';
-import { toLocalDateStr } from '../../services/financeHelpers';
+import { shiftPrayerDate } from '../../services/prayerTimeZone';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import PrayerOutcomeBars from '../prayer/PrayerOutcomeBars';
 
@@ -21,16 +21,21 @@ function getDisplayedStatus(
 ): PrayerOutcomeStatus | 'pending' | 'not_tracked' {
   const record = prayer.getOutcome(date, prayerName);
   if (record) return record.status;
-  if (!prayer.schedule || !prayer.timezoneMatches) return 'pending';
+  if (!prayer.schedule || !prayer.scheduleTimezoneValid) return 'pending';
   if (!isPrayerOpportunityTracked(
     prayer.tracking,
-    { date, prayers: prayer.schedule.prayers },
+    { date, timezone: prayer.schedule.timezone, prayers: prayer.schedule.prayers },
     prayerName,
     prayer.now,
   )) {
     return 'not_tracked';
   }
-  const bounds = getPrayerDeadlineBounds(prayer.schedule.prayers, date, prayerName);
+  const bounds = getPrayerDeadlineBounds(
+    prayer.schedule.prayers,
+    date,
+    prayerName,
+    prayer.schedule.timezone,
+  );
   return bounds && prayer.now >= bounds.deadlineAt ? 'missed' : 'pending';
 }
 
@@ -42,15 +47,16 @@ export default function PrayerStatsCard({
   const prayer = usePrayerContext();
   const last7Days: { dateStr: string; label: string }[] = [];
   for (let index = 6; index >= 0; index -= 1) {
-    const date = new Date();
-    date.setDate(date.getDate() - index);
+    const dateStr = shiftPrayerDate(prayer.today, -index);
+    if (!dateStr) continue;
+    const date = new Date(`${dateStr}T00:00:00.000Z`);
     last7Days.push({
-      dateStr: toLocalDateStr(date),
+      dateStr,
       label: index === 0
         ? 'Today'
         : index === 1
           ? 'Yesterday'
-          : date.toLocaleDateString([], { weekday: 'short' }),
+          : date.toLocaleDateString([], { weekday: 'short', timeZone: 'UTC' }),
     });
   }
 
