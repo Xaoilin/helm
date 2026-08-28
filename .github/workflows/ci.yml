@@ -202,11 +202,13 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Start isolated Supabase Postgres
-        run: npx supabase start
+        run: npx supabase db start
       - name: Verify Sabah One migrations, RLS, concurrency semantics, and legacy preservation
         run: npm run test:database
       - name: Stop isolated Supabase Postgres
-        if: always()
+        # Successful GitHub-hosted runners are discarded; retain cleanup only
+        # for failures so diagnostics/retries do not inherit local state.
+        if: failure()
         run: npx supabase stop --no-backup
 
   receipt:

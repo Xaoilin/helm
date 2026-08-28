@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { executeActionPlan } from '../assistant/executor';
 import { DEFAULT_PROFILE } from '../services/gamification';
-import type { AssistantCommandContext } from '../services/assistantTypes';
+import type { AssistantCommandContext } from '../assistant/shared';
 import type { ActionPlan } from '../assistant/plannerSchema';
 
 function makeContext(): AssistantCommandContext {

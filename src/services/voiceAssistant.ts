@@ -1,5 +1,5 @@
 import { API_TIMEOUT, TIMING, VOICE_SESSION } from '../config/constants';
-import type { AssistantLang } from './assistantTypes';
+import type { AssistantLang } from '../assistant/shared';
 
 export async function speakWithElevenLabs(
   text: string,

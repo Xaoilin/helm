@@ -7,8 +7,8 @@ import { useVoiceOutput } from '../hooks/useVoiceOutput';
 import { useWakeWord } from '../hooks/useWakeWord';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import type { PrayerTimesData } from '../services/prayerTimes';
-import { processAssistantCommand } from '../services/assistantRuntime';
-import type { AssistantConversationMessage, AssistantDialogState, AssistantLang } from '../services/assistantTypes';
+import { runAssistantTurn } from '../assistant/runtime';
+import type { AssistantConversationMessage, AssistantDialogState, AssistantLang } from '../assistant/shared';
 import { playReadyTone } from '../services/voiceAssistant';
 import { logError } from '../services/logger';
 
@@ -330,7 +330,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     const prayerTimes = prayerData?.prayers.map(prayer => ({ name: prayer.name, time: prayer.time }));
 
     try {
-      const result = await processAssistantCommand(trimmed, {
+      const result = await runAssistantTurn(trimmed, {
         calendarAccounts: app.calendarAccounts,
         calendarSources: app.calendarSources,
         calendarEvents: app.calendarEvents,

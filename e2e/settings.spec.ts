@@ -111,4 +111,5 @@ async function openSettings(page: Page): Promise<void> {
   await page.goto('/');
   await expect(page.locator('.sidebar')).toBeVisible();
   await page.getByRole('button', { name: 'Navigate to Settings' }).click();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
 }
