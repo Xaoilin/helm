@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Project } from '../types/domain';
 import {
-  migrateLegacyProjectDeviceBindings,
   normalizeProjectRecord,
   normalizeProjectRecords,
   serializeSharedProjects,
@@ -158,93 +157,4 @@ describe('project persistence normalization', () => {
     expect(json).not.toContain('device-only');
   });
 
-  it('migrates a legacy localPath only after successful canonicalization', async () => {
-    const legacyRecords = [{
-      id: 'legacy-project',
-      name: 'Legacy Project',
-      localPath: '/device/legacy-project',
-      summary: '',
-      status: 'active',
-      tags: [],
-      isPinned: false,
-      createdAt: NOW,
-      updatedAt: NOW,
-    }];
-    const projects = normalizeProjectRecords(legacyRecords, NOW);
-
-    const migration = await migrateLegacyProjectDeviceBindings(
-      legacyRecords,
-      projects,
-      [],
-      [],
-      async () => '/canonical/legacy-project',
-      NOW,
-    );
-
-    expect(migration.bindings).toEqual([{
-      catalogKey: 'custom:legacy-project',
-      projectRoot: '/canonical/legacy-project',
-      source: 'legacy',
-      adoptedAt: NOW,
-      updatedAt: NOW,
-      runProfiles: [],
-    }]);
-    expect(migration.pendingPaths).toEqual([]);
-    expect(projects[0]).not.toHaveProperty('localPath');
-    expect(JSON.stringify(serializeSharedProjects(projects))).not.toContain('/device/legacy-project');
-  });
-
-  it('does not adopt a legacy localPath when canonicalization fails', async () => {
-    const legacyRecords = [{
-      id: 'legacy-project',
-      name: 'Legacy Project',
-      localPath: '/device/missing-project',
-      updatedAt: NOW,
-    }];
-    const projects = normalizeProjectRecords(legacyRecords, NOW);
-
-    const migration = await migrateLegacyProjectDeviceBindings(
-      legacyRecords,
-      projects,
-      [],
-      [],
-      async () => null,
-      NOW,
-    );
-
-    expect(migration.bindings).toEqual([]);
-    expect(migration.pendingPaths).toEqual([{
-      catalogKey: 'custom:legacy-project',
-      projectRoot: '/device/missing-project',
-      capturedAt: NOW,
-    }]);
-  });
-
-  it('promotes a pending legacy path after it becomes available', async () => {
-    const projects = normalizeProjectRecords([{
-      id: 'legacy-project',
-      catalogKey: 'custom:legacy-project',
-      name: 'Legacy Project',
-    }], NOW);
-
-    const migration = await migrateLegacyProjectDeviceBindings(
-      projects,
-      projects,
-      [],
-      [{
-        catalogKey: 'custom:legacy-project',
-        projectRoot: '/device/remounted-project',
-        capturedAt: NOW,
-      }],
-      async () => '/canonical/remounted-project',
-      NOW,
-    );
-
-    expect(migration.bindings[0]).toMatchObject({
-      catalogKey: 'custom:legacy-project',
-      projectRoot: '/canonical/remounted-project',
-      source: 'legacy',
-    });
-    expect(migration.pendingPaths).toEqual([]);
-  });
 });

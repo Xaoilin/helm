@@ -3,9 +3,8 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { AppProvider, useApp } from '../store/AppContext';
 import { createElement, type ReactNode } from 'react';
 
-const { processAssistantCommandMock, revokeProjectProfilesForProjectMock } = vi.hoisted(() => ({
+const { processAssistantCommandMock } = vi.hoisted(() => ({
   processAssistantCommandMock: vi.fn(),
-  revokeProjectProfilesForProjectMock: vi.fn(),
 }));
 
 vi.mock('../store/persistence', async importOriginal => {
@@ -18,10 +17,6 @@ vi.mock('../services/assistantRuntime', () => ({
   isOllamaAvailable: vi.fn(),
   resetOllamaCache: vi.fn(),
   processAssistantCommand: processAssistantCommandMock,
-}));
-
-vi.mock('../services/projectRuntime', () => ({
-  revokeProjectProfilesForProject: revokeProjectProfilesForProjectMock,
 }));
 
 beforeEach(() => {
@@ -39,8 +34,6 @@ beforeEach(() => {
     planningSource: 'openai',
     planningStatus: 'planned',
   });
-  revokeProjectProfilesForProjectMock.mockReset();
-  revokeProjectProfilesForProjectMock.mockResolvedValue(undefined);
 });
 
 async function renderWithApp() {
@@ -219,7 +212,7 @@ describe('AppContext - Settings', () => {
 describe('AppContext - Projects', () => {
   beforeEach(() => { localStorage.clear(); });
 
-  it('does not adopt a legacy project localPath when native canonicalization is unavailable', async () => {
+  it('drops legacy project paths while preserving the web catalogue record', async () => {
     localStorage.setItem('helm:projects', JSON.stringify([{
       id: 'legacy-project',
       name: 'Legacy Project',
@@ -242,11 +235,7 @@ describe('AppContext - Projects', () => {
 
     await waitFor(() => {
       const shared = localStorage.getItem('helm:projects') || '';
-      const device = localStorage.getItem('helm:device:projectDeviceBindings') || '';
-      const pending = localStorage.getItem('helm:device:projectPendingLegacyPaths') || '';
       expect(shared).not.toContain('/device/legacy-project');
-      expect(device).not.toContain('/device/legacy-project');
-      expect(pending).toContain('/device/legacy-project');
     });
   });
 
@@ -256,7 +245,6 @@ describe('AppContext - Projects', () => {
     act(() => {
       projectId = r.api!.addProject({
         name: 'Project',
-        localPath: '/code/proj',
         summary: 'Main project',
         status: 'active',
         tags: ['frontend'],
@@ -270,10 +258,9 @@ describe('AppContext - Projects', () => {
     act(() => { r.api!.updateProject(projectId, { summary: 'Updated' }); });
     expect(r.api!.projects[0].summary).toBe('Updated');
 
-    await act(async () => { await r.api!.removeProject(projectId); });
+    act(() => { r.api!.removeProject(projectId); });
     expect(r.api!.projects).toHaveLength(0);
     expect(r.api!.projectPages).toHaveLength(0);
-    expect(revokeProjectProfilesForProjectMock).toHaveBeenCalledWith(projectId);
   });
 
   it('pins, reorders, archives, and restores projects through atomic catalogue operations', async () => {
@@ -333,7 +320,6 @@ describe('AppContext - Projects', () => {
     act(() => {
       projectId = r.api!.addProject({
         name: 'Project',
-        localPath: '/code/proj',
         summary: '',
         status: 'active',
         tags: [],
@@ -351,7 +337,7 @@ describe('AppContext - Projects', () => {
       });
     });
 
-    await act(async () => { await r.api!.removeProject(projectId); });
+    act(() => { r.api!.removeProject(projectId); });
 
     const task = r.api!.tasks.find(item => item.id === taskId);
     expect(task?.projectId).toBeUndefined();
@@ -359,26 +345,6 @@ describe('AppContext - Projects', () => {
     expect(task?.boardOrder).toBeUndefined();
   });
 
-  it('preserves the project when native approval revocation fails', async () => {
-    const r = await renderWithApp();
-    let projectId = '';
-    act(() => {
-      projectId = r.api!.addProject({
-        name: 'Project',
-        summary: '',
-        status: 'active',
-        tags: [],
-        isPinned: false,
-      });
-    });
-    revokeProjectProfilesForProjectMock.mockRejectedValueOnce(new Error('Approval store unavailable'));
-
-    await expect(act(async () => {
-      await r.api!.removeProject(projectId);
-    })).rejects.toThrow('Approval store unavailable');
-
-    expect(r.api!.projects.some(project => project.id === projectId)).toBe(true);
-  });
 });
 
 describe('AppContext - Chat', () => {

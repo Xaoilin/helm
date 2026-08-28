@@ -67,7 +67,7 @@ describe('DashboardSurface Night Compass', () => {
 
     await act(async () => { renderWithProvider(<DashboardSurface />); });
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Schedule timezone does not match this desktop');
+    expect(alert).toHaveTextContent('Schedule timezone does not match this browser');
     expect(within(alert).getByRole('button', { name: 'Repair prayer settings' })).toBeInTheDocument();
     for (const name of PRAYER_NAMES) {
       expect(screen.getByText(name, { selector: '.nc-prayer-name' })).toBeInTheDocument();

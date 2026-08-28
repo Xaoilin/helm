@@ -18,7 +18,6 @@ import {
   ProjectCard,
   ProjectReferenceDrawer,
   type ProjectMoveDirection,
-  type ProjectRecipeViewState,
 } from '../components/projects/ProjectCatalog';
 import {
   getProjectAvailability,
@@ -30,32 +29,11 @@ import {
   compareProjectCatalogueOrder,
   getOrderedProjectsInSection,
 } from '../store/projectOrdering';
-import {
-  canUseDesktopProjectPaths,
-  canonicalizeProjectPath,
-  openProjectPath,
-  pickProjectDirectory,
-} from '../services/projectPaths';
-import {
-  approveProjectProfile,
-  canUseProjectRuntime,
-  createProjectRunFingerprint,
-  listApprovedProjectProfiles,
-  listProjectSessions,
-  startProjectProfile,
-  stopProjectSession,
-  subscribeProjectSession,
-  type ApprovedProjectProfile,
-  type ProjectRuntimeEvent,
-  type ProjectSessionSnapshot,
-} from '../services/projectRuntime';
 import type {
   Project,
   ProjectCatalogueSection,
-  ProjectDeviceBinding,
   ProjectKind,
   ProjectPage,
-  ProjectRunRecipe,
   ProjectStatus,
   Task,
   TaskPriority,
@@ -81,7 +59,6 @@ const PROJECT_CATALOG_FILTERS: Array<{ value: ProjectCatalogFilter; label: strin
   { value: 'all', label: 'All' },
   { value: 'active', label: 'Active' },
   { value: 'live', label: 'Live' },
-  { value: 'local', label: 'Local' },
   { value: 'hardware', label: 'Hardware' },
   { value: 'reference', label: 'Reference' },
 ];
@@ -239,7 +216,7 @@ function ProjectWikiEditor({
       </div>
 
       <div style={{ fontSize: 12, color: '#8b8fa3' }}>
-        Last updated {formatDateTime(page.updatedAt)}. Pages are stored locally as markdown-style notes.
+        Last updated {formatDateTime(page.updatedAt)}. Pages are account-backed markdown-style notes.
       </div>
 
       <input className="form-input" value={titleDraft} onChange={event => setTitleDraft(event.target.value)} placeholder="Page title" />
@@ -267,7 +244,6 @@ function ProjectCatalogueSectionView({
   title,
   description,
   projects,
-  bindings,
   collapsed = false,
   collapsible = false,
   reorderEnabled,
@@ -283,7 +259,6 @@ function ProjectCatalogueSectionView({
   title: string;
   description: string;
   projects: Project[];
-  bindings: ReadonlyMap<string, ProjectDeviceBinding>;
   collapsed?: boolean;
   collapsible?: boolean;
   reorderEnabled: boolean;
@@ -387,7 +362,6 @@ function ProjectCatalogueSectionView({
                 <ProjectCard
                   key={project.id}
                   project={project}
-                  binding={project.catalogKey ? bindings.get(project.catalogKey) : undefined}
                   activeWorkCount={getActiveWorkCount(project.id)}
                   section={section}
                   index={index}
@@ -431,23 +405,12 @@ export default function ProjectsSurface() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [projectName, setProjectName] = useState('');
   const [projectSummary, setProjectSummary] = useState('');
-  const [projectLocalPath, setProjectLocalPath] = useState('');
   const [projectKind, setProjectKind] = useState<ProjectKind>('other');
   const [projectRepositoryUrl, setProjectRepositoryUrl] = useState('');
   const [projectDeploymentUrl, setProjectDeploymentUrl] = useState('');
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>('active');
   const [projectTagsInput, setProjectTagsInput] = useState('');
   const [projectPinned, setProjectPinned] = useState(false);
-  const [desktopPathActions, setDesktopPathActions] = useState(false);
-  const [runtimeAvailable, setRuntimeAvailable] = useState(false);
-  const [approvedProfiles, setApprovedProfiles] = useState<ApprovedProjectProfile[]>([]);
-  const [runtimeSessions, setRuntimeSessions] = useState<ProjectSessionSnapshot[]>([]);
-  const [recipeFingerprints, setRecipeFingerprints] = useState<Record<string, string>>({});
-  const [pendingRecipeId, setPendingRecipeId] = useState<string | null>(null);
-  const [pathFeedback, setPathFeedback] = useState<string | null>(null);
-  const [unavailableBindingCatalogKeys, setUnavailableBindingCatalogKeys] = useState<Set<string>>(
-    () => new Set(),
-  );
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [newBoardTaskTitle, setNewBoardTaskTitle] = useState('');
   const [newBoardTaskDueDate, setNewBoardTaskDueDate] = useState('');
@@ -460,31 +423,11 @@ export default function ProjectsSurface() {
   const [milestonePriority, setMilestonePriority] = useState<TaskPriority>('medium');
   const [wikiSearch, setWikiSearch] = useState('');
   const [selectedPageIdState, setSelectedPageIdState] = useState<string | null>(null);
-  const validatedDeviceBindings = useRef(new Set<string>());
-  const subscribedRuntimeProfiles = useRef(new Set<string>());
   const managementBackButtonRef = useRef<HTMLButtonElement>(null);
   const managementReturnFocusProjectId = useRef<string | null>(null);
   const projectFormRef = useRef<HTMLDivElement>(null);
   const projectFormReturnFocus = useRef<HTMLElement | null>(null);
   const projectFormFallbackProjectId = useRef<string | null>(null);
-
-  useEffect(() => {
-    void canUseDesktopProjectPaths().then(setDesktopPathActions);
-    void canUseProjectRuntime().then(async available => {
-      setRuntimeAvailable(available);
-      if (!available) return;
-      try {
-        const [profiles, sessions] = await Promise.all([
-          listApprovedProjectProfiles(),
-          listProjectSessions(),
-        ]);
-        setApprovedProfiles(profiles);
-        setRuntimeSessions(sessions);
-      } catch (error) {
-        setPathFeedback(error instanceof Error ? error.message : 'Unable to read local project runtime status.');
-      }
-    });
-  }, []);
 
   useEffect(() => {
     if (managedProjectId) {
@@ -568,51 +511,10 @@ export default function ProjectsSurface() {
     return [...tags].sort((left, right) => left.localeCompare(right));
   }, [app.projects]);
 
-  const deviceBindingByCatalogKey = useMemo(
-    () => new Map(app.projectDeviceBindings
-      .map(binding => [binding.catalogKey, binding])),
-    [app.projectDeviceBindings],
-  );
-  const bindingByCatalogKey = useMemo(
-    () => new Map((desktopPathActions ? app.projectDeviceBindings : [])
-      .filter(binding => !unavailableBindingCatalogKeys.has(binding.catalogKey))
-      .map(binding => [binding.catalogKey, binding])),
-    [app.projectDeviceBindings, desktopPathActions, unavailableBindingCatalogKeys],
-  );
-
-  useEffect(() => {
-    if (!desktopPathActions) return;
-    for (const binding of app.projectDeviceBindings) {
-      const validationKey = `${binding.catalogKey}:${binding.projectRoot}`;
-      if (validatedDeviceBindings.current.has(validationKey)) continue;
-      validatedDeviceBindings.current.add(validationKey);
-      void canonicalizeProjectPath(binding.projectRoot).then(canonicalPath => {
-        if (!canonicalPath) {
-          setUnavailableBindingCatalogKeys(previous => {
-            const next = new Set(previous);
-            next.add(binding.catalogKey);
-            return next;
-          });
-          return;
-        }
-        setUnavailableBindingCatalogKeys(previous => {
-          if (!previous.has(binding.catalogKey)) return previous;
-          const next = new Set(previous);
-          next.delete(binding.catalogKey);
-          return next;
-        });
-        if (canonicalPath !== binding.projectRoot) {
-          app.setProjectDeviceRoot(binding.catalogKey, canonicalPath);
-        }
-      });
-    }
-  }, [app, desktopPathActions]);
-
   const filteredProjects = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return app.projects.filter(project => {
-      const binding = project.catalogKey ? bindingByCatalogKey.get(project.catalogKey) : undefined;
-      const availability = getProjectAvailability(project, binding);
+      const availability = getProjectAvailability(project);
       const matchesQuery = !query
         || project.name.toLowerCase().includes(query)
         || project.summary.toLowerCase().includes(query)
@@ -623,13 +525,12 @@ export default function ProjectsSurface() {
       const matchesTag = tagFilter === 'all' || project.tags.includes(tagFilter);
       const matchesCatalogFilter = catalogFilter === 'all'
         || (catalogFilter === 'active' && (project.status === 'active' || project.status === 'planning'))
-        || (catalogFilter === 'live' && (availability.key === 'live' || availability.key === 'hybrid'))
-        || (catalogFilter === 'local' && (availability.key === 'local' || availability.key === 'hybrid'))
+        || (catalogFilter === 'live' && availability.key === 'live')
         || (catalogFilter === 'hardware' && project.kind === 'hardware')
         || (catalogFilter === 'reference' && availability.key === 'reference');
       return matchesQuery && matchesStatus && matchesKind && matchesTag && matchesCatalogFilter;
     });
-  }, [app.projects, bindingByCatalogKey, catalogFilter, kindFilter, searchQuery, statusFilter, tagFilter]);
+  }, [app.projects, catalogFilter, kindFilter, searchQuery, statusFilter, tagFilter]);
 
   const selectedProjectId = useMemo(() => {
     const requestedId = managedProjectId || detailProjectId || selectedProjectIdState;
@@ -642,16 +543,10 @@ export default function ProjectsSurface() {
     () => app.projects.find(project => project.id === selectedProjectId) || null,
     [app.projects, selectedProjectId],
   );
-  const selectedBinding = selectedProject?.catalogKey
-    ? bindingByCatalogKey.get(selectedProject.catalogKey)
-    : undefined;
   const detailProject = useMemo(
     () => app.projects.find(project => project.id === detailProjectId) || null,
     [app.projects, detailProjectId],
   );
-  const detailBinding = detailProject?.catalogKey
-    ? bindingByCatalogKey.get(detailProject.catalogKey)
-    : undefined;
 
   const selectedProjectTasks = useMemo(
     () => app.tasks.filter(task => task.projectId === selectedProjectId),
@@ -693,73 +588,8 @@ export default function ProjectsSurface() {
     handleAssistantNavigation(request.id, request.surfaceState?.projects?.revealProjectId);
   }, [app.assistantNavigationRequest]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!detailProject || !detailBinding?.projectRoot) {
-      setRecipeFingerprints({});
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    void Promise.all((detailProject.runRecipes || []).map(async recipe => [
-      recipe.id,
-      await createProjectRunFingerprint(detailProject.id, detailBinding.projectRoot, recipe),
-    ] as const)).then(entries => {
-      if (!cancelled) setRecipeFingerprints(Object.fromEntries(entries));
-    }).catch(error => {
-      if (!cancelled) {
-        setPathFeedback(error instanceof Error ? error.message : 'Unable to verify project run recipes.');
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [detailBinding?.projectRoot, detailProject]);
-
-  const handleRuntimeEvent = useCallback((event: ProjectRuntimeEvent) => {
-    if (event.event === 'snapshot') {
-      setRuntimeSessions(previous => [
-        event.data.session,
-        ...previous.filter(session => session.profileId !== event.data.session.profileId),
-      ]);
-      return;
-    }
-
-    setRuntimeSessions(previous => previous.map(session => (
-      session.profileId === event.data.profileId
-        ? {
-          ...session,
-          logs: [...session.logs, event.data.log].slice(-200),
-          revision: session.revision + 1,
-        }
-        : session
-    )));
-  }, []);
-
-  useEffect(() => {
-    if (!runtimeAvailable) return;
-
-    for (const session of runtimeSessions) {
-      if (
-        session.status !== 'running'
-        || subscribedRuntimeProfiles.current.has(session.profileId)
-      ) {
-        continue;
-      }
-
-      subscribedRuntimeProfiles.current.add(session.profileId);
-      void subscribeProjectSession(session.profileId, handleRuntimeEvent).catch(error => {
-        subscribedRuntimeProfiles.current.delete(session.profileId);
-        setPathFeedback(error instanceof Error ? error.message : 'Unable to follow the project process.');
-      });
-    }
-  }, [handleRuntimeEvent, runtimeAvailable, runtimeSessions]);
-
   const closeProjectDetails = useCallback(() => {
     setDetailProjectId(null);
-    setPendingRecipeId(null);
   }, []);
 
   const groupedProjects = useMemo(() => ({
@@ -853,37 +683,8 @@ export default function ProjectsSurface() {
   const completedMilestones = selectedProjectMilestones.filter(task => task.completed).length;
   const recentActivity = buildProjectActivity(selectedProjectTasks, selectedProjectPages);
   const liveProjectCount = app.projects.filter(project => {
-    const binding = project.catalogKey ? bindingByCatalogKey.get(project.catalogKey) : undefined;
-    const availability = getProjectAvailability(project, binding);
-    return availability.key === 'live' || availability.key === 'hybrid';
+    return getProjectAvailability(project).key === 'live';
   }).length;
-  const localProjectCount = app.projects.filter(project => {
-    const binding = project.catalogKey ? bindingByCatalogKey.get(project.catalogKey) : undefined;
-    const availability = getProjectAvailability(project, binding);
-    return availability.key === 'local' || availability.key === 'hybrid';
-  }).length;
-  const detailRecipeStates = useMemo(() => {
-    const states: Record<string, ProjectRecipeViewState> = {};
-    if (!detailProject) return states;
-
-    for (const recipe of detailProject.runRecipes || []) {
-      const fingerprint = recipeFingerprints[recipe.id];
-      const profile = approvedProfiles.find(existing => (
-        existing.projectId === detailProject.id && existing.recipeId === recipe.id
-      ));
-      const session = profile
-        ? runtimeSessions.find(existing => existing.profileId === profile.id)
-        : undefined;
-      states[recipe.id] = {
-        fingerprint,
-        profile,
-        session,
-        pending: pendingRecipeId === recipe.id,
-        stale: Boolean(profile && fingerprint && profile.sourceFingerprint !== fingerprint),
-      };
-    }
-    return states;
-  }, [approvedProfiles, detailProject, pendingRecipeId, recipeFingerprints, runtimeSessions]);
 
   const wikiResults = useMemo(() => {
     const query = wikiSearch.trim().toLowerCase();
@@ -923,10 +724,8 @@ export default function ProjectsSurface() {
   }
 
   function resetProjectForm(project?: Project | null): void {
-    const binding = project?.catalogKey ? deviceBindingByCatalogKey.get(project.catalogKey) : undefined;
     setProjectName(project?.name || '');
     setProjectSummary(project?.summary || '');
-    setProjectLocalPath(binding?.projectRoot || '');
     setProjectKind(project?.kind || 'other');
     setProjectRepositoryUrl(project?.links?.find(link => link.kind === 'repository')?.url || '');
     setProjectDeploymentUrl(project?.links?.find(link => link.kind === 'deployment')?.url || '');
@@ -961,11 +760,6 @@ export default function ProjectsSurface() {
     const retainedLinks = existingLinks.filter(link => link.kind !== 'repository' && link.kind !== 'deployment');
     const repositoryUrl = projectRepositoryUrl.trim();
     const deploymentUrl = projectDeploymentUrl.trim();
-    const nextLocalPath = projectLocalPath.trim();
-    const currentBinding = editingProject?.catalogKey
-      ? deviceBindingByCatalogKey.get(editingProject.catalogKey)
-      : undefined;
-    const localPathChanged = nextLocalPath !== (currentBinding?.projectRoot || '');
     const referencePayload = {
       name: projectName.trim(),
       summary: projectSummary.trim(),
@@ -999,9 +793,7 @@ export default function ProjectsSurface() {
     if (editingProject) {
       const wasArchived = editingProject.status === 'archived';
       const willBeArchived = projectStatus === 'archived';
-      app.updateProject(editingProject.id, localPathChanged
-        ? { ...referencePayload, localPath: nextLocalPath || undefined }
-        : referencePayload);
+      app.updateProject(editingProject.id, referencePayload);
       if (wasArchived !== willBeArchived) {
         changeProjectArchived(editingProject, willBeArchived, false);
       }
@@ -1013,21 +805,12 @@ export default function ProjectsSurface() {
           changeProjectPinned(editingProject, projectPinned, false);
         }
       }
-      if (editingProject.catalogKey && localPathChanged) {
-        setUnavailableBindingCatalogKeys(previous => {
-          if (!previous.has(editingProject.catalogKey!)) return previous;
-          const next = new Set(previous);
-          next.delete(editingProject.catalogKey!);
-          return next;
-        });
-      }
       setSelectedProjectIdState(editingProject.id);
     } else {
       const createdId = app.addProject({
         ...referencePayload,
         status: projectStatus,
         isPinned: projectStatus !== 'archived' && projectPinned,
-        ...(nextLocalPath ? { localPath: nextLocalPath } : {}),
       });
       setSelectedProjectIdState(createdId);
       setActiveTab('overview');
@@ -1036,66 +819,13 @@ export default function ProjectsSurface() {
     setShowProjectForm(false);
   }
 
-  async function browseForPath(): Promise<void> {
-    const selectedPath = await pickProjectDirectory();
-    if (selectedPath) {
-      const canonicalPath = await canonicalizeProjectPath(selectedPath);
-      if (!canonicalPath) {
-        setPathFeedback('That folder could not be verified on this device.');
-        return;
-      }
-      setProjectLocalPath(canonicalPath);
-      setPathFeedback(`Selected ${canonicalPath}`);
-    }
-  }
-
-  async function handleOpenProjectPath(path: string | undefined): Promise<void> {
-    if (!path) return;
-    try {
-      await openProjectPath(path);
-      setPathFeedback(`Opened ${path}`);
-    } catch (error) {
-      setPathFeedback(error instanceof Error ? error.message : 'Unable to open that local path.');
-    }
-  }
-
-  async function handleCopyPath(path: string | undefined): Promise<void> {
-    if (!path) return;
-    await navigator.clipboard.writeText(path);
-    setPathFeedback(`Copied ${path}`);
-  }
-
-  async function linkDetailProjectFolder(): Promise<void> {
-    if (!detailProject?.catalogKey) return;
-    try {
-      const selectedPath = await pickProjectDirectory();
-      if (!selectedPath) return;
-      const canonicalPath = await canonicalizeProjectPath(selectedPath);
-      if (!canonicalPath) {
-        setPathFeedback('That folder could not be verified on this device.');
-        return;
-      }
-      const linked = app.setProjectDeviceRoot(detailProject.catalogKey, canonicalPath);
-      if (linked) {
-        setUnavailableBindingCatalogKeys(previous => {
-          if (!previous.has(detailProject.catalogKey!)) return previous;
-          const next = new Set(previous);
-          next.delete(detailProject.catalogKey!);
-          return next;
-        });
-      }
-      setPathFeedback(linked ? `Linked ${canonicalPath}` : 'Choose an absolute project folder.');
-    } catch (error) {
-      setPathFeedback(error instanceof Error ? error.message : 'Unable to link that project folder.');
-    }
-  }
 
   async function copyProjectReference(value: string, label: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(value);
-      setPathFeedback(`Copied ${label}.`);
+      setCatalogAnnouncement(`Copied ${label}.`);
     } catch {
-      setPathFeedback(`Unable to copy ${label}.`);
+      setCatalogAnnouncement(`Unable to copy ${label}.`);
     }
   }
 
@@ -1115,88 +845,6 @@ export default function ProjectsSurface() {
     const nextTab = PROJECT_TABS[nextIndex].key;
     setActiveTab(nextTab);
     requestAnimationFrame(() => document.getElementById(`project-tab-${nextTab}`)?.focus());
-  }
-
-  async function runProjectRecipe(recipe: ProjectRunRecipe): Promise<void> {
-    if (!detailProject || !detailProject.catalogKey || !detailBinding?.projectRoot) return;
-    let fingerprint = recipeFingerprints[recipe.id];
-    if (!fingerprint) {
-      setPathFeedback('The local command is still being verified. Try again in a moment.');
-      return;
-    }
-
-    setPendingRecipeId(recipe.id);
-    let directChannelProfileId: string | null = null;
-    let alreadyFollowed = false;
-    try {
-      let profile = approvedProfiles.find(existing => (
-        existing.projectId === detailProject.id
-        && existing.recipeId === recipe.id
-        && existing.sourceFingerprint === fingerprint
-      ));
-      if (!profile) {
-        profile = await approveProjectProfile(
-          detailProject.id,
-          detailBinding.projectRoot,
-          recipe,
-        );
-        fingerprint = profile.sourceFingerprint;
-        setApprovedProfiles(previous => [
-          profile!,
-          ...previous.filter(existing => existing.id !== profile!.id),
-        ]);
-        app.approveProjectRunProfile(detailProject.catalogKey, {
-          profileId: profile.id,
-          projectId: profile.projectId,
-          recipeId: profile.recipeId,
-          projectRoot: profile.projectRoot,
-          workingDirectory: profile.workingDirectory,
-          executable: profile.executable,
-          args: profile.args,
-          environment: Object.fromEntries(profile.environment.map(entry => [entry.name, entry.value])),
-          fingerprint: profile.sourceFingerprint,
-          approvedAt: profile.approvedAt,
-        });
-      }
-
-      alreadyFollowed = subscribedRuntimeProfiles.current.has(profile.id);
-      subscribedRuntimeProfiles.current.add(profile.id);
-      directChannelProfileId = profile.id;
-      const session = await startProjectProfile(profile.id, fingerprint, handleRuntimeEvent);
-      setRuntimeSessions(previous => [
-        session,
-        ...previous.filter(existing => existing.profileId !== session.profileId),
-      ]);
-      setPathFeedback(`Started ${recipe.label}.`);
-    } catch (error) {
-      if (directChannelProfileId && !alreadyFollowed) {
-        subscribedRuntimeProfiles.current.delete(directChannelProfileId);
-      }
-      setPathFeedback(error instanceof Error ? error.message : `Unable to start ${recipe.label}.`);
-    } finally {
-      setPendingRecipeId(null);
-    }
-  }
-
-  async function stopProjectRecipe(recipe: ProjectRunRecipe): Promise<void> {
-    const profile = approvedProfiles.find(existing => (
-      existing.projectId === detailProject?.id && existing.recipeId === recipe.id
-    ));
-    if (!profile) return;
-
-    setPendingRecipeId(recipe.id);
-    try {
-      const session = await stopProjectSession(profile.id);
-      setRuntimeSessions(previous => [
-        session,
-        ...previous.filter(existing => existing.profileId !== session.profileId),
-      ]);
-      setPathFeedback(`Stopped ${recipe.label}.`);
-    } catch (error) {
-      setPathFeedback(error instanceof Error ? error.message : `Unable to stop ${recipe.label}.`);
-    } finally {
-      setPendingRecipeId(null);
-    }
   }
 
   function addBoardTask(): void {
@@ -1358,8 +1006,8 @@ export default function ProjectsSurface() {
         {app.projects.length === 0 ? (
           <div className="empty-state" role="status">
             <div className="empty-icon">&#128736;</div>
-            <h3>Turn Sabah One into your local project hub</h3>
-            <p>Create a project to keep its live link, repository, local folder, setup notes, and management workspace easy to find again.</p>
+            <h3>Build your project reference catalogue</h3>
+            <p>Create a project to keep its live link, repository, setup notes, and management workspace easy to find again.</p>
             <button className="btn btn-primary" onClick={openCreateProject}>+ Create Project</button>
           </div>
         ) : managedProjectId ? (
@@ -1444,13 +1092,8 @@ export default function ProjectsSurface() {
                         <button className="btn btn-secondary btn-sm" onClick={() => openEditProject(selectedProject)}>Edit Project</button>
                         <button className="btn btn-danger btn-sm" onClick={() => {
                           if (window.confirm(`Remove project "${selectedProject.name}"? Linked tasks will stay in Sabah One but lose their project assignment.`)) {
-                            void app.removeProject(selectedProject.id)
-                              .then(() => setSelectedProjectIdState(null))
-                              .catch(error => {
-                                setPathFeedback(error instanceof Error
-                                  ? error.message
-                                  : 'Unable to revoke this project’s local command approvals.');
-                              });
+                            app.removeProject(selectedProject.id);
+                            setSelectedProjectIdState(null);
                           }
                         }}>Remove</button>
                       </div>
@@ -1493,27 +1136,20 @@ export default function ProjectsSurface() {
 
                       <div className="project-detail-grid">
                         <div className="card" style={{ padding: 18, display: 'grid', gap: 14 }}>
-                          <div style={{ fontSize: 16, fontWeight: 700 }}>Local Project Reference</div>
+                          <div style={{ fontSize: 16, fontWeight: 700 }}>Project References</div>
                           <div style={{ fontSize: 13, color: '#8b8fa3' }}>
-                            {selectedBinding?.projectRoot || 'No local path linked yet. Add one so the project becomes the front door to the code or docs on this machine.'}
+                            Open the account-backed web links and keep setup guidance with the project.
                           </div>
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <button className="btn btn-secondary btn-sm" disabled={!selectedBinding?.projectRoot} onClick={() => { void handleOpenProjectPath(selectedBinding?.projectRoot); }}>Open Path</button>
-                            <button className="btn btn-secondary btn-sm" disabled={!selectedBinding?.projectRoot} onClick={() => { void handleCopyPath(selectedBinding?.projectRoot); }}>Copy Path</button>
-                            <button className="btn btn-secondary btn-sm" disabled={!desktopPathActions} onClick={() => openEditProject(selectedProject)}>
-                              {desktopPathActions ? 'Browse in Edit' : 'Desktop only'}
-                            </button>
+                            {(selectedProject.links || []).filter(link => link.url).map(link => (
+                              <a key={link.id} className="btn btn-secondary btn-sm" href={link.url} target="_blank" rel="noreferrer">
+                                {link.label}
+                              </a>
+                            ))}
+                            {(selectedProject.links || []).length === 0 && (
+                              <span style={{ fontSize: 12, color: '#6b6f85' }}>No web links recorded yet.</span>
+                            )}
                           </div>
-                          <div style={{ fontSize: 12, color: '#6b6f85' }}>
-                            {desktopPathActions
-                              ? 'Desktop path actions are available in this build.'
-                              : 'Directory picking and open-path actions are desktop-only. On web builds you can still paste and copy the path manually.'}
-                          </div>
-                          {pathFeedback && (
-                            <div style={{ padding: 12, borderRadius: 12, background: '#141926', border: '1px solid #23283c', fontSize: 12, color: '#9ea4c5' }}>
-                              {pathFeedback}
-                            </div>
-                          )}
                         </div>
 
                         <div className="card" style={{ padding: 18, display: 'grid', gap: 12 }}>
@@ -1838,14 +1474,13 @@ export default function ProjectsSurface() {
               <div>
                 <h2 id="projects-catalog-title">Your work, easy to find again.</h2>
                 <p>
-                  Open live projects, find the right repository, or remember how a local-only tool runs.
+                  Keep account-backed project references, live links, setup notes, and planning work together.
                   Sabah One keeps the reference visible without turning every project into a task board.
                 </p>
               </div>
               <div className="projects-catalog-stats" aria-label="Project catalogue summary">
                 <div className="projects-catalog-stat"><strong>{app.projects.length}</strong><span>Projects</span></div>
                 <div className="projects-catalog-stat"><strong>{liveProjectCount}</strong><span>Live</span></div>
-                <div className="projects-catalog-stat"><strong>{localProjectCount}</strong><span>Local</span></div>
               </div>
             </section>
 
@@ -1937,13 +1572,11 @@ export default function ProjectsSurface() {
                       title="Pinned"
                       description="Your quickest access to priority projects."
                       projects={groupedProjects.pinned}
-                      bindings={bindingByCatalogKey}
                       reorderEnabled={!isCatalogueFiltered}
                       getActiveWorkCount={projectId => app.tasks.filter(task => task.projectId === projectId && !task.completed).length}
                       onOpen={openedProject => {
                         setSelectedProjectIdState(openedProject.id);
                         setDetailProjectId(openedProject.id);
-                        setPathFeedback(null);
                       }}
                       onPinChange={(project, pinned) => changeProjectPinned(project, pinned)}
                       onArchiveChange={(project, archived) => changeProjectArchived(project, archived)}
@@ -1957,13 +1590,11 @@ export default function ProjectsSurface() {
                       title="Projects"
                       description="Active, planned, blocked, and completed work."
                       projects={groupedProjects.projects}
-                      bindings={bindingByCatalogKey}
                       reorderEnabled={!isCatalogueFiltered}
                       getActiveWorkCount={projectId => app.tasks.filter(task => task.projectId === projectId && !task.completed).length}
                       onOpen={openedProject => {
                         setSelectedProjectIdState(openedProject.id);
                         setDetailProjectId(openedProject.id);
-                        setPathFeedback(null);
                       }}
                       onPinChange={(project, pinned) => changeProjectPinned(project, pinned)}
                       onArchiveChange={(project, archived) => changeProjectArchived(project, archived)}
@@ -1976,7 +1607,6 @@ export default function ProjectsSurface() {
                     title="Archived"
                     description="Out of the way, but always recoverable."
                     projects={groupedProjects.archived}
-                    bindings={bindingByCatalogKey}
                     collapsed={!archivedExpanded}
                     collapsible
                     reorderEnabled={!isCatalogueFiltered}
@@ -1985,7 +1615,6 @@ export default function ProjectsSurface() {
                     onOpen={openedProject => {
                       setSelectedProjectIdState(openedProject.id);
                       setDetailProjectId(openedProject.id);
-                      setPathFeedback(null);
                     }}
                     onPinChange={(project, pinned) => changeProjectPinned(project, pinned)}
                     onArchiveChange={(project, archived) => changeProjectArchived(project, archived)}
@@ -2016,13 +1645,9 @@ export default function ProjectsSurface() {
       {detailProject && !managedProjectId && (
         <ProjectReferenceDrawer
           project={detailProject}
-          binding={detailBinding}
           activeWorkCount={selectedProjectTasks.filter(task => !task.completed).length}
           milestoneCount={selectedProjectMilestones.length}
-          desktopPathActions={desktopPathActions}
-          runtimeAvailable={runtimeAvailable}
-          recipeStates={detailRecipeStates}
-          feedback={pathFeedback || undefined}
+          feedback={catalogAnnouncement || undefined}
           onClose={closeProjectDetails}
           onEdit={() => {
             setDetailProjectId(null);
@@ -2034,11 +1659,7 @@ export default function ProjectsSurface() {
             setSelectedProjectIdState(detailProject.id);
             setActiveTab('overview');
           }}
-          onLinkFolder={() => { void linkDetailProjectFolder(); }}
-          onOpenFolder={() => { void handleOpenProjectPath(detailBinding?.projectRoot); }}
           onCopy={(value, label) => { void copyProjectReference(value, label); }}
-          onRun={recipe => { void runProjectRecipe(recipe); }}
-          onStop={recipe => { void stopProjectRecipe(recipe); }}
           onPinChange={pinned => changeProjectPinned(detailProject, pinned, false)}
           onArchiveChange={archived => changeProjectArchived(detailProject, archived, false)}
         />
@@ -2096,21 +1717,6 @@ export default function ProjectsSurface() {
                 <label htmlFor="project-deployment">Live URL</label>
                 <input id="project-deployment" className="form-input" type="url" value={projectDeploymentUrl} onChange={event => setProjectDeploymentUrl(event.target.value)} placeholder="https://…" />
               </div>
-            </div>
-            <div className="form-group">
-              <label htmlFor="project-path">Folder on this device</label>
-              <div style={{ display: 'grid', gridTemplateColumns: desktopPathActions ? '1fr auto' : '1fr', gap: 8 }}>
-                <input
-                  id="project-path"
-                  className="form-input"
-                  value={projectLocalPath}
-                  onChange={event => setProjectLocalPath(event.target.value)}
-                  placeholder={desktopPathActions ? 'Choose an existing folder' : 'Desktop app only'}
-                  disabled={!desktopPathActions}
-                />
-                {desktopPathActions && <button className="btn btn-secondary btn-sm" type="button" onClick={() => { void browseForPath(); }}>Browse</button>}
-              </div>
-              <small>This absolute path stays on this device and is never synced.</small>
             </div>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#cfd3e6' }}>
               <input

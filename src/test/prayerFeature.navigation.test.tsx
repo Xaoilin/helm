@@ -33,7 +33,7 @@ describe('prayer completion navigation', () => {
     renderPrayerFeatureApp();
     await screen.findByRole('heading', { name: 'Night Compass' });
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Schedule timezone does not match this desktop',
+      'Schedule timezone does not match this browser',
     );
 
     const fajrRow = screen.getByText('Fajr', { selector: '.nc-prayer-name' }).closest('.nc-prayer-item');

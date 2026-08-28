@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import type { PrayerName } from '../types/domain';
 
 export const PRAYER_REMINDER_FIRED_EVENT = 'prayer-reminder-fired';
@@ -44,10 +43,6 @@ type BrowserReminder = {
 };
 
 const browserReminders = new Map<string, BrowserReminder>();
-
-function isTauriRuntime(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
 
 function parseInstant(value: string, field: string): number {
   const instant = Date.parse(value);
@@ -148,19 +143,12 @@ function scheduleBrowserReminder(
 export async function schedulePrayerReminder(
   request: PrayerReminderScheduleRequest,
 ): Promise<PrayerReminderScheduleResult> {
-  if (!isTauriRuntime()) {
-    return scheduleBrowserReminder(request);
-  }
-  return invoke<PrayerReminderScheduleResult>('schedule_prayer_reminder', { reminder: request });
+  return scheduleBrowserReminder(request);
 }
 
 export async function cancelPrayerReminder(
   reminder: PrayerReminderIdentity,
 ): Promise<boolean> {
-  if (isTauriRuntime()) {
-    return invoke<boolean>('cancel_prayer_reminder', { reminder });
-  }
-
   const key = getPrayerReminderKey(reminder);
   const scheduled = browserReminders.get(key);
   if (!scheduled) return false;
@@ -170,10 +158,6 @@ export async function cancelPrayerReminder(
 }
 
 export async function cancelAllPrayerReminders(): Promise<number> {
-  if (isTauriRuntime()) {
-    return invoke<number>('cancel_all_prayer_reminders');
-  }
-
   const count = browserReminders.size;
   for (const reminder of browserReminders.values()) {
     clearTimeout(reminder.handle);
@@ -183,9 +167,6 @@ export async function cancelAllPrayerReminders(): Promise<number> {
 }
 
 export async function listScheduledPrayerReminders(): Promise<ScheduledPrayerReminder[]> {
-  if (isTauriRuntime()) {
-    return invoke<ScheduledPrayerReminder[]>('list_scheduled_prayer_reminders');
-  }
   return [...browserReminders.values()]
     .map(({ reminder }) => reminder)
     .sort((left, right) => left.fireAtIso.localeCompare(right.fireAtIso));
@@ -194,14 +175,6 @@ export async function listScheduledPrayerReminders(): Promise<ScheduledPrayerRem
 export async function onPrayerReminderFired(
   listener: (event: PrayerReminderFiredEvent) => void,
 ): Promise<() => void> {
-  if (isTauriRuntime()) {
-    const { listen } = await import('@tauri-apps/api/event');
-    return listen<PrayerReminderFiredEvent>(
-      PRAYER_REMINDER_FIRED_EVENT,
-      event => listener(event.payload),
-    );
-  }
-
   if (typeof window === 'undefined') return () => undefined;
   const browserListener = (event: Event) => {
     listener((event as CustomEvent<PrayerReminderFiredEvent>).detail);
@@ -211,15 +184,6 @@ export async function onPrayerReminderFired(
 }
 
 export async function getPrayerReminderPermission(): Promise<PrayerReminderPermissionState> {
-  if (isTauriRuntime()) {
-    try {
-      const { isPermissionGranted } = await import('@tauri-apps/plugin-notification');
-      return await isPermissionGranted() ? 'granted' : 'not_granted';
-    } catch {
-      return 'unsupported';
-    }
-  }
-
   if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
   return window.Notification.permission === 'granted' ? 'granted' : 'not_granted';
 }
@@ -227,17 +191,6 @@ export async function getPrayerReminderPermission(): Promise<PrayerReminderPermi
 export async function sendPrayerNotification(
   notification: { title: string; body: string },
 ): Promise<boolean> {
-  if (isTauriRuntime()) {
-    try {
-      const { isPermissionGranted, sendNotification } = await import('@tauri-apps/plugin-notification');
-      if (!await isPermissionGranted()) return false;
-      sendNotification(notification);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   if (
     typeof window === 'undefined'
     || !('Notification' in window)
@@ -257,16 +210,6 @@ export async function sendPrayerNotification(
  * Explicit user-action API. Scheduling never invokes this or prompts for permission.
  */
 export async function requestPrayerReminderPermission(): Promise<PrayerReminderPermissionRequestResult> {
-  if (isTauriRuntime()) {
-    try {
-      const { isPermissionGranted, requestPermission } = await import('@tauri-apps/plugin-notification');
-      if (await isPermissionGranted()) return 'granted';
-      return requestPermission();
-    } catch {
-      return 'unsupported';
-    }
-  }
-
   if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
   try {
     return window.Notification.requestPermission();

@@ -134,9 +134,9 @@ const DEFAULT_PROJECTS = [
     catalogKey: 'fixture:orbit-console',
     name: 'Orbit Console',
     kind: 'desktop_app',
-    summary: 'A desktop command centre and project reference example.',
+    summary: 'An external desktop project and reference example.',
     status: 'active',
-    tags: ['app', 'productivity', 'tauri'],
+    tags: ['app', 'productivity', 'reference'],
     isPinned: true,
     links: [
       {

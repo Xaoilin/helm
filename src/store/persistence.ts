@@ -1,13 +1,7 @@
-import { invoke } from '@tauri-apps/api/core';
 import { v4 as uuid } from 'uuid';
 import { APP_VERSION } from '../config/release';
 import { logWarn } from '../services/logger';
 import {
-  PROJECT_DEVICE_BINDINGS_STORE_KEY,
-  PROJECT_PENDING_LEGACY_PATHS_STORE_KEY,
-  migrateLegacyProjectDeviceBindings,
-  normalizePendingLegacyProjectPaths,
-  normalizeProjectDeviceBindings,
   normalizeProjectRecords,
   serializeSharedProjects,
 } from './projectPersistence';
@@ -44,15 +38,10 @@ export const DEVICE_SETTINGS_STORE_KEY = 'deviceSettings';
 export const CALENDAR_SYNC_REQUEST_EVENT = 'helm:calendar-sync-requested';
 
 const DEVICE_STORE_KEYS = new Set<string>([
-  PROJECT_DEVICE_BINDINGS_STORE_KEY,
-  PROJECT_PENDING_LEGACY_PATHS_STORE_KEY,
   DEVICE_SETTINGS_STORE_KEY,
 ]);
 
-type DeviceStoreKey =
-  | typeof PROJECT_DEVICE_BINDINGS_STORE_KEY
-  | typeof PROJECT_PENDING_LEGACY_PATHS_STORE_KEY
-  | typeof DEVICE_SETTINGS_STORE_KEY;
+type DeviceStoreKey = typeof DEVICE_SETTINGS_STORE_KEY;
 
 export interface RemoteStoreChange {
   event: 'REMOTE_REFRESH' | 'RECONNECT';
@@ -127,12 +116,10 @@ export interface LocalImportCandidate {
   label: string;
   description: string;
   localStorage: boolean;
-  tauri: boolean;
   remoteExists: boolean | null;
   sizeBytes: number;
 }
 
-let tauriAvailable: boolean | null = null;
 let accountVersion = 0;
 let bootstrappedUserId: string | null = null;
 let bootstrapPromise: Promise<void> | null = null;
@@ -236,17 +223,6 @@ function assertCurrentPersistenceSession(epoch: number, userId: string): void {
   if (!isCurrentPersistenceSession(epoch, userId)) throw new StalePersistenceSessionError();
 }
 
-async function isTauri(): Promise<boolean> {
-  if (tauriAvailable !== null) return tauriAvailable;
-  try {
-    await invoke('get_app_data_dir');
-    tauriAvailable = true;
-  } catch {
-    tauriAvailable = false;
-  }
-  return tauriAvailable;
-}
-
 function getDataKey(key: string): string {
   return `${NAMESPACE}:${key}`;
 }
@@ -257,10 +233,6 @@ function getMetaKey(key: string): string {
 
 function getDeviceDataKey(key: string): string {
   return `${NAMESPACE}:device:${key}`;
-}
-
-function getDeviceTauriKey(key: string): string {
-  return `device-${key}`;
 }
 
 function assertSharedStoreKeyIsNotDeviceOnly(key: string): void {
@@ -274,37 +246,7 @@ function assertSharedStoreKeyIsNotDeviceOnly(key: string): void {
 
 async function prepareSharedStoreValue(key: string, value: unknown): Promise<unknown> {
   if (key !== 'projects') return value;
-  const now = new Date().toISOString();
-  const projects = normalizeProjectRecords(value, now);
-  const [storedBindings, storedPendingPaths] = await Promise.all([
-    loadDeviceStore<unknown>(PROJECT_DEVICE_BINDINGS_STORE_KEY),
-    loadDeviceStore<unknown>(PROJECT_PENDING_LEGACY_PATHS_STORE_KEY),
-  ]);
-  const existingBindings = normalizeProjectDeviceBindings(storedBindings, now);
-  const existingPendingPaths = normalizePendingLegacyProjectPaths(storedPendingPaths, now);
-  const migration = await migrateLegacyProjectDeviceBindings(
-    value,
-    projects,
-    existingBindings,
-    existingPendingPaths,
-    async projectRoot => {
-      if (!(await isTauri())) return null;
-      try {
-        const canonicalRoot = await invoke<string>('canonicalize_project_path', { path: projectRoot });
-        return typeof canonicalRoot === 'string' && canonicalRoot.trim() ? canonicalRoot.trim() : null;
-      } catch {
-        return null;
-      }
-    },
-    now,
-  );
-  if (JSON.stringify(existingBindings) !== JSON.stringify(migration.bindings)) {
-    await saveDeviceStore(PROJECT_DEVICE_BINDINGS_STORE_KEY, migration.bindings);
-  }
-  if (JSON.stringify(existingPendingPaths) !== JSON.stringify(migration.pendingPaths)) {
-    await saveDeviceStore(PROJECT_PENDING_LEGACY_PATHS_STORE_KEY, migration.pendingPaths);
-  }
-  return serializeSharedProjects(projects);
+  return serializeSharedProjects(normalizeProjectRecords(value, new Date().toISOString()));
 }
 
 function publishSyncSession(patch: Partial<SyncSessionSnapshot>): void {
@@ -690,15 +632,6 @@ export async function flushPendingRemoteMutations(): Promise<void> {
   await flushPendingStores();
 }
 
-async function readTauriRaw(key: string): Promise<string | null> {
-  try {
-    if (!(await isTauri())) return null;
-    return await invoke<string>('read_store', { key });
-  } catch {
-    return null;
-  }
-}
-
 function localRawSnapshot(raw: string | null): { hasValue: boolean; value: unknown; parseError: boolean; sizeBytes: number } {
   if (raw === null) return { hasValue: false, value: null, parseError: false, sizeBytes: 0 };
   try {
@@ -713,14 +646,12 @@ async function readLegacyLocalValue(key: string): Promise<{
   value: unknown;
   hasValue: boolean;
   parseError: boolean;
-  source: 'localStorage' | 'tauri' | null;
+  source: 'localStorage' | null;
 }> {
   const browserRaw = localStorage.getItem(getDataKey(key));
   const browser = localRawSnapshot(browserRaw);
   if (browser.hasValue || browser.parseError) return { ...browser, raw: browserRaw, source: 'localStorage' };
-  const tauriRaw = await readTauriRaw(key);
-  const tauri = localRawSnapshot(tauriRaw);
-  return { ...tauri, raw: tauriRaw, source: tauri.hasValue || tauri.parseError ? 'tauri' : null };
+  return { ...browser, raw: browserRaw, source: null };
 }
 
 function quarantineLegacyValue(key: string, raw: string): void {
@@ -1456,11 +1387,6 @@ export function saveStoreRecordFieldsCommitted<T>(
 export async function clearLocalStoreCopy(key: string, notify = true): Promise<void> {
   localStorage.removeItem(getDataKey(key));
   localStorage.removeItem(getMetaKey(key));
-  try {
-    if (await isTauri()) await invoke('delete_store', { key });
-  } catch {
-    logWarn('Persistence', `Tauri legacy delete failed for ${key}`);
-  }
   if (notify) notifyPersistenceHealthSubscribers();
 }
 
@@ -1468,31 +1394,20 @@ export async function listLocalImportCandidates(): Promise<LocalImportCandidate[
   const candidates: LocalImportCandidate[] = [];
   for (const item of SHARED_STORE_KEYS) {
     const browser = localRawSnapshot(localStorage.getItem(getDataKey(item.key)));
-    const tauri = localRawSnapshot(await readTauriRaw(item.key));
-    if (!browser.hasValue && !browser.parseError && !tauri.hasValue && !tauri.parseError) continue;
+    if (!browser.hasValue && !browser.parseError) continue;
     candidates.push({
       key: item.key,
       label: item.label,
       description: item.description,
       localStorage: browser.hasValue || browser.parseError,
-      tauri: tauri.hasValue || tauri.parseError,
       remoteExists: syncSession.hasUsableSnapshot ? encodedCache(item.key).length > 0 : null,
-      sizeBytes: Math.max(browser.sizeBytes, tauri.sizeBytes),
+      sizeBytes: browser.sizeBytes,
     });
   }
   return candidates;
 }
 
 export async function loadDeviceStore<T>(key: DeviceStoreKey): Promise<T | null> {
-  try {
-    if (await isTauri()) {
-      const raw = await invoke<string>('read_store', { key: getDeviceTauriKey(key) });
-      const parsed = JSON.parse(raw) as T | null;
-      if (parsed !== null) return parsed;
-    }
-  } catch {
-    logWarn('Persistence', `Tauri device-only read failed for ${key}`);
-  }
   const raw = localStorage.getItem(getDeviceDataKey(key));
   if (raw === null) return null;
   try {
@@ -1505,11 +1420,6 @@ export async function loadDeviceStore<T>(key: DeviceStoreKey): Promise<T | null>
 
 export async function saveDeviceStore<T>(key: DeviceStoreKey, value: T): Promise<void> {
   const json = JSON.stringify(value);
-  try {
-    if (await isTauri()) await invoke('write_store', { key: getDeviceTauriKey(key), value: json });
-  } catch {
-    logWarn('Persistence', `Tauri device-only write failed for ${key}`);
-  }
   localStorage.setItem(getDeviceDataKey(key), json);
   lastLocalWriteAt = new Date().toISOString();
   lastLocalWriteKey = key;

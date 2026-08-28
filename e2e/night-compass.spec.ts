@@ -193,7 +193,7 @@ test.describe('Night Compass acceptance', () => {
     for (const viewport of [acceptanceViewports[0], acceptanceViewports[2]]) {
       await page.setViewportSize(viewport);
       await page.goto('/');
-      const reminder = page.getByRole('alert').filter({ hasText: 'Native notifications are unavailable' });
+      const reminder = page.getByRole('alert').filter({ hasText: 'Browser notifications are unavailable' });
       await expect(reminder).toBeVisible();
       await expect(reminder.getByRole('button', { name: 'Repair notifications' })).toBeVisible();
       await expect(reminder.getByRole('button', { name: 'Snooze once' })).toBeVisible();
@@ -254,7 +254,7 @@ test.describe('Night Compass acceptance', () => {
     await page.setViewportSize(acceptanceViewports[2]);
     await page.goto('/');
 
-    await expect(page.getByText('Schedule timezone does not match this desktop')).toBeVisible();
+    await expect(page.getByText('Schedule timezone does not match this browser')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Repair prayer settings' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Prayer', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Learn', exact: true })).toBeVisible();

@@ -22,7 +22,7 @@ export default function PrayerDebug() {
     ['Location', diagnostics.location],
     ['Method', diagnostics.method],
     ['Schedule timezone', diagnostics.scheduleTimezone],
-    ['Desktop timezone', diagnostics.desktopTimezone],
+    ['Local browser timezone', diagnostics.localTimezone],
     ['Timezone matches', diagnostics.timezoneMatches],
     ['Next reminder fire', diagnostics.nextReminderAt ? new Date(diagnostics.nextReminderAt).toLocaleString() : null],
     ['Suppression reason', diagnostics.suppressionReason],
@@ -72,8 +72,8 @@ export default function PrayerDebug() {
       <section className="card debug-prayer-card">
         <div className="dash-card-header"><span>Safe notification test</span></div>
         <p className="debug-prayer-help">
-          Schedules a clearly labelled test for five seconds from now. Minimize Sabah One after clicking to
-          verify the process timer; no prayer outcome, reminder receipt, or XP changes.
+          Schedules a clearly labelled test for five seconds from now. Keep this page open after clicking to
+          verify the browser timer; no prayer outcome, reminder receipt, or XP changes.
         </p>
         <div className="actions-row">
           <button
@@ -92,7 +92,7 @@ export default function PrayerDebug() {
             onClick={async () => {
               const sent = await prayer.testReminder('Fajr');
               setTestStatus(sent
-                ? 'TEST scheduled for five seconds from now. Minimize Sabah One now.'
+                ? 'TEST scheduled for five seconds from now. Keep this page open.'
                 : 'Test not scheduled; permission is not granted or scheduling failed.');
             }}
           >

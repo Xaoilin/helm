@@ -16,7 +16,7 @@ const baseProject: Project = {
 };
 
 describe('project catalogue availability', () => {
-  it('keeps a portable run recipe visible as local-only before this device is linked', () => {
+  it('keeps a portable run recipe as a reference without enabling local execution', () => {
     expect(getProjectAvailability({
       ...baseProject,
       runRecipes: [{
@@ -26,10 +26,10 @@ describe('project catalogue availability', () => {
         executable: 'npm',
         args: ['run', 'dev'],
       }],
-    })).toEqual({ key: 'local', label: 'Local only' });
+    })).toEqual({ key: 'reference', label: 'Reference' });
   });
 
-  it('labels a deployed project with a local recipe as live and local', () => {
+  it('labels a deployed project with a reference recipe as live', () => {
     expect(getProjectAvailability({
       ...baseProject,
       links: [{
@@ -45,7 +45,7 @@ describe('project catalogue availability', () => {
         executable: 'npm',
         args: ['run', 'dev'],
       }],
-    })).toEqual({ key: 'hybrid', label: 'Live + local' });
+    })).toEqual({ key: 'live', label: 'Live' });
   });
 
   it('keeps documentation and hardware records reference-only', () => {

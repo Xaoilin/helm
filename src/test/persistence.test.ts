@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { invoke } from '@tauri-apps/api/core';
 
 const {
   isAuthenticatedMock,
@@ -53,11 +52,10 @@ describe('database-authoritative persistence boundaries', () => {
     expect(getSyncSessionSnapshot().status).toBe('blocked');
   });
 
-  it('never writes shared data to browser or native storage', async () => {
+  it('never writes shared data while signed out', async () => {
     await saveStore('tasks', [{ id: 'task-1', title: 'Blocked write' }]);
 
     expect(localStorage.getItem('helm:tasks')).toBeNull();
-    expect(invoke).not.toHaveBeenCalledWith('write_store', expect.anything());
   });
 
   it('exposes no active storage interface for retired Capture records', async () => {

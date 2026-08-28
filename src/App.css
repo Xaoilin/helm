@@ -7650,17 +7650,10 @@ textarea.form-input {
   color: #d3b6ff;
 }
 
-.project-badge.availability-live,
-.project-badge.availability-hybrid {
+.project-badge.availability-live {
   border-color: rgba(69, 188, 255, 0.34);
   background: rgba(69, 188, 255, 0.1);
   color: #9ad9ff;
-}
-
-.project-badge.availability-local {
-  border-color: rgba(99, 216, 190, 0.32);
-  background: rgba(99, 216, 190, 0.09);
-  color: #9fe6d5;
 }
 
 .project-card-meta {
@@ -8034,26 +8027,13 @@ textarea.form-input {
   background: #11141c;
 }
 
-.project-runtime-state {
+.project-reference-state {
   flex: 0 0 auto;
   color: #7f879f;
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-}
-
-.project-runtime-state.running {
-  color: #75e0ac;
-}
-
-.project-runtime-state.trusted {
-  color: #9da3ff;
-}
-
-.project-runtime-state.stale,
-.project-runtime-state.failed {
-  color: #f4b875;
 }
 
 .project-safety-note {
@@ -8065,41 +8045,6 @@ textarea.form-input {
   color: #8f96b4;
   font-size: 11px;
   line-height: 1.55;
-}
-
-.project-runtime-log {
-  max-height: 220px;
-  overflow: auto;
-  padding: 10px;
-  border: 1px solid #292e42;
-  border-radius: 12px;
-  background: #0b0e14;
-  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-}
-
-.project-log-line {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  gap: 8px;
-  padding: 3px 0;
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.project-log-line span {
-  color: #929ab8;
-  text-transform: uppercase;
-}
-
-.project-log-line code {
-  overflow-wrap: anywhere;
-  color: #c7ccdc;
-  white-space: pre-wrap;
-}
-
-.project-log-line.stderr code,
-.project-log-line.system code {
-  color: #f0b5ac;
 }
 
 .project-workspace-summary {

@@ -3,7 +3,7 @@ import type {
   Surface, ChatConversation,
   CalendarAccount, CalendarSource, CalendarEvent,
   Trip, TripBooking, TripBookingInput, TripBudgetEntry, TripBudgetEntryInput, TripItineraryItem, TripLeg,
-  Project, ProjectCatalogueSection, ProjectDeviceBinding, ProjectPage, ProjectRunProfile, Integration, Settings,
+  Project, ProjectCatalogueSection, ProjectPage, Integration, Settings,
   Task, GamificationProfile,
   DashboardFocusState,
   KnowledgeTopic, KnowledgeEntry,
@@ -27,8 +27,6 @@ import {
   type AssistantNavigationHandler,
   type AssistantNavigationRequest,
 } from '../services/assistantNavigation';
-import { revokeProjectProfilesForProject } from '../services/projectRuntime';
-
 import { CalendarProvider, useCalendar } from './contexts/CalendarContext';
 import { TripProvider, useTripContext } from './contexts/TripContext';
 import { ProjectProvider, useProjectContext } from './contexts/ProjectContext';
@@ -67,7 +65,6 @@ interface AppContextAPI {
   tripBookings: TripBooking[];
   tripBudgetEntries: TripBudgetEntry[];
   projects: Project[];
-  projectDeviceBindings: ProjectDeviceBinding[];
   projectPages: ProjectPage[];
   inventoryItems: InventoryItem[];
   inventoryNeeds: InventoryNeed[];
@@ -132,14 +129,10 @@ interface AppContextAPI {
 
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProject: (id: string, updates: Partial<Project>) => void;
-  removeProject: (id: string) => Promise<void>;
+  removeProject: (id: string) => void;
   setProjectPinned: (projectId: string, isPinned: boolean) => void;
   setProjectArchived: (projectId: string, isArchived: boolean) => void;
   reorderProjectSection: (section: ProjectCatalogueSection, orderedProjectIds: string[]) => void;
-  setProjectDeviceRoot: (catalogKey: string, projectRoot: string) => boolean;
-  clearProjectDeviceBinding: (catalogKey: string) => void;
-  approveProjectRunProfile: (catalogKey: string, profile: ProjectRunProfile) => void;
-  removeProjectRunProfile: (catalogKey: string, profileId: string) => void;
   addProjectPage: (page: Omit<ProjectPage, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProjectPage: (id: string, updates: Partial<ProjectPage>) => void;
   removeProjectPage: (id: string) => void;
@@ -341,8 +334,7 @@ function ShellProvider({ children }: { children: ReactNode }) {
     }
   }, [state.surface]);
 
-  const removeProject = useCallback(async (id: string) => {
-    await revokeProjectProfilesForProject(id);
+  const removeProject = useCallback((id: string) => {
     projectCtx.removeProject(id);
 
     taskCtx.setTasks(prev => prev.map(task => (
@@ -570,7 +562,6 @@ function ShellProvider({ children }: { children: ReactNode }) {
     tripBookings: tripCtx.tripBookings,
     tripBudgetEntries: tripCtx.tripBudgetEntries,
     projects: projectCtx.projects,
-    projectDeviceBindings: projectCtx.projectDeviceBindings,
     projectPages: projectCtx.projectPages,
     inventoryItems: inventoryCtx.inventoryItems,
     inventoryNeeds: inventoryCtx.inventoryNeeds,
@@ -637,10 +628,6 @@ function ShellProvider({ children }: { children: ReactNode }) {
     setProjectPinned: projectCtx.setProjectPinned,
     setProjectArchived: projectCtx.setProjectArchived,
     reorderProjectSection: projectCtx.reorderProjectSection,
-    setProjectDeviceRoot: projectCtx.setProjectDeviceRoot,
-    clearProjectDeviceBinding: projectCtx.clearProjectDeviceBinding,
-    approveProjectRunProfile: projectCtx.approveProjectRunProfile,
-    removeProjectRunProfile: projectCtx.removeProjectRunProfile,
     addProjectPage: projectCtx.addProjectPage,
     updateProjectPage: projectCtx.updateProjectPage,
     removeProjectPage: projectCtx.removeProjectPage,

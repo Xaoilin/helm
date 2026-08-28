@@ -20,7 +20,7 @@ export default function BoundedReminderBanner() {
         <span>{reminder.body}</span>
         {prayer.diagnostics.permissionState !== 'granted' && (
           <span className="bounded-reminder-fallback">
-            Native notifications are unavailable; this in-app reminder remains active.
+            Browser notifications are unavailable; this in-app reminder remains active.
           </span>
         )}
       </div>

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   PrayerReminderFiredEvent,
   PrayerReminderScheduleRequest,
-} from '../services/nativePrayerReminder';
+} from '../services/browserPrayerReminder';
 import { AppProvider } from '../store/AppContext';
 import { usePrayerContext } from '../store/contexts/PrayerContext';
 import { useSettingsContext } from '../store/contexts/SettingsContext';
@@ -25,8 +25,8 @@ function expectLocalClock(instant: string | undefined, hours: number, minutes: n
   expect([value.getHours(), value.getMinutes()]).toEqual([hours, minutes]);
 }
 
-vi.mock('../services/nativePrayerReminder', async importOriginal => {
-  const actual = await importOriginal<typeof import('../services/nativePrayerReminder')>();
+vi.mock('../services/browserPrayerReminder', async importOriginal => {
+  const actual = await importOriginal<typeof import('../services/browserPrayerReminder')>();
   return {
     ...actual,
     cancelAllPrayerReminders: reminderMocks.cancelAll,
