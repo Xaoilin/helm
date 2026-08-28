@@ -49,12 +49,11 @@ const DEFAULT_PREVIEW: ProjectPreviewStyle = {
 };
 
 type UnknownRecord = Record<string, unknown>;
-export type SharedProjectRecord = Omit<Project, 'localPath'>;
+export type SharedProjectRecord = Project;
 
 export interface LegacyWorkspaceRecord {
   id?: unknown;
   name?: unknown;
-  path?: unknown;
   description?: unknown;
   isPrimary?: unknown;
   createdAt?: unknown;
@@ -169,7 +168,7 @@ function normalizeSetupSteps(value: unknown, catalogKey: string): ProjectSetupSt
   });
 }
 
-export function isAbsoluteProjectRoot(value: unknown): boolean {
+export function isAbsoluteFilesystemPath(value: unknown): boolean {
   const candidate = trimmedString(value);
   return candidate.startsWith('/')
     || WINDOWS_ABSOLUTE_PATH_PATTERN.test(candidate)
@@ -179,7 +178,7 @@ export function isAbsoluteProjectRoot(value: unknown): boolean {
 function normalizeRelativeWorkingDirectory(value: unknown): string | undefined {
   const candidate = trimmedString(value);
   if (!candidate) return undefined;
-  if (isAbsoluteProjectRoot(candidate)) return undefined;
+  if (isAbsoluteFilesystemPath(candidate)) return undefined;
   if (candidate === '..' || candidate.startsWith('../') || candidate.startsWith('..\\')) return undefined;
   return candidate;
 }
@@ -201,7 +200,7 @@ function normalizeRunRecipes(value: unknown, catalogKey: string): ProjectRunReci
   return value.flatMap((item, index) => {
     if (!isRecord(item)) return [];
     const executable = trimmedString(item.executable);
-    if (!executable || isAbsoluteProjectRoot(executable)) return [];
+    if (!executable || isAbsoluteFilesystemPath(executable)) return [];
 
     const args = Array.isArray(item.args)
       ? item.args.filter((arg): arg is string => typeof arg === 'string')
@@ -314,7 +313,6 @@ export function migrateLegacyWorkspaceRecord(
   return {
     id,
     name: trimmedString(value.name) || `Project ${index + 1}`,
-    localPath: trimmedString(value.path) || undefined,
     summary: trimmedString(value.description),
     status: 'active',
     tags: [],

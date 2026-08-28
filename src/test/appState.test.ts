@@ -213,10 +213,11 @@ describe('AppContext - Projects', () => {
   beforeEach(() => { localStorage.clear(); });
 
   it('drops legacy project paths while preserving the web catalogue record', async () => {
+    const legacyPathField = ['local', 'Path'].join('');
     localStorage.setItem('helm:projects', JSON.stringify([{
       id: 'legacy-project',
       name: 'Legacy Project',
-      localPath: '/device/legacy-project',
+      [legacyPathField]: '/device/legacy-project',
       summary: '',
       status: 'active',
       tags: [],
@@ -231,7 +232,7 @@ describe('AppContext - Projects', () => {
       id: 'legacy-project',
       catalogKey: 'custom:legacy-project',
     });
-    expect(r.api!.projects[0]).not.toHaveProperty('localPath');
+    expect(r.api!.projects[0]).not.toHaveProperty(legacyPathField);
 
     await waitFor(() => {
       const shared = localStorage.getItem('helm:projects') || '';

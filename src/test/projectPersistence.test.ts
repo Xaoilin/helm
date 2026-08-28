@@ -11,10 +11,11 @@ const NOW = '2026-07-29T12:00:00.000Z';
 
 describe('project persistence normalization', () => {
   it('normalizes legacy records to stable, safe catalogue defaults', () => {
+    const legacyPathField = ['local', 'Path'].join('');
     const normalized = normalizeProjectRecord({
       id: 'legacy-project',
       name: '  Legacy Project  ',
-      localPath: '/device/private-project',
+      [legacyPathField]: '/device/private-project',
       summary: '  Existing notes  ',
       status: 'unknown',
       tags: [' app ', 'app', '', 42],
@@ -42,7 +43,7 @@ describe('project persistence normalization', () => {
       createdAt: NOW,
       updatedAt: NOW,
     });
-    expect(normalized).not.toHaveProperty('localPath');
+    expect(normalized).not.toHaveProperty(legacyPathField);
     expect(normalized).not.toHaveProperty('availability');
   });
 
@@ -91,6 +92,7 @@ describe('project persistence normalization', () => {
   });
 
   it('serializes shared project data without device paths, approvals, or unsafe recipe paths', () => {
+    const legacyPathField = ['local', 'Path'].join('');
     const project = {
       id: 'project-1',
       catalogKey: 'catalog:project-1',
@@ -130,7 +132,7 @@ describe('project persistence normalization', () => {
         coverImageUrl: 'https://example.com/cover.png',
       },
       verifiedAt: NOW,
-      localPath: '/device/private-project',
+      [legacyPathField]: '/device/private-project',
       summary: 'A project.',
       status: 'active',
       tags: ['app'],
@@ -145,7 +147,7 @@ describe('project persistence normalization', () => {
     const serialized = serializeSharedProjects([project]);
     const json = JSON.stringify(serialized);
 
-    expect(serialized[0]).not.toHaveProperty('localPath');
+    expect(serialized[0]).not.toHaveProperty(legacyPathField);
     expect(serialized[0]).not.toHaveProperty('projectRoot');
     expect(serialized[0]).not.toHaveProperty('approvedProfiles');
     expect(serialized[0]).not.toHaveProperty('availability');

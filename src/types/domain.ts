@@ -163,11 +163,6 @@ export interface Project {
   runRecipes?: ProjectRunRecipe[];
   preview?: ProjectPreviewStyle;
   verifiedAt?: string;
-  /**
-   * @deprecated Migration input only. Normalized Project records never retain
-   * or sync an absolute local path.
-   */
-  localPath?: string;
   summary: string;
   status: ProjectStatus;
   /** Restored when a reversible archive is removed. */
