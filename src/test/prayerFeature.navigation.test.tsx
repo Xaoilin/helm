@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import {
   installPrayerFeatureHarness,
   renderPrayerFeatureApp,
@@ -31,27 +31,27 @@ describe('prayer completion navigation', () => {
     }));
 
     renderPrayerFeatureApp();
-    await screen.findByRole('heading', { name: 'Good morning' });
+    await screen.findByRole('heading', { name: 'Night Compass' });
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Deadline classification and reminders paused',
+      'Schedule timezone does not match this desktop',
     );
 
-    const fajrRow = screen.getByText('Fajr', { selector: '.prayer-name' }).closest('.prayer-row');
-    expect(fajrRow).toHaveTextContent('Pending');
+    const fajrRow = screen.getByText('Fajr', { selector: '.nc-prayer-name' }).closest('.nc-prayer-item');
+    expect(fajrRow).toHaveTextContent('Schedule pending');
     expect(fajrRow).not.toHaveTextContent('Before tracking');
-    fireEvent.click(within(fajrRow!).getByRole('button', { name: 'Mark prayed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Complete Fajr Prayer' }));
     expect(await screen.findByRole('dialog', { name: 'How was Fajr prayed?' })).toBeInTheDocument();
     expect(screen.queryByText('Likely from the clock')).not.toBeInTheDocument();
   });
 
-  it('opens the shared selector from the Dashboard Up Next quick-complete action', async () => {
+  it('opens the shared selector from the prayer-first Dashboard', async () => {
     const tasks = JSON.parse(localStorage.getItem('helm:tasks') || '[]') as Array<{ category?: string }>;
     localStorage.setItem('helm:tasks', JSON.stringify(tasks.filter(task => task.category === 'prayer')));
 
     renderPrayerFeatureApp();
-    await screen.findByRole('heading', { name: 'Good morning' });
+    await screen.findByRole('heading', { name: 'Night Compass' });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Complete now' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Complete Fajr Prayer' }));
 
     expect(await screen.findByRole('dialog', { name: 'How was Fajr prayed?' })).toBeInTheDocument();
   });

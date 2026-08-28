@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import {
   installPrayerFeatureHarness,
   renderPrayerFeatureApp,
@@ -11,10 +11,9 @@ describe('prayer completion rewards', () => {
   it('awards canonical one-time XP when no prayer task exists', async () => {
     localStorage.setItem('helm:tasks', '[]');
     renderPrayerFeatureApp();
-    await screen.findByRole('heading', { name: 'Good morning' });
+    await screen.findByRole('heading', { name: 'Night Compass' });
 
-    const fajrRow = screen.getByText('Fajr', { selector: '.prayer-name' }).closest('.prayer-row');
-    fireEvent.click(within(fajrRow!).getByRole('button', { name: 'Mark prayed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Complete Fajr Prayer' }));
     fireEvent.click(await screen.findByRole('button', { name: /On time/ }));
 
     await waitFor(() => {
@@ -52,7 +51,7 @@ describe('prayer completion rewards', () => {
     }));
 
     const first = renderPrayerFeatureApp();
-    await screen.findByRole('heading', { name: 'Good morning' });
+    await screen.findByRole('heading', { name: 'Night Compass' });
     await waitFor(() => {
       const profile = JSON.parse(localStorage.getItem('helm:gamification') || '{}');
       expect(profile.totalXp).toBe(15);
@@ -61,7 +60,7 @@ describe('prayer completion rewards', () => {
     first.unmount();
 
     renderPrayerFeatureApp();
-    await screen.findByRole('heading', { name: 'Good morning' });
+    await screen.findByRole('heading', { name: 'Night Compass' });
     await waitFor(() => {
       expect(JSON.parse(localStorage.getItem('helm:gamification') || '{}').totalXp).toBe(15);
     });
@@ -69,7 +68,7 @@ describe('prayer completion rewards', () => {
 
   it('persists the activation-day eligibility from the matching schedule once', async () => {
     renderPrayerFeatureApp();
-    await screen.findByRole('heading', { name: 'Good morning' });
+    await screen.findByRole('heading', { name: 'Night Compass' });
 
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem('helm:prayerTracking') || '{}');

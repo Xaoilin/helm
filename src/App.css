@@ -5249,6 +5249,625 @@ textarea.form-input {
   align-items: center;
   gap: 10px;
 }
+
+/* ── Night Compass dashboard ── */
+.nc-dashboard-body {
+  min-width: 0;
+  background:
+    radial-gradient(circle at 50% -20%, rgba(47, 203, 143, 0.08), transparent 38%),
+    #07111f;
+}
+
+.nc-dashboard {
+  --nc-canvas: #07111f;
+  --nc-shell: #081321;
+  --nc-surface: #101d31;
+  --nc-surface-raised: #13243d;
+  --nc-border: #243650;
+  --nc-text: #f3f0e6;
+  --nc-text-muted: #91a0b8;
+  --nc-emerald: #2fcb8f;
+  --nc-emerald-strong: #20ae78;
+  --nc-moon-gold: #e6c66a;
+  --nc-moon-gold-strong: #c9a84f;
+  --nc-late: #d79a46;
+  --nc-missed: #e87373;
+  --nc-focus: #8fe7c4;
+  display: grid;
+  gap: 16px;
+  width: min(100%, 1240px);
+  min-width: 0;
+  margin: 0 auto;
+  color: var(--nc-text);
+}
+
+.nc-surface-header {
+  background: #081321;
+  border-bottom-color: #243650;
+}
+
+.nc-surface-header h1 {
+  color: #f3f0e6;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.nc-surface-header .subtitle {
+  color: #aab5c6;
+}
+
+.nc-prayer-card,
+.nc-momentum-card,
+.nc-tasks-card {
+  box-sizing: border-box;
+  min-width: 0;
+  border: 1px solid var(--nc-border);
+  background: var(--nc-surface);
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.2);
+}
+
+.nc-prayer-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 444px;
+  overflow: hidden;
+  padding: 24px;
+  border-radius: 16px;
+  isolation: isolate;
+}
+
+.nc-celestial {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nc-celestial-arc {
+  position: absolute;
+  top: 54px;
+  left: 14%;
+  width: 72%;
+  height: 42%;
+  border-top: 1px solid rgba(230, 198, 106, 0.62);
+  border-radius: 50%;
+  box-shadow: 22px -8px 20px rgba(230, 198, 106, 0.08);
+}
+
+.nc-orientation-marker {
+  position: absolute;
+  top: 50px;
+  left: calc(50% - 7px);
+  width: 14px;
+  height: 24px;
+  border: 1px solid rgba(47, 203, 143, 0.7);
+  background: rgba(47, 203, 143, 0.18);
+  clip-path: polygon(50% 0, 100% 65%, 50% 100%, 0 65%);
+}
+
+.nc-celestial i {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(243, 240, 230, 0.3);
+}
+.nc-celestial i:nth-of-type(1) { top: 16%; left: 12%; }
+.nc-celestial i:nth-of-type(2) { top: 29%; left: 25%; }
+.nc-celestial i:nth-of-type(3) { top: 19%; right: 17%; }
+.nc-celestial i:nth-of-type(4) { top: 38%; right: 28%; }
+.nc-celestial i:nth-of-type(5) { top: 52%; left: 18%; }
+
+.nc-prayer-heading,
+.nc-momentum-heading,
+.nc-tasks-card,
+.nc-tasks-copy,
+.nc-progress-row,
+.nc-reset-row {
+  display: flex;
+  align-items: center;
+}
+
+.nc-prayer-heading {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.nc-prayer-heading h2,
+.nc-momentum-heading h2,
+.nc-tasks-card h2 {
+  margin: 0;
+  color: var(--nc-text);
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.nc-eyebrow {
+  color: var(--nc-emerald-strong);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.nc-prayer-location {
+  color: var(--nc-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.nc-next-prayer {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 170px;
+  text-align: center;
+}
+
+.nc-next-prayer strong {
+  margin-top: 4px;
+  color: var(--nc-text);
+  font-size: 44px;
+  line-height: 1.05;
+}
+
+.nc-next-prayer time {
+  color: var(--nc-emerald-strong);
+  font-size: 64px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.nc-next-badge {
+  margin-top: 8px;
+  padding: 5px 16px;
+  border: 1px solid rgba(47, 203, 143, 0.64);
+  border-radius: 999px;
+  color: var(--nc-emerald-strong);
+  background: rgba(47, 203, 143, 0.1);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.nc-next-prayer small {
+  margin-top: 8px;
+  color: var(--nc-text-muted);
+  font-size: 12px;
+}
+
+.nc-prayer-sequence {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.nc-prayer-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 112px;
+  padding: 10px 6px;
+  border: 1px solid var(--nc-border);
+  border-radius: 12px;
+  color: var(--nc-text);
+  background: rgba(7, 17, 31, 0.62);
+  cursor: pointer;
+}
+
+.nc-prayer-item:hover:not(:disabled),
+.nc-prayer-item.temporal-current,
+.nc-prayer-item.temporal-next {
+  border-color: var(--nc-emerald);
+  background: rgba(47, 203, 143, 0.08);
+}
+
+.nc-prayer-item.temporal-past:not([class*='outcome-']) {
+  color: #bcc5d2;
+  background: rgba(7, 17, 31, 0.38);
+}
+
+.nc-prayer-item:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.nc-prayer-item.outcome-on_time { border-color: rgba(47, 203, 143, 0.58); }
+.nc-prayer-item.outcome-late { border-color: rgba(215, 154, 70, 0.72); }
+.nc-prayer-item.outcome-missed { border-color: rgba(232, 115, 115, 0.72); }
+.nc-prayer-item.outcome-unclassified { border-style: dashed; }
+
+.nc-prayer-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.nc-prayer-arabic {
+  min-height: 17px;
+  color: var(--nc-text-muted);
+  font-family: 'Segoe UI', serif;
+  font-size: 12px;
+}
+
+.nc-prayer-item time {
+  margin-top: 5px;
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.nc-prayer-state {
+  margin-top: 5px;
+  color: var(--nc-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.outcome-on_time .nc-prayer-state { color: var(--nc-emerald-strong); }
+.outcome-late .nc-prayer-state { color: #efb968; }
+.outcome-missed .nc-prayer-state { color: #ff9696; }
+.temporal-current .nc-prayer-state,
+.temporal-next .nc-prayer-state { color: var(--nc-emerald-strong); }
+
+.nc-prayer-repair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 16px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border: 1px solid rgba(230, 198, 106, 0.58);
+  border-radius: 12px;
+  background: rgba(99, 72, 17, 0.2);
+}
+
+.nc-prayer-repair strong {
+  color: #f4d985;
+  font-size: 14px;
+}
+
+.nc-prayer-repair span {
+  grid-column: 1;
+  color: #d7d0b7;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.nc-prayer-repair .nc-primary-action {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+
+.nc-momentum-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+
+.nc-momentum-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 230px;
+  padding: 20px;
+  border-radius: 14px;
+}
+
+.nc-momentum-card.nc-learn { border-color: rgba(47, 203, 143, 0.5); }
+.nc-momentum-card.nc-move { border-color: rgba(230, 198, 106, 0.52); }
+
+.nc-momentum-heading {
+  gap: 12px;
+}
+
+.nc-momentum-heading > div {
+  min-width: 0;
+}
+
+.nc-momentum-heading p,
+.nc-tasks-card p {
+  margin: 2px 0 0;
+  color: var(--nc-text-muted);
+  font-size: 13px;
+}
+
+.nc-momentum-icon,
+.nc-task-icon {
+  display: inline-flex;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid currentColor;
+  border-radius: 12px;
+  font-size: 24px;
+}
+
+.nc-learn .nc-momentum-icon { color: var(--nc-emerald); }
+.nc-move .nc-momentum-icon { color: var(--nc-moon-gold); }
+
+.nc-level-summary {
+  margin-left: auto;
+  color: var(--nc-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nc-level-summary.complete { color: var(--nc-emerald-strong); }
+.nc-move .nc-level-summary.complete { color: #f0d477; }
+
+.nc-path-label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  color: var(--nc-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.nc-path-label select {
+  width: 100%;
+  min-height: 44px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--nc-border);
+  border-radius: 8px;
+  color: var(--nc-text);
+  background: #0b1728;
+}
+
+.nc-level-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.nc-level-track > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  padding: 6px 2px;
+  border-top: 3px solid var(--nc-border);
+  color: var(--nc-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.nc-level-track > span.required { border-top-color: var(--nc-emerald); }
+.nc-move .nc-level-track > span.required { border-top-color: var(--nc-moon-gold); }
+.nc-level-track > span.achieved { border-top-color: var(--nc-emerald); color: var(--nc-emerald-strong); }
+.nc-move .nc-level-track > span.achieved { border-top-color: var(--nc-moon-gold); color: #f0d477; }
+
+.nc-level-track small {
+  max-width: 100%;
+  font-size: 8px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nc-progress-controls {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.nc-progress-row {
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nc-progress-row > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nc-progress-row strong { font-size: 12px; }
+.nc-progress-row span { color: var(--nc-text-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+
+.nc-momentum-empty {
+  margin: 12px 0 0;
+  color: var(--nc-text-muted);
+  font-size: 12px;
+}
+
+.nc-primary-action,
+.nc-secondary-action,
+.nc-compact-action,
+.nc-text-action {
+  min-height: 44px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nc-primary-action {
+  padding: 8px 14px;
+  border: 1px solid var(--nc-emerald);
+  color: #06150f;
+  background: var(--nc-emerald);
+}
+
+.nc-secondary-action,
+.nc-compact-action {
+  padding: 8px 14px;
+  border: 1px solid var(--nc-border);
+  color: var(--nc-text);
+  background: #0b1728;
+}
+
+.nc-compact-action {
+  flex: 0 0 auto;
+  min-height: 36px;
+}
+
+.nc-primary-action:hover,
+.nc-secondary-action:hover,
+.nc-compact-action:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.nc-primary-action:disabled,
+.nc-secondary-action:disabled,
+.nc-compact-action:disabled,
+.nc-path-label select:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.nc-reset-row {
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: auto;
+  color: var(--nc-text-muted);
+  font-size: 10px;
+}
+
+.nc-text-action {
+  min-height: 36px;
+  padding: 4px 0;
+  border: 0;
+  color: #b7c7da;
+  background: transparent;
+}
+
+.nc-text-action.danger { color: #ff9696; }
+
+.nc-inline-error {
+  margin: 8px 0 0;
+  color: #ffadad;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.nc-saving-status {
+  position: absolute;
+  right: 20px;
+  bottom: 8px;
+  color: var(--nc-text-muted);
+  font-size: 9px;
+}
+
+.nc-tasks-card {
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 76px;
+  padding: 16px;
+  border-radius: 14px;
+}
+
+.nc-tasks-copy {
+  flex: 1;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nc-task-icon {
+  color: #86aefc;
+  font-size: 22px;
+}
+
+.nc-task-preview {
+  flex: 1;
+  min-width: 0;
+  margin-left: 12px;
+  overflow: hidden;
+  color: #cbd5e2;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nc-dashboard :is(button, select):focus-visible {
+  outline: 2px solid var(--nc-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1024px) {
+  .nc-dashboard-body { padding-right: 20px; padding-left: 20px; }
+  .nc-dashboard { gap: 12px; }
+  .nc-prayer-card { min-height: 370px; padding: 20px; }
+  .nc-next-prayer { min-height: 150px; }
+  .nc-next-prayer strong { font-size: 38px; }
+  .nc-next-prayer time { font-size: 56px; }
+  .nc-momentum-grid { gap: 12px; }
+}
+
+@media (max-width: 900px) {
+  .nc-momentum-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .nc-dashboard-body { padding: 16px; }
+  .nc-prayer-card { min-height: 0; padding: 16px; }
+  .nc-prayer-heading { align-items: flex-start; }
+  .nc-prayer-location { max-width: 45%; text-align: right; overflow-wrap: anywhere; }
+  .nc-next-prayer { min-height: 154px; }
+  .nc-next-prayer strong { font-size: 32px; }
+  .nc-next-prayer time { font-size: 48px; }
+  .nc-celestial-arc { top: 68px; left: 6%; width: 88%; height: 30%; }
+  .nc-celestial i { display: none; }
+  .nc-prayer-sequence { gap: 4px; }
+  .nc-prayer-item { min-height: 108px; padding: 8px 2px; border-radius: 9px; }
+  .nc-prayer-name { font-size: 11px; }
+  .nc-prayer-arabic { display: none; }
+  .nc-prayer-item time { font-size: 13px; }
+  .nc-prayer-state { font-size: 9px; }
+  .nc-prayer-repair { grid-template-columns: 1fr; }
+  .nc-prayer-repair span,
+  .nc-prayer-repair .nc-primary-action { grid-column: 1; grid-row: auto; }
+  .nc-prayer-repair .nc-primary-action { width: 100%; margin-top: 6px; }
+  .nc-momentum-grid { grid-template-columns: 1fr; }
+  .nc-momentum-card { padding: 16px; }
+  .nc-level-summary { max-width: 100px; white-space: normal; text-align: right; }
+  .nc-path-label { grid-template-columns: 1fr; gap: 6px; }
+  .nc-progress-row { align-items: flex-end; }
+  .nc-tasks-card { align-items: stretch; flex-direction: column; }
+  .nc-task-preview { margin-left: 0; }
+  .nc-secondary-action { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nc-dashboard *,
+  .nc-dashboard *::before,
+  .nc-dashboard *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .nc-celestial { display: none; }
+  .nc-prayer-card,
+  .nc-momentum-card,
+  .nc-tasks-card,
+  .nc-prayer-item { forced-color-adjust: auto; }
+}
 .prayer-stat-name {
   font-size: 12px;
   font-weight: 500;

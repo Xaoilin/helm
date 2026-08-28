@@ -8,7 +8,7 @@ test.describe('Navigation', () => {
   });
 
   test('should load dashboard by default', async ({ page }) => {
-    await expect(page.locator('text=Good morning').or(page.locator('text=Good afternoon').or(page.locator('text=Good evening')))).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Night Compass' })).toBeVisible();
   });
 
   test('@smoke should navigate to key surfaces via sidebar', async ({ page }) => {
@@ -33,7 +33,7 @@ test.describe('Navigation', () => {
     await page.getByRole('button', { name: 'Navigate to Settings' }).click();
     await expect(page.locator('h1:has-text("Settings")')).toBeVisible();
     await page.getByRole('button', { name: 'Navigate to Dashboard' }).click();
-    await expect(page.locator('text=Good morning').or(page.locator('text=Good afternoon').or(page.locator('text=Good evening')))).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Night Compass' })).toBeVisible();
   });
 
   test('should restore the Trips surface after a browser reload', async ({ page }) => {

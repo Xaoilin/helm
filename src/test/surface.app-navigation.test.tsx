@@ -101,7 +101,7 @@ describe('App surface navigation', () => {
     expect(requestCodeMock).not.toHaveBeenCalled();
   });
 
-  it('opens a recommended task into the Tasks surface with assistant reveal highlighting', async () => {
+  it('opens the compact second-order task queue without restoring generic ranking', async () => {
     localStorage.setItem('helm:tasks', JSON.stringify([
       {
         id: 'task-open-me',
@@ -121,11 +121,12 @@ describe('App surface navigation', () => {
     });
 
     await act(async () => {
-      fireEvent.click(await screen.findByRole('button', { name: 'Open task' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Open tasks' }));
     });
 
     expect(await screen.findByText('All Tasks')).toBeInTheDocument();
-    expect(screen.getByText('Send the invoice').closest('.assistant-focus')).not.toBeNull();
+    expect(screen.getByText('Send the invoice')).toBeInTheDocument();
+    expect(screen.getByText('Send the invoice').closest('.assistant-focus')).toBeNull();
   });
 
   it('supports assistant navigation to the Trips surface', async () => {
