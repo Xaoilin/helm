@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(38);
+select plan(44);
 
 select has_table('public', 'helm_records', 'account record table exists');
 select has_table('public', 'helm_account_state', 'account version table exists');
@@ -122,10 +122,39 @@ select is(
 
 select lives_ok(
   $$select public.apply_helm_mutations(
-    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
-    '[{"op":"create","collection":"gamification","recordId":"profile","payload":{"totalXp":10,"totalTasksCompleted":1}}]'::jsonb
+    'dddddddd-dddd-4ddd-8ddd-ddddddddddd1',
+    '[{"op":"create","collection":"prayerTracking","recordId":"meta","payload":{"schemaVersion":1,"trackingStartedAt":"2026-08-01T00:00:00.000Z"}}]'::jsonb
   )$$,
-  'counter fixture is created'
+  'prayer fixture is created independently'
+);
+
+select lives_ok(
+  $$select public.apply_helm_mutations(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
+    '[{"op":"create","collection":"gamification","recordId":"profile","payload":{"totalXp":10,"totalTasksCompleted":1,"dailyMomentumLearn":{"schemaVersion":1,"templates":[],"logs":{},"reminderPreferences":{"learn":{"enabled":false,"localTime":null},"move":{"enabled":false,"localTime":null}}},"dailyMomentumMove":{"schemaVersion":1,"templates":[],"logs":{},"reminderPreferences":{"learn":{"enabled":false,"localTime":null},"move":{"enabled":false,"localTime":null}}}}}]'::jsonb
+  )$$,
+  'daily momentum commits additively through the established profile record'
+);
+
+select is(
+  (select payload -> 'dailyMomentumLearn' ->> 'schemaVersion' from public.helm_records
+    where collection = 'gamification' and record_id = 'profile'),
+  '1',
+  'daily momentum round-trips through the account record table'
+);
+
+select is(
+  (select payload ->> 'title' from public.helm_records
+    where collection = 'tasks' and record_id = 'task-a'),
+  'A',
+  'daily momentum writes do not change task records'
+);
+
+select is(
+  (select payload ->> 'schemaVersion' from public.helm_records
+    where collection = 'prayerTracking' and record_id = 'meta'),
+  '1',
+  'daily momentum writes do not change prayer records'
 );
 
 select lives_ok(
@@ -149,6 +178,21 @@ select is(
     where collection = 'gamification' and record_id = 'profile'),
   15,
   'a retried increment is applied exactly once'
+);
+
+select lives_ok(
+  $$select public.apply_helm_mutations(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11',
+    '[{"op":"patch","collection":"gamification","recordId":"profile","set":{"totalXp":0,"totalTasksCompleted":0},"unset":["dailyMomentumLearn","dailyMomentumMove"]}]'::jsonb
+  )$$,
+  'a legacy gamification reset remains compatible'
+);
+
+select ok(
+  (select payload ? 'dailyMomentumLearn' and payload ? 'dailyMomentumMove'
+    from public.helm_records
+    where collection = 'gamification' and record_id = 'profile'),
+  'a legacy writer cannot erase reserved daily momentum fields'
 );
 
 select lives_ok(
@@ -268,7 +312,7 @@ select set_config(
 
 select is(
   jsonb_array_length(public.get_helm_account_snapshot() -> 'records'),
-  1005,
+  1006,
   'one RPC returns the complete account beyond the 1,000-row API cap'
 );
 select is(

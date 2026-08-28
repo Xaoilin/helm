@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HelmRealtimeEvent, HelmRecord } from '../store/databaseTypes';
+import {
+  createDefaultDailyMomentumState,
+  getDailyMomentumPillarState,
+} from '../services/dailyMomentum';
+import { DEFAULT_PROFILE } from '../services/gamification';
 
 const mocks = vi.hoisted(() => ({
   apply: vi.fn(),
@@ -39,6 +44,7 @@ import {
   refreshDatabasePersistence,
   resetDatabasePersistence,
   saveStore,
+  saveStoreRecordFieldsCommitted,
 } from '../store/persistence';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -256,6 +262,124 @@ describe('authenticated database persistence', () => {
       reason: 'offline',
     });
     expect(mocks.apply).not.toHaveBeenCalled();
+  });
+
+  it('commits daily momentum without changing task or prayer records', async () => {
+    const task = row('tasks', 'task-1', { id: 'task-1', title: 'Unchanged task' }, { position: 0 });
+    const prayer = row('prayerTracking', 'meta', {
+      schemaVersion: 1,
+      trackingStartedAt: '2026-08-01T00:00:00.000Z',
+    });
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([task, prayer]));
+    mocks.apply.mockImplementation(async (requestId: string, operations: Array<Record<string, unknown>>) => {
+      const operation = operations[0];
+      return {
+        requestId,
+        accountVersion: 2,
+        changes: [row(
+          'gamification',
+          'profile',
+          operation.payload as Record<string, unknown>,
+          { accountVersion: 2 },
+        )],
+      };
+    });
+    await bootstrapDatabasePersistence();
+    const tasksBefore = await loadStore('tasks');
+    const prayerBefore = await loadStore('prayerTracking');
+    const momentum = createDefaultDailyMomentumState();
+    const gamification = {
+      ...DEFAULT_PROFILE,
+      prayerCompletionLedger: {},
+      dailyMomentumLearn: getDailyMomentumPillarState(momentum, 'learn'),
+      dailyMomentumMove: getDailyMomentumPillarState(momentum, 'move'),
+    };
+
+    await saveStoreRecordFieldsCommitted('gamification', 'profile', {
+      dailyMomentumLearn: gamification.dailyMomentumLearn,
+    }, gamification);
+
+    expect(mocks.apply.mock.calls.at(-1)?.[1]).toEqual([{
+      op: 'create',
+      collection: 'gamification',
+      recordId: 'profile',
+      payload: {
+        totalXp: 0,
+        level: 1,
+        currentStreak: 0,
+        longestStreak: 0,
+        totalTasksCompleted: 0,
+        badges: [],
+        dailyMomentumLearn: gamification.dailyMomentumLearn,
+        dailyMomentumMove: gamification.dailyMomentumMove,
+      },
+      position: null,
+    }]);
+    await expect(loadStore('gamification')).resolves.toEqual(gamification);
+    await expect(loadStore('tasks')).resolves.toEqual(tasksBefore);
+    await expect(loadStore('prayerTracking')).resolves.toEqual(prayerBefore);
+  });
+
+  it('rejects committed daily momentum writes while the confirmed snapshot is offline read-only', async () => {
+    const momentum = createDefaultDailyMomentumState();
+    const confirmed = {
+      ...DEFAULT_PROFILE,
+      prayerCompletionLedger: {},
+      dailyMomentumLearn: getDailyMomentumPillarState(momentum, 'learn'),
+      dailyMomentumMove: getDailyMomentumPillarState(momentum, 'move'),
+    };
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([
+      row('gamification', 'profile', {
+        totalXp: confirmed.totalXp,
+        level: confirmed.level,
+        currentStreak: confirmed.currentStreak,
+        longestStreak: confirmed.longestStreak,
+        totalTasksCompleted: confirmed.totalTasksCompleted,
+        badges: confirmed.badges,
+        dailyMomentumLearn: confirmed.dailyMomentumLearn,
+        dailyMomentumMove: confirmed.dailyMomentumMove,
+      }),
+    ]));
+    await bootstrapDatabasePersistence();
+    window.dispatchEvent(new Event('offline'));
+
+    await expect(saveStoreRecordFieldsCommitted('gamification', 'profile', {
+      dailyMomentumLearn: { ...confirmed.dailyMomentumLearn, unknownAttemptedChange: true },
+    }, confirmed)).rejects.toThrow(/database session is ready/i);
+
+    expect(mocks.apply).not.toHaveBeenCalled();
+    await expect(loadStore('gamification')).resolves.toEqual(confirmed);
+  });
+
+  it('prevents ordinary stale gamification writers from replacing reserved momentum fields', async () => {
+    const momentum = createDefaultDailyMomentumState();
+    const learn = getDailyMomentumPillarState(momentum, 'learn');
+    const move = getDailyMomentumPillarState(momentum, 'move');
+    mocks.fetchSnapshot.mockResolvedValue(snapshot([
+      row('gamification', 'profile', {
+        totalXp: 0,
+        level: 1,
+        currentStreak: 0,
+        longestStreak: 0,
+        totalTasksCompleted: 0,
+        badges: [],
+        dailyMomentumLearn: learn,
+        dailyMomentumMove: move,
+      }),
+    ]));
+    await bootstrapDatabasePersistence();
+    await loadStore('gamification');
+
+    await saveStore('gamification', { ...DEFAULT_PROFILE, totalXp: 5 });
+    await flushPendingRemoteMutations();
+
+    expect(mocks.apply.mock.calls.at(-1)?.[1]).toEqual([{
+      op: 'increment',
+      collection: 'gamification',
+      recordId: 'profile',
+      field: 'totalXp',
+      amount: 5,
+    }]);
   });
 
   it('coalesces overlapping full refreshes without restarting a healthy realtime channel', async () => {

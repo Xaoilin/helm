@@ -141,6 +141,46 @@ async function runConcurrencyScenario() {
     $$;
   `)
 
+  await runAuthenticatedMutation(claims, `
+    select public.apply_helm_mutations(
+      'cccccccc-cccc-4ccc-8ccc-ccccccccccc7',
+      '[{"op":"create","collection":"gamification","recordId":"profile","payload":{"totalXp":0,"dailyMomentumLearn":{"schemaVersion":1,"templates":[],"logs":{},"reminderPreferences":{}},"dailyMomentumMove":{"schemaVersion":1,"templates":[],"logs":{},"reminderPreferences":{}}}}]'::jsonb
+    );
+  `)
+
+  await Promise.all([
+    runAuthenticatedMutation(claims, `
+      select public.apply_helm_mutations(
+        'cccccccc-cccc-4ccc-8ccc-ccccccccccc8',
+        '[{"op":"patch","collection":"gamification","recordId":"profile","set":{"dailyMomentumLearn":{"schemaVersion":1,"templates":[],"logs":{"2026-08-28:learn":{"progress":{"pages":2}}},"reminderPreferences":{}}}}]'::jsonb
+      );
+    `),
+    runAuthenticatedMutation(claims, `
+      select public.apply_helm_mutations(
+        'cccccccc-cccc-4ccc-8ccc-ccccccccccc9',
+        '[{"op":"patch","collection":"gamification","recordId":"profile","set":{"dailyMomentumMove":{"schemaVersion":1,"templates":[],"logs":{"2026-08-28:move":{"progress":{"active-minutes":5}}},"reminderPreferences":{}}}}]'::jsonb
+      );
+    `),
+  ])
+
+  await runSql(`
+    do $$
+    begin
+      if not exists (
+        select 1
+        from public.helm_records
+        where user_id = '${userId}'
+          and collection = 'gamification'
+          and record_id = 'profile'
+          and payload -> 'dailyMomentumLearn' -> 'logs' -> '2026-08-28:learn' -> 'progress' ->> 'pages' = '2'
+          and payload -> 'dailyMomentumMove' -> 'logs' -> '2026-08-28:move' -> 'progress' ->> 'active-minutes' = '5'
+      ) then
+        raise exception 'Concurrent daily momentum patches did not both survive.';
+      end if;
+    end
+    $$;
+  `)
+
   const beforeSnapshot = await runAuthenticatedSnapshot(claims)
   const snapshotWriterGate = await openSnapshotWriterGate()
   const snapshotWriter = runSql(`
@@ -184,7 +224,7 @@ async function runConcurrencyScenario() {
     throw new Error('The committed atomic snapshot was incomplete.')
   }
 
-  console.log('Concurrent database sessions: 6 assertions passed')
+  console.log('Concurrent database sessions: 7 assertions passed')
 }
 
 async function runAuthenticatedSnapshot(claims) {

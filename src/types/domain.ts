@@ -520,6 +520,72 @@ export interface Task {
   updatedAt: string;
 }
 
+// ── Daily Momentum ──
+export type DailyPillar = 'learn' | 'move';
+export type ProgressMetric = 'pages' | 'minutes' | 'rounds';
+export type DailyMomentumLevel = 1 | 2 | 3 | 4 | 5;
+
+export interface DailyActivityTargetStep {
+  id: string;
+  label: string;
+  metric: ProgressMetric;
+  amount: number;
+  [key: string]: unknown;
+}
+
+export interface DailyActivityLevelTarget {
+  level: DailyMomentumLevel;
+  steps: DailyActivityTargetStep[];
+  [key: string]: unknown;
+}
+
+export type DailyActivityLevelTargets = [
+  DailyActivityLevelTarget,
+  DailyActivityLevelTarget,
+  DailyActivityLevelTarget,
+  DailyActivityLevelTarget,
+  DailyActivityLevelTarget,
+];
+
+export interface DailyCircuitConfiguration {
+  /** User-authored exercise composition; defaults intentionally prescribe no exercises or reps. */
+  exercises: string[];
+  [key: string]: unknown;
+}
+
+export interface DailyActivityTemplate {
+  id: string;
+  pillar: DailyPillar;
+  label: string;
+  version: number;
+  levels: DailyActivityLevelTargets;
+  circuit?: DailyCircuitConfiguration;
+  [key: string]: unknown;
+}
+
+export interface DailyMomentumProgressLog {
+  date: string; // local YYYY-MM-DD
+  pillar: DailyPillar;
+  template: DailyActivityTemplate;
+  progress: Record<string, number>;
+  updatedAt: string;
+  [key: string]: unknown;
+}
+
+export interface DailyMomentumReminderPreference {
+  enabled: boolean;
+  localTime: string | null;
+  [key: string]: unknown;
+}
+
+export interface DailyMomentumState {
+  schemaVersion: number;
+  templates: DailyActivityTemplate[];
+  logs: Record<string, DailyMomentumProgressLog>;
+  reminderPreferences: Record<DailyPillar, DailyMomentumReminderPreference>;
+  [key: string]: unknown;
+}
+
 // ── Prayer Tracking ──
 export type PrayerCompletionStatus = 'on_time' | 'late';
 export type PrayerOutcomeStatus = PrayerCompletionStatus | 'missed' | 'unclassified';
@@ -871,6 +937,9 @@ export interface GamificationProfile {
   dailyLog?: Record<string, string[]>;
   /** Durable prayer mutation receipts, keyed by local date + prayer. */
   prayerCompletionLedger?: Record<string, PrayerCompletionLedgerEntry>;
+  /** Additive pillar records kept in older-reader-tolerant profile fields. */
+  dailyMomentumLearn?: DailyMomentumState;
+  dailyMomentumMove?: DailyMomentumState;
 }
 
 // ── Assistant Activity ──

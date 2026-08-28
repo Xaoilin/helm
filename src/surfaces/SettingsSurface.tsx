@@ -600,7 +600,15 @@ export default function SettingsSurface() {
               <button
                 className="btn btn-danger btn-sm"
                 onClick={() => {
-                  app.updateGamification({ ...DEFAULT_PROFILE });
+                  app.updateGamification({
+                    ...DEFAULT_PROFILE,
+                    ...(app.gamification.dailyMomentumLearn
+                      ? { dailyMomentumLearn: app.gamification.dailyMomentumLearn }
+                      : {}),
+                    ...(app.gamification.dailyMomentumMove
+                      ? { dailyMomentumMove: app.gamification.dailyMomentumMove }
+                      : {}),
+                  });
                   prayer.replacePrayerTracking(createPrayerTrackingState());
                   setConfirmReset(false);
                 }}
