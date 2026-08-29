@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "private": true,
-  "version": "0.2.122",
+  "version": "0.2.123",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
@@ -45,9 +45,12 @@
     "openwakeword-wasm-browser": "^0.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "three": "^0.185.1",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@emnapi/core": "^2.0.0-alpha.3",
+    "@emnapi/runtime": "^2.0.0-alpha.3",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
     "@testing-library/jest-dom": "^6.9.1",

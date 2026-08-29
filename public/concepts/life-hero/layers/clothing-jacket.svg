@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 520" role="img" aria-labelledby="title">
+  <title id="title">Life Hero field jacket source layer</title>
+  <g stroke="#07111f" stroke-linejoin="round" stroke-width="5">
+    <path fill="#2b3850" d="M141 164l-31 20 14 102 41 19 15-119z"/>
+    <path fill="#34445e" d="M219 164l31 20-14 102-41 19-15-119z"/>
+    <path fill="#d0aa73" d="M141 164l39 22-22 31-30-36zm78 0-39 22 22 31 30-36z"/>
+    <path fill="#243149" d="M124 274l41 16-8 54-32 24zm112 0-41 16 8 54 32 24z"/>
+    <path fill="none" stroke="#71819a" stroke-width="3" d="M142 230h22m32 0h22"/>
+  </g>
+</svg>
