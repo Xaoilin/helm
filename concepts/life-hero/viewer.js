@@ -8,12 +8,15 @@ const state = {
   activeAction: null,
   activeClip: 'Idle_02',
   animationSpeed: 1,
+  base: null,
   jacket: null,
   loaded: false,
   loading: false,
   mixer: null,
+  modelBox: null,
   root: null,
   static: stage.dataset.motionMode === 'static',
+  view: 'full',
 }
 let renderer
 let scene
@@ -36,7 +39,7 @@ function initialiseRenderer() {
   const key = new THREE.DirectionalLight(0xfff0d0, 2.6)
   key.position.set(3, 5, 4)
   scene.add(key)
-  const rim = new THREE.DirectionalLight(0x56e0d3, 1.4)
+  const rim = new THREE.DirectionalLight(0x91a8be, 0.65)
   rim.position.set(-4, 3, -3)
   scene.add(rim)
   clock = new THREE.Clock()
@@ -55,13 +58,93 @@ function frameModel(root) {
   root.updateMatrixWorld(true)
   const box = new THREE.Box3().setFromObject(root)
   const size = box.getSize(new THREE.Vector3())
-  const center = box.getCenter(new THREE.Vector3())
   const height = Math.max(size.y, 0.01)
+  state.modelBox = box
   camera.near = Math.max(height / 500, 0.0001)
   camera.far = height * 20
-  camera.position.set(center.x, center.y + height * 0.03, center.z + height * 2.8)
-  camera.lookAt(center.x, center.y + height * 0.02, center.z)
+  setView(state.view)
+}
+
+function getHandBounds(boneName) {
+  const base = state.base
+  if (!base?.isSkinnedMesh) return null
+  const boneIndex = base.skeleton.bones.findIndex(bone => bone.name === boneName)
+  const positionAttribute = base.geometry.getAttribute('position')
+  const skinIndexAttribute = base.geometry.getAttribute('skinIndex')
+  const skinWeightAttribute = base.geometry.getAttribute('skinWeight')
+  if (boneIndex < 0 || !positionAttribute || !skinIndexAttribute || !skinWeightAttribute) return null
+
+  const box = new THREE.Box3()
+  const point = new THREE.Vector3()
+  const components = ['x', 'y', 'z', 'w']
+  base.updateMatrixWorld(true)
+  for (let vertex = 0; vertex < positionAttribute.count; vertex += 1) {
+    let handWeight = 0
+    for (let component = 0; component < 4; component += 1) {
+      const joint = skinIndexAttribute[`get${components[component].toUpperCase()}`](vertex)
+      if (joint === boneIndex) {
+        handWeight += skinWeightAttribute[`get${components[component].toUpperCase()}`](vertex)
+      }
+    }
+    if (handWeight < 0.35) continue
+    point.fromBufferAttribute(positionAttribute, vertex)
+    base.applyBoneTransform(vertex, point)
+    base.localToWorld(point)
+    box.expandByPoint(point)
+  }
+  return box.isEmpty() ? null : box
+}
+
+function setView(viewName) {
+  state.view = viewName
+  if (!state.root || !state.modelBox || !camera) return false
+  state.root.updateMatrixWorld(true)
+  const size = state.modelBox.getSize(new THREE.Vector3())
+  const center = state.modelBox.getCenter(new THREE.Vector3())
+  const height = Math.max(size.y, 0.01)
+  const target = center.clone()
+  const position = center.clone()
+  camera.fov = 30
+
+  if (viewName === 'face-front' || viewName === 'face-three-quarter') {
+    const head = state.root.getObjectByName('Head')
+    if (!head) return false
+    head.getWorldPosition(target)
+    target.y += height * 0.055
+    position.copy(target)
+    position.y += height * 0.015
+    position.z += height * 0.62
+    if (viewName === 'face-three-quarter') {
+      position.x += height * 0.28
+      position.z -= height * 0.04
+    }
+    camera.fov = 27
+  } else if (viewName === 'left-hand' || viewName === 'right-hand') {
+    const boneName = viewName === 'left-hand' ? 'LeftHand' : 'RightHand'
+    const handBox = getHandBounds(boneName)
+    if (!handBox) return false
+    handBox.getCenter(target)
+    const handSize = handBox.getSize(new THREE.Vector3())
+    camera.fov = 27
+    const handExtent = Math.max(handSize.x, handSize.y, handSize.z)
+    const distance = Math.max(
+      handExtent / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.35,
+      height * 0.24,
+    )
+    position.copy(target)
+    position.x += (viewName === 'left-hand' ? -1 : 1) * distance * 0.16
+    position.y += distance * 0.04
+    position.z += distance
+  } else {
+    target.y += height * 0.02
+    position.set(center.x, center.y + height * 0.03, center.z + height * 2.8)
+  }
+
+  camera.position.copy(position)
+  camera.lookAt(target)
   camera.updateProjectionMatrix()
+  if (renderer) renderer.render(scene, camera)
+  return true
 }
 
 function renderLoop() {
@@ -110,8 +193,17 @@ async function ensureLoaded() {
     if (!base?.isSkinnedMesh || !jacket?.isSkinnedMesh || base.skeleton !== jacket.skeleton) {
       throw new Error('base and jacket are not separate skinned meshes on one skeleton')
     }
+    const jacketMaterials = Array.isArray(jacket.material) ? jacket.material : [jacket.material]
+    for (const material of jacketMaterials) {
+      material.polygonOffset = true
+      material.polygonOffsetFactor = -1
+      material.polygonOffsetUnits = -1
+      material.needsUpdate = true
+    }
+    jacket.renderOrder = 1
     gltf.scene.animations = gltf.animations
     state.root = gltf.scene
+    state.base = base
     state.jacket = jacket
     state.mixer = new THREE.AnimationMixer(gltf.scene)
     scene.add(gltf.scene)
@@ -147,6 +239,7 @@ function setSampleTime(seconds) {
   state.activeAction.paused = true
   state.activeAction.time = Math.max(0, seconds) % state.activeAction.getClip().duration
   state.mixer.update(0)
+  setView(state.view)
   renderer.render(scene, camera)
   return true
 }
@@ -158,11 +251,13 @@ window.lifeHeroViewer = {
     jacketVisible: state.jacket?.visible ?? null,
     loaded: state.loaded,
     static: state.static,
+    view: state.view,
   }),
   setJacketVisible,
   setMotion,
   setSampleTime,
   setStatic,
+  setView,
 }
 window.addEventListener('resize', resize)
 new ResizeObserver(resize).observe(canvas)

@@ -134,8 +134,8 @@
           <p class="eyebrow">Sabah One / Life Hero / Animated GLB proof</p>
           <h1 id="concept-title">A real hero, a separate jacket</h1>
           <p class="lede">
-            This approval artifact renders an actual rigged GLB with a higher-detail neutral body,
-            one separately skinned jacket, and four embedded clips. It is an honest pipeline proof,
+            This approval artifact renders an actual native same-body rig with a high-detail neutral body,
+            one separately skinned graphite jacket, and four embedded clips. It is an honest pipeline proof,
             not the production wardrobe system or final 3D rig.
           </p>
         </div>
@@ -147,7 +147,7 @@
           <header class="lab-heading">
             <p class="card-label">Runtime proof</p>
             <h2 id="lab-title">One skeleton, two skinned mesh nodes</h2>
-            <p>The rust jacket toggles without regenerating, replacing, or changing the complete neutral body.</p>
+            <p>The fitted graphite jacket toggles without regenerating, replacing, or changing the complete neutral body.</p>
           </header>
           <div class="lab-workspace">
             <div class="avatar-stage" data-testid="avatar-stage" data-motion-mode="animated" data-model-state="loading" data-jacket-visible="true" data-active-clip="Idle_02" aria-label="Rigged Life Hero GLB proof">
@@ -163,7 +163,7 @@
                   <img class="fallback-layer" src="./layers/gear-training-sash.svg" alt="" data-source-layer="training-sash" hidden />
                   <img class="fallback-layer" src="./layers/gear-cuff.svg" alt="" data-source-layer="progress-cuff" />
                 </div>
-                <div class="viewer-loading" data-testid="viewer-status" role="status">Loading the 28 MB local GLB proof…</div>
+                <div class="viewer-loading" data-testid="viewer-status" role="status">Loading the 15 MB local GLB proof…</div>
               </div>
               <div class="motion-readout">
                 <strong id="motion-name">Idle</strong>
@@ -176,7 +176,7 @@
                 <h3 id="jacket-control-title">Actual GLB clothing</h3>
                 <p class="control-help">This controls the separate <code>LifeHero_Jacket</code> skinned node.</p>
                 <div class="control-grid">
-                  <button class="toggle-button" type="button" aria-pressed="true" data-layer-toggle="field-jacket">Rust jacket · GLB</button>
+                  <button class="toggle-button" type="button" aria-pressed="true" data-layer-toggle="field-jacket">Graphite jacket · GLB</button>
                 </div>
                 <p class="control-status" id="jacket-status" data-testid="jacket-status" aria-live="polite">Jacket mesh visible; neutral body unchanged.</p>
               </section>
@@ -191,6 +191,19 @@
                   <button class="toggle-button" type="button" aria-pressed="false" data-motion="train">Train</button>
                   <button class="toggle-button" type="button" aria-pressed="false" data-motion="tired">Low momentum</button>
                 </div>
+              </section>
+
+              <section class="control-group" aria-labelledby="inspection-controls-title">
+                <h3 id="inspection-controls-title">Inspection view</h3>
+                <p class="control-help">Move between exact review framings without hiding the character.</p>
+                <div class="control-grid">
+                  <button class="toggle-button" type="button" aria-pressed="true" data-camera-view="full">Full body</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-camera-view="face-front">Face front</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-camera-view="face-three-quarter">Face ¾</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-camera-view="left-hand">Left hand</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-camera-view="right-hand">Right hand</button>
+                </div>
+                <p class="control-status" id="view-status" data-testid="view-status" aria-live="polite">Full-body inspection view.</p>
               </section>
 
               <section class="control-group" aria-labelledby="motion-preference-title">
@@ -223,7 +236,7 @@
               </section>
 
               <div class="proof-note">
-                The 28 MB GLB is project-bound approval evidence. The viewer is lightweight proof code,
+                The 15 MB GLB is project-bound approval evidence. The viewer is lightweight proof code,
                 not a production engine decision or production dashboard integration.
               </div>
             </div>
@@ -238,8 +251,8 @@
               <p>Binary glTF 2.0; both mesh nodes bind to skin 0.</p>
             </header>
             <ul class="structure-list">
-              <li><strong>29,410</strong><span>base vertices</span></li>
-              <li><strong>6,198</strong><span>jacket vertices</span></li>
+              <li><strong>105,568</strong><span>native base vertices</span></li>
+              <li><strong>31,604</strong><span>jacket vertices</span></li>
               <li><strong>24</strong><span>shared joints</span></li>
               <li><strong>4</strong><span>embedded clips</span></li>
             </ul>
@@ -331,9 +344,11 @@
       const layerStatus = document.querySelector('[data-testid="layer-status"]');
       const motionName = document.querySelector('#motion-name');
       const motionModeStatus = document.querySelector('[data-testid="motion-mode-status"]');
+      const viewStatus = document.querySelector('[data-testid="view-status"]');
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       let selectedMotionMode = reducedMotion.matches ? 'static' : 'animated';
       let selectedMotion = 'idle';
+      let selectedView = 'full';
       let jacketVisible = true;
       const motionContract = {
         idle: { label: 'Idle', clip: 'Idle_02', speed: 1 },
@@ -341,6 +356,13 @@
         focus: { label: 'Focus', clip: 'Walking', speed: 0.72 },
         train: { label: 'Train', clip: 'Running', speed: 0.82 },
         tired: { label: 'Low momentum', clip: 'Idle_02', speed: 0.48 },
+      };
+      const viewLabels = {
+        full: 'Full-body inspection view.',
+        'face-front': 'Front face close-up.',
+        'face-three-quarter': 'Three-quarter face close-up.',
+        'left-hand': 'Left-hand close-up.',
+        'right-hand': 'Right-hand close-up.',
       };
 
       const updateLayerStatus = () => {
@@ -390,6 +412,17 @@
         });
       });
 
+      document.querySelectorAll('[data-camera-view]').forEach(button => {
+        button.addEventListener('click', () => {
+          selectedView = button.dataset.cameraView;
+          document.querySelectorAll('[data-camera-view]').forEach(candidate => {
+            candidate.setAttribute('aria-pressed', String(candidate === button));
+          });
+          window.lifeHeroViewer?.setView(selectedView);
+          viewStatus.textContent = viewLabels[selectedView];
+        });
+      });
+
       const applyMotionMode = () => {
         const systemStatic = reducedMotion.matches;
         const effectiveMode = systemStatic ? 'static' : selectedMotionMode;
@@ -398,6 +431,9 @@
           const selected = button.dataset.motionModeChoice === effectiveMode;
           button.setAttribute('aria-pressed', String(selected));
           button.disabled = systemStatic && button.dataset.motionModeChoice === 'animated';
+        });
+        document.querySelectorAll('[data-camera-view]').forEach(button => {
+          button.disabled = effectiveMode === 'static';
         });
         window.lifeHeroViewer?.setStatic(effectiveMode === 'static');
         const state = motionContract[selectedMotion];
@@ -424,6 +460,7 @@
         stage.dataset.modelState = stage.dataset.motionMode === 'static' ? 'fallback' : 'ready';
         viewerStatus.textContent = 'Local modular GLB ready.';
         window.lifeHeroViewer.setJacketVisible(jacketVisible);
+        window.lifeHeroViewer.setView(selectedView);
         applyMotion();
       });
       window.addEventListener('life-hero-viewer-fallback', event => {

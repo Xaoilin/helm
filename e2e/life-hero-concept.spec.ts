@@ -37,9 +37,10 @@ test.describe('Life Hero modular GLB proof', () => {
     ]);
     expect(inspection.summary.animations.map(animation => animation.name)).toEqual(REQUIRED_LIFE_HERO_CLIPS);
     expect(inspection.meshGeometry).toEqual([
-      expect.objectContaining({ name: 'LifeHero_BaseBody', vertices: 29_410, triangles: 31_045 }),
-      expect.objectContaining({ name: 'LifeHero_Jacket', vertices: 6_198, triangles: 8_256 }),
+      expect.objectContaining({ name: 'LifeHero_BaseBody', vertices: 105_568, triangles: 174_754 }),
+      expect.objectContaining({ name: 'LifeHero_Jacket', vertices: 31_604, triangles: 56_420 }),
     ]);
+    expect(inspection.jacketWeightCopiesVerified).toBe(true);
   });
 
   test('renders the actual GLB and toggles the jacket without replacing the body', async ({ page }) => {
@@ -57,7 +58,7 @@ test.describe('Life Hero modular GLB proof', () => {
       static: false,
     });
 
-    const jacketButton = page.getByRole('button', { name: 'Rust jacket · GLB', exact: true });
+    const jacketButton = page.getByRole('button', { name: 'Graphite jacket · GLB', exact: true });
     const stageBeforeToggle = await page.getByTestId('avatar-stage').boundingBox();
     await jacketButton.focus();
     await page.keyboard.press('Enter');
@@ -74,6 +75,17 @@ test.describe('Life Hero modular GLB proof', () => {
 
     await page.keyboard.press('Enter');
     await expect.poll(() => readViewerState(page)).toMatchObject({ jacketVisible: true, loaded: true });
+
+    for (const [buttonName, view] of [
+      ['Face front', 'face-front'],
+      ['Face ¾', 'face-three-quarter'],
+      ['Left hand', 'left-hand'],
+      ['Right hand', 'right-hand'],
+      ['Full body', 'full'],
+    ] as const) {
+      await page.getByRole('button', { name: buttonName, exact: true }).click();
+      await expect.poll(() => readViewerState(page)).toMatchObject({ view });
+    }
   });
 
   test('selects every concept motion through the preserved embedded clips', async ({ page }) => {
@@ -121,7 +133,7 @@ test.describe('Life Hero modular GLB proof', () => {
     await page.goto(CONCEPT_PATH);
     await waitForModel(page);
 
-    await page.getByRole('button', { name: 'Rust jacket · GLB', exact: true }).click();
+    await page.getByRole('button', { name: 'Graphite jacket · GLB', exact: true }).click();
     await page.getByRole('button', { name: 'Focus', exact: true }).click();
     await expect(page.getByTestId('avatar-stage')).toHaveAttribute('data-active-clip', 'Walking');
     await expect.poll(() => readViewerState(page)).toMatchObject({ jacketVisible: false, activeClip: 'Walking' });
@@ -136,7 +148,7 @@ test.describe('Life Hero modular GLB proof', () => {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollBefore);
   });
 
-  test('@visual captures KAN-257 GLB, jacket-motion, mobile, and fallback evidence', async ({ page }) => {
+  test('@visual captures KAN-257 anatomy, jacket, motion, mobile, and fallback evidence', async ({ page }) => {
     test.skip(process.env.HELM_E2E_VISUAL_SURFACE !== 'life-hero', 'Life Hero visual capture only.');
 
     await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -155,14 +167,53 @@ test.describe('Life Hero modular GLB proof', () => {
     await page.getByTestId('avatar-stage').screenshot({
       path: path.join(EVIDENCE_DIRECTORY, 'life-hero-idle-jacket-frame.png'),
     });
+    await page.getByTestId('avatar-stage').screenshot({
+      path: path.join(EVIDENCE_DIRECTORY, 'life-hero-jacket-on.png'),
+    });
+
+    await page.getByRole('button', { name: 'Graphite jacket · GLB', exact: true }).click();
+    await page.getByTestId('avatar-stage').screenshot({
+      path: path.join(EVIDENCE_DIRECTORY, 'life-hero-jacket-off.png'),
+    });
+    await page.getByTestId('avatar-stage').screenshot({
+      path: path.join(EVIDENCE_DIRECTORY, 'life-hero-full-body.png'),
+    });
+
+    for (const [buttonName, fileName] of [
+      ['Face front', 'life-hero-face-front.png'],
+      ['Face ¾', 'life-hero-face-three-quarter.png'],
+    ] as const) {
+      await page.getByRole('button', { name: buttonName, exact: true }).click();
+      await page.getByTestId('avatar-stage').screenshot({
+        path: path.join(EVIDENCE_DIRECTORY, fileName),
+      });
+    }
 
     await page.getByRole('button', { name: 'Motivate', exact: true }).click();
     await page.evaluate(() => {
       const viewer = (window as typeof window & {
         lifeHeroViewer: { setSampleTime: (seconds: number) => boolean };
       }).lifeHeroViewer;
-      viewer.setSampleTime(0.95);
+      viewer.setSampleTime(6);
     });
+    await page.getByRole('button', { name: 'Left hand', exact: true }).click();
+    await page.getByTestId('avatar-stage').screenshot({
+      path: path.join(EVIDENCE_DIRECTORY, 'life-hero-left-hand.png'),
+    });
+
+    await page.evaluate(() => {
+      const viewer = (window as typeof window & {
+        lifeHeroViewer: { setSampleTime: (seconds: number) => boolean };
+      }).lifeHeroViewer;
+      viewer.setSampleTime(4.5);
+    });
+    await page.getByRole('button', { name: 'Right hand', exact: true }).click();
+    await page.getByTestId('avatar-stage').screenshot({
+      path: path.join(EVIDENCE_DIRECTORY, 'life-hero-right-hand.png'),
+    });
+
+    await page.getByRole('button', { name: 'Full body', exact: true }).click();
+    await page.getByRole('button', { name: 'Graphite jacket · GLB', exact: true }).click();
     await page.getByTestId('avatar-stage').screenshot({
       path: path.join(EVIDENCE_DIRECTORY, 'life-hero-cheer-jacket-frame.png'),
     });

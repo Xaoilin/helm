@@ -30,6 +30,39 @@ export async function inspectLifeHeroGlb(filePath) {
     }
   }
 
+  const basePrimitive = model.json.meshes?.[baseNode?.mesh]?.primitives?.[0]
+  const jacketPrimitive = model.json.meshes?.[jacketNode?.mesh]?.primitives?.[0]
+  let jacketWeightCopiesVerified = false
+  if (basePrimitive && jacketPrimitive) {
+    const sourceVertexAccessor = jacketPrimitive.attributes?._SOURCE_VERTEX
+    if (sourceVertexAccessor === undefined) {
+      errors.push('jacket must expose _SOURCE_VERTEX proof mapping')
+    } else {
+      const baseJoints = readAccessor(model, basePrimitive.attributes.JOINTS_0).values
+      const baseWeights = readAccessor(model, basePrimitive.attributes.WEIGHTS_0).values
+      const jacketJoints = readAccessor(model, jacketPrimitive.attributes.JOINTS_0).values
+      const jacketWeights = readAccessor(model, jacketPrimitive.attributes.WEIGHTS_0).values
+      const sourceVertices = readAccessor(model, sourceVertexAccessor).values
+      jacketWeightCopiesVerified = sourceVertices.every((sourceVertex, jacketVertex) => {
+        if (!Number.isInteger(sourceVertex) || sourceVertex < 0 || sourceVertex * 4 + 3 >= baseJoints.length) return false
+        for (let component = 0; component < 4; component += 1) {
+          const sourceOffset = sourceVertex * 4 + component
+          const jacketOffset = jacketVertex * 4 + component
+          if (jacketJoints[jacketOffset] !== baseJoints[sourceOffset]) return false
+          if (jacketWeights[jacketOffset] !== baseWeights[sourceOffset]) return false
+        }
+        return true
+      })
+      if (!jacketWeightCopiesVerified) {
+        errors.push('jacket JOINTS_0 and WEIGHTS_0 must exactly match mapped native body vertices')
+      }
+    }
+  }
+
+  if (model.json.asset?.extras?.schema !== 'life-hero-concept-glb/v2') {
+    errors.push('asset must expose the native same-body KAN-257 contract receipt')
+  }
+
   const meshGeometry = (model.json.meshes ?? []).map(mesh => {
     const primitive = mesh.primitives[0]
     const position = readAccessor(model, primitive.attributes.POSITION).accessor
@@ -50,6 +83,7 @@ export async function inspectLifeHeroGlb(filePath) {
     errors,
     summary,
     meshGeometry,
+    jacketWeightCopiesVerified,
     contract: model.json.asset?.extras ?? null,
   }
 }
