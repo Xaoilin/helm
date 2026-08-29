@@ -8,11 +8,21 @@ import { inspectGlbJson, readAccessor, readGlb, writeGlb } from './lib/glb.mjs'
 const REQUIRED_CLIPS = ['Idle_02', 'Motivational_Cheer', 'Running', 'Walking']
 const JOINT_COUNT = 24
 const MATERIAL_REGION_CLASSIFIER = 'native-joints-position-v1'
+const RENDER_NORMAL_ALGORITHM = 'angle-weighted-welded-v1'
+const RENDER_NORMAL_CREASE_DEGREES = 45
+const POSITION_WELD_EPSILON = 1e-5
 const BODY_REGION_ORDER = ['identity-texture', 'clean-skin', 'clean-underlayer', 'clean-shoes']
 const HEAD_JOINTS = new Set([21, 22, 23])
 const CLEAN_SKIN_JOINTS = new Set([14, 15, 18, 19, 20])
 const UPPER_ARM_JOINTS = new Set([13, 17])
 const SHOE_JOINTS = new Set([3, 4, 7, 8])
+const SKIN_COLOR = [0.54, 0.29, 0.15, 1]
+const UNDERLAYER_COLOR = [0.055, 0.065, 0.08, 1]
+const COLLAR_FADE_LOWER_Y = 1.413
+const COLLAR_FADE_UPPER_Y = 1.421
+const COLLAR_MAX_ABS_X = 0.2
+const COLLAR_MIN_Z = -0.15
+const COLLAR_MAX_Z = 0.05
 
 function parseArguments(argv) {
   const result = {}
@@ -64,6 +74,147 @@ function typedArray(componentType, values) {
   return new Constructor(values)
 }
 
+function accessorSha256(componentType, values) {
+  return createHash('sha256').update(typedBuffer(typedArray(componentType, values))).digest('hex')
+}
+
+function positionKey(positions, vertex) {
+  return [0, 1, 2]
+    .map(component => Math.round(positions[vertex * 3 + component] / POSITION_WELD_EPSILON))
+    .join(',')
+}
+
+function normalizedVector(values, offset) {
+  const length = Math.hypot(values[offset], values[offset + 1], values[offset + 2])
+  if (length <= Number.EPSILON) return [0, 1, 0]
+  return [values[offset] / length, values[offset + 1] / length, values[offset + 2] / length]
+}
+
+function vectorDot(left, right) {
+  return left[0] * right[0] + left[1] * right[1] + left[2] * right[2]
+}
+
+function cornerAngle(positions, centerVertex, leftVertex, rightVertex) {
+  const centerOffset = centerVertex * 3
+  const leftOffset = leftVertex * 3
+  const rightOffset = rightVertex * 3
+  const left = [
+    positions[leftOffset] - positions[centerOffset],
+    positions[leftOffset + 1] - positions[centerOffset + 1],
+    positions[leftOffset + 2] - positions[centerOffset + 2],
+  ]
+  const right = [
+    positions[rightOffset] - positions[centerOffset],
+    positions[rightOffset + 1] - positions[centerOffset + 1],
+    positions[rightOffset + 2] - positions[centerOffset + 2],
+  ]
+  const leftLength = Math.hypot(...left)
+  const rightLength = Math.hypot(...right)
+  if (leftLength <= Number.EPSILON || rightLength <= Number.EPSILON) return 0
+  return Math.acos(Math.max(-1, Math.min(1, vectorDot(left, right) / (leftLength * rightLength))))
+}
+
+function makeRenderedNormals(positions, sourceNormals, indices) {
+  const vertexCount = positions.length / 3
+  const groups = new Map()
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const key = positionKey(positions, vertex)
+    const vertices = groups.get(key) ?? []
+    vertices.push(vertex)
+    groups.set(key, vertices)
+  }
+
+  const creaseCosine = Math.cos(RENDER_NORMAL_CREASE_DEGREES * Math.PI / 180)
+  const vertexClusters = Array(vertexCount)
+  let multiVertexClusters = 0
+  let preservedCreaseGroups = 0
+  for (const vertices of groups.values()) {
+    const clusters = []
+    for (const vertex of vertices) {
+      const sourceNormal = normalizedVector(sourceNormals, vertex * 3)
+      let selected = null
+      let selectedDot = -1
+      for (const cluster of clusters) {
+        const referenceLength = Math.hypot(...cluster.reference)
+        const reference = cluster.reference.map(component => component / referenceLength)
+        const dot = vectorDot(sourceNormal, reference)
+        if (dot >= creaseCosine && dot > selectedDot) {
+          selected = cluster
+          selectedDot = dot
+        }
+      }
+      if (!selected) {
+        selected = { reference: [0, 0, 0], sum: [0, 0, 0], members: [] }
+        clusters.push(selected)
+      }
+      selected.reference[0] += sourceNormal[0]
+      selected.reference[1] += sourceNormal[1]
+      selected.reference[2] += sourceNormal[2]
+      selected.members.push(vertex)
+      vertexClusters[vertex] = selected
+    }
+    multiVertexClusters += clusters.filter(cluster => cluster.members.length > 1).length
+    if (clusters.length > 1) preservedCreaseGroups += 1
+  }
+
+  for (let index = 0; index < indices.length; index += 3) {
+    const triangle = [indices[index], indices[index + 1], indices[index + 2]]
+    const a = triangle[0] * 3
+    const b = triangle[1] * 3
+    const c = triangle[2] * 3
+    const left = [positions[b] - positions[a], positions[b + 1] - positions[a + 1], positions[b + 2] - positions[a + 2]]
+    const right = [positions[c] - positions[a], positions[c + 1] - positions[a + 1], positions[c + 2] - positions[a + 2]]
+    const face = [
+      left[1] * right[2] - left[2] * right[1],
+      left[2] * right[0] - left[0] * right[2],
+      left[0] * right[1] - left[1] * right[0],
+    ]
+    const faceLength = Math.hypot(...face)
+    if (faceLength <= Number.EPSILON) continue
+    const faceNormal = face.map(component => component / faceLength)
+    for (let corner = 0; corner < 3; corner += 1) {
+      const angle = cornerAngle(
+        positions,
+        triangle[corner],
+        triangle[(corner + 1) % 3],
+        triangle[(corner + 2) % 3],
+      )
+      const cluster = vertexClusters[triangle[corner]]
+      cluster.sum[0] += faceNormal[0] * angle
+      cluster.sum[1] += faceNormal[1] * angle
+      cluster.sum[2] += faceNormal[2] * angle
+    }
+  }
+
+  const rendered = new Float32Array(sourceNormals.length)
+  let changedVertices = 0
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const cluster = vertexClusters[vertex]
+    const length = Math.hypot(...cluster.sum)
+    const normal = length > Number.EPSILON
+      ? cluster.sum.map(component => component / length)
+      : normalizedVector(sourceNormals, vertex * 3)
+    const sourceNormal = normalizedVector(sourceNormals, vertex * 3)
+    if (vectorDot(sourceNormal, normal) < Math.cos(0.1 * Math.PI / 180)) changedVertices += 1
+    rendered.set(normal, vertex * 3)
+  }
+
+  return {
+    normals: rendered,
+    receipt: {
+      algorithm: RENDER_NORMAL_ALGORITHM,
+      creaseDegrees: RENDER_NORMAL_CREASE_DEGREES,
+      positionWeldEpsilon: POSITION_WELD_EPSILON,
+      duplicatePositionGroups: [...groups.values()].filter(vertices => vertices.length > 1).length,
+      multiVertexClusters,
+      preservedCreaseGroups,
+      changedVertices,
+      sourceNormalSha256: accessorSha256(5126, sourceNormals),
+      renderedNormalSha256: accessorSha256(5126, rendered),
+    },
+  }
+}
+
 function averageJointInfluence(vertices, jointIndexes, joints, weights) {
   let influence = 0
   for (const vertex of vertices) {
@@ -97,6 +248,49 @@ function splitBodyMaterialRegions(positions, joints, weights, indices) {
     regionIndices[region] = new Uint32Array(regionIndices[region])
   }
   return regionIndices
+}
+
+function makeSkinCollarColors(positions, skinIndices) {
+  const vertexCount = positions.length / 3
+  const skinVertices = new Set(skinIndices)
+  const colors = new Float32Array(vertexCount * 4)
+  let collarVertices = 0
+  let transitionVertices = 0
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const offset = vertex * 3
+    const x = positions[offset]
+    const y = positions[offset + 1]
+    const z = positions[offset + 2]
+    const eligible = skinVertices.has(vertex)
+      && Math.abs(x) <= COLLAR_MAX_ABS_X
+      && z >= COLLAR_MIN_Z
+      && z <= COLLAR_MAX_Z
+    let skinMix = 1
+    if (eligible && y < COLLAR_FADE_UPPER_Y) {
+      skinMix = Math.max(0, Math.min(1, (y - COLLAR_FADE_LOWER_Y) / (COLLAR_FADE_UPPER_Y - COLLAR_FADE_LOWER_Y)))
+      skinMix = skinMix * skinMix * (3 - 2 * skinMix)
+      collarVertices += 1
+      if (skinMix > 0 && skinMix < 1) transitionVertices += 1
+    }
+    const color = SKIN_COLOR.map((component, index) => (
+      index === 3 ? 1 : UNDERLAYER_COLOR[index] * (1 - skinMix) + component * skinMix
+    ))
+    colors.set(color, vertex * 4)
+  }
+  return {
+    colors,
+    receipt: {
+      algorithm: 'bounded-same-body-collar-fade-v3',
+      lowerY: COLLAR_FADE_LOWER_Y,
+      upperY: COLLAR_FADE_UPPER_Y,
+      maxAbsX: COLLAR_MAX_ABS_X,
+      minZ: COLLAR_MIN_Z,
+      maxZ: COLLAR_MAX_Z,
+      collarVertices,
+      transitionVertices,
+      treatment: 'existing same-body skin vertices below the bounded collar line fade to graphite without new geometry or overlap',
+    },
+  }
 }
 
 function cleanPbrMaterial(name, baseColorFactor, roughnessFactor) {
@@ -310,11 +504,14 @@ async function build({
   ]
 
   const bodyPositions = readAccessor(body, bodyPrimitive.attributes.POSITION).values
-  const bodyNormals = readAccessor(body, bodyPrimitive.attributes.NORMAL).values
+  const sourceBodyNormals = readAccessor(body, bodyPrimitive.attributes.NORMAL).values
   const bodyJoints = readAccessor(body, bodyPrimitive.attributes.JOINTS_0).values
   const bodyWeights = readAccessor(body, bodyPrimitive.attributes.WEIGHTS_0).values
   const bodyIndices = readAccessor(body, bodyPrimitive.indices).values
+  const inverseBindMatrices = readAccessor(body, body.json.skins[0].inverseBindMatrices).values
+  const renderedNormals = makeRenderedNormals(bodyPositions, sourceBodyNormals, bodyIndices)
   const bodyRegions = splitBodyMaterialRegions(bodyPositions, bodyJoints, bodyWeights, bodyIndices)
+  const collarTransition = makeSkinCollarColors(bodyPositions, bodyRegions['clean-skin'])
   const originalBodyMaterial = clone(json.materials?.[bodyPrimitive.material ?? 0] ?? {})
   const identityPbr = clone(originalBodyMaterial.pbrMetallicRoughness ?? {})
   identityPbr.baseColorFactor = [1, 1, 1, 1]
@@ -327,8 +524,8 @@ async function build({
       pbrMetallicRoughness: identityPbr,
       extras: { region: 'head-face-hair', source: 'paid-native-texture', emissiveRemoved: true },
     },
-    cleanPbrMaterial('LifeHero_CleanSkin', [0.54, 0.29, 0.15, 1], 0.76),
-    cleanPbrMaterial('LifeHero_CleanUnderlayer', [0.055, 0.065, 0.08, 1], 0.9),
+    cleanPbrMaterial('LifeHero_CleanSkin', [1, 1, 1, 1], 0.76),
+    cleanPbrMaterial('LifeHero_CleanUnderlayer', UNDERLAYER_COLOR, 0.9),
     cleanPbrMaterial('LifeHero_CleanShoes', [0.025, 0.03, 0.04, 1], 0.8),
   ]
   json.extensionsUsed = (json.extensionsUsed ?? []).filter(extension => (
@@ -350,9 +547,15 @@ async function build({
     region,
     appendAccessor(bodyRegions[region], 5125, 'SCALAR', 34963),
   ]))
+  const renderedNormalAccessor = appendAccessor(renderedNormals.normals, 5126, 'VEC3', 34962)
+  const skinColorAccessor = appendAccessor(collarTransition.colors, 5126, 'VEC4', 34962)
   const sharedBodyAttributes = clone(bodyPrimitive.attributes)
+  sharedBodyAttributes.NORMAL = renderedNormalAccessor
   json.meshes[0].primitives = BODY_REGION_ORDER.map(region => ({
-    attributes: clone(sharedBodyAttributes),
+    attributes: {
+      ...clone(sharedBodyAttributes),
+      ...(region === 'clean-skin' ? { COLOR_0: skinColorAccessor } : {}),
+    },
     indices: bodyRegionIndexAccessor[region],
     material: bodyRegionMaterialIndex[region],
     mode: bodyPrimitive.mode ?? 4,
@@ -363,7 +566,7 @@ async function build({
     },
   }))
 
-  const jacket = makeJacket(bodyPositions, bodyNormals, bodyJoints, bodyWeights, bodyIndices)
+  const jacket = makeJacket(bodyPositions, renderedNormals.normals, bodyJoints, bodyWeights, bodyIndices)
   const jacketBounds = bounds(jacket.positions)
   const jacketPositionAccessor = appendAccessor(jacket.positions, 5126, 'VEC3', 34962, jacketBounds.minimum, jacketBounds.maximum)
   const jacketNormalAccessor = appendAccessor(jacket.normals, 5126, 'VEC3', 34962)
@@ -414,7 +617,7 @@ async function build({
   parentNode.children.push(jacketNodeIndex)
 
   json.asset.extras = {
-    schema: 'life-hero-concept-glb/v3',
+    schema: 'life-hero-concept-glb/v4',
     scope: 'KAN-257 approval proof; not production wardrobe readiness',
     bodySourceSha256: bodyHash,
     nativeIdleSourceSha256: idleHash,
@@ -429,6 +632,19 @@ async function build({
       regions: BODY_REGION_ORDER,
       identity: 'paid native texture retained only for head, face, and hair with emissive disabled',
       cleanPbr: 'skin, neutral underlayer, shoes, and graphite jacket use texture-free rough PBR materials',
+      necklineTransition: collarTransition.receipt,
+    },
+    normalSmoothing: {
+      ...renderedNormals.receipt,
+      sourceNormalAccessor: bodyPrimitive.attributes.NORMAL,
+      renderedNormalAccessor,
+      boundaryRule: 'weld only position-identical vertices whose source normals remain within the crease threshold',
+    },
+    immutableAccessors: {
+      positionSha256: accessorSha256(5126, bodyPositions),
+      jointsSha256: accessorSha256(body.json.accessors[bodyPrimitive.attributes.JOINTS_0].componentType, bodyJoints),
+      weightsSha256: accessorSha256(5126, bodyWeights),
+      inverseBindMatricesSha256: accessorSha256(5126, inverseBindMatrices),
     },
   }
 
@@ -446,6 +662,8 @@ async function build({
     bodyVertices: bodyPositions.length / 3,
     bodyTriangles: bodyIndices.length / 3,
     bodyMaterialRegions: Object.fromEntries(BODY_REGION_ORDER.map(region => [region, bodyRegions[region].length / 3])),
+    normalSmoothing: renderedNormals.receipt,
+    necklineTransition: collarTransition.receipt,
     jacketVertices: jacket.positions.length / 3,
     jacketTriangles: jacket.indices.length / 3,
     jacketOutwardOffset: jacket.outwardOffset,

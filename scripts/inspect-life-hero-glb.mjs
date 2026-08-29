@@ -11,11 +11,70 @@ const REQUIRED_BODY_MATERIAL_REGIONS = [
   ['clean-underlayer', 'LifeHero_CleanUnderlayer', false],
   ['clean-shoes', 'LifeHero_CleanShoes', false],
 ]
+const CORE_BODY_ATTRIBUTES = ['POSITION', 'NORMAL', 'TEXCOORD_0', 'JOINTS_0', 'WEIGHTS_0']
 
 function hasVisibleEmissive(material) {
   return Boolean(material?.emissiveTexture !== undefined
     || material?.emissiveFactor?.some(component => component !== 0)
   )
+}
+
+function angleDegrees(left, leftOffset, right, rightOffset) {
+  const leftLength = Math.hypot(left[leftOffset], left[leftOffset + 1], left[leftOffset + 2])
+  const rightLength = Math.hypot(right[rightOffset], right[rightOffset + 1], right[rightOffset + 2])
+  if (leftLength <= Number.EPSILON || rightLength <= Number.EPSILON) return 0
+  const dot = (
+    left[leftOffset] * right[rightOffset]
+    + left[leftOffset + 1] * right[rightOffset + 1]
+    + left[leftOffset + 2] * right[rightOffset + 2]
+  ) / (leftLength * rightLength)
+  return Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI
+}
+
+function percentile(values, fraction) {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((left, right) => left - right)
+  return sorted[Math.floor((sorted.length - 1) * fraction)]
+}
+
+function analyseNormalContinuity(positions, sourceNormals, renderedNormals, creaseDegrees, epsilon) {
+  const groups = new Map()
+  for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+    const key = [0, 1, 2]
+      .map(component => Math.round(positions[vertex * 3 + component] / epsilon))
+      .join(',')
+    const vertices = groups.get(key) ?? []
+    vertices.push(vertex)
+    groups.set(key, vertices)
+  }
+  const sourceWeldable = []
+  const renderedWeldable = []
+  const renderedHardEdges = []
+  for (const vertices of groups.values()) {
+    if (vertices.length < 2) continue
+    for (let left = 0; left < vertices.length; left += 1) {
+      for (let right = left + 1; right < vertices.length; right += 1) {
+        const sourceAngle = angleDegrees(sourceNormals, vertices[left] * 3, sourceNormals, vertices[right] * 3)
+        const renderedAngle = angleDegrees(renderedNormals, vertices[left] * 3, renderedNormals, vertices[right] * 3)
+        if (sourceAngle <= creaseDegrees) {
+          sourceWeldable.push(sourceAngle)
+          renderedWeldable.push(renderedAngle)
+        } else if (sourceAngle >= creaseDegrees + 10) {
+          renderedHardEdges.push(renderedAngle)
+        }
+      }
+    }
+  }
+  const average = values => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length)
+  return {
+    weldablePairs: sourceWeldable.length,
+    sourceMeanDegrees: average(sourceWeldable),
+    sourceP95Degrees: percentile(sourceWeldable, 0.95),
+    renderedMeanDegrees: average(renderedWeldable),
+    renderedP95Degrees: percentile(renderedWeldable, 0.95),
+    hardEdgePairs: renderedHardEdges.length,
+    renderedHardEdgeMeanDegrees: average(renderedHardEdges),
+  }
 }
 
 export async function inspectLifeHeroGlb(filePath) {
@@ -62,7 +121,10 @@ export async function inspectLifeHeroGlb(filePath) {
     errors.push('base body must expose four deterministic material primitives')
     cleanMaterialRegionsVerified = false
   }
-  const sharedAttributes = JSON.stringify(basePrimitive?.attributes ?? null)
+  const sharedCoreAttributes = JSON.stringify(Object.fromEntries(CORE_BODY_ATTRIBUTES.map(attribute => [
+    attribute,
+    basePrimitive?.attributes?.[attribute],
+  ])))
   for (let index = 0; index < REQUIRED_BODY_MATERIAL_REGIONS.length; index += 1) {
     const [expectedRegion, expectedMaterial, expectedTextured] = REQUIRED_BODY_MATERIAL_REGIONS[index]
     const actual = materialRegions[index]
@@ -70,7 +132,10 @@ export async function inspectLifeHeroGlb(filePath) {
     if (!actual || actual.region !== expectedRegion || actual.material !== expectedMaterial
       || actual.textured !== expectedTextured || actual.emissive
       || actual.classifier !== 'native-joints-position-v1'
-      || JSON.stringify(primitive?.attributes ?? null) !== sharedAttributes) {
+      || JSON.stringify(Object.fromEntries(CORE_BODY_ATTRIBUTES.map(attribute => [
+        attribute,
+        primitive?.attributes?.[attribute],
+      ]))) !== sharedCoreAttributes) {
       errors.push(`base material region ${expectedRegion} is not the deterministic clean PBR contract`)
       cleanMaterialRegionsVerified = false
     }
@@ -86,6 +151,23 @@ export async function inspectLifeHeroGlb(filePath) {
     || jacketMaterial?.pbrMetallicRoughness?.baseColorTexture !== undefined
     || hasVisibleEmissive(jacketMaterial)) {
     errors.push('jacket must use one clean texture-free graphite PBR material')
+    cleanMaterialRegionsVerified = false
+  }
+  const skinPrimitive = basePrimitives.find(primitive => primitive.extras?.materialRegion === 'clean-skin')
+  const skinMaterial = model.json.materials?.[skinPrimitive?.material]
+  const underlayerPrimitive = basePrimitives.find(primitive => primitive.extras?.materialRegion === 'clean-underlayer')
+  const underlayerMaterial = model.json.materials?.[underlayerPrimitive?.material]
+  const necklineTransition = model.json.asset?.extras?.materialCorrection?.necklineTransition
+  const necklineTransitionVerified = skinPrimitive?.attributes?.COLOR_0 !== undefined
+    && underlayerPrimitive?.attributes?.COLOR_0 === undefined
+    && JSON.stringify(skinMaterial?.pbrMetallicRoughness?.baseColorFactor) === JSON.stringify([1, 1, 1, 1])
+    && JSON.stringify(underlayerMaterial?.pbrMetallicRoughness?.baseColorFactor) === JSON.stringify([0.055, 0.065, 0.08, 1])
+    && necklineTransition?.algorithm === 'bounded-same-body-collar-fade-v3'
+    && necklineTransition.collarVertices > 0
+    && necklineTransition.transitionVertices > 0
+    && necklineTransition.lowerY < necklineTransition.upperY
+  if (!necklineTransitionVerified) {
+    errors.push('skin must expose the deterministic bounded same-body collar fade without an overlapping underlayer surface')
     cleanMaterialRegionsVerified = false
   }
   let jacketWeightCopiesVerified = false
@@ -115,13 +197,38 @@ export async function inspectLifeHeroGlb(filePath) {
     }
   }
 
-  if (model.json.asset?.extras?.schema !== 'life-hero-concept-glb/v3') {
+  if (model.json.asset?.extras?.schema !== 'life-hero-concept-glb/v4') {
     errors.push('asset must expose the native same-body KAN-257 contract receipt')
   }
   if (model.json.asset?.extras?.materialCorrection?.classifier !== 'native-joints-position-v1') {
     errors.push('asset must expose the deterministic material correction receipt')
     cleanMaterialRegionsVerified = false
   }
+
+  const normalReceipt = model.json.asset?.extras?.normalSmoothing
+  let normalContinuity = null
+  let normalContinuityVerified = false
+  if (basePrimitive && normalReceipt?.algorithm === 'angle-weighted-welded-v1') {
+    const positions = readAccessor(model, basePrimitive.attributes.POSITION).values
+    const sourceNormals = readAccessor(model, normalReceipt.sourceNormalAccessor).values
+    const renderedNormals = readAccessor(model, basePrimitive.attributes.NORMAL).values
+    normalContinuity = analyseNormalContinuity(
+      positions,
+      sourceNormals,
+      renderedNormals,
+      normalReceipt.creaseDegrees,
+      normalReceipt.positionWeldEpsilon,
+    )
+    normalContinuityVerified = basePrimitive.attributes.NORMAL === normalReceipt.renderedNormalAccessor
+      && normalReceipt.sourceNormalAccessor !== normalReceipt.renderedNormalAccessor
+      && normalReceipt.sourceNormalSha256 !== normalReceipt.renderedNormalSha256
+      && normalContinuity.weldablePairs > 1_000
+      && normalContinuity.renderedMeanDegrees < normalContinuity.sourceMeanDegrees * 0.35
+      && normalContinuity.renderedP95Degrees < normalContinuity.sourceP95Degrees * 0.35
+      && normalContinuity.hardEdgePairs > 100
+      && normalContinuity.renderedHardEdgeMeanDegrees > 20
+  }
+  if (!normalContinuityVerified) errors.push('render normals must measurably smooth weldable seams while retaining hard creases')
 
   const meshGeometry = (model.json.meshes ?? []).map(mesh => {
     const primitive = mesh.primitives[0]
@@ -146,6 +253,10 @@ export async function inspectLifeHeroGlb(filePath) {
     meshGeometry,
     materialRegions,
     cleanMaterialRegionsVerified,
+    necklineTransitionVerified,
+    normalContinuity,
+    normalContinuityVerified,
+    immutableAccessors: model.json.asset?.extras?.immutableAccessors ?? null,
     jacketWeightCopiesVerified,
     contract: model.json.asset?.extras ?? null,
   }

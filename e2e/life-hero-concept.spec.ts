@@ -1,12 +1,46 @@
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
 import { inspectLifeHeroGlb, REQUIRED_LIFE_HERO_CLIPS } from '../scripts/inspect-life-hero-glb.mjs';
+import { readAccessor, readGlb } from '../scripts/lib/glb.mjs';
 
 const CONCEPT_PATH = 'concepts/life-hero/index.html';
 const EVIDENCE_DIRECTORY = path.resolve('docs/design/evidence');
 const MODEL_PATH = path.resolve('public/concepts/life-hero/assets/life-hero-modular.glb');
+const BODY_SOURCE_PATH = path.resolve('docs/design/source-assets/life-hero/life-hero-native-body.glb');
+const MOTION_SOURCE_PATHS = [
+  path.resolve('docs/design/source-assets/life-hero/life-hero-native-idle.glb'),
+  path.resolve('docs/design/source-assets/life-hero/life-hero-native-cheer.glb'),
+  path.resolve('docs/design/source-assets/life-hero/life-hero-native-running.glb'),
+  path.resolve('docs/design/source-assets/life-hero/life-hero-native-walking.glb'),
+];
+
+function valuesSha256(componentType: number, values: number[]) {
+  const constructors = {
+    5120: Int8Array,
+    5121: Uint8Array,
+    5122: Int16Array,
+    5123: Uint16Array,
+    5125: Uint32Array,
+    5126: Float32Array,
+  } as const;
+  const Constructor = constructors[componentType as keyof typeof constructors];
+  if (!Constructor) throw new Error(`Unsupported component type ${componentType}`);
+  const typed = new Constructor(values);
+  return createHash('sha256').update(Buffer.from(typed.buffer, typed.byteOffset, typed.byteLength)).digest('hex');
+}
+
+function accessorSha256(model: Awaited<ReturnType<typeof readGlb>>, accessorIndex: number) {
+  const { accessor, values } = readAccessor(model, accessorIndex);
+  return valuesSha256(accessor.componentType, values);
+}
+
+async function fileSha256(filePath: string) {
+  return createHash('sha256').update(await readFile(filePath)).digest('hex');
+}
 
 async function waitForModel(page: import('@playwright/test').Page) {
   await expect(page.getByTestId('avatar-stage')).toHaveAttribute('data-model-state', 'ready', {
@@ -42,12 +76,74 @@ test.describe('Life Hero modular GLB proof', () => {
     ]);
     expect(inspection.jacketWeightCopiesVerified).toBe(true);
     expect(inspection.cleanMaterialRegionsVerified).toBe(true);
+    expect(inspection.necklineTransitionVerified).toBe(true);
+    expect(inspection.normalContinuityVerified, JSON.stringify(inspection.normalContinuity)).toBe(true);
+    expect(inspection.normalContinuity).toEqual(expect.objectContaining({
+      weldablePairs: expect.any(Number),
+      hardEdgePairs: expect.any(Number),
+    }));
+    expect(inspection.normalContinuity!.renderedMeanDegrees)
+      .toBeLessThan(inspection.normalContinuity!.sourceMeanDegrees * 0.35);
+    expect(inspection.normalContinuity!.renderedHardEdgeMeanDegrees).toBeGreaterThan(20);
     expect(inspection.materialRegions).toEqual([
       expect.objectContaining({ region: 'identity-texture', material: 'LifeHero_IdentityTexture', triangles: 15_637, textured: true, emissive: false }),
       expect.objectContaining({ region: 'clean-skin', material: 'LifeHero_CleanSkin', triangles: 29_191, textured: false, emissive: false }),
       expect.objectContaining({ region: 'clean-underlayer', material: 'LifeHero_CleanUnderlayer', triangles: 111_092, textured: false, emissive: false }),
       expect.objectContaining({ region: 'clean-shoes', material: 'LifeHero_CleanShoes', triangles: 18_834, textured: false, emissive: false }),
     ]);
+  });
+
+  test('preserves native geometry, skin, inverse binds, and animation accessors while changing render normals only', async () => {
+    const [source, candidate, ...motionSources] = await Promise.all([
+      readGlb(BODY_SOURCE_PATH),
+      readGlb(MODEL_PATH),
+      ...MOTION_SOURCE_PATHS.map(filePath => readGlb(filePath)),
+    ]);
+    const sourcePrimitive = source.json.meshes[0].primitives[0];
+    const candidatePrimitive = candidate.json.meshes[0].primitives[0];
+    const immutableAttributes = ['POSITION', 'JOINTS_0', 'WEIGHTS_0'] as const;
+    for (const attribute of immutableAttributes) {
+      expect(accessorSha256(candidate, candidatePrimitive.attributes[attribute]))
+        .toBe(accessorSha256(source, sourcePrimitive.attributes[attribute]));
+    }
+    expect(accessorSha256(candidate, candidate.json.skins[0].inverseBindMatrices))
+      .toBe(accessorSha256(source, source.json.skins[0].inverseBindMatrices));
+    expect(candidatePrimitive.attributes.NORMAL).not.toBe(sourcePrimitive.attributes.NORMAL);
+    expect(accessorSha256(candidate, candidatePrimitive.attributes.NORMAL))
+      .not.toBe(accessorSha256(source, sourcePrimitive.attributes.NORMAL));
+
+    const expectedSourceHashes = [
+      'a5965d8ce412e7bf4eab12cb5aaee6d14e6004c2324023740514feaa97410d75',
+      'c060d79115d258ad90fb335a0d525ed33d53add5683019a484efee8a50028fbb',
+      '6005bca6c31e76ab8c08b62d759fb9e0fd8807a6649d9b34dbfc31f44acbfec6',
+      '873d9a7911532421071cd0c55018053aefee73017b35e0e3470f6ba237655633',
+      '35e0337d3549d982a7483836436c2d1b253e28c2cfe6405438a7b7a16daef87e',
+    ];
+    expect(await Promise.all([BODY_SOURCE_PATH, ...MOTION_SOURCE_PATHS].map(fileSha256)))
+      .toEqual(expectedSourceHashes);
+
+    for (let clip = 0; clip < motionSources.length; clip += 1) {
+      const sourceAnimation = motionSources[clip].json.animations[0];
+      const candidateAnimation = candidate.json.animations[clip];
+      expect(candidateAnimation.name).toBe(REQUIRED_LIFE_HERO_CLIPS[clip]);
+      expect(candidateAnimation.channels).toEqual(sourceAnimation.channels.map(channel => ({
+        ...channel,
+        target: {
+          ...channel.target,
+          node: candidate.json.nodes.findIndex(node => node.name === motionSources[clip].json.nodes[channel.target.node].name),
+        },
+      })));
+      expect(candidateAnimation.samplers).toHaveLength(sourceAnimation.samplers.length);
+      for (let sampler = 0; sampler < sourceAnimation.samplers.length; sampler += 1) {
+        const sourceSampler = sourceAnimation.samplers[sampler];
+        const candidateSampler = candidateAnimation.samplers[sampler];
+        expect(candidateSampler.interpolation ?? 'LINEAR').toBe(sourceSampler.interpolation ?? 'LINEAR');
+        expect(accessorSha256(candidate, candidateSampler.input))
+          .toBe(accessorSha256(motionSources[clip], sourceSampler.input));
+        expect(accessorSha256(candidate, candidateSampler.output))
+          .toBe(accessorSha256(motionSources[clip], sourceSampler.output));
+      }
+    }
   });
 
   test('renders the actual GLB and toggles the jacket without replacing the body', async ({ page }) => {
@@ -62,6 +158,7 @@ test.describe('Life Hero modular GLB proof', () => {
       activeClip: 'Idle_02',
       jacketVisible: true,
       loaded: true,
+      studioLighting: 'neutral-fill-v3',
       materialRegions: [
         'LifeHero_IdentityTexture',
         'LifeHero_CleanSkin',
@@ -162,6 +259,7 @@ test.describe('Life Hero modular GLB proof', () => {
   });
 
   test('@visual captures KAN-257 anatomy, jacket, motion, mobile, and fallback evidence', async ({ page }) => {
+    test.setTimeout(60_000);
     test.skip(process.env.HELM_E2E_VISUAL_SURFACE !== 'life-hero', 'Life Hero visual capture only.');
 
     await page.emulateMedia({ reducedMotion: 'no-preference' });

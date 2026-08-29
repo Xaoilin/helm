@@ -37,7 +37,7 @@ Skin 0 contains 24 joints. Every body material primitive and the jacket primitiv
 
 The paid native atlas contains large black gaps between UV islands. The rejected render reused that atlas as both base colour and fully white emissive output across the whole body and jacket, so filtering exposed black/torn seams at wrists, palms, neckline, sleeves, trousers, and garment edges while flattening lighting.
 
-This zero-credit correction does not inpaint, regenerate, remesh, or reskin the character. `native-joints-position-v1` classifies the existing native triangles by centroid position and native joint influence, then emits four index-only body primitives that all reuse the exact original position, normal, UV, joint, and weight accessors:
+This zero-credit correction does not inpaint, regenerate, remesh, or reskin the character. `native-joints-position-v1` classifies the existing native triangles by centroid position and native joint influence, then emits four index-only body primitives that all reuse the exact original position, UV, joint, and weight accessors. The untouched source normal accessor remains in the GLB as an inspection reference; the rendered primitives use the deterministic review-normal accessor described below.
 
 | Region | Triangles | Material treatment |
 | --- | ---: | --- |
@@ -47,6 +47,21 @@ This zero-credit correction does not inpaint, regenerate, remesh, or reskin the 
 | `clean-shoes` | 18,834 | Texture-free rough graphite PBR. |
 
 The four regions total the unchanged 174,754 native body triangles. The jacket uses one texture-free rough graphite PBR material and no inherited vertex-colour trim. This deliberately trades atlas detail outside the face and hair for deterministic seam-free review surfaces; it is a bounded concept-material pass, not final texture authoring.
+
+### Render-normal, neckline, and studio-light polish
+
+`angle-weighted-welded-v1` recomputes only the rendered `NORMAL` values. It welds position-identical seam vertices at `0.00001` tolerance, accumulates corner-angle-weighted face normals, and refuses to join source-normal clusters separated by 45 degrees or more. Hair, shoes, and garment creases therefore retain deliberate hard boundaries. Across 16,907 independently measured weldable seam pairs, mean discontinuity falls from 18.6906 degrees to 0.6680 degrees and p95 falls from 41.2790 degrees to effectively zero. The 4,272 retained hard-edge pairs still average 79.5761 degrees. Source normal SHA-256 is `85899d4db6c3efac050b3e8461e51f238f602ecc1a4df0e6200b269809a45569`; rendered normal SHA-256 is `7a85474bfb9dbf70dd45c1db262e11a6ded8e0d0953321d3a6e799132cd367d6`.
+
+The bounded `bounded-same-body-collar-fade-v3` treatment colours only existing skin vertices in the native neck box. It fades 273 vertices between model-space Y 1.413 and 1.421, with 1,788 affected collar vertices in total. No duplicate surface, offset shell, texture inpainting, or geometry edit is introduced, so there is no new Z-fighting path. `neutral-fill-v3` keeps ACES tone mapping and rough non-emissive PBR while using a brighter neutral lower hemisphere so the face and both raised palms remain readable.
+
+The immutable source values remain exact:
+
+| Native value | SHA-256 |
+| --- | --- |
+| `POSITION` | `2224d1324c78cd3f8915965f8993bbe60cf31fa8e814f3524a048541f2cc3888` |
+| `JOINTS_0` | `107967db947424c88c19f55a8a30b08bfcf463200f2f2593ff1728d2711211f8` |
+| `WEIGHTS_0` | `8c69c1e6ddd2a7e357caf16d81f9aa7a91e1dadf44276be2ce9302362cd427f2` |
+| inverse bind matrices | `72fda20685a70671a78782d99499c9ab3b30841c44614345c71de080a5bdb849` |
 
 ### Jacket proof and limitation
 
@@ -115,7 +130,7 @@ node scripts/build-life-hero-glb.mjs \
 node scripts/inspect-life-hero-glb.mjs public/concepts/life-hero/assets/life-hero-modular.glb
 ```
 
-The inspector fails if the body and jacket are not separate named skinned nodes, if they do not both use skin 0, if the skin is not 24 joints, if the exact four clips drift, if the deterministic region counts/material assignments drift, if any corrected region is emissive, or if any jacket joint/weight tuple differs from its mapped native body source vertex.
+The inspector fails if the body and jacket are not separate named skinned nodes, if they do not both use skin 0, if the skin is not 24 joints, if the exact four clips drift, if immutable accessor receipts or native source hashes drift, if the rendered seam continuity does not materially improve while retaining hard edges, if the bounded collar treatment is missing, if deterministic region counts/material assignments drift, if any corrected region is emissive, or if any jacket joint/weight tuple differs from its mapped native body source vertex.
 
 ## Exact asset receipt
 
@@ -128,7 +143,7 @@ The inspector fails if the body and jacket are not separate named skinned nodes,
 | `docs/design/source-assets/life-hero/life-hero-native-running.glb` | 11,704,908 | `873d9a7911532421071cd0c55018053aefee73017b35e0e3470f6ba237655633` |
 | `docs/design/source-assets/life-hero/life-hero-native-walking.glb` | 11,709,516 | `35e0337d3549d982a7483836436c2d1b253e28c2cfe6405438a7b7a16daef87e` |
 | Private native export archive (retained outside Git) | 53,637,315 | `e4afa4a0fd6b936e4eca6fbb460c915fc57263caace6468c3c05e048affafba9` |
-| `public/concepts/life-hero/assets/life-hero-modular.glb` | 16,341,176 | `1134dff38f3b201d296a45d16ee2050f11ad49427b2725b50d6d87682da753eb` |
+| `public/concepts/life-hero/assets/life-hero-modular.glb` | 19,298,616 | `c04e4bae674e67f62a70f4d8606dbece0caad0947d33ef9ead514359e8591ec5` |
 | `public/concepts/life-hero/life-hero-concept.png` | existing approved fallback | `c14763d2cd25a37eb4d433a26ad9ea25d5aeffeaaacc4fa82368fcce9e690b59` |
 
 ## Production avatar contract
@@ -187,7 +202,7 @@ The frugal 3D-making review classifies this animated, skinned GLB as a visual an
 
 ## Rendered evidence
 
-Visual review is claim-matched to this exact asset. Compared with the rejected cross-character candidate, the native same-body export preserves coherent proportions, a symmetrical face, stable neck and jaw, and recognisable five-finger hands through Idle and Cheer. Compared with the Jira 11200 rejection, the black/torn atlas seams are absent from the sampled palms, wrists, neckline, sleeves, trousers, and jacket edges. It remains visibly Meshy-produced: the face is softer and less athletic than the grey reference, the texture-free material regions expose native faceting, and the fitted jacket has source-triangle rather than authored garment boundaries. These are explicit user-review risks, not concealed by distant framing.
+Visual review is claim-matched to this exact asset. Compared with the rejected cross-character candidate, the native same-body export preserves coherent proportions, a symmetrical face, stable neck and jaw, and recognisable five-finger hands through Idle and Cheer. Compared with Jira comments 11200 and 11201, the black/torn atlas seams remain absent; angle-weighted welded review normals materially soften the avoidable face, palm, and finger faceting; the bounded collar fade replaces the jagged skin-underlayer cut; and the neutral lower fill makes both Cheer hands readable. The model remains visibly Meshy-produced: nose and fingertip silhouettes are still polygonal because `POSITION` is intentionally immutable, the face is softer and less athletic than the grey reference, and the fitted jacket retains source-triangle rather than authored garment boundaries. These are explicit user-review risks, not concealed by distant framing.
 
 ### Face and anatomy close-ups
 
@@ -229,17 +244,17 @@ The jacket follows the torso and raised arms in both representative native clips
 
 | State | Rendered observation | SHA-256 |
 | --- | --- | --- |
-| Front face | Paid face and hair texture remains; emissive is removed; face, jaw, neck, and hair are coherent though softer than the grey reference. | `ccb730e5aa7743c507a5d89dc62fba4852b3ff1975b49f918d6dff3b9334dfb0` |
-| Three-quarter face | Head, ear, jaw, neck, and hair remain coherent without cross-character rig distortion or a black neckline seam. | `d3b4297f4a7a7073ae5b6bb1f3d74be8bade89a7a46c8d2a5953cc6743070cd9` |
-| Left hand | Five distinct digits visible at Cheer 6.0 seconds; clean PBR spans the palm and wrist without the rejected black tear. | `fd4253bdd5217b3b5f172e0fdf4b8efa2bf482561e5798dfab57f6c7a56775c1` |
-| Right hand | Five distinct digits visible at Cheer 4.5 seconds; clean PBR spans the palm and wrist without fused geometry or a black tear. | `dc2fd037172279342d11dfceed0ccdf85e7a89a318d44981147c4bc78275d939` |
-| Complete neutral body | Jacket off leaves the native body and clean neutral underlayer intact. | `14bb065d9f52c7936dcb88b85a309477129e68cae5ae77cbe42752ac46f1b910` |
-| Jacket off | Runtime-hidden jacket does not alter the body; intentionally identical to the complete-body frame. | `14bb065d9f52c7936dcb88b85a309477129e68cae5ae77cbe42752ac46f1b910` |
-| Jacket on | Separate uniform graphite mesh follows native Idle; no inherited atlas or patchy colour trim remains. | `0c9626a0caad7b96007d0fd536141964fae07196b8a979cc473e31d620222696` |
-| Idle 0.7 seconds | Same jacket-on representative frame; no severe clipping, black seam, or detached geometry. | `0c9626a0caad7b96007d0fd536141964fae07196b8a979cc473e31d620222696` |
-| Cheer 4.5 seconds | Native raised-arm pose drives body and jacket together without severe clipping, tearing, or black atlas seams. | `69ea5dfb1ac0d61dcaf4bda3448587515f817e5ed0c34e7f19de951ca4507b3f` |
-| Desktop 1440 by 900 | Actual GLB, clean graphite jacket, controls, local structure, and flattened-image warning render without horizontal overflow. | `79a6139acc46ac0ca56efd322907ba84d8ba12468c41ad31ffcb35c113b64d9f` |
-| Mobile 390 by 844 | Actual GLB remains framed below the responsive heading; controls remain reachable by document scroll and no horizontal overflow is present. | `a853a770c8874926f1a6fbdf45c58491ce2dd1b3ebb4f6c8ccd517d629d633fe` |
+| Front face | Paid identity texture remains; welded review normals soften cheek and nose shading; the collar fade is continuous, while the immutable nose silhouette remains visibly polygonal. | `0118e81e1c45e3d232ae139225738cedf7ca57f68b1e400633573314d121ba24` |
+| Three-quarter face | Head, ear, jaw, neck, and hair remain coherent without cross-character rig distortion or a torn neckline atlas seam. | `059ccf9d183c586c318640ec8f18b2527a4396a1850a2f26e6fefaef0e842203` |
+| Left hand | Five distinct digits remain visible at Cheer 6.0 seconds; welded normals and neutral lower fill keep the clean palm and wrist readable. | `b93081214a1b454d5cb1d90f9ef9ac3c85fdc7b750d48112b571dfc83be84d71` |
+| Right hand | Five distinct digits remain visible at Cheer 4.5 seconds; clean PBR spans the brighter palm and wrist without fused geometry or a black tear. | `98e724782dbd0a8bef3d8740538c0151b2590b82943de95ba5c39f7adfa45049` |
+| Complete neutral body | Jacket off leaves the native body, bounded collar fade, and clean neutral underlayer intact. | `0b306f83e4e629ee004aba572ddcda6b9590577f3cbdec76fec82fd51b48b57c` |
+| Jacket off | Runtime-hidden jacket does not alter the body; intentionally identical to the complete-body frame. | `0b306f83e4e629ee004aba572ddcda6b9590577f3cbdec76fec82fd51b48b57c` |
+| Jacket on | Separate uniform graphite concept shell follows native Idle; no inherited atlas or patchy colour trim remains. | `77375a39d85579e2e88d6365224e8786cade2b48242e551894619de951610933` |
+| Idle 0.7 seconds | Same jacket-on representative frame; no severe clipping, black seam, or detached geometry. | `77375a39d85579e2e88d6365224e8786cade2b48242e551894619de951610933` |
+| Cheer 4.5 seconds | Native raised-arm pose drives body and jacket together; both hands remain readable without severe clipping, tearing, or black atlas seams. | `164382665cc370fefe57580a707134e13dfdeb1cccb221e567430d6c313f909e` |
+| Desktop 1440 by 900 | Actual GLB, clean graphite jacket, controls, local structure, and flattened-image warning render without horizontal overflow. | `021c1681304b164cfa97a48c303c8d2be00a3bc2dfc6c6a6c47d4fdcb5621576` |
+| Mobile 390 by 844 | Actual GLB remains framed below the responsive heading; controls remain reachable by document scroll and no horizontal overflow is present. | `6311ecf78bdd1e452e19e72a26c4097b19b5e903976b67ecac90c091d29e8e97` |
 | Reduced motion 390 by 844 | 3D motion is disabled and the separately layered static SVG fallback is visible with written meaning retained. | `7e711a79f4858cc586f91245b59256e25f66bb7157ffa36e9444bfc09cf18d6c` |
 
-Focused Playwright coverage validates the GLB structure and exact weight provenance, runtime jacket toggle, inspection controls, exact motion mapping, mobile behavior, explicit static mode, reduced-motion fallback, and independent SVG equipment toggles. Rendered review at the exact desktop and mobile viewports found no new overlap, clipped controls, or horizontal overflow. Explicit Sol and My Liege visual approval remains required.
+Focused Playwright coverage validates the GLB structure, quantitative source-versus-rendered normal continuity, immutable native geometry/skin/inverse-bind/animation accessors, exact jacket weight provenance, runtime jacket toggle, neutral studio-light receipt, inspection controls, exact motion mapping, mobile behavior, explicit static mode, reduced-motion fallback, and independent SVG equipment toggles. Rendered review at the exact desktop and mobile viewports found no new overlap, clipped controls, or horizontal overflow. Explicit Sol and My Liege visual approval remains required.

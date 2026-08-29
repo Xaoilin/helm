@@ -47,14 +47,17 @@ function initialiseRenderer() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 0.92
+  renderer.toneMappingExposure = 1.08
   scene = new THREE.Scene()
   camera = new THREE.PerspectiveCamera(30, 1, 0.001, 100)
-  scene.add(new THREE.HemisphereLight(0xeaf6ff, 0x182439, 1.65))
-  const key = new THREE.DirectionalLight(0xfff0d0, 2.6)
+  scene.add(new THREE.HemisphereLight(0xf2f7ff, 0x786a60, 1.85))
+  const key = new THREE.DirectionalLight(0xfff1d8, 2.1)
   key.position.set(3, 5, 4)
   scene.add(key)
-  const rim = new THREE.DirectionalLight(0x91a8be, 0.65)
+  const fill = new THREE.DirectionalLight(0xddeeff, 1.35)
+  fill.position.set(-3, 2, 5)
+  scene.add(fill)
+  const rim = new THREE.DirectionalLight(0x91a8be, 0.55)
   rim.position.set(-4, 3, -3)
   scene.add(rim)
   clock = new THREE.Clock()
@@ -271,6 +274,7 @@ window.lifeHeroViewer = {
     jacketVisible: state.jacket?.visible ?? null,
     loaded: state.loaded,
     materialRegions: state.baseMeshes.map(mesh => mesh.material.name),
+    studioLighting: 'neutral-fill-v3',
     static: state.static,
     view: state.view,
   }),
