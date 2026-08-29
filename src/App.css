@@ -5724,17 +5724,29 @@ textarea.form-input {
   color: var(--nc-text);
   background: transparent;
   cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
 }
 
-.nc-prayer-item:hover:not(:disabled),
-.nc-prayer-item.temporal-current,
-.nc-prayer-item.temporal-next {
+.nc-prayer-item:hover:not(:disabled) {
+  border-color: rgba(156, 178, 210, 0.5);
+  background: rgba(156, 178, 210, 0.07);
+}
+
+.nc-prayer-item.temporal-current {
   border-color: rgba(47, 203, 143, 0.62);
   background: rgba(47, 203, 143, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(47, 203, 143, 0.08);
+}
+
+.nc-prayer-item.temporal-next {
+  border-color: rgba(126, 153, 255, 0.68);
+  background: rgba(126, 153, 255, 0.09);
 }
 
 .nc-prayer-item.temporal-past:not([class*='outcome-']) {
+  border-color: rgba(239, 185, 104, 0.4);
   color: #bcc5d2;
+  background: rgba(239, 185, 104, 0.06);
 }
 
 .nc-prayer-item:disabled {
@@ -5748,10 +5760,20 @@ textarea.form-input {
   background: rgba(47, 203, 143, 0.16);
 }
 
+.nc-prayer-item.outcome-on_time {
+  border-color: rgba(47, 203, 143, 0.42);
+  background: rgba(47, 203, 143, 0.055);
+}
+
 .nc-prayer-item.outcome-late .nc-prayer-symbol {
   border-color: rgba(215, 154, 70, 0.95);
   color: var(--nc-prayer-symbol-color);
   background: rgba(215, 154, 70, 0.14);
+}
+
+.nc-prayer-item.outcome-late {
+  border-color: rgba(215, 154, 70, 0.46);
+  background: rgba(215, 154, 70, 0.055);
 }
 
 .nc-prayer-item.outcome-missed .nc-prayer-symbol {
@@ -5760,8 +5782,19 @@ textarea.form-input {
   background: rgba(232, 115, 115, 0.12);
 }
 
+.nc-prayer-item.outcome-missed {
+  border-color: rgba(232, 115, 115, 0.5);
+  background: rgba(232, 115, 115, 0.07);
+}
+
 .nc-prayer-item.outcome-unclassified .nc-prayer-symbol {
   border-style: dashed;
+}
+
+.nc-prayer-item.outcome-unclassified {
+  border-color: rgba(239, 185, 104, 0.45);
+  border-style: dashed;
+  background: rgba(239, 185, 104, 0.055);
 }
 
 .nc-prayer-name {
@@ -5792,12 +5825,18 @@ textarea.form-input {
 .nc-prayer-symbol[data-prayer='Maghrib'] { --nc-prayer-symbol-color: var(--nc-prayer-maghrib); }
 .nc-prayer-symbol[data-prayer='Isha'] { --nc-prayer-symbol-color: var(--nc-prayer-isha); }
 
-.temporal-current .nc-prayer-symbol,
-.temporal-next .nc-prayer-symbol {
+.temporal-current .nc-prayer-symbol {
   border-color: var(--nc-emerald);
   color: var(--nc-prayer-symbol-color);
   background: rgba(47, 203, 143, 0.12);
   box-shadow: 0 0 14px rgba(47, 203, 143, 0.22);
+}
+
+.temporal-next .nc-prayer-symbol {
+  border-color: #8ea5ff;
+  color: var(--nc-prayer-symbol-color);
+  background: rgba(126, 153, 255, 0.13);
+  box-shadow: 0 0 14px rgba(126, 153, 255, 0.18);
 }
 
 .nc-prayer-arabic {
@@ -5815,20 +5854,79 @@ textarea.form-input {
 }
 
 .nc-prayer-state {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 22px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   margin-top: 5px;
+  padding: 3px 7px;
+  border: 1px solid rgba(145, 160, 184, 0.32);
+  border-radius: 999px;
   color: var(--nc-text-muted);
+  background: rgba(145, 160, 184, 0.08);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.3;
   overflow-wrap: anywhere;
   text-align: center;
+  white-space: nowrap;
 }
 
-.outcome-on_time .nc-prayer-state { color: var(--nc-emerald-strong); }
-.outcome-late .nc-prayer-state { color: #efb968; }
-.outcome-missed .nc-prayer-state { color: #ff9696; }
-.temporal-current .nc-prayer-state,
-.temporal-next .nc-prayer-state { color: var(--nc-emerald-strong); }
+.nc-prayer-state-icon {
+  flex: 0 0 auto;
+  font-size: 1.05em;
+  line-height: 1;
+}
+
+.outcome-on_time .nc-prayer-state {
+  border-color: rgba(47, 203, 143, 0.5);
+  color: #71e7b7;
+  background: rgba(47, 203, 143, 0.14);
+}
+
+.outcome-late .nc-prayer-state {
+  border-color: rgba(239, 185, 104, 0.5);
+  color: #f3c77e;
+  background: rgba(239, 185, 104, 0.13);
+}
+
+.outcome-missed .nc-prayer-state {
+  border-color: rgba(255, 120, 120, 0.52);
+  color: #ffaaaa;
+  background: rgba(232, 115, 115, 0.14);
+}
+
+.outcome-unclassified .nc-prayer-state,
+.temporal-past .nc-prayer-state {
+  border-color: rgba(239, 185, 104, 0.46);
+  color: #f3c77e;
+  background: rgba(239, 185, 104, 0.11);
+}
+
+.temporal-current .nc-prayer-state {
+  border-color: rgba(47, 203, 143, 0.55);
+  color: #7cecc0;
+  background: rgba(47, 203, 143, 0.15);
+}
+
+.temporal-next .nc-prayer-state {
+  border-color: rgba(142, 165, 255, 0.58);
+  color: #b5c2ff;
+  background: rgba(126, 153, 255, 0.15);
+}
+
+.temporal-upcoming .nc-prayer-state {
+  border-color: rgba(156, 178, 210, 0.34);
+  color: #bdc9dc;
+  background: rgba(156, 178, 210, 0.08);
+}
+
+.temporal-not_tracked .nc-prayer-state,
+.temporal-pending .nc-prayer-state {
+  border-style: dashed;
+}
 
 .nc-prayer-timeline-caption {
   display: flex;
@@ -6287,7 +6385,7 @@ textarea.form-input {
   .nc-prayer-arabic { display: none; }
   .nc-prayer-symbol { width: 34px; height: 34px; margin-top: 10px; font-size: 20px; }
   .nc-prayer-item time { font-size: 13px; }
-  .nc-prayer-state { font-size: 9px; }
+  .nc-prayer-state { min-height: 20px; gap: 2px; padding: 2px; font-size: 8.5px; }
   .nc-prayer-repair { grid-template-columns: 1fr; }
   .nc-prayer-repair span,
   .nc-prayer-repair .nc-primary-action { grid-column: 1; grid-row: auto; }
