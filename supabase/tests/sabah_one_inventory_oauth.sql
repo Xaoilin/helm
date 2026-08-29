@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(15);
+select plan(16);
 
 select has_table(
   'public', 'helm_inventory_oauth_clients',
@@ -87,6 +87,15 @@ select throws_ok(
   '42501',
   'OAuth clients cannot use this Sabah One interface.',
   'an OAuth client cannot use generic account mutations'
+);
+select throws_ok(
+  $$select public.apply_helm_mutations(
+    'cccccccc-cccc-4ccc-8ccc-cccccccc0002',
+    '[{"op":"create","collection":"employment","recordId":"blocked-employment","payload":{"id":"blocked-employment"}}]'::jsonb
+  )$$,
+  '42501',
+  'OAuth clients cannot use this Sabah One interface.',
+  'an OAuth client cannot use generic Employment mutations'
 );
 select throws_ok(
   $$select public.inventory_search('', null, null, null, 20)$$,
