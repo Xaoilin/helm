@@ -15,6 +15,7 @@ const state = {
   loading: false,
   mixer: null,
   modelBox: null,
+  qualityTier: null,
   root: null,
   static: stage.dataset.motionMode === 'static',
   view: 'full',
@@ -178,6 +179,13 @@ function setJacketVisible(visible) {
   stage.dataset.jacketVisible = String(visible)
 }
 
+function shouldUseConstrainedFallback() {
+  const deviceMemory = Number(navigator.deviceMemory)
+  const hardwareConcurrency = Number(navigator.hardwareConcurrency)
+  return (Number.isFinite(deviceMemory) && deviceMemory > 0 && deviceMemory <= 4)
+    || (Number.isFinite(hardwareConcurrency) && hardwareConcurrency > 0 && hardwareConcurrency <= 4)
+}
+
 function playClip(clipName, speed = 1) {
   state.activeClip = clipName
   state.animationSpeed = speed
@@ -204,13 +212,15 @@ async function ensureLoaded() {
   try {
     if (!renderer) initialiseRenderer()
     const loader = new GLTFLoader()
-    const url = new URL('./assets/life-hero-modular.glb', document.baseURI).href
+    const constrained = shouldUseConstrainedFallback()
+    const assetName = constrained ? 'life-hero-modular-fallback.glb' : 'life-hero-modular.glb'
+    const url = new URL(`./assets/${assetName}`, document.baseURI).href
     const gltf = await loader.loadAsync(url)
     const baseRoot = gltf.scene.getObjectByName('LifeHero_BaseBody')
     const jacket = gltf.scene.getObjectByName('LifeHero_Jacket')
     const baseMeshes = collectSkinnedMeshes(baseRoot)
     const base = baseMeshes[0]
-    if (!baseRoot || baseMeshes.length !== 4 || !jacket?.isSkinnedMesh
+    if (!baseRoot || baseMeshes.length < 1 || !jacket?.isSkinnedMesh
       || !baseMeshes.every(mesh => usesSameSkeleton(mesh.skeleton, jacket.skeleton))) {
       throw new Error('base and jacket are not separate skinned meshes on one skeleton')
     }
@@ -227,6 +237,7 @@ async function ensureLoaded() {
     state.base = base
     state.baseMeshes = baseMeshes
     state.jacket = jacket
+    state.qualityTier = constrained ? 'constrained-fallback' : 'max-quality-primary'
     state.mixer = new THREE.AnimationMixer(gltf.scene)
     scene.add(gltf.scene)
     frameModel(gltf.scene)
@@ -238,6 +249,7 @@ async function ensureLoaded() {
       animations: gltf.animations.map(clip => clip.name),
       materials: baseMeshes.map(mesh => mesh.material.name),
       meshes: [baseRoot.name, jacket.name],
+      qualityTier: state.qualityTier,
     })
   } catch (error) {
     state.loading = false
@@ -274,6 +286,7 @@ window.lifeHeroViewer = {
     jacketVisible: state.jacket?.visible ?? null,
     loaded: state.loaded,
     materialRegions: state.baseMeshes.map(mesh => mesh.material.name),
+    qualityTier: state.qualityTier,
     studioLighting: 'neutral-fill-v3',
     static: state.static,
     view: state.view,

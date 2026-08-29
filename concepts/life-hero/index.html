@@ -134,7 +134,7 @@
           <p class="eyebrow">Sabah One / Life Hero / Animated GLB proof</p>
           <h1 id="concept-title">A real hero, a separate jacket</h1>
           <p class="lede">
-            This approval artifact renders an actual native same-body rig with a high-detail neutral body,
+            This approval artifact renders an actual maximum-quality native same-body rig with a neutral body,
             one separately skinned graphite jacket, and four embedded clips. It is an honest pipeline proof,
             with paid face/hair identity texture and deterministic clean PBR review materials elsewhere—not
             the production wardrobe system or final 3D rig.
@@ -151,8 +151,8 @@
             <p>The fitted graphite jacket toggles without regenerating, replacing, or changing the complete neutral body.</p>
           </header>
           <div class="lab-workspace">
-            <div class="avatar-stage" data-testid="avatar-stage" data-motion-mode="animated" data-model-state="loading" data-jacket-visible="true" data-active-clip="Idle_02" aria-label="Rigged Life Hero GLB proof">
-              <div class="model-badge">Actual GLB · 2 meshes · 1 skin · 4 clips</div>
+            <div class="avatar-stage" data-testid="avatar-stage" data-motion-mode="animated" data-model-state="loading" data-quality-tier="pending" data-jacket-visible="true" data-active-clip="Idle_02" aria-label="Rigged Life Hero GLB proof">
+              <div class="model-badge">Max-quality GLB · 597,811 tris · 2 meshes · 1 skin · 4 clips</div>
               <div class="viewer-frame">
                 <canvas id="life-hero-canvas" data-testid="life-hero-canvas" aria-label="Animated 3D Life Hero model"></canvas>
                 <div class="viewer-fallback" data-testid="static-fallback" role="img" aria-label="Static layered Life Hero fallback">
@@ -164,7 +164,7 @@
                   <img class="fallback-layer" src="./layers/gear-training-sash.svg" alt="" data-source-layer="training-sash" hidden />
                   <img class="fallback-layer" src="./layers/gear-cuff.svg" alt="" data-source-layer="progress-cuff" />
                 </div>
-                <div class="viewer-loading" data-testid="viewer-status" role="status">Loading the 19 MB local GLB proof…</div>
+                <div class="viewer-loading" data-testid="viewer-status" role="status">Loading the max-quality local GLB proof…</div>
               </div>
               <div class="motion-readout">
                 <strong id="motion-name">Idle</strong>
@@ -237,9 +237,10 @@
               </section>
 
               <div class="proof-note">
-                The 19 MB GLB is project-bound approval evidence. Its review normals, collar fade, and neutral
-                studio fill are deterministic local polish—not altered source geometry. The viewer is lightweight proof code,
-                not a production engine decision or production dashboard integration.
+                The max-quality GLB is project-bound approval evidence. Its one deduplicated 8K image uses natural opaque PBR;
+                the graphite jacket is a separate same-skeleton concept shell, not final wardrobe tailoring. Devices with four or
+                fewer logical cores or 4 GB device memory automatically use the retained 31K-triangle capability fallback.
+                The viewer is lightweight proof code, not a production engine decision or production dashboard integration.
               </div>
             </div>
           </div>
@@ -250,11 +251,11 @@
             <header class="card-heading">
               <p class="card-label">Locally inspected export</p>
               <h2 id="structure-title">GLB structure, not viewer “parts”</h2>
-              <p>Binary glTF 2.0; both mesh nodes bind to skin 0; four deterministic non-emissive body regions remove damaged atlas seams.</p>
+            <p>Binary glTF 2.0; both mesh nodes bind to skin 0; one retained 8K image is used through natural opaque PBR.</p>
             </header>
             <ul class="structure-list">
-              <li><strong>105,568</strong><span>native base vertices</span></li>
-              <li><strong>31,604</strong><span>jacket vertices</span></li>
+              <li><strong>332,478</strong><span>native base vertices</span></li>
+              <li><strong>105,602</strong><span>jacket vertices</span></li>
               <li><strong>24</strong><span>shared joints</span></li>
               <li><strong>4</strong><span>embedded clips</span></li>
             </ul>
@@ -305,7 +306,7 @@
           <p class="card-label">True separation</p>
           <h2>Addressable at runtime</h2>
           <ul class="detail-list">
-            <li><code>LifeHero_BaseBody</code> is a complete neutral character.</li>
+            <li><code>LifeHero_BaseBody</code> is a complete 332,478-vertex neutral character.</li>
             <li><code>LifeHero_Jacket</code> is a second skinned mesh node.</li>
             <li>Both reference the same 24-joint skin and animation mixer.</li>
           </ul>
@@ -458,9 +459,13 @@
         });
       });
 
-      window.addEventListener('life-hero-viewer-ready', () => {
+      window.addEventListener('life-hero-viewer-ready', event => {
         stage.dataset.modelState = stage.dataset.motionMode === 'static' ? 'fallback' : 'ready';
-        viewerStatus.textContent = 'Local modular GLB ready.';
+        const qualityTier = event.detail?.qualityTier ?? 'max-quality-primary';
+        stage.dataset.qualityTier = qualityTier;
+        viewerStatus.textContent = qualityTier === 'constrained-fallback'
+          ? 'Constrained-device 31K-triangle fallback ready.'
+          : 'Max-quality local GLB ready.';
         window.lifeHeroViewer.setJacketVisible(jacketVisible);
         window.lifeHeroViewer.setView(selectedView);
         applyMotion();
