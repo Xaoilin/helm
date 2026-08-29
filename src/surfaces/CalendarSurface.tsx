@@ -11,6 +11,11 @@ import {
   localEventToGooglePayload,
 } from '../services/googleCalendarApi';
 import { buildGoogleEventCacheId } from '../services/calendarProviderSync';
+import {
+  getAllDayCalendarDateRange,
+  isAllDayCalendarEventOnDate,
+  normalizeCalendarDate,
+} from '../services/calendarEventDates';
 import { logError } from '../services/logger';
 import { formatAppDate, formatAppTime, getAppDate } from '../services/appTimeZone';
 import { dateTimeLocalToInstant, instantToDateTimeLocal } from '../services/timeZone';
@@ -161,9 +166,17 @@ export default function CalendarSurface() {
     return `${formatAppDate(instant, appTimeZone)} at ${formatAppTime(instant, appTimeZone)}`;
   };
 
+  const formatEventDate = (event: CalendarEvent) => {
+    if (!event.allDay) return formatAppDate(new Date(event.start), appTimeZone);
+    const range = getAllDayCalendarDateRange(event, appTimeZone);
+    return range ? formatCalendarDate(toCalendarMarker(range.startDate)) : '—';
+  };
+
   const getEventsForDate = (date: Date) => {
     const dateStr = toLocalDateStr(date);
-    return visibleEvents.filter(e => getAppDate(new Date(e.start), appTimeZone) === dateStr);
+    return visibleEvents.filter(event => event.allDay
+      ? isAllDayCalendarEventOnDate(event, dateStr, appTimeZone)
+      : getAppDate(new Date(event.start), appTimeZone) === dateStr);
   };
 
   const selectedDate = useMemo(() => {
@@ -255,8 +268,14 @@ export default function CalendarSurface() {
   };
   const openEditEvent = (evt: CalendarEvent) => {
     setEvtTitle(evt.title); setEvtDesc(evt.description); setEvtAllDay(evt.allDay);
-    setEvtStart(instantToDateTimeLocal(new Date(evt.start), appTimeZone) || '');
-    setEvtEnd(instantToDateTimeLocal(new Date(evt.end), appTimeZone) || '');
+    if (evt.allDay) {
+      const range = getAllDayCalendarDateRange(evt, appTimeZone);
+      setEvtStart(range ? `${range.startDate}T00:00` : '');
+      setEvtEnd(range ? `${range.endDate}T23:59` : '');
+    } else {
+      setEvtStart(instantToDateTimeLocal(new Date(evt.start), appTimeZone) || '');
+      setEvtEnd(instantToDateTimeLocal(new Date(evt.end), appTimeZone) || '');
+    }
     setEvtSourceId(evt.sourceId); setEvtLocation(evt.location || '');
     setEventWriteError(null);
     setEditingEvent(evt); setShowAddEvent(true);
@@ -265,21 +284,40 @@ export default function CalendarSurface() {
   const saveEvent = async () => {
     if (!evtTitle.trim() || !evtSourceId) return;
     setEventWriteError(null);
-    const startInstant = dateTimeLocalToInstant(evtStart, appTimeZone);
-    const endInstant = dateTimeLocalToInstant(evtEnd, appTimeZone);
-    if (!startInstant || !endInstant) {
-      setEventWriteError(`Choose valid wall-clock times in ${appTimeZone}. Daylight-saving gaps do not exist.`);
-      return;
-    }
-    if (endInstant <= startInstant) {
-      setEventWriteError('Event end must be after its start.');
-      return;
+    let start: string;
+    let end: string;
+    if (evtAllDay) {
+      const startDate = normalizeCalendarDate(evtStart.slice(0, 10));
+      const endDate = normalizeCalendarDate(evtEnd.slice(0, 10));
+      if (!startDate || !endDate) {
+        setEventWriteError('Choose valid all-day event dates.');
+        return;
+      }
+      if (endDate < startDate) {
+        setEventWriteError('All-day event end must be on or after its start.');
+        return;
+      }
+      start = startDate;
+      end = endDate;
+    } else {
+      const startInstant = dateTimeLocalToInstant(evtStart, appTimeZone);
+      const endInstant = dateTimeLocalToInstant(evtEnd, appTimeZone);
+      if (!startInstant || !endInstant) {
+        setEventWriteError(`Choose valid wall-clock times in ${appTimeZone}. Daylight-saving gaps do not exist.`);
+        return;
+      }
+      if (endInstant <= startInstant) {
+        setEventWriteError('Event end must be after its start.');
+        return;
+      }
+      start = startInstant.toISOString();
+      end = endInstant.toISOString();
     }
     const eventData = {
       title: evtTitle.trim(),
       description: evtDesc.trim(),
-      start: startInstant.toISOString(),
-      end: endInstant.toISOString(),
+      start,
+      end,
       allDay: evtAllDay,
       sourceId: evtSourceId,
       location: evtLocation.trim() || undefined,
@@ -430,8 +468,12 @@ export default function CalendarSurface() {
   // ── Agenda ──
   const agendaEvents = useMemo(() => {
     const now = new Date().toISOString();
-    return [...visibleEvents].filter(e => e.end >= now).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 30);
-  }, [visibleEvents]);
+    return [...visibleEvents].filter(event => {
+      if (!event.allDay) return event.end >= now;
+      const range = getAllDayCalendarDateRange(event, appTimeZone);
+      return Boolean(range && range.endDate >= currentAppDate);
+    }).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 30);
+  }, [appTimeZone, currentAppDate, visibleEvents]);
 
   // ── Sync status ──
   const syncStatusText = () => {
@@ -757,7 +799,7 @@ export default function CalendarSurface() {
                       {evt.googleEventId && <span style={{ fontSize: 10, color: '#8b90a8' }}>(Google)</span>}
                     </div>
                     <div style={{ fontSize: 12, color: '#9499b0' }}>
-                      {formatAppDate(new Date(evt.start), appTimeZone)}
+                      {formatEventDate(evt)}
                       {evt.location && <> &middot; {evt.location}</>}
                       {evt.description && <> &middot; {evt.description.slice(0, 60)}</>}
                     </div>

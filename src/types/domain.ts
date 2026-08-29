@@ -83,7 +83,9 @@ export interface CalendarEvent {
   sourceId: string;
   title: string;
   description: string;
+  /** ISO instant for timed events; inclusive YYYY-MM-DD calendar date for all-day events. */
   start: string;
+  /** ISO instant for timed events; inclusive YYYY-MM-DD calendar date for all-day events. */
   end: string;
   allDay: boolean;
   location?: string;

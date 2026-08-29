@@ -3,6 +3,7 @@ import { TRIP_BUDGET } from '../config/constants';
 import { useShell } from "../store/ShellContext";
 import { useTripContext } from "../store/contexts/TripContext";
 import { useCalendar } from "../store/contexts/CalendarContext";
+import { normalizeCalendarDate } from '../services/calendarEventDates';
 import type {
   CalendarSource,
   Trip,
@@ -1931,12 +1932,22 @@ export default function TripsSurface() {
 
   function importToCalendar(): void {
     if (!calendarTarget || !calendarSourceId) return;
+    const start = calendarTarget.allDay
+      ? normalizeCalendarDate(calendarTarget.start.slice(0, 10))
+      : new Date(calendarTarget.start).toISOString();
+    const end = calendarTarget.allDay
+      ? normalizeCalendarDate(calendarTarget.end.slice(0, 10))
+      : new Date(calendarTarget.end).toISOString();
+    if (!start || !end) {
+      setCalendarNotice('The calendar dates are invalid.');
+      return;
+    }
     calendar.addCalendarEvent({
       sourceId: calendarSourceId,
       title: calendarTarget.title,
       description: calendarTarget.description,
-      start: new Date(calendarTarget.start).toISOString(),
-      end: new Date(calendarTarget.end).toISOString(),
+      start,
+      end,
       allDay: calendarTarget.allDay,
       location: calendarTarget.location,
     });

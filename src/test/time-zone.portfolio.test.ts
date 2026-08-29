@@ -3,7 +3,15 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { extractTemporalReference } from '../assistant/temporalResolver';
 import { resolveAppTimeZone } from '../services/appTimeZone';
-import { localEventToGooglePayload } from '../services/googleCalendarApi';
+import {
+  getAllDayCalendarDateRange,
+  isAllDayCalendarEventOnDate,
+} from '../services/calendarEventDates';
+import {
+  googleEventToLocal,
+  localEventToGooglePayload,
+  type GoogleCalendarEvent,
+} from '../services/googleCalendarApi';
 import {
   buildPrayerScheduleDays,
   buildPrayerSchedulePolicySnapshot,
@@ -125,14 +133,66 @@ describe('effective app time-zone policy', () => {
     })).resolution).toBeNull();
   });
 
-  it('uses the prayer schedule zone for prayer anchors during an app-zone mismatch', () => {
-    const resolution = extractTemporalReference('tomorrow after Dhuhr', makeAssistantContext({
-      now: new Date('2026-08-29T10:00:00.000Z'),
+  it('uses the supplied current prayer schedule date across an app-zone day boundary', () => {
+    const resolution = extractTemporalReference('after Dhuhr', makeAssistantContext({
+      now: new Date('2026-08-29T02:00:00.000Z'),
       timezone: 'America/New_York',
+      prayerDate: '2026-08-29',
       prayerTimezone: 'Europe/London',
       prayerTimes: [{ name: 'Dhuhr', time: '12:00' }],
     })).resolution;
+    expect(resolution?.date).toBe('2026-08-29');
+    expect(resolution?.start).toBe('2026-08-29T11:30:00.000Z');
+  });
+
+  it('applies tomorrow to the supplied prayer schedule date during an app-zone mismatch', () => {
+    const resolution = extractTemporalReference('tomorrow after Dhuhr', makeAssistantContext({
+      now: new Date('2026-08-29T02:00:00.000Z'),
+      timezone: 'America/New_York',
+      prayerDate: '2026-08-29',
+      prayerTimezone: 'Europe/London',
+      prayerTimes: [{ name: 'Dhuhr', time: '12:00' }],
+    })).resolution;
+    expect(resolution?.date).toBe('2026-08-30');
     expect(resolution?.start).toBe('2026-08-30T11:30:00.000Z');
+  });
+
+  it('round-trips single-day and multi-day Google all-day dates without zone drift', () => {
+    const appTimeZone = resolveAppTimeZone(
+      'America/New_York',
+      'Europe/London',
+    ).effectiveTimeZone;
+    const cases = [
+      { start: '2026-08-29', exclusiveEnd: '2026-08-30', inclusiveEnd: '2026-08-29' },
+      { start: '2026-08-29', exclusiveEnd: '2026-09-01', inclusiveEnd: '2026-08-31' },
+    ];
+
+    for (const [index, expected] of cases.entries()) {
+      const googleEvent: GoogleCalendarEvent = {
+        id: `all-day-${index}`,
+        summary: `All day ${index}`,
+        start: { date: expected.start },
+        end: { date: expected.exclusiveEnd },
+      };
+      const local = googleEventToLocal(googleEvent, 'source-google', 'primary');
+
+      expect(local.start).toBe(expected.start);
+      expect(local.end).toBe(expected.inclusiveEnd);
+      expect(getAllDayCalendarDateRange(local, appTimeZone)).toEqual({
+        startDate: expected.start,
+        endDate: expected.inclusiveEnd,
+      });
+      expect(isAllDayCalendarEventOnDate(local, expected.start, appTimeZone)).toBe(true);
+      expect(isAllDayCalendarEventOnDate(local, expected.inclusiveEnd, appTimeZone)).toBe(true);
+      if (index === 1) {
+        expect(isAllDayCalendarEventOnDate(local, '2026-08-30', appTimeZone)).toBe(true);
+        expect(isAllDayCalendarEventOnDate(local, expected.exclusiveEnd, appTimeZone)).toBe(false);
+      }
+      expect(localEventToGooglePayload(local, appTimeZone)).toMatchObject({
+        start: { date: expected.start },
+        end: { date: expected.exclusiveEnd },
+      });
+    }
   });
 
   it('writes Google timed events with the effective app zone explicitly', () => {

@@ -48,6 +48,10 @@ function getTimeZone(context: AssistantCommandContext): string {
   return validateIanaTimeZone(context.timezone) || 'UTC';
 }
 
+function getPrayerTimeZone(context: AssistantCommandContext): string {
+  return validateIanaTimeZone(context.prayerTimezone) || getTimeZone(context);
+}
+
 /** A UTC-backed Date used only as a stable wall-clock calendar marker. */
 function toWallDate(instant: Date, timeZone: string): Date {
   const parts = getZonedDateTimeParts(instant, timeZone);
@@ -102,19 +106,19 @@ function parseClockTime(value: string): { hours: number; minutes: number } | nul
 function findPrayerInstant(
   prayerName: string,
   context: AssistantCommandContext,
-  date: Date,
+  prayerDate: string,
+  prayerTimeZone: string,
 ): Date | null {
   const canonical = PRAYER_NAME_MAP[prayerName.toLowerCase()];
   if (!canonical) return null;
   const prayer = context.prayerTimes?.find(
     entry => entry.name.toLowerCase() === canonical.toLowerCase(),
   );
-  const prayerTimeZone = validateIanaTimeZone(context.prayerTimezone) || getTimeZone(context);
   if (!prayer) return null;
   const time = parseClockTime(prayer.time);
   if (!time) return null;
   return zonedDateTimeToInstant(
-    toWallDateStr(date),
+    prayerDate,
     `${String(time.hours).padStart(2, '0')}:${String(time.minutes).padStart(2, '0')}`,
     prayerTimeZone,
   );
@@ -140,21 +144,28 @@ export function extractTemporalReference(
   const original = input;
   let remaining = input;
   const timeZone = getTimeZone(context);
+  const prayerTimeZone = getPrayerTimeZone(context);
   const nowInstant = getReferenceInstant(context);
   const now = toWallDate(nowInstant, timeZone);
+  const suppliedPrayerDate = shiftIsoDate(context.prayerDate || '', 0);
+  const prayerDateNow = suppliedPrayerDate || getZonedDate(nowInstant, prayerTimeZone);
+  const prayerNow = prayerDateNow ? parseWallDate(prayerDateNow) : null;
   const baseStart = options.baseStart ? new Date(options.baseStart) : null;
   const baseEnd = options.baseEnd ? new Date(options.baseEnd) : null;
   let baseDate = new Date(now);
+  let prayerBaseDate = prayerNow ? new Date(prayerNow) : new Date(now);
   let precision: TemporalResolution['precision'] = 'day';
   const phrases: string[] = [];
   let exactTime: { hours: number; minutes: number } | null = null;
   let prayerAnchoredStart: Date | null = null;
+  let prayerAnchorDate: string | null = null;
 
   const absoluteDate = remaining.match(/\b(\d{4}-\d{2}-\d{2})\b/);
   if (absoluteDate) {
     const parsed = parseWallDate(absoluteDate[1]);
     if (parsed) {
       baseDate = parsed;
+      prayerBaseDate = new Date(parsed);
       phrases.push(absoluteDate[0]);
       remaining = remaining.replace(absoluteDate[0], ' ');
     }
@@ -162,14 +173,17 @@ export function extractTemporalReference(
 
   if (/\btomorrow\b/i.test(remaining)) {
     baseDate.setUTCDate(baseDate.getUTCDate() + 1);
+    prayerBaseDate.setUTCDate(prayerBaseDate.getUTCDate() + 1);
     phrases.push('tomorrow');
     remaining = remaining.replace(/\btomorrow\b/i, ' ');
   } else if (/\bnext month\b/i.test(remaining)) {
     baseDate.setUTCMonth(baseDate.getUTCMonth() + 1);
+    prayerBaseDate.setUTCMonth(prayerBaseDate.getUTCMonth() + 1);
     phrases.push('next month');
     remaining = remaining.replace(/\bnext month\b/i, ' ');
   } else if (/\bnext week\b/i.test(remaining)) {
     baseDate.setUTCDate(baseDate.getUTCDate() + 7);
+    prayerBaseDate.setUTCDate(prayerBaseDate.getUTCDate() + 7);
     phrases.push('next week');
     remaining = remaining.replace(/\bnext week\b/i, ' ');
   } else if (/\btoday\b/i.test(remaining)) {
@@ -182,6 +196,7 @@ export function extractTemporalReference(
   );
   if (weekdayMatch) {
     baseDate = nextWeekday(now, WEEKDAY_MAP[weekdayMatch[1].toLowerCase()]);
+    prayerBaseDate = nextWeekday(prayerBaseDate, WEEKDAY_MAP[weekdayMatch[1].toLowerCase()]);
     phrases.push(weekdayMatch[0]);
     remaining = remaining.replace(weekdayMatch[0], ' ');
   }
@@ -190,10 +205,17 @@ export function extractTemporalReference(
     /\b(before|after)\s+(fajr|dhuhr|asr|maghrib|isha|فجر|ظهر|عصر|مغرب|عشاء)\b/i,
   );
   if (prayerMatch) {
-    const prayerInstant = findPrayerInstant(prayerMatch[2], context, baseDate);
+    const anchorDate = toWallDateStr(prayerBaseDate);
+    const prayerInstant = findPrayerInstant(
+      prayerMatch[2],
+      context,
+      anchorDate,
+      prayerTimeZone,
+    );
     if (prayerInstant) {
       const offsetMinutes = prayerMatch[1].toLowerCase() === 'before' ? -60 : 30;
       prayerAnchoredStart = new Date(prayerInstant.getTime() + offsetMinutes * 60_000);
+      prayerAnchorDate = anchorDate;
       precision = 'window';
       phrases.push(prayerMatch[0]);
       remaining = remaining.replace(prayerMatch[0], ' ');
@@ -304,7 +326,7 @@ export function extractTemporalReference(
   return {
     resolution: {
       phrase: phrases.join(' '),
-      date: getZonedDate(start, timeZone) || toWallDateStr(baseDate),
+      date: prayerAnchorDate || getZonedDate(start, timeZone) || toWallDateStr(baseDate),
       start: start.toISOString(),
       end: end.toISOString(),
       precision,
