@@ -112,18 +112,19 @@ test('visually distinguishes prayed, missed, current, next, and upcoming prayers
     await expect(statuses).toHaveCount(5);
 
     const expectedStates = [
-      ['Fajr', 'on_time', '✓', 'Prayed'],
-      ['Dhuhr', 'missed', '×', 'Missed'],
-      ['Asr', 'current', '●', 'Now'],
-      ['Maghrib', 'next', '→', 'Next'],
-      ['Isha', 'upcoming', '○', 'Upcoming'],
+      ['Fajr', 'on_time', '✓', 'Prayed', 'rgb(113, 231, 183)'],
+      ['Dhuhr', 'missed', '×', 'Missed', 'rgb(255, 170, 170)'],
+      ['Asr', 'current', '●', 'Now', 'rgb(124, 236, 192)'],
+      ['Maghrib', 'next', '→', 'Next', 'rgb(181, 194, 255)'],
+      ['Isha', 'upcoming', '○', 'Upcoming', 'rgb(189, 201, 220)'],
     ] as const;
 
-    for (const [name, state, icon, label] of expectedStates) {
+    for (const [name, state, icon, label, color] of expectedStates) {
       const prayer = dashboard.locator(`.nc-prayer-item:has(.nc-prayer-symbol[data-prayer="${name}"])`);
       await expect(prayer).toHaveAttribute('data-prayer-status', state);
       await expect(prayer.locator('.nc-prayer-state-icon')).toHaveText(icon);
       await expect(prayer.locator('.nc-prayer-state')).toContainText(label);
+      await expect(prayer.locator('.nc-prayer-state')).toHaveCSS('color', color);
     }
 
     await expect(dashboard.getByRole('button', { name: 'Fajr Prayer — confirmed, Prayed on time' })).toBeDisabled();

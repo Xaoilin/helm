@@ -5899,7 +5899,7 @@ textarea.form-input {
 }
 
 .outcome-unclassified .nc-prayer-state,
-.temporal-past .nc-prayer-state {
+.temporal-past:not([class*='outcome-']) .nc-prayer-state {
   border-color: rgba(239, 185, 104, 0.46);
   color: #f3c77e;
   background: rgba(239, 185, 104, 0.11);
