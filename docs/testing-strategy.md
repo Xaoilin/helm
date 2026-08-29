@@ -53,6 +53,8 @@ The unit, E2E, and database gates were also run with deliberate representative f
 
 The complete-gate median is 66.2% faster than the labelled historical 35.2-second receipt, exceeding the 30% ticket threshold. The accepted source CI elapsed time remains a release receipt and is recorded only after the exact candidate run exists.
 
+Source run `33232846749` passed every required gate but was rejected as the timing receipt: its 147-second elapsed time was only 0.7% below the 148-second baseline. The measured critical path was the database job: 62 seconds starting its isolated Supabase stack and 42 seconds verifying the portfolio. The database runner therefore preserves its final reset locally but omits that redundant cleanup in ephemeral CI, where the job environment is discarded.
+
 ## Known Unproven Behavior
 
 This portfolio does not claim exhaustive surface coverage, every responsive or accessibility state, live Google/OpenAI/AlAdhan availability, browser notification delivery after the page closes, production-scale concurrency, or usability outside the recorded browser journey. Those claims require their own boundary evidence.

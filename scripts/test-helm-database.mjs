@@ -7,6 +7,7 @@ const supabaseCli = process.platform === 'win32'
   : 'node_modules/.bin/supabase'
 const concurrencyGateLockKey = 202608030293
 const snapshotWriterLockKey = 202608030294
+const isolatedCi = process.env.CI === 'true'
 
 let failure = null
 try {
@@ -24,10 +25,14 @@ try {
 } catch (error) {
   failure = error
 } finally {
-  try {
-    run(['db', 'reset', '--local', '--no-seed'])
-  } catch (resetError) {
-    if (!failure) failure = resetError
+  if (isolatedCi) {
+    console.log('Skipping final database reset in the ephemeral CI environment.')
+  } else {
+    try {
+      run(['db', 'reset', '--local', '--no-seed'])
+    } catch (resetError) {
+      if (!failure) failure = resetError
+    }
   }
 }
 
