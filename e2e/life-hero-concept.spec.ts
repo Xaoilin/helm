@@ -37,10 +37,17 @@ test.describe('Life Hero modular GLB proof', () => {
     ]);
     expect(inspection.summary.animations.map(animation => animation.name)).toEqual(REQUIRED_LIFE_HERO_CLIPS);
     expect(inspection.meshGeometry).toEqual([
-      expect.objectContaining({ name: 'LifeHero_BaseBody', vertices: 105_568, triangles: 174_754 }),
-      expect.objectContaining({ name: 'LifeHero_Jacket', vertices: 31_604, triangles: 56_420 }),
+      expect.objectContaining({ name: 'LifeHero_BaseBody', vertices: 105_568, triangles: 174_754, materials: [0, 1, 2, 3] }),
+      expect.objectContaining({ name: 'LifeHero_Jacket', vertices: 31_604, triangles: 56_420, materials: [4] }),
     ]);
     expect(inspection.jacketWeightCopiesVerified).toBe(true);
+    expect(inspection.cleanMaterialRegionsVerified).toBe(true);
+    expect(inspection.materialRegions).toEqual([
+      expect.objectContaining({ region: 'identity-texture', material: 'LifeHero_IdentityTexture', triangles: 15_637, textured: true, emissive: false }),
+      expect.objectContaining({ region: 'clean-skin', material: 'LifeHero_CleanSkin', triangles: 29_191, textured: false, emissive: false }),
+      expect.objectContaining({ region: 'clean-underlayer', material: 'LifeHero_CleanUnderlayer', triangles: 111_092, textured: false, emissive: false }),
+      expect.objectContaining({ region: 'clean-shoes', material: 'LifeHero_CleanShoes', triangles: 18_834, textured: false, emissive: false }),
+    ]);
   });
 
   test('renders the actual GLB and toggles the jacket without replacing the body', async ({ page }) => {
@@ -55,6 +62,12 @@ test.describe('Life Hero modular GLB proof', () => {
       activeClip: 'Idle_02',
       jacketVisible: true,
       loaded: true,
+      materialRegions: [
+        'LifeHero_IdentityTexture',
+        'LifeHero_CleanSkin',
+        'LifeHero_CleanUnderlayer',
+        'LifeHero_CleanShoes',
+      ],
       static: false,
     });
 

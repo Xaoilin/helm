@@ -31,13 +31,28 @@ The final exported structure was inspected from the GLB JSON and binary buffers 
 | `LifeHero_BaseBody` | 0 | 0 | 105,568 vertices; 174,754 triangles | Complete original character with neutral underlayer and native same-body skin. |
 | `LifeHero_Jacket` | 1 | 0 | 31,604 vertices; 56,420 triangles | Separate fitted graphite jacket; runtime-toggleable skinned clothing proof. |
 
-Skin 0 contains 24 joints. Both mesh primitives contain `JOINTS_0` and `WEIGHTS_0`. Hiding `LifeHero_Jacket` leaves `LifeHero_BaseBody` intact.
+Skin 0 contains 24 joints. Every body material primitive and the jacket primitive contain `JOINTS_0` and `WEIGHTS_0`. Hiding `LifeHero_Jacket` leaves `LifeHero_BaseBody` intact.
+
+### Deterministic material correction
+
+The paid native atlas contains large black gaps between UV islands. The rejected render reused that atlas as both base colour and fully white emissive output across the whole body and jacket, so filtering exposed black/torn seams at wrists, palms, neckline, sleeves, trousers, and garment edges while flattening lighting.
+
+This zero-credit correction does not inpaint, regenerate, remesh, or reskin the character. `native-joints-position-v1` classifies the existing native triangles by centroid position and native joint influence, then emits four index-only body primitives that all reuse the exact original position, normal, UV, joint, and weight accessors:
+
+| Region | Triangles | Material treatment |
+| --- | ---: | --- |
+| `identity-texture` | 15,637 | Paid native texture retained for head, face, and hair; emissive removed. |
+| `clean-skin` | 29,191 | Texture-free rough skin PBR for neck, arms, wrists, palms, and fingers. |
+| `clean-underlayer` | 111,092 | Texture-free rough charcoal PBR for the complete neutral clothing layer. |
+| `clean-shoes` | 18,834 | Texture-free rough graphite PBR. |
+
+The four regions total the unchanged 174,754 native body triangles. The jacket uses one texture-free rough graphite PBR material and no inherited vertex-colour trim. This deliberately trades atlas detail outside the face and hair for deterministic seam-free review surfaces; it is a bounded concept-material pass, not final texture authoring.
 
 ### Jacket proof and limitation
 
 The jacket is a genuinely separate mesh generated locally from the exact native-rigged body's upper-torso and arm surface. Every jacket vertex records its native body source vertex in `_SOURCE_VERTEX`; its `JOINTS_0` and `WEIGHTS_0` values are copied byte-for-byte from that source vertex. No old-character skeleton, bounds alignment, nearest-neighbour skin transfer, or approximate weight generation remains. The mesh is not a Meshy viewer grouping and is not baked into the body's texture or geometry.
 
-Idle at 0.7 seconds and Motivational Cheer at 4.5 seconds show the jacket following the same-body rig without severe clipping or tearing. The viewer uses polygon offset to present coincident proof surfaces without z-fighting. The fitted surface-derived shape, colour-defined centre trim, collar, and hem are concept architecture—not authored production clothing. It does not establish garment topology, collision, cloth simulation, generalized sizing, or wardrobe readiness.
+Idle at 0.7 seconds and Motivational Cheer at 4.5 seconds show the jacket following the same-body rig without severe clipping or tearing. The viewer uses polygon offset to present coincident proof surfaces without z-fighting. The restrained uniform graphite surface and its fitted source-triangle boundaries are concept architecture—not authored production clothing. It does not establish garment topology, collision, cloth simulation, generalized sizing, or wardrobe readiness.
 
 ## Embedded motion proof
 
@@ -85,7 +100,7 @@ The earlier paid private generation moved the balance from 1,785 to 1,750: 25 ge
 
 ### Local assembly
 
-Meshy rigged this exact high-quality body. `scripts/build-life-hero-glb.mjs` verifies that each downloaded motion export has the same rest skeleton and body attribute counts, preserves the native body mesh, skin, inverse bind matrices, materials, and animation streams, then creates the separately addressable fitted jacket from that body's own vertices and weights. The final GLB records the native same-body assembly contract in `asset.extras`.
+Meshy rigged this exact high-quality body. `scripts/build-life-hero-glb.mjs` verifies that each downloaded motion export has the same rest skeleton and body attribute counts; preserves the native body geometry, skin, inverse bind matrices, joints, weights, and animation streams; applies the deterministic material-region split above; then creates the separately addressable fitted jacket from that body's own vertices and weights. The final GLB records the native same-body assembly and material-correction contract in `asset.extras`.
 
 Rebuild and inspect with:
 
@@ -100,7 +115,7 @@ node scripts/build-life-hero-glb.mjs \
 node scripts/inspect-life-hero-glb.mjs public/concepts/life-hero/assets/life-hero-modular.glb
 ```
 
-The inspector fails if the body and jacket are not separate named skinned nodes, if they do not both use skin 0, if the skin is not 24 joints, if the exact four clips drift, or if any jacket joint/weight tuple differs from its mapped native body source vertex.
+The inspector fails if the body and jacket are not separate named skinned nodes, if they do not both use skin 0, if the skin is not 24 joints, if the exact four clips drift, if the deterministic region counts/material assignments drift, if any corrected region is emissive, or if any jacket joint/weight tuple differs from its mapped native body source vertex.
 
 ## Exact asset receipt
 
@@ -113,7 +128,7 @@ The inspector fails if the body and jacket are not separate named skinned nodes,
 | `docs/design/source-assets/life-hero/life-hero-native-running.glb` | 11,704,908 | `873d9a7911532421071cd0c55018053aefee73017b35e0e3470f6ba237655633` |
 | `docs/design/source-assets/life-hero/life-hero-native-walking.glb` | 11,709,516 | `35e0337d3549d982a7483836436c2d1b253e28c2cfe6405438a7b7a16daef87e` |
 | Private native export archive (retained outside Git) | 53,637,315 | `e4afa4a0fd6b936e4eca6fbb460c915fc57263caace6468c3c05e048affafba9` |
-| `public/concepts/life-hero/assets/life-hero-modular.glb` | 14,747,796 | `f5c1074172a739010642ccd0bcac21e1a825506c1811792a191386c95aa7a8ff` |
+| `public/concepts/life-hero/assets/life-hero-modular.glb` | 16,341,176 | `1134dff38f3b201d296a45d16ee2050f11ad49427b2725b50d6d87682da753eb` |
 | `public/concepts/life-hero/life-hero-concept.png` | existing approved fallback | `c14763d2cd25a37eb4d433a26ad9ea25d5aeffeaaacc4fa82368fcce9e690b59` |
 
 ## Production avatar contract
@@ -172,7 +187,7 @@ The frugal 3D-making review classifies this animated, skinned GLB as a visual an
 
 ## Rendered evidence
 
-Visual review is claim-matched to this exact asset. Compared with the rejected cross-character candidate, the native same-body export restores coherent proportions, a symmetrical face, stable neck and jaw, and recognisable five-finger hands through Idle and Cheer. It remains visibly Meshy-produced: the face is softer and less athletic than the grey reference, texture-edge artifacts remain around the neckline and wrists, and the fitted jacket has colour-defined rather than authored garment boundaries. These are explicit user-review risks, not concealed by distant framing.
+Visual review is claim-matched to this exact asset. Compared with the rejected cross-character candidate, the native same-body export preserves coherent proportions, a symmetrical face, stable neck and jaw, and recognisable five-finger hands through Idle and Cheer. Compared with the Jira 11200 rejection, the black/torn atlas seams are absent from the sampled palms, wrists, neckline, sleeves, trousers, and jacket edges. It remains visibly Meshy-produced: the face is softer and less athletic than the grey reference, the texture-free material regions expose native faceting, and the fitted jacket has source-triangle rather than authored garment boundaries. These are explicit user-review risks, not concealed by distant framing.
 
 ### Face and anatomy close-ups
 
@@ -184,7 +199,7 @@ Visual review is claim-matched to this exact asset. Compared with the rejected c
 
 ![Life Hero right hand in Motivational Cheer at 4.5 seconds](./evidence/life-hero-right-hand.png)
 
-Both hands show five distinct digits without fused, melted, stretched, or collapsed geometry in the sampled native Cheer poses. The close-ups also expose the remaining low-frequency texture detail and dark wrist/underlayer texture boundaries.
+Both hands show five distinct digits without fused, melted, stretched, or collapsed geometry in the sampled native Cheer poses. The texture-free skin PBR reaches continuously across palms and wrists; the rejected black/torn atlas seams are not visible.
 
 ### Full body and jacket toggle
 
@@ -214,17 +229,17 @@ The jacket follows the torso and raised arms in both representative native clips
 
 | State | Rendered observation | SHA-256 |
 | --- | --- | --- |
-| Front face | Symmetrical native face, coherent hairline, eyes, nose, lips, jaw, and neck; softer than the grey reference and retains texture-edge artifacts. | `2cbd8e28c11d05ed422d79404511a534d33bbf2110fa0ea7fd07f9f806781ae5` |
-| Three-quarter face | Head, ear, jaw, neck, and hair remain coherent without cross-character rig distortion. | `8da47b820bacd5d0654f277a98e588f803cfa8b4b182a8ae968f107710135146` |
-| Left hand | Five distinct digits visible at Cheer 6.0 seconds; dark underlayer texture reaches the wrist/palm boundary. | `a9a37df926735abf88ebc52ff9a0712d9c89d8c68f9e54019c2694b36b02980a` |
-| Right hand | Five distinct digits visible at Cheer 4.5 seconds without fused or collapsed geometry. | `bf67870bd8287ffa86beba3c5a992b592e0b722e1d920925d0324e45ae5ff921` |
-| Complete neutral body | Jacket off leaves the native body and neutral underlayer intact. | `9a92225f18249c20d0e045a415f20bbb87ec8277aa7ef6e4ceba60e91fb46397` |
-| Jacket off | Runtime-hidden jacket does not alter the body; intentionally identical to the complete-body frame. | `9a92225f18249c20d0e045a415f20bbb87ec8277aa7ef6e4ceba60e91fb46397` |
-| Jacket on | Separate graphite mesh follows the native Idle pose; fitted panel boundaries remain concept-level. | `8eb99d02980a1c4365c4274fcaddefa4b737d2c4a09a4ed0e32c7afb249b87be` |
-| Idle 0.7 seconds | Same jacket-on representative frame; no severe clipping or detached geometry. | `8eb99d02980a1c4365c4274fcaddefa4b737d2c4a09a4ed0e32c7afb249b87be` |
-| Cheer 4.5 seconds | Native raised-arm pose drives body and jacket together without severe clipping or tearing. | `a3253b6c00791c677f716288ef169f405de68ca90ada65c6636d87fbe9fff936` |
-| Desktop 1440 by 900 | Actual GLB, graphite jacket, controls, local structure, and flattened-image warning render without horizontal overflow. | `6001326bf9025852b9b6ac4503dd7d6bf20f4ccadd44d46b84b3116e6cd63f5d` |
-| Mobile 390 by 844 | Actual GLB remains framed below the responsive heading; controls remain reachable by document scroll and no horizontal overflow is present. | `2d6ad7552e0dc5276411120176cde6eedf9fb65e2b6c945c6ebd883222e9ac23` |
-| Reduced motion 390 by 844 | 3D motion is disabled and the separately layered static SVG fallback is visible with written meaning retained. | `96909d789228cbc4838b2fbb018ce94960795db41a7e677125b64588cf338199` |
+| Front face | Paid face and hair texture remains; emissive is removed; face, jaw, neck, and hair are coherent though softer than the grey reference. | `ccb730e5aa7743c507a5d89dc62fba4852b3ff1975b49f918d6dff3b9334dfb0` |
+| Three-quarter face | Head, ear, jaw, neck, and hair remain coherent without cross-character rig distortion or a black neckline seam. | `d3b4297f4a7a7073ae5b6bb1f3d74be8bade89a7a46c8d2a5953cc6743070cd9` |
+| Left hand | Five distinct digits visible at Cheer 6.0 seconds; clean PBR spans the palm and wrist without the rejected black tear. | `fd4253bdd5217b3b5f172e0fdf4b8efa2bf482561e5798dfab57f6c7a56775c1` |
+| Right hand | Five distinct digits visible at Cheer 4.5 seconds; clean PBR spans the palm and wrist without fused geometry or a black tear. | `dc2fd037172279342d11dfceed0ccdf85e7a89a318d44981147c4bc78275d939` |
+| Complete neutral body | Jacket off leaves the native body and clean neutral underlayer intact. | `14bb065d9f52c7936dcb88b85a309477129e68cae5ae77cbe42752ac46f1b910` |
+| Jacket off | Runtime-hidden jacket does not alter the body; intentionally identical to the complete-body frame. | `14bb065d9f52c7936dcb88b85a309477129e68cae5ae77cbe42752ac46f1b910` |
+| Jacket on | Separate uniform graphite mesh follows native Idle; no inherited atlas or patchy colour trim remains. | `0c9626a0caad7b96007d0fd536141964fae07196b8a979cc473e31d620222696` |
+| Idle 0.7 seconds | Same jacket-on representative frame; no severe clipping, black seam, or detached geometry. | `0c9626a0caad7b96007d0fd536141964fae07196b8a979cc473e31d620222696` |
+| Cheer 4.5 seconds | Native raised-arm pose drives body and jacket together without severe clipping, tearing, or black atlas seams. | `69ea5dfb1ac0d61dcaf4bda3448587515f817e5ed0c34e7f19de951ca4507b3f` |
+| Desktop 1440 by 900 | Actual GLB, clean graphite jacket, controls, local structure, and flattened-image warning render without horizontal overflow. | `79a6139acc46ac0ca56efd322907ba84d8ba12468c41ad31ffcb35c113b64d9f` |
+| Mobile 390 by 844 | Actual GLB remains framed below the responsive heading; controls remain reachable by document scroll and no horizontal overflow is present. | `a853a770c8874926f1a6fbdf45c58491ce2dd1b3ebb4f6c8ccd517d629d633fe` |
+| Reduced motion 390 by 844 | 3D motion is disabled and the separately layered static SVG fallback is visible with written meaning retained. | `7e711a79f4858cc586f91245b59256e25f66bb7157ffa36e9444bfc09cf18d6c` |
 
 Focused Playwright coverage validates the GLB structure and exact weight provenance, runtime jacket toggle, inspection controls, exact motion mapping, mobile behavior, explicit static mode, reduced-motion fallback, and independent SVG equipment toggles. Rendered review at the exact desktop and mobile viewports found no new overlap, clipped controls, or horizontal overflow. Explicit Sol and My Liege visual approval remains required.

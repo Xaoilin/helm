@@ -5,6 +5,18 @@ import { fileURLToPath } from 'node:url'
 import { inspectGlbJson, readAccessor, readGlb } from './lib/glb.mjs'
 
 export const REQUIRED_LIFE_HERO_CLIPS = ['Idle_02', 'Motivational_Cheer', 'Running', 'Walking']
+const REQUIRED_BODY_MATERIAL_REGIONS = [
+  ['identity-texture', 'LifeHero_IdentityTexture', true],
+  ['clean-skin', 'LifeHero_CleanSkin', false],
+  ['clean-underlayer', 'LifeHero_CleanUnderlayer', false],
+  ['clean-shoes', 'LifeHero_CleanShoes', false],
+]
+
+function hasVisibleEmissive(material) {
+  return Boolean(material?.emissiveTexture !== undefined
+    || material?.emissiveFactor?.some(component => component !== 0)
+  )
+}
 
 export async function inspectLifeHeroGlb(filePath) {
   const model = await readGlb(filePath)
@@ -23,15 +35,59 @@ export async function inspectLifeHeroGlb(filePath) {
     errors.push(`animation clips must be exactly ${REQUIRED_LIFE_HERO_CLIPS.join(', ')}`)
   }
   for (const mesh of model.json.meshes ?? []) {
-    const primitive = mesh.primitives?.[0]
-    if (!primitive) continue
-    if (primitive.attributes?.JOINTS_0 === undefined || primitive.attributes?.WEIGHTS_0 === undefined) {
-      errors.push(`${mesh.name ?? 'unnamed mesh'} is not skinned`)
+    for (const primitive of mesh.primitives ?? []) {
+      if (primitive.attributes?.JOINTS_0 === undefined || primitive.attributes?.WEIGHTS_0 === undefined) {
+        errors.push(`${mesh.name ?? 'unnamed mesh'} is not skinned`)
+      }
     }
   }
 
-  const basePrimitive = model.json.meshes?.[baseNode?.mesh]?.primitives?.[0]
+  const basePrimitives = model.json.meshes?.[baseNode?.mesh]?.primitives ?? []
+  const basePrimitive = basePrimitives[0]
   const jacketPrimitive = model.json.meshes?.[jacketNode?.mesh]?.primitives?.[0]
+  const materialRegions = basePrimitives.map(primitive => {
+    const material = model.json.materials?.[primitive.material]
+    const indices = readAccessor(model, primitive.indices).accessor
+    return {
+      region: primitive.extras?.materialRegion ?? null,
+      classifier: primitive.extras?.classifier ?? null,
+      material: material?.name ?? null,
+      triangles: indices.count / 3,
+      textured: material?.pbrMetallicRoughness?.baseColorTexture !== undefined,
+      emissive: hasVisibleEmissive(material),
+    }
+  })
+  let cleanMaterialRegionsVerified = true
+  if (basePrimitives.length !== REQUIRED_BODY_MATERIAL_REGIONS.length) {
+    errors.push('base body must expose four deterministic material primitives')
+    cleanMaterialRegionsVerified = false
+  }
+  const sharedAttributes = JSON.stringify(basePrimitive?.attributes ?? null)
+  for (let index = 0; index < REQUIRED_BODY_MATERIAL_REGIONS.length; index += 1) {
+    const [expectedRegion, expectedMaterial, expectedTextured] = REQUIRED_BODY_MATERIAL_REGIONS[index]
+    const actual = materialRegions[index]
+    const primitive = basePrimitives[index]
+    if (!actual || actual.region !== expectedRegion || actual.material !== expectedMaterial
+      || actual.textured !== expectedTextured || actual.emissive
+      || actual.classifier !== 'native-joints-position-v1'
+      || JSON.stringify(primitive?.attributes ?? null) !== sharedAttributes) {
+      errors.push(`base material region ${expectedRegion} is not the deterministic clean PBR contract`)
+      cleanMaterialRegionsVerified = false
+    }
+  }
+  const totalBodyTriangles = materialRegions.reduce((sum, region) => sum + region.triangles, 0)
+  if (totalBodyTriangles !== 174_754) {
+    errors.push(`base material regions must preserve 174754 native triangles, found ${totalBodyTriangles}`)
+    cleanMaterialRegionsVerified = false
+  }
+  const jacketMaterial = model.json.materials?.[jacketPrimitive?.material]
+  if (jacketMaterial?.name !== 'LifeHero_Jacket_Graphite'
+    || jacketPrimitive?.attributes?.COLOR_0 !== undefined
+    || jacketMaterial?.pbrMetallicRoughness?.baseColorTexture !== undefined
+    || hasVisibleEmissive(jacketMaterial)) {
+    errors.push('jacket must use one clean texture-free graphite PBR material')
+    cleanMaterialRegionsVerified = false
+  }
   let jacketWeightCopiesVerified = false
   if (basePrimitive && jacketPrimitive) {
     const sourceVertexAccessor = jacketPrimitive.attributes?._SOURCE_VERTEX
@@ -59,19 +115,24 @@ export async function inspectLifeHeroGlb(filePath) {
     }
   }
 
-  if (model.json.asset?.extras?.schema !== 'life-hero-concept-glb/v2') {
+  if (model.json.asset?.extras?.schema !== 'life-hero-concept-glb/v3') {
     errors.push('asset must expose the native same-body KAN-257 contract receipt')
+  }
+  if (model.json.asset?.extras?.materialCorrection?.classifier !== 'native-joints-position-v1') {
+    errors.push('asset must expose the deterministic material correction receipt')
+    cleanMaterialRegionsVerified = false
   }
 
   const meshGeometry = (model.json.meshes ?? []).map(mesh => {
     const primitive = mesh.primitives[0]
     const position = readAccessor(model, primitive.attributes.POSITION).accessor
-    const indices = readAccessor(model, primitive.indices).accessor
     return {
       name: mesh.name,
       vertices: position.count,
-      triangles: indices.count / 3,
-      material: primitive.material,
+      triangles: mesh.primitives.reduce((sum, candidate) => (
+        sum + readAccessor(model, candidate.indices).accessor.count / 3
+      ), 0),
+      materials: mesh.primitives.map(candidate => candidate.material),
     }
   })
   const bytes = await readFile(filePath)
@@ -83,6 +144,8 @@ export async function inspectLifeHeroGlb(filePath) {
     errors,
     summary,
     meshGeometry,
+    materialRegions,
+    cleanMaterialRegionsVerified,
     jacketWeightCopiesVerified,
     contract: model.json.asset?.extras ?? null,
   }

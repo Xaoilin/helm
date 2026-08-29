@@ -7,6 +7,12 @@ import { inspectGlbJson, readAccessor, readGlb, writeGlb } from './lib/glb.mjs'
 
 const REQUIRED_CLIPS = ['Idle_02', 'Motivational_Cheer', 'Running', 'Walking']
 const JOINT_COUNT = 24
+const MATERIAL_REGION_CLASSIFIER = 'native-joints-position-v1'
+const BODY_REGION_ORDER = ['identity-texture', 'clean-skin', 'clean-underlayer', 'clean-shoes']
+const HEAD_JOINTS = new Set([21, 22, 23])
+const CLEAN_SKIN_JOINTS = new Set([14, 15, 18, 19, 20])
+const UPPER_ARM_JOINTS = new Set([13, 17])
+const SHOE_JOINTS = new Set([3, 4, 7, 8])
 
 function parseArguments(argv) {
   const result = {}
@@ -58,6 +64,53 @@ function typedArray(componentType, values) {
   return new Constructor(values)
 }
 
+function averageJointInfluence(vertices, jointIndexes, joints, weights) {
+  let influence = 0
+  for (const vertex of vertices) {
+    for (let component = 0; component < 4; component += 1) {
+      const offset = vertex * 4 + component
+      if (jointIndexes.has(joints[offset])) influence += weights[offset]
+    }
+  }
+  return influence / vertices.length
+}
+
+function classifyBodyTriangle(vertices, positions, joints, weights) {
+  const centroidY = vertices.reduce((sum, vertex) => sum + positions[vertex * 3 + 1], 0) / vertices.length
+  if (averageJointInfluence(vertices, HEAD_JOINTS, joints, weights) >= 0.45) return 'identity-texture'
+  if (averageJointInfluence(vertices, SHOE_JOINTS, joints, weights) >= 0.45 || centroidY < 0.105) return 'clean-shoes'
+  if (averageJointInfluence(vertices, CLEAN_SKIN_JOINTS, joints, weights) >= 0.32) return 'clean-skin'
+  if (centroidY < 1.185 && averageJointInfluence(vertices, UPPER_ARM_JOINTS, joints, weights) >= 0.42) {
+    return 'clean-skin'
+  }
+  return 'clean-underlayer'
+}
+
+function splitBodyMaterialRegions(positions, joints, weights, indices) {
+  const regionIndices = Object.fromEntries(BODY_REGION_ORDER.map(region => [region, []]))
+  for (let index = 0; index < indices.length; index += 3) {
+    const triangle = [indices[index], indices[index + 1], indices[index + 2]]
+    regionIndices[classifyBodyTriangle(triangle, positions, joints, weights)].push(...triangle)
+  }
+  for (const region of BODY_REGION_ORDER) {
+    if (regionIndices[region].length === 0) throw new Error(`Body material region ${region} produced no triangles`)
+    regionIndices[region] = new Uint32Array(regionIndices[region])
+  }
+  return regionIndices
+}
+
+function cleanPbrMaterial(name, baseColorFactor, roughnessFactor) {
+  return {
+    name,
+    doubleSided: true,
+    pbrMetallicRoughness: {
+      baseColorFactor,
+      metallicFactor: 0,
+      roughnessFactor,
+    },
+  }
+}
+
 function skeletonSignature(model) {
   const skin = model.json.skins?.[0]
   if (!skin || skin.joints?.length !== JOINT_COUNT) {
@@ -98,7 +151,6 @@ function makeJacket(bodyPositions, bodyNormals, bodyJoints, bodyWeights, bodyInd
   const normals = []
   const joints = []
   const weights = []
-  const colors = []
   const sourceVertices = []
   const indices = []
   const outwardOffset = 0
@@ -131,9 +183,6 @@ function makeJacket(bodyPositions, bodyNormals, bodyJoints, bodyWeights, bodyInd
     sourceToJacket.set(sourceIndex, jacketIndex)
     const positionOffset = sourceIndex * 3
     const weightOffset = sourceIndex * 4
-    const sourceX = bodyPositions[positionOffset]
-    const sourceY = bodyPositions[positionOffset + 1]
-    const sourceZ = bodyPositions[positionOffset + 2]
     for (let component = 0; component < 3; component += 1) {
       positions.push(bodyPositions[positionOffset + component])
       normals.push(bodyNormals[positionOffset + component])
@@ -142,12 +191,6 @@ function makeJacket(bodyPositions, bodyNormals, bodyJoints, bodyWeights, bodyInd
       joints.push(bodyJoints[weightOffset + component])
       weights.push(bodyWeights[weightOffset + component])
     }
-    const frontTrim = sourceZ > 0.015 && Math.abs(sourceX) < 0.035 && sourceY < 1.33
-    const collarTrim = sourceZ > 0 && sourceY > 1.315
-    const hemTrim = sourceY < 0.915
-    colors.push(...(frontTrim || collarTrim || hemTrim
-      ? [0.025, 0.03, 0.04, 1]
-      : [0.18, 0.2, 0.23, 1]))
     sourceVertices.push(sourceIndex)
     return jacketIndex
   }
@@ -165,7 +208,6 @@ function makeJacket(bodyPositions, bodyNormals, bodyJoints, bodyWeights, bodyInd
     normals: new Float32Array(normals),
     joints: new Uint8Array(joints),
     weights: new Float32Array(weights),
-    colors: new Float32Array(colors),
     sourceVertices: new Uint32Array(sourceVertices),
     indices: new Uint32Array(indices),
     outwardOffset,
@@ -272,28 +314,73 @@ async function build({
   const bodyJoints = readAccessor(body, bodyPrimitive.attributes.JOINTS_0).values
   const bodyWeights = readAccessor(body, bodyPrimitive.attributes.WEIGHTS_0).values
   const bodyIndices = readAccessor(body, bodyPrimitive.indices).values
+  const bodyRegions = splitBodyMaterialRegions(bodyPositions, bodyJoints, bodyWeights, bodyIndices)
+  const originalBodyMaterial = clone(json.materials?.[bodyPrimitive.material ?? 0] ?? {})
+  const identityPbr = clone(originalBodyMaterial.pbrMetallicRoughness ?? {})
+  identityPbr.baseColorFactor = [1, 1, 1, 1]
+  identityPbr.metallicFactor = 0
+  identityPbr.roughnessFactor = 0.72
+  json.materials = [
+    {
+      name: 'LifeHero_IdentityTexture',
+      doubleSided: true,
+      pbrMetallicRoughness: identityPbr,
+      extras: { region: 'head-face-hair', source: 'paid-native-texture', emissiveRemoved: true },
+    },
+    cleanPbrMaterial('LifeHero_CleanSkin', [0.54, 0.29, 0.15, 1], 0.76),
+    cleanPbrMaterial('LifeHero_CleanUnderlayer', [0.055, 0.065, 0.08, 1], 0.9),
+    cleanPbrMaterial('LifeHero_CleanShoes', [0.025, 0.03, 0.04, 1], 0.8),
+  ]
+  json.extensionsUsed = (json.extensionsUsed ?? []).filter(extension => (
+    extension !== 'KHR_materials_specular' && extension !== 'KHR_materials_ior'
+  ))
+  if (json.extensionsUsed.length === 0) delete json.extensionsUsed
+  json.extensionsRequired = (json.extensionsRequired ?? []).filter(extension => (
+    extension !== 'KHR_materials_specular' && extension !== 'KHR_materials_ior'
+  ))
+  if (json.extensionsRequired.length === 0) delete json.extensionsRequired
+
+  const bodyRegionMaterialIndex = {
+    'identity-texture': 0,
+    'clean-skin': 1,
+    'clean-underlayer': 2,
+    'clean-shoes': 3,
+  }
+  const bodyRegionIndexAccessor = Object.fromEntries(BODY_REGION_ORDER.map(region => [
+    region,
+    appendAccessor(bodyRegions[region], 5125, 'SCALAR', 34963),
+  ]))
+  const sharedBodyAttributes = clone(bodyPrimitive.attributes)
+  json.meshes[0].primitives = BODY_REGION_ORDER.map(region => ({
+    attributes: clone(sharedBodyAttributes),
+    indices: bodyRegionIndexAccessor[region],
+    material: bodyRegionMaterialIndex[region],
+    mode: bodyPrimitive.mode ?? 4,
+    extras: {
+      materialRegion: region,
+      classifier: MATERIAL_REGION_CLASSIFIER,
+      triangles: bodyRegions[region].length / 3,
+    },
+  }))
+
   const jacket = makeJacket(bodyPositions, bodyNormals, bodyJoints, bodyWeights, bodyIndices)
   const jacketBounds = bounds(jacket.positions)
   const jacketPositionAccessor = appendAccessor(jacket.positions, 5126, 'VEC3', 34962, jacketBounds.minimum, jacketBounds.maximum)
   const jacketNormalAccessor = appendAccessor(jacket.normals, 5126, 'VEC3', 34962)
   const jacketJointsAccessor = appendAccessor(jacket.joints, 5121, 'VEC4', 34962)
   const jacketWeightsAccessor = appendAccessor(jacket.weights, 5126, 'VEC4', 34962)
-  const jacketColorAccessor = appendAccessor(jacket.colors, 5126, 'VEC4', 34962)
   const jacketSourceAccessor = appendAccessor(jacket.sourceVertices, 5125, 'SCALAR', 34962)
   const jacketIndexAccessor = appendAccessor(jacket.indices, 5125, 'SCALAR', 34963)
 
   json.meshes[0].name = 'LifeHero_BaseBody'
-  json.meshes[0].extras = { kind: 'body', neutralUnderlayerComplete: true, source: 'native-same-body-rig' }
+  json.meshes[0].extras = {
+    kind: 'body',
+    neutralUnderlayerComplete: true,
+    source: 'native-same-body-rig',
+    materialRegionClassifier: MATERIAL_REGION_CLASSIFIER,
+  }
   const jacketMaterialIndex = json.materials.length
-  json.materials.push({
-    name: 'LifeHero_Jacket_Graphite',
-    doubleSided: true,
-    pbrMetallicRoughness: {
-      baseColorFactor: [1, 1, 1, 1],
-      metallicFactor: 0.05,
-      roughnessFactor: 0.78,
-    },
-  })
+  json.materials.push(cleanPbrMaterial('LifeHero_Jacket_Graphite', [0.11, 0.13, 0.16, 1], 0.84))
   json.meshes.push({
     name: 'LifeHero_Jacket',
     extras: { kind: 'skinned-clothing', slot: 'torso', source: 'native-body-surface', weights: 'exact-source-vertex-copy' },
@@ -303,7 +390,6 @@ async function build({
         NORMAL: jacketNormalAccessor,
         JOINTS_0: jacketJointsAccessor,
         WEIGHTS_0: jacketWeightsAccessor,
-        COLOR_0: jacketColorAccessor,
         _SOURCE_VERTEX: jacketSourceAccessor,
       },
       indices: jacketIndexAccessor,
@@ -328,7 +414,7 @@ async function build({
   parentNode.children.push(jacketNodeIndex)
 
   json.asset.extras = {
-    schema: 'life-hero-concept-glb/v2',
+    schema: 'life-hero-concept-glb/v3',
     scope: 'KAN-257 approval proof; not production wardrobe readiness',
     bodySourceSha256: bodyHash,
     nativeIdleSourceSha256: idleHash,
@@ -338,6 +424,12 @@ async function build({
     skinning: 'native same-body skin retained without transferred joints, inverse binds, or body weights',
     jacket: 'separate mesh using exact JOINTS_0 and WEIGHTS_0 copied from mapped native body vertices',
     animation: 'Idle_02, Motivational_Cheer, Running, and Walking are native same-body animation exports',
+    materialCorrection: {
+      classifier: MATERIAL_REGION_CLASSIFIER,
+      regions: BODY_REGION_ORDER,
+      identity: 'paid native texture retained only for head, face, and hair with emissive disabled',
+      cleanPbr: 'skin, neutral underlayer, shoes, and graphite jacket use texture-free rough PBR materials',
+    },
   }
 
   const binary = Buffer.concat(binaryParts)
@@ -353,6 +445,7 @@ async function build({
     sourceWalkingSha256: walkingHash,
     bodyVertices: bodyPositions.length / 3,
     bodyTriangles: bodyIndices.length / 3,
+    bodyMaterialRegions: Object.fromEntries(BODY_REGION_ORDER.map(region => [region, bodyRegions[region].length / 3])),
     jacketVertices: jacket.positions.length / 3,
     jacketTriangles: jacket.indices.length / 3,
     jacketOutwardOffset: jacket.outwardOffset,

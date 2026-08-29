@@ -9,6 +9,7 @@ const state = {
   activeClip: 'Idle_02',
   animationSpeed: 1,
   base: null,
+  baseMeshes: [],
   jacket: null,
   loaded: false,
   loading: false,
@@ -22,6 +23,20 @@ let renderer
 let scene
 let camera
 let clock
+
+function collectSkinnedMeshes(root) {
+  const meshes = []
+  root?.traverse?.(object => {
+    if (object.isSkinnedMesh) meshes.push(object)
+  })
+  if (root?.isSkinnedMesh && meshes.length === 0) meshes.push(root)
+  return meshes
+}
+
+function usesSameSkeleton(left, right) {
+  if (!left || !right || left.bones.length !== right.bones.length) return false
+  return left.bones.every((bone, index) => bone === right.bones[index])
+}
 
 function dispatch(name, detail) {
   window.dispatchEvent(new CustomEvent(name, { detail }))
@@ -188,9 +203,12 @@ async function ensureLoaded() {
     const loader = new GLTFLoader()
     const url = new URL('./assets/life-hero-modular.glb', document.baseURI).href
     const gltf = await loader.loadAsync(url)
-    const base = gltf.scene.getObjectByName('LifeHero_BaseBody')
+    const baseRoot = gltf.scene.getObjectByName('LifeHero_BaseBody')
     const jacket = gltf.scene.getObjectByName('LifeHero_Jacket')
-    if (!base?.isSkinnedMesh || !jacket?.isSkinnedMesh || base.skeleton !== jacket.skeleton) {
+    const baseMeshes = collectSkinnedMeshes(baseRoot)
+    const base = baseMeshes[0]
+    if (!baseRoot || baseMeshes.length !== 4 || !jacket?.isSkinnedMesh
+      || !baseMeshes.every(mesh => usesSameSkeleton(mesh.skeleton, jacket.skeleton))) {
       throw new Error('base and jacket are not separate skinned meshes on one skeleton')
     }
     const jacketMaterials = Array.isArray(jacket.material) ? jacket.material : [jacket.material]
@@ -204,6 +222,7 @@ async function ensureLoaded() {
     gltf.scene.animations = gltf.animations
     state.root = gltf.scene
     state.base = base
+    state.baseMeshes = baseMeshes
     state.jacket = jacket
     state.mixer = new THREE.AnimationMixer(gltf.scene)
     scene.add(gltf.scene)
@@ -214,7 +233,8 @@ async function ensureLoaded() {
     playClip(state.activeClip, state.animationSpeed)
     dispatch('life-hero-viewer-ready', {
       animations: gltf.animations.map(clip => clip.name),
-      meshes: [base.name, jacket.name],
+      materials: baseMeshes.map(mesh => mesh.material.name),
+      meshes: [baseRoot.name, jacket.name],
     })
   } catch (error) {
     state.loading = false
@@ -250,6 +270,7 @@ window.lifeHeroViewer = {
     activeClip: state.activeClip,
     jacketVisible: state.jacket?.visible ?? null,
     loaded: state.loaded,
+    materialRegions: state.baseMeshes.map(mesh => mesh.material.name),
     static: state.static,
     view: state.view,
   }),
