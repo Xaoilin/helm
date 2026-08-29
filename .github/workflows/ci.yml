@@ -86,16 +86,12 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
 
-  unit-shard:
-    name: unit-${{ matrix.shard }}-of-2
+  unit:
+    name: unit
     if: >-
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event_name != 'workflow_dispatch' ||
         (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -104,38 +100,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test -- --config vite.config.ts --shard=${{ matrix.shard }}/2
+      - run: npm run test -- --config vite.config.ts
 
-  unit:
-    name: unit
-    needs: unit-shard
-    if: >-
-      always() &&
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event_name != 'workflow_dispatch' ||
-        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require every unit-test shard
-        env:
-          UNIT_SHARDS_RESULT: ${{ needs['unit-shard'].result }}
-        run: |
-          if [ "$UNIT_SHARDS_RESULT" != "success" ]; then
-            echo "One or more unit-test shards did not pass."
-            exit 1
-          fi
-          echo "All unit-test shards passed."
-
-  e2e-shard:
-    name: e2e-${{ matrix.shard }}-of-3
+  e2e:
+    name: e2e
     if: >-
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event_name != 'workflow_dispatch' ||
         (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -146,30 +118,10 @@ jobs:
       - run: npm ci
       - name: Verify hosted browser
         run: google-chrome --version
-      - name: Run blocking E2E shard
-        run: npm run test:e2e -- --fully-parallel --workers=2 --shard=${{ matrix.shard }}/3 --reporter=line
+      - name: Run blocking E2E portfolio
+        run: npm run test:e2e -- --fully-parallel --workers=2 --reporter=line
         env:
           HELM_E2E_USE_HOST_CHROME: "1"
-
-  e2e:
-    name: e2e
-    needs: e2e-shard
-    if: >-
-      always() &&
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event_name != 'workflow_dispatch' ||
-        (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require every E2E shard
-        env:
-          E2E_SHARDS_RESULT: ${{ needs['e2e-shard'].result }}
-        run: |
-          if [ "$E2E_SHARDS_RESULT" != "success" ]; then
-            echo "One or more E2E shards did not pass."
-            exit 1
-          fi
-          echo "All E2E shards passed."
 
   build:
     name: build
