@@ -16,7 +16,7 @@ Desktop and ordinary-capability devices load `public/concepts/life-hero/assets/l
 | Skin | one shared 24-joint skin, skin 0 |
 | Clips | `Idle_02`, `Motivational_Cheer`, `Running`, `Walking` |
 | Native merged source SHA-256 | `9b850b4c61287c240d34bdb70da496255c68cd91cdf82f3152767677c664cd91` |
-| Canonical output SHA-256 | recorded by the inspector and final evidence receipt |
+| Canonical output | 72,512,508 bytes; SHA-256 `dad158c26e7d926ad898c78d019898536b7776ac3625b145ddd8aa0c88a0ac66` |
 
 The source contained two pixel-identical 8192×8192 PNG images: one used as base color and one incorrectly used as emissive. The builder retains one image at full resolution, removes the duplicate bytes, deletes emissive/specular extensions, sets `alphaMode` to `OPAQUE`, and uses natural opaque PBR. The exact deduplication receipt is embedded in `asset.extras.textureDeduplication`.
 
@@ -24,7 +24,7 @@ The jacket is a separate skinned concept shell derived from the exact native bod
 
 ## Constrained-device fallback
 
-`public/concepts/life-hero/assets/life-hero-modular-fallback.glb` retains the earlier 31K-triangle rig as a capability fallback. The viewer selects it when `navigator.deviceMemory <= 4` or `navigator.hardwareConcurrency <= 4`; otherwise the maximum-quality asset is primary. The fallback remains separately named, skinned, animated, and inspectable. This is a device-capability decision, not a dashboard LOD system; production LOD ownership remains with KAN-260.
+`public/concepts/life-hero/assets/life-hero-modular-fallback.glb` retains the earlier 31K-triangle rig as a capability fallback. Its SHA-256 is `3f507f356a5aa59ad2cff06be2bcfb4d9cec5a43fbd25721127e2407d6e7542e`. The viewer selects it when `navigator.deviceMemory <= 4` or `navigator.hardwareConcurrency <= 4`; otherwise the maximum-quality asset is primary. The fallback remains separately named, skinned, animated, and inspectable. This is a device-capability decision, not a dashboard LOD system; production LOD ownership remains with KAN-260.
 
 ## Viewer behavior
 
