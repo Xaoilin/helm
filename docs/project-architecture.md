@@ -52,6 +52,17 @@ Shared arrays are account-owned records with explicit positions. Semantic create
 
 Account changes clear the previous in-memory state before the next account can render. Calendar data keeps the account -> source -> event hierarchy, including intentional multi-account support.
 
+The persistence runtime has one stable consumer API at `src/store/persistence.ts`. Its implementation is divided by state ownership instead of keeping cache, queue, realtime, device, and diagnostic globals in one module:
+
+- `persistence/runtime.ts` orchestrates authenticated session bootstrap, hydration, account switching, legacy cutover, and consumer publication through one explicit `PersistenceRuntimeState` owner.
+- `persistence/cache.ts` owns authoritative records and the provider-delivered diff baseline. The separate baseline prevents a concurrent remote addition from being interpreted as a local deletion.
+- `persistence/writes.ts` owns coalesced writes, one-at-a-time committed operations, queue diagnostics, and account-epoch invalidation. Transient mutation retry remains limited to one repeat with the same request ID and operation list.
+- `persistence/realtime.ts` owns the private Broadcast channel, lifecycle refresh triggers, readiness timeout, and bounded recovery. Broadcast remains an invalidation signal; records are refreshed from the database before they are published.
+- `persistence/deviceStore.ts` owns the device-only settings key and one-way legacy shared-data quarantine. It cannot be used as a shared-data fallback.
+- `persistence/health.ts` owns immutable health publication and clears account-scoped read/write diagnostics when the account runtime resets.
+
+Each stateful boundary has an explicit reset path. Add a new boundary only when it owns distinct mutable state or policy; ordinary persistence behavior should extend the existing consumer-shaped boundary. Do not introduce a generic repository, event bus, dependency-injection container, or storage abstraction without a concrete consumer and measured benefit.
+
 ### Supabase
 
 `src/store/supabase.ts` provides Supabase Auth, session bootstrap, account-isolated reads, semantic mutation calls, private Broadcast subscriptions, version probes, and account-owned secret operations. `src/AppRoot.tsx` blocks the provider tree until the authenticated database session is ready.

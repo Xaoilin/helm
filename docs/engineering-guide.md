@@ -59,6 +59,8 @@ Assistant-planning changes also keep the benchmark corpus, dialog seeds, grounde
 
 Business rules, account persistence, semantic mutations, assistant validation, and provider error mapping should have focused deterministic coverage. Service checks should exercise success and failure responses without hiding diagnostics.
 
+Persistence changes should directly prove the affected owner: stale session epochs and account reset, delivered-cache diff policy, queued-write reset and stable retry identity, Broadcast invalidation and recovery, device-key isolation, or health publication. Run the focused persistence contract before the aggregate gate; the database contract remains the authority for RLS, idempotency, revision serialization, tombstones, and account-version behavior.
+
 ### Browser E2E
 
 User-facing flows should have Playwright coverage when they change visible behavior. Existing specs should be extended instead of duplicated. Responsive shell or surface work covers the repository's supported mobile, tablet, and wider browser widths, with no horizontal overflow and no clipped content at increased text zoom.
