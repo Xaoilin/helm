@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -15,6 +16,14 @@ export const vitestExcludedPaths = ['node_modules', 'e2e', '.codex_tmp/**', '.ai
 export default defineConfig({
   plugins: [react()],
   base: resolveAssetBase(),
+  build: {
+    rollupOptions: {
+      input: {
+        app: fileURLToPath(new URL('./index.html', import.meta.url)),
+        lifeHeroConcept: fileURLToPath(new URL('./concepts/life-hero/index.html', import.meta.url)),
+      },
+    },
+  },
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
   },

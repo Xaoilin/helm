@@ -2,164 +2,194 @@ import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
+import { inspectLifeHeroGlb, REQUIRED_LIFE_HERO_CLIPS } from '../scripts/inspect-life-hero-glb.mjs';
+
 const CONCEPT_PATH = 'concepts/life-hero/index.html';
 const EVIDENCE_DIRECTORY = path.resolve('docs/design/evidence');
+const MODEL_PATH = path.resolve('public/concepts/life-hero/assets/life-hero-modular.glb');
 
-test.describe('Life Hero modular concept', () => {
-  test('toggles separate clothing and gear assets independently', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(CONCEPT_PATH);
+async function waitForModel(page: import('@playwright/test').Page) {
+  await expect(page.getByTestId('avatar-stage')).toHaveAttribute('data-model-state', 'ready', {
+    timeout: 30_000,
+  });
+}
 
-    await expect(page.getByRole('heading', { name: 'One hero, separate layers' })).toBeVisible();
-    await expect(page.getByText('This image is not a 3D model.')).toBeVisible();
+async function readViewerState(page: import('@playwright/test').Page) {
+  return page.evaluate(() => {
+    const viewer = (window as typeof window & {
+      lifeHeroViewer?: { getState: () => Record<string, unknown> };
+    }).lifeHeroViewer;
+    return viewer?.getState() ?? null;
+  });
+}
 
-    const body = page.locator('[data-layer="body-base"]');
-    const clothing = page.locator('[data-layer="clothing-base"]');
-    const jacket = page.locator('[data-layer="field-jacket"]');
-    const harness = page.locator('[data-layer="harness"]');
-    const cuff = page.locator('[data-layer="progress-cuff"]');
-    const pack = page.locator('[data-layer="day-pack"]');
-    const sash = page.locator('[data-layer="training-sash"]');
+test.describe('Life Hero modular GLB proof', () => {
+  test('exports separate base and jacket meshes on one skin with four exact clips', async () => {
+    const inspection = await inspectLifeHeroGlb(MODEL_PATH);
 
-    await expect(body).toBeVisible();
-    await expect(clothing).toBeVisible();
-    await expect(jacket).toBeVisible();
-    await expect(harness).toBeVisible();
-    await expect(cuff).toBeVisible();
-    await expect(pack).toBeHidden();
-    await expect(sash).toBeHidden();
-
-    await page.getByRole('button', { name: 'Harness' }).click();
-    await expect(harness).toBeHidden();
-    await expect(cuff).toBeVisible();
-
-    await page.getByRole('button', { name: 'Day pack' }).focus();
-    await page.keyboard.press('Enter');
-    await page.getByRole('button', { name: 'Training sash' }).click();
-    await expect(pack).toBeVisible();
-    await expect(sash).toBeVisible();
-    await expect(page.getByTestId('layer-status')).toContainText('Day pack, Training sash');
-    await expect(body).toBeVisible();
-    await expect(clothing).toBeVisible();
-
-    const hasHorizontalOverflow = await page.evaluate(() => (
-      document.documentElement.scrollWidth > document.documentElement.clientWidth
-    ));
-    expect(hasHorizontalOverflow).toBe(false);
+    expect(inspection.valid, inspection.errors.join('\n')).toBe(true);
+    expect(inspection.summary.meshNodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'LifeHero_BaseBody', mesh: 0, skin: 0 }),
+      expect.objectContaining({ name: 'LifeHero_Jacket', mesh: 1, skin: 0 }),
+    ]));
+    expect(inspection.summary.skins).toEqual([
+      expect.objectContaining({ index: 0, joints: 24 }),
+    ]);
+    expect(inspection.summary.animations.map(animation => animation.name)).toEqual(REQUIRED_LIFE_HERO_CLIPS);
+    expect(inspection.meshGeometry).toEqual([
+      expect.objectContaining({ name: 'LifeHero_BaseBody', vertices: 29_410, triangles: 31_045 }),
+      expect.objectContaining({ name: 'LifeHero_Jacket', vertices: 6_198, triangles: 8_256 }),
+    ]);
   });
 
-  test('selects every named motion and supports an explicit static mode', async ({ page }) => {
+  test('renders the actual GLB and toggles the jacket without replacing the body', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(CONCEPT_PATH);
+    await waitForModel(page);
 
-    const rig = page.getByTestId('avatar-rig');
-    const stage = page.getByTestId('avatar-stage');
-    await expect(rig).toHaveAttribute('data-motion', 'idle');
+    await expect(page.getByRole('heading', { name: 'A real hero, a separate jacket' })).toBeVisible();
+    await expect(page.getByText('This image is not a 3D model.')).toBeVisible();
+    await expect(page.getByTestId('life-hero-canvas')).toBeVisible();
+    await expect.poll(() => readViewerState(page)).toMatchObject({
+      activeClip: 'Idle_02',
+      jacketVisible: true,
+      loaded: true,
+      static: false,
+    });
+
+    const jacketButton = page.getByRole('button', { name: 'Rust jacket · GLB', exact: true });
+    const stageBeforeToggle = await page.getByTestId('avatar-stage').boundingBox();
+    await jacketButton.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('avatar-stage')).toHaveAttribute('data-jacket-visible', 'false');
+    await expect(page.getByTestId('jacket-status')).toContainText('complete neutral body remains');
+    await expect.poll(() => readViewerState(page)).toMatchObject({ jacketVisible: false, loaded: true });
+    const stageAfterToggle = await page.getByTestId('avatar-stage').boundingBox();
+    expect(stageBeforeToggle).not.toBeNull();
+    expect(stageAfterToggle).not.toBeNull();
+    expect(Math.abs(stageAfterToggle!.x - stageBeforeToggle!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(stageAfterToggle!.y - stageBeforeToggle!.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(stageAfterToggle!.width - stageBeforeToggle!.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(stageAfterToggle!.height - stageBeforeToggle!.height)).toBeLessThanOrEqual(1);
+
+    await page.keyboard.press('Enter');
+    await expect.poll(() => readViewerState(page)).toMatchObject({ jacketVisible: true, loaded: true });
+  });
+
+  test('selects every concept motion through the preserved embedded clips', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(CONCEPT_PATH);
+    await waitForModel(page);
 
     const motions = [
-      ['Motivate', 'celebrate'],
-      ['Focus', 'focus'],
-      ['Train', 'train'],
-      ['Low momentum', 'tired'],
-      ['Idle', 'idle'],
+      ['Motivate', 'Motivational_Cheer'],
+      ['Focus', 'Walking'],
+      ['Train', 'Running'],
+      ['Low momentum', 'Idle_02'],
+      ['Idle', 'Idle_02'],
     ] as const;
 
-    for (const [buttonName, motion] of motions) {
+    for (const [buttonName, clip] of motions) {
       await page.getByRole('button', { name: buttonName, exact: true }).click();
-      await expect(rig).toHaveAttribute('data-motion', motion);
-      await expect(page.locator('#motion-name')).toHaveText(buttonName);
+      await expect(page.getByTestId('avatar-stage')).toHaveAttribute('data-active-clip', clip);
+      await expect.poll(() => readViewerState(page)).toMatchObject({ activeClip: clip });
     }
-
-    await page.getByRole('button', { name: 'Static', exact: true }).click();
-    await expect(stage).toHaveAttribute('data-motion-mode', 'static');
-    await expect(page.getByTestId('motion-mode-status')).toContainText('Static fallback selected');
-    await expect.poll(() => rig.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
   });
 
-  test('forces the static fallback for prefers-reduced-motion', async ({ page }) => {
+  test('uses layered static fallbacks for explicit and reduced-motion modes', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(CONCEPT_PATH);
 
-    const rig = page.getByTestId('avatar-rig');
-    await expect(page.getByTestId('avatar-stage')).toHaveAttribute('data-motion-mode', 'static');
-    await expect(page.getByRole('button', { name: 'Motion on' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Static', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const stage = page.getByTestId('avatar-stage');
+    await expect(stage).toHaveAttribute('data-motion-mode', 'static');
+    await expect(stage).toHaveAttribute('data-model-state', 'fallback');
+    await expect(page.getByRole('button', { name: '3D motion on' })).toBeDisabled();
+    await expect(page.getByTestId('static-fallback')).toBeVisible();
+    await expect(page.getByTestId('life-hero-canvas')).toBeHidden();
+    await expect(page.getByTestId('motion-mode-status')).toContainText('system reduced-motion preference');
 
-    await page.getByRole('button', { name: 'Low momentum' }).click();
-    await expect(rig).toHaveAttribute('data-motion', 'tired');
-    await expect(page.getByTestId('motion-mode-status')).toHaveText(
-      'Static fallback active — system reduced-motion preference.',
-    );
-    await expect.poll(() => rig.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
-    await expect(page.getByRole('img', { name: 'Approved original Life Hero art-direction portrait' })).toBeVisible();
+    await page.getByRole('button', { name: 'Pack · SVG' }).click();
+    await page.getByRole('button', { name: 'Sash · SVG' }).click();
+    await expect(page.locator('[data-testid="static-fallback"] [data-source-layer="day-pack"]')).toBeVisible();
+    await expect(page.locator('[data-testid="static-fallback"] [data-source-layer="training-sash"]')).toBeVisible();
+    await expect(page.getByTestId('layer-status')).toContainText('Pack, Sash');
   });
 
-  test('keeps the modular controls usable at mobile width', async ({ page }) => {
+  test('keeps actual model controls usable at mobile width', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(CONCEPT_PATH);
+    await waitForModel(page);
 
-    const rig = page.getByTestId('avatar-rig');
-    const heading = page.getByRole('heading', { name: 'One hero, separate layers' });
-    const [headingBox, rigBox] = await Promise.all([heading.boundingBox(), rig.boundingBox()]);
-    expect(headingBox).not.toBeNull();
-    expect(rigBox).not.toBeNull();
-    expect(rigBox!.y).toBeGreaterThan(headingBox!.y);
-
-    await page.getByRole('button', { name: 'Day pack' }).click();
+    await page.getByRole('button', { name: 'Rust jacket · GLB', exact: true }).click();
     await page.getByRole('button', { name: 'Focus', exact: true }).click();
-    await expect(page.locator('[data-layer="day-pack"]')).toBeVisible();
-    await expect(rig).toHaveAttribute('data-motion', 'focus');
-
-    const beforeScroll = await page.evaluate(() => window.scrollY);
-    await page.mouse.wheel(0, 620);
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(beforeScroll);
+    await expect(page.getByTestId('avatar-stage')).toHaveAttribute('data-active-clip', 'Walking');
+    await expect.poll(() => readViewerState(page)).toMatchObject({ jacketVisible: false, activeClip: 'Walking' });
 
     const hasHorizontalOverflow = await page.evaluate(() => (
       document.documentElement.scrollWidth > document.documentElement.clientWidth
     ));
     expect(hasHorizontalOverflow).toBe(false);
+
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    await page.mouse.wheel(0, 620);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollBefore);
   });
 
-  test('@visual captures KAN-257 desktop, mobile, and reduced-motion evidence', async ({ page }) => {
+  test('@visual captures KAN-257 GLB, jacket-motion, mobile, and fallback evidence', async ({ page }) => {
     test.skip(process.env.HELM_E2E_VISUAL_SURFACE !== 'life-hero', 'Life Hero visual capture only.');
 
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(CONCEPT_PATH);
-    await page.getByRole('button', { name: 'Day pack' }).click();
-    await page.getByRole('button', { name: 'Static', exact: true }).click();
+    await waitForModel(page);
     await page.evaluate(() => {
+      const viewer = (window as typeof window & {
+        lifeHeroViewer: { setSampleTime: (seconds: number) => boolean };
+      }).lifeHeroViewer;
+      viewer.setSampleTime(0.7);
       (document.activeElement as HTMLElement | null)?.blur();
       window.scrollTo(0, 0);
     });
-    await page.screenshot({ path: path.join(EVIDENCE_DIRECTORY, 'life-hero-desktop-1440x900.png'), fullPage: true });
+    await page.screenshot({ path: path.join(EVIDENCE_DIRECTORY, 'life-hero-desktop-1440x900.png') });
+    await page.getByTestId('avatar-stage').screenshot({
+      path: path.join(EVIDENCE_DIRECTORY, 'life-hero-idle-jacket-frame.png'),
+    });
+
+    await page.getByRole('button', { name: 'Motivate', exact: true }).click();
+    await page.evaluate(() => {
+      const viewer = (window as typeof window & {
+        lifeHeroViewer: { setSampleTime: (seconds: number) => boolean };
+      }).lifeHeroViewer;
+      viewer.setSampleTime(0.95);
+    });
+    await page.getByTestId('avatar-stage').screenshot({
+      path: path.join(EVIDENCE_DIRECTORY, 'life-hero-cheer-jacket-frame.png'),
+    });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(CONCEPT_PATH);
-    await page.getByRole('button', { name: 'Harness' }).click();
-    await page.getByRole('button', { name: 'Day pack' }).click();
-    await page.getByRole('button', { name: 'Training sash' }).click();
-    await page.getByRole('button', { name: 'Static', exact: true }).click();
+    await waitForModel(page);
     await page.evaluate(() => {
+      const viewer = (window as typeof window & {
+        lifeHeroViewer: { setSampleTime: (seconds: number) => boolean };
+      }).lifeHeroViewer;
+      viewer.setSampleTime(0.7);
       (document.activeElement as HTMLElement | null)?.blur();
       window.scrollTo(0, 0);
     });
-    await page.screenshot({ path: path.join(EVIDENCE_DIRECTORY, 'life-hero-mobile-390x844.png'), fullPage: true });
+    await page.screenshot({ path: path.join(EVIDENCE_DIRECTORY, 'life-hero-mobile-390x844.png') });
 
     const reducedPage = await page.context().newPage();
     await reducedPage.emulateMedia({ reducedMotion: 'reduce' });
     await reducedPage.setViewportSize({ width: 390, height: 844 });
     await reducedPage.goto(`${CONCEPT_PATH}?evidence=reduced`);
-    await reducedPage.getByRole('button', { name: 'Low momentum' }).evaluate(button => {
-      (button as HTMLButtonElement).click();
-    });
+    await reducedPage.getByRole('button', { name: 'Low momentum' }).click();
     await reducedPage.evaluate(() => {
       (document.activeElement as HTMLElement | null)?.blur();
       window.scrollTo(0, 0);
     });
-    await expect.poll(() => reducedPage.evaluate(() => window.scrollY)).toBe(0);
-    await reducedPage.screenshot({ path: path.join(EVIDENCE_DIRECTORY, 'life-hero-reduced-motion-390x844.png'), fullPage: true });
+    await reducedPage.screenshot({ path: path.join(EVIDENCE_DIRECTORY, 'life-hero-reduced-motion-390x844.png') });
     await reducedPage.close();
   });
 });

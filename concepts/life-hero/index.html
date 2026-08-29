@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="Sabah One Life Hero modular animated GLB approval proof." />
+    <title>Life Hero modular GLB proof | Sabah One</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --canvas: #07111f;
+        --surface: #101d31;
+        --surface-deep: #091528;
+        --border: #30455f;
+        --text: #f5f1e7;
+        --muted: #adb9ca;
+        --gold: #e6c66a;
+        --turquoise: #55d8cc;
+        --focus: #9df0cf;
+      }
+      html { background: var(--canvas); }
+      body {
+        min-width: 240px;
+        min-height: 100vh;
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 12% 4%, rgba(85, 216, 204, 0.1), transparent 30rem),
+          radial-gradient(circle at 88% 15%, rgba(230, 198, 106, 0.08), transparent 26rem),
+          var(--canvas);
+      }
+      button { font: inherit; }
+      [hidden] { display: none !important; }
+      code { color: #dcfff7; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.76rem; }
+      .skip-link { position: absolute; top: 8px; left: 8px; z-index: 30; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .skip-link:focus { width: auto; height: auto; margin: 0; overflow: visible; clip: auto; padding: 10px 14px; border-radius: 8px; color: #07111f; background: var(--focus); }
+      .page { width: min(100%, 1440px); margin: 0 auto; padding: 26px clamp(16px, 3vw, 44px) 38px; }
+      .masthead { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+      .eyebrow, .card-label { margin: 0; color: var(--gold); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.13em; line-height: 1.35; text-transform: uppercase; }
+      h1 { max-width: 850px; margin: 7px 0 9px; font-size: clamp(2.15rem, 4vw, 4.4rem); line-height: 0.98; letter-spacing: -0.045em; }
+      .lede { max-width: 820px; margin: 0; color: var(--muted); font-size: clamp(0.96rem, 1.4vw, 1.1rem); line-height: 1.52; }
+      .approval-state { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 9px; min-height: 44px; padding: 10px 14px; border: 1px solid rgba(230, 198, 106, 0.48); border-radius: 999px; color: #f8e9aa; background: rgba(230, 198, 106, 0.09); font-size: 0.78rem; font-weight: 750; line-height: 1.3; }
+      .approval-state::before { width: 9px; height: 9px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 4px rgba(230, 198, 106, 0.12); content: ""; }
+      .proof-grid { display: grid; grid-template-columns: minmax(620px, 1.2fr) minmax(330px, 0.8fr); gap: 18px; align-items: start; }
+      .lab-card, .reference-card, .contract-card, .boundary-card, .detail-card, .approval-gate { border: 1px solid var(--border); border-radius: 18px; background: rgba(16, 29, 49, 0.94); box-shadow: 0 18px 36px rgba(0, 0, 0, 0.2); }
+      .lab-card { overflow: hidden; }
+      .lab-heading, .card-heading { padding: 16px 18px; border-bottom: 1px solid var(--border); }
+      .lab-heading h2, .card-heading h2, .detail-card h2, .boundary-card h2 { margin: 5px 0 4px; font-size: 1.05rem; line-height: 1.3; }
+      .lab-heading p:last-child, .card-heading p:last-child, .detail-card p, .boundary-card p, .contract-card li { margin: 0; color: var(--muted); font-size: 0.83rem; line-height: 1.48; }
+      .lab-workspace { display: grid; grid-template-columns: minmax(340px, 1.1fr) minmax(280px, 0.9fr); min-height: 610px; }
+      .avatar-stage { position: relative; display: grid; grid-template-rows: 1fr auto; min-height: 610px; overflow: hidden; border-right: 1px solid var(--border); background: linear-gradient(180deg, rgba(85, 216, 204, 0.1), transparent 38%), repeating-linear-gradient(90deg, transparent 0, transparent calc(25% - 1px), rgba(145, 160, 184, 0.06) 25%, transparent calc(25% + 1px)), var(--surface-deep); isolation: isolate; }
+      .model-badge { position: absolute; top: 12px; left: 12px; z-index: 8; max-width: calc(100% - 24px); padding: 7px 9px; border: 1px solid rgba(85, 216, 204, 0.34); border-radius: 999px; color: #d8fff9; background: rgba(7, 17, 31, 0.85); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
+      .viewer-frame { position: relative; display: grid; min-height: 548px; place-items: center; }
+      .viewer-frame::after { position: absolute; right: 18%; bottom: 18px; left: 18%; z-index: 0; height: 18px; border: 1px solid rgba(85, 216, 204, 0.16); border-radius: 50%; background: rgba(0, 0, 0, 0.28); content: ""; transform: perspective(90px) rotateX(58deg); }
+      #life-hero-canvas { position: absolute; inset: 0; z-index: 2; display: block; width: 100%; height: 100%; touch-action: none; }
+      .viewer-fallback { position: relative; z-index: 2; width: min(78%, 330px); aspect-ratio: 360 / 520; }
+      .fallback-layer { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; }
+      .viewer-loading { position: absolute; bottom: 20px; left: 50%; z-index: 6; max-width: calc(100% - 32px); padding: 7px 10px; border-radius: 8px; color: #dce7f5; background: rgba(7, 17, 31, 0.84); font-size: 0.7rem; transform: translateX(-50%); white-space: nowrap; }
+      .motion-readout { position: relative; z-index: 5; display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; min-height: 62px; padding: 10px 13px; border-top: 1px solid var(--border); background: rgba(7, 17, 31, 0.93); }
+      .motion-readout strong { color: var(--gold); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; }
+      .motion-readout span { color: #dbe6f4; font-size: 0.75rem; line-height: 1.35; text-align: right; }
+      .control-panel { display: grid; align-content: start; gap: 15px; padding: 16px; }
+      .control-group { min-width: 0; }
+      .control-group h3 { margin: 0 0 4px; font-size: 0.84rem; line-height: 1.3; }
+      .control-help, .control-status { margin: 0; color: var(--muted); font-size: 0.71rem; line-height: 1.4; }
+      .control-status { min-height: 2.8em; margin-top: 7px; color: #dbe6f4; }
+      .control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 9px; }
+      .toggle-button { min-height: 42px; padding: 8px 9px; border: 1px solid #405773; border-radius: 9px; color: #d9e5f3; background: #0b182a; cursor: pointer; font-size: 0.71rem; font-weight: 700; line-height: 1.25; text-align: left; }
+      .toggle-button:hover { border-color: var(--turquoise); }
+      .toggle-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+      .toggle-button[aria-pressed="true"] { border-color: rgba(85, 216, 204, 0.72); color: #ecfffb; background: rgba(85, 216, 204, 0.14); box-shadow: inset 3px 0 0 var(--turquoise); }
+      .toggle-button:disabled { cursor: not-allowed; opacity: 0.55; }
+      .layer-preview { position: relative; width: 92px; height: 132px; margin: 9px auto 2px; border: 1px solid rgba(85, 216, 204, 0.22); border-radius: 10px; background: #091528; overflow: hidden; }
+      .layer-preview .fallback-layer { inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); }
+      .proof-note { padding: 11px 12px; border: 1px solid rgba(230, 198, 106, 0.28); border-radius: 10px; color: #f6e9b6; background: rgba(230, 198, 106, 0.07); font-size: 0.71rem; line-height: 1.45; }
+      .side-stack { display: grid; gap: 14px; }
+      .structure-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 14px; list-style: none; }
+      .structure-list li { padding: 10px; border: 1px solid rgba(85, 216, 204, 0.2); border-radius: 10px; background: rgba(7, 17, 31, 0.42); }
+      .structure-list strong, .structure-list span { display: block; }
+      .structure-list strong { color: var(--turquoise); font-size: 1rem; }
+      .structure-list span { margin-top: 3px; color: var(--muted); font-size: 0.68rem; line-height: 1.35; }
+      .reference-body { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 14px; align-items: center; padding: 14px; }
+      .reference-body img { display: block; width: 118px; height: 158px; border: 1px solid var(--border); border-radius: 12px; object-fit: cover; object-position: center 20%; }
+      .reference-body strong, .reference-body span { display: block; }
+      .reference-body strong { margin-bottom: 6px; color: #f8e9aa; font-size: 0.88rem; line-height: 1.35; }
+      .reference-body span { color: var(--muted); font-size: 0.76rem; line-height: 1.46; }
+      .contract-card ul { display: grid; gap: 7px; margin: 0; padding: 14px 18px 17px 34px; }
+      .boundary-card { padding: 16px 18px; border-color: rgba(85, 216, 204, 0.36); background: linear-gradient(115deg, rgba(85, 216, 204, 0.08), rgba(16, 29, 49, 0.94) 52%); }
+      .support-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+      .detail-card { padding: 16px 18px; }
+      .detail-list { display: grid; gap: 6px; margin: 9px 0 0; padding: 0; list-style: none; }
+      .detail-list li { position: relative; padding-left: 16px; color: #dce6f4; font-size: 0.77rem; line-height: 1.42; }
+      .detail-list li::before { position: absolute; top: 0.55em; left: 0; width: 6px; height: 6px; border: 1px solid var(--turquoise); border-radius: 50%; content: ""; }
+      .approval-gate { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 14px; padding: 14px 18px; border-color: rgba(230, 198, 106, 0.42); }
+      .approval-gate strong { color: #f8e9aa; font-size: 0.86rem; line-height: 1.4; }
+      .approval-gate span { color: var(--muted); font-size: 0.76rem; line-height: 1.4; text-align: right; }
+      .avatar-stage[data-motion-mode="animated"] .viewer-fallback { display: none; }
+      .avatar-stage[data-motion-mode="static"] #life-hero-canvas { display: none; }
+      .avatar-stage[data-motion-mode="static"] .viewer-loading { display: none; }
+      @media (max-width: 1080px) {
+        .proof-grid { grid-template-columns: minmax(0, 1fr); }
+        .side-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .boundary-card { grid-column: 1 / -1; }
+      }
+      @media (max-width: 720px) {
+        .page { padding: 18px 12px 24px; }
+        .masthead { display: grid; gap: 13px; margin-bottom: 16px; }
+        h1 { max-width: 12ch; font-size: clamp(2.2rem, 12vw, 3.15rem); }
+        .approval-state { width: fit-content; }
+        .lab-workspace { grid-template-columns: minmax(0, 1fr); }
+        .avatar-stage { min-height: 520px; border-right: 0; border-bottom: 1px solid var(--border); }
+        .viewer-frame { min-height: 458px; }
+        .control-panel { padding: 14px; }
+        .side-stack, .support-grid { grid-template-columns: minmax(0, 1fr); }
+        .boundary-card { grid-column: auto; }
+        .approval-gate { display: grid; gap: 5px; }
+        .approval-gate span { text-align: left; }
+      }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
+      @media (forced-colors: active) {
+        body, .avatar-stage, .boundary-card { background: Canvas; }
+        .lab-card, .reference-card, .contract-card, .boundary-card, .detail-card, .approval-gate, .approval-state, .toggle-button { border: 1px solid CanvasText; }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#concept">Skip to concept</a>
+    <main id="concept" class="page" aria-labelledby="concept-title">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">Sabah One / Life Hero / Animated GLB proof</p>
+          <h1 id="concept-title">A real hero, a separate jacket</h1>
+          <p class="lede">
+            This approval artifact renders an actual rigged GLB with a higher-detail neutral body,
+            one separately skinned jacket, and four embedded clips. It is an honest pipeline proof,
+            not the production wardrobe system or final 3D rig.
+          </p>
+        </div>
+        <div class="approval-state" role="status">Milestone awaiting explicit approval</div>
+      </header>
+
+      <div class="proof-grid">
+        <section class="lab-card" aria-labelledby="lab-title">
+          <header class="lab-heading">
+            <p class="card-label">Runtime proof</p>
+            <h2 id="lab-title">One skeleton, two skinned mesh nodes</h2>
+            <p>The rust jacket toggles without regenerating, replacing, or changing the complete neutral body.</p>
+          </header>
+          <div class="lab-workspace">
+            <div class="avatar-stage" data-testid="avatar-stage" data-motion-mode="animated" data-model-state="loading" data-jacket-visible="true" data-active-clip="Idle_02" aria-label="Rigged Life Hero GLB proof">
+              <div class="model-badge">Actual GLB · 2 meshes · 1 skin · 4 clips</div>
+              <div class="viewer-frame">
+                <canvas id="life-hero-canvas" data-testid="life-hero-canvas" aria-label="Animated 3D Life Hero model"></canvas>
+                <div class="viewer-fallback" data-testid="static-fallback" role="img" aria-label="Static layered Life Hero fallback">
+                  <img class="fallback-layer" src="./layers/gear-pack.svg" alt="" data-source-layer="day-pack" hidden />
+                  <img class="fallback-layer" src="./layers/body-base.svg" alt="" />
+                  <img class="fallback-layer" src="./layers/clothing-base.svg" alt="" />
+                  <img class="fallback-layer" src="./layers/clothing-jacket.svg" alt="" data-source-layer="field-jacket" />
+                  <img class="fallback-layer" src="./layers/gear-harness.svg" alt="" data-source-layer="harness" />
+                  <img class="fallback-layer" src="./layers/gear-training-sash.svg" alt="" data-source-layer="training-sash" hidden />
+                  <img class="fallback-layer" src="./layers/gear-cuff.svg" alt="" data-source-layer="progress-cuff" />
+                </div>
+                <div class="viewer-loading" data-testid="viewer-status" role="status">Loading the 28 MB local GLB proof…</div>
+              </div>
+              <div class="motion-readout">
+                <strong id="motion-name">Idle</strong>
+                <span id="motion-mode-status" data-testid="motion-mode-status" aria-live="polite">Loading embedded Idle_02.</span>
+              </div>
+            </div>
+
+            <div class="control-panel">
+              <section class="control-group" aria-labelledby="jacket-control-title">
+                <h3 id="jacket-control-title">Actual GLB clothing</h3>
+                <p class="control-help">This controls the separate <code>LifeHero_Jacket</code> skinned node.</p>
+                <div class="control-grid">
+                  <button class="toggle-button" type="button" aria-pressed="true" data-layer-toggle="field-jacket">Rust jacket · GLB</button>
+                </div>
+                <p class="control-status" id="jacket-status" data-testid="jacket-status" aria-live="polite">Jacket mesh visible; neutral body unchanged.</p>
+              </section>
+
+              <section class="control-group" aria-labelledby="motion-controls-title">
+                <h3 id="motion-controls-title">Motion intent</h3>
+                <p class="control-help">The readout names the exact embedded clip used for each concept state.</p>
+                <div class="control-grid">
+                  <button class="toggle-button" type="button" aria-pressed="true" data-motion="idle">Idle</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-motion="celebrate">Motivate</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-motion="focus">Focus</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-motion="train">Train</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-motion="tired">Low momentum</button>
+                </div>
+              </section>
+
+              <section class="control-group" aria-labelledby="motion-preference-title">
+                <h3 id="motion-preference-title">Motion preference</h3>
+                <div class="control-grid">
+                  <button class="toggle-button" type="button" aria-pressed="true" data-motion-mode-choice="animated">3D motion on</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-motion-mode-choice="static">Static fallback</button>
+                </div>
+              </section>
+
+              <section class="control-group" aria-labelledby="source-layer-title">
+                <h3 id="source-layer-title">Additional source-layer proof</h3>
+                <p class="control-help">These SVG assets remain concept-only; only the jacket above is a real GLB mesh.</p>
+                <div class="layer-preview" aria-label="Layered SVG equipment preview">
+                  <img class="fallback-layer" src="./layers/gear-pack.svg" alt="" data-source-layer="day-pack" hidden />
+                  <img class="fallback-layer" src="./layers/body-base.svg" alt="" />
+                  <img class="fallback-layer" src="./layers/clothing-base.svg" alt="" />
+                  <img class="fallback-layer" src="./layers/clothing-jacket.svg" alt="" data-source-layer="field-jacket" />
+                  <img class="fallback-layer" src="./layers/gear-harness.svg" alt="" data-source-layer="harness" />
+                  <img class="fallback-layer" src="./layers/gear-training-sash.svg" alt="" data-source-layer="training-sash" hidden />
+                  <img class="fallback-layer" src="./layers/gear-cuff.svg" alt="" data-source-layer="progress-cuff" />
+                </div>
+                <div class="control-grid">
+                  <button class="toggle-button" type="button" aria-pressed="true" data-layer-toggle="harness">Harness · SVG</button>
+                  <button class="toggle-button" type="button" aria-pressed="true" data-layer-toggle="progress-cuff">Cuff · SVG</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-layer-toggle="day-pack">Pack · SVG</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-layer-toggle="training-sash">Sash · SVG</button>
+                </div>
+                <p class="control-status" id="layer-status" data-testid="layer-status" aria-live="polite">Concept layers: Jacket, Harness, Cuff.</p>
+              </section>
+
+              <div class="proof-note">
+                The 28 MB GLB is project-bound approval evidence. The viewer is lightweight proof code,
+                not a production engine decision or production dashboard integration.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="side-stack" aria-label="Model evidence and production boundary">
+          <section class="contract-card" aria-labelledby="structure-title">
+            <header class="card-heading">
+              <p class="card-label">Locally inspected export</p>
+              <h2 id="structure-title">GLB structure, not viewer “parts”</h2>
+              <p>Binary glTF 2.0; both mesh nodes bind to skin 0.</p>
+            </header>
+            <ul class="structure-list">
+              <li><strong>29,410</strong><span>base vertices</span></li>
+              <li><strong>6,198</strong><span>jacket vertices</span></li>
+              <li><strong>24</strong><span>shared joints</span></li>
+              <li><strong>4</strong><span>embedded clips</span></li>
+            </ul>
+          </section>
+
+          <section class="reference-card" aria-labelledby="reference-title">
+            <header class="card-heading">
+              <p class="card-label">Approved art direction / static fallback</p>
+              <h2 id="reference-title">Original flattened PNG</h2>
+            </header>
+            <div class="reference-body">
+              <img src="./life-hero-concept.png" width="930" height="1691" alt="Approved original Life Hero art-direction portrait" />
+              <div>
+                <strong>This image is not a 3D model.</strong>
+                <span>It remains approved art direction and a static fallback. It contains no mesh, skeleton, clothing slot, or clip.</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="contract-card" aria-labelledby="contract-title">
+            <header class="card-heading">
+              <p class="card-label">Production target contract</p>
+              <h2 id="contract-title">Rigged glTF 2.0 / GLB humanoid</h2>
+              <p>One future contract will serve both dashboard and minigame.</p>
+            </header>
+            <ul>
+              <li>One shared skeleton with stable semantic clip names.</li>
+              <li>Separate skinned clothing or socketed gear in named slots.</li>
+              <li>Body-region visibility masks prevent outfit clipping.</li>
+              <li>Incompatible assets fail visibly and fall back to the neutral outfit.</li>
+            </ul>
+          </section>
+
+          <section class="boundary-card" aria-labelledby="boundary-title">
+            <p class="card-label">Originality and scope boundary</p>
+            <h2 id="boundary-title">Motivational, grounded, non-scolding</h2>
+            <p>
+              Original human hero; no copied character, music, gambling, loot boxes, chance rewards,
+              weapons, or default magic. No production dashboard, persistence, progression, providers,
+              analytics, voice, or minigame behavior is added here.
+            </p>
+          </section>
+        </aside>
+      </div>
+
+      <section class="support-grid" aria-label="Concept design notes">
+        <article class="detail-card">
+          <p class="card-label">True separation</p>
+          <h2>Addressable at runtime</h2>
+          <ul class="detail-list">
+            <li><code>LifeHero_BaseBody</code> is a complete neutral character.</li>
+            <li><code>LifeHero_Jacket</code> is a second skinned mesh node.</li>
+            <li>Both reference the same 24-joint skin and animation mixer.</li>
+          </ul>
+        </article>
+        <article class="detail-card">
+          <p class="card-label">Embedded motion</p>
+          <h2>Four preserved clips</h2>
+          <ul class="detail-list">
+            <li><code>Idle_02</code> for calm readiness and low momentum.</li>
+            <li><code>Motivational_Cheer</code> for positive acknowledgment.</li>
+            <li><code>Walking</code> for focused forward effort.</li>
+            <li><code>Running</code> for deliberate training.</li>
+          </ul>
+        </article>
+        <article class="detail-card">
+          <p class="card-label">Access and fallback</p>
+          <h2>Meaning survives without motion</h2>
+          <ul class="detail-list">
+            <li>Keyboard controls name each state and exact clip.</li>
+            <li>Static mode uses the separately layered SVG fallback.</li>
+            <li>Reduced-motion forces that static fallback.</li>
+            <li>The flattened PNG remains available as approved art direction.</li>
+          </ul>
+        </article>
+      </section>
+
+      <footer class="approval-gate">
+        <strong>KAN-257 gate: Sol and My Liege must approve before any downstream ticket starts.</strong>
+        <span>No merge, release, deployment, Jira completion, or KAN-258 work is recorded here.</span>
+      </footer>
+    </main>
+
+    <noscript><p>The static SVG and PNG fallbacks remain available; the GLB viewer requires JavaScript.</p></noscript>
+    <script>
+      const stage = document.querySelector('[data-testid="avatar-stage"]');
+      const viewerStatus = document.querySelector('[data-testid="viewer-status"]');
+      const jacketStatus = document.querySelector('[data-testid="jacket-status"]');
+      const layerStatus = document.querySelector('[data-testid="layer-status"]');
+      const motionName = document.querySelector('#motion-name');
+      const motionModeStatus = document.querySelector('[data-testid="motion-mode-status"]');
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      let selectedMotionMode = reducedMotion.matches ? 'static' : 'animated';
+      let selectedMotion = 'idle';
+      let jacketVisible = true;
+      const motionContract = {
+        idle: { label: 'Idle', clip: 'Idle_02', speed: 1 },
+        celebrate: { label: 'Motivate', clip: 'Motivational_Cheer', speed: 1 },
+        focus: { label: 'Focus', clip: 'Walking', speed: 0.72 },
+        train: { label: 'Train', clip: 'Running', speed: 0.82 },
+        tired: { label: 'Low momentum', clip: 'Idle_02', speed: 0.48 },
+      };
+
+      const updateLayerStatus = () => {
+        const equipped = [...document.querySelectorAll('[data-layer-toggle][aria-pressed="true"]')]
+          .map(button => button.textContent.replace(/ · .+$/, '').trim());
+        layerStatus.textContent = equipped.length > 0
+          ? `Concept layers: ${equipped.join(', ')}.`
+          : 'Optional concept layers cleared; neutral body remains.';
+      };
+
+      document.querySelectorAll('[data-layer-toggle]').forEach(button => {
+        button.addEventListener('click', () => {
+          const nextVisible = button.getAttribute('aria-pressed') !== 'true';
+          button.setAttribute('aria-pressed', String(nextVisible));
+          document.querySelectorAll(`[data-source-layer="${button.dataset.layerToggle}"]`).forEach(layer => {
+            layer.hidden = !nextVisible;
+          });
+          if (button.dataset.layerToggle === 'field-jacket') {
+            jacketVisible = nextVisible;
+            stage.dataset.jacketVisible = String(nextVisible);
+            window.lifeHeroViewer?.setJacketVisible(nextVisible);
+            jacketStatus.textContent = nextVisible
+              ? 'Jacket mesh visible; neutral body unchanged.'
+              : 'Jacket mesh hidden; complete neutral body remains.';
+          }
+          updateLayerStatus();
+        });
+      });
+
+      const applyMotion = () => {
+        const state = motionContract[selectedMotion];
+        motionName.textContent = state.label;
+        stage.dataset.activeClip = state.clip;
+        window.lifeHeroViewer?.setMotion(selectedMotion, state.clip, state.speed);
+        if (stage.dataset.motionMode === 'animated') {
+          motionModeStatus.textContent = `${state.clip} active · ${state.label.toLowerCase()} intent.`;
+        }
+      };
+
+      document.querySelectorAll('[data-motion]').forEach(button => {
+        button.addEventListener('click', () => {
+          selectedMotion = button.dataset.motion;
+          document.querySelectorAll('[data-motion]').forEach(candidate => {
+            candidate.setAttribute('aria-pressed', String(candidate === button));
+          });
+          applyMotion();
+        });
+      });
+
+      const applyMotionMode = () => {
+        const systemStatic = reducedMotion.matches;
+        const effectiveMode = systemStatic ? 'static' : selectedMotionMode;
+        stage.dataset.motionMode = effectiveMode;
+        document.querySelectorAll('[data-motion-mode-choice]').forEach(button => {
+          const selected = button.dataset.motionModeChoice === effectiveMode;
+          button.setAttribute('aria-pressed', String(selected));
+          button.disabled = systemStatic && button.dataset.motionModeChoice === 'animated';
+        });
+        window.lifeHeroViewer?.setStatic(effectiveMode === 'static');
+        const state = motionContract[selectedMotion];
+        if (systemStatic) {
+          stage.dataset.modelState = 'fallback';
+          motionModeStatus.textContent = 'Static layered fallback active · system reduced-motion preference.';
+        } else if (effectiveMode === 'static') {
+          stage.dataset.modelState = 'fallback';
+          motionModeStatus.textContent = `Static layered fallback selected · ${state.label.toLowerCase()} meaning retained.`;
+        } else {
+          if (stage.dataset.modelState === 'fallback') stage.dataset.modelState = 'loading';
+          motionModeStatus.textContent = `${state.clip} active · ${state.label.toLowerCase()} intent.`;
+        }
+      };
+
+      document.querySelectorAll('[data-motion-mode-choice]').forEach(button => {
+        button.addEventListener('click', () => {
+          selectedMotionMode = button.dataset.motionModeChoice;
+          applyMotionMode();
+        });
+      });
+
+      window.addEventListener('life-hero-viewer-ready', () => {
+        stage.dataset.modelState = stage.dataset.motionMode === 'static' ? 'fallback' : 'ready';
+        viewerStatus.textContent = 'Local modular GLB ready.';
+        window.lifeHeroViewer.setJacketVisible(jacketVisible);
+        applyMotion();
+      });
+      window.addEventListener('life-hero-viewer-fallback', event => {
+        selectedMotionMode = 'static';
+        stage.dataset.modelState = 'fallback';
+        viewerStatus.textContent = `Static fallback active: ${event.detail?.reason ?? '3D unavailable'}.`;
+        applyMotionMode();
+      });
+      reducedMotion.addEventListener('change', applyMotionMode);
+      applyMotionMode();
+      updateLayerStatus();
+    </script>
+    <script type="module" src="./viewer.js"></script>
+  </body>
+</html>

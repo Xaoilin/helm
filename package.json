@@ -45,6 +45,7 @@
     "openwakeword-wasm-browser": "^0.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "three": "^0.185.1",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
