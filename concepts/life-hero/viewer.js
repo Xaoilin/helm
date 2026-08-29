@@ -123,7 +123,7 @@ function setView(viewName) {
     target.copy(handFocus)
     target.y += height * 0.015
     camera.fov = 27
-    const distance = height * 0.24
+    const distance = height * 0.55
     position.copy(target)
     position.x += (viewName === 'left-hand' ? -1 : 1) * distance * 0.16
     position.y += distance * 0.04
