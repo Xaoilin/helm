@@ -4,86 +4,67 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
-    <meta
-      name="description"
-      content="Sabah One Life Hero original character concept awaiting explicit approval."
-    />
-    <title>Life Hero concept | Sabah One</title>
+    <meta name="description" content="Sabah One Life Hero modular equipment and motion concept proof." />
+    <title>Life Hero modular concept | Sabah One</title>
     <style>
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box;
-      }
-
+      *, *::before, *::after { box-sizing: border-box; }
       :root {
         color-scheme: dark;
         font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         --canvas: #07111f;
         --surface: #101d31;
-        --surface-raised: #13243d;
-        --border: #2a3d57;
-        --text: #f3f0e6;
-        --muted: #aab5c6;
+        --border: #30455f;
+        --text: #f5f1e7;
+        --muted: #adb9ca;
         --gold: #e6c66a;
-        --gold-strong: #c9a84f;
-        --copper: #c98552;
         --turquoise: #55d8cc;
-        --focus: #8fe7c4;
+        --focus: #9df0cf;
       }
-
-      html {
-        background: var(--canvas);
-      }
-
+      html { background: var(--canvas); }
       body {
         min-width: 240px;
         min-height: 100vh;
         margin: 0;
         color: var(--text);
         background:
-          radial-gradient(circle at 18% 6%, rgba(85, 216, 204, 0.09), transparent 28rem),
-          radial-gradient(circle at 88% 18%, rgba(230, 198, 106, 0.08), transparent 24rem),
+          radial-gradient(circle at 15% 4%, rgba(85, 216, 204, 0.1), transparent 30rem),
+          radial-gradient(circle at 88% 18%, rgba(230, 198, 106, 0.08), transparent 26rem),
           var(--canvas);
       }
-
-      a {
-        color: inherit;
-      }
-
+      button { font: inherit; }
+      [hidden] { display: none !important; }
       .skip-link {
-        position: fixed;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
         top: 8px;
         left: 8px;
-        z-index: 20;
+        z-index: 30;
+      }
+      .skip-link:focus {
+        width: auto;
+        height: auto;
+        margin: 0;
+        overflow: visible;
+        clip: auto;
         padding: 10px 14px;
         border-radius: 8px;
         color: #07111f;
         background: var(--focus);
-        transform: translateY(-160%);
       }
-
-      .skip-link:focus {
-        transform: translateY(0);
-      }
-
-      .page {
-        width: min(100%, 1440px);
-        margin: 0 auto;
-        padding: 28px clamp(16px, 3vw, 44px) 36px;
-      }
-
+      .page { width: min(100%, 1440px); margin: 0 auto; padding: 26px clamp(16px, 3vw, 44px) 38px; }
       .masthead {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
         gap: 24px;
-        margin-bottom: 24px;
+        margin-bottom: 20px;
       }
-
-      .eyebrow,
-      .card-label,
-      .portrait-label {
+      .eyebrow, .card-label {
         margin: 0;
         color: var(--gold);
         font-size: 0.72rem;
@@ -92,23 +73,20 @@
         line-height: 1.35;
         text-transform: uppercase;
       }
-
       h1 {
-        max-width: 820px;
-        margin: 8px 0 10px;
-        font-size: clamp(2.1rem, 4.2vw, 4.7rem);
+        max-width: 850px;
+        margin: 7px 0 9px;
+        font-size: clamp(2.15rem, 4vw, 4.4rem);
         line-height: 0.98;
         letter-spacing: -0.045em;
       }
-
       .lede {
-        max-width: 760px;
+        max-width: 790px;
         margin: 0;
         color: var(--muted);
-        font-size: clamp(0.98rem, 1.5vw, 1.13rem);
-        line-height: 1.55;
+        font-size: clamp(0.96rem, 1.4vw, 1.1rem);
+        line-height: 1.52;
       }
-
       .approval-state {
         display: inline-flex;
         flex: 0 0 auto;
@@ -122,11 +100,8 @@
         background: rgba(230, 198, 106, 0.09);
         font-size: 0.78rem;
         font-weight: 750;
-        letter-spacing: 0.04em;
         line-height: 1.3;
-        text-align: left;
       }
-
       .approval-state::before {
         width: 9px;
         height: 9px;
@@ -135,170 +110,169 @@
         box-shadow: 0 0 0 4px rgba(230, 198, 106, 0.12);
         content: "";
       }
-
-      .concept-grid {
+      .proof-grid {
         display: grid;
-        grid-template-columns: minmax(360px, 0.88fr) minmax(520px, 1.12fr);
-        gap: 20px;
-        align-items: stretch;
+        grid-template-columns: minmax(560px, 1.12fr) minmax(360px, 0.88fr);
+        gap: 18px;
+        align-items: start;
       }
-
-      .portrait-panel,
-      .summary-card,
-      .detail-card,
-      .boundary-card,
-      .approval-gate {
+      .lab-card, .reference-card, .contract-card, .boundary-card, .detail-card, .approval-gate {
         border: 1px solid var(--border);
-        background: rgba(16, 29, 49, 0.92);
-        box-shadow: 0 18px 36px rgba(0, 0, 0, 0.22);
+        border-radius: 18px;
+        background: rgba(16, 29, 49, 0.94);
+        box-shadow: 0 18px 36px rgba(0, 0, 0, 0.2);
       }
-
-      .portrait-panel {
+      .lab-card { overflow: hidden; }
+      .lab-heading, .card-heading { padding: 16px 18px; border-bottom: 1px solid var(--border); }
+      .lab-heading h2, .card-heading h2, .detail-card h2, .boundary-card h2 {
+        margin: 5px 0 4px;
+        font-size: 1.05rem;
+        line-height: 1.3;
+      }
+      .lab-heading p:last-child, .card-heading p:last-child, .detail-card p, .boundary-card p, .contract-card li {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.83rem;
+        line-height: 1.48;
+      }
+      .lab-workspace { display: grid; grid-template-columns: minmax(270px, 0.9fr) minmax(290px, 1.1fr); min-height: 542px; }
+      .avatar-stage {
         position: relative;
         display: grid;
-        min-height: 660px;
+        grid-template-rows: 1fr auto;
+        min-height: 542px;
         overflow: hidden;
-        border-radius: 20px;
+        border-right: 1px solid var(--border);
+        background:
+          linear-gradient(180deg, rgba(85, 216, 204, 0.08), transparent 34%),
+          repeating-linear-gradient(90deg, transparent 0, transparent calc(25% - 1px), rgba(145, 160, 184, 0.07) 25%, transparent calc(25% + 1px)),
+          #0a1627;
         isolation: isolate;
       }
-
-      .portrait-panel::before {
+      .layer-key {
         position: absolute;
-        inset: 0;
-        z-index: -1;
-        background:
-          linear-gradient(180deg, rgba(85, 216, 204, 0.08), transparent 32%),
-          repeating-linear-gradient(
-            90deg,
-            transparent 0,
-            transparent calc(25% - 1px),
-            rgba(145, 160, 184, 0.07) 25%,
-            transparent calc(25% + 1px)
-          );
-        content: "";
+        top: 12px;
+        left: 12px;
+        z-index: 10;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        max-width: calc(100% - 24px);
       }
-
-      .portrait-label {
-        position: absolute;
-        top: 18px;
-        left: 18px;
-        z-index: 2;
-        padding: 8px 10px;
-        border: 1px solid rgba(230, 198, 106, 0.35);
-        border-radius: 8px;
+      .layer-key span {
+        padding: 5px 7px;
+        border: 1px solid rgba(85, 216, 204, 0.28);
+        border-radius: 999px;
+        color: #d8fff9;
         background: rgba(7, 17, 31, 0.82);
-      }
-
-      .portrait-panel img {
-        display: block;
-        width: 100%;
-        height: 610px;
-        margin-top: 10px;
-        object-fit: contain;
-        object-position: center;
-      }
-
-      .portrait-panel figcaption {
-        align-self: end;
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1px;
-        margin: 0;
-        border-top: 1px solid var(--border);
-        background: var(--border);
-      }
-
-      .portrait-signal {
-        min-width: 0;
-        padding: 13px 12px 14px;
-        background: #0c1829;
-      }
-
-      .portrait-signal strong,
-      .portrait-signal span {
-        display: block;
-      }
-
-      .portrait-signal strong {
-        margin-bottom: 4px;
-        color: var(--gold);
-        font-size: 0.7rem;
+        font-size: 0.62rem;
+        font-weight: 800;
         letter-spacing: 0.08em;
         text-transform: uppercase;
       }
-
-      .portrait-signal span {
-        color: #dce6f4;
-        font-size: 0.82rem;
-        line-height: 1.35;
+      .avatar-frame { position: relative; display: grid; min-height: 465px; place-items: center; padding: 28px 12px 0; }
+      .avatar-frame::after {
+        position: absolute;
+        right: 16%;
+        bottom: 21px;
+        left: 16%;
+        height: 16px;
+        border: 1px solid rgba(85, 216, 204, 0.18);
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.26);
+        content: "";
+        transform: perspective(90px) rotateX(58deg);
       }
-
-      .specification {
-        display: grid;
-        gap: 14px;
+      .avatar-rig { position: relative; z-index: 2; width: min(100%, 310px); aspect-ratio: 360 / 520; transform-origin: 50% 92%; }
+      .avatar-layer {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+        user-select: none;
       }
-
-      .summary-card,
-      .detail-card,
-      .boundary-card,
-      .approval-gate {
-        border-radius: 16px;
-      }
-
-      .summary-card {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 14px;
-        padding: 18px;
-      }
-
-      .summary-card h2,
-      .detail-card h2,
-      .boundary-card h2 {
-        margin: 5px 0 6px;
-        color: var(--text);
-        font-size: 1rem;
-        line-height: 1.25;
-      }
-
-      .summary-card p,
-      .detail-card p,
-      .boundary-card p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 0.86rem;
-        line-height: 1.48;
-      }
-
-      .detail-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-      }
-
-      .detail-card {
-        padding: 17px 18px 18px;
-      }
-
-      .detail-list {
-        display: grid;
-        gap: 7px;
-        margin: 10px 0 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .detail-list li {
+      .motion-readout {
         position: relative;
-        padding-left: 17px;
-        color: #dce6f4;
-        font-size: 0.82rem;
-        line-height: 1.42;
+        z-index: 5;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 10px;
+        align-items: center;
+        min-height: 56px;
+        padding: 10px 13px;
+        border-top: 1px solid var(--border);
+        background: rgba(7, 17, 31, 0.9);
       }
-
+      .motion-readout strong { color: var(--gold); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; }
+      .motion-readout span { color: #dbe6f4; font-size: 0.76rem; line-height: 1.35; text-align: right; }
+      .control-panel { display: grid; align-content: start; gap: 16px; padding: 16px; }
+      .control-group { min-width: 0; }
+      .control-group h3 { margin: 0 0 4px; font-size: 0.84rem; line-height: 1.3; }
+      .control-help, .control-status { margin: 0; color: var(--muted); font-size: 0.72rem; line-height: 1.4; }
+      .control-status { min-height: 2.8em; margin-top: 7px; color: #dbe6f4; }
+      .control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 9px; }
+      .toggle-button {
+        min-height: 42px;
+        padding: 8px 9px;
+        border: 1px solid #405773;
+        border-radius: 9px;
+        color: #d9e5f3;
+        background: #0b182a;
+        cursor: pointer;
+        font-size: 0.72rem;
+        font-weight: 700;
+        line-height: 1.25;
+        text-align: left;
+      }
+      .toggle-button:hover { border-color: var(--turquoise); }
+      .toggle-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+      .toggle-button[aria-pressed="true"] {
+        border-color: rgba(85, 216, 204, 0.72);
+        color: #ecfffb;
+        background: rgba(85, 216, 204, 0.14);
+        box-shadow: inset 3px 0 0 var(--turquoise);
+      }
+      .toggle-button:disabled { cursor: not-allowed; opacity: 0.55; }
+      .proof-note {
+        padding: 11px 12px;
+        border: 1px solid rgba(230, 198, 106, 0.28);
+        border-radius: 10px;
+        color: #f6e9b6;
+        background: rgba(230, 198, 106, 0.07);
+        font-size: 0.72rem;
+        line-height: 1.45;
+      }
+      .side-stack { display: grid; gap: 14px; }
+      .reference-body { display: grid; grid-template-columns: 138px minmax(0, 1fr); gap: 14px; align-items: center; padding: 14px; }
+      .reference-body img {
+        display: block;
+        width: 138px;
+        height: 176px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        object-fit: cover;
+        object-position: center 20%;
+      }
+      .reference-body strong, .reference-body span { display: block; }
+      .reference-body strong { margin-bottom: 6px; color: #f8e9aa; font-size: 0.88rem; line-height: 1.35; }
+      .reference-body span { color: var(--muted); font-size: 0.77rem; line-height: 1.48; }
+      .contract-card ul { display: grid; gap: 7px; margin: 0; padding: 14px 18px 17px 34px; }
+      .contract-card code { color: #dcfff7; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.76rem; }
+      .boundary-card {
+        padding: 16px 18px;
+        border-color: rgba(85, 216, 204, 0.36);
+        background: linear-gradient(115deg, rgba(85, 216, 204, 0.08), rgba(16, 29, 49, 0.94) 52%);
+      }
+      .support-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+      .detail-card { padding: 16px 18px; }
+      .detail-list { display: grid; gap: 6px; margin: 9px 0 0; padding: 0; list-style: none; }
+      .detail-list li { position: relative; padding-left: 16px; color: #dce6f4; font-size: 0.78rem; line-height: 1.42; }
       .detail-list li::before {
         position: absolute;
-        top: 0.53em;
+        top: 0.55em;
         left: 0;
         width: 6px;
         height: 6px;
@@ -306,195 +280,58 @@
         border-radius: 50%;
         content: "";
       }
-
-      .swatches {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-        margin-top: 12px;
-      }
-
-      .swatch {
-        display: grid;
-        grid-template-columns: 18px minmax(0, 1fr);
-        gap: 8px;
-        align-items: center;
-        color: #dce6f4;
-        font-size: 0.73rem;
-        line-height: 1.3;
-      }
-
-      .swatch::before {
-        width: 18px;
-        height: 18px;
-        border: 1px solid rgba(243, 240, 230, 0.28);
-        border-radius: 5px;
-        background: var(--swatch);
-        content: "";
-      }
-
-      .voice-lines {
-        display: grid;
-        gap: 7px;
-        margin: 11px 0 0;
-      }
-
-      .voice-lines q {
-        padding: 8px 10px;
-        border-left: 2px solid var(--gold);
-        color: #f5edcf;
-        background: rgba(230, 198, 106, 0.06);
-        font-size: 0.8rem;
-        font-style: normal;
-        line-height: 1.35;
-      }
-
-      .boundary-card {
-        display: grid;
-        grid-template-columns: minmax(150px, 0.3fr) minmax(0, 0.7fr);
-        gap: 18px;
-        align-items: center;
-        padding: 17px 18px;
-        border-color: rgba(85, 216, 204, 0.34);
-        background: linear-gradient(105deg, rgba(85, 216, 204, 0.08), rgba(16, 29, 49, 0.92) 46%);
-      }
-
       .approval-gate {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 18px;
-        padding: 15px 18px;
+        margin-top: 14px;
+        padding: 14px 18px;
         border-color: rgba(230, 198, 106, 0.42);
       }
-
-      .approval-gate strong {
-        color: #f8e9aa;
-        font-size: 0.88rem;
-        line-height: 1.4;
+      .approval-gate strong { color: #f8e9aa; font-size: 0.86rem; line-height: 1.4; }
+      .approval-gate span { color: var(--muted); font-size: 0.76rem; line-height: 1.4; text-align: right; }
+      .avatar-rig[data-motion="idle"] { animation: hero-idle 2.8s ease-in-out infinite; }
+      .avatar-rig[data-motion="celebrate"] { animation: hero-celebrate 1.2s ease-in-out infinite; }
+      .avatar-rig[data-motion="focus"] { animation: hero-focus 1.8s ease-in-out infinite; }
+      .avatar-rig[data-motion="train"] { animation: hero-train 1.25s ease-in-out infinite; }
+      .avatar-rig[data-motion="tired"] { animation: hero-tired 3s ease-in-out infinite; }
+      .avatar-stage[data-motion-mode="static"] .avatar-rig { animation: none; transform: none; }
+      @keyframes hero-idle { 0%, 100% { transform: translateY(0) rotate(-0.35deg); } 50% { transform: translateY(-6px) rotate(0.35deg); } }
+      @keyframes hero-celebrate { 0%, 100% { transform: translateY(0) rotate(0); } 28% { transform: translateY(-18px) rotate(-2deg); } 58% { transform: translateY(-7px) rotate(2deg); } }
+      @keyframes hero-focus { 0%, 100% { transform: translateY(2px) scale(1); } 50% { transform: translateY(-2px) scale(1.018); } }
+      @keyframes hero-train { 0%, 100% { transform: translateX(-4px) rotate(-1deg); } 50% { transform: translateX(4px) rotate(1deg); } }
+      @keyframes hero-tired { 0%, 100% { transform: translateY(7px) rotate(1.4deg); } 50% { transform: translateY(10px) rotate(2deg); } }
+      @media (max-width: 1040px) {
+        .proof-grid { grid-template-columns: minmax(0, 1fr); }
+        .side-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .boundary-card { grid-column: 1 / -1; }
       }
-
-      .approval-gate span {
-        color: var(--muted);
-        font-size: 0.78rem;
-        line-height: 1.4;
-        text-align: right;
+      @media (max-width: 680px) {
+        .page { padding: 18px 12px 24px; }
+        .masthead { display: grid; gap: 13px; margin-bottom: 16px; }
+        h1 { max-width: 12ch; font-size: clamp(2.2rem, 12vw, 3.15rem); }
+        .approval-state { width: fit-content; }
+        .lab-workspace { grid-template-columns: minmax(0, 1fr); }
+        .avatar-stage { min-height: 465px; border-right: 0; border-bottom: 1px solid var(--border); }
+        .avatar-frame { min-height: 410px; padding-top: 34px; }
+        .avatar-rig { width: min(100%, 270px); }
+        .control-panel { padding: 14px; }
+        .side-stack, .support-grid { grid-template-columns: minmax(0, 1fr); }
+        .boundary-card { grid-column: auto; }
+        .reference-body { grid-template-columns: 112px minmax(0, 1fr); }
+        .reference-body img { width: 112px; height: 148px; }
+        .approval-gate { display: grid; gap: 5px; }
+        .approval-gate span { text-align: left; }
       }
-
-      @media (max-width: 980px) {
-        .concept-grid {
-          grid-template-columns: minmax(0, 1fr);
-        }
-
-        .portrait-panel {
-          min-height: 620px;
-        }
-
-        .portrait-panel img {
-          height: 565px;
-        }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; }
+        .avatar-rig { animation: none !important; transform: none !important; }
       }
-
-      @media (max-width: 640px) {
-        .page {
-          padding: 18px 12px 24px;
-        }
-
-        .masthead {
-          display: grid;
-          gap: 14px;
-          margin-bottom: 18px;
-        }
-
-        h1 {
-          max-width: 12ch;
-          margin-top: 7px;
-          font-size: clamp(2.2rem, 12vw, 3.15rem);
-        }
-
-        .approval-state {
-          width: fit-content;
-        }
-
-        .concept-grid,
-        .specification {
-          gap: 12px;
-        }
-
-        .portrait-panel {
-          min-height: 530px;
-          border-radius: 16px;
-        }
-
-        .portrait-panel img {
-          height: 474px;
-          margin-top: 8px;
-        }
-
-        .portrait-panel figcaption {
-          grid-template-columns: 1fr;
-        }
-
-        .portrait-signal {
-          display: grid;
-          grid-template-columns: 92px minmax(0, 1fr);
-          align-items: baseline;
-          gap: 7px;
-          padding: 9px 12px;
-        }
-
-        .portrait-signal strong {
-          margin: 0;
-        }
-
-        .summary-card,
-        .detail-grid,
-        .boundary-card {
-          grid-template-columns: minmax(0, 1fr);
-        }
-
-        .summary-card,
-        .boundary-card {
-          gap: 12px;
-        }
-
-        .summary-card,
-        .detail-card,
-        .boundary-card {
-          padding: 15px;
-        }
-
-        .approval-gate {
-          display: grid;
-          gap: 5px;
-        }
-
-        .approval-gate span {
-          text-align: left;
-        }
-      }
-
       @media (forced-colors: active) {
-        body,
-        .portrait-panel::before,
-        .boundary-card {
-          background: Canvas;
-        }
-
-        .portrait-panel,
-        .summary-card,
-        .detail-card,
-        .boundary-card,
-        .approval-gate,
-        .approval-state {
-          border: 1px solid CanvasText;
-        }
-
-        .approval-state::before,
-        .detail-list li::before,
-        .swatch::before {
-          forced-color-adjust: none;
-        }
+        body, .avatar-stage, .boundary-card { background: Canvas; }
+        .lab-card, .reference-card, .contract-card, .boundary-card, .detail-card, .approval-gate, .approval-state, .toggle-button { border: 1px solid CanvasText; }
+        .approval-state::before, .detail-list li::before { forced-color-adjust: none; }
       }
     </style>
   </head>
@@ -503,124 +340,247 @@
     <main id="concept" class="page" aria-labelledby="concept-title">
       <header class="masthead">
         <div>
-          <p class="eyebrow">Sabah One / Life Hero / Concept 01</p>
-          <h1 id="concept-title">Original human baseline</h1>
+          <p class="eyebrow">Sabah One / Life Hero / Architecture proof</p>
+          <h1 id="concept-title">One hero, separate layers</h1>
           <p class="lede">
-            A warm, capable companion whose visible growth comes from effort, equipment,
-            posture, and earned milestones—not chance, scolding, or spectacle.
+            An honest SVG/CSS concept for independently equipped clothing, gear, and reusable
+            motion states. It proves the interaction architecture—not a production 3D rig.
           </p>
         </div>
-        <div class="approval-state" role="status">Awaiting explicit concept approval</div>
+        <div class="approval-state" role="status">Revision awaiting explicit approval</div>
       </header>
 
-      <div class="concept-grid">
-        <figure class="portrait-panel">
-          <span class="portrait-label">Human baseline / neutral equipment</span>
-          <img
-            src="./life-hero-concept.png"
-            width="930"
-            height="1691"
-            alt="Full-body original human Life Hero with warm brown skin, dark swept-up hair, a calm half-smile, midnight and sand utility clothing, open hands, a modular cross-body harness, and a non-weapon forearm progress cuff."
-          />
-          <figcaption>
-            <span class="portrait-signal">
-              <strong>Silhouette</strong>
-              <span>Offset shoulder line and split-back layer</span>
-            </span>
-            <span class="portrait-signal">
-              <strong>Expression</strong>
-              <span>Calm resolve with a welcoming half-smile</span>
-            </span>
-            <span class="portrait-signal">
-              <strong>Equipment</strong>
-              <span>Progress cuff and empty modular anchors</span>
-            </span>
-          </figcaption>
-        </figure>
+      <div class="proof-grid">
+        <section class="lab-card" aria-labelledby="lab-title">
+          <header class="lab-heading">
+            <p class="card-label">Concept-level modularity proof</p>
+            <h2 id="lab-title">Base body + clothing + socket-style gear</h2>
+            <p>Every visible item below is a separate source asset. Toggle pieces independently.</p>
+          </header>
+          <div class="lab-workspace">
+            <div class="avatar-stage" data-testid="avatar-stage" data-motion-mode="animated" aria-label="Layered Life Hero architecture proof">
+              <div class="layer-key" aria-hidden="true"><span>Base</span><span>Clothing</span><span>Gear</span></div>
+              <div class="avatar-frame">
+                <div
+                  class="avatar-rig"
+                  data-testid="avatar-rig"
+                  data-motion="idle"
+                  role="img"
+                  aria-label="Original Life Hero assembled from separate base body, clothing, and gear SVG layers"
+                >
+                  <img class="avatar-layer" src="./layers/gear-pack.svg" alt="" data-layer="day-pack" hidden />
+                  <img class="avatar-layer" src="./layers/body-base.svg" alt="" data-layer="body-base" />
+                  <img class="avatar-layer" src="./layers/clothing-base.svg" alt="" data-layer="clothing-base" />
+                  <img class="avatar-layer" src="./layers/clothing-jacket.svg" alt="" data-layer="field-jacket" />
+                  <img class="avatar-layer" src="./layers/gear-harness.svg" alt="" data-layer="harness" />
+                  <img class="avatar-layer" src="./layers/gear-training-sash.svg" alt="" data-layer="training-sash" hidden />
+                  <img class="avatar-layer" src="./layers/gear-cuff.svg" alt="" data-layer="progress-cuff" />
+                </div>
+              </div>
+              <div class="motion-readout">
+                <strong id="motion-name">Idle</strong>
+                <span id="motion-mode-status" data-testid="motion-mode-status" aria-live="polite">Animated concept cue active.</span>
+              </div>
+            </div>
 
-        <section class="specification" aria-label="Life Hero concept specification">
-          <div class="summary-card">
-            <div>
-              <p class="card-label">Shape</p>
-              <h2>Readable, grounded, human</h2>
-              <p>Open hands, stable stance, face-first appeal, and no combat pose.</p>
-            </div>
-            <div>
-              <p class="card-label">Baseline</p>
-              <h2>Neutral equipment</h2>
-              <p>Harness and cuff foreshadow utility without weapons or abilities.</p>
-            </div>
-            <div>
-              <p class="card-label">Personality</p>
-              <h2>Steady encouragement</h2>
-              <p>Motivates through calm invitations, never pressure or shame.</p>
+            <div class="control-panel">
+              <section class="control-group" aria-labelledby="equipment-controls-title">
+                <h3 id="equipment-controls-title">Equipment layers</h3>
+                <p class="control-help">Base body and neutral underlayer stay visible; optional assets do not merge.</p>
+                <div class="control-grid">
+                  <button class="toggle-button" type="button" aria-pressed="true" data-layer-toggle="field-jacket">Field jacket</button>
+                  <button class="toggle-button" type="button" aria-pressed="true" data-layer-toggle="harness">Harness</button>
+                  <button class="toggle-button" type="button" aria-pressed="true" data-layer-toggle="progress-cuff">Progress cuff</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-layer-toggle="day-pack">Day pack</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-layer-toggle="training-sash">Training sash</button>
+                </div>
+                <p class="control-status" id="layer-status" data-testid="layer-status" aria-live="polite">Equipped: Field jacket, Harness, Progress cuff.</p>
+              </section>
+
+              <section class="control-group" aria-labelledby="motion-controls-title">
+                <h3 id="motion-controls-title">Reusable motion states</h3>
+                <p class="control-help">Posture cues demonstrate clip intent; they are not rigged animation clips.</p>
+                <div class="control-grid">
+                  <button class="toggle-button" type="button" aria-pressed="true" data-motion="idle">Idle</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-motion="celebrate">Motivate</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-motion="focus">Focus</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-motion="train">Train</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-motion="tired">Low momentum</button>
+                </div>
+              </section>
+
+              <section class="control-group" aria-labelledby="motion-preference-title">
+                <h3 id="motion-preference-title">Motion preference</h3>
+                <div class="control-grid">
+                  <button class="toggle-button" type="button" aria-pressed="true" data-motion-mode-choice="animated">Motion on</button>
+                  <button class="toggle-button" type="button" aria-pressed="false" data-motion-mode-choice="static">Static</button>
+                </div>
+              </section>
+
+              <div class="proof-note">
+                Architecture proof only: layered SVG assets and CSS motion stand in for the later
+                shared GLB skeleton, skinned clothing, sockets, and named clips.
+              </div>
             </div>
           </div>
-
-          <div class="detail-grid">
-            <article class="detail-card">
-              <p class="card-label">Palette</p>
-              <h2>Night, warmth, progress</h2>
-              <p>Colour supports identity; every meaning is also written in text.</p>
-              <div class="swatches" aria-label="Character colour palette">
-                <span class="swatch" style="--swatch: #07111f">Midnight #07111F</span>
-                <span class="swatch" style="--swatch: #d0aa73">Sand #D0AA73</span>
-                <span class="swatch" style="--swatch: #c98552">Copper #C98552</span>
-                <span class="swatch" style="--swatch: #55d8cc">Signal #55D8CC</span>
-              </div>
-            </article>
-
-            <article class="detail-card">
-              <p class="card-label">Evolution cues</p>
-              <h2>Growth without default magic</h2>
-              <ul class="detail-list">
-                <li>Material quality and fit can visibly improve.</li>
-                <li>Empty anchors can receive earned equipment later.</li>
-                <li>Posture and expression can reflect mastery.</li>
-                <li>Pets, trophies, and abilities remain only future options.</li>
-              </ul>
-            </article>
-
-            <article class="detail-card">
-              <p class="card-label">Voice direction</p>
-              <h2>Warm, concise, no music</h2>
-              <p>Steady mid-pace delivery, clear pauses, no music bed, and no scolding.</p>
-              <div class="voice-lines" aria-label="Approved tone examples">
-                <q>One steady step counts.</q>
-                <q>Ready when you are.</q>
-              </div>
-            </article>
-
-            <article class="detail-card">
-              <p class="card-label">Access and safeguards</p>
-              <h2>Legible beyond colour</h2>
-              <ul class="detail-list">
-                <li>Descriptive alt text and semantic reading order.</li>
-                <li>High-contrast copy with written palette labels.</li>
-                <li>No required motion, audio, or hover-only information.</li>
-                <li>No gambling, loot boxes, chance rewards, or haram mechanics.</li>
-              </ul>
-            </article>
-          </div>
-
-          <aside class="boundary-card" aria-labelledby="inspiration-boundary">
-            <div>
-              <p class="card-label">Originality boundary</p>
-              <h2 id="inspiration-boundary">Broad energy, no copying</h2>
-            </div>
-            <p>
-              Inspiration is limited to general action-adventure optimism, readable growth,
-              and a strong silhouette. No named character, logo, costume, symbol, pose,
-              or signature attack was referenced or copied.
-            </p>
-          </aside>
-
-          <footer class="approval-gate">
-            <strong>Concept gate: explicit approval is required before LH-02.</strong>
-            <span>No user approval is recorded by this artifact.</span>
-          </footer>
         </section>
+
+        <aside class="side-stack" aria-label="Concept evidence and production boundary">
+          <section class="reference-card" aria-labelledby="reference-title">
+            <header class="card-heading">
+              <p class="card-label">Approved art direction / static fallback</p>
+              <h2 id="reference-title">Original flattened PNG</h2>
+            </header>
+            <div class="reference-body">
+              <img src="./life-hero-concept.png" width="930" height="1691" alt="Approved original Life Hero art-direction portrait" />
+              <div>
+                <strong>This image is not a 3D model.</strong>
+                <span>
+                  It is one flattened concept image. It cannot prove separate equipment, skeletal
+                  animation, body masks, sockets, or runtime compatibility. Keep it as art direction
+                  and the static visual fallback only.
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section class="contract-card" aria-labelledby="contract-title">
+            <header class="card-heading">
+              <p class="card-label">Production target contract</p>
+              <h2 id="contract-title">Rigged glTF 2.0 / GLB humanoid</h2>
+              <p>One contract will serve both the dashboard and the minigame.</p>
+            </header>
+            <ul>
+              <li>One shared skeleton; stable clips: <code>idle</code>, <code>celebrate</code>, <code>focus</code>, <code>train</code>, <code>tired</code>.</li>
+              <li>Separate skinned clothing or socketed gear in named slots.</li>
+              <li>Body-region visibility masks prevent outfit clipping.</li>
+              <li>Incompatible assets fail visibly and fall back to the neutral outfit.</li>
+            </ul>
+          </section>
+
+          <section class="boundary-card" aria-labelledby="boundary-title">
+            <p class="card-label">Originality and scope boundary</p>
+            <h2 id="boundary-title">Motivational, grounded, non-scolding</h2>
+            <p>
+              Broad action-adventure optimism only. No copied character, costume, logo, signature
+              attack, music, gambling, loot boxes, chance rewards, or default magic. This ticket adds
+              no 3D engine, model, dashboard integration, persistence, progression, voice, analytics,
+              provider, or minigame behavior.
+            </p>
+          </section>
+        </aside>
       </div>
+
+      <section class="support-grid" aria-label="Concept design notes">
+        <article class="detail-card">
+          <p class="card-label">Source separation</p>
+          <h2>Addressable, not baked</h2>
+          <ul class="detail-list">
+            <li>Base body is its own SVG source asset.</li>
+            <li>Neutral clothing and jacket are independent layers.</li>
+            <li>Harness, cuff, pack, and sash toggle independently.</li>
+          </ul>
+        </article>
+        <article class="detail-card">
+          <p class="card-label">Motion meaning</p>
+          <h2>Encourage without pressure</h2>
+          <ul class="detail-list">
+            <li>Idle is calm readiness.</li>
+            <li>Celebrate motivates completed effort.</li>
+            <li>Focus and train signal deliberate practice.</li>
+            <li>Tired acknowledges low momentum without shame.</li>
+          </ul>
+        </article>
+        <article class="detail-card">
+          <p class="card-label">Access</p>
+          <h2>Meaning survives without motion</h2>
+          <ul class="detail-list">
+            <li>Controls are keyboard-operable and visibly focused.</li>
+            <li>Text names every layer and motion state.</li>
+            <li>Reduced-motion defaults to a static pose.</li>
+            <li>The approved PNG remains a static fallback.</li>
+          </ul>
+        </article>
+      </section>
+
+      <footer class="approval-gate">
+        <strong>Concept gate: explicit revised approval is required before KAN-258.</strong>
+        <span>No production placement, release, or user approval is recorded by this artifact.</span>
+      </footer>
     </main>
+
+    <noscript><p>The modular layers remain visible, but toggles require JavaScript. The static PNG fallback remains available.</p></noscript>
+
+    <script>
+      const avatarRig = document.querySelector('[data-testid="avatar-rig"]');
+      const avatarStage = document.querySelector('[data-testid="avatar-stage"]');
+      const layerStatus = document.querySelector('[data-testid="layer-status"]');
+      const motionName = document.querySelector('#motion-name');
+      const motionModeStatus = document.querySelector('[data-testid="motion-mode-status"]');
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      let selectedMotionMode = reducedMotion.matches ? 'static' : 'animated';
+
+      const labelFor = value => value
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+
+      const updateLayerStatus = () => {
+        const equipped = [...document.querySelectorAll('[data-layer-toggle][aria-pressed="true"]')]
+          .map(button => button.textContent.trim());
+        layerStatus.textContent = equipped.length > 0
+          ? `Equipped: ${equipped.join(', ')}.`
+          : 'Optional equipment cleared; neutral underlayer remains.';
+      };
+
+      document.querySelectorAll('[data-layer-toggle]').forEach(button => {
+        button.addEventListener('click', () => {
+          const layer = document.querySelector(`[data-layer="${button.dataset.layerToggle}"]`);
+          const nextVisible = button.getAttribute('aria-pressed') !== 'true';
+          button.setAttribute('aria-pressed', String(nextVisible));
+          layer.hidden = !nextVisible;
+          updateLayerStatus();
+        });
+      });
+
+      document.querySelectorAll('[data-motion]').forEach(button => {
+        button.addEventListener('click', () => {
+          document.querySelectorAll('[data-motion]').forEach(candidate => {
+            candidate.setAttribute('aria-pressed', String(candidate === button));
+          });
+          avatarRig.dataset.motion = button.dataset.motion;
+          motionName.textContent = button.textContent.trim();
+          applyMotionMode();
+        });
+      });
+
+      const applyMotionMode = () => {
+        const systemStatic = reducedMotion.matches;
+        const effectiveMode = systemStatic ? 'static' : selectedMotionMode;
+        avatarStage.dataset.motionMode = effectiveMode;
+        document.querySelectorAll('[data-motion-mode-choice]').forEach(button => {
+          const selected = button.dataset.motionModeChoice === effectiveMode;
+          button.setAttribute('aria-pressed', String(selected));
+          button.disabled = systemStatic && button.dataset.motionModeChoice === 'animated';
+        });
+        if (systemStatic) {
+          motionModeStatus.textContent = 'Static fallback active — system reduced-motion preference.';
+        } else if (effectiveMode === 'static') {
+          motionModeStatus.textContent = `Static fallback selected — ${labelFor(avatarRig.dataset.motion)} pose.`;
+        } else {
+          motionModeStatus.textContent = `Animated concept cue active — ${labelFor(avatarRig.dataset.motion)}.`;
+        }
+      };
+
+      document.querySelectorAll('[data-motion-mode-choice]').forEach(button => {
+        button.addEventListener('click', () => {
+          selectedMotionMode = button.dataset.motionModeChoice;
+          applyMotionMode();
+        });
+      });
+
+      reducedMotion.addEventListener('change', applyMotionMode);
+      applyMotionMode();
+    </script>
   </body>
 </html>

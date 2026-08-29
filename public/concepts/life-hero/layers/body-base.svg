@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 520" role="img" aria-labelledby="title">
+  <title id="title">Life Hero base body source layer</title>
+  <defs>
+    <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c7855f"/><stop offset="1" stop-color="#8e553f"/></linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#182032"/><stop offset="1" stop-color="#070b12"/></linearGradient>
+  </defs>
+  <g stroke="#07111f" stroke-linejoin="round" stroke-width="5">
+    <path fill="url(#skin)" d="M160 132h40v53h-40z"/>
+    <path fill="url(#skin)" d="M128 173c-24 18-37 57-42 95l-9 83 29 4 18-74 24-55z"/>
+    <path fill="url(#skin)" d="M232 173c24 18 37 57 42 95l9 83-29 4-18-74-24-55z"/>
+    <path fill="url(#skin)" d="M77 344c-7 4-12 15-9 24 3 10 14 16 24 13l16-8-3-24z"/>
+    <path fill="url(#skin)" d="M283 344c7 4 12 15 9 24-3 10-14 16-24 13l-16-8 3-24z"/>
+    <path fill="#202b3d" d="M143 276l-10 113 18 93h28l1-153 1 153h28l18-93-10-113z"/>
+    <path fill="#0b1321" d="M147 470h32v29h-56c0-13 9-24 24-29z"/>
+    <path fill="#0b1321" d="M213 470h-32v29h56c0-13-9-24-24-29z"/>
+    <path fill="url(#skin)" d="M126 80c0-36 23-62 54-62s54 26 54 62v25c0 35-23 61-54 61s-54-26-54-61z"/>
+    <path fill="url(#hair)" d="M124 86c-8-24-1-52 17-65 17-13 46-14 65-3 24 13 35 41 29 68l-12-17-11 10-9-27-12 17-11-26-15 23-13-15-10 29z"/>
+    <path fill="none" stroke="#3a1f1a" stroke-linecap="round" stroke-width="4" d="M148 101l12-2m40 2 12 2m-49 29c11 8 23 8 34 0"/>
+    <circle cx="157" cy="104" r="4" fill="#07111f" stroke="none"/><circle cx="204" cy="104" r="4" fill="#07111f" stroke="none"/>
+    <path fill="none" stroke="#9c6047" stroke-linecap="round" stroke-width="3" d="M181 105l-4 15 9 2"/>
+  </g>
+</svg>

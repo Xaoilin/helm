@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 520" role="img" aria-labelledby="title">
+  <title id="title">Life Hero neutral clothing source layer</title>
+  <g stroke="#07111f" stroke-linejoin="round" stroke-width="5">
+    <path fill="#202d44" d="M145 166l35 15 35-15 24 24-18 112h-82l-18-112z"/>
+    <path fill="#d0aa73" d="M153 174l27 12 27-12-8 30h-38z"/>
+    <path fill="#1a2639" d="M139 294h82l7 91-16 91h-31l-1-144-1 144h-31l-16-91z"/>
+    <path fill="none" stroke="#50617a" stroke-width="3" d="M180 332v144m-36-98h30m12 0h30"/>
+    <path fill="#101b2c" d="M148 463h31v34h-58c3-15 12-27 27-34z"/>
+    <path fill="#101b2c" d="M212 463h-31v34h58c-3-15-12-27-27-34z"/>
+    <path fill="none" stroke="#c98552" stroke-width="4" d="M126 210l-11 64m119-64 11 64"/>
+  </g>
+</svg>
