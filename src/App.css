@@ -5466,6 +5466,11 @@ textarea.form-input {
   --nc-late: #d79a46;
   --nc-missed: #e87373;
   --nc-focus: #8fe7c4;
+  --nc-prayer-fajr: #f2b866;
+  --nc-prayer-dhuhr: #f1d276;
+  --nc-prayer-asr: #f29a60;
+  --nc-prayer-maghrib: #c8b8ff;
+  --nc-prayer-isha: #8e9df5;
   display: grid;
   gap: 16px;
   width: min(100%, 1240px);
@@ -5739,19 +5744,19 @@ textarea.form-input {
 
 .nc-prayer-item.outcome-on_time .nc-prayer-symbol {
   border-color: rgba(47, 203, 143, 0.9);
-  color: var(--nc-emerald);
+  color: var(--nc-prayer-symbol-color);
   background: rgba(47, 203, 143, 0.16);
 }
 
 .nc-prayer-item.outcome-late .nc-prayer-symbol {
   border-color: rgba(215, 154, 70, 0.95);
-  color: #efb968;
+  color: var(--nc-prayer-symbol-color);
   background: rgba(215, 154, 70, 0.14);
 }
 
 .nc-prayer-item.outcome-missed .nc-prayer-symbol {
   border-color: rgba(232, 115, 115, 0.95);
-  color: #ff9696;
+  color: var(--nc-prayer-symbol-color);
   background: rgba(232, 115, 115, 0.12);
 }
 
@@ -5765,25 +5770,32 @@ textarea.form-input {
 }
 
 .nc-prayer-symbol {
+  --nc-prayer-symbol-color: #9cb2d2;
   display: inline-flex;
   width: 42px;
   height: 42px;
   align-items: center;
   justify-content: center;
   margin: 10px 0 7px;
-  border: 1px solid var(--nc-border);
+  border: 1px solid color-mix(in srgb, var(--nc-prayer-symbol-color) 82%, var(--nc-border));
   border-radius: 50%;
-  color: #9cb2d2;
-  background: rgba(7, 17, 31, 0.62);
+  color: var(--nc-prayer-symbol-color);
+  background: color-mix(in srgb, var(--nc-prayer-symbol-color) 14%, var(--nc-canvas));
   font-family: Georgia, serif;
   font-size: 25px;
   line-height: 1;
 }
 
+.nc-prayer-symbol[data-prayer='Fajr'] { --nc-prayer-symbol-color: var(--nc-prayer-fajr); }
+.nc-prayer-symbol[data-prayer='Dhuhr'] { --nc-prayer-symbol-color: var(--nc-prayer-dhuhr); }
+.nc-prayer-symbol[data-prayer='Asr'] { --nc-prayer-symbol-color: var(--nc-prayer-asr); }
+.nc-prayer-symbol[data-prayer='Maghrib'] { --nc-prayer-symbol-color: var(--nc-prayer-maghrib); }
+.nc-prayer-symbol[data-prayer='Isha'] { --nc-prayer-symbol-color: var(--nc-prayer-isha); }
+
 .temporal-current .nc-prayer-symbol,
 .temporal-next .nc-prayer-symbol {
   border-color: var(--nc-emerald);
-  color: var(--nc-emerald);
+  color: var(--nc-prayer-symbol-color);
   background: rgba(47, 203, 143, 0.12);
   box-shadow: 0 0 14px rgba(47, 203, 143, 0.22);
 }
