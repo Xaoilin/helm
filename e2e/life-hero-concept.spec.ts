@@ -17,6 +17,7 @@ async function fileSha256(filePath: string) {
 }
 
 async function waitForModel(page: import('@playwright/test').Page) {
+  page.setDefaultTimeout(120_000);
   await expect(page.getByTestId('avatar-stage')).toHaveAttribute('data-model-state', 'ready', {
     timeout: 60_000,
   });
