@@ -17,7 +17,9 @@ import type {
   DailyMomentumActivityDay,
   DailyMomentumPillarDay,
 } from '../../services/dailyMomentum';
-import { useApp } from '../../store/AppContext';
+import { useShell } from "../../store/ShellContext";
+import { useSettingsContext } from "../../store/contexts/SettingsContext";
+import { useTaskContext } from "../../store/contexts/TaskContext";
 import { useDailyMomentumContext } from '../../store/contexts/DailyMomentumContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import PrayerStatsCard from './PrayerStatsCard';
@@ -276,7 +278,9 @@ function MomentumCard({
 }
 
 export default function NightCompassDashboard() {
-  const app = useApp();
+  const shell = useShell();
+  const settings = useSettingsContext();
+  const tasks = useTaskContext();
   const prayer = usePrayerContext();
   const momentum = useDailyMomentumContext();
   const [busyPillar, setBusyPillar] = useState<DailyPillar | null>(null);
@@ -286,7 +290,7 @@ export default function NightCompassDashboard() {
   const today = momentum.getDay();
   const motivation = getQuranMotivationForDate(prayer.today);
 
-  const prayerEnabled = app.settings.prayerEnabled !== false;
+  const prayerEnabled = settings.settings.prayerEnabled !== false;
   const scheduleRepairNeeded = prayerEnabled && (
     prayer.scheduleStatus === 'unavailable'
     || Boolean(prayer.schedule && !prayer.scheduleTimezoneValid)
@@ -330,13 +334,13 @@ export default function NightCompassDashboard() {
   const dueTasks = useMemo(() => {
     const todayString = toLocalDateStr(prayer.now);
     const priorityOrder = { high: 0, medium: 1, low: 2 } as const;
-    return app.tasks
+    return tasks.tasks
       .filter(task => task.category === 'task' && !task.completed && task.dueDate && task.dueDate <= todayString)
       .sort((left, right) => (
         (left.dueDate || '').localeCompare(right.dueDate || '')
         || priorityOrder[left.priority] - priorityOrder[right.priority]
       ));
-  }, [app.tasks, prayer.now]);
+  }, [tasks.tasks, prayer.now]);
 
   const prayerStats = useMemo(() => {
     const currentMonth = prayer.today.slice(0, 7);
@@ -403,7 +407,7 @@ export default function NightCompassDashboard() {
             <h2 id="nc-prayer-title">Prayer</h2>
           </div>
           <span className="nc-prayer-location">
-            {app.settings.prayerCity || 'Prayer location'} · {prayer.schedule?.timezone || prayer.localTimezone}
+            {settings.settings.prayerCity || 'Prayer location'} · {prayer.schedule?.timezone || prayer.localTimezone}
           </span>
         </div>
 
@@ -411,7 +415,7 @@ export default function NightCompassDashboard() {
           <div className="nc-prayer-repair" role="status">
             <strong>Keep Prayer at the centre of Night Compass</strong>
             <span>Enable prayer tracking to load the five daily prayers and their canonical outcomes.</span>
-            <button type="button" className="nc-primary-action" onClick={() => app.navigate('settings')}>
+            <button type="button" className="nc-primary-action" onClick={() => shell.navigate('settings')}>
               Open prayer settings
             </button>
           </div>
@@ -572,7 +576,7 @@ export default function NightCompassDashboard() {
                     Retry schedule
                   </button>
                 ) : (
-                  <button type="button" className="nc-primary-action" onClick={() => app.navigate('settings')}>
+                  <button type="button" className="nc-primary-action" onClick={() => shell.navigate('settings')}>
                     Repair prayer settings
                   </button>
                 )}
@@ -615,7 +619,7 @@ export default function NightCompassDashboard() {
         <button
           type="button"
           className="nc-secondary-action"
-          onClick={() => app.requestAssistantNavigation({
+          onClick={() => shell.requestAssistantNavigation({
             surface: 'tasks',
             surfaceState: { tasks: { tab: 'all', resetFilters: true } },
           })}

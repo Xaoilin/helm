@@ -1,5 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useApp } from '../store/AppContext';
+import { useShell } from "../store/ShellContext";
+import { useTaskContext } from "../store/contexts/TaskContext";
+import { useGamificationContext } from "../store/contexts/GamificationContext";
+import { useKnowledgeContext } from "../store/contexts/KnowledgeContext";
+import { useProjectContext } from "../store/contexts/ProjectContext";
+import { useSettingsContext } from "../store/contexts/SettingsContext";
 import HabitCards from '../components/HabitCards';
 import { TIMING } from '../config/constants';
 import { EMOJI_PALETTE, getHabitEmoji } from '../services/habitEmoji';
@@ -75,7 +80,12 @@ function getAllTaskSectionId(task: Task, todayStr: string): AllTaskSection['id']
 }
 
 export default function TasksSurface() {
-  const app = useApp();
+  const shell = useShell();
+  const taskContext = useTaskContext();
+  const gamification = useGamificationContext();
+  const knowledge = useKnowledgeContext();
+  const projects = useProjectContext();
+  const settings = useSettingsContext();
   const prayer = usePrayerContext();
   const [tab, setTab] = useState<Tab>('today');
   const [showForm, setShowForm] = useState(false);
@@ -112,9 +122,9 @@ export default function TasksSurface() {
 
   const todayStr = toLocalDateStr(new Date());
   const isWeekday = () => { const d = new Date().getDay(); return d >= 1 && d <= 5; };
-  const assistantNavigationRequest = app.assistantNavigationRequest;
-  const dismissAssistantNavigationRequest = app.dismissAssistantNavigationRequest;
-  const tasks = app.tasks;
+  const assistantNavigationRequest = shell.assistantNavigationRequest;
+  const dismissAssistantNavigationRequest = shell.dismissAssistantNavigationRequest;
+  const tasks = taskContext.tasks;
 
   useEffect(() => {
     const request = assistantNavigationRequest;
@@ -147,7 +157,7 @@ export default function TasksSurface() {
 
   // ── Recurring reset ──
   useEffect(() => {
-    const habitsToReset = app.tasks.filter(t => {
+    const habitsToReset = taskContext.tasks.filter(t => {
       if (!isHabitTask(t) || !t.recurring || !t.completed) return false;
       if (t.recurring.lastReset === todayStr) return false;
       // Weekday-only habits: don't reset on weekends
@@ -155,7 +165,7 @@ export default function TasksSurface() {
       return true;
     });
     for (const t of habitsToReset) {
-      app.updateTask(t.id, {
+      taskContext.updateTask(t.id, {
         completed: false,
         completedAt: undefined,
         recurring: { ...t.recurring!, lastReset: todayStr },
@@ -166,8 +176,8 @@ export default function TasksSurface() {
 
   // Check if streak was broken (missed a day)
   useEffect(() => {
-    if (checkStreakBroken(app.gamification) && app.gamification.currentStreak > 0) {
-      app.updateGamification({ ...app.gamification, currentStreak: 0 });
+    if (checkStreakBroken(gamification.gamification) && gamification.gamification.currentStreak > 0) {
+      gamification.updateGamification({ ...gamification.gamification, currentStreak: 0 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayStr]);
@@ -202,9 +212,9 @@ export default function TasksSurface() {
   // ── Derived data ──
   const projectFilteredTasks = useMemo(() => (
     filterProjectId === 'all'
-      ? app.tasks
-      : app.tasks.filter(task => task.projectId === filterProjectId)
-  ), [app.tasks, filterProjectId]);
+      ? taskContext.tasks
+      : taskContext.tasks.filter(task => task.projectId === filterProjectId)
+  ), [taskContext.tasks, filterProjectId]);
 
   const prayerTasks = useMemo(() =>
     projectFilteredTasks
@@ -256,8 +266,8 @@ export default function TasksSurface() {
   );
 
   const selectedProjectName = useMemo(
-    () => app.projects.find(project => project.id === filterProjectId)?.name,
-    [app.projects, filterProjectId],
+    () => projects.projects.find(project => project.id === filterProjectId)?.name,
+    [projects.projects, filterProjectId],
   );
 
   const allTaskStats = useMemo(() => {
@@ -375,7 +385,7 @@ export default function TasksSurface() {
     || filterPriority !== 'all'
     || filterStatus !== 'all';
 
-  const goalTags = useMemo(() => app.settings.goalTags || [], [app.settings.goalTags]);
+  const goalTags = useMemo(() => settings.settings.goalTags || [], [settings.settings.goalTags]);
 
   const activeGoals = useMemo(() => {
     let goals = projectFilteredTasks.filter(t => t.category === 'goal' && !t.completed);
@@ -422,7 +432,7 @@ export default function TasksSurface() {
     const nextBoardOrder = category === 'task' && normalizedProjectId
       ? (editing && editing.projectId === normalizedProjectId && typeof editing.boardOrder === 'number'
         ? editing.boardOrder
-        : app.tasks
+        : taskContext.tasks
           .filter(task => task.projectId === normalizedProjectId && task.category === 'task')
           .reduce((max, task) => Math.max(max, task.boardOrder ?? 0), 0) + 1)
       : undefined;
@@ -448,9 +458,9 @@ export default function TasksSurface() {
       boardOrder: nextBoardOrder,
     };
     if (editing) {
-      app.updateTask(editing.id, data);
+      taskContext.updateTask(editing.id, data);
     } else {
-      app.addTask(data);
+      taskContext.addTask(data);
     }
     setShowForm(false);
   };
@@ -488,7 +498,7 @@ export default function TasksSurface() {
       return;
     }
 
-    app.updateTask(task.id, {
+    taskContext.updateTask(task.id, {
       completed: completing,
       completedAt: completing ? now : undefined,
       ...(task.recurring && completing ? { recurring: { ...task.recurring, lastReset: todayStr } } : {}),
@@ -497,25 +507,25 @@ export default function TasksSurface() {
     // Gamification: award XP on completion (once per habit per day)
     if (completing) {
       // Check if this habit already got XP today (prevent farming)
-      const todayLog = app.gamification.dailyLog?.[todayStr] || [];
+      const todayLog = gamification.gamification.dailyLog?.[todayStr] || [];
       const alreadyRewarded = isHabitTask(task) && todayLog.includes(task.id);
 
       if (alreadyRewarded) return; // no duplicate XP
 
-      const completionsToday = app.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
-      const extCtx = buildCompletionContext(app.tasks, app.settings.goalTags, todayStr, app.gamification, {
-        knowledgeEntries: app.knowledgeEntries.length,
-        knowledgeTopics: app.knowledgeTopics.length,
-        lifestyleHaramMastered: app.lifestyleItems.filter(i => i.type === 'haram' && i.status === 'mastered').length,
-        lifestyleHalalConsistent: app.lifestyleItems.filter(i => i.type === 'halal' && i.status === 'consistent').length,
-        lifestyleTotal: app.lifestyleItems.length,
+      const completionsToday = taskContext.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
+      const extCtx = buildCompletionContext(taskContext.tasks, settings.settings.goalTags, todayStr, gamification.gamification, {
+        knowledgeEntries: knowledge.knowledgeEntries.length,
+        knowledgeTopics: knowledge.knowledgeTopics.length,
+        lifestyleHaramMastered: knowledge.lifestyleItems.filter(i => i.type === 'haram' && i.status === 'mastered').length,
+        lifestyleHalalConsistent: knowledge.lifestyleItems.filter(i => i.type === 'halal' && i.status === 'consistent').length,
+        lifestyleTotal: knowledge.lifestyleItems.length,
       });
-      const result = processTaskCompletion(app.gamification, task, completionsToday, nowDate, extCtx);
+      const result = processTaskCompletion(gamification.gamification, task, completionsToday, nowDate, extCtx);
       let profile = result.updatedProfile;
       if (isHabitTask(task)) {
         profile = recordHabitCompletion(profile, task.id, todayStr);
       }
-      app.updateGamification(profile);
+      gamification.updateGamification(profile);
 
       // XP toast
       addToast({ type: 'xp', text: `+${result.xpEarned} XP`, emoji: '\u2728' });
@@ -540,7 +550,7 @@ export default function TasksSurface() {
   };
 
   const handleDelete = (id: string) => {
-    app.removeTask(id);
+    taskContext.removeTask(id);
     setDeletingId(null);
     if (editing?.id === id) setShowForm(false);
   };
@@ -578,7 +588,7 @@ export default function TasksSurface() {
       <div className="task-content">
         {task.projectId && (
           <div style={{ marginBottom: 6 }}>
-            <span className="tag tag-connected">{app.projects.find(project => project.id === task.projectId)?.name || 'Project'}</span>
+            <span className="tag tag-connected">{projects.projects.find(project => project.id === task.projectId)?.name || 'Project'}</span>
           </div>
         )}
         <div className={`task-title ${task.completed ? 'task-title-done' : ''}`}>
@@ -621,7 +631,7 @@ export default function TasksSurface() {
   );
 
   const renderAllTaskCard = (task: Task) => {
-    const projectName = task.projectId ? app.projects.find(project => project.id === task.projectId)?.name || 'Project' : undefined;
+    const projectName = task.projectId ? projects.projects.find(project => project.id === task.projectId)?.name || 'Project' : undefined;
     const canonicalPrayerName = getPrayerTaskName(task);
     const canonicalPrayerOutcome = canonicalPrayerName
       ? prayer.getOutcome(todayStr, canonicalPrayerName)?.status
@@ -744,7 +754,7 @@ export default function TasksSurface() {
     );
   };
 
-  const activeCount = app.tasks.filter(t => !t.completed && t.category !== 'goal').length;
+  const activeCount = taskContext.tasks.filter(t => !t.completed && t.category !== 'goal').length;
   const goalCount = activeGoals.length;
 
   return (
@@ -753,7 +763,7 @@ export default function TasksSurface() {
         <div>
           <h1>Tasks</h1>
           <div className="subtitle">
-            {app.tasks.length === 0
+            {taskContext.tasks.length === 0
               ? 'No tasks yet'
               : `${activeCount} active task${activeCount !== 1 ? 's' : ''}${goalCount > 0 ? ` \u00b7 ${goalCount} goal${goalCount !== 1 ? 's' : ''}` : ''}`}
           </div>
@@ -776,7 +786,7 @@ export default function TasksSurface() {
           <>
             {/* Gamification stats panel */}
             {(() => {
-              const gam = app.gamification;
+              const gam = gamification.gamification;
               const xp = xpToNextLevel(gam.totalXp);
               const title = titleForLevel(gam.level);
               const streakMilestone = [7, 14, 30, 60, 100].includes(gam.currentStreak);
@@ -914,7 +924,7 @@ export default function TasksSurface() {
                   <span>Project</span>
                   <select className="form-select" value={filterProjectId} onChange={e => setFilterProjectId(e.target.value)}>
                     <option value="all">All projects</option>
-                    {app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+                    {projects.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
                   </select>
                 </label>
                 <label className="all-tasks-filter-field">
@@ -1038,7 +1048,7 @@ export default function TasksSurface() {
               <div className="filter-bar">
                 <select className="form-select" value={filterProjectId} onChange={e => setFilterProjectId(e.target.value)}>
                   <option value="all">All projects</option>
-                  {app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+                  {projects.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
                 </select>
                 <button
                   className={`btn btn-sm ${filterGoalTag === 'all' ? 'btn-primary' : 'btn-secondary'}`}
@@ -1055,7 +1065,7 @@ export default function TasksSurface() {
                     {tag}
                   </button>
                 ))}
-                {app.tasks.some(t => t.category === 'goal' && !t.goalTag) && (
+                {taskContext.tasks.some(t => t.category === 'goal' && !t.goalTag) && (
                   <button
                     className={`btn btn-sm ${filterGoalTag === '' ? 'btn-primary' : 'btn-secondary'}`}
                     onClick={() => setFilterGoalTag('')}
@@ -1085,7 +1095,7 @@ export default function TasksSurface() {
                       {goal.title}
                       <span className={`tag tag-${goal.priority}`}>{goal.priority}</span>
                       {goal.goalTag && <span className="tag tag-goal">{goal.goalTag}</span>}
-                      {goal.projectId && <span className="tag tag-connected">{app.projects.find(project => project.id === goal.projectId)?.name || 'Project'}</span>}
+                      {goal.projectId && <span className="tag tag-connected">{projects.projects.find(project => project.id === goal.projectId)?.name || 'Project'}</span>}
                     </div>
                     {goal.description && <div className="goal-desc">{goal.description}</div>}
                     <div className="goal-meta">
@@ -1236,12 +1246,12 @@ export default function TasksSurface() {
                 </select>
               </div>
             )}
-            {category !== 'daily' && category !== 'prayer' && app.projects.length > 0 && (
+            {category !== 'daily' && category !== 'prayer' && projects.projects.length > 0 && (
               <div className="form-group">
                 <label htmlFor="task-project">Project (optional)</label>
                 <select id="task-project" className="form-select" value={taskProjectId} onChange={e => setTaskProjectId(e.target.value)}>
                   <option value="">None</option>
-                  {app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+                  {projects.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
                 </select>
               </div>
             )}

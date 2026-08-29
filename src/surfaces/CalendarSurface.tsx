@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useApp } from '../store/AppContext';
+import { useShell } from "../store/ShellContext";
+import { useCalendar } from "../store/contexts/CalendarContext";
+import { useSettingsContext } from "../store/contexts/SettingsContext";
 import { useGoogleSync } from '../hooks/useGoogleSync';
 import { appendGoogleCalendarDiagnosticEvent } from '../services/googleCalendarDiagnosticEvents';
 import {
@@ -35,8 +37,10 @@ const ACCOUNT_PALETTES = [
 type Tab = 'month' | 'week' | 'agenda' | 'accounts';
 
 export default function CalendarSurface() {
-  const app = useApp();
-  const [tab, setTab] = useState<Tab>(app.settings.defaultCalendarTab || 'week');
+  const shell = useShell();
+  const calendar = useCalendar();
+  const settings = useSettingsContext();
+  const [tab, setTab] = useState<Tab>(settings.settings.defaultCalendarTab || 'week');
   const [viewDate, setViewDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState(() => {
     const todayDate = new Date();
@@ -71,7 +75,7 @@ export default function CalendarSurface() {
   const month = viewDate.getMonth();
 
   // Multi-account sync
-  const googleAccounts = app.calendarAccounts.filter(isGoogleCalendarAccount);
+  const googleAccounts = calendar.calendarAccounts.filter(isGoogleCalendarAccount);
   const { syncState, lastSyncTime, syncError, triggerSync } = useGoogleSync();
   const hasGoogleAccounts = googleAccounts.length > 0;
   const [syncStatusNow, setSyncStatusNow] = useState(() => new Date());
@@ -84,47 +88,47 @@ export default function CalendarSurface() {
 
   // Visible sources
   const visibleSourceIds = useMemo(
-    () => new Set(app.calendarSources.filter(s => s.visible).map(s => s.id)),
-    [app.calendarSources]
+    () => new Set(calendar.calendarSources.filter(s => s.visible).map(s => s.id)),
+    [calendar.calendarSources]
   );
 
   const visibleEvents = useMemo(
-    () => app.calendarEvents.filter(e => visibleSourceIds.has(e.sourceId)),
-    [app.calendarEvents, visibleSourceIds]
+    () => calendar.calendarEvents.filter(e => visibleSourceIds.has(e.sourceId)),
+    [calendar.calendarEvents, visibleSourceIds]
   );
 
   // Helpers
   const isGoogleSource = (sourceId: string) => {
-    const source = app.calendarSources.find(s => s.id === sourceId);
+    const source = calendar.calendarSources.find(s => s.id === sourceId);
     if (!source) return false;
-    const account = app.calendarAccounts.find(a => a.id === source.accountId);
+    const account = calendar.calendarAccounts.find(a => a.id === source.accountId);
     return !!account && isGoogleCalendarAccount(account);
   };
 
   const getGoogleCalendarId = (sourceId: string) => {
-    return app.calendarSources.find(s => s.id === sourceId)?.googleCalendarId;
+    return calendar.calendarSources.find(s => s.id === sourceId)?.googleCalendarId;
   };
 
   const getAccountForSource = (sourceId: string) => {
-    const source = app.calendarSources.find(s => s.id === sourceId);
-    return source ? app.calendarAccounts.find(a => a.id === source.accountId) : null;
+    const source = calendar.calendarSources.find(s => s.id === sourceId);
+    return source ? calendar.calendarAccounts.find(a => a.id === source.accountId) : null;
   };
 
   const getSourceColor = (sourceId: string) => {
-    return app.calendarSources.find(s => s.id === sourceId)?.color || '#4f5bff';
+    return calendar.calendarSources.find(s => s.id === sourceId)?.color || '#4f5bff';
   };
 
   const accountPaletteMap = useMemo(() => {
     const map = new Map<string, typeof ACCOUNT_PALETTES[number]>();
-    app.calendarAccounts.forEach((acc, i) => {
+    calendar.calendarAccounts.forEach((acc, i) => {
       const idx = acc.paletteIndex ?? i;
       map.set(acc.id, ACCOUNT_PALETTES[idx % ACCOUNT_PALETTES.length]);
     });
     return map;
-  }, [app.calendarAccounts]);
+  }, [calendar.calendarAccounts]);
 
   const getEventPalette = (sourceId: string) => {
-    const source = app.calendarSources.find(s => s.id === sourceId);
+    const source = calendar.calendarSources.find(s => s.id === sourceId);
     if (!source) return ACCOUNT_PALETTES[0];
     return accountPaletteMap.get(source.accountId) || ACCOUNT_PALETTES[0];
   };
@@ -204,10 +208,10 @@ export default function CalendarSurface() {
   const saveAccount = () => {
     if (!accName.trim() || !accEmail.trim()) return;
     if (editingAccount) {
-      app.updateCalendarAccount(editingAccount.id, { name: accName.trim(), email: accEmail.trim(), provider: accProvider });
+      calendar.updateCalendarAccount(editingAccount.id, { name: accName.trim(), email: accEmail.trim(), provider: accProvider });
     } else {
-      const id = app.addCalendarAccount({ name: accName.trim(), email: accEmail.trim(), provider: accProvider, isPrimary: false, connected: false, mocked: true });
-      app.addCalendarSource({ accountId: id, name: accName.trim(), color: randomColor(), visible: true });
+      const id = calendar.addCalendarAccount({ name: accName.trim(), email: accEmail.trim(), provider: accProvider, isPrimary: false, connected: false, mocked: true });
+      calendar.addCalendarSource({ accountId: id, name: accName.trim(), color: randomColor(), visible: true });
     }
     setShowAddAccount(false);
   };
@@ -220,7 +224,7 @@ export default function CalendarSurface() {
     const end = new Date(d.getTime() + 3600000);
     const endStr = `${toLocalDateStr(end)}T${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')}`;
     setEvtStart(startStr); setEvtEnd(endStr);
-    setEvtSourceId(app.calendarSources[0]?.id || '');
+    setEvtSourceId(calendar.calendarSources[0]?.id || '');
     setEventWriteError(null);
     setEditingEvent(null); setShowAddEvent(true);
   };
@@ -258,10 +262,10 @@ export default function CalendarSurface() {
 
         if (editingEvent && editingEvent.googleEventId) {
           const result = await googleUpdateEvent(accessToken, googleCalId, editingEvent.googleEventId, payload);
-          app.updateCalendarEvent(editingEvent.id, { ...eventData, googleEventId: result.id, pendingSync: undefined });
+          calendar.updateCalendarEvent(editingEvent.id, { ...eventData, googleEventId: result.id, pendingSync: undefined });
         } else {
           const result = await googleCreateEvent(accessToken, googleCalId, payload);
-          app.bulkUpsertCalendarEvents([{
+          calendar.bulkUpsertCalendarEvents([{
             ...eventData,
             id: buildGoogleEventCacheId(evtSourceId, result.id),
             googleEventId: result.id,
@@ -269,7 +273,7 @@ export default function CalendarSurface() {
             pendingSync: undefined,
           }]);
         }
-        app.updateCalendarAccount(account.id, {
+        calendar.updateCalendarAccount(account.id, {
           authProvider: token.authProvider,
           authStatus: 'connected',
           authEmail: account.email,
@@ -293,7 +297,7 @@ export default function CalendarSurface() {
           message: `Google event write failed: ${message}`,
         });
         if (err instanceof GoogleCalendarReconnectRequiredError) {
-          app.updateCalendarAccount(account.id, {
+          calendar.updateCalendarAccount(account.id, {
             authProvider: err.authProvider,
             authStatus: err.authStatus,
             authEmail: account.email,
@@ -302,7 +306,7 @@ export default function CalendarSurface() {
             syncError: undefined,
           });
         } else {
-          app.updateCalendarAccount(account.id, {
+          calendar.updateCalendarAccount(account.id, {
             authStatus: 'error',
             authEmail: account.email,
             lastAuthCheckAt: new Date().toISOString(),
@@ -316,9 +320,9 @@ export default function CalendarSurface() {
       }
     } else {
       if (editingEvent) {
-        app.updateCalendarEvent(editingEvent.id, eventData);
+        calendar.updateCalendarEvent(editingEvent.id, eventData);
       } else {
-        app.addCalendarEvent(eventData);
+        calendar.addCalendarEvent(eventData);
       }
     }
     setShowAddEvent(false);
@@ -336,7 +340,7 @@ export default function CalendarSurface() {
         const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, '');
         const accessToken = token.accessToken;
         await googleDeleteEvent(accessToken, googleCalId, editingEvent.googleEventId);
-        app.updateCalendarAccount(account.id, {
+        calendar.updateCalendarAccount(account.id, {
           authProvider: token.authProvider,
           authStatus: 'connected',
           authEmail: account.email,
@@ -360,7 +364,7 @@ export default function CalendarSurface() {
           message: `Google event delete failed: ${message}`,
         });
         if (err instanceof GoogleCalendarReconnectRequiredError) {
-          app.updateCalendarAccount(account.id, {
+          calendar.updateCalendarAccount(account.id, {
             authProvider: err.authProvider,
             authStatus: err.authStatus,
             authEmail: account.email,
@@ -369,7 +373,7 @@ export default function CalendarSurface() {
             syncError: undefined,
           });
         } else {
-          app.updateCalendarAccount(account.id, {
+          calendar.updateCalendarAccount(account.id, {
             authStatus: 'error',
             authEmail: account.email,
             lastAuthCheckAt: new Date().toISOString(),
@@ -379,9 +383,9 @@ export default function CalendarSurface() {
         setEventWriteError(`Google Calendar was not changed: ${message}`);
         return;
       }
-      app.removeCalendarEvent(editingEvent.id);
+      calendar.removeCalendarEvent(editingEvent.id);
     } else {
-      app.removeCalendarEvent(editingEvent.id);
+      calendar.removeCalendarEvent(editingEvent.id);
     }
     setShowAddEvent(false);
     setDeletingEventId(null);
@@ -411,9 +415,9 @@ export default function CalendarSurface() {
   };
 
   // ── Account color legend ──
-  const accountLegend = app.calendarAccounts.length > 1 ? (
+  const accountLegend = calendar.calendarAccounts.length > 1 ? (
     <div className="account-legend" data-testid="account-legend">
-      {app.calendarAccounts.map(acc => {
+      {calendar.calendarAccounts.map(acc => {
         const pal = accountPaletteMap.get(acc.id) || ACCOUNT_PALETTES[0];
         return (
           <div key={acc.id} className="account-legend-item">
@@ -441,9 +445,9 @@ export default function CalendarSurface() {
         <div>
           <h1>Calendar</h1>
           <div className="subtitle">
-            {app.calendarAccounts.length === 0
+            {calendar.calendarAccounts.length === 0
               ? 'No accounts connected'
-              : `${app.calendarAccounts.length} account${app.calendarAccounts.length > 1 ? 's' : ''} \u00b7 ${visibleEvents.length} visible event${visibleEvents.length !== 1 ? 's' : ''}`}
+              : `${calendar.calendarAccounts.length} account${calendar.calendarAccounts.length > 1 ? 's' : ''} \u00b7 ${visibleEvents.length} visible event${visibleEvents.length !== 1 ? 's' : ''}`}
             {hasGoogleAccounts ? (
               <span style={{ marginLeft: 8 }}>{syncStatusText()}</span>
             ) : (
@@ -457,7 +461,7 @@ export default function CalendarSurface() {
               {syncState === 'syncing' ? <><span className="spinner" /> Syncing</> : '\u{21BB} Sync'}
             </button>
           )}
-          <button className="btn btn-secondary" onClick={() => openAddEvent()} disabled={app.calendarSources.length === 0}>+ Event</button>
+          <button className="btn btn-secondary" onClick={() => openAddEvent()} disabled={calendar.calendarSources.length === 0}>+ Event</button>
           <button className="btn btn-primary" onClick={openAddAccount}>+ Account</button>
         </div>
       </div>
@@ -479,14 +483,14 @@ export default function CalendarSurface() {
                 <button className="btn-icon" onClick={nextMonth} aria-label="Next month">&rsaquo;</button>
                 <button className="btn btn-secondary btn-sm" onClick={goToday}>Today</button>
               </div>
-              {app.calendarAccounts.length === 0 ? (
+              {calendar.calendarAccounts.length === 0 ? (
                 <div className="empty-state" role="status">
                   <div className="empty-icon">&#128197;</div>
                   <h3>No calendar accounts</h3>
                   <p>Add a local calendar account or connect Google Calendar from Integrations.</p>
                   <div className="actions-row" style={{ gap: 8 }}>
                     <button className="btn btn-primary" onClick={openAddAccount}>+ Local Account</button>
-                    <button className="btn btn-secondary" onClick={() => app.navigate('integrations')}>Connect Google</button>
+                    <button className="btn btn-secondary" onClick={() => shell.navigate('integrations')}>Connect Google</button>
                   </div>
                 </div>
               ) : (
@@ -522,7 +526,7 @@ export default function CalendarSurface() {
                   })}
                 </div>
               )}
-              {app.calendarAccounts.length > 0 && (
+              {calendar.calendarAccounts.length > 0 && (
                 <div className="calendar-mobile-selected-agenda">
                   <div className="calendar-mobile-selected-title">
                     {selectedDate.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
@@ -550,13 +554,13 @@ export default function CalendarSurface() {
                 </div>
               )}
             </div>
-            {app.calendarSources.length > 0 && (
+            {calendar.calendarSources.length > 0 && (
               <div className="calendar-right-panel">
                 <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#8b8fa3' }}>Calendars</h3>
-                {app.calendarSources.map(source => (
+                {calendar.calendarSources.map(source => (
                   <div key={source.id} className="source-toggle">
                     <label className="toggle">
-                      <input type="checkbox" checked={source.visible} onChange={e => app.updateCalendarSource(source.id, { visible: e.target.checked })} aria-label={`Toggle ${source.name} calendar`} />
+                      <input type="checkbox" checked={source.visible} onChange={e => calendar.updateCalendarSource(source.id, { visible: e.target.checked })} aria-label={`Toggle ${source.name} calendar`} />
                       <span className="slider" />
                     </label>
                     <span className="dot" style={{ background: source.color }} />
@@ -581,14 +585,14 @@ export default function CalendarSurface() {
               <button className="btn btn-secondary btn-sm" onClick={goToday}>Today</button>
             </div>
             {accountLegend}
-            {app.calendarAccounts.length === 0 ? (
+            {calendar.calendarAccounts.length === 0 ? (
               <div className="empty-state" role="status">
                 <div className="empty-icon">&#128197;</div>
                 <h3>No calendar accounts</h3>
                 <p>Add a calendar account to see events here.</p>
                 <div className="actions-row" style={{ gap: 8 }}>
                   <button className="btn btn-primary" onClick={openAddAccount}>+ Local Account</button>
-                  <button className="btn btn-secondary" onClick={() => app.navigate('integrations')}>Connect Google</button>
+                  <button className="btn btn-secondary" onClick={() => shell.navigate('integrations')}>Connect Google</button>
                 </div>
               </div>
             ) : (
@@ -738,21 +742,21 @@ export default function CalendarSurface() {
                 {googleAccounts.some(account => account.authStatus === 'needs_reconnect' || account.authStatus === 'revoked')
                   ? ' Some accounts need reconnect before they can sync again.'
                   : ' Manage connections in '}
-                <button className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: 11, marginLeft: 6 }} onClick={() => app.navigate('integrations')}>Integrations</button>
+                <button className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: 11, marginLeft: 6 }} onClick={() => shell.navigate('integrations')}>Integrations</button>
               </div>
             )}
-            {app.calendarAccounts.length === 0 ? (
+            {calendar.calendarAccounts.length === 0 ? (
               <div className="empty-state" role="status">
                 <div className="empty-icon">&#128231;</div>
                 <h3>No calendar accounts</h3>
                 <p>Add a local calendar account or connect Google Calendar from Integrations.</p>
                 <div className="actions-row" style={{ gap: 8 }}>
                   <button className="btn btn-primary" onClick={openAddAccount}>+ Local Account</button>
-                  <button className="btn btn-secondary" onClick={() => app.navigate('integrations')}>Connect Google</button>
+                  <button className="btn btn-secondary" onClick={() => shell.navigate('integrations')}>Connect Google</button>
                 </div>
               </div>
             ) : (
-              app.calendarAccounts.map(acc => {
+              calendar.calendarAccounts.map(acc => {
                 const isGoogleAcc = isGoogleCalendarAccount(acc);
                 return (
                   <div key={acc.id} className="card">
@@ -785,11 +789,11 @@ export default function CalendarSurface() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '8px 0 4px' }}>
                       <span style={{ fontSize: 11, color: '#9499b0' }}>Color:</span>
                       {ACCOUNT_PALETTES.map((pal, pi) => {
-                        const isSelected = (acc.paletteIndex ?? app.calendarAccounts.indexOf(acc)) % ACCOUNT_PALETTES.length === pi;
+                        const isSelected = (acc.paletteIndex ?? calendar.calendarAccounts.indexOf(acc)) % ACCOUNT_PALETTES.length === pi;
                         return (
                           <button
                             key={pi}
-                            onClick={() => app.updateCalendarAccount(acc.id, { paletteIndex: pi })}
+                            onClick={() => calendar.updateCalendarAccount(acc.id, { paletteIndex: pi })}
                             aria-label={`Set color ${pi + 1}`}
                             style={{
                               width: 20,
@@ -808,30 +812,30 @@ export default function CalendarSurface() {
                       })}
                     </div>
                     <div className="actions-row" style={{ marginTop: 6 }}>
-                      {!acc.isPrimary && <button className="btn btn-secondary btn-sm" onClick={() => app.setPrimaryCalendarAccount(acc.id)}>Set Primary</button>}
+                      {!acc.isPrimary && <button className="btn btn-secondary btn-sm" onClick={() => calendar.setPrimaryCalendarAccount(acc.id)}>Set Primary</button>}
                       {!isGoogleAcc && <button className="btn btn-secondary btn-sm" onClick={() => openEditAccount(acc)}>Edit</button>}
                       {isGoogleAcc
-                        ? <button className="btn btn-secondary btn-sm" onClick={() => app.navigate('integrations')}>
+                        ? <button className="btn btn-secondary btn-sm" onClick={() => shell.navigate('integrations')}>
                             {acc.authStatus === 'needs_reconnect' || acc.authStatus === 'revoked' ? 'Reconnect in Integrations' : 'Manage in Integrations'}
                           </button>
                         : deletingAccountId === acc.id
                           ? <div className="confirm-bar" style={{ margin: 0 }} role="alert">
                               Delete account?
-                              <button className="btn btn-danger btn-sm" onClick={() => { app.removeCalendarAccount(acc.id); setDeletingAccountId(null); }}>Delete</button>
+                              <button className="btn btn-danger btn-sm" onClick={() => { calendar.removeCalendarAccount(acc.id); setDeletingAccountId(null); }}>Delete</button>
                               <button className="btn btn-secondary btn-sm" onClick={() => setDeletingAccountId(null)}>Cancel</button>
                             </div>
                           : <button className="btn btn-danger btn-sm" onClick={() => setDeletingAccountId(acc.id)}>Remove</button>
                       }
                     </div>
                     <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #1e2030' }}>
-                      <div style={{ fontSize: 12, color: '#9499b0', marginBottom: 6 }}>Calendars ({app.calendarSources.filter(s => s.accountId === acc.id).length})</div>
-                      {app.calendarSources.filter(s => s.accountId === acc.id).map(source => {
-                        const otherAccounts = app.calendarAccounts.filter(a => a.id !== acc.id);
+                      <div style={{ fontSize: 12, color: '#9499b0', marginBottom: 6 }}>Calendars ({calendar.calendarSources.filter(s => s.accountId === acc.id).length})</div>
+                      {calendar.calendarSources.filter(s => s.accountId === acc.id).map(source => {
+                        const otherAccounts = calendar.calendarAccounts.filter(a => a.id !== acc.id);
                         return (
                           <div key={source.id} className="source-toggle" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <label className="toggle">
-                                <input type="checkbox" checked={source.visible} onChange={e => app.updateCalendarSource(source.id, { visible: e.target.checked })} aria-label={`Toggle ${source.name} calendar`} />
+                                <input type="checkbox" checked={source.visible} onChange={e => calendar.updateCalendarSource(source.id, { visible: e.target.checked })} aria-label={`Toggle ${source.name} calendar`} />
                                 <span className="slider" />
                               </label>
                               <span className="dot" style={{ background: source.color }} />
@@ -851,7 +855,7 @@ export default function CalendarSurface() {
                                           className="btn btn-sm"
                                           style={{ background: pal.bg, borderColor: pal.border, color: pal.text, fontSize: 11 }}
                                           onClick={() => {
-                                            app.updateCalendarSource(source.id, { accountId: otherAcc.id });
+                                            calendar.updateCalendarSource(source.id, { accountId: otherAcc.id });
                                             setMovingSourceId(null);
                                           }}
                                         >
@@ -865,13 +869,13 @@ export default function CalendarSurface() {
                                   <button className="btn btn-secondary btn-sm" style={{ fontSize: 11 }} onClick={() => setMovingSourceId(source.id)}>Move</button>
                                 )
                               )}
-                              {!isGoogleAcc && <button className="btn btn-danger btn-sm" onClick={() => app.removeCalendarSource(source.id)}>Remove</button>}
+                              {!isGoogleAcc && <button className="btn btn-danger btn-sm" onClick={() => calendar.removeCalendarSource(source.id)}>Remove</button>}
                             </div>
                           </div>
                         );
                       })}
                       {!isGoogleAcc && (
-                        <button className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => app.addCalendarSource({ accountId: acc.id, name: 'New Calendar', color: randomColor(), visible: true })}>
+                        <button className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => calendar.addCalendarSource({ accountId: acc.id, name: 'New Calendar', color: randomColor(), visible: true })}>
                           + Add Calendar
                         </button>
                       )}
@@ -891,7 +895,7 @@ export default function CalendarSurface() {
             <h2>{editingAccount ? 'Edit Account' : 'Add Local Calendar Account'}</h2>
             <div className="info-box">
               This creates a local calendar. To connect Google Calendar, go to{' '}
-              <button className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => { setShowAddAccount(false); app.navigate('integrations'); }}>Integrations</button>.
+              <button className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => { setShowAddAccount(false); shell.navigate('integrations'); }}>Integrations</button>.
             </div>
             <div className="form-group">
               <label htmlFor="cal-acc-name">Account Name</label>
@@ -949,7 +953,7 @@ export default function CalendarSurface() {
             <div className="form-group">
               <label htmlFor="evt-calendar">Calendar</label>
               <select id="evt-calendar" className="form-select" value={evtSourceId} onChange={e => { setEvtSourceId(e.target.value); setEventWriteError(null); }}>
-                {app.calendarSources.map(s => (
+                {calendar.calendarSources.map(s => (
                   <option key={s.id} value={s.id}>{s.name}{s.googleCalendarId ? ' (Google)' : ''}</option>
                 ))}
               </select>

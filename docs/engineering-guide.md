@@ -55,6 +55,10 @@ Assistant-planning changes also keep the benchmark corpus, dialog seeds, grounde
 
 ## Testing Expectations
 
+### Composition boundaries
+
+Rendered components consume owning domain hooks directly. Shell owns navigation and readiness only; a true cross-domain operation must be named for its workflow and expose a consumer-shaped contract. Do not add an application service bag, generic service locator, dependency-injection container, or all-domain context. `npm run agent:policy` enforces the lightweight composition rule, and `src/test/composition.boundaries.test.ts` proves that a representative broad bag is rejected.
+
 ### Unit and contract checks
 
 Business rules, account persistence, semantic mutations, assistant validation, and provider error mapping should have focused deterministic coverage. Service checks should exercise success and failure responses without hiding diagnostics.

@@ -23,7 +23,10 @@ import {
   getProjectAvailability,
   type ProjectCatalogFilter,
 } from '../components/projects/projectCatalogModel';
-import { useApp } from '../store/AppContext';
+import { useShell } from "../store/ShellContext";
+import { useProjectContext } from "../store/contexts/ProjectContext";
+import { useTaskContext } from "../store/contexts/TaskContext";
+import { useProjectRemovalWorkflow } from '../store/workflows/useProjectRemovalWorkflow';
 import { ProjectInventorySection } from './InventorySurface';
 import {
   compareProjectCatalogueOrder,
@@ -387,7 +390,13 @@ function ProjectCatalogueSectionView({
 }
 
 export default function ProjectsSurface() {
-  const app = useApp();
+  const shell = useShell();
+  const projects = useProjectContext();
+  const setProjectPinnedInStore = projects.setProjectPinned;
+  const setProjectArchivedInStore = projects.setProjectArchived;
+  const reorderProjectSectionInStore = projects.reorderProjectSection;
+  const tasks = useTaskContext();
+  const removeProject = useProjectRemovalWorkflow();
   const today = toLocalDateStr(new Date());
 
   const [activeTab, setActiveTab] = useState<ProjectTab>('overview');
@@ -490,7 +499,7 @@ export default function ProjectsSurface() {
   }, [showProjectForm]);
 
   const handleAssistantNavigation = useEffectEvent((requestId: string, revealProjectId?: string) => {
-    if (revealProjectId && app.projects.some(project => project.id === revealProjectId)) {
+    if (revealProjectId && projects.projects.some(project => project.id === revealProjectId)) {
       setSelectedProjectIdState(revealProjectId);
       setDetailProjectId(revealProjectId);
       setManagedProjectId(null);
@@ -502,18 +511,18 @@ export default function ProjectsSurface() {
       setTagFilter('all');
     }
 
-    app.dismissAssistantNavigationRequest(requestId);
+    shell.dismissAssistantNavigationRequest(requestId);
   });
 
   const availableTags = useMemo(() => {
     const tags = new Set<string>();
-    app.projects.forEach(project => project.tags.forEach(tag => tags.add(tag)));
+    projects.projects.forEach(project => project.tags.forEach(tag => tags.add(tag)));
     return [...tags].sort((left, right) => left.localeCompare(right));
-  }, [app.projects]);
+  }, [projects.projects]);
 
   const filteredProjects = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return app.projects.filter(project => {
+    return projects.projects.filter(project => {
       const availability = getProjectAvailability(project);
       const matchesQuery = !query
         || project.name.toLowerCase().includes(query)
@@ -530,27 +539,27 @@ export default function ProjectsSurface() {
         || (catalogFilter === 'reference' && availability.key === 'reference');
       return matchesQuery && matchesStatus && matchesKind && matchesTag && matchesCatalogFilter;
     });
-  }, [app.projects, catalogFilter, kindFilter, searchQuery, statusFilter, tagFilter]);
+  }, [projects.projects, catalogFilter, kindFilter, searchQuery, statusFilter, tagFilter]);
 
   const selectedProjectId = useMemo(() => {
     const requestedId = managedProjectId || detailProjectId || selectedProjectIdState;
-    return requestedId && app.projects.some(project => project.id === requestedId)
+    return requestedId && projects.projects.some(project => project.id === requestedId)
       ? requestedId
       : null;
-  }, [app.projects, detailProjectId, managedProjectId, selectedProjectIdState]);
+  }, [projects.projects, detailProjectId, managedProjectId, selectedProjectIdState]);
 
   const selectedProject = useMemo(
-    () => app.projects.find(project => project.id === selectedProjectId) || null,
-    [app.projects, selectedProjectId],
+    () => projects.projects.find(project => project.id === selectedProjectId) || null,
+    [projects.projects, selectedProjectId],
   );
   const detailProject = useMemo(
-    () => app.projects.find(project => project.id === detailProjectId) || null,
-    [app.projects, detailProjectId],
+    () => projects.projects.find(project => project.id === detailProjectId) || null,
+    [projects.projects, detailProjectId],
   );
 
   const selectedProjectTasks = useMemo(
-    () => app.tasks.filter(task => task.projectId === selectedProjectId),
-    [app.tasks, selectedProjectId],
+    () => tasks.tasks.filter(task => task.projectId === selectedProjectId),
+    [tasks.tasks, selectedProjectId],
   );
   const selectedProjectBoardTasks = useMemo(
     () => selectedProjectTasks.filter(task => task.category === 'task'),
@@ -561,13 +570,13 @@ export default function ProjectsSurface() {
     [selectedProjectTasks],
   );
   const selectedProjectPages = useMemo(() => (
-    app.projectPages
+    projects.projectPages
       .filter(page => page.projectId === selectedProjectId)
       .sort((left, right) => {
         if (left.isOverview !== right.isOverview) return left.isOverview ? -1 : 1;
         return right.updatedAt.localeCompare(left.updatedAt);
       })
-  ), [app.projectPages, selectedProjectId]);
+  ), [projects.projectPages, selectedProjectId]);
 
   const selectedPageId = useMemo(() => {
     if (selectedPageIdState && selectedProjectPages.some(page => page.id === selectedPageIdState)) {
@@ -582,11 +591,11 @@ export default function ProjectsSurface() {
   );
 
   useEffect(() => {
-    const request = app.assistantNavigationRequest;
+    const request = shell.assistantNavigationRequest;
     if (!request || request.surface !== 'projects') return;
 
     handleAssistantNavigation(request.id, request.surfaceState?.projects?.revealProjectId);
-  }, [app.assistantNavigationRequest]);
+  }, [shell.assistantNavigationRequest]);
 
   const closeProjectDetails = useCallback(() => {
     setDetailProjectId(null);
@@ -648,17 +657,17 @@ export default function ProjectsSurface() {
     pinned: boolean,
     focusCard = true,
   ) => {
-    app.setProjectPinned(project.id, pinned);
+    setProjectPinnedInStore(project.id, pinned);
     setCatalogAnnouncement(`${project.name} ${pinned ? 'pinned' : 'unpinned'}.`);
     if (focusCard) focusProjectControl(project.id, 'pin');
-  }, [app, focusProjectControl]);
+  }, [focusProjectControl, setProjectPinnedInStore]);
 
   const changeProjectArchived = useCallback((
     project: Project,
     archived: boolean,
     focusCard = true,
   ) => {
-    app.setProjectArchived(project.id, archived);
+    setProjectArchivedInStore(project.id, archived);
     setCatalogAnnouncement(`${project.name} ${archived ? 'archived' : 'restored to Projects'}.`);
     if (archived) {
       clearCatalogueFilters();
@@ -667,14 +676,14 @@ export default function ProjectsSurface() {
       setStatusFilter('all');
     }
     if (focusCard) focusProjectControl(project.id, archived ? 'unarchive' : 'pin');
-  }, [app, clearCatalogueFilters, focusProjectControl, statusFilter]);
+  }, [clearCatalogueFilters, focusProjectControl, setProjectArchivedInStore, statusFilter]);
 
   const reorderProjects = useCallback((
     section: ProjectCatalogueSection,
     orderedIds: string[],
   ) => {
-    app.reorderProjectSection(section, orderedIds);
-  }, [app]);
+    reorderProjectSectionInStore(section, orderedIds);
+  }, [reorderProjectSectionInStore]);
 
   const openCount = selectedProjectTasks.filter(task => !task.completed).length;
   const blockedCount = selectedProjectBoardTasks.filter(task => !task.completed && task.workflowState === 'blocked').length;
@@ -682,7 +691,7 @@ export default function ProjectsSurface() {
   const completedCount = selectedProjectTasks.filter(task => task.completed).length;
   const completedMilestones = selectedProjectMilestones.filter(task => task.completed).length;
   const recentActivity = buildProjectActivity(selectedProjectTasks, selectedProjectPages);
-  const liveProjectCount = app.projects.filter(project => {
+  const liveProjectCount = projects.projects.filter(project => {
     return getProjectAvailability(project).key === 'live';
   }).length;
 
@@ -793,13 +802,13 @@ export default function ProjectsSurface() {
     if (editingProject) {
       const wasArchived = editingProject.status === 'archived';
       const willBeArchived = projectStatus === 'archived';
-      app.updateProject(editingProject.id, referencePayload);
+      projects.updateProject(editingProject.id, referencePayload);
       if (wasArchived !== willBeArchived) {
         changeProjectArchived(editingProject, willBeArchived, false);
       }
       if (!willBeArchived) {
         if (!wasArchived || projectStatus !== (editingProject.statusBeforeArchive || 'active')) {
-          app.updateProject(editingProject.id, { status: projectStatus });
+          projects.updateProject(editingProject.id, { status: projectStatus });
         }
         if (editingProject.isPinned !== projectPinned) {
           changeProjectPinned(editingProject, projectPinned, false);
@@ -807,7 +816,7 @@ export default function ProjectsSurface() {
       }
       setSelectedProjectIdState(editingProject.id);
     } else {
-      const createdId = app.addProject({
+      const createdId = projects.addProject({
         ...referencePayload,
         status: projectStatus,
         isPinned: projectStatus !== 'archived' && projectPinned,
@@ -850,7 +859,7 @@ export default function ProjectsSurface() {
   function addBoardTask(): void {
     if (!selectedProject || !newBoardTaskTitle.trim()) return;
 
-    app.addTask({
+    tasks.addTask({
       title: newBoardTaskTitle.trim(),
       description: '',
       completed: false,
@@ -869,7 +878,7 @@ export default function ProjectsSurface() {
 
   function moveBoardTask(task: Task, targetColumn: BoardColumn): void {
     if (targetColumn === 'done') {
-      app.updateTask(task.id, {
+      tasks.updateTask(task.id, {
         completed: true,
         completedAt: task.completedAt || new Date().toISOString(),
       });
@@ -882,7 +891,7 @@ export default function ProjectsSurface() {
       ? (window.prompt('What is blocking this task?', task.blockedReason || '') || '').trim() || undefined
       : leavingBlocked ? undefined : task.blockedReason;
 
-    app.updateTask(task.id, {
+    tasks.updateTask(task.id, {
       completed: false,
       completedAt: undefined,
       workflowState: targetColumn,
@@ -926,9 +935,9 @@ export default function ProjectsSurface() {
     };
 
     if (editingMilestone) {
-      app.updateTask(editingMilestone.id, payload);
+      tasks.updateTask(editingMilestone.id, payload);
     } else {
-      app.addTask(payload);
+      tasks.addTask(payload);
     }
 
     setShowMilestoneForm(false);
@@ -937,7 +946,7 @@ export default function ProjectsSurface() {
   function createWikiPage(): void {
     if (!selectedProject) return;
 
-    const pageId = app.addProjectPage({
+    const pageId = projects.addProjectPage({
       projectId: selectedProject.id,
       title: 'New Page',
       content: '# New Page\n\nAdd references, decisions, or setup notes here.',
@@ -954,7 +963,7 @@ export default function ProjectsSurface() {
       <div style={{ display: 'grid', gap: 8 }}>
         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.7, color: '#6b6f85' }}>{title}</div>
         {projects.map(project => {
-          const projectTaskCount = app.tasks.filter(task => task.projectId === project.id && !task.completed).length;
+          const projectTaskCount = tasks.tasks.filter(task => task.projectId === project.id && !task.completed).length;
           return (
             <button
               key={project.id}
@@ -994,16 +1003,16 @@ export default function ProjectsSurface() {
         <div>
           <h1>Projects</h1>
           <div className="subtitle">
-            {app.projects.length === 0
+            {projects.projects.length === 0
               ? 'No projects yet'
-              : `${app.projects.length} project${app.projects.length === 1 ? '' : 's'} in your reference catalogue`}
+              : `${projects.projects.length} project${projects.projects.length === 1 ? '' : 's'} in your reference catalogue`}
           </div>
         </div>
         <button className="btn btn-primary" onClick={openCreateProject}>+ Add Project</button>
       </div>
 
       <div className="surface-body">
-        {app.projects.length === 0 ? (
+        {projects.projects.length === 0 ? (
           <div className="empty-state" role="status">
             <div className="empty-icon">&#128736;</div>
             <h3>Build your project reference catalogue</h3>
@@ -1092,7 +1101,7 @@ export default function ProjectsSurface() {
                         <button className="btn btn-secondary btn-sm" onClick={() => openEditProject(selectedProject)}>Edit Project</button>
                         <button className="btn btn-danger btn-sm" onClick={() => {
                           if (window.confirm(`Remove project "${selectedProject.name}"? Linked tasks will stay in Sabah One but lose their project assignment.`)) {
-                            app.removeProject(selectedProject.id);
+                            removeProject(selectedProject.id);
                             setSelectedProjectIdState(null);
                           }
                         }}>Remove</button>
@@ -1288,7 +1297,7 @@ export default function ProjectsSurface() {
                                   )}
                                   <button className="btn btn-danger btn-sm" onClick={() => {
                                     if (window.confirm(`Delete "${task.title}"?`)) {
-                                      app.removeTask(task.id);
+                                      tasks.removeTask(task.id);
                                     }
                                   }}>Delete</button>
                                 </div>
@@ -1355,7 +1364,7 @@ export default function ProjectsSurface() {
                                     </div>
                                   </div>
                                   <div className="actions-row" style={{ margin: 0 }}>
-                                    <button className="btn btn-secondary btn-sm" onClick={() => app.updateTask(goal.id, {
+                                    <button className="btn btn-secondary btn-sm" onClick={() => tasks.updateTask(goal.id, {
                                       completed: !goal.completed,
                                       completedAt: goal.completed ? undefined : new Date().toISOString(),
                                     })}>
@@ -1364,7 +1373,7 @@ export default function ProjectsSurface() {
                                     <button className="btn btn-secondary btn-sm" onClick={() => openMilestoneForm(goal)}>Edit</button>
                                     <button className="btn btn-danger btn-sm" onClick={() => {
                                       if (window.confirm(`Delete milestone "${goal.title}"?`)) {
-                                        app.removeTask(goal.id);
+                                        tasks.removeTask(goal.id);
                                       }
                                     }}>Delete</button>
                                   </div>
@@ -1428,14 +1437,14 @@ export default function ProjectsSurface() {
                             key={selectedPage.id}
                             page={selectedPage}
                             onSave={(title, content) => {
-                              app.updateProjectPage(selectedPage.id, {
+                              projects.updateProjectPage(selectedPage.id, {
                                 title: title.trim() || 'Untitled Page',
                                 content,
                               });
                             }}
                             onDelete={() => {
                               if (window.confirm(`Delete wiki page "${selectedPage.title}"?`)) {
-                                app.removeProjectPage(selectedPage.id);
+                                projects.removeProjectPage(selectedPage.id);
                               }
                             }}
                           />
@@ -1479,7 +1488,7 @@ export default function ProjectsSurface() {
                 </p>
               </div>
               <div className="projects-catalog-stats" aria-label="Project catalogue summary">
-                <div className="projects-catalog-stat"><strong>{app.projects.length}</strong><span>Projects</span></div>
+                <div className="projects-catalog-stat"><strong>{projects.projects.length}</strong><span>Projects</span></div>
                 <div className="projects-catalog-stat"><strong>{liveProjectCount}</strong><span>Live</span></div>
               </div>
             </section>
@@ -1573,7 +1582,7 @@ export default function ProjectsSurface() {
                       description="Your quickest access to priority projects."
                       projects={groupedProjects.pinned}
                       reorderEnabled={!isCatalogueFiltered}
-                      getActiveWorkCount={projectId => app.tasks.filter(task => task.projectId === projectId && !task.completed).length}
+                      getActiveWorkCount={projectId => tasks.tasks.filter(task => task.projectId === projectId && !task.completed).length}
                       onOpen={openedProject => {
                         setSelectedProjectIdState(openedProject.id);
                         setDetailProjectId(openedProject.id);
@@ -1591,7 +1600,7 @@ export default function ProjectsSurface() {
                       description="Active, planned, blocked, and completed work."
                       projects={groupedProjects.projects}
                       reorderEnabled={!isCatalogueFiltered}
-                      getActiveWorkCount={projectId => app.tasks.filter(task => task.projectId === projectId && !task.completed).length}
+                      getActiveWorkCount={projectId => tasks.tasks.filter(task => task.projectId === projectId && !task.completed).length}
                       onOpen={openedProject => {
                         setSelectedProjectIdState(openedProject.id);
                         setDetailProjectId(openedProject.id);
@@ -1611,7 +1620,7 @@ export default function ProjectsSurface() {
                     collapsible
                     reorderEnabled={!isCatalogueFiltered}
                     onToggleCollapsed={() => setArchivedExpanded(current => !current)}
-                    getActiveWorkCount={projectId => app.tasks.filter(task => task.projectId === projectId && !task.completed).length}
+                    getActiveWorkCount={projectId => tasks.tasks.filter(task => task.projectId === projectId && !task.completed).length}
                     onOpen={openedProject => {
                       setSelectedProjectIdState(openedProject.id);
                       setDetailProjectId(openedProject.id);

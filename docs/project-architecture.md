@@ -24,9 +24,20 @@ The visible version comes from the web build and the deployed `public/release.js
 
 ### State composition
 
-`src/store/AppContext.tsx` composes domain providers behind one app-shaped API. The provider stack includes Settings, Gamification, Calendar, Trips, Projects, Tasks, Knowledge, Inventory, Health, Finance, Prayer, Dashboard Focus, Clock, Assistant, Assistant Activity, Chat, and Shell.
+`src/store/AppProviders.tsx` composes the existing domain providers without exposing an app-wide service bag. Components import the smallest owning domain hook they need: Calendar consumers use `useCalendar`, Task consumers use `useTaskContext`, Settings consumers use `useSettingsContext`, and so on. Updating one domain no longer republishes an object containing every other domain capability.
 
-The shell owns only cross-cutting UI state such as the active surface and one-shot assistant navigation requests. Chat and voice can hand the UI a typed request to open a Tasks view or reveal a grounded Project without creating a second navigation or mutation path.
+Provider order remains explicit because several providers consume earlier owners. Settings and Gamification wrap Daily Momentum; Calendar precedes Trips; Projects precedes Tasks; Prayer and Dashboard Focus follow the data domains; Assistant Activity follows Assistant; then the named Chat bridge, Shell, assistant-undo coordinator, and Google Sync bridge wrap rendered consumers. `src/test/composition.boundaries.test.ts` checks the order and ownership markers.
+
+`src/store/ShellContext.tsx` owns only the active surface, one-shot assistant navigation requests, session restoration, and the readiness gate. Chat and voice can hand Shell a typed request to open a Tasks view or reveal a grounded Project without creating a second navigation path. Because rendered consumers mount after readiness, they do not need a cross-domain `loaded` capability.
+
+Cross-domain behavior is retained only where one domain cannot own the invariant:
+
+- `ChatBridge` adapts the named assistant command workflow into `ChatProvider` while Chat and Voice still use the same runtime and mutation executor.
+- `GoogleSyncBridge` supplies only Calendar account, source, event, and mutation capabilities to `GoogleSyncProvider`, preserving account -> source -> event identity.
+- `AssistantUndoProvider` is the single owner of supported assistant inverse operations and activity status publication.
+- `useProjectRemovalWorkflow` removes a Project and clears its Task references as one named workflow.
+
+The selected design reuses existing domain contexts. A dependency-injection container, Redux migration, generic service locator, and replacement all-app context were rejected because they would add another global contract without hiding new knowledge. `scripts/verify-capability-composition.mjs` rejects the retired façade identifiers, generic service-locator names, and non-workflow contracts spanning four or more recognized domains. Revisit this decision only when a concrete workflow cannot preserve its invariant within one owner or one explicitly named coordinator.
 
 Browser session state is limited to transient UI state, permission state, and bounded diagnostics. It is not a source of truth for shared records.
 

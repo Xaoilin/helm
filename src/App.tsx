@@ -1,7 +1,9 @@
 import './App.css';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import type { ComponentType } from 'react';
-import { useApp } from './store/AppContext';
+import { useShell } from "./store/ShellContext";
+import { useCalendar } from "./store/contexts/CalendarContext";
+import { useSettingsContext } from "./store/contexts/SettingsContext";
 import DashboardSurface from './surfaces/DashboardSurface';
 import PrayerGlobalOverlays from './components/prayer/PrayerGlobalOverlays';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -58,7 +60,9 @@ const MOBILE_MORE_ITEMS = NAV_ITEMS.filter(item => !PRIMARY_MOBILE_NAV.includes(
 const VoiceAssistant = lazy(() => import('./components/VoiceAssistant'));
 
 function AppInner() {
-  const app = useApp();
+  const shell = useShell();
+  const { calendarAccounts, updateCalendarAccount } = useCalendar();
+  const { integrations, updateIntegration } = useSettingsContext();
   const { readOnly } = useSyncAvailability();
   const authSession = useOptionalAuthSession();
   const authUser = authSession?.authUser ?? null;
@@ -85,23 +89,23 @@ function AppInner() {
 
   useEffect(() => {
     if (readOnly) return;
-    for (const account of app.calendarAccounts) {
+    for (const account of calendarAccounts) {
       if (!isGoogleCalendarAccount(account)) continue;
 
       const patch = getGoogleCalendarAuthPatch(account);
       const hasChanges = Object.entries(patch).some(([key, value]) => account[key as keyof typeof account] !== value);
       if (hasChanges) {
-        app.updateCalendarAccount(account.id, patch);
+        updateCalendarAccount(account.id, patch);
       }
     }
-  }, [app, app.calendarAccounts, authUser?.email, readOnly]);
+  }, [authUser?.email, calendarAccounts, readOnly, updateCalendarAccount]);
 
   useEffect(() => {
     if (readOnly) return;
-    const googleIntegration = app.integrations.find(integration => integration.provider === 'google');
+    const googleIntegration = integrations.find(integration => integration.provider === 'google');
     if (!googleIntegration) return;
 
-    const googleAccounts = app.calendarAccounts.filter(isGoogleCalendarAccount);
+    const googleAccounts = calendarAccounts.filter(isGoogleCalendarAccount);
     const problemAccount = googleAccounts.find(account =>
       account.authStatus === 'needs_reconnect'
       || account.authStatus === 'revoked'
@@ -114,7 +118,7 @@ function AppInner() {
     const nextError = problemAccount?.lastAuthError || problemAccount?.syncError;
 
     if (googleIntegration.status !== nextStatus || googleIntegration.lastError !== nextError) {
-      app.updateIntegration(googleIntegration.id, {
+      updateIntegration(googleIntegration.id, {
         status: nextStatus,
         lastError: nextError,
         configuredAt: nextStatus === 'connected'
@@ -122,7 +126,7 @@ function AppInner() {
           : googleIntegration.configuredAt,
       });
     }
-  }, [app, app.calendarAccounts, app.integrations, readOnly]);
+  }, [calendarAccounts, integrations, readOnly, updateIntegration]);
 
   const handleSignIn = async () => {
     try {
@@ -137,9 +141,9 @@ function AppInner() {
   };
 
   const renderSurface = () => {
-    const SurfaceComponent = SURFACE_REGISTRY[app.surface].component;
+    const SurfaceComponent = SURFACE_REGISTRY[shell.surface].component;
     return (
-      <ErrorBoundary name={app.surface} key={app.surface}>
+      <ErrorBoundary name={shell.surface} key={shell.surface}>
         <Suspense fallback={<div role="status" aria-live="polite">Loading surface...</div>}>
           <SurfaceComponent />
         </Suspense>
@@ -178,11 +182,11 @@ function AppInner() {
   };
 
   const navigateFromMobile = (surface: Surface) => {
-    app.navigate(surface);
+    shell.navigate(surface);
     setMobileMoreOpen(false);
   };
 
-  const moreIsActive = MOBILE_MORE_ITEMS.some(item => item.surface === app.surface);
+  const moreIsActive = MOBILE_MORE_ITEMS.some(item => item.surface === shell.surface);
 
   return (
     <div className="app-layout">
@@ -195,9 +199,9 @@ function AppInner() {
           {NAV_ITEMS.map(item => (
             <button
               key={item.surface}
-              className={`sidebar-item ${app.surface === item.surface ? 'active' : ''}`}
-              onClick={() => app.navigate(item.surface)}
-              aria-current={app.surface === item.surface ? 'page' : undefined}
+              className={`sidebar-item ${shell.surface === item.surface ? 'active' : ''}`}
+              onClick={() => shell.navigate(item.surface)}
+              aria-current={shell.surface === item.surface ? 'page' : undefined}
               aria-label={`Navigate to ${item.label}`}
             >
               <span className="icon" aria-hidden="true">{item.icon}</span>
@@ -220,7 +224,7 @@ function AppInner() {
       </nav>
       <main
         className="main-content"
-        aria-label={`${app.surface} surface`}
+        aria-label={`${shell.surface} surface`}
         aria-disabled={readOnly || undefined}
         inert={readOnly || undefined}
       >
@@ -249,9 +253,9 @@ function AppInner() {
               {MOBILE_MORE_ITEMS.map(item => (
                 <button
                   key={item.surface}
-                  className={`mobile-more-item ${app.surface === item.surface ? 'active' : ''}`}
+                  className={`mobile-more-item ${shell.surface === item.surface ? 'active' : ''}`}
                   onClick={() => navigateFromMobile(item.surface)}
-                  aria-current={app.surface === item.surface ? 'page' : undefined}
+                  aria-current={shell.surface === item.surface ? 'page' : undefined}
                 >
                   <span className="mobile-more-icon" aria-hidden="true">{item.icon}</span>
                   <span>{item.label}</span>
@@ -275,9 +279,9 @@ function AppInner() {
         {MOBILE_NAV_ITEMS.map(item => (
           <button
             key={item.surface}
-            className={`mobile-nav-item ${app.surface === item.surface ? 'active' : ''}`}
+            className={`mobile-nav-item ${shell.surface === item.surface ? 'active' : ''}`}
             onClick={() => navigateFromMobile(item.surface)}
-            aria-current={app.surface === item.surface ? 'page' : undefined}
+            aria-current={shell.surface === item.surface ? 'page' : undefined}
             aria-label={`Navigate to ${item.label}`}
           >
             <span className="mobile-nav-icon" aria-hidden="true">{item.icon}</span>

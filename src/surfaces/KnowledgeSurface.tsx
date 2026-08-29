@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useApp } from '../store/AppContext';
+import { useKnowledgeContext } from "../store/contexts/KnowledgeContext";
 import type { KnowledgeTopic, KnowledgeEntry, KnowledgeSource, LifestyleItem, LifestyleType, LifestyleStatus } from '../types/domain';
 
 type Tab = 'browse' | 'add' | 'search' | 'lifestyle';
@@ -92,7 +92,7 @@ function sourceTagClass(type: KnowledgeSource['type']): string {
 }
 
 export default function KnowledgeSurface() {
-  const app = useApp();
+  const knowledge = useKnowledgeContext();
   const [tab, setTab] = useState<Tab>('browse');
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
@@ -140,34 +140,34 @@ export default function KnowledgeSurface() {
   });
 
   // ── Derived data ──
-  const totalEntries = app.knowledgeEntries.length;
+  const totalEntries = knowledge.knowledgeEntries.length;
   const thisWeekEntries = useMemo(() => {
-    return app.knowledgeEntries.filter(e => e.createdAt >= weekAgoIso).length;
-  }, [app.knowledgeEntries, weekAgoIso]);
+    return knowledge.knowledgeEntries.filter(e => e.createdAt >= weekAgoIso).length;
+  }, [knowledge.knowledgeEntries, weekAgoIso]);
 
-  const selectedTopic = app.knowledgeTopics.find(t => t.id === selectedTopicId);
+  const selectedTopic = knowledge.knowledgeTopics.find(t => t.id === selectedTopicId);
 
   const sortedKnowledgeTopics = useMemo(
-    () => [...app.knowledgeTopics].sort((a, b) => a.sortOrder - b.sortOrder),
-    [app.knowledgeTopics]
+    () => [...knowledge.knowledgeTopics].sort((a, b) => a.sortOrder - b.sortOrder),
+    [knowledge.knowledgeTopics]
   );
 
   const topicEntries = useMemo(() => {
     if (!selectedTopicId) return [];
-    let entries = app.knowledgeEntries.filter(e => e.topicId === selectedTopicId);
+    let entries = knowledge.knowledgeEntries.filter(e => e.topicId === selectedTopicId);
     if (sourceFilter !== 'all') entries = entries.filter(e => e.sources.some(s => s.type === sourceFilter));
     return entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [app.knowledgeEntries, selectedTopicId, sourceFilter]);
+  }, [knowledge.knowledgeEntries, selectedTopicId, sourceFilter]);
 
   const recentEntries = useMemo(() =>
-    [...app.knowledgeEntries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5),
-    [app.knowledgeEntries]
+    [...knowledge.knowledgeEntries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5),
+    [knowledge.knowledgeEntries]
   );
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim() && searchSourceFilter === 'all' && searchTopicFilter === 'all') return [];
     const q = searchQuery.toLowerCase();
-    return app.knowledgeEntries.filter(e => {
+    return knowledge.knowledgeEntries.filter(e => {
       if (searchTopicFilter !== 'all' && e.topicId !== searchTopicFilter) return false;
       if (searchSourceFilter !== 'all' && !e.sources.some(s => s.type === searchSourceFilter)) return false;
       if (q) {
@@ -176,12 +176,12 @@ export default function KnowledgeSurface() {
       }
       return true;
     }).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  }, [app.knowledgeEntries, searchQuery, searchSourceFilter, searchTopicFilter]);
+  }, [knowledge.knowledgeEntries, searchQuery, searchSourceFilter, searchTopicFilter]);
 
-  const getEntryCountForTopic = (topicId: string) => app.knowledgeEntries.filter(e => e.topicId === topicId).length;
+  const getEntryCountForTopic = (topicId: string) => knowledge.knowledgeEntries.filter(e => e.topicId === topicId).length;
 
   const getSourceComposition = (topicId: string) => {
-    const entries = app.knowledgeEntries.filter(e => e.topicId === topicId);
+    const entries = knowledge.knowledgeEntries.filter(e => e.topicId === topicId);
     if (entries.length === 0) return { quran: 0, hadith: 0, other: 0 };
     const total = entries.length;
     const quran = entries.filter(e => e.sources.some(s => s.type === 'quran')).length;
@@ -192,21 +192,21 @@ export default function KnowledgeSurface() {
 
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
-    app.knowledgeEntries.forEach(e => e.tags.forEach(t => tagSet.add(t)));
+    knowledge.knowledgeEntries.forEach(e => e.tags.forEach(t => tagSet.add(t)));
     return Array.from(tagSet).sort();
-  }, [app.knowledgeEntries]);
+  }, [knowledge.knowledgeEntries]);
 
   // Lifestyle derived
   const itemsByType = useMemo(() => {
     const map: Record<LifestyleType, LifestyleItem[]> = { haram: [], 'major-sin': [], 'wajib-both': [], 'wajib-women': [], 'wajib-men': [], halal: [] };
-    for (const item of app.lifestyleItems) {
+    for (const item of knowledge.lifestyleItems) {
       (map[item.type] || map.haram).push(item);
     }
     for (const key of Object.keys(map) as LifestyleType[]) {
       map[key].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     }
     return map;
-  }, [app.lifestyleItems]);
+  }, [knowledge.lifestyleItems]);
   const [dragId, setDragId] = useState<string | null>(null);
 
   const openAddLifestyle = (type: LifestyleType) => {
@@ -222,11 +222,11 @@ export default function KnowledgeSurface() {
     if (!lsTitle.trim()) return;
     const allSources = lsNewSource.trim() ? [...lsSources, lsNewSource.trim()] : lsSources;
     if (editingLifestyle) {
-      app.updateLifestyleItem(editingLifestyle.id, { type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined });
+      knowledge.updateLifestyleItem(editingLifestyle.id, { type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined });
     }
     else {
-      const existing = app.lifestyleItems.filter(i => i.type === lsType);
-      app.addLifestyleItem({ type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined, sortOrder: existing.length });
+      const existing = knowledge.lifestyleItems.filter(i => i.type === lsType);
+      knowledge.addLifestyleItem({ type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined, sortOrder: existing.length });
     }
     setShowLifestyleForm(false);
   };
@@ -237,7 +237,7 @@ export default function KnowledgeSurface() {
   // Drop onto a specific item (reorder within column or move between columns)
   const handleDrop = (targetId: string, targetType: LifestyleType) => {
     if (!dragId || dragId === targetId) { setDragId(null); return; }
-    const draggedItem = app.lifestyleItems.find(i => i.id === dragId);
+    const draggedItem = knowledge.lifestyleItems.find(i => i.id === dragId);
     if (!draggedItem) { setDragId(null); return; }
 
     const movingBetweenColumns = draggedItem.type !== targetType;
@@ -253,11 +253,11 @@ export default function KnowledgeSurface() {
           : 'struggling' as LifestyleStatus;
       const targetItems = itemsByType[targetType];
       const toIdx = targetItems.findIndex(i => i.id === targetId);
-      app.updateLifestyleItem(dragId, { type: targetType, status: newStatus, sortOrder: toIdx >= 0 ? toIdx : targetItems.length });
+      knowledge.updateLifestyleItem(dragId, { type: targetType, status: newStatus, sortOrder: toIdx >= 0 ? toIdx : targetItems.length });
       // Re-sort the target column
       const newIds = targetItems.map(i => i.id);
       newIds.splice(toIdx >= 0 ? toIdx : newIds.length, 0, dragId);
-      app.reorderLifestyleItems(newIds);
+      knowledge.reorderLifestyleItems(newIds);
     } else {
       // Same column reorder
       const items = itemsByType[targetType];
@@ -267,7 +267,7 @@ export default function KnowledgeSurface() {
       if (fromIdx < 0 || toIdx < 0) { setDragId(null); return; }
       ids.splice(fromIdx, 1);
       ids.splice(toIdx, 0, dragId);
-      app.reorderLifestyleItems(ids);
+      knowledge.reorderLifestyleItems(ids);
     }
     setDragId(null);
   };
@@ -276,7 +276,7 @@ export default function KnowledgeSurface() {
   const handleColumnDrop = (targetType: LifestyleType, e: React.DragEvent) => {
     e.preventDefault();
     if (!dragId) return;
-    const draggedItem = app.lifestyleItems.find(i => i.id === dragId);
+    const draggedItem = knowledge.lifestyleItems.find(i => i.id === dragId);
     if (!draggedItem) { setDragId(null); return; }
 
     if (draggedItem.type !== targetType) {
@@ -287,7 +287,7 @@ export default function KnowledgeSurface() {
         : targetIsPractice
           ? 'want-to-start' as LifestyleStatus
           : 'struggling' as LifestyleStatus;
-      app.updateLifestyleItem(dragId, { type: targetType, status: newStatus, sortOrder: itemsByType[targetType].length });
+      knowledge.updateLifestyleItem(dragId, { type: targetType, status: newStatus, sortOrder: itemsByType[targetType].length });
     }
     setDragId(null);
   };
@@ -296,7 +296,7 @@ export default function KnowledgeSurface() {
     const statuses = item.type === 'haram' ? HARAM_STATUSES : HALAL_STATUSES;
     const idx = statuses.findIndex(s => s.value === item.status);
     const next = statuses[(idx + 1) % statuses.length];
-    app.updateLifestyleItem(item.id, { status: next.value });
+    knowledge.updateLifestyleItem(item.id, { status: next.value });
   };
 
   // ── Topic actions ──
@@ -310,9 +310,9 @@ export default function KnowledgeSurface() {
   };
   const saveTopic = () => {
     if (!topicName.trim()) return;
-    const data = { name: topicName.trim(), description: topicDesc.trim(), icon: topicIcon, color: topicColor, sortOrder: app.knowledgeTopics.length };
-    if (editingTopic) app.updateKnowledgeTopic(editingTopic.id, data);
-    else app.addKnowledgeTopic(data);
+    const data = { name: topicName.trim(), description: topicDesc.trim(), icon: topicIcon, color: topicColor, sortOrder: knowledge.knowledgeTopics.length };
+    if (editingTopic) knowledge.updateKnowledgeTopic(editingTopic.id, data);
+    else knowledge.addKnowledgeTopic(data);
     setShowTopicModal(false);
   };
 
@@ -323,7 +323,7 @@ export default function KnowledgeSurface() {
 
   const openAddEntry = (presetTopicId?: string) => {
     resetEntryForm();
-    setEntryTopicId(presetTopicId || lastTopicId || app.knowledgeTopics[0]?.id || '');
+    setEntryTopicId(presetTopicId || lastTopicId || knowledge.knowledgeTopics[0]?.id || '');
     setTab('add');
   };
   const openEditEntry = (entry: KnowledgeEntry) => {
@@ -333,8 +333,8 @@ export default function KnowledgeSurface() {
   };
   const moveEntryToTopic = (entry: KnowledgeEntry, targetTopicId: string) => {
     if (!targetTopicId || targetTopicId === entry.topicId) return;
-    if (!app.knowledgeTopics.some(topic => topic.id === targetTopicId)) return;
-    app.updateKnowledgeEntry(entry.id, { topicId: targetTopicId });
+    if (!knowledge.knowledgeTopics.some(topic => topic.id === targetTopicId)) return;
+    knowledge.updateKnowledgeEntry(entry.id, { topicId: targetTopicId });
     setLastTopicId(targetTopicId);
     setSelectedTopicId(targetTopicId);
     setExpandedEntryId(entry.id);
@@ -343,10 +343,10 @@ export default function KnowledgeSurface() {
     if (!entryTitle.trim() || !entryTopicId) return;
     const data = { topicId: entryTopicId, title: entryTitle.trim(), content: entryContent.trim(), sources: entrySources, tags: entryTags };
     if (editingEntry) {
-      app.updateKnowledgeEntry(editingEntry.id, data);
+      knowledge.updateKnowledgeEntry(editingEntry.id, data);
       setTab('browse'); setSelectedTopicId(entryTopicId);
     } else {
-      app.addKnowledgeEntry(data);
+      knowledge.addKnowledgeEntry(data);
       setLastTopicId(entryTopicId);
       if (addAnother) { resetEntryForm(); setEntryTopicId(entryTopicId); }
       else { setTab('browse'); setSelectedTopicId(entryTopicId); }
@@ -390,7 +390,7 @@ export default function KnowledgeSurface() {
         )}
         {showTopic && (
           <div className="kb-entry-topic-crumb">
-            in: {app.knowledgeTopics.find(t => t.id === entry.topicId)?.name || 'Unknown'}
+            in: {knowledge.knowledgeTopics.find(t => t.id === entry.topicId)?.name || 'Unknown'}
           </div>
         )}
         {expanded && (
@@ -427,7 +427,7 @@ export default function KnowledgeSurface() {
                 {deletingEntryId === entry.id ? (
                   <div className="confirm-bar" role="alert" style={{ margin: 0 }}>
                     Delete entry?
-                    <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); app.removeKnowledgeEntry(entry.id); setDeletingEntryId(null); setExpandedEntryId(null); }}>Delete</button>
+                    <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); knowledge.removeKnowledgeEntry(entry.id); setDeletingEntryId(null); setExpandedEntryId(null); }}>Delete</button>
                     <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setDeletingEntryId(null); }}>Cancel</button>
                   </div>
                 ) : (
@@ -447,8 +447,8 @@ export default function KnowledgeSurface() {
         <div>
           <h1>Knowledge</h1>
           <div className="subtitle">
-            {app.knowledgeTopics.length === 0 ? 'Start building your knowledge base'
-              : `${app.knowledgeTopics.length} topic${app.knowledgeTopics.length !== 1 ? 's' : ''} \u00b7 ${totalEntries} entr${totalEntries !== 1 ? 'ies' : 'y'}${thisWeekEntries > 0 ? ` \u00b7 ${thisWeekEntries} added this week` : ''}`}
+            {knowledge.knowledgeTopics.length === 0 ? 'Start building your knowledge base'
+              : `${knowledge.knowledgeTopics.length} topic${knowledge.knowledgeTopics.length !== 1 ? 's' : ''} \u00b7 ${totalEntries} entr${totalEntries !== 1 ? 'ies' : 'y'}${thisWeekEntries > 0 ? ` \u00b7 ${thisWeekEntries} added this week` : ''}`}
           </div>
         </div>
         <button className="btn btn-primary" onClick={() => openAddEntry()}>+ Add Entry</button>
@@ -461,14 +461,14 @@ export default function KnowledgeSurface() {
           </button>
           <button className={`tab ${tab === 'search' ? 'active' : ''}`} onClick={() => setTab('search')}>Search</button>
           <button className={`tab ${tab === 'lifestyle' ? 'active' : ''}`} onClick={() => setTab('lifestyle')}>
-            Lifestyle{app.lifestyleItems.length > 0 && <span style={{ marginLeft: 6, fontSize: 11, color: '#6b6f85' }}>{app.lifestyleItems.length}</span>}
+            Lifestyle{knowledge.lifestyleItems.length > 0 && <span style={{ marginLeft: 6, fontSize: 11, color: '#6b6f85' }}>{knowledge.lifestyleItems.length}</span>}
           </button>
         </div>
 
         {/* ══ Browse Tab ══ */}
         {tab === 'browse' && !selectedTopicId && (
           <>
-            {app.knowledgeTopics.length === 0 ? (
+            {knowledge.knowledgeTopics.length === 0 ? (
               <div className="empty-state" role="status">
                 <div className="empty-icon" style={{ fontSize: 36 }}>{'\u{1F4DA}'}</div>
                 <h3>Start Your Knowledge Base</h3>
@@ -532,7 +532,7 @@ export default function KnowledgeSurface() {
                 {deletingTopicId === selectedTopicId ? (
                   <div className="confirm-bar" role="alert" style={{ margin: 0 }}>
                     Delete topic and all {topicEntries.length} entries?
-                    <button className="btn btn-danger btn-sm" onClick={() => { app.removeKnowledgeTopic(selectedTopicId); setSelectedTopicId(null); setDeletingTopicId(null); }}>Delete</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => { knowledge.removeKnowledgeTopic(selectedTopicId); setSelectedTopicId(null); setDeletingTopicId(null); }}>Delete</button>
                     <button className="btn btn-secondary btn-sm" onClick={() => setDeletingTopicId(null)}>Cancel</button>
                   </div>
                 ) : (
@@ -570,7 +570,7 @@ export default function KnowledgeSurface() {
                 <option value="">Select a topic...</option>
                 {sortedKnowledgeTopics.map(t => <option key={t.id} value={t.id}>{t.icon} {t.name}</option>)}
               </select>
-              {app.knowledgeTopics.length === 0 && (
+              {knowledge.knowledgeTopics.length === 0 && (
                 <button className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={openAddTopic}>+ Create Topic First</button>
               )}
             </div>
@@ -749,7 +749,7 @@ export default function KnowledgeSurface() {
                               <button className="btn-icon btn-sm" onClick={() => openEditLifestyle(item)} style={{ fontSize: 10 }}>Edit</button>
                               {deletingLifestyleId === item.id ? (
                                 <div className="confirm-bar" role="alert" style={{ margin: 0, padding: '2px 4px', fontSize: 9 }}>
-                                  <button className="btn btn-danger btn-sm" style={{ fontSize: 9, padding: '1px 4px' }} onClick={() => { app.removeLifestyleItem(item.id); setDeletingLifestyleId(null); }}>Yes</button>
+                                  <button className="btn btn-danger btn-sm" style={{ fontSize: 9, padding: '1px 4px' }} onClick={() => { knowledge.removeLifestyleItem(item.id); setDeletingLifestyleId(null); }}>Yes</button>
                                   <button className="btn btn-secondary btn-sm" style={{ fontSize: 9, padding: '1px 4px' }} onClick={() => setDeletingLifestyleId(null)}>No</button>
                                 </div>
                               ) : (

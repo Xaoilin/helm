@@ -1,5 +1,5 @@
 import { Children, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { useApp } from '../store/AppContext';
+import { useClockContext } from "../store/contexts/ClockContext";
 import { CLOCK, TIMING } from '../config/constants';
 import { TIMER_SOUND_OPTIONS } from '../services/clockAudio';
 import {
@@ -18,13 +18,13 @@ function getStopwatchLapSplitMs(laps: readonly number[], index: number): number 
 }
 
 export default function ClockSurface() {
-  const app = useApp();
+  const clock = useClockContext();
   const [now, setNow] = useState(() => Date.now());
 
-  const runningStopwatches = app.clock.stopwatches.filter(stopwatch => stopwatch.startedAt !== null).length;
-  const runningTimers = app.clock.timers.filter(timer => timer.status === 'running').length;
-  const completedTimers = app.clock.timers.filter(timer => timer.status === 'completed').length;
-  const alertingTimers = app.clock.timers.filter(timer => timer.status === 'completed' && timer.alerting).length;
+  const runningStopwatches = clock.clock.stopwatches.filter(stopwatch => stopwatch.startedAt !== null).length;
+  const runningTimers = clock.clock.timers.filter(timer => timer.status === 'running').length;
+  const completedTimers = clock.clock.timers.filter(timer => timer.status === 'completed').length;
+  const alertingTimers = clock.clock.timers.filter(timer => timer.status === 'completed' && timer.alerting).length;
   const hasLiveClock = runningStopwatches > 0 || runningTimers > 0;
 
   useEffect(() => {
@@ -61,11 +61,11 @@ export default function ClockSurface() {
 
           <div className="clock-toolbar-metrics" aria-label="Clock workspace summary">
             <div className="clock-toolbar-metric">
-              <strong>{app.clock.timers.length}</strong>
+              <strong>{clock.clock.timers.length}</strong>
               <span>Timers</span>
             </div>
             <div className="clock-toolbar-metric">
-              <strong>{app.clock.stopwatches.length}</strong>
+              <strong>{clock.clock.stopwatches.length}</strong>
               <span>Stopwatches</span>
             </div>
             <div className="clock-toolbar-metric">
@@ -75,10 +75,10 @@ export default function ClockSurface() {
           </div>
 
           <div className="clock-toolbar-actions">
-            <button className="btn btn-primary" onClick={app.createTimer}>
+            <button className="btn btn-primary" onClick={clock.createTimer}>
               + Add Timer
             </button>
-            <button className="btn btn-secondary" onClick={app.createStopwatch}>
+            <button className="btn btn-secondary" onClick={clock.createStopwatch}>
               + Add Stopwatch
             </button>
           </div>
@@ -88,26 +88,26 @@ export default function ClockSurface() {
           <ClockSection
             title="Timers"
             subtitle="Run multiple countdowns with their own names, presets, custom durations, alarm sounds, and finish alerts."
-            count={`${app.clock.timers.length} ${app.clock.timers.length === 1 ? 'timer' : 'timers'}`}
+            count={`${clock.clock.timers.length} ${clock.clock.timers.length === 1 ? 'timer' : 'timers'}`}
             emptyTitle="No timers yet"
             emptyCopy="Add a timer whenever you need a fresh countdown."
             emptyActionLabel="+ Add Timer"
-            onEmptyAction={app.createTimer}
+            onEmptyAction={clock.createTimer}
           >
-            {app.clock.timers.map(timer => (
+            {clock.clock.timers.map(timer => (
               <TimerCard
                 key={`${timer.id}:${timer.durationMs}`}
                 timer={timer}
                 now={now}
-                onRename={app.setTimerLabel}
-                onRemove={app.removeTimer}
-                onSetDuration={app.setTimerDuration}
-                onSetSound={app.setTimerSound}
-                onStart={app.startTimer}
-                onPause={app.pauseTimer}
-                onReset={app.resetTimer}
-                onAcknowledge={app.acknowledgeTimer}
-                onPreview={app.previewTimerSound}
+                onRename={clock.setTimerLabel}
+                onRemove={clock.removeTimer}
+                onSetDuration={clock.setTimerDuration}
+                onSetSound={clock.setTimerSound}
+                onStart={clock.startTimer}
+                onPause={clock.pauseTimer}
+                onReset={clock.resetTimer}
+                onAcknowledge={clock.acknowledgeTimer}
+                onPreview={clock.previewTimerSound}
               />
             ))}
           </ClockSection>
@@ -115,23 +115,23 @@ export default function ClockSurface() {
           <ClockSection
             title="Stopwatches"
             subtitle="Track multiple elapsed sessions, give each one a custom name, and keep lap history separate."
-            count={`${app.clock.stopwatches.length} ${app.clock.stopwatches.length === 1 ? 'stopwatch' : 'stopwatches'}`}
+            count={`${clock.clock.stopwatches.length} ${clock.clock.stopwatches.length === 1 ? 'stopwatch' : 'stopwatches'}`}
             emptyTitle="No stopwatches yet"
             emptyCopy="Add a stopwatch whenever you want a separate lap tracker."
             emptyActionLabel="+ Add Stopwatch"
-            onEmptyAction={app.createStopwatch}
+            onEmptyAction={clock.createStopwatch}
           >
-            {app.clock.stopwatches.map(stopwatch => (
+            {clock.clock.stopwatches.map(stopwatch => (
               <StopwatchCard
                 key={stopwatch.id}
                 stopwatch={stopwatch}
                 now={now}
-                onRename={app.setStopwatchLabel}
-                onRemove={app.removeStopwatch}
-                onStart={app.startStopwatch}
-                onPause={app.pauseStopwatch}
-                onReset={app.resetStopwatch}
-                onLap={app.recordStopwatchLap}
+                onRename={clock.setStopwatchLabel}
+                onRemove={clock.removeStopwatch}
+                onStart={clock.startStopwatch}
+                onPause={clock.pauseStopwatch}
+                onReset={clock.resetStopwatch}
+                onLap={clock.recordStopwatchLap}
               />
             ))}
           </ClockSection>

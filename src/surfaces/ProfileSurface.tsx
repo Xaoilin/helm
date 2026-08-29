@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useApp } from '../store/AppContext';
+import { useGamificationContext } from "../store/contexts/GamificationContext";
+import { useTaskContext } from "../store/contexts/TaskContext";
 import {
   xpToNextLevel,
   titleForLevel,
@@ -20,28 +21,29 @@ import PrayerOutcomeBars, {
 import type { PrayerOutcomeStats } from '../types/domain';
 
 export default function ProfileSurface() {
-  const app = useApp();
+  const gamification = useGamificationContext();
+  const tasks = useTaskContext();
   const prayer = usePrayerContext();
-  const gam = app.gamification;
+  const gam = gamification.gamification;
   const xp = xpToNextLevel(gam.totalXp);
   const title = titleForLevel(gam.level);
   const todayStr = toLocalDateStr(new Date());
   const [referenceTime] = useState(() => Date.now());
 
   // Stats
-  const tasksToday = app.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
-  const habitsToday = app.tasks.filter(t => isStandardDailyTask(t) && t.completed).length;
-  const goalsCompleted = app.tasks.filter(t => t.category === 'goal' && t.completed).length;
+  const tasksToday = tasks.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
+  const habitsToday = tasks.tasks.filter(t => isStandardDailyTask(t) && t.completed).length;
+  const goalsCompleted = tasks.tasks.filter(t => t.category === 'goal' && t.completed).length;
 
   const daysSinceFirst = useMemo(() => {
     if (gam.totalTasksCompleted === 0) return 0;
-    const first = app.tasks.reduce<string | null>((earliest, t) => {
+    const first = tasks.tasks.reduce<string | null>((earliest, t) => {
       if (!earliest) return t.createdAt;
       return t.createdAt < earliest ? t.createdAt : earliest;
     }, null);
     if (!first) return 1;
     return Math.max(1, Math.ceil((referenceTime - new Date(first).getTime()) / 86400000));
-  }, [app.tasks, gam.totalTasksCompleted, referenceTime]);
+  }, [tasks.tasks, gam.totalTasksCompleted, referenceTime]);
 
   const avgPerDay = gam.totalTasksCompleted > 0 ? (gam.totalTasksCompleted / daysSinceFirst).toFixed(1) : '0';
   const prayerStats = prayer.stats;
@@ -91,11 +93,11 @@ export default function ProfileSurface() {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = toLocalDateStr(d);
-      const completed = app.tasks.some(t => t.completed && t.completedAt?.startsWith(dateStr));
+      const completed = tasks.tasks.some(t => t.completed && t.completedAt?.startsWith(dateStr));
       days.push({ date: dateStr, completed, isToday: i === 0 });
     }
     return days;
-  }, [app.tasks]);
+  }, [tasks.tasks]);
 
   // Next streak milestone
   const nextMilestone = STREAK_MILESTONES.find(m => m > gam.currentStreak) || null;
@@ -234,7 +236,7 @@ export default function ProfileSurface() {
 
         {/* ── Habit Tallies ── */}
         {(() => {
-          const dailyHabits = app.tasks.filter(isStandardDailyTask);
+          const dailyHabits = tasks.tasks.filter(isStandardDailyTask);
           const tallies = gam.habitTallies || {};
           if (dailyHabits.length === 0) return null;
           return (

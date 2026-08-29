@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { TRIP_BUDGET } from '../config/constants';
-import { useApp } from '../store/AppContext';
+import { useShell } from "../store/ShellContext";
+import { useTripContext } from "../store/contexts/TripContext";
+import { useCalendar } from "../store/contexts/CalendarContext";
 import type {
   CalendarSource,
   Trip,
@@ -1317,7 +1319,9 @@ function BudgetTabPanel({
 }
 
 export default function TripsSurface() {
-  const app = useApp();
+  const shell = useShell();
+  const trips = useTripContext();
+  const calendar = useCalendar();
   const todayStr = toLocalDateStr(new Date());
 
   const [activeTab, setActiveTab] = useState<TripsTab>('overview');
@@ -1367,7 +1371,7 @@ export default function TripsSurface() {
 
   const legsByTrip = useMemo(() => {
     const map = new Map<string, TripLeg[]>();
-    app.tripLegs.forEach(leg => {
+    trips.tripLegs.forEach(leg => {
       const current = map.get(leg.tripId) || [];
       current.push(leg);
       map.set(leg.tripId, current);
@@ -1376,11 +1380,11 @@ export default function TripsSurface() {
       map.set(tripId, [...legs].sort(compareLegs));
     });
     return map;
-  }, [app.tripLegs]);
+  }, [trips.tripLegs]);
 
   const filteredTrips = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const matching = app.trips.filter(trip => {
+    const matching = trips.trips.filter(trip => {
       const tripLegs = legsByTrip.get(trip.id) || [];
       if (!query) return true;
       return trip.name.toLowerCase().includes(query)
@@ -1399,23 +1403,23 @@ export default function TripsSurface() {
       .sort((left, right) => right.startDate.localeCompare(left.startDate));
 
     return [...active, ...inactive];
-  }, [app.trips, legsByTrip, searchQuery]);
+  }, [trips.trips, legsByTrip, searchQuery]);
 
   const selectedTripId = useMemo(() => {
     if (selectedTripIdState && filteredTrips.some(trip => trip.id === selectedTripIdState)) {
       return selectedTripIdState;
     }
-    return filteredTrips[0]?.id || app.trips[0]?.id || null;
-  }, [app.trips, filteredTrips, selectedTripIdState]);
+    return filteredTrips[0]?.id || trips.trips[0]?.id || null;
+  }, [trips.trips, filteredTrips, selectedTripIdState]);
 
   const selectedTrip = useMemo(
-    () => app.trips.find(trip => trip.id === selectedTripId) || null,
-    [app.trips, selectedTripId],
+    () => trips.trips.find(trip => trip.id === selectedTripId) || null,
+    [trips.trips, selectedTripId],
   );
 
   const selectedLegs = useMemo(
-    () => app.tripLegs.filter(leg => leg.tripId === selectedTripId).sort(compareLegs),
-    [app.tripLegs, selectedTripId],
+    () => trips.tripLegs.filter(leg => leg.tripId === selectedTripId).sort(compareLegs),
+    [trips.tripLegs, selectedTripId],
   );
   const selectedLegLookup = useMemo(
     () => new Map(selectedLegs.map(leg => [leg.id, leg])),
@@ -1423,15 +1427,15 @@ export default function TripsSurface() {
   );
 
   const selectedItinerary = useMemo(
-    () => app.tripItineraryItems.filter(item => item.tripId === selectedTripId).sort((left, right) => {
+    () => trips.tripItineraryItems.filter(item => item.tripId === selectedTripId).sort((left, right) => {
       if (left.date !== right.date) return left.date.localeCompare(right.date);
       return compareItinerary(left, right);
     }),
-    [app.tripItineraryItems, selectedTripId],
+    [trips.tripItineraryItems, selectedTripId],
   );
 
   const selectedBookings = useMemo(
-    () => app.tripBookings
+    () => trips.tripBookings
       .filter(booking => booking.tripId === selectedTripId)
       .sort((left, right) => {
         const leftUpcoming = isUpcomingBooking(left);
@@ -1440,14 +1444,14 @@ export default function TripsSurface() {
         if (leftUpcoming) return getBookingStartMs(left) - getBookingStartMs(right);
         return getBookingStartMs(right) - getBookingStartMs(left);
       }),
-    [app.tripBookings, selectedTripId],
+    [trips.tripBookings, selectedTripId],
   );
 
   const selectedManualBudgetEntries = useMemo(
-    () => app.tripBudgetEntries
+    () => trips.tripBudgetEntries
       .filter(entry => entry.tripId === selectedTripId)
       .sort((left, right) => right.date.localeCompare(left.date) || right.createdAt.localeCompare(left.createdAt)),
-    [app.tripBudgetEntries, selectedTripId],
+    [trips.tripBudgetEntries, selectedTripId],
   );
 
   const itineraryByDay = useMemo(() => {
@@ -1480,10 +1484,10 @@ export default function TripsSurface() {
   );
 
   const defaultCalendarSource = useMemo(() => {
-    const primaryAccount = app.calendarAccounts.find(account => account.isPrimary);
-    const visibleSource = app.calendarSources.find(source => source.visible && source.accountId === primaryAccount?.id);
-    return visibleSource || app.calendarSources.find(source => source.visible) || app.calendarSources[0] || null;
-  }, [app.calendarAccounts, app.calendarSources]);
+    const primaryAccount = calendar.calendarAccounts.find(account => account.isPrimary);
+    const visibleSource = calendar.calendarSources.find(source => source.visible && source.accountId === primaryAccount?.id);
+    return visibleSource || calendar.calendarSources.find(source => source.visible) || calendar.calendarSources[0] || null;
+  }, [calendar.calendarAccounts, calendar.calendarSources]);
 
   const transportBookings = selectedBookings.filter(booking => booking.kind === 'transport');
   const stayBookings = selectedBookings.filter(booking => booking.kind === 'stay');
@@ -1637,7 +1641,7 @@ export default function TripsSurface() {
     const range = deriveTripRange(preparedLegs);
     const budgetCurrency = normalizeCurrencyCode(tripBudgetCurrency) || TRIP_BUDGET.DEFAULT_CURRENCY;
     const budgetTotal = parseBudgetAmountInput(tripBudgetTotal) || 0;
-    const tripId = app.addTrip({
+    const tripId = trips.addTrip({
       name: tripName.trim(),
       summary: tripSummary.trim(),
       notes: tripNotes,
@@ -1650,7 +1654,7 @@ export default function TripsSurface() {
 
     const legIdMap = new Map<string, string>();
     routeDrafts.forEach((draft, index) => {
-      const createdId = app.addTripLeg({
+      const createdId = trips.addTripLeg({
         tripId,
         country: draft.country.trim(),
         city: draft.city.trim(),
@@ -1663,14 +1667,14 @@ export default function TripsSurface() {
 
     preparedBookings.forEach(booking => {
       if (booking.kind === 'transport') {
-        app.addTripBooking({
+        trips.addTripBooking({
           ...buildTransportBookingPayload(booking, tripId, getWizardBookingSeed(booking.legId)),
           legId: booking.legId ? legIdMap.get(booking.legId) : undefined,
         });
         return;
       }
 
-      app.addTripBooking({
+      trips.addTripBooking({
         ...buildStayBookingPayload(booking, tripId, getWizardBookingSeed(booking.legId)),
         legId: booking.legId ? legIdMap.get(booking.legId) : undefined,
       });
@@ -1696,7 +1700,7 @@ export default function TripsSurface() {
     if (!editingTripId || !tripName.trim()) return;
     const budgetCurrency = normalizeCurrencyCode(tripBudgetCurrency) || TRIP_BUDGET.DEFAULT_CURRENCY;
     const budgetTotal = parseBudgetAmountInput(tripBudgetTotal) || 0;
-    app.updateTrip(editingTripId, {
+    trips.updateTrip(editingTripId, {
       name: tripName.trim(),
       summary: tripSummary.trim(),
       notes: tripNotes,
@@ -1758,14 +1762,14 @@ export default function TripsSurface() {
   function saveLeg(): void {
     if (!selectedTrip || !legCountry.trim() || !legCity.trim() || !legStartDate || !legEndDate) return;
     if (editingLegId) {
-      app.updateTripLeg(editingLegId, {
+      trips.updateTripLeg(editingLegId, {
         country: legCountry.trim(),
         city: legCity.trim(),
         startDate: legStartDate,
         endDate: legEndDate,
       });
     } else {
-      app.addTripLeg({
+      trips.addTripLeg({
         tripId: selectedTrip.id,
         country: legCountry.trim(),
         city: legCity.trim(),
@@ -1777,7 +1781,7 @@ export default function TripsSurface() {
     const nextRange = deriveTripRange(editingLegId
       ? selectedLegs.map(leg => leg.id === editingLegId ? { ...leg, startDate: legStartDate, endDate: legEndDate } : leg)
       : [...selectedLegs, { id: '', tripId: selectedTrip.id, country: legCountry, city: legCity, startDate: legStartDate, endDate: legEndDate, sortOrder: selectedLegs.length, createdAt: '', updatedAt: '' }]);
-    app.updateTrip(selectedTrip.id, nextRange);
+    trips.updateTrip(selectedTrip.id, nextRange);
     setShowLegModal(false);
   }
 
@@ -1787,17 +1791,17 @@ export default function TripsSurface() {
     const nextIndex = index + direction;
     if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) return;
     const swap = ordered[nextIndex];
-    app.updateTripLeg(leg.id, { sortOrder: swap.sortOrder });
-    app.updateTripLeg(swap.id, { sortOrder: leg.sortOrder });
+    trips.updateTripLeg(leg.id, { sortOrder: swap.sortOrder });
+    trips.updateTripLeg(swap.id, { sortOrder: leg.sortOrder });
   }
 
   function removeLeg(leg: TripLeg): void {
     if (!selectedTrip) return;
-    app.removeTripLeg(leg.id);
+    trips.removeTripLeg(leg.id);
     const remaining = selectedLegs.filter(item => item.id !== leg.id).map((item, index) => ({ ...item, sortOrder: index }));
-    remaining.forEach(item => app.updateTripLeg(item.id, { sortOrder: item.sortOrder }));
+    remaining.forEach(item => trips.updateTripLeg(item.id, { sortOrder: item.sortOrder }));
     const nextRange = deriveTripRange(remaining);
-    app.updateTrip(selectedTrip.id, nextRange);
+    trips.updateTrip(selectedTrip.id, nextRange);
   }
 
   function openItineraryModal(leg: TripLeg, date: string, item?: TripItineraryItem): void {
@@ -1817,7 +1821,7 @@ export default function TripsSurface() {
     const sameDayItems = selectedItinerary.filter(item => item.legId === itineraryLegId && item.date === itineraryDate && item.id !== editingItineraryId);
     const sortOrder = sameDayItems.length;
     if (editingItineraryId) {
-      app.updateTripItineraryItem(editingItineraryId, {
+      trips.updateTripItineraryItem(editingItineraryId, {
         legId: itineraryLegId,
         date: itineraryDate,
         title: itineraryTitle.trim(),
@@ -1827,7 +1831,7 @@ export default function TripsSurface() {
         notes: itineraryNotes,
       });
     } else {
-      app.addTripItineraryItem({
+      trips.addTripItineraryItem({
         tripId: selectedTrip.id,
         legId: itineraryLegId,
         date: itineraryDate,
@@ -1896,16 +1900,16 @@ export default function TripsSurface() {
       if (preparedDraft.kind === 'transport') {
         const payload = buildTransportBookingPayload(preparedDraft, selectedTrip.id, seed);
         if (editingBookingId) {
-          app.updateTripBooking(editingBookingId, payload);
+          trips.updateTripBooking(editingBookingId, payload);
         } else {
-          app.addTripBooking(payload);
+          trips.addTripBooking(payload);
         }
       } else {
         const payload = buildStayBookingPayload(preparedDraft, selectedTrip.id, seed);
         if (editingBookingId) {
-          app.updateTripBooking(editingBookingId, payload);
+          trips.updateTripBooking(editingBookingId, payload);
         } else {
-          app.addTripBooking(payload);
+          trips.addTripBooking(payload);
         }
       }
       setBookingFeedback(null);
@@ -1916,18 +1920,18 @@ export default function TripsSurface() {
   }
 
   function openCalendarImport(target: { title: string; start: string; end: string; description: string; allDay: boolean; location?: string }): void {
-    if (app.calendarSources.length === 0) {
+    if (calendar.calendarSources.length === 0) {
       setCalendarNotice('Add a calendar source first, then you can import trip items into Calendar.');
       return;
     }
     setCalendarNotice(null);
     setCalendarTarget(target);
-    setCalendarSourceId(defaultCalendarSource?.id || app.calendarSources[0]?.id || '');
+    setCalendarSourceId(defaultCalendarSource?.id || calendar.calendarSources[0]?.id || '');
   }
 
   function importToCalendar(): void {
     if (!calendarTarget || !calendarSourceId) return;
-    app.addCalendarEvent({
+    calendar.addCalendarEvent({
       sourceId: calendarSourceId,
       title: calendarTarget.title,
       description: calendarTarget.description,
@@ -2036,16 +2040,16 @@ export default function TripsSurface() {
         <div>
           <h1>Trips</h1>
           <div className="subtitle">
-            {app.trips.length === 0
+            {trips.trips.length === 0
               ? 'Plan multi-country travel without leaving Sabah One'
-              : `${app.trips.length} trip${app.trips.length === 1 ? '' : 's'} tracked locally`}
+              : `${trips.trips.length} trip${trips.trips.length === 1 ? '' : 's'} tracked locally`}
           </div>
         </div>
         <button className="btn btn-primary" onClick={openCreateWizard}>+ Plan Trip</button>
       </div>
 
       <div className="surface-body">
-        {app.trips.length === 0 ? (
+        {trips.trips.length === 0 ? (
           <div className="empty-state" role="status">
             <div className="empty-icon">&#9992;&#65039;</div>
             <h3>Plan your first trip</h3>
@@ -2091,7 +2095,7 @@ export default function TripsSurface() {
                         <button className="btn btn-secondary btn-sm" onClick={() => openTripEdit(selectedTrip)}>Edit Trip</button>
                         <button className="btn btn-danger btn-sm" onClick={() => {
                           if (window.confirm(`Delete trip "${selectedTrip.name}"?`)) {
-                            app.removeTrip(selectedTrip.id);
+                            trips.removeTrip(selectedTrip.id);
                             setSelectedTripIdState(null);
                           }
                         }}>Delete</button>
@@ -2110,7 +2114,7 @@ export default function TripsSurface() {
                     <div className="info-box warning" style={{ marginBottom: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                         <span>{calendarNotice}</span>
-                        <button className="btn btn-secondary btn-sm" onClick={() => app.navigate('calendar')}>Open Calendar</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => shell.navigate('calendar')}>Open Calendar</button>
                       </div>
                     </div>
                   )}
@@ -2302,7 +2306,7 @@ export default function TripsSurface() {
                                                   <button className="btn btn-secondary btn-sm" onClick={() => buildCalendarPayloadForItinerary(item, leg)}>Add to Calendar</button>
                                                   <button className="btn btn-danger btn-sm" onClick={() => {
                                                     if (window.confirm(`Delete "${item.title}"?`)) {
-                                                      app.removeTripItineraryItem(item.id);
+                                                      trips.removeTripItineraryItem(item.id);
                                                     }
                                                   }}>Delete</button>
                                                 </div>
@@ -2371,7 +2375,7 @@ export default function TripsSurface() {
                                     <button className="btn btn-secondary btn-sm" onClick={() => buildCalendarPayloadForBooking(booking)}>Add to Calendar</button>
                                     <button className="btn btn-danger btn-sm" onClick={() => {
                                       if (window.confirm(`Delete booking "${getBookingDisplayTitle(booking, seed)}"?`)) {
-                                        app.removeTripBooking(booking.id);
+                                        trips.removeTripBooking(booking.id);
                                       }
                                     }}>Delete</button>
                                   </div>
@@ -2415,7 +2419,7 @@ export default function TripsSurface() {
                                     <button className="btn btn-secondary btn-sm" onClick={() => buildCalendarPayloadForBooking(booking)}>Add to Calendar</button>
                                     <button className="btn btn-danger btn-sm" onClick={() => {
                                       if (window.confirm(`Delete booking "${getBookingDisplayTitle(booking, seed)}"?`)) {
-                                        app.removeTripBooking(booking.id);
+                                        trips.removeTripBooking(booking.id);
                                       }
                                     }}>Delete</button>
                                   </div>
@@ -2441,10 +2445,10 @@ export default function TripsSurface() {
                       categoryBreakdown={budgetByCategory}
                       uncostedCount={uncostedBookingCount}
                       todayStr={todayStr}
-                      updateTrip={app.updateTrip}
-                      addTripBudgetEntry={app.addTripBudgetEntry}
-                      updateTripBudgetEntry={app.updateTripBudgetEntry}
-                      removeTripBudgetEntry={app.removeTripBudgetEntry}
+                      updateTrip={trips.updateTrip}
+                      addTripBudgetEntry={trips.addTripBudgetEntry}
+                      updateTripBudgetEntry={trips.updateTripBudgetEntry}
+                      removeTripBudgetEntry={trips.removeTripBudgetEntry}
                       editBooking={openBookingById}
                     />
                   )}
@@ -2812,7 +2816,7 @@ export default function TripsSurface() {
             <div className="form-group">
               <label htmlFor="trip-calendar-source">Calendar Source</label>
               <select id="trip-calendar-source" className="form-select" value={calendarSourceId} onChange={event => setCalendarSourceId(event.target.value)}>
-                {app.calendarSources.map((source: CalendarSource) => (
+                {calendar.calendarSources.map((source: CalendarSource) => (
                   <option key={source.id} value={source.id}>{source.name}</option>
                 ))}
               </select>

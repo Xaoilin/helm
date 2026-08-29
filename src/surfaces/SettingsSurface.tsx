@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useApp } from '../store/AppContext';
+import { useSettingsContext } from "../store/contexts/SettingsContext";
+import { useGamificationContext } from "../store/contexts/GamificationContext";
 import {
   isSupabaseReady,
   isAuthenticated,
@@ -33,10 +34,11 @@ import { useDailyMomentumContext } from '../store/contexts/DailyMomentumContext'
 import { DAILY_MOMENTUM_REMINDER_ANCHORS } from '../services/dailyMomentum';
 
 export default function SettingsSurface() {
-  const app = useApp();
+  const settingsContext = useSettingsContext();
+  const gamification = useGamificationContext();
   const prayer = usePrayerContext();
   const momentum = useDailyMomentumContext();
-  const { settings } = app;
+  const { settings } = settingsContext;
   const linaEnabled = settings.assistantEnabled !== false;
   const [confirmReset, setConfirmReset] = useState(false);
   const [prayerTestStatus, setPrayerTestStatus] = useState<string | null>(null);
@@ -189,7 +191,7 @@ export default function SettingsSurface() {
               className="form-select"
               style={{ maxWidth: 200 }}
               value={settings.defaultCalendarTab || 'week'}
-              onChange={e => app.updateSettings({ defaultCalendarTab: e.target.value as 'month' | 'week' | 'agenda' | 'accounts' })}
+              onChange={e => settingsContext.updateSettings({ defaultCalendarTab: e.target.value as 'month' | 'week' | 'agenda' | 'accounts' })}
             >
               <option value="week">Week</option>
               <option value="month">Month</option>
@@ -213,18 +215,18 @@ export default function SettingsSurface() {
               </div>
             </div>
             <label className="toggle">
-              <input type="checkbox" checked={settings.prayerEnabled !== false} onChange={e => app.updateSettings({ prayerEnabled: e.target.checked })} aria-label="Toggle prayer notifications" />
+              <input type="checkbox" checked={settings.prayerEnabled !== false} onChange={e => settingsContext.updateSettings({ prayerEnabled: e.target.checked })} aria-label="Toggle prayer notifications" />
               <span className="slider" />
             </label>
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
             <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
               <label htmlFor="settings-prayer-city">City</label>
-              <input id="settings-prayer-city" className="form-input" value={settings.prayerCity || 'Bedford'} onChange={e => app.updateSettings({ prayerCity: e.target.value })} />
+              <input id="settings-prayer-city" className="form-input" value={settings.prayerCity || 'Bedford'} onChange={e => settingsContext.updateSettings({ prayerCity: e.target.value })} />
             </div>
             <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
               <label htmlFor="settings-prayer-country">Country</label>
-              <input id="settings-prayer-country" className="form-input" value={settings.prayerCountry || 'United Kingdom'} onChange={e => app.updateSettings({ prayerCountry: e.target.value })} />
+              <input id="settings-prayer-country" className="form-input" value={settings.prayerCountry || 'United Kingdom'} onChange={e => settingsContext.updateSettings({ prayerCountry: e.target.value })} />
             </div>
           </div>
           <div className="prayer-settings-reminder-row">
@@ -239,7 +241,7 @@ export default function SettingsSurface() {
                 type="checkbox"
                 checked={settings.prayerReminderEnabled !== false}
                 disabled={settings.prayerEnabled === false}
-                onChange={event => app.updateSettings({ prayerReminderEnabled: event.target.checked })}
+                onChange={event => settingsContext.updateSettings({ prayerReminderEnabled: event.target.checked })}
                 aria-label="Toggle prayer deadline reminders"
               />
               <span className="slider" />
@@ -252,7 +254,7 @@ export default function SettingsSurface() {
               className="form-select"
               value={settings.prayerReminderMinutes ?? PRAYER_REMINDERS.DEFAULT_MINUTES}
               disabled={settings.prayerEnabled === false || settings.prayerReminderEnabled === false}
-              onChange={event => app.updateSettings({
+              onChange={event => settingsContext.updateSettings({
                 prayerReminderMinutes: Number(event.target.value) as 5 | 10 | 15 | 30,
               })}
             >
@@ -371,7 +373,7 @@ export default function SettingsSurface() {
                 {tag}
                 <button
                   style={{ background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 }}
-                  onClick={() => app.updateSettings({ goalTags: (settings.goalTags || []).filter(t => t !== tag) })}
+                  onClick={() => settingsContext.updateSettings({ goalTags: (settings.goalTags || []).filter(t => t !== tag) })}
                   aria-label={`Remove ${tag} category`}
                 >
                   &times;
@@ -393,7 +395,7 @@ export default function SettingsSurface() {
                 if (e.key === 'Enter' && newTag.trim()) {
                   const tags = settings.goalTags || [];
                   if (!tags.includes(newTag.trim())) {
-                    app.updateSettings({ goalTags: [...tags, newTag.trim()] });
+                    settingsContext.updateSettings({ goalTags: [...tags, newTag.trim()] });
                   }
                   setNewTag('');
                 }
@@ -405,7 +407,7 @@ export default function SettingsSurface() {
               onClick={() => {
                 const tags = settings.goalTags || [];
                 if (!tags.includes(newTag.trim()) && newTag.trim()) {
-                  app.updateSettings({ goalTags: [...tags, newTag.trim()] });
+                  settingsContext.updateSettings({ goalTags: [...tags, newTag.trim()] });
                 }
                 setNewTag('');
               }}
@@ -426,7 +428,7 @@ export default function SettingsSurface() {
               </div>
             </div>
             <label className="toggle">
-              <input type="checkbox" checked={settings.telemetry} onChange={e => app.updateSettings({ telemetry: e.target.checked })} aria-label="Toggle telemetry" />
+              <input type="checkbox" checked={settings.telemetry} onChange={e => settingsContext.updateSettings({ telemetry: e.target.checked })} aria-label="Toggle telemetry" />
               <span className="slider" />
             </label>
           </div>
@@ -440,7 +442,7 @@ export default function SettingsSurface() {
               min={7}
               max={365}
               value={settings.dataRetentionDays}
-              onChange={e => app.updateSettings({ dataRetentionDays: Math.max(7, Math.min(365, parseInt(e.target.value) || 90)) })}
+              onChange={e => settingsContext.updateSettings({ dataRetentionDays: Math.max(7, Math.min(365, parseInt(e.target.value) || 90)) })}
               style={{ maxWidth: 120 }}
             />
             <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 4 }}>
@@ -458,7 +460,7 @@ export default function SettingsSurface() {
               id="settings-theme"
               className="form-select"
               value={settings.theme}
-              onChange={e => app.updateSettings({ theme: e.target.value as 'dark' | 'light' })}
+              onChange={e => settingsContext.updateSettings({ theme: e.target.value as 'dark' | 'light' })}
               style={{ maxWidth: 200 }}
             >
               <option value="dark">Dark</option>
@@ -483,7 +485,7 @@ export default function SettingsSurface() {
               </div>
             </div>
             <label className="toggle">
-              <input type="checkbox" checked={linaEnabled} onChange={e => app.updateSettings({ assistantEnabled: e.target.checked })} aria-label="Toggle Lina" />
+              <input type="checkbox" checked={linaEnabled} onChange={e => settingsContext.updateSettings({ assistantEnabled: e.target.checked })} aria-label="Toggle Lina" />
               <span className="slider" />
             </label>
           </div>
@@ -500,7 +502,7 @@ export default function SettingsSurface() {
               </div>
             </div>
             <label className="toggle">
-              <input type="checkbox" checked={settings.wakeWordEnabled === true} onChange={e => app.updateSettings({ wakeWordEnabled: e.target.checked })} aria-label="Toggle wake word" />
+              <input type="checkbox" checked={settings.wakeWordEnabled === true} onChange={e => settingsContext.updateSettings({ wakeWordEnabled: e.target.checked })} aria-label="Toggle wake word" />
               <span className="slider" />
             </label>
           </div>
@@ -516,7 +518,7 @@ export default function SettingsSurface() {
               id="settings-assistant-provider"
               className="form-select"
               value={settings.assistantProvider || DEFAULT_ASSISTANT_PROVIDER}
-              onChange={e => app.updateSettings({ assistantProvider: e.target.value as typeof settings.assistantProvider })}
+              onChange={e => settingsContext.updateSettings({ assistantProvider: e.target.value as typeof settings.assistantProvider })}
             >
               <option value="auto">Auto (hosted first, then Ollama)</option>
               <option value="hosted">Hosted AI (OpenAI)</option>
@@ -533,7 +535,7 @@ export default function SettingsSurface() {
                 id="settings-hosted-model"
                 className="form-select"
                 value={selectedHostedModel}
-                onChange={e => app.updateSettings({ hostedModel: e.target.value })}
+                onChange={e => settingsContext.updateSettings({ hostedModel: e.target.value })}
               >
                 {HOSTED_ASSISTANT_MODEL_OPTIONS.map(option => (
                   <option key={option.id} value={option.id}>
@@ -569,7 +571,7 @@ export default function SettingsSurface() {
               id="settings-assistant-lang"
               className="form-select"
               value={settings.assistantLanguage || 'en'}
-              onChange={e => app.updateSettings({ assistantLanguage: e.target.value as 'en' | 'ar' })}
+              onChange={e => settingsContext.updateSettings({ assistantLanguage: e.target.value as 'en' | 'ar' })}
             >
               <option value="en">English</option>
               <option value="ar">العربية (Arabic)</option>
@@ -587,7 +589,7 @@ export default function SettingsSurface() {
               type="password"
               placeholder="Paste your Deepgram API key..."
               value={settings.deepgramApiKey || ''}
-              onChange={e => app.updateSettings({ deepgramApiKey: e.target.value || undefined })}
+              onChange={e => settingsContext.updateSettings({ deepgramApiKey: e.target.value || undefined })}
             />
             <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
               Free at <a href="https://console.deepgram.com" target="_blank" rel="noreferrer" style={{ color: '#7c8aff' }}>console.deepgram.com</a> — comes with $200 credit.
@@ -607,7 +609,7 @@ export default function SettingsSurface() {
                 id="settings-mic"
                 className="form-select"
                 value={settings.microphoneDeviceId || ''}
-                onChange={e => app.updateSettings({ microphoneDeviceId: e.target.value || undefined })}
+                onChange={e => settingsContext.updateSettings({ microphoneDeviceId: e.target.value || undefined })}
               >
                 <option value="">Default microphone</option>
                 {microphones.map(mic => (
@@ -637,14 +639,14 @@ export default function SettingsSurface() {
               className="form-input"
               placeholder="http://localhost:11434"
               value={settings.ollamaEndpoint || ''}
-              onChange={e => app.updateSettings({ ollamaEndpoint: e.target.value || undefined })}
+              onChange={e => settingsContext.updateSettings({ ollamaEndpoint: e.target.value || undefined })}
             />
           </div>
           <OllamaModelSelector
             key={settings.ollamaEndpoint || OLLAMA_ENDPOINT}
             endpoint={settings.ollamaEndpoint || OLLAMA_ENDPOINT}
             currentModel={settings.ollamaModel}
-            onModelChange={(model) => app.updateSettings({ ollamaModel: model || undefined })}
+            onModelChange={(model) => settingsContext.updateSettings({ ollamaModel: model || undefined })}
           />
         </div>
 
@@ -660,13 +662,13 @@ export default function SettingsSurface() {
               <button
                 className="btn btn-danger btn-sm"
                 onClick={() => {
-                  app.updateGamification({
+                  gamification.updateGamification({
                     ...DEFAULT_PROFILE,
-                    ...(app.gamification.dailyMomentumLearn
-                      ? { dailyMomentumLearn: app.gamification.dailyMomentumLearn }
+                    ...(gamification.gamification.dailyMomentumLearn
+                      ? { dailyMomentumLearn: gamification.gamification.dailyMomentumLearn }
                       : {}),
-                    ...(app.gamification.dailyMomentumMove
-                      ? { dailyMomentumMove: app.gamification.dailyMomentumMove }
+                    ...(gamification.gamification.dailyMomentumMove
+                      ? { dailyMomentumMove: gamification.gamification.dailyMomentumMove }
                       : {}),
                   });
                   prayer.replacePrayerTracking(createPrayerTrackingState());

@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useMemo, useState } from 'react';
-import { useApp } from '../../store/AppContext';
+import { useCalendar } from "../../store/contexts/CalendarContext";
 import { useGoogleSync } from '../../hooks/useGoogleSync';
 import { GOOGLE_OAUTH_CLIENT_ID } from '../../config';
 import {
@@ -121,15 +121,15 @@ function TimelineRow({ event }: { event: GoogleCalendarDiagnosticEvent }) {
 }
 
 export default function GoogleCalendarDebug() {
-  const app = useApp();
+  const calendar = useCalendar();
   const googleSync = useGoogleSync();
   const googleAccounts = useMemo(
-    () => app.calendarAccounts.filter(isGoogleCalendarAccount),
-    [app.calendarAccounts],
+    () => calendar.calendarAccounts.filter(isGoogleCalendarAccount),
+    [calendar.calendarAccounts],
   );
   const snapshot = useMemo(
-    () => getGoogleCalendarDebugSnapshot(app.calendarAccounts, googleSync.credentialStatuses),
-    [app.calendarAccounts, googleSync.credentialStatuses],
+    () => getGoogleCalendarDebugSnapshot(calendar.calendarAccounts, googleSync.credentialStatuses),
+    [calendar.calendarAccounts, googleSync.credentialStatuses],
   );
   const [checking, setChecking] = useState(false);
   const [refreshingStatus, setRefreshingStatus] = useState(false);

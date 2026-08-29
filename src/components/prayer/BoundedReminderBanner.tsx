@@ -1,8 +1,8 @@
-import { useApp } from '../../store/AppContext';
+import { useShell } from "../../store/ShellContext";
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 
 export default function BoundedReminderBanner() {
-  const app = useApp();
+  const shell = useShell();
   const prayer = usePrayerContext();
   const reminder = prayer.activeBoundedReminder;
   if (!reminder || prayer.activeReminder) return null;
@@ -39,7 +39,7 @@ export default function BoundedReminderBanner() {
           </button>
         ))}
         {!isPrayer && (
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => app.navigate('dashboard')}>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => shell.navigate('dashboard')}>
             Open dashboard
           </button>
         )}
@@ -49,7 +49,7 @@ export default function BoundedReminderBanner() {
           </button>
         )}
         {prayer.diagnostics.permissionState !== 'granted' && (
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => app.navigate('settings')}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => shell.navigate('settings')}>
             Repair notifications
           </button>
         )}
