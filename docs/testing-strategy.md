@@ -43,14 +43,15 @@ The candidate contains 19 authored files: 9 under `src/test`, 5 under `e2e`, and
 
 | Boundary | Three successful samples | Median |
 | --- | --- | --- |
-| Unit | 1.49s, 1.11s, 1.10s | 1.11s |
+| Unit | 1.09s, 1.11s, 1.09s | 1.09s |
 | Browser E2E | 7.3s, 7.3s, 7.2s | 7.3s |
 | Database, engine already warm | 54.38s, 50.33s, 49.95s | 50.33s |
 | `agent:fast` | 7.58s, 7.62s, 7.58s | 7.58s |
+| Complete `npm run check` | 11.87s, 11.93s, 11.91s | 11.91s |
 
 The unit, E2E, and database gates were also run with deliberate representative faults. Workflow operations `4690e698-a7af-44bc-a1f3-e4b24bc38687`, `e756979f-39ae-412a-af33-73d1185eef13`, and `bf674255-54cd-440d-8470-63c3805eff8e` each rejected its broken check; every probe was then removed or restored before the candidate was frozen.
 
-The final three-run `npm run check` table and accepted source CI elapsed time are release receipts and are added only after those exact candidate runs exist.
+The complete-gate median is 66.2% faster than the labelled historical 35.2-second receipt, exceeding the 30% ticket threshold. The accepted source CI elapsed time remains a release receipt and is recorded only after the exact candidate run exists.
 
 ## Known Unproven Behavior
 
