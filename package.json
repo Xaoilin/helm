@@ -49,6 +49,8 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@emnapi/core": "^2.0.0-alpha.3",
+    "@emnapi/runtime": "^2.0.0-alpha.3",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
     "@testing-library/jest-dom": "^6.9.1",
