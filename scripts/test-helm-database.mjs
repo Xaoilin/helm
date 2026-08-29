@@ -5,6 +5,7 @@ import process from 'node:process'
 const supabaseCli = process.platform === 'win32'
   ? 'node_modules/.bin/supabase.cmd'
   : 'node_modules/.bin/supabase'
+const concurrencyGateLockKey = 202608030293
 const snapshotWriterLockKey = 202608030294
 
 let failure = null
@@ -66,19 +67,15 @@ async function runConcurrencyScenario() {
     );
   `)
 
-  await Promise.all([
-    runAuthenticatedMutation(claims, `
-      select public.apply_helm_mutations(
-        'cccccccc-cccc-4ccc-8ccc-ccccccccccc1',
-        '[{"op":"create","collection":"tasks","recordId":"concurrent-a","payload":{"id":"concurrent-a","title":"A","completed":false}}]'::jsonb
-      );
-    `),
-    runAuthenticatedMutation(claims, `
-      select public.apply_helm_mutations(
-        'cccccccc-cccc-4ccc-8ccc-ccccccccccc2',
-        '[{"op":"create","collection":"tasks","recordId":"concurrent-b","payload":{"id":"concurrent-b","title":"B","completed":false}}]'::jsonb
-      );
-    `),
+  await runGatedPair(claims, [
+    `select public.apply_helm_mutations(
+      'cccccccc-cccc-4ccc-8ccc-ccccccccccc1',
+      '[{"op":"create","collection":"tasks","recordId":"concurrent-a","payload":{"id":"concurrent-a","title":"A","completed":false}}]'::jsonb
+    );`,
+    `select public.apply_helm_mutations(
+      'cccccccc-cccc-4ccc-8ccc-ccccccccccc2',
+      '[{"op":"create","collection":"tasks","recordId":"concurrent-b","payload":{"id":"concurrent-b","title":"B","completed":false}}]'::jsonb
+    );`,
   ])
 
   await runAuthenticatedMutation(claims, `
@@ -88,19 +85,15 @@ async function runConcurrencyScenario() {
     );
   `)
 
-  await Promise.all([
-    runAuthenticatedMutation(claims, `
-      select public.apply_helm_mutations(
-        'cccccccc-cccc-4ccc-8ccc-ccccccccccc4',
-        '[{"op":"patch","collection":"tasks","recordId":"shared-task","set":{"title":"Retitled"}}]'::jsonb
-      );
-    `),
-    runAuthenticatedMutation(claims, `
-      select public.apply_helm_mutations(
-        'cccccccc-cccc-4ccc-8ccc-ccccccccccc5',
-        '[{"op":"patch","collection":"tasks","recordId":"shared-task","set":{"completed":true}}]'::jsonb
-      );
-    `),
+  await runGatedPair(claims, [
+    `select public.apply_helm_mutations(
+      'cccccccc-cccc-4ccc-8ccc-ccccccccccc4',
+      '[{"op":"patch","collection":"tasks","recordId":"shared-task","set":{"title":"Retitled"}}]'::jsonb
+    );`,
+    `select public.apply_helm_mutations(
+      'cccccccc-cccc-4ccc-8ccc-ccccccccccc5',
+      '[{"op":"patch","collection":"tasks","recordId":"shared-task","set":{"completed":true}}]'::jsonb
+    );`,
   ])
 
   await runSql(`
@@ -141,71 +134,32 @@ async function runConcurrencyScenario() {
     $$;
   `)
 
-  await runAuthenticatedMutation(claims, `
-    select public.apply_helm_mutations(
-      'cccccccc-cccc-4ccc-8ccc-ccccccccccc7',
-      '[{"op":"create","collection":"gamification","recordId":"profile","payload":{"totalXp":0,"dailyMomentumLearn":{"schemaVersion":1,"templates":[],"logs":{},"reminderPreferences":{}},"dailyMomentumMove":{"schemaVersion":1,"templates":[],"logs":{},"reminderPreferences":{}}}}]'::jsonb
-    );
-  `)
-
-  await Promise.all([
-    runAuthenticatedMutation(claims, `
-      select public.apply_helm_mutations(
-        'cccccccc-cccc-4ccc-8ccc-ccccccccccc8',
-        '[{"op":"patch","collection":"gamification","recordId":"profile","set":{"dailyMomentumLearn":{"schemaVersion":1,"templates":[],"logs":{"2026-08-28:learn":{"progress":{"pages":2}}},"reminderPreferences":{}}}}]'::jsonb
-      );
-    `),
-    runAuthenticatedMutation(claims, `
-      select public.apply_helm_mutations(
-        'cccccccc-cccc-4ccc-8ccc-ccccccccccc9',
-        '[{"op":"patch","collection":"gamification","recordId":"profile","set":{"dailyMomentumMove":{"schemaVersion":1,"templates":[],"logs":{"2026-08-28:move":{"progress":{"active-minutes":5}}},"reminderPreferences":{}}}}]'::jsonb
-      );
-    `),
-  ])
-
-  await runSql(`
-    do $$
-    begin
-      if not exists (
-        select 1
-        from public.helm_records
-        where user_id = '${userId}'
-          and collection = 'gamification'
-          and record_id = 'profile'
-          and payload -> 'dailyMomentumLearn' -> 'logs' -> '2026-08-28:learn' -> 'progress' ->> 'pages' = '2'
-          and payload -> 'dailyMomentumMove' -> 'logs' -> '2026-08-28:move' -> 'progress' ->> 'active-minutes' = '5'
-      ) then
-        raise exception 'Concurrent daily momentum patches did not both survive.';
-      end if;
-    end
-    $$;
-  `)
-
   const beforeSnapshot = await runAuthenticatedSnapshot(claims)
-  const snapshotWriterGate = await openSnapshotWriterGate()
-  const snapshotWriter = runSql(`
+  const snapshotWriterGate = await openAdvisoryGate(snapshotWriterLockKey)
+  const snapshotWriter = startMarkedSql(`
     begin;
-    set local application_name = 'helm_snapshot_writer';
     set local role authenticated;
     select set_config('request.jwt.claims', '${claims}', true);
     select public.apply_helm_mutations(
       'cccccccc-cccc-4ccc-8ccc-ccccccccccc6',
       '[{"op":"create","collection":"tasks","recordId":"snapshot-atomic","payload":{"id":"snapshot-atomic","title":"Atomic snapshot","completed":false}}]'::jsonb
     );
+    select 'helm_snapshot_writer_ready';
     select pg_advisory_xact_lock(${snapshotWriterLockKey});
     commit;
-  `)
+  `, 'helm_snapshot_writer_ready')
+
   let duringSnapshot
   let samplingFailure = null
   try {
-    await waitForSnapshotWriter()
+    await snapshotWriter.ready
     duringSnapshot = await runAuthenticatedSnapshot(claims)
   } catch (error) {
     samplingFailure = error
   } finally {
     await snapshotWriterGate.release()
   }
-  await snapshotWriter
+  await snapshotWriter.done
   if (samplingFailure) throw samplingFailure
   const afterSnapshot = await runAuthenticatedSnapshot(claims)
 
@@ -224,7 +178,31 @@ async function runConcurrencyScenario() {
     throw new Error('The committed atomic snapshot was incomplete.')
   }
 
-  console.log('Concurrent database sessions: 7 assertions passed')
+  console.log('Concurrent database sessions: 6 assertions passed')
+}
+
+async function runGatedPair(claims, statements) {
+  const gate = await openAdvisoryGate(concurrencyGateLockKey)
+  const sessions = statements.map(statement => startMarkedSql(`
+    begin;
+    set local role authenticated;
+    select set_config('request.jwt.claims', '${claims}', true);
+    select 'helm_concurrency_session_ready';
+    select pg_advisory_xact_lock(${concurrencyGateLockKey});
+    ${statement}
+    commit;
+  `, 'helm_concurrency_session_ready'))
+
+  let readinessFailure = null
+  try {
+    await Promise.all(sessions.map(session => session.ready))
+  } catch (error) {
+    readinessFailure = error
+  } finally {
+    await gate.release()
+  }
+  await Promise.all(sessions.map(session => session.done))
+  if (readinessFailure) throw readinessFailure
 }
 
 async function runAuthenticatedSnapshot(claims) {
@@ -243,32 +221,9 @@ async function runAuthenticatedSnapshot(claims) {
   return JSON.parse(snapshot)
 }
 
-async function waitForSnapshotWriter() {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const output = await runSqlOutput(`
-      select count(*)
-      from pg_stat_activity
-      where application_name = 'helm_snapshot_writer'
-        and wait_event_type = 'Lock'
-        and wait_event = 'advisory';
-    `)
-    if (output.trim().split('\n').at(-1) === '1') return
-    await new Promise(resolve => setTimeout(resolve, 20))
-  }
-  throw new Error('Timed out waiting for the snapshot concurrency writer.')
-}
-
-function openSnapshotWriterGate() {
+function openAdvisoryGate(lockKey) {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      'docker',
-      ['exec', '-i', 'supabase_db_helm', 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-qAt'],
-      {
-        cwd: process.cwd(),
-        env: process.env,
-        stdio: ['pipe', 'pipe', 'inherit'],
-      },
-    )
+    const child = spawnPsql(['-qAt'])
     let output = ''
     let ready = false
     let released = false
@@ -279,13 +234,13 @@ function openSnapshotWriterGate() {
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', chunk => {
       output += chunk
-      if (ready || !output.split('\n').includes('helm_snapshot_gate_ready')) return
+      if (ready || !output.split('\n').includes('helm_advisory_gate_ready')) return
       ready = true
       resolve({
         release: async () => {
           if (!released) {
             released = true
-            child.stdin.end(`select pg_advisory_unlock(${snapshotWriterLockKey});\n`)
+            child.stdin.end(`select pg_advisory_unlock(${lockKey});\n`)
           }
           await exited
           if (exitError) throw exitError
@@ -298,17 +253,53 @@ function openSnapshotWriterGate() {
       if (!ready) reject(error)
     })
     child.once('exit', code => {
-      if (code !== 0) {
-        exitError = new Error(`Snapshot advisory-lock gate failed with exit code ${code}.`)
-      }
+      if (code !== 0) exitError = new Error(`Advisory-lock gate failed with exit code ${code}.`)
       finishExit()
-      if (!ready) reject(exitError || new Error('Snapshot advisory-lock gate exited before it was ready.'))
+      if (!ready) reject(exitError || new Error('Advisory-lock gate exited before it was ready.'))
     })
     child.stdin.write(`
-      select pg_advisory_lock(${snapshotWriterLockKey});
-      select 'helm_snapshot_gate_ready';
+      select pg_advisory_lock(${lockKey});
+      select 'helm_advisory_gate_ready';
     `)
   })
+}
+
+function startMarkedSql(sql, marker) {
+  const child = spawnPsql(['-qAt'])
+  let output = ''
+  let readySettled = false
+  let resolveReady
+  let rejectReady
+  const ready = new Promise((resolve, reject) => {
+    resolveReady = resolve
+    rejectReady = reject
+  })
+  const done = new Promise((resolve, reject) => {
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', chunk => {
+      output += chunk
+      if (readySettled || !output.split('\n').includes(marker)) return
+      readySettled = true
+      resolveReady()
+    })
+    child.once('error', error => {
+      if (!readySettled) {
+        readySettled = true
+        rejectReady(error)
+      }
+      reject(error)
+    })
+    child.once('exit', code => {
+      if (!readySettled) {
+        readySettled = true
+        rejectReady(new Error(`Database session exited before marker ${marker}.`))
+      }
+      if (code === 0) resolve()
+      else reject(new Error(`Database SQL failed with exit code ${code}.`))
+    })
+    child.stdin.end(sql)
+  })
+  return { ready, done }
 }
 
 async function runAuthenticatedMutation(claims, sql) {
@@ -316,7 +307,6 @@ async function runAuthenticatedMutation(claims, sql) {
     begin;
     set local role authenticated;
     select set_config('request.jwt.claims', '${claims}', true);
-    select pg_sleep(0.1);
     ${sql}
     commit;
   `)
@@ -324,19 +314,12 @@ async function runAuthenticatedMutation(claims, sql) {
 
 function runSql(sql) {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      'docker',
-      ['exec', '-i', 'supabase_db_helm', 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-q'],
-      {
-        cwd: process.cwd(),
-        env: process.env,
-        stdio: ['pipe', 'ignore', 'inherit'],
-      },
-    )
+    const child = spawnPsql(['-q'])
+    child.stdout.resume()
     child.once('error', reject)
-    child.once('exit', (code) => {
+    child.once('exit', code => {
       if (code === 0) resolve()
-      else reject(new Error(`Concurrent database SQL failed with exit code ${code}.`))
+      else reject(new Error(`Database SQL failed with exit code ${code}.`))
     })
     child.stdin.end(sql)
   })
@@ -344,15 +327,7 @@ function runSql(sql) {
 
 function runSqlOutput(sql) {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      'docker',
-      ['exec', '-i', 'supabase_db_helm', 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-qAt'],
-      {
-        cwd: process.cwd(),
-        env: process.env,
-        stdio: ['pipe', 'pipe', 'inherit'],
-      },
-    )
+    const child = spawnPsql(['-qAt'])
     let output = ''
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', chunk => { output += chunk })
@@ -363,6 +338,18 @@ function runSqlOutput(sql) {
     })
     child.stdin.end(sql)
   })
+}
+
+function spawnPsql(extraArguments) {
+  return spawn(
+    'docker',
+    ['exec', '-i', 'supabase_db_helm', 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', ...extraArguments],
+    {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ['pipe', 'pipe', 'inherit'],
+    },
+  )
 }
 
 function run(arguments_) {

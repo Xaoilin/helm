@@ -33,7 +33,7 @@ Only Sol can claim the overall change live after protected promotion, GitHub Pag
 
 ## Validation Contract
 
-The required hosted-web checks are policy, database contract, lint, typecheck, unit, browser E2E, and web build. Browser E2E covers behavior and responsive overflow; the visual path supplies screenshot evidence for surfaces where rendered review matters. The exact commands and workflow details belong to the repository automation and CI logs, not to a second product runtime.
+The required hosted-web checks are policy, database contract, lint, typecheck, unit, browser E2E, and web build. The risk-to-check map, focused-versus-complete gate claims, determinism rules, and known gaps are maintained in [`testing-strategy.md`](testing-strategy.md). Browser E2E covers assembled behavior; the visual path supplies screenshot evidence for surfaces where rendered review matters. The exact commands and workflow details belong to the repository automation and CI logs, not to a second product runtime.
 
 Assistant-planning changes also keep the benchmark corpus, dialog seeds, grounded-ID expectations, and hosted threshold enforcement current. A benchmark result is evidence for its corpus and provider path, not proof of every conversation.
 

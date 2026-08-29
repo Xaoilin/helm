@@ -23,6 +23,14 @@ Every receipt should identify the source revision, workflow run, artifact or dep
 - Investigate regressions at the slowest job or user-facing boundary first; change one contributor at a time when evidence permits.
 - Revisit thresholds when the workflow, browser fixtures, Supabase dependencies, or Pages deployment shape changes.
 
+## KAN-252 Baseline
+
+The accepted v0.2.111 source CI sample was 148 seconds. Its unit shards took 27 and 32 seconds, its browser shards took 33 to 48 seconds, and its database job took 123 seconds.
+
+On the same implementation host, three warm v0.2.111 `npm run check` attempts took 36.02, 33.84, and 34.41 seconds. The latter two failed in different unrelated E2E cases, so they are instability evidence rather than successful timing samples. The ticket therefore uses the accepted 35.2-second v0.2.110 local receipt as its labelled historical comparison. The replacement result and exact source CI receipt belong in the KAN-252 delivery evidence; do not treat one run as a trend.
+
+The replacement removes per-portfolio hosted sharding because the newly bounded unit and browser suites are smaller than the former shard setup. The stable `unit` and `e2e` aggregate check names remain direct fail-closed jobs. Database execution stays serial because migration order and account/revision behavior share one authoritative Postgres boundary.
+
 ## Acceptance Boundary
 
 Performance evidence supports the specific workflow, browser surface, or deployment path measured. It does not establish a universal device benchmark, guarantee browser notification delivery after a page closes, or replace direct hosted verification.

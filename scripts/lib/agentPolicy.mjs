@@ -372,14 +372,10 @@ export function evaluateCiWorkflow(rawWorkflow) {
     'converted_to_draft',
     "github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id",
     "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+    'name: unit',
     'npm run test -- --config vite.config.ts',
-    'name: unit-${{ matrix.shard }}-of-2',
-    '--shard=${{ matrix.shard }}/2',
-    "UNIT_SHARDS_RESULT: ${{ needs['unit-shard'].result }}",
-    'name: e2e-${{ matrix.shard }}-of-3',
-    'shard: [1, 2, 3]',
-    'npm run test:e2e -- --fully-parallel --workers=2 --shard=${{ matrix.shard }}/3 --reporter=line',
-    "E2E_SHARDS_RESULT: ${{ needs['e2e-shard'].result }}",
+    'name: e2e',
+    'npm run test:e2e -- --fully-parallel --workers=2 --reporter=line',
     'google-chrome --version',
   ]
 
@@ -390,7 +386,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
   }
 
   if (requiredEfficiencySnippets.every((snippet) => rawWorkflow.includes(snippet))) {
-    passes.push('CI workflow cancels stale PR runs and keeps the hosted web checks balanced.')
+    passes.push('CI workflow cancels stale PR runs and runs the risk-matched unit and browser portfolios once.')
   }
 
   const requiredReceiptSnippets = [
