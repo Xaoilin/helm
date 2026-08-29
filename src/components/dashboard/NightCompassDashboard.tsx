@@ -141,6 +141,59 @@ interface MomentumActivityProps {
   onRecord: (templateId: string, stepId: string) => void;
 }
 
+const ACTIVITY_HELP_TEXT: Record<string, string> = {
+  'learn-reading': 'Read pages from a book, article, or other focused material.',
+  'learn-course': 'Spend minutes on a structured course or lesson.',
+  'move-walk': 'Try an outdoor walk, a treadmill walk, or a few purposeful indoor laps.',
+  'move-workout': 'Try squats, wall push-ups, cycling, a gym session, or another planned workout.',
+  'move-stretching': 'Try gentle calf, hamstring, chest, or shoulder stretches.',
+};
+
+function getActivityHelpText(activity: DailyMomentumActivityDay): string {
+  return ACTIVITY_HELP_TEXT[activity.template.id]
+    ?? `${activity.template.label} activity. Use the progress control to work toward today's goal.`;
+}
+
+function ActivityTitleHelp({ pillar, activity }: Pick<MomentumActivityProps, 'pillar' | 'activity'>) {
+  const [visible, setVisible] = useState(false);
+  const tooltipId = `nc-${pillar}-${activity.template.id}-help`;
+
+  return (
+    <span className={`nc-activity-help${visible ? ' is-visible' : ''}`}>
+      <button
+        type="button"
+        className="nc-activity-help-trigger"
+        aria-label={`About ${activity.template.label}`}
+        aria-controls={tooltipId}
+        aria-expanded={visible}
+        aria-describedby={visible ? tooltipId : undefined}
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+      >
+        <svg
+          className="nc-activity-help-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          data-icon="eye"
+        >
+          <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+          <circle cx="12" cy="12" r="2.75" />
+        </svg>
+      </button>
+      <span id={tooltipId} className="nc-activity-tooltip" role="tooltip" hidden={!visible}>
+        {getActivityHelpText(activity)}
+      </span>
+    </span>
+  );
+}
+
 function MomentumActivity({ pillar, activity, busy, onRecord }: MomentumActivityProps) {
   const nextLevel = activity.template.levels[Math.min(activity.achievedLevel, 4)];
   const status = activity.complete
@@ -157,7 +210,10 @@ function MomentumActivity({ pillar, activity, busy, onRecord }: MomentumActivity
     >
       <div className="nc-activity-heading">
         <div>
-          <h3 id={`nc-${pillar}-${activity.template.id}-title`}>{activity.template.label}</h3>
+          <div className="nc-activity-title">
+            <h3 id={`nc-${pillar}-${activity.template.id}-title`}>{activity.template.label}</h3>
+            <ActivityTitleHelp pillar={pillar} activity={activity} />
+          </div>
           <p>{status}</p>
         </div>
         <span className={`nc-activity-status ${activity.complete ? 'complete' : ''}`}>

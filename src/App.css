@@ -6010,11 +6010,81 @@ textarea.form-input {
 
 .nc-activity-heading > div { min-width: 0; }
 
+.nc-activity-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .nc-activity-heading h3 {
   margin: 0;
   color: var(--nc-text);
   font-size: 13px;
   font-weight: 700;
+}
+
+.nc-activity-help {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.nc-activity-help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--nc-text-muted);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: color 120ms ease, background 120ms ease, opacity 120ms ease;
+}
+
+.nc-activity-help-trigger:hover,
+.nc-activity-help-trigger:focus-visible {
+  color: var(--nc-text);
+  background: rgba(145, 160, 184, 0.12);
+  opacity: 1;
+}
+
+.nc-activity-help-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.nc-activity-tooltip {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  z-index: 2;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 48px));
+  padding: 8px 10px;
+  border: 1px solid rgba(145, 160, 184, 0.42);
+  border-radius: 8px;
+  color: var(--nc-text);
+  background: #101b2c;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-2px, -50%);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.nc-activity-help.is-visible .nc-activity-tooltip {
+  opacity: 1;
+  transform: translate(0, -50%);
 }
 
 .nc-activity-heading p {
@@ -6212,6 +6282,7 @@ textarea.form-input {
   .nc-prayer-repair .nc-primary-action { width: 100%; margin-top: 6px; }
   .nc-momentum-grid { grid-template-columns: 1fr; }
   .nc-momentum-card { padding: 16px; }
+  .nc-activity-tooltip { max-width: min(240px, calc(100vw - 160px)); }
   .nc-level-summary { max-width: 100px; white-space: normal; text-align: right; }
   .nc-path-label { grid-template-columns: 1fr; gap: 6px; }
   .nc-progress-row { align-items: flex-end; }
