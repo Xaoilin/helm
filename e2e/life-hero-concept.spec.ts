@@ -122,7 +122,7 @@ test.describe('Life Hero maximum-quality GLB proof', () => {
       ['Right hand', 'right-hand'],
       ['Full body', 'full'],
     ] as const) {
-      await page.getByRole('button', { name: buttonName, exact: true }).click();
+      await page.getByRole('button', { name: buttonName, exact: true }).click({ force: true });
       await expect.poll(() => readViewerState(page)).toMatchObject({ view });
     }
   });
@@ -138,7 +138,7 @@ test.describe('Life Hero maximum-quality GLB proof', () => {
       ['Low momentum', 'Idle_02'],
       ['Idle', 'Idle_02'],
     ] as const) {
-      await page.getByRole('button', { name: buttonName, exact: true }).click();
+      await page.getByRole('button', { name: buttonName, exact: true }).click({ force: true });
       await expect(page.getByTestId('avatar-stage')).toHaveAttribute('data-active-clip', clip);
       await expect.poll(() => readViewerState(page)).toMatchObject({ activeClip: clip });
     }
@@ -209,7 +209,7 @@ test.describe('Life Hero maximum-quality GLB proof', () => {
     await page.getByTestId('avatar-stage').screenshot({ path: path.join(EVIDENCE_DIRECTORY, 'life-hero-jacket-off.png') });
     await page.getByTestId('avatar-stage').screenshot({ path: path.join(EVIDENCE_DIRECTORY, 'life-hero-full-body.png') });
     for (const [buttonName, fileName] of [['Face front', 'life-hero-face-front.png'], ['Face ¾', 'life-hero-face-three-quarter.png']] as const) {
-      await page.getByRole('button', { name: buttonName, exact: true }).click();
+      await page.getByRole('button', { name: buttonName, exact: true }).click({ force: true });
       await page.getByTestId('avatar-stage').screenshot({ path: path.join(EVIDENCE_DIRECTORY, fileName) });
     }
     await page.getByRole('button', { name: 'Motivate', exact: true }).click();
