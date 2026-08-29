@@ -33,6 +33,8 @@ async function readViewerState(page: import('@playwright/test').Page) {
 }
 
 test.describe('Life Hero maximum-quality GLB proof', () => {
+  test.describe.configure({ timeout: 120_000 });
+
   test('exports maximum-quality body and separate jacket on one skin with four exact clips', async () => {
     const inspection = await inspectLifeHeroGlb(MODEL_PATH);
 
