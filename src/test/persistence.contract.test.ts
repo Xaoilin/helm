@@ -27,11 +27,15 @@ import {
 } from '../store/persistence';
 
 const USER_ID = 'user-kan-252';
+const SECOND_USER_ID = 'user-kan-253-switch';
 const SNAPSHOT_TIME = '2026-08-29T10:00:00.000Z';
 
-function settingsRecord(payload: Record<string, unknown> = { theme: 'dark', telemetry: false }) {
+function settingsRecord(
+  payload: Record<string, unknown> = { theme: 'dark', telemetry: false },
+  userId = USER_ID,
+) {
   return {
-    userId: USER_ID,
+    userId,
     collection: 'settings',
     recordId: 'singleton',
     payload,
@@ -44,17 +48,17 @@ function settingsRecord(payload: Record<string, unknown> = { theme: 'dark', tele
   };
 }
 
-function accountSnapshot() {
+function accountSnapshot(userId = USER_ID, payload?: Record<string, unknown>) {
   return {
     state: {
-      userId: USER_ID,
+      userId,
       schemaVersion: 1,
       accountVersion: 7,
       minimumClientVersion: '0.2.0',
       migratedAt: SNAPSHOT_TIME,
       updatedAt: SNAPSHOT_TIME,
     },
-    records: [settingsRecord()],
+    records: [settingsRecord(payload, userId)],
   };
 }
 
@@ -137,6 +141,52 @@ describe('signed-in persistence boundaries', () => {
         unset: [],
       },
     ]);
+    expect(await loadStore('settings')).toEqual({ theme: 'light', telemetry: true });
+  });
+
+  it('retries a transient write once with the same request id and operations', async () => {
+    configureSupabase({ authenticated: true });
+    await bootstrapDatabasePersistence();
+    supabaseMocks.applyHelmMutations
+      .mockRejectedValueOnce(new TypeError('network fetch failed'))
+      .mockResolvedValueOnce({
+        requestId: 'request-settings-retry',
+        accountVersion: 8,
+        changes: [settingsRecord({ theme: 'light', telemetry: false })],
+      });
+
+    await saveStoreCommitted('settings', { theme: 'light', telemetry: false });
+
+    expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(2);
+    expect(supabaseMocks.applyHelmMutations.mock.calls[1]).toEqual(
+      supabaseMocks.applyHelmMutations.mock.calls[0],
+    );
+  });
+
+  it('rejects an old hydration epoch after an account switch', async () => {
+    configureSupabase({ authenticated: true });
+    let resolveFirstSnapshot!: (value: ReturnType<typeof accountSnapshot>) => void;
+    supabaseMocks.fetchHelmAccountSnapshot
+      .mockImplementationOnce(() => new Promise(resolve => { resolveFirstSnapshot = resolve; }))
+      .mockResolvedValueOnce(accountSnapshot(
+        SECOND_USER_ID,
+        { theme: 'light', telemetry: true },
+      ));
+
+    const firstBoot = bootstrapDatabasePersistence();
+    await vi.waitFor(() => expect(supabaseMocks.fetchHelmAccountSnapshot).toHaveBeenCalledTimes(1));
+    supabaseMocks.getCurrentUserId.mockReturnValue(SECOND_USER_ID);
+    resetDatabasePersistence('Switching Sabah One accounts.', 'switching_account');
+    const secondBoot = bootstrapDatabasePersistence();
+    await secondBoot;
+    resolveFirstSnapshot(accountSnapshot(USER_ID, { theme: 'dark', telemetry: false }));
+    await firstBoot;
+
+    expect(getSyncSessionSnapshot()).toMatchObject({
+      status: 'ready',
+      userId: SECOND_USER_ID,
+      accountVersion: 7,
+    });
     expect(await loadStore('settings')).toEqual({ theme: 'light', telemetry: true });
   });
 
