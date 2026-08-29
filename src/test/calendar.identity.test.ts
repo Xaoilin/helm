@@ -64,5 +64,44 @@ describe('calendar account/source/event identity', () => {
       '2026-08-29T00:00:00.000Z',
       '2026-08-30T00:00:00.000Z',
     )).toBe(false);
+    expect(isEventInsideCalendarFetchWindow(
+      event,
+      '2026-08-30T00:00:00.000Z',
+      '2026-08-29T00:00:00.000Z',
+    )).toBe(false);
+  });
+
+  it('only removes all-day cache entries that overlap an unambiguous interior fetch date', () => {
+    const timeMin = '2026-08-29T23:30:00.000Z';
+    const timeMax = '2026-09-05T00:30:00.000Z';
+
+    expect(isEventInsideCalendarFetchWindow(
+      makeCalendarEvent({
+        allDay: true,
+        start: '2026-08-31',
+        end: '2026-09-02',
+      }),
+      timeMin,
+      timeMax,
+    )).toBe(true);
+
+    for (const edgeDate of ['2026-08-30', '2026-09-04']) {
+      expect(isEventInsideCalendarFetchWindow(
+        makeCalendarEvent({ allDay: true, start: edgeDate, end: edgeDate }),
+        timeMin,
+        timeMax,
+      )).toBe(false);
+    }
+
+    expect(isEventInsideCalendarFetchWindow(
+      makeCalendarEvent({ allDay: true, start: '2026-02-30', end: '2026-03-01' }),
+      timeMin,
+      timeMax,
+    )).toBe(false);
+    expect(isEventInsideCalendarFetchWindow(
+      makeCalendarEvent({ allDay: true, start: '2026-08-31', end: '2026-09-02' }),
+      'not-an-instant',
+      timeMax,
+    )).toBe(false);
   });
 });

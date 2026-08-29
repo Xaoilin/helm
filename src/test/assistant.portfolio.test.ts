@@ -2,10 +2,18 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { executeActionPlan } from '../assistant/executor';
+import { resolveCalendarEventReference } from '../assistant/entityResolver';
 import { parseActionPlan } from '../assistant/plannerSchema';
 import { validateModelPlan } from '../assistant/planner';
 import type { AssistantActionHandlers } from '../assistant/shared';
-import { makeAssistantContext, makeTask, TEST_NOW_ISO } from './fixtures';
+import {
+  makeAssistantContext,
+  makeCalendarAccount,
+  makeCalendarEvent,
+  makeCalendarSource,
+  makeTask,
+  TEST_NOW_ISO,
+} from './fixtures';
 
 describe('assistant planner and executor boundary', () => {
   beforeEach(() => {
@@ -133,5 +141,34 @@ describe('assistant planner and executor boundary', () => {
     expect(chat).toContain("import { runAssistantTurn } from '../../assistant/runtime'");
     expect(voice).toContain("import { runAssistantTurn } from '../assistant/runtime'");
     expect(runtime).toContain("import { executeActionPlan } from './executor'");
+  });
+
+  it('matches all-day events by descriptive fields without inventing a midnight alias', () => {
+    const account = makeCalendarAccount({ name: 'Family account' });
+    const source = makeCalendarSource({ name: 'Family calendar' });
+    const event = makeCalendarEvent({
+      title: 'Museum day',
+      description: 'Annual members visit',
+      location: 'City gallery',
+      allDay: true,
+      start: '2026-08-29',
+      end: '2026-08-29',
+    });
+    const context = makeAssistantContext({
+      calendarAccounts: [account],
+      calendarSources: [source],
+      calendarEvents: [event],
+    });
+    const timeFormatter = vi.spyOn(Date.prototype, 'toLocaleTimeString').mockReturnValue('12 am');
+
+    try {
+      expect(resolveCalendarEventReference('12am', context).best).toBeNull();
+      expect(timeFormatter).not.toHaveBeenCalled();
+      for (const query of ['Museum day', 'Family calendar', 'Family account', 'City gallery']) {
+        expect(resolveCalendarEventReference(query, context).best?.id).toBe(event.id);
+      }
+    } finally {
+      timeFormatter.mockRestore();
+    }
   });
 });

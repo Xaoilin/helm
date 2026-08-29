@@ -83,7 +83,9 @@ export interface CalendarEvent {
   sourceId: string;
   title: string;
   description: string;
+  /** ISO instant for timed events; inclusive YYYY-MM-DD calendar date for all-day events. */
   start: string;
+  /** ISO instant for timed events; inclusive YYYY-MM-DD calendar date for all-day events. */
   end: string;
   allDay: boolean;
   location?: string;
@@ -1023,6 +1025,7 @@ export interface Settings {
   theme: 'dark' | 'light';
   dataRetentionDays: number;
   telemetry: boolean;
+  appTimezone?: string;
   googleOAuthClientId?: string;
   defaultCalendarTab?: 'month' | 'week' | 'agenda' | 'accounts';
   supabaseUrl?: string;

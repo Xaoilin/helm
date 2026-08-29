@@ -2,7 +2,8 @@
 // No SDK dependency — uses native fetch
 
 import { API_TIMEOUT } from '../config/constants';
-import { toLocalDateStr } from './financeHelpers';
+import { getAllDayCalendarDateRange } from './calendarEventDates';
+import { shiftIsoDate, validateIanaTimeZone } from './timeZone';
 import { googleCalendarBreaker } from './serviceBreakers';
 import { withRetry } from './retry';
 
@@ -227,12 +228,21 @@ export function googleEventToLocal(
   googleCalendarId: string;
 } {
   const allDay = !ge.start.dateTime;
-  const start = allDay
-    ? new Date(ge.start.date + 'T00:00:00').toISOString()
-    : new Date(ge.start.dateTime!).toISOString();
-  const end = allDay
-    ? new Date(ge.end.date + 'T23:59:59').toISOString()
-    : new Date(ge.end.dateTime!).toISOString();
+  let start: string;
+  let end: string;
+  if (allDay) {
+    const startDate = shiftIsoDate(ge.start.date || '', 0);
+    const exclusiveEndDate = shiftIsoDate(ge.end.date || '', 0);
+    const inclusiveEndDate = exclusiveEndDate ? shiftIsoDate(exclusiveEndDate, -1) : null;
+    if (!startDate || !inclusiveEndDate || inclusiveEndDate < startDate) {
+      throw new Error('The Google all-day event dates are invalid.');
+    }
+    start = startDate;
+    end = inclusiveEndDate;
+  } else {
+    start = new Date(ge.start.dateTime!).toISOString();
+    end = new Date(ge.end.dateTime!).toISOString();
+  }
 
   return {
     title: ge.summary || '(No title)',
@@ -255,21 +265,22 @@ export function localEventToGooglePayload(event: {
   end: string;
   allDay: boolean;
   location?: string;
-}): GoogleEventPayload {
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+}, timeZone: string): GoogleEventPayload {
+  const tz = validateIanaTimeZone(timeZone);
+  if (!tz) throw new Error('A valid app time zone is required for Google Calendar writes.');
 
   if (event.allDay) {
-    const startDate = event.start.split('T')[0];
-    // Google all-day end is exclusive, so add a day
-    const endD = new Date(event.end);
-    endD.setDate(endD.getDate() + 1);
-    const endDate = toLocalDateStr(endD);
+    const range = getAllDayCalendarDateRange(event, tz);
+    const exclusiveEndDate = range ? shiftIsoDate(range.endDate, 1) : null;
+    if (!range || !exclusiveEndDate) {
+      throw new Error('The all-day event dates are invalid.');
+    }
     return {
       summary: event.title,
       description: event.description || undefined,
       location: event.location,
-      start: { date: startDate },
-      end: { date: endDate },
+      start: { date: range.startDate },
+      end: { date: exclusiveEndDate },
     };
   }
 

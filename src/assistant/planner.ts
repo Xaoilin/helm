@@ -667,7 +667,7 @@ export function buildPlanningBundle(
     normalizedTranscript: normaliseText(transcript),
     currentSurface: context.currentSurface || dialogState?.currentSurface,
     nowIso: getNow(context).toISOString(),
-    timezone: context.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    timezone: context.timezone || 'UTC',
     recentEntities: [...(dialogState?.recentEntities || [])].slice(0, 5),
     recentPlans: [...(dialogState?.recentPlans || [])].slice(0, 5),
     capabilities: capabilities.map(capability => toPlanningCapabilityCandidate(capability, transcript)),

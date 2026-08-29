@@ -2,7 +2,7 @@
 
 ## Overview
 
-Sabah One is a hosted web product for a solo operator, with Lina as its in-app assistant. GitHub Pages serves the web bundle and the browser is the only supported product runtime. Shared state is online-only and database-authoritative through Supabase.
+Sabah One is a hosted web product for a solo operator, with Lina as its in-app assistant. GitHub Pages serves the web bundle and the browser is the only supported product runtime. Shared state is online-only and database-authoritative through Supabase. Generic app time uses one optional account-shared IANA preference with `Automatic` browser fallback; prayer schedules keep their own authoritative zone.
 
 The current stack is:
 
@@ -90,11 +90,11 @@ The list operation never decrypts values. Reveal fetches one active secret at a 
 
 Sabah One sign-in uses Supabase Auth. Separately connected Google Calendar accounts use hosted authorization-code exchange and refreshable credentials held by Supabase. The browser receives short-lived access for the requested operation; refresh credentials never enter browser storage or shared client records.
 
-Calendar sync is passive and account-bound. Opening Calendar or pressing `Sync` never opens an OAuth prompt. Reconnect is an explicit user action, and account-level states distinguish reconnect-required or revoked access from a generic service outage. Calendar writes go to Google first; a failed provider operation leaves the cached event unchanged rather than creating an offline pending mutation.
+Calendar sync is passive and account-bound. Opening Calendar or pressing `Sync` never opens an OAuth prompt. Reconnect is an explicit user action, and account-level states distinguish reconnect-required or revoked access from a generic service outage. Calendar groups, displays, and edits timed events in the effective app zone and supplies that zone explicitly to Google writes. Calendar writes go to Google first; a failed provider operation leaves the cached event unchanged rather than creating an offline pending mutation.
 
 ### Assistant and voice
 
-Chat and voice use the shared grounded assistant runtime in `src/assistant/`. Hosted GPT-5.4-family models provide planning and narration through `assistant-openai`, while Settings may select a configured Ollama endpoint; browser code supplies transcript normalization, capability and entity retrieval, validation, confirmation, deterministic execution, and debug tracing for both.
+Chat and voice use the shared grounded assistant runtime in `src/assistant/`. Hosted GPT-5.4-family models provide planning and narration through `assistant-openai`, while Settings may select a configured Ollama endpoint; browser code supplies transcript normalization, capability and entity retrieval, effective-app-zone temporal resolution, validation, confirmation, deterministic execution, and debug tracing for both. Prayer-relative anchors receive the schedule zone separately.
 
 The selected planner returns `reply`, `clarify`, `confirm`, or `tool_calls`. Sabah One validates grounded IDs and temporal references, confirms risky actions, executes one semantic mutation path, verifies the result, and asks the same provider to narrate verified facts. If no live planner is available, Lina explains the unavailable capability in-app and does not guess or mutate state.
 
@@ -113,7 +113,8 @@ Network failures use visible error states and the established retry, circuit-bre
 ## Surface Notes
 
 - Dashboard is the Night Compass daily operating view. Prayer is the structural first tier, a deterministic Quran motivation card follows it, Learn and Move are the mandatory daily pillars, and one compact due-task route is second-order. Source-reviewed Arabic, references, paraphrase labels, and Quran.com links are preserved; runtime model output does not write religious content.
-- Prayer tracking and reminders are specified in `docs/prayer-tracking-and-reminders.md`. `PrayerProvider` owns schedule freshness, canonical outcomes, the shared completion selector, stats, page-open reminder planning, and diagnostics. UI, chat, and voice use the same completion mutation.
+- Prayer tracking and reminders are specified in `docs/prayer-tracking-and-reminders.md`. `PrayerProvider` orchestrates schedule freshness and side effects while pure schedule, reminder, and completion policies own the domain transitions. UI, chat, and voice use the same completion mutation.
+- Generic time-zone resolution and its strict separation from prayer schedule authority are specified in `docs/app-time-zone.md`.
 - Chat is persistent and conversation-based. Activity records provide the account-backed audit trail for assistant mutations and supported undo operations.
 - Calendar depends on account/source/event integrity and keeps provider cache changes account-bound.
 - Tasks and gamification share canonical task, prayer outcome, XP, and streak boundaries. Prayer outcomes are keyed by local prayer date and prayer name rather than task ID.

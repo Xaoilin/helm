@@ -11,7 +11,14 @@ import {
   localEventToGooglePayload,
 } from '../services/googleCalendarApi';
 import { buildGoogleEventCacheId } from '../services/calendarProviderSync';
+import {
+  getAllDayCalendarDateRange,
+  isAllDayCalendarEventOnDate,
+  normalizeCalendarDate,
+} from '../services/calendarEventDates';
 import { logError } from '../services/logger';
+import { formatAppDate, formatAppTime, getAppDate } from '../services/appTimeZone';
+import { dateTimeLocalToInstant, instantToDateTimeLocal } from '../services/timeZone';
 import type { CalendarAccount, CalendarEvent } from '../types/domain';
 import {
   GoogleCalendarReconnectRequiredError,
@@ -40,12 +47,15 @@ export default function CalendarSurface() {
   const shell = useShell();
   const calendar = useCalendar();
   const settings = useSettingsContext();
+  const appTimeZone = settings.appTimeZone.effectiveTimeZone;
+  const currentAppDate = getAppDate(new Date(), appTimeZone) || new Date().toISOString().slice(0, 10);
+  const toCalendarMarker = (date: string) => {
+    const [markerYear, markerMonth, markerDay] = date.split('-').map(Number);
+    return new Date(Date.UTC(markerYear, markerMonth - 1, markerDay));
+  };
   const [tab, setTab] = useState<Tab>(settings.settings.defaultCalendarTab || 'week');
-  const [viewDate, setViewDate] = useState(new Date());
-  const [selectedDateStr, setSelectedDateStr] = useState(() => {
-    const todayDate = new Date();
-    return `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
-  });
+  const [viewDate, setViewDate] = useState(() => toCalendarMarker(currentAppDate));
+  const [selectedDateStr, setSelectedDateStr] = useState(currentAppDate);
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [editingAccount, setEditingAccount] = useState<CalendarAccount | null>(null);
@@ -70,9 +80,9 @@ export default function CalendarSurface() {
   const [evtAllDay, setEvtAllDay] = useState(false);
   const [evtLocation, setEvtLocation] = useState('');
 
-  const today = new Date();
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
+  const today = toCalendarMarker(currentAppDate);
+  const year = viewDate.getUTCFullYear();
+  const month = viewDate.getUTCMonth();
 
   // Multi-account sync
   const googleAccounts = calendar.calendarAccounts.filter(isGoogleCalendarAccount);
@@ -85,6 +95,12 @@ export default function CalendarSurface() {
     const interval = window.setInterval(() => setSyncStatusNow(new Date()), 60_000);
     return () => window.clearInterval(interval);
   }, [lastSyncTime]);
+
+  useEffect(() => {
+    const date = getAppDate(new Date(), appTimeZone) || new Date().toISOString().slice(0, 10);
+    setSelectedDateStr(date);
+    setViewDate(toCalendarMarker(date));
+  }, [appTimeZone]);
 
   // Visible sources
   const visibleSourceIds = useMemo(
@@ -133,20 +149,38 @@ export default function CalendarSurface() {
     return accountPaletteMap.get(source.accountId) || ACCOUNT_PALETTES[0];
   };
 
-  const isToday = (date: Date) =>
-    date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
+  const isToday = (date: Date) => toLocalDateStr(date) === toLocalDateStr(today);
 
   const toLocalDateStr = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+
+  const formatCalendarDate = (date: Date) => date.toLocaleDateString([], {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+
+  const formatAppDateTime = (value: string) => {
+    const instant = new Date(value);
+    return `${formatAppDate(instant, appTimeZone)} at ${formatAppTime(instant, appTimeZone)}`;
+  };
+
+  const formatEventDate = (event: CalendarEvent) => {
+    if (!event.allDay) return formatAppDate(new Date(event.start), appTimeZone);
+    const range = getAllDayCalendarDateRange(event, appTimeZone);
+    return range ? formatCalendarDate(toCalendarMarker(range.startDate)) : '—';
+  };
 
   const getEventsForDate = (date: Date) => {
     const dateStr = toLocalDateStr(date);
-    return visibleEvents.filter(e => toLocalDateStr(new Date(e.start)) === dateStr);
+    return visibleEvents.filter(event => event.allDay
+      ? isAllDayCalendarEventOnDate(event, dateStr, appTimeZone)
+      : getAppDate(new Date(event.start), appTimeZone) === dateStr);
   };
 
   const selectedDate = useMemo(() => {
-    const [selectedYear, selectedMonth, selectedDay] = selectedDateStr.split('-').map(Number);
-    return new Date(selectedYear, selectedMonth - 1, selectedDay);
+    return toCalendarMarker(selectedDateStr);
   }, [selectedDateStr]);
 
   const selectedDateEvents = useMemo(
@@ -162,20 +196,20 @@ export default function CalendarSurface() {
 
   // ── Month Grid ──
   const calendarDays = useMemo(() => {
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const daysInPrev = new Date(year, month, 0).getDate();
+    const firstDay = new Date(Date.UTC(year, month, 1)).getUTCDay();
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const daysInPrev = new Date(Date.UTC(year, month, 0)).getUTCDate();
     const days: { date: Date; isCurrentMonth: boolean }[] = [];
 
     for (let i = firstDay - 1; i >= 0; i--) {
-      days.push({ date: new Date(year, month - 1, daysInPrev - i), isCurrentMonth: false });
+      days.push({ date: new Date(Date.UTC(year, month - 1, daysInPrev - i)), isCurrentMonth: false });
     }
     for (let d = 1; d <= daysInMonth; d++) {
-      days.push({ date: new Date(year, month, d), isCurrentMonth: true });
+      days.push({ date: new Date(Date.UTC(year, month, d)), isCurrentMonth: true });
     }
     const remaining = 42 - days.length;
     for (let d = 1; d <= remaining; d++) {
-      days.push({ date: new Date(year, month + 1, d), isCurrentMonth: false });
+      days.push({ date: new Date(Date.UTC(year, month + 1, d)), isCurrentMonth: false });
     }
     return days;
   }, [year, month]);
@@ -183,20 +217,20 @@ export default function CalendarSurface() {
   // ── Week Grid ──
   const weekDays = useMemo(() => {
     const startOfWeek = new Date(viewDate);
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay());
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(startOfWeek);
-      d.setDate(d.getDate() + i);
+      d.setUTCDate(d.getUTCDate() + i);
       return d;
     });
   }, [viewDate]);
 
   // ── Navigation ──
-  const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
-  const prevWeek = () => { const d = new Date(viewDate); d.setDate(d.getDate() - 7); setViewDate(d); };
-  const nextWeek = () => { const d = new Date(viewDate); d.setDate(d.getDate() + 7); setViewDate(d); };
-  const goToday = () => setViewDate(new Date());
+  const prevMonth = () => setViewDate(new Date(Date.UTC(year, month - 1, 1)));
+  const nextMonth = () => setViewDate(new Date(Date.UTC(year, month + 1, 1)));
+  const prevWeek = () => { const d = new Date(viewDate); d.setUTCDate(d.getUTCDate() - 7); setViewDate(d); };
+  const nextWeek = () => { const d = new Date(viewDate); d.setUTCDate(d.getUTCDate() + 7); setViewDate(d); };
+  const goToday = () => setViewDate(toCalendarMarker(currentAppDate));
 
   // ── Account CRUD ──
   const openAddAccount = () => {
@@ -219,10 +253,14 @@ export default function CalendarSurface() {
   // ── Event CRUD ──
   const openAddEvent = (presetDate?: Date) => {
     setEvtTitle(''); setEvtDesc(''); setEvtAllDay(false); setEvtLocation('');
-    const d = presetDate || new Date();
-    const startStr = `${toLocalDateStr(d)}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    const end = new Date(d.getTime() + 3600000);
-    const endStr = `${toLocalDateStr(end)}T${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')}`;
+    const now = new Date();
+    const startStr = presetDate
+      ? `${toLocalDateStr(presetDate)}T09:00`
+      : instantToDateTimeLocal(now, appTimeZone) || `${currentAppDate}T09:00`;
+    const endStr = presetDate
+      ? `${toLocalDateStr(presetDate)}T10:00`
+      : instantToDateTimeLocal(new Date(now.getTime() + 3_600_000), appTimeZone)
+        || `${currentAppDate}T10:00`;
     setEvtStart(startStr); setEvtEnd(endStr);
     setEvtSourceId(calendar.calendarSources[0]?.id || '');
     setEventWriteError(null);
@@ -230,7 +268,14 @@ export default function CalendarSurface() {
   };
   const openEditEvent = (evt: CalendarEvent) => {
     setEvtTitle(evt.title); setEvtDesc(evt.description); setEvtAllDay(evt.allDay);
-    setEvtStart(evt.start.slice(0, 16)); setEvtEnd(evt.end.slice(0, 16));
+    if (evt.allDay) {
+      const range = getAllDayCalendarDateRange(evt, appTimeZone);
+      setEvtStart(range ? `${range.startDate}T00:00` : '');
+      setEvtEnd(range ? `${range.endDate}T23:59` : '');
+    } else {
+      setEvtStart(instantToDateTimeLocal(new Date(evt.start), appTimeZone) || '');
+      setEvtEnd(instantToDateTimeLocal(new Date(evt.end), appTimeZone) || '');
+    }
     setEvtSourceId(evt.sourceId); setEvtLocation(evt.location || '');
     setEventWriteError(null);
     setEditingEvent(evt); setShowAddEvent(true);
@@ -239,11 +284,40 @@ export default function CalendarSurface() {
   const saveEvent = async () => {
     if (!evtTitle.trim() || !evtSourceId) return;
     setEventWriteError(null);
+    let start: string;
+    let end: string;
+    if (evtAllDay) {
+      const startDate = normalizeCalendarDate(evtStart.slice(0, 10));
+      const endDate = normalizeCalendarDate(evtEnd.slice(0, 10));
+      if (!startDate || !endDate) {
+        setEventWriteError('Choose valid all-day event dates.');
+        return;
+      }
+      if (endDate < startDate) {
+        setEventWriteError('All-day event end must be on or after its start.');
+        return;
+      }
+      start = startDate;
+      end = endDate;
+    } else {
+      const startInstant = dateTimeLocalToInstant(evtStart, appTimeZone);
+      const endInstant = dateTimeLocalToInstant(evtEnd, appTimeZone);
+      if (!startInstant || !endInstant) {
+        setEventWriteError(`Choose valid wall-clock times in ${appTimeZone}. Daylight-saving gaps do not exist.`);
+        return;
+      }
+      if (endInstant <= startInstant) {
+        setEventWriteError('Event end must be after its start.');
+        return;
+      }
+      start = startInstant.toISOString();
+      end = endInstant.toISOString();
+    }
     const eventData = {
       title: evtTitle.trim(),
       description: evtDesc.trim(),
-      start: new Date(evtStart).toISOString(),
-      end: new Date(evtEnd).toISOString(),
+      start,
+      end,
       allDay: evtAllDay,
       sourceId: evtSourceId,
       location: evtLocation.trim() || undefined,
@@ -258,7 +332,7 @@ export default function CalendarSurface() {
       try {
         const token = await getGoogleCalendarPassiveAccessTokenWithRefresh(account, '');
         const accessToken = token.accessToken;
-        const payload = localEventToGooglePayload(eventData);
+        const payload = localEventToGooglePayload(eventData, appTimeZone);
 
         if (editingEvent && editingEvent.googleEventId) {
           const result = await googleUpdateEvent(accessToken, googleCalId, editingEvent.googleEventId, payload);
@@ -394,8 +468,12 @@ export default function CalendarSurface() {
   // ── Agenda ──
   const agendaEvents = useMemo(() => {
     const now = new Date().toISOString();
-    return [...visibleEvents].filter(e => e.end >= now).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 30);
-  }, [visibleEvents]);
+    return [...visibleEvents].filter(event => {
+      if (!event.allDay) return event.end >= now;
+      const range = getAllDayCalendarDateRange(event, appTimeZone);
+      return Boolean(range && range.endDate >= currentAppDate);
+    }).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 30);
+  }, [appTimeZone, currentAppDate, visibleEvents]);
 
   // ── Sync status ──
   const syncStatusText = () => {
@@ -433,10 +511,10 @@ export default function CalendarSurface() {
   const weekLabel = useMemo(() => {
     const start = weekDays[0];
     const end = weekDays[6];
-    if (start.getMonth() === end.getMonth()) {
-      return `${MONTHS[start.getMonth()]} ${start.getDate()} \u2013 ${end.getDate()}, ${start.getFullYear()}`;
+    if (start.getUTCMonth() === end.getUTCMonth()) {
+      return `${MONTHS[start.getUTCMonth()]} ${start.getUTCDate()} \u2013 ${end.getUTCDate()}, ${start.getUTCFullYear()}`;
     }
-    return `${MONTHS[start.getMonth()].slice(0, 3)} ${start.getDate()} \u2013 ${MONTHS[end.getMonth()].slice(0, 3)} ${end.getDate()}, ${end.getFullYear()}`;
+    return `${MONTHS[start.getUTCMonth()].slice(0, 3)} ${start.getUTCDate()} \u2013 ${MONTHS[end.getUTCMonth()].slice(0, 3)} ${end.getUTCDate()}, ${end.getUTCFullYear()}`;
   }, [weekDays]);
 
   return (
@@ -504,7 +582,7 @@ export default function CalendarSurface() {
                         className={`calendar-day ${isCurrentMonth ? '' : 'other-month'} ${isToday(date) ? 'today' : ''} ${toLocalDateStr(date) === selectedDateStr ? 'selected' : ''}`}
                         onClick={() => setSelectedDateStr(toLocalDateStr(date))}
                       >
-                        <div className="day-num">{date.getDate()}</div>
+                        <div className="day-num">{date.getUTCDate()}</div>
                         {dayEvents.slice(0, 3).map(evt => {
                           const pal = getEventPalette(evt.sourceId);
                           return (
@@ -529,7 +607,7 @@ export default function CalendarSurface() {
               {calendar.calendarAccounts.length > 0 && (
                 <div className="calendar-mobile-selected-agenda">
                   <div className="calendar-mobile-selected-title">
-                    {selectedDate.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
+                    {formatCalendarDate(selectedDate)}
                   </div>
                   {selectedDateEvents.length === 0 ? (
                     <div className="calendar-mobile-empty">No events for this day.</div>
@@ -544,7 +622,7 @@ export default function CalendarSurface() {
                           onClick={() => openEditEvent(evt)}
                         >
                           <span style={{ color: pal.text }}>
-                            {evt.allDay ? 'All day' : new Date(evt.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {evt.allDay ? 'All day' : formatAppTime(new Date(evt.start), appTimeZone)}
                           </span>
                           <strong>{evt.title}</strong>
                         </button>
@@ -607,8 +685,8 @@ export default function CalendarSurface() {
                         className={`calendar-mobile-day ${isToday(d) ? 'today' : ''} ${dateStr === selectedDateStr ? 'active' : ''}`}
                         onClick={() => setSelectedDateStr(dateStr)}
                       >
-                        <span>{DAYS[d.getDay()]}</span>
-                        <strong>{d.getDate()}</strong>
+                        <span>{DAYS[d.getUTCDay()]}</span>
+                        <strong>{d.getUTCDate()}</strong>
                         {dayEvents.length > 0 && <em>{dayEvents.length}</em>}
                       </button>
                     );
@@ -616,7 +694,7 @@ export default function CalendarSurface() {
                 </div>
                 <div className="calendar-mobile-selected-agenda">
                   <div className="calendar-mobile-selected-title">
-                    {selectedDate.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
+                    {formatCalendarDate(selectedDate)}
                   </div>
                   {selectedDateEvents.length === 0 ? (
                     <div className="calendar-mobile-empty">No events for this day.</div>
@@ -631,7 +709,7 @@ export default function CalendarSurface() {
                           onClick={() => openEditEvent(evt)}
                         >
                           <span style={{ color: pal.text }}>
-                            {evt.allDay ? 'All day' : new Date(evt.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {evt.allDay ? 'All day' : formatAppTime(new Date(evt.start), appTimeZone)}
                           </span>
                           <strong>{evt.title}</strong>
                           {evt.location && <small>{evt.location}</small>}
@@ -650,8 +728,8 @@ export default function CalendarSurface() {
                   return (
                     <div key={i} className={`week-col ${isToday(d) ? 'today' : ''}`}>
                       <div className="week-col-header">
-                        <div className="week-col-dayname">{DAYS[d.getDay()]}</div>
-                        <div className={`week-col-daynum ${isToday(d) ? 'today' : ''}`}>{d.getDate()}</div>
+                        <div className="week-col-dayname">{DAYS[d.getUTCDay()]}</div>
+                        <div className={`week-col-daynum ${isToday(d) ? 'today' : ''}`}>{d.getUTCDate()}</div>
                       </div>
                       <div className="week-col-events">
                         {dayEvents.length === 0 && (
@@ -671,9 +749,9 @@ export default function CalendarSurface() {
                                 onClick={() => openEditEvent(evt)}
                               >
                                 <div className="week-col-event-time" style={{ color: pal.text }}>
-                                  {evt.allDay ? 'All day' : new Date(evt.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  {evt.allDay ? 'All day' : formatAppTime(new Date(evt.start), appTimeZone)}
                                   {!evt.allDay && (
-                                    <> &ndash; {new Date(evt.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>
+                                    <> &ndash; {formatAppTime(new Date(evt.end), appTimeZone)}</>
                                   )}
                                 </div>
                                 <div className="week-col-event-title">{evt.title}</div>
@@ -711,7 +789,7 @@ export default function CalendarSurface() {
               agendaEvents.map(evt => (
                 <div key={evt.id} className="agenda-item" onClick={() => openEditEvent(evt)} style={{ cursor: 'pointer' }}>
                   <div className="agenda-time">
-                    {evt.allDay ? 'All day' : new Date(evt.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {evt.allDay ? 'All day' : formatAppTime(new Date(evt.start), appTimeZone)}
                   </div>
                   <div style={{ flex: 1 }}>
                     <div className="agenda-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -721,7 +799,7 @@ export default function CalendarSurface() {
                       {evt.googleEventId && <span style={{ fontSize: 10, color: '#8b90a8' }}>(Google)</span>}
                     </div>
                     <div style={{ fontSize: 12, color: '#9499b0' }}>
-                      {new Date(evt.start).toLocaleDateString()}
+                      {formatEventDate(evt)}
                       {evt.location && <> &middot; {evt.location}</>}
                       {evt.description && <> &middot; {evt.description.slice(0, 60)}</>}
                     </div>
@@ -770,8 +848,8 @@ export default function CalendarSurface() {
                         <div className="card-subtitle">
                           {acc.email} &middot; {acc.provider}
                           {acc.mocked && ' (manual provider)'}
-                          {isGoogleAcc && acc.lastSyncTime && ` \u00b7 Synced from Google ${new Date(acc.lastSyncTime).toLocaleString()}`}
-                          {isGoogleAcc && acc.lastAuthCheckAt && ` \u00b7 Access checked ${new Date(acc.lastAuthCheckAt).toLocaleString()}`}
+                          {isGoogleAcc && acc.lastSyncTime && ` \u00b7 Synced from Google ${formatAppDateTime(acc.lastSyncTime)}`}
+                          {isGoogleAcc && acc.lastAuthCheckAt && ` \u00b7 Access checked ${formatAppDateTime(acc.lastAuthCheckAt)}`}
                           {isGoogleAcc && ` \u00b7 Credential status ${getGoogleCalendarCredentialStatusLabel(acc)}`}
                           {isGoogleAcc && acc.authProvider === 'profile-google' && ' \u00b7 Linked to Sabah One sign-in'}
                         </div>

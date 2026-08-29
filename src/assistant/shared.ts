@@ -202,6 +202,8 @@ export interface AssistantCommandContext {
   projects: Project[];
   gamification: GamificationProfile;
   prayerTimes?: PrayerTimeSnapshot[];
+  prayerDate?: string;
+  prayerTimezone?: string;
   goalTags?: Settings['goalTags'];
   currentSurface?: Surface;
   now?: Date;

@@ -32,6 +32,8 @@ import { PRAYER_REMINDERS } from '../config/constants';
 import { createPrayerTrackingState } from '../services/prayerTracking';
 import { useDailyMomentumContext } from '../store/contexts/DailyMomentumContext';
 import { DAILY_MOMENTUM_REMINDER_ANCHORS } from '../services/dailyMomentum';
+import { getSupportedIanaTimeZones } from '../services/appTimeZone';
+import { validateIanaTimeZone } from '../services/timeZone';
 
 export default function SettingsSurface() {
   const settingsContext = useSettingsContext();
@@ -45,6 +47,12 @@ export default function SettingsSurface() {
   const [syncSession, setSyncSession] = useState(() => getSyncSessionSnapshot());
   const [inventoryClients, setInventoryClients] = useState<InventoryOAuthClientApproval[]>([]);
   const [inventoryClientStatus, setInventoryClientStatus] = useState('');
+  const [appTimeZoneInput, setAppTimeZoneInput] = useState(settings.appTimezone || '');
+  const [appTimeZoneStatus, setAppTimeZoneStatus] = useState<{
+    tone: 'saving' | 'saved' | 'error';
+    message: string;
+  } | null>(null);
+  const supportedTimeZones = useState(() => getSupportedIanaTimeZones())[0];
 
   // Goal tags
   const [newTag, setNewTag] = useState('');
@@ -87,6 +95,10 @@ export default function SettingsSurface() {
   }, [selectedHostedModel, selectedProvider, settings.ollamaEndpoint, authSyncKey]);
 
   useEffect(() => subscribeSyncSession(setSyncSession), []);
+
+  useEffect(() => {
+    setAppTimeZoneInput(settings.appTimezone || '');
+  }, [settings.appTimezone]);
 
   useEffect(() => {
     if (!isAuthenticated()) return;
@@ -179,6 +191,112 @@ export default function SettingsSurface() {
             ))}
           </div>
           {inventoryClientStatus && <div className="inventory-client-status" role="status">{inventoryClientStatus}</div>}
+        </div>
+
+        <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>App time zone</h3>
+        <div className="card app-time-zone-settings">
+          <div className="app-time-zone-heading">
+            <div>
+              <strong>{settingsContext.appTimeZone.source === 'preference' ? 'Account time zone' : 'Automatic'}</strong>
+              <span>Effective zone: {settingsContext.appTimeZone.effectiveTimeZone}</span>
+            </div>
+            <span className="app-time-zone-source">
+              Browser: {settingsContext.appTimeZone.browserTimeZone || 'Unavailable'}
+            </span>
+          </div>
+          <div className="form-group app-time-zone-field">
+            <label htmlFor="settings-app-time-zone">IANA time zone</label>
+            <input
+              id="settings-app-time-zone"
+              className={`form-input ${appTimeZoneStatus?.tone === 'error' ? 'is-invalid' : ''}`}
+              list="settings-app-time-zone-options"
+              placeholder="Automatic (browser time zone)"
+              value={appTimeZoneInput}
+              aria-describedby="settings-app-time-zone-help settings-app-time-zone-status"
+              onChange={event => {
+                setAppTimeZoneInput(event.target.value);
+                setAppTimeZoneStatus(null);
+              }}
+            />
+            <datalist id="settings-app-time-zone-options">
+              {supportedTimeZones.map(timeZone => <option key={timeZone} value={timeZone} />)}
+            </datalist>
+            <div id="settings-app-time-zone-help" className="app-time-zone-help">
+              Leave blank for Automatic. This account-shared setting controls generic app, assistant, and calendar time. Prayer schedules always retain their own validated zone.
+            </div>
+          </div>
+          <div className="actions-row app-time-zone-actions">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={appTimeZoneStatus?.tone === 'saving'}
+              onClick={async () => {
+                const rawTimeZone = appTimeZoneInput.trim();
+                if (rawTimeZone && !validateIanaTimeZone(rawTimeZone)) {
+                  setAppTimeZoneStatus({
+                    tone: 'error',
+                    message: 'Enter a valid IANA time zone, such as Europe/London.',
+                  });
+                  return;
+                }
+                setAppTimeZoneStatus({ tone: 'saving', message: 'Saving to your account…' });
+                try {
+                  await settingsContext.saveAppTimeZonePreference(rawTimeZone || undefined);
+                  setAppTimeZoneStatus({
+                    tone: 'saved',
+                    message: rawTimeZone
+                      ? `Saved ${rawTimeZone} to your account.`
+                      : `Saved Automatic (${settingsContext.appTimeZone.browserTimeZone || 'UTC'}) to your account.`,
+                  });
+                } catch (error) {
+                  setAppTimeZoneStatus({
+                    tone: 'error',
+                    message: error instanceof Error ? error.message : 'The time zone was not saved.',
+                  });
+                }
+              }}
+            >
+              {appTimeZoneStatus?.tone === 'saving' ? 'Saving…' : 'Save time zone'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={appTimeZoneStatus?.tone === 'saving'}
+              onClick={async () => {
+                setAppTimeZoneStatus({ tone: 'saving', message: 'Resetting to Automatic…' });
+                try {
+                  await settingsContext.saveAppTimeZonePreference(undefined);
+                  setAppTimeZoneInput('');
+                  setAppTimeZoneStatus({
+                    tone: 'saved',
+                    message: `Automatic restored (${settingsContext.appTimeZone.browserTimeZone || 'UTC'}).`,
+                  });
+                } catch (error) {
+                  setAppTimeZoneStatus({
+                    tone: 'error',
+                    message: error instanceof Error ? error.message : 'Automatic was not restored.',
+                  });
+                }
+              }}
+            >
+              Use Automatic
+            </button>
+          </div>
+          {(settingsContext.appTimeZoneLoadWarning || appTimeZoneStatus) && (
+            <div
+              id="settings-app-time-zone-status"
+              className={`app-time-zone-status ${appTimeZoneStatus?.tone || 'error'}`}
+              role={appTimeZoneStatus?.tone === 'error' || settingsContext.appTimeZoneLoadWarning ? 'alert' : 'status'}
+            >
+              {appTimeZoneStatus?.message || settingsContext.appTimeZoneLoadWarning}
+            </div>
+          )}
+          {prayer.schedule?.timezone
+            && prayer.schedule.timezone !== settingsContext.appTimeZone.effectiveTimeZone && (
+            <div className="app-time-zone-prayer-boundary" role="status">
+              Prayer times remain on {prayer.schedule.timezone}; app time uses {settingsContext.appTimeZone.effectiveTimeZone}.
+            </div>
+          )}
         </div>
 
         {/* Google Calendar */}

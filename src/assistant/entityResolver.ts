@@ -153,6 +153,7 @@ function recentEntityByKind<T>(
 }
 
 function formatEventAliases(event: CalendarEvent): string[] {
+  if (event.allDay) return [];
   const start = new Date(event.start);
   const hour12 = start.toLocaleTimeString('en-GB', { hour: 'numeric', hour12: true }).toLowerCase();
   const hourMinute12 = start.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();

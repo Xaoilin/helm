@@ -32,11 +32,11 @@ Final on-time deadlines use the Jafari rules requested by the product:
 The deadline is exclusive: completion before it is on time; completion at or after it is late. The UI uses the clock only to highlight the likely selection. The user's explicit On time or Late choice is authoritative.
 
 Sequential timetable windows drive the Dashboard's next-prayer orientation. A final deadline must not be reused as the active-prayer ranking window.
-The raw validated schedule timezone is the authoritative prayer clock. Night Compass converts the current instant into that zone, then compares its wall-clock minutes and seconds with the displayed prayer `HH:mm` values, including the before-Fajr interval and overnight interpolation to tomorrow's Fajr. A browser timezone override may differ and remains diagnostic only.
+The raw validated schedule timezone is the authoritative prayer clock. Night Compass converts the current instant into that zone, then compares its wall-clock minutes and seconds with the displayed prayer `HH:mm` values, including the before-Fajr interval and overnight interpolation to tomorrow's Fajr. The optional account app time zone may differ and remains presentation-only for generic time; Settings and Night Compass label the boundary.
 
 ## State And Mutations
 
-Canonical types live in `src/types/domain.ts`. Pure normalization, deadline, outcome, reminder-key, and percentage logic lives in `src/services/prayerTracking.ts`. `PrayerProvider` owns the live schedule, tracking state, completion dialog, reminder lifecycle, and diagnostics.
+Canonical types live in `src/types/domain.ts`. Pure normalization, deadline, outcome, reminder-key, and percentage logic lives in `src/services/prayerTracking.ts`. Cohesive schedule, reminder, and completion/undo transitions live in `prayerSchedulePolicy.ts`, `prayerReminderPolicy.ts`, and `prayerCompletionPolicy.ts`. `PrayerProvider` owns React state, live schedule refresh, persistence, browser effects, completion dialog, and diagnostics.
 
 Records use `<local date>::<PrayerName>` keys so deletion or recreation of a prayer task cannot erase history. The aggregate is decomposed into account-owned metadata, outcome, eligibility, and reminder-receipt records and changed through the transactional Sabah One mutation RPC.
 

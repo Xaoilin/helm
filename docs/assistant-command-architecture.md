@@ -41,7 +41,7 @@ Grounded IDs are required for reveal, completion, deletion, rescheduling, financ
 
 ### 3. Temporal resolver
 
-The planner must resolve phrases such as `tomorrow after lunch`, `next Friday morning`, `before Maghrib`, and `after Dhuhr` against the current date, browser timezone, locale, prayer timetable, and product rules. Unresolved time remains visible as clarification rather than being silently approximated.
+The planner must resolve phrases such as `tomorrow after lunch` and `next Friday morning` against the current date, effective account app zone, locale, and product rules. Prayer phrases such as `before Maghrib` and `after Dhuhr` use the timetable's validated schedule zone separately. Nonexistent daylight-saving wall time remains unresolved rather than being silently shifted.
 
 ### 4. Structured planner
 
