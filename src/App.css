@@ -6057,8 +6057,8 @@ textarea.form-input {
 
 .nc-activity-tooltip {
   position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
+  top: 50%;
+  left: calc(100% + 8px);
   z-index: 2;
   width: max-content;
   max-width: min(240px, calc(100vw - 48px));
@@ -6073,13 +6073,13 @@ textarea.form-input {
   line-height: 1.4;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(2px);
+  transform: translate(-2px, -50%);
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
 .nc-activity-help.is-visible .nc-activity-tooltip {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(0, -50%);
 }
 
 .nc-activity-heading p {
@@ -6277,6 +6277,7 @@ textarea.form-input {
   .nc-prayer-repair .nc-primary-action { width: 100%; margin-top: 6px; }
   .nc-momentum-grid { grid-template-columns: 1fr; }
   .nc-momentum-card { padding: 16px; }
+  .nc-activity-tooltip { max-width: min(240px, calc(100vw - 160px)); }
   .nc-level-summary { max-width: 100px; white-space: normal; text-align: right; }
   .nc-path-label { grid-template-columns: 1fr; gap: 6px; }
   .nc-progress-row { align-items: flex-end; }
