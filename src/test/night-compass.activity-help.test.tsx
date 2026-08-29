@@ -61,9 +61,9 @@ describe('Night Compass activity title help', () => {
     const activities = [
       ['Reading', 'learn', 'learn-reading', 'Read pages from a book, article, or other focused material.'],
       ['Course', 'learn', 'learn-course', 'Spend minutes on a structured course or lesson.'],
-      ['Walk', 'move', 'move-walk', 'Purposeful walking, such as outdoors, on a treadmill, or indoors.'],
-      ['Workout', 'move', 'move-workout', 'Planned exercise, such as strength, cardio, gym, home exercise, or sport.'],
-      ['Stretching', 'move', 'move-stretching', 'Held or gentle stretches, such as calves, hamstrings, chest, or shoulders.'],
+      ['Walk', 'move', 'move-walk', 'Try an outdoor walk, a treadmill walk, or a few purposeful indoor laps.'],
+      ['Workout', 'move', 'move-workout', 'Try squats, wall push-ups, cycling, a gym session, or another planned workout.'],
+      ['Stretching', 'move', 'move-stretching', 'Try gentle calf, hamstring, chest, or shoulder stretches.'],
     ] as const;
 
     for (const [label, pillar, templateId, helpText] of activities) {

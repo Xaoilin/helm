@@ -144,9 +144,9 @@ interface MomentumActivityProps {
 const ACTIVITY_HELP_TEXT: Record<string, string> = {
   'learn-reading': 'Read pages from a book, article, or other focused material.',
   'learn-course': 'Spend minutes on a structured course or lesson.',
-  'move-walk': 'Purposeful walking, such as outdoors, on a treadmill, or indoors.',
-  'move-workout': 'Planned exercise, such as strength, cardio, gym, home exercise, or sport.',
-  'move-stretching': 'Held or gentle stretches, such as calves, hamstrings, chest, or shoulders.',
+  'move-walk': 'Try an outdoor walk, a treadmill walk, or a few purposeful indoor laps.',
+  'move-workout': 'Try squats, wall push-ups, cycling, a gym session, or another planned workout.',
+  'move-stretching': 'Try gentle calf, hamstring, chest, or shoulder stretches.',
 };
 
 function getActivityHelpText(activity: DailyMomentumActivityDay): string {
