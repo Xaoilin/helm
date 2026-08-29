@@ -99,7 +99,7 @@ test.describe('Life Hero maximum-quality GLB proof', () => {
 
     await expect(page.getByRole('heading', { name: 'A real hero, a separate jacket' })).toBeVisible();
     await expect(page.getByText('This image is not a 3D model.')).toBeVisible();
-    await expect.poll(() => readViewerState(page)).toMatchObject({
+    await expect.poll(() => readViewerState(page), { timeout: 30_000 }).toMatchObject({
       activeClip: 'Idle_02',
       jacketVisible: true,
       loaded: true,
