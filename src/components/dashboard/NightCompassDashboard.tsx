@@ -31,23 +31,29 @@ import type {
 
 type PrayerTemporalState = 'current' | 'next' | 'upcoming' | 'past' | 'not_tracked' | 'pending';
 
-function outcomeLabel(status: PrayerOutcomeStatus): string {
+interface PrayerStatusPresentation {
+  accessibleLabel: string;
+  icon: string;
+  label: string;
+}
+
+function outcomePresentation(status: PrayerOutcomeStatus): PrayerStatusPresentation {
   switch (status) {
-    case 'on_time': return 'On time';
-    case 'late': return 'Late';
-    case 'missed': return 'Missed';
-    default: return 'Legacy — classify';
+    case 'on_time': return { accessibleLabel: 'Prayed on time', icon: '✓', label: 'Prayed' };
+    case 'late': return { accessibleLabel: 'Prayed late', icon: '✓', label: 'Prayed late' };
+    case 'missed': return { accessibleLabel: 'Missed, not confirmed', icon: '×', label: 'Missed' };
+    default: return { accessibleLabel: 'Needs review', icon: '?', label: 'Review' };
   }
 }
 
-function temporalLabel(state: PrayerTemporalState): string {
+function temporalPresentation(state: PrayerTemporalState): PrayerStatusPresentation {
   switch (state) {
-    case 'current': return 'Current';
-    case 'next': return 'Next';
-    case 'upcoming': return 'Upcoming';
-    case 'past': return 'Past — not recorded';
-    case 'not_tracked': return 'Before tracking';
-    default: return 'Schedule pending';
+    case 'current': return { accessibleLabel: 'Current prayer', icon: '●', label: 'Now' };
+    case 'next': return { accessibleLabel: 'Next prayer', icon: '→', label: 'Next' };
+    case 'upcoming': return { accessibleLabel: 'Upcoming', icon: '○', label: 'Upcoming' };
+    case 'past': return { accessibleLabel: 'Past, not confirmed', icon: '!', label: 'Check' };
+    case 'not_tracked': return { accessibleLabel: 'Before tracking', icon: '–', label: 'Untracked' };
+    default: return { accessibleLabel: 'Schedule pending', icon: '…', label: 'Pending' };
   }
 }
 
@@ -585,21 +591,24 @@ export default function NightCompassDashboard() {
                         : opportunityTracked
                           ? 'past'
                           : 'not_tracked';
-                  const stateLabel = outcome ? outcomeLabel(outcome) : temporalLabel(temporalState);
+                  const statusPresentation = outcome
+                    ? outcomePresentation(outcome)
+                    : temporalPresentation(temporalState);
                   const completed = outcome === 'on_time' || outcome === 'late';
                   return (
                     <li className="nc-prayer-node" key={name}>
                       <button
                         type="button"
                         className={`nc-prayer-item temporal-${temporalState} ${outcome ? `outcome-${outcome}` : ''}`}
+                        data-prayer-status={outcome ?? temporalState}
                         disabled={completed || isTomorrowOccurrence}
                         aria-label={isTomorrowOccurrence
                           ? `${name} Prayer — Next tomorrow`
                           : outcome === 'unclassified'
                             ? `Classify ${name} Prayer — Legacy record`
                             : completed
-                              ? `${name} Prayer — completed, ${stateLabel}`
-                              : `Complete ${name} Prayer`}
+                              ? `${name} Prayer — confirmed, ${statusPresentation.accessibleLabel}`
+                              : `Complete ${name} Prayer — ${statusPresentation.accessibleLabel}`}
                         aria-current={isCurrent || (!currentPrayer && isNext) ? 'true' : undefined}
                         onClick={() => prayer.requestPrayerCompletion(name, { source: 'dashboard' })}
                       >
@@ -609,7 +618,12 @@ export default function NightCompassDashboard() {
                         </span>
                         <span className="nc-prayer-arabic">{entry?.nameArabic ?? PRAYER_NAMES[name]?.arabic}</span>
                         <time>{entry?.time ?? '—'}</time>
-                        <span className="nc-prayer-state">{stateLabel}</span>
+                        <span className="nc-prayer-state">
+                          <span className="nc-prayer-state-icon" aria-hidden="true">
+                            {statusPresentation.icon}
+                          </span>
+                          <span>{statusPresentation.label}</span>
+                        </span>
                       </button>
                     </li>
                   );
