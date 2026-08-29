@@ -28,6 +28,7 @@ HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the lin
 - Update relevant docs and `docs/feature-status.md` when product status changes.
 - A new or materially changed account-data feature must expose and test a narrow semantic agent interface, or record the missing MCP capability as an explicit acceptance blocker. See `docs/agent-access.md`.
 - Keep the required GitHub checks and their stable names aligned with the hosted web pipeline.
+- After a completed Sabah One feature passes its required gates, proceed directly through the protected PR, merge, GitHub Pages deployment, and live-verification path without waiting for user review. This project-specific standing authorization does not bypass protected controls, release evidence, or Sol ownership, and any blocker that needs new user authority must still be surfaced.
 - Protected `master` promotion, GitHub Pages deployment, Supabase function deployment, and live verification are Sol-owned acceptance steps.
 - Never describe branch-only work as deployed or live.
 
