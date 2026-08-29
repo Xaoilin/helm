@@ -4,6 +4,7 @@ import type {
   PrayerTrackingState,
   Settings,
 } from '../types/domain';
+import { validateIanaTimeZone } from '../services/timeZone';
 import { KNOWN_SHARED_STORE_KEY_SET, SHARED_STORE_KEY_SET } from './storeKeys';
 
 export interface EncodedStoreRecord {
@@ -33,6 +34,7 @@ const SHARED_SETTING_FIELDS = new Set<string>([
   'theme',
   'dataRetentionDays',
   'telemetry',
+  'appTimezone',
   'defaultCalendarTab',
   'goalTags',
   'prayerEnabled',
@@ -82,6 +84,9 @@ export function splitSettings(value: unknown): {
   for (const [key, entry] of Object.entries(value)) {
     if (DEVICE_SETTING_FIELD_SET.has(key)) {
       (device as Record<string, unknown>)[key] = entry;
+    } else if (key === 'appTimezone') {
+      const timeZone = validateIanaTimeZone(entry);
+      if (timeZone) shared.appTimezone = timeZone;
     } else if (SHARED_SETTING_FIELDS.has(key)) {
       (shared as Record<string, unknown>)[key] = entry;
     }

@@ -411,6 +411,13 @@ export default function NightCompassDashboard() {
           </span>
         </div>
 
+        {prayer.schedule?.timezone
+          && prayer.schedule.timezone !== settings.appTimeZone.effectiveTimeZone && (
+          <div className="nc-time-zone-boundary" role="status">
+            Prayer schedule: {prayer.schedule.timezone} · App time: {settings.appTimeZone.effectiveTimeZone}
+          </div>
+        )}
+
         {!prayerEnabled ? (
           <div className="nc-prayer-repair" role="status">
             <strong>Keep Prayer at the centre of Night Compass</strong>

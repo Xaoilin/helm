@@ -1023,6 +1023,7 @@ export interface Settings {
   theme: 'dark' | 'light';
   dataRetentionDays: number;
   telemetry: boolean;
+  appTimezone?: string;
   googleOAuthClientId?: string;
   defaultCalendarTab?: 'month' | 'week' | 'agenda' | 'accounts';
   supabaseUrl?: string;

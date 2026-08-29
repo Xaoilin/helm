@@ -2,7 +2,7 @@
 // No SDK dependency — uses native fetch
 
 import { API_TIMEOUT } from '../config/constants';
-import { toLocalDateStr } from './financeHelpers';
+import { getZonedDate, shiftIsoDate, validateIanaTimeZone } from './timeZone';
 import { googleCalendarBreaker } from './serviceBreakers';
 import { withRetry } from './retry';
 
@@ -255,15 +255,18 @@ export function localEventToGooglePayload(event: {
   end: string;
   allDay: boolean;
   location?: string;
-}): GoogleEventPayload {
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+}, timeZone: string): GoogleEventPayload {
+  const tz = validateIanaTimeZone(timeZone);
+  if (!tz) throw new Error('A valid app time zone is required for Google Calendar writes.');
 
   if (event.allDay) {
-    const startDate = event.start.split('T')[0];
+    const startDate = getZonedDate(new Date(event.start), tz);
+    const eventEndDate = getZonedDate(new Date(event.end), tz);
+    const endDate = eventEndDate ? shiftIsoDate(eventEndDate, 1) : null;
+    if (!startDate || !endDate) {
+      throw new Error('The all-day event dates are invalid.');
+    }
     // Google all-day end is exclusive, so add a day
-    const endD = new Date(event.end);
-    endD.setDate(endD.getDate() + 1);
-    const endDate = toLocalDateStr(endD);
     return {
       summary: event.title,
       description: event.description || undefined,

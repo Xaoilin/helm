@@ -370,6 +370,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
         gamification: gamification.gamification,
         goalTags: settings.settings.goalTags,
         prayerTimes,
+        prayerDate: prayerData?.date,
+        prayerTimezone: prayerData?.timezone,
+        timezone: settings.appTimeZone.effectiveTimeZone,
         currentSurface: shell.surface,
       }, {
         lang,
@@ -479,6 +482,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     scheduleHandsFreeListening,
     setVoiceSessionMode,
     settings.settings,
+    settings.appTimeZone.effectiveTimeZone,
     shell,
     speakMessage,
     tasks,

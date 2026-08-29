@@ -2767,6 +2767,95 @@ textarea.form-input {
   font-size: 10px;
 }
 
+.app-time-zone-settings {
+  display: grid;
+  gap: 14px;
+}
+
+.app-time-zone-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.app-time-zone-heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.app-time-zone-heading strong {
+  font-size: 13px;
+  color: var(--mc-strong);
+}
+
+.app-time-zone-heading span,
+.app-time-zone-help,
+.app-time-zone-source {
+  color: #6b6f85;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.app-time-zone-field {
+  margin-bottom: 0;
+  max-width: 620px;
+}
+
+.app-time-zone-field .form-input.is-invalid {
+  border-color: #ef6464;
+}
+
+.app-time-zone-help {
+  margin-top: 5px;
+}
+
+.app-time-zone-actions {
+  flex-wrap: wrap;
+}
+
+.app-time-zone-status,
+.app-time-zone-prayer-boundary {
+  border: 1px solid #2a3047;
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.app-time-zone-status.saving {
+  color: #a5b4fc;
+  background: rgba(79, 91, 255, 0.1);
+}
+
+.app-time-zone-status.saved {
+  color: #78dba5;
+  background: #13291f;
+  border-color: #24553c;
+}
+
+.app-time-zone-status.error {
+  color: #ff9b9b;
+  background: rgba(239, 100, 100, 0.08);
+  border-color: rgba(239, 100, 100, 0.45);
+}
+
+.app-time-zone-prayer-boundary {
+  color: #f8c66a;
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.32);
+}
+
+@media (max-width: 520px) {
+  .app-time-zone-heading {
+    display: grid;
+  }
+
+  .app-time-zone-actions .btn {
+    width: 100%;
+  }
+}
+
 .debug-prayer-layout {
   display: grid;
   gap: 14px;
@@ -5502,6 +5591,22 @@ textarea.form-input {
   color: var(--nc-text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+.nc-time-zone-boundary {
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px auto 0;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--nc-emerald-strong) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nc-surface) 88%, transparent);
+  color: var(--nc-text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .nc-next-prayer {

@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from 'react';
 import type {
-  GamificationProfile,
   PrayerCompletionSource,
   PrayerCompletionStatus,
   PrayerCompletionUndoData,
@@ -20,44 +19,29 @@ import type {
   PrayerScheduleDay,
   PrayerTrackingRecord,
   PrayerTrackingState,
-  Task,
 } from '../../types/domain';
 import { PRAYER_REMINDERS } from '../../config/constants';
-import {
-  buildCompletionContext,
-  levelFromXp,
-  processTaskCompletion,
-  recordHabitCompletion,
-  type CompletionResult,
-} from '../../services/gamification';
+import type { CompletionResult } from '../../services/gamification';
 import { toLocalDateStr } from '../../services/financeHelpers';
 import {
-  formatPrayerInstantTime,
   getPrayerZonedDate,
   shiftPrayerDate,
   validatePrayerTimeZone,
 } from '../../services/prayerTimeZone';
 import {
-  CANONICAL_PRAYER_NAMES,
-  calculatePrayerOutcomeStats,
   capturePrayerActivationDayEligibility,
   createPrayerTrackingState,
   getPrayerCompletionStatusAt,
   getPrayerDeadlineBounds,
   getPrayerOutcome,
   getPrayerRecordKey,
-  getPrayerRewardLogId,
-  getPrayerReminderKey as getTrackingReminderKey,
-  isPrayerOpportunityTracked,
   normalizePrayerTrackingState,
-  setPrayerOutcome,
   setPrayerReminderReceipt,
 } from '../../services/prayerTracking';
 import {
   cancelAllPrayerReminders,
   cancelPrayerReminder,
   getPrayerReminderPermission,
-  getPrayerReminderKey as getBrowserReminderKey,
   onPrayerReminderFired,
   requestPrayerReminderPermission,
   schedulePrayerReminder,
@@ -66,13 +50,28 @@ import {
   type PrayerReminderPermissionState,
 } from '../../services/browserPrayerReminder';
 import {
-  getNextPrayer,
   getPrayerTimes,
   isAdhanTime,
   type PrayerTime,
   type PrayerTimesData,
 } from '../../services/prayerTimes';
-import { getPrayerTaskName } from '../../services/prayerTasks';
+import type { getNextPrayer } from '../../services/prayerTimes';
+import {
+  applyPrayerCompletionUndo,
+  buildPrayerCompletionTransition,
+  buildPrayerCorrectionTransition,
+} from '../../services/prayerCompletionPolicy';
+import {
+  buildPrayerReminderGroups,
+  buildScheduledPrayerReminderGroup,
+  selectActivePrayerReminder,
+  type PrayerReminderGroup,
+  type ScheduledPrayerReminderGroup,
+} from '../../services/prayerReminderPolicy';
+import {
+  buildPrayerSchedulePolicySnapshot,
+  classifyExpiredPrayerOutcomes,
+} from '../../services/prayerSchedulePolicy';
 import {
   buildBoundedReminderPlan,
   canSnoozeBoundedReminder,
@@ -109,28 +108,7 @@ export interface PrayerCompletionRequest {
   onCompleted?: (result: PrayerCompletionMutationResult) => void;
 }
 
-export interface PrayerReminderGroup {
-  prayerDate: string;
-  prayerNames: PrayerName[];
-  deadlineName: PrayerDeadlineBounds['deadlineName'];
-  deadlineAt: Date;
-  minutesRemaining: number;
-  canSnooze: boolean;
-  timezone: string;
-}
-
-interface ScheduledReminderGroup {
-  groupKey: string;
-  signature: string;
-  prayerDate: string;
-  prayerNames: PrayerName[];
-  leader: PrayerName;
-  deadlineIso: string;
-  fireAtIso: string;
-  reminderKey: string;
-  title: string;
-  body: string;
-}
+export type { PrayerReminderGroup } from '../../services/prayerReminderPolicy';
 
 export interface PrayerDiagnostics {
   scheduleStatus: 'idle' | 'loading' | 'ready' | 'unavailable';
@@ -206,249 +184,6 @@ interface PrayerContextValue {
 
 const PrayerCtx = createContext<PrayerContextValue | null>(null);
 
-function buildScheduleDays(
-  schedule: PrayerTimesData | null,
-  trackingStartedAt: string,
-  today: string,
-): PrayerScheduleDay[] {
-  if (!schedule) return [];
-
-  const start = new Date(trackingStartedAt);
-  if (!Number.isFinite(start.getTime())) return [];
-  const firstDate = toLocalDateStr(start);
-  if (firstDate > today) return [];
-
-  const prayers = schedule.prayers.map(({ name, time }) => ({ name, time }));
-  const days: PrayerScheduleDay[] = [];
-  let cursor = firstDate;
-  while (cursor <= today) {
-    days.push({ date: cursor, timezone: schedule.timezone, prayers });
-    const next = shiftPrayerDate(cursor, 1);
-    if (!next) return [];
-    cursor = next;
-  }
-  return days;
-}
-
-export function canonicalizeTimezone(timezone: string): string {
-  // Validate the explicit zone without asking a potentially overridden Intl
-  // implementation to rewrite it through resolvedOptions().
-  return validatePrayerTimeZone(timezone);
-}
-
-function getMatchingPrayerTasks(tasks: Task[], prayerName: PrayerName): Task[] {
-  return tasks.filter(task => getPrayerTaskName(task) === prayerName);
-}
-
-function getReminderGroups(
-  schedules: readonly PrayerTimesData[],
-  tracking: PrayerTrackingState,
-  today: string,
-  now: Date,
-  reminderMinutes: number,
-): Array<PrayerReminderGroup & { fireAt: Date }> {
-  const scheduleByDate = new Map(schedules.map(schedule => [schedule.date, schedule]));
-  const previousDate = shiftPrayerDate(today, -1);
-  const candidates = previousDate ? [previousDate, today] : [today];
-  const reminders: Array<PrayerReminderGroup & { fireAt: Date }> = [];
-
-  for (const prayerDate of candidates) {
-    const schedule = scheduleByDate.get(prayerDate);
-    if (!schedule) continue;
-    const scheduleEntries = schedule.prayers.map(({ name, time }) => ({ name, time }));
-
-    for (const prayerName of CANONICAL_PRAYER_NAMES) {
-      const outcome = getPrayerOutcome(tracking, prayerDate, prayerName);
-      if (outcome) continue;
-
-      const bounds = getPrayerDeadlineBounds(
-        scheduleEntries,
-        prayerDate,
-        prayerName,
-        schedule.timezone,
-      );
-      if (!bounds || now >= bounds.deadlineAt) continue;
-
-      const fireAt = new Date(bounds.deadlineAt.getTime() - reminderMinutes * 60_000);
-      const minutesRemaining = Math.max(0, (bounds.deadlineAt.getTime() - now.getTime()) / 60_000);
-      reminders.push({
-        prayerDate,
-        prayerNames: [prayerName],
-        deadlineName: bounds.deadlineName,
-        deadlineAt: bounds.deadlineAt,
-        fireAt,
-        minutesRemaining,
-        canSnooze: minutesRemaining > PRAYER_REMINDERS.SNOOZE_CUTOFF_MINUTES,
-        timezone: schedule.timezone,
-      });
-    }
-  }
-
-  return reminders.sort((left, right) => left.deadlineAt.getTime() - right.deadlineAt.getTime());
-}
-
-function buildScheduledReminderGroup(
-  group: PrayerReminderGroup & { fireAt: Date },
-  tracking: PrayerTrackingState,
-): ScheduledReminderGroup | null {
-  const prayerNames = group.prayerNames.filter(prayerName => {
-    const receiptKey = getTrackingReminderKey(group.prayerDate, prayerName, group.deadlineAt);
-    return !tracking.reminderReceipts[receiptKey];
-  });
-  if (prayerNames.length === 0) return null;
-
-  const leader = prayerNames[0];
-  const deadlineIso = group.deadlineAt.toISOString();
-  const fireAtIso = group.fireAt.toISOString();
-  const groupKey = `${group.prayerDate}:${leader}:${group.deadlineAt.getTime()}`;
-  const reminderKey = getBrowserReminderKey({
-    prayerDate: group.prayerDate,
-    prayerName: leader,
-    deadlineIso,
-  });
-  const names = prayerNames.join(' and ');
-  const title = `${names} prayer due soon`;
-  const body = `Pray ${names} before ${group.deadlineName} at ${formatPrayerInstantTime(
-    group.deadlineAt,
-    group.timezone,
-  )}.`;
-
-  return {
-    groupKey,
-    signature: [leader, prayerNames.join(','), deadlineIso, fireAtIso, title, body].join('|'),
-    prayerDate: group.prayerDate,
-    prayerNames,
-    leader,
-    deadlineIso,
-    fireAtIso,
-    reminderKey,
-    title,
-    body,
-  };
-}
-
-function prayerRecordsEqual(
-  left: PrayerTrackingRecord | undefined,
-  right: PrayerTrackingRecord | undefined,
-): boolean {
-  if (!left || !right) return left === right;
-  return left.date === right.date
-    && left.prayerName === right.prayerName
-    && left.status === right.status
-    && left.recordedAt === right.recordedAt
-    && left.rewarded === right.rewarded
-    && left.taskId === right.taskId
-    && left.source === right.source;
-}
-
-function profilesEqual(left: GamificationProfile, right: GamificationProfile): boolean {
-  return left === right || JSON.stringify(left) === JSON.stringify(right);
-}
-
-function reverseHabitTallyDelta(
-  current: Record<string, number> | undefined,
-  before: Record<string, number> | undefined,
-  after: Record<string, number> | undefined,
-): Record<string, number> {
-  const next = { ...(current || {}) };
-  const changedIds = new Set([
-    ...Object.keys(before || {}),
-    ...Object.keys(after || {}),
-  ]);
-  for (const taskId of changedIds) {
-    const delta = (after?.[taskId] || 0) - (before?.[taskId] || 0);
-    if (delta === 0) continue;
-    const value = Math.max(0, (next[taskId] || 0) - delta);
-    if (value > 0) next[taskId] = value;
-    else delete next[taskId];
-  }
-  return next;
-}
-
-function reverseDailyLogDelta(
-  current: Record<string, string[]> | undefined,
-  before: Record<string, string[]> | undefined,
-  after: Record<string, string[]> | undefined,
-): Record<string, string[]> {
-  const next = Object.fromEntries(
-    Object.entries(current || {}).map(([date, taskIds]) => [date, [...taskIds]]),
-  );
-  const changedDates = new Set([
-    ...Object.keys(before || {}),
-    ...Object.keys(after || {}),
-  ]);
-
-  for (const date of changedDates) {
-    const beforeIds = new Set(before?.[date] || []);
-    const afterIds = new Set(after?.[date] || []);
-    const currentIds = new Set(next[date] || []);
-    for (const taskId of afterIds) {
-      if (!beforeIds.has(taskId)) currentIds.delete(taskId);
-    }
-    for (const taskId of beforeIds) {
-      if (!afterIds.has(taskId)) currentIds.add(taskId);
-    }
-    if (currentIds.size > 0) next[date] = [...currentIds];
-    else delete next[date];
-  }
-  return next;
-}
-
-function reversePrayerLedgerDelta(
-  current: GamificationProfile['prayerCompletionLedger'],
-  before: GamificationProfile['prayerCompletionLedger'],
-  after: GamificationProfile['prayerCompletionLedger'],
-): NonNullable<GamificationProfile['prayerCompletionLedger']> {
-  const next = { ...(current || {}) };
-  const changedKeys = new Set([
-    ...Object.keys(before || {}),
-    ...Object.keys(after || {}),
-  ]);
-  for (const key of changedKeys) {
-    const beforeEntry = before?.[key];
-    const afterEntry = after?.[key];
-    if (JSON.stringify(beforeEntry) === JSON.stringify(afterEntry)) continue;
-    if (JSON.stringify(next[key]) !== JSON.stringify(afterEntry)) continue;
-    if (beforeEntry) next[key] = beforeEntry;
-    else delete next[key];
-  }
-  return next;
-}
-
-function reversePrayerGamification(
-  current: GamificationProfile,
-  inverse: PrayerCompletionUndoData,
-): GamificationProfile {
-  const { gamificationBefore: before, gamificationAfter: after } = inverse;
-  if (profilesEqual(current, after)) return before;
-
-  const totalXp = Math.max(0, current.totalXp - (after.totalXp - before.totalXp));
-  return {
-    ...current,
-    totalXp,
-    level: levelFromXp(totalXp),
-    totalTasksCompleted: Math.max(
-      0,
-      current.totalTasksCompleted - (after.totalTasksCompleted - before.totalTasksCompleted),
-    ),
-    habitTallies: reverseHabitTallyDelta(
-      current.habitTallies,
-      before.habitTallies,
-      after.habitTallies,
-    ),
-    dailyLog: reverseDailyLogDelta(
-      current.dailyLog,
-      before.dailyLog,
-      after.dailyLog,
-    ),
-    prayerCompletionLedger: reversePrayerLedgerDelta(
-      current.prayerCompletionLedger,
-      before.prayerCompletionLedger,
-      after.prayerCompletionLedger,
-    ),
-  };
-}
-
 export function usePrayerContext(): PrayerContextValue {
   const ctx = useContext(PrayerCtx);
   if (!ctx) throw new Error('usePrayerContext must be used within PrayerProvider');
@@ -481,7 +216,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const reminderReconcileVersionRef = useRef(0);
   const reminderInventoryInitializedRef = useRef(false);
   const recoveringRewardKeysRef = useRef(new Set<string>());
-  const scheduledGroupsRef = useRef(new Map<string, ScheduledReminderGroup>());
+  const scheduledGroupsRef = useRef(new Map<string, ScheduledPrayerReminderGroup>());
   const scheduledGroupNamesRef = useRef(new Map<string, PrayerName[]>());
   const shownAdhanKeysRef = useRef(new Set<string>());
   const attemptingBoundedKeysRef = useRef(new Set<string>());
@@ -498,8 +233,8 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const reminderMinutes = settingsCtx.settings.prayerReminderMinutes ?? PRAYER_REMINDERS.DEFAULT_MINUTES;
   const city = settingsCtx.settings.prayerCity || 'Bedford';
   const country = settingsCtx.settings.prayerCountry || 'United Kingdom';
-  const localTimezone = canonicalizeTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
-  const scheduleTimezone = canonicalizeTimezone(schedule?.timezone || '');
+  const localTimezone = settingsCtx.appTimeZone.browserTimeZone;
+  const scheduleTimezone = validatePrayerTimeZone(schedule?.timezone || '');
   const scheduleTimezoneValid = Boolean(scheduleTimezone);
   const timezoneMatches = Boolean(scheduleTimezone && localTimezone && scheduleTimezone === localTimezone);
   const today = scheduleTimezone
@@ -510,7 +245,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     [reminderSchedules],
   );
   const reminderTimezonesValid = reminderScheduleList.length > 0
-    && reminderScheduleList.every(candidate => Boolean(canonicalizeTimezone(candidate.timezone || '')));
+    && reminderScheduleList.every(candidate => Boolean(validatePrayerTimeZone(candidate.timezone || '')));
 
   useEffect(() => {
     todayRef.current = today;
@@ -587,7 +322,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     try {
       const data = await getPrayerTimes(city, country, { forceRefresh });
       if (sequence !== refreshSequenceRef.current) return;
-      const timezone = canonicalizeTimezone(data.timezone);
+      const timezone = validatePrayerTimeZone(data.timezone);
       const currentPrayerDate = timezone ? getPrayerZonedDate(new Date(), timezone) : null;
       if (!timezone || !currentPrayerDate) {
         throw new Error('Prayer schedule timezone is invalid or missing.');
@@ -677,65 +412,23 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     });
   }, [commitTracking, loaded, schedule, scheduleTimezoneValid]);
 
-  const scheduleDays = useMemo(
-    () => buildScheduleDays(scheduleTimezoneValid ? schedule : null, tracking.trackingStartedAt, today),
-    [schedule, scheduleTimezoneValid, today, tracking.trackingStartedAt],
-  );
-  const stats = useMemo(
-    () => calculatePrayerOutcomeStats(tracking, scheduleDays, now),
-    [now, scheduleDays, tracking],
-  );
-  const deadlines = useMemo(() => Object.fromEntries(
-    CANONICAL_PRAYER_NAMES.map(prayerName => [
-      prayerName,
-      schedule && scheduleTimezoneValid
-        ? getPrayerDeadlineBounds(schedule.prayers, today, prayerName, schedule.timezone)
-        : null,
-    ]),
-  ) as Record<PrayerName, PrayerDeadlineBounds | null>, [schedule, scheduleTimezoneValid, today]);
-  const nextPrayer = schedule && scheduleTimezoneValid
-    ? getNextPrayer(schedule.prayers, now, schedule.timezone)
-    : null;
+  const schedulePolicy = useMemo(() => buildPrayerSchedulePolicySnapshot({
+    schedule: scheduleTimezoneValid ? schedule : null,
+    tracking,
+    today,
+    now,
+  }), [now, schedule, scheduleTimezoneValid, today, tracking]);
+  const { scheduleDays, stats, deadlines, nextPrayer } = schedulePolicy;
 
   useEffect(() => {
     if (!loaded || !reminderTimezonesValid) return;
-    let next = tracking;
-    let changed = false;
-
-    const previousDate = shiftPrayerDate(today, -1);
-    for (const prayerDate of previousDate ? [previousDate, today] : [today]) {
-      const daySchedule = reminderSchedules[prayerDate];
-      if (!daySchedule) continue;
-      const scheduleDay = {
-        date: prayerDate,
-        timezone: daySchedule.timezone,
-        prayers: daySchedule.prayers,
-      };
-      for (const prayerName of CANONICAL_PRAYER_NAMES) {
-        if (getPrayerOutcome(next, prayerDate, prayerName)) continue;
-        const bounds = getPrayerDeadlineBounds(
-          daySchedule.prayers,
-          prayerDate,
-          prayerName,
-          daySchedule.timezone,
-        );
-        if (
-          !bounds
-          || !isPrayerOpportunityTracked(next, scheduleDay, prayerName, now)
-          || now < bounds.deadlineAt
-        ) continue;
-        next = setPrayerOutcome(next, {
-          date: prayerDate,
-          prayerName,
-          status: 'missed',
-          recordedAt: now,
-          source: 'system',
-        });
-        changed = true;
-      }
-    }
-
-    if (changed) commitTracking(next);
+    const next = classifyExpiredPrayerOutcomes({
+      schedules: reminderSchedules,
+      tracking,
+      today,
+      now,
+    });
+    if (next !== tracking) commitTracking(next);
   }, [commitTracking, loaded, now, reminderSchedules, reminderTimezonesValid, today, tracking]);
 
   const cancelScheduledReminderForPrayer = useCallback((
@@ -764,157 +457,62 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     options: CompletePrayerOptions = {},
   ): PrayerCompletionMutationResult => {
     const completedAt = new Date();
-    const prayerDate = options.prayerDate || toLocalDateStr(completedAt);
+    const prayerDate = options.prayerDate || today;
     const source = options.source || 'system';
-    const trackingBefore = trackingRef.current;
-    const gamificationBefore = gamificationRef.current;
-    const matchingTasks = getMatchingPrayerTasks(taskCtx.tasks, prayerName);
-    const task = matchingTasks.find(candidate => candidate.id === options.taskId) || matchingTasks[0];
-    const existingOutcome = getPrayerOutcome(trackingBefore, prayerDate, prayerName);
-    const rewardKey = getPrayerRecordKey(prayerDate, prayerName);
-    const canonicalLogId = getPrayerRewardLogId(prayerName);
-    const relevantLogIds = new Set([
-      canonicalLogId,
-      ...matchingTasks.map(candidate => candidate.id),
-      ...(existingOutcome?.taskId ? [existingOutcome.taskId] : []),
-    ]);
-    const rewardLogId = task?.id || existingOutcome?.taskId || canonicalLogId;
-    const dayLog = gamificationBefore.dailyLog?.[prayerDate] || [];
-    const alreadyRewarded = Boolean(
-      gamificationBefore.prayerCompletionLedger?.[rewardKey]?.rewarded
-      || dayLog.some(taskId => relevantLogIds.has(taskId)),
-    );
-
-    const nextTracking = setPrayerOutcome(trackingBefore, {
-      date: prayerDate,
+    const transition = buildPrayerCompletionTransition({
       prayerName,
       status,
-      rewarded: true,
-      taskId: task?.id,
+      prayerDate,
       source,
-      recordedAt: completedAt,
-    });
-
-    const taskCompletion = task && prayerDate === toLocalDateStr(completedAt)
-      ? {
-          taskId: task.id,
-          before: {
-            completed: task.completed,
-            ...(task.completedAt !== undefined ? { completedAt: task.completedAt } : {}),
-            ...(task.recurring?.lastReset !== undefined
-              ? { recurringLastReset: task.recurring.lastReset }
-              : {}),
-          },
-          after: {
-            completed: true,
-            completedAt: completedAt.toISOString(),
-            ...(task.recurring ? { recurringLastReset: prayerDate } : {}),
-          },
-        }
-      : undefined;
-
-    let xpEarned = 0;
-    let gamificationResult: CompletionResult | undefined;
-    const cleanedDayLog = dayLog.filter(taskId => !relevantLogIds.has(taskId));
-    const baseDailyLog = { ...(gamificationBefore.dailyLog || {}) };
-    if (cleanedDayLog.length > 0) baseDailyLog[prayerDate] = cleanedDayLog;
-    else delete baseDailyLog[prayerDate];
-    let gamificationAfter: GamificationProfile = {
-      ...gamificationBefore,
-      dailyLog: baseDailyLog,
-    };
-
-    if (!alreadyRewarded) {
-      const todayForXp = toLocalDateStr(completedAt);
-      const completionsToday = taskCtx.tasks.filter(candidate =>
-        candidate.completed && candidate.completedAt && toLocalDateStr(new Date(candidate.completedAt)) === todayForXp
-      ).length;
-      const completionContext = buildCompletionContext(
-        taskCtx.tasks,
-        settingsCtx.settings.goalTags,
-        todayForXp,
-        gamificationBefore,
-        {
-          knowledgeEntries: knowledge.knowledgeEntries.length,
-          knowledgeTopics: knowledge.knowledgeTopics.length,
-          lifestyleHaramMastered: knowledge.lifestyleItems.filter(item => item.type === 'haram' && item.status === 'mastered').length,
-          lifestyleHalalConsistent: knowledge.lifestyleItems.filter(item => item.type === 'halal' && item.status === 'consistent').length,
-          lifestyleTotal: knowledge.lifestyleItems.length,
-        },
-      );
-      const result = processTaskCompletion(
-        gamificationAfter,
-        task || { priority: 'medium', category: 'prayer' },
-        completionsToday,
-        completedAt,
-        completionContext,
-      );
-      gamificationResult = result;
-      xpEarned = result.xpEarned;
-      gamificationAfter = recordHabitCompletion(result.updatedProfile, rewardLogId, prayerDate);
-    } else {
-      gamificationAfter = {
-        ...gamificationAfter,
-        dailyLog: {
-          ...(gamificationAfter.dailyLog || {}),
-          [prayerDate]: [...cleanedDayLog, rewardLogId],
-        },
-      };
-    }
-
-    gamificationAfter = {
-      ...gamificationAfter,
-      prayerCompletionLedger: {
-        ...(gamificationAfter.prayerCompletionLedger || {}),
-        [rewardKey]: {
-          date: prayerDate,
-          prayerName,
-          status,
-          recordedAt: completedAt.toISOString(),
-          rewarded: true,
-          ...(task?.id ? { taskId: task.id } : {}),
-          source,
-        },
+      completedAt,
+      taskId: options.taskId,
+      tasks: taskCtx.tasks,
+      tracking: trackingRef.current,
+      gamification: gamificationRef.current,
+      goalTags: settingsCtx.settings.goalTags,
+      knowledge: {
+        knowledgeEntries: knowledge.knowledgeEntries.length,
+        knowledgeTopics: knowledge.knowledgeTopics.length,
+        lifestyleHaramMastered: knowledge.lifestyleItems.filter(
+          item => item.type === 'haram' && item.status === 'mastered',
+        ).length,
+        lifestyleHalalConsistent: knowledge.lifestyleItems.filter(
+          item => item.type === 'halal' && item.status === 'consistent',
+        ).length,
+        lifestyleTotal: knowledge.lifestyleItems.length,
       },
-    };
+      scheduleTimeZone: scheduleTimezone,
+    });
 
     // Both stores retain the canonical receipt. Hydration can repair either
     // side after an interrupted multi-store write without granting XP twice.
-    commitTracking(nextTracking);
-    gamificationRef.current = gamificationAfter;
-    gamificationCtx.updateGamification(gamificationAfter);
+    commitTracking(transition.trackingAfter);
+    gamificationRef.current = transition.gamificationAfter;
+    gamificationCtx.updateGamification(transition.gamificationAfter);
 
-    if (taskCompletion) {
-      taskCtx.updateTask(task.id, {
-        completed: taskCompletion.after.completed,
-        completedAt: taskCompletion.after.completedAt,
-        ...(task.recurring
-          ? { recurring: { ...task.recurring, lastReset: taskCompletion.after.recurringLastReset } }
+    if (transition.taskCompletion && transition.task) {
+      taskCtx.updateTask(transition.task.id, {
+        completed: transition.taskCompletion.after.completed,
+        completedAt: transition.taskCompletion.after.completedAt,
+        ...(transition.task.recurring
+          ? {
+              recurring: {
+                ...transition.task.recurring,
+                lastReset: transition.taskCompletion.after.recurringLastReset,
+              },
+            }
           : {}),
       });
     }
 
     cancelScheduledReminderForPrayer(prayerDate, prayerName);
-    const outcomeAfter = getPrayerOutcome(nextTracking, prayerDate, prayerName);
-    if (!outcomeAfter) {
-      throw new Error(`Prayer outcome was not recorded for ${prayerName} on ${prayerDate}.`);
-    }
-
     return {
-      undo: {
-        prayerDate,
-        prayerName,
-        ...(taskCompletion ? { taskCompletion } : {}),
-        ...(existingOutcome ? { outcomeBefore: existingOutcome } : {}),
-        outcomeAfter,
-        gamificationBefore,
-        gamificationAfter,
-      },
-      xpEarned,
+      undo: transition.undo,
+      xpEarned: transition.xpEarned,
       status,
       prayerName,
       prayerDate,
-      gamificationResult,
+      gamificationResult: transition.gamificationResult,
     };
   }, [
     commitTracking,
@@ -924,7 +522,9 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     knowledge.knowledgeTopics.length,
     knowledge.lifestyleItems,
     settingsCtx.settings.goalTags,
+    scheduleTimezone,
     taskCtx,
+    today,
   ]);
 
   useEffect(() => {
@@ -1000,66 +600,30 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     prayerName: PrayerName,
     status: PrayerOutcomeStatus,
   ) => {
-    const matchingTasks = getMatchingPrayerTasks(taskCtx.tasks, prayerName);
-    const current = trackingRef.current;
-    const existingRecord = getPrayerOutcome(current, prayerDate, prayerName);
-    const targetTask = matchingTasks[0];
-    const canonicalLogId = getPrayerRewardLogId(prayerName);
-    const targetLogId = targetTask?.id || existingRecord?.taskId || canonicalLogId;
-    const relevantLogIds = new Set([
-      canonicalLogId,
-      ...matchingTasks.map(task => task.id),
-      ...(existingRecord?.taskId ? [existingRecord.taskId] : []),
-    ]);
     const correctedAt = new Date();
-    commitTracking(setPrayerOutcome(current, {
-      date: prayerDate,
+    const transition = buildPrayerCorrectionTransition({
+      prayerDate,
       prayerName,
       status,
-      taskId: targetTask?.id,
-      source: 'history',
-      recordedAt: correctedAt,
-    }));
+      correctedAt,
+      tasks: taskCtx.tasks,
+      tracking: trackingRef.current,
+      gamification: gamificationRef.current,
+    });
+    commitTracking(transition.trackingAfter);
     cancelScheduledReminderForPrayer(prayerDate, prayerName);
+    gamificationRef.current = transition.gamificationAfter;
+    gamificationCtx.updateGamification(transition.gamificationAfter);
 
-    const currentProfile = gamificationRef.current;
-    const existingLog = currentProfile.dailyLog?.[prayerDate] || [];
-    const completed = status === 'on_time' || status === 'late' || status === 'unclassified';
-    const cleanedLog = existingLog.filter(taskId => !relevantLogIds.has(taskId));
-    const nextDayLog = completed ? [...cleanedLog, targetLogId] : cleanedLog;
-    const nextDailyLog = { ...(currentProfile.dailyLog || {}) };
-    if (nextDayLog.length > 0) nextDailyLog[prayerDate] = nextDayLog;
-    else delete nextDailyLog[prayerDate];
-    const rewardKey = getPrayerRecordKey(prayerDate, prayerName);
-    const previousLedger = currentProfile.prayerCompletionLedger?.[rewardKey];
-    const nextProfile = {
-      ...currentProfile,
-      dailyLog: nextDailyLog,
-      prayerCompletionLedger: {
-        ...(currentProfile.prayerCompletionLedger || {}),
-        [rewardKey]: {
-          date: prayerDate,
-          prayerName,
-          status,
-          recordedAt: correctedAt.toISOString(),
-          rewarded: previousLedger?.rewarded === true || existingRecord?.rewarded === true,
-          ...(targetTask?.id ? { taskId: targetTask.id } : {}),
-          source: 'history',
-        },
-      },
-    };
-    gamificationRef.current = nextProfile;
-    gamificationCtx.updateGamification(nextProfile);
-
-    if (prayerDate === toLocalDateStr(correctedAt) && targetTask) {
-      taskCtx.updateTask(targetTask.id, {
-        completed,
-        completedAt: completed
+    if (prayerDate === today && transition.targetTask) {
+      taskCtx.updateTask(transition.targetTask.id, {
+        completed: transition.completed,
+        completedAt: transition.completed
           ? correctedAt.toISOString()
           : undefined,
       });
     }
-  }, [cancelScheduledReminderForPrayer, commitTracking, gamificationCtx, taskCtx]);
+  }, [cancelScheduledReminderForPrayer, commitTracking, gamificationCtx, taskCtx, today]);
 
   const getOutcome = useCallback(
     (prayerDate: string, prayerName: PrayerName) => getPrayerOutcome(tracking, prayerDate, prayerName),
@@ -1067,24 +631,14 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   );
 
   const undoPrayerCompletion = useCallback((inverse: PrayerCompletionUndoData) => {
-    commitTracking(current => {
-      const key = getPrayerRecordKey(inverse.prayerDate, inverse.prayerName);
-      const currentOutcome = current.records[key];
-      if (!prayerRecordsEqual(currentOutcome, inverse.outcomeAfter)) {
-        throw new Error(
-          `${inverse.prayerName} on ${inverse.prayerDate} changed after completion and was not undone.`,
-        );
-      }
-
-      const records = { ...current.records };
-      if (inverse.outcomeBefore) records[key] = inverse.outcomeBefore;
-      else delete records[key];
-      return { ...current, records };
-    });
-
-    const nextProfile = reversePrayerGamification(gamificationRef.current, inverse);
-    gamificationRef.current = nextProfile;
-    gamificationCtx.updateGamification(nextProfile);
+    const transition = applyPrayerCompletionUndo(
+      trackingRef.current,
+      gamificationRef.current,
+      inverse,
+    );
+    commitTracking(transition.trackingAfter);
+    gamificationRef.current = transition.gamificationAfter;
+    gamificationCtx.updateGamification(transition.gamificationAfter);
   }, [commitTracking, gamificationCtx]);
 
   const replacePrayerTracking = useCallback((state: PrayerTrackingState) => {
@@ -1092,33 +646,26 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   }, [commitTracking]);
 
   const reminderGroups = useMemo(
-    () => getReminderGroups(reminderScheduleList, tracking, today, now, reminderMinutes),
+    () => buildPrayerReminderGroups({
+      schedules: reminderScheduleList,
+      tracking,
+      today,
+      now,
+      reminderMinutes,
+    }),
     [now, reminderMinutes, reminderScheduleList, today, tracking],
   );
 
   const activeReminder = useMemo(() => {
     if (!prayerEnabled || !reminderEnabled || !reminderTimezonesValid) return null;
-    const active = reminderGroups.find(group => {
-      if (now < group.fireAt || now >= group.deadlineAt) return false;
-      return group.prayerNames.some(prayerName => {
-        const receiptKey = getTrackingReminderKey(group.prayerDate, prayerName, group.deadlineAt);
-        const snoozedUntil = tracking.reminderReceipts[receiptKey]?.snoozedUntil;
-        return !snoozedUntil || now >= new Date(snoozedUntil);
-      });
-    });
-    if (!active) return null;
-    const alreadySnoozed = active.prayerNames.some(prayerName => {
-      const receiptKey = getTrackingReminderKey(active.prayerDate, prayerName, active.deadlineAt);
-      return Boolean(tracking.reminderReceipts[receiptKey]?.snoozedUntil);
-    });
-    return { ...active, canSnooze: active.canSnooze && !alreadySnoozed };
+    return selectActivePrayerReminder(reminderGroups, tracking, now);
   }, [
     now,
     prayerEnabled,
     reminderEnabled,
     reminderGroups,
     reminderTimezonesValid,
-    tracking.reminderReceipts,
+    tracking,
   ]);
 
   const boundedReminderPlans = useMemo(() => {
@@ -1295,10 +842,10 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
       && reminderEnabled
       && reminderListenerReady
       && reminderTimezonesValid;
-    const desired = new Map<string, ScheduledReminderGroup>();
+    const desired = new Map<string, ScheduledPrayerReminderGroup>();
     if (enabled) {
       for (const group of reminderGroups) {
-        const scheduled = buildScheduledReminderGroup(group, tracking);
+        const scheduled = buildScheduledPrayerReminderGroup(group, tracking);
         if (scheduled) desired.set(scheduled.groupKey, scheduled);
       }
     }

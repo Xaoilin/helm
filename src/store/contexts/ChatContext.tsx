@@ -54,6 +54,7 @@ export interface ChatCrossDomainData {
   assistantCorrections: AssistantCorrection[];
   gamification: GamificationProfile;
   settings: Settings;
+  appTimeZone: string;
   recordAssistantActivity: (activity: AssistantActivityDraft) => string;
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateTask: (id: string, updates: Partial<Task>) => void;
@@ -254,6 +255,7 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
       lifestyleItems: crossDomain.lifestyleItems,
       gamification: crossDomain.gamification,
       goalTags: crossDomain.settings.goalTags,
+      timezone: crossDomain.appTimeZone,
       currentSurface: 'chat',
     }, {
       lang: crossDomain.settings.assistantLanguage || 'en',

@@ -11,6 +11,7 @@ const persistenceMocks = vi.hoisted(() => ({
   loadStore: vi.fn(),
   saveDeviceStore: vi.fn(),
   saveStore: vi.fn(),
+  saveStoreCommitted: vi.fn(),
   subscribeStoreKey: vi.fn(),
 }));
 
@@ -31,6 +32,21 @@ function SettingsProbe() {
   );
 }
 
+function TimeZoneProbe() {
+  const { appTimeZone, saveAppTimeZonePreference } = useSettingsContext();
+  return (
+    <div>
+      <span>{`${appTimeZone.source}|${appTimeZone.effectiveTimeZone}`}</span>
+      <button type="button" onClick={() => void saveAppTimeZonePreference('America/New_York')}>
+        Save New York
+      </button>
+      <button type="button" onClick={() => void saveAppTimeZonePreference(undefined)}>
+        Use Automatic
+      </button>
+    </div>
+  );
+}
+
 describe('settings shared/device partition', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -42,6 +58,7 @@ describe('settings shared/device partition', () => {
       supabaseUrl: 'https://device.example.test',
     });
     persistenceMocks.saveStore.mockResolvedValue(undefined);
+    persistenceMocks.saveStoreCommitted.mockResolvedValue(undefined);
     persistenceMocks.saveDeviceStore.mockResolvedValue(undefined);
     persistenceMocks.subscribeStoreKey.mockReturnValue(() => undefined);
   });
@@ -60,6 +77,14 @@ describe('settings shared/device partition', () => {
         supabaseUrl: 'https://device.example.test',
       },
     });
+  });
+
+  it('allows only validated account-shared IANA app time zones', () => {
+    expect(splitSettings({ appTimezone: 'America/New_York' })).toEqual({
+      shared: { appTimezone: 'America/New_York' },
+      device: {},
+    });
+    expect(splitSettings({ appTimezone: 'Not/AZone' })).toEqual({ shared: {}, device: {} });
   });
 
   it('proves SettingsContext hydrates both stores and writes device fields through the device path', async () => {
@@ -99,5 +124,33 @@ describe('settings shared/device partition', () => {
     expect(source).toContain('loadDeviceStore<DeviceSettings>');
     expect(source).toContain('saveDeviceStore(DEVICE_SETTINGS_STORE_KEY, splitSettings(settings).device)');
     expect(source).toContain("saveStore('settings', settings)");
+  });
+
+  it('commits a preferred app time zone before publishing it and clears back to Automatic', async () => {
+    persistenceMocks.loadStore.mockImplementation(async (key: string) => (
+      key === 'settings' ? { appTimezone: 'Europe/London' } : []
+    ));
+    render(
+      <SettingsProvider>
+        <TimeZoneProbe />
+      </SettingsProvider>,
+    );
+
+    await screen.findByText('preference|Europe/London');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save New York' }));
+    });
+    expect(persistenceMocks.saveStoreCommitted).toHaveBeenLastCalledWith(
+      'settings',
+      expect.objectContaining({ appTimezone: 'America/New_York' }),
+    );
+    expect(screen.getByText('preference|America/New_York')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Use Automatic' }));
+    });
+    const committedSettings = persistenceMocks.saveStoreCommitted.mock.calls.at(-1)?.[1] as Settings;
+    expect(committedSettings).not.toHaveProperty('appTimezone');
+    expect(screen.getByText(/automatic\||utc-fallback\|/)).toBeInTheDocument();
   });
 });

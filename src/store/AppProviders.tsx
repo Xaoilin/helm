@@ -78,6 +78,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
     assistantCorrections: assistant.corrections,
     gamification: gamification.gamification,
     settings: settings.settings,
+    appTimeZone: settings.appTimeZone.effectiveTimeZone,
     recordAssistantActivity: activity.recordAssistantActivity,
     addTask: tasks.addTask,
     updateTask: tasks.updateTask,
@@ -108,6 +109,7 @@ function ChatBridge({ children }: { children: ReactNode }) {
     gamification,
     prayer,
     settings.settings,
+    settings.appTimeZone.effectiveTimeZone,
   ]);
 
   return <ChatProvider crossDomain={crossDomain}>{children}</ChatProvider>;
