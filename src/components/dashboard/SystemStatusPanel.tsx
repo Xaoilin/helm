@@ -10,7 +10,9 @@ import {
   type HealthActionKind,
   type HealthItem,
 } from '../../services/systemHealth';
-import { useApp } from '../../store/AppContext';
+import { useShell } from "../../store/ShellContext";
+import { useCalendar } from "../../store/contexts/CalendarContext";
+import { useSettingsContext } from "../../store/contexts/SettingsContext";
 import {
   getPersistenceHealthSnapshot,
   subscribePersistenceHealth,
@@ -53,7 +55,9 @@ function toneLabel(tone: HealthItem['tone']): string {
 }
 
 export default function SystemStatusPanel() {
-  const app = useApp();
+  const shell = useShell();
+  const calendar = useCalendar();
+  const settings = useSettingsContext();
   const googleSync = useGoogleSync();
   const mountedRef = useRef(true);
   const [persistence, setPersistence] = useState<PersistenceHealthSnapshot>(() => getPersistenceHealthSnapshot());
@@ -65,8 +69,8 @@ export default function SystemStatusPanel() {
   const [ollamaCheckedAt, setOllamaCheckedAt] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const hostedModel = getHostedAssistantModelSetting(app.settings);
-  const ollamaEndpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
+  const hostedModel = getHostedAssistantModelSetting(settings.settings);
+  const ollamaEndpoint = settings.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
 
   const applyProbeResults = useCallback((
     checkedAt: string,
@@ -127,7 +131,7 @@ export default function SystemStatusPanel() {
   }, [applyProbeResults, hostedModel, ollamaEndpoint]);
 
   const snapshot = useMemo(() => buildSystemHealthSnapshot({
-    appLoaded: app.loaded,
+    appLoaded: true,
     persistence,
     supabase: {
       ready: isSupabaseReady(),
@@ -135,7 +139,7 @@ export default function SystemStatusPanel() {
       bootstrapped: isAuthSessionBootstrapped(),
     },
     calendar: {
-      accounts: app.calendarAccounts,
+      accounts: calendar.calendarAccounts,
       syncState: googleSync.syncState,
       lastSyncTime: googleSync.lastSyncTime,
       syncError: googleSync.syncError,
@@ -152,14 +156,13 @@ export default function SystemStatusPanel() {
       checkedAt: ollamaCheckedAt,
     },
     voice: {
-      settings: app.settings,
-      deepgramKeyPresent: Boolean(DEEPGRAM_API_KEY || app.settings.deepgramApiKey),
+      settings: settings.settings,
+      deepgramKeyPresent: Boolean(DEEPGRAM_API_KEY || settings.settings.deepgramApiKey),
       browserSpeechAvailable: isBrowserSpeechAvailable(),
     },
   }), [
-    app.calendarAccounts,
-    app.loaded,
-    app.settings,
+    calendar.calendarAccounts,
+    settings.settings,
     googleSync.lastSyncTime,
     googleSync.syncError,
     googleSync.syncState,
@@ -184,13 +187,13 @@ export default function SystemStatusPanel() {
           await signInWithGoogle();
           break;
         case 'settings':
-          app.navigate('settings');
+          shell.navigate('settings');
           break;
         case 'integrations':
-          app.navigate('integrations');
+          shell.navigate('integrations');
           break;
         case 'calendar':
-          app.navigate('calendar');
+          shell.navigate('calendar');
           break;
         default:
           break;
@@ -198,7 +201,7 @@ export default function SystemStatusPanel() {
     } catch (error) {
       setActionError(sanitizeHealthDetail(error instanceof Error ? error.message : String(error)));
     }
-  }, [app, refreshStatus]);
+  }, [refreshStatus, shell]);
 
   return (
     <section className="system-status-panel dash-card" aria-label="System status">

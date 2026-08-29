@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { HEALTH_FAST_FOOD } from '../config/constants';
 import { toLocalDateStr } from '../services/financeHelpers';
-import { useApp } from '../store/AppContext';
+import { useHealthContext } from "../store/contexts/HealthContext";
 import type {
   FastFoodExperienceRating,
   FastFoodLogEntry,
@@ -74,7 +74,7 @@ function entrySummary(entry: FastFoodLogEntry): string {
 }
 
 export default function HealthSurface() {
-  const app = useApp();
+  const health = useHealthContext();
   const [referenceDate] = useState(() => new Date());
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [draft, setDraft] = useState<FastFoodDraft>(() => buildDefaultDraft(referenceDate));
@@ -83,11 +83,11 @@ export default function HealthSurface() {
   const yesterday = shiftLocalDate(referenceDate, -1);
 
   const sortedEntries = useMemo(
-    () => [...app.fastFoodEntries].sort((left, right) => {
+    () => [...health.fastFoodEntries].sort((left, right) => {
       if (left.date !== right.date) return right.date.localeCompare(left.date);
       return right.updatedAt.localeCompare(left.updatedAt);
     }),
-    [app.fastFoodEntries],
+    [health.fastFoodEntries],
   );
 
   const latestEntry = sortedEntries[0] ?? null;
@@ -176,12 +176,12 @@ export default function HealthSurface() {
     };
 
     if (editingEntryId) {
-      app.updateFastFoodEntry(editingEntryId, payload);
+      health.updateFastFoodEntry(editingEntryId, payload);
       resetDraft(draft.date);
       return;
     }
 
-    app.addFastFoodEntry(payload);
+    health.addFastFoodEntry(payload);
     resetDraft(today);
   }
 
@@ -417,7 +417,7 @@ export default function HealthSurface() {
                           Edit
                         </button>
                         <button className="btn btn-secondary btn-sm" onClick={() => {
-                          app.removeFastFoodEntry(entry.id);
+                          health.removeFastFoodEntry(entry.id);
                           if (editingEntryId === entry.id) {
                             resetDraft(today);
                           }

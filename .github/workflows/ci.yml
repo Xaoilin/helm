@@ -68,6 +68,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: npm
+      - run: npm ci
       - run: npm run agent:policy
 
   typecheck:

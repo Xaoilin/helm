@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import App from './App';
-import { AppProvider } from './store/AppContext';
+import { AppProviders } from './store/AppProviders';
 import { AuthSessionProvider, useAuthSession } from './store/AuthSessionContext';
 import { SyncAvailabilityProvider } from './store/SyncAvailabilityContext';
 import {
@@ -100,10 +100,10 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
 
   return (
     <SyncAvailabilityProvider readOnly={syncSession.readOnly} reason={syncSession.reason}>
-      <AppProvider key={auth.authUser.id}>
+      <AppProviders key={auth.authUser.id}>
         <SyncStatusBanner syncSession={syncSession} />
         {children ?? <App />}
-      </AppProvider>
+      </AppProviders>
     </SyncAvailabilityProvider>
   );
 }

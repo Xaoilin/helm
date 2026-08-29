@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useApp } from '../store/AppContext';
+import { useAssistantActivityContext } from "../store/contexts/AssistantActivityContext";
+import { useAssistantUndo } from "../store/contexts/AssistantUndoContext";
 import type { AssistantActivityEntry } from '../types/domain';
 
 function formatActivityTime(value: string): string {
@@ -42,17 +43,18 @@ function domainLabel(entry: AssistantActivityEntry): string {
 }
 
 export default function ActivitySurface() {
-  const app = useApp();
+  const activity = useAssistantActivityContext();
+  const assistantUndo = useAssistantUndo();
   const [notice, setNotice] = useState<string>('');
   const [undoingId, setUndoingId] = useState<string | null>(null);
-  const entries = app.assistantActivityLog;
+  const entries = activity.assistantActivityLog;
   const undoableCount = entries.filter(entry => entry.undoOperation && entry.status === 'applied').length;
   const voiceCount = entries.filter(entry => entry.actor === 'voice').length;
 
   function handleUndo(entry: AssistantActivityEntry) {
     if (!entry.undoOperation || entry.status !== 'applied') return;
     setUndoingId(entry.id);
-    const result = app.undoAssistantActivity(entry.id);
+    const result = assistantUndo.undoAssistantActivity(entry.id);
     setNotice(result.message);
     setUndoingId(null);
   }

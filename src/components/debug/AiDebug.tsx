@@ -4,7 +4,7 @@ import {
   HOSTED_ASSISTANT_FUNCTION,
   OLLAMA_ENDPOINT,
 } from '../../config';
-import { useApp } from '../../store/AppContext';
+import { useSettingsContext } from "../../store/contexts/SettingsContext";
 import { getAllCapabilityDefinitions } from '../../assistant/capabilities';
 import {
   getAssistantProviderSetting,
@@ -120,7 +120,7 @@ const SMOKE_TEST_FORMAT = {
 } as const;
 
 export default function AiDebug() {
-  const app = useApp();
+  const settings = useSettingsContext();
   const [runtimeStatus, setRuntimeStatus] = useState<AssistantRuntimeStatus | null>(null);
   const [runtimeCheckedAt, setRuntimeCheckedAt] = useState<string | null>(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
@@ -134,10 +134,10 @@ export default function AiDebug() {
   const [assistantTrace, setAssistantTrace] = useState<AssistantDebugTrace | null>(() => getAssistantDebugTrace());
   const [dashboardFocusTrace, setDashboardFocusTrace] = useState<DashboardFocusDiagnostics | null>(() => getDashboardFocusDiagnostics());
 
-  const providerSetting = getAssistantProviderSetting(app.settings);
-  const selectedHostedModel = getHostedAssistantModelSetting(app.settings);
-  const ollamaEndpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
-  const ollamaModel = app.settings.ollamaModel || 'qwen3';
+  const providerSetting = getAssistantProviderSetting(settings.settings);
+  const selectedHostedModel = getHostedAssistantModelSetting(settings.settings);
+  const ollamaEndpoint = settings.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
+  const ollamaModel = settings.settings.ollamaModel || 'qwen3';
   const sessionSnapshot = getAuthSessionSnapshot();
   const supabaseReady = isSupabaseReady();
   const authenticated = isAuthenticated();
@@ -151,7 +151,7 @@ export default function AiDebug() {
     setRefreshingRuntime(true);
     setRuntimeError(null);
     try {
-      const nextStatus = await getAssistantRuntimeStatus(app.settings);
+      const nextStatus = await getAssistantRuntimeStatus(settings.settings);
       setRuntimeStatus(nextStatus);
       setRuntimeCheckedAt(new Date().toISOString());
     } catch (error) {
@@ -162,7 +162,7 @@ export default function AiDebug() {
     } finally {
       setRefreshingRuntime(false);
     }
-  }, [app.settings]);
+  }, [settings.settings]);
 
   useEffect(() => {
     void refreshRuntime();

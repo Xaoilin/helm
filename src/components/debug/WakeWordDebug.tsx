@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { useApp } from '../../store/AppContext';
+import { useSettingsContext } from "../../store/contexts/SettingsContext";
 import WakeWordEngine from 'openwakeword-wasm-browser';
 import { TIMING } from '../../config/constants';
 
@@ -10,7 +10,7 @@ interface LogEntry {
 }
 
 export default function WakeWordDebug() {
-  const app = useApp();
+  const settings = useSettingsContext();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [engineState, setEngineState] = useState<'idle' | 'loading' | 'running' | 'error'>('idle');
   const [micLevel, setMicLevel] = useState(0);
@@ -29,11 +29,11 @@ export default function WakeWordDebug() {
   // ── Step 1: Check Settings ──
   const checkSettings = () => {
     log('info', '── Step 1: Checking Settings ──');
-    log(app.settings.assistantEnabled !== false ? 'success' : 'error',
-      `Lina enabled: ${app.settings.assistantEnabled !== false}`);
-    log(app.settings.wakeWordEnabled === true ? 'success' : 'error',
-      `Wake word enabled: ${app.settings.wakeWordEnabled === true}`);
-    if (!app.settings.wakeWordEnabled) {
+    log(settings.settings.assistantEnabled !== false ? 'success' : 'error',
+      `Lina enabled: ${settings.settings.assistantEnabled !== false}`);
+    log(settings.settings.wakeWordEnabled === true ? 'success' : 'error',
+      `Wake word enabled: ${settings.settings.wakeWordEnabled === true}`);
+    if (!settings.settings.wakeWordEnabled) {
       log('warn', 'Wake word is disabled in Settings → Voice Assistant. Enable it first.');
     }
   };
@@ -73,13 +73,13 @@ export default function WakeWordDebug() {
       const mics = devices.filter(d => d.kind === 'audioinput');
       log('info', `Found ${mics.length} microphone(s):`);
       mics.forEach((mic, i) => {
-        const selected = mic.deviceId === app.settings.microphoneDeviceId;
+        const selected = mic.deviceId === settings.settings.microphoneDeviceId;
         log('info', `  ${i + 1}. ${mic.label || 'Unnamed'} ${selected ? '← SELECTED' : ''}`);
       });
 
       const constraints: MediaStreamConstraints = {
-        audio: app.settings.microphoneDeviceId
-          ? { deviceId: { exact: app.settings.microphoneDeviceId } }
+        audio: settings.settings.microphoneDeviceId
+          ? { deviceId: { exact: settings.settings.microphoneDeviceId } }
           : true,
       };
 
@@ -192,8 +192,8 @@ export default function WakeWordDebug() {
   const startLevelMonitor = async () => {
     try {
       const constraints: MediaStreamConstraints = {
-        audio: app.settings.microphoneDeviceId
-          ? { deviceId: { exact: app.settings.microphoneDeviceId } }
+        audio: settings.settings.microphoneDeviceId
+          ? { deviceId: { exact: settings.settings.microphoneDeviceId } }
           : true,
       };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);

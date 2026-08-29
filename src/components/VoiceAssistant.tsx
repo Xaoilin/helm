@@ -1,5 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useApp } from '../store/AppContext';
+import { useShell } from "../store/ShellContext";
+import { useCalendar } from "../store/contexts/CalendarContext";
+import { useInventoryContext } from "../store/contexts/InventoryContext";
+import { useKnowledgeContext } from "../store/contexts/KnowledgeContext";
+import { useTaskContext } from "../store/contexts/TaskContext";
+import { useFinanceContext } from "../store/contexts/FinanceContext";
+import { useProjectContext } from "../store/contexts/ProjectContext";
+import { useGamificationContext } from "../store/contexts/GamificationContext";
+import { useSettingsContext } from "../store/contexts/SettingsContext";
+import { useAssistantContext } from "../store/contexts/AssistantContext";
+import { useAssistantActivityContext } from "../store/contexts/AssistantActivityContext";
+import { useAssistantUndo } from "../store/contexts/AssistantUndoContext";
+import { usePrayerContext } from "../store/contexts/PrayerContext";
 import { useChatContext } from '../store/contexts/ChatContext';
 import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY, OLLAMA_ENDPOINT } from '../config';
 import { TIMING, VOICE_SESSION } from '../config/constants';
@@ -35,7 +47,19 @@ function isVoiceStopPhrase(text: string, lang: AssistantLang): boolean {
 }
 
 export default function VoiceAssistant({ prayerData }: Props) {
-  const app = useApp();
+  const shell = useShell();
+  const calendar = useCalendar();
+  const inventory = useInventoryContext();
+  const knowledge = useKnowledgeContext();
+  const tasks = useTaskContext();
+  const finance = useFinanceContext();
+  const projects = useProjectContext();
+  const gamification = useGamificationContext();
+  const settings = useSettingsContext();
+  const assistant = useAssistantContext();
+  const activity = useAssistantActivityContext();
+  const assistantUndo = useAssistantUndo();
+  const prayer = usePrayerContext();
   const chat = useChatContext();
   const [state, setState] = useState<AssistantState>('idle');
   const [transcript, setTranscript] = useState('');
@@ -47,7 +71,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const chatHistoryRef = useRef<AssistantConversationMessage[]>([]);
   const dialogStateRef = useRef<AssistantDialogState>({
-    currentSurface: app.surface,
+    currentSurface: shell.surface,
     recentEntities: [],
     recentPlans: [],
   });
@@ -59,17 +83,17 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const processTranscriptRef = useRef<(text: string, inputMode: InputMode) => Promise<void>>(async () => {});
   const voiceConversationIdRef = useRef<string | null>(null);
 
-  const enabled = app.settings.assistantEnabled !== false;
-  const wakeWordEnabled = app.settings.wakeWordEnabled === true;
+  const enabled = settings.settings.assistantEnabled !== false;
+  const wakeWordEnabled = settings.settings.wakeWordEnabled === true;
   const hasElevenLabs = !!(ELEVENLABS_API_KEY && ELEVENLABS_VOICE_ID);
-  const deepgramKey = DEEPGRAM_API_KEY || app.settings.deepgramApiKey || '';
-  const micDeviceId = app.settings.microphoneDeviceId;
-  const lang: AssistantLang = app.settings.assistantLanguage || 'en';
+  const deepgramKey = DEEPGRAM_API_KEY || settings.settings.deepgramApiKey || '';
+  const micDeviceId = settings.settings.microphoneDeviceId;
+  const lang: AssistantLang = settings.settings.assistantLanguage || 'en';
   const isArabic = lang === 'ar';
   const sttLang = isArabic ? 'ar' : 'en-GB';
-  const ollamaEndpoint = app.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
-  const hostedModel = app.settings.hostedModel;
-  const ollamaModel = app.settings.ollamaModel || undefined;
+  const ollamaEndpoint = settings.settings.ollamaEndpoint || OLLAMA_ENDPOINT;
+  const hostedModel = settings.settings.hostedModel;
+  const ollamaModel = settings.settings.ollamaModel || undefined;
 
   const setVoiceSessionMode = useCallback((mode: VoiceSessionMode) => {
     voiceSessionModeRef.current = mode;
@@ -268,7 +292,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     sessionIdRef.current = sessionId;
     handsFreeSessionActiveRef.current = true;
     const nextDialogState: AssistantDialogState = {
-      currentSurface: app.surface,
+      currentSurface: shell.surface,
       recentEntities: [],
       recentPlans: [],
     };
@@ -302,7 +326,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
       scheduleHandsFreeListening('initial', sessionId);
     })();
-  }, [app.surface, cancelListening, chat, clearScheduledListening, enabled, lang, openAssistantPanel, scheduleHandsFreeListening, setVoiceSessionMode, speakMessage, stopSpeaking, voiceBackend]);
+  }, [shell.surface, cancelListening, chat, clearScheduledListening, enabled, lang, openAssistantPanel, scheduleHandsFreeListening, setVoiceSessionMode, speakMessage, stopSpeaking, voiceBackend]);
 
   const processTranscript = useCallback(async (text: string, inputMode: InputMode) => {
     const trimmed = text.trim();
@@ -331,61 +355,59 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
     try {
       const result = await runAssistantTurn(trimmed, {
-        calendarAccounts: app.calendarAccounts,
-        calendarSources: app.calendarSources,
-        calendarEvents: app.calendarEvents,
-        projects: app.projects,
-        tasks: app.tasks,
-        inventoryItems: app.inventoryItems,
-        inventoryNeeds: app.inventoryNeeds,
-        financeAccounts: app.financeAccounts,
-        transactions: app.transactions,
-        knowledgeEntries: app.knowledgeEntries,
-        knowledgeTopics: app.knowledgeTopics,
-        lifestyleItems: app.lifestyleItems,
-        gamification: app.gamification,
-        goalTags: app.settings.goalTags,
+        calendarAccounts: calendar.calendarAccounts,
+        calendarSources: calendar.calendarSources,
+        calendarEvents: calendar.calendarEvents,
+        projects: projects.projects,
+        tasks: tasks.tasks,
+        inventoryItems: inventory.inventoryItems,
+        inventoryNeeds: inventory.inventoryNeeds,
+        financeAccounts: finance.financeAccounts,
+        transactions: finance.transactions,
+        knowledgeEntries: knowledge.knowledgeEntries,
+        knowledgeTopics: knowledge.knowledgeTopics,
+        lifestyleItems: knowledge.lifestyleItems,
+        gamification: gamification.gamification,
+        goalTags: settings.settings.goalTags,
         prayerTimes,
-        currentSurface: app.surface,
+        currentSurface: shell.surface,
       }, {
         lang,
         conversationHistory: chatHistoryRef.current,
-        corrections: app.assistantCorrections,
+        corrections: assistant.corrections,
         dialogState: dialogStateRef.current,
-        provider: app.settings.assistantProvider,
+        provider: settings.settings.assistantProvider,
         hostedModel,
         endpoint: ollamaEndpoint,
         ollamaModel,
         activity: {
           actor: inputMode === 'voice' ? 'voice' : 'chat',
-          surface: app.surface,
+          surface: shell.surface,
           sourceTranscript: trimmed,
           conversationId: voiceConversationIdRef.current || undefined,
         },
         handlers: {
-          navigate: app.requestAssistantNavigation,
-          addTask: app.addTask,
-          updateTask: app.updateTask,
-          removeTask: app.removeTask,
-          upsertAssistantCorrection: app.upsertAssistantCorrection,
-          noteAssistantCorrectionApplied: app.noteAssistantCorrectionApplied,
-          addCalendarEvent: app.addCalendarEvent,
-          updateCalendarEvent: app.updateCalendarEvent,
-          addTransaction: app.addTransaction,
-          addKnowledgeEntry: app.addKnowledgeEntry,
-          addInventoryItem: app.addInventoryItem,
-          adjustInventoryQuantity: app.adjustInventoryQuantity,
-          addInventoryNeed: app.addInventoryNeed,
-          completeInventoryNeed: app.completeInventoryNeed,
-          updateGamification: app.updateGamification,
-          completePrayer: (prayerName, status, taskId) =>
-            app.completePrayer(
-              prayerName,
-              status,
-              taskId,
-              inputMode === 'voice' ? 'voice' : 'chat',
-            ),
-          recordAssistantActivity: app.recordAssistantActivity,
+          navigate: shell.requestAssistantNavigation,
+          addTask: tasks.addTask,
+          updateTask: tasks.updateTask,
+          removeTask: tasks.removeTask,
+          upsertAssistantCorrection: assistant.upsertCorrection,
+          noteAssistantCorrectionApplied: assistant.noteCorrectionApplied,
+          addCalendarEvent: calendar.addCalendarEvent,
+          updateCalendarEvent: calendar.updateCalendarEvent,
+          addTransaction: finance.addTransaction,
+          addKnowledgeEntry: knowledge.addKnowledgeEntry,
+          addInventoryItem: inventory.addInventoryItem,
+          adjustInventoryQuantity: inventory.adjustInventoryQuantity,
+          addInventoryNeed: inventory.addInventoryNeed,
+          completeInventoryNeed: inventory.completeInventoryNeed,
+          updateGamification: gamification.updateGamification,
+          completePrayer: (prayerName, status, taskId) => prayer.completePrayer(
+            prayerName,
+            status,
+            { taskId, source: inputMode === 'voice' ? 'voice' : 'chat' },
+          ),
+          recordAssistantActivity: activity.recordAssistantActivity,
         },
       });
 
@@ -437,18 +459,29 @@ export default function VoiceAssistant({ prayerData }: Props) {
       }
     }
   }, [
-    app,
+    activity,
+    assistant,
+    calendar,
     chat,
     clearScheduledListening,
     endHandsFreeSession,
+    finance,
+    gamification,
+    inventory,
+    knowledge,
     lang,
     hostedModel,
     ollamaEndpoint,
     ollamaModel,
     prayerData,
+    prayer,
+    projects.projects,
     scheduleHandsFreeListening,
     setVoiceSessionMode,
+    settings.settings,
+    shell,
     speakMessage,
+    tasks,
   ]);
 
   useEffect(() => {
@@ -470,9 +503,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
   useEffect(() => {
     dialogStateRef.current = {
       ...dialogStateRef.current,
-      currentSurface: app.surface,
+      currentSurface: shell.surface,
     };
-  }, [app.surface]);
+  }, [shell.surface]);
 
   const wakeWordArmed = state === 'idle' || (state === 'open' && voiceSessionMode === 'manual');
 
@@ -536,7 +569,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
   useWakeWord({
     enabled,
     wakeWordEnabled,
-    loaded: app.loaded,
+    loaded: true,
     wakeWordArmed,
     micDeviceId,
     onWakeWordDetected: beginHandsFreeSession,
@@ -569,7 +602,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     clearScheduledListening();
   }, [clearScheduledListening]);
 
-  const latestActivity = app.assistantActivityLog[0] || null;
+  const latestActivity = activity.assistantActivityLog[0] || null;
 
   if (!enabled) return null;
 
@@ -600,7 +633,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
   const handleUndoLatestActivity = () => {
     if (!latestActivity) return;
-    const result = app.undoAssistantActivity(latestActivity.id);
+    const result = assistantUndo.undoAssistantActivity(latestActivity.id);
     if (result.ok) {
       setResponse(result.message);
       setError('');
@@ -659,7 +692,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
                 <button
                   type="button"
                   className="va-activity-button"
-                  onClick={() => app.navigate('activity')}
+                  onClick={() => shell.navigate('activity')}
                 >
                   {isArabic ? '\u0627\u0644\u0633\u062C\u0644' : 'Log'}
                 </button>

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useApp } from '../store/AppContext';
+import { useShell } from "../store/ShellContext";
+import { useCalendar } from "../store/contexts/CalendarContext";
+import { useSettingsContext } from "../store/contexts/SettingsContext";
 import type { CalendarAccount, IntegrationStatus } from '../types/domain';
 import { useGoogleSync } from '../hooks/useGoogleSync';
 import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
@@ -48,7 +50,9 @@ function getStatusTone(account: CalendarAccount): string {
 }
 
 export default function IntegrationsSurface() {
-  const app = useApp();
+  const shell = useShell();
+  const calendar = useCalendar();
+  const settings = useSettingsContext();
   const googleSync = useGoogleSync();
   const [configuring, setConfiguring] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
@@ -56,7 +60,7 @@ export default function IntegrationsSurface() {
   const [googleError, setGoogleError] = useState<string | null>(null);
 
   const getInfo = (provider: string) => PROVIDER_INFO[provider] || { setupHint: 'No setup instructions available.', mockable: false };
-  const googleAccounts = app.calendarAccounts.filter(isGoogleCalendarAccount);
+  const googleAccounts = calendar.calendarAccounts.filter(isGoogleCalendarAccount);
   const clientId = GOOGLE_OAUTH_CLIENT_ID;
   const authSnapshot = getAuthSessionSnapshot();
   const isSignedIn = Boolean(authSnapshot?.userId);
@@ -82,25 +86,25 @@ export default function IntegrationsSurface() {
 
   const addSourcesIfMissing = (accountId: string, calendars: Awaited<ReturnType<typeof connectProfileGoogleCalendar>>['calendars']) => {
     const existingGoogleIds = new Set(
-      app.calendarSources
+      calendar.calendarSources
         .filter(source => source.accountId === accountId && source.googleCalendarId)
         .map(source => source.googleCalendarId!),
     );
     const foreignGoogleIds = new Set(
-      app.calendarSources
+      calendar.calendarSources
         .filter(source => source.accountId !== accountId && source.googleCalendarId)
         .map(source => source.googleCalendarId!),
     );
 
-    for (const calendar of calendars) {
-      if (existingGoogleIds.has(calendar.id) || foreignGoogleIds.has(calendar.id)) continue;
-      app.addCalendarSource({
+    for (const calendarEntry of calendars) {
+      if (existingGoogleIds.has(calendarEntry.id) || foreignGoogleIds.has(calendarEntry.id)) continue;
+      calendar.addCalendarSource({
         accountId,
-        name: calendar.summary,
-        color: calendar.backgroundColor || '#4f5bff',
+        name: calendarEntry.summary,
+        color: calendarEntry.backgroundColor || '#4f5bff',
         visible: true,
-        googleCalendarId: calendar.id,
-        accessRole: calendar.accessRole,
+        googleCalendarId: calendarEntry.id,
+        accessRole: calendarEntry.accessRole,
       });
     }
   };
@@ -124,7 +128,7 @@ export default function IntegrationsSurface() {
       const existing = googleAccounts.find(account => normalizeEmail(account.email) === normalizeEmail(result.email));
 
       if (existing) {
-        app.updateCalendarAccount(existing.id, {
+        calendar.updateCalendarAccount(existing.id, {
           name: result.accountName,
           connected: true,
           mocked: false,
@@ -132,11 +136,11 @@ export default function IntegrationsSurface() {
         });
         addSourcesIfMissing(existing.id, result.calendars);
       } else {
-        const accountId = app.addCalendarAccount({
+        const accountId = calendar.addCalendarAccount({
           name: result.accountName,
           email: result.email,
           provider: 'google',
-          isPrimary: app.calendarAccounts.length === 0,
+          isPrimary: calendar.calendarAccounts.length === 0,
           connected: true,
           mocked: false,
           authProvider: result.authProvider,
@@ -150,7 +154,7 @@ export default function IntegrationsSurface() {
         addSourcesIfMissing(accountId, result.calendars);
       }
 
-      app.updateIntegration('int-google', {
+      settings.updateIntegration('int-google', {
         status: 'connected',
         configuredAt: new Date().toISOString(),
         lastError: undefined,
@@ -186,11 +190,11 @@ export default function IntegrationsSurface() {
         return;
       }
 
-      const accountId = app.addCalendarAccount({
+      const accountId = calendar.addCalendarAccount({
         name: result.accountName,
         email: result.email,
         provider: 'google',
-        isPrimary: app.calendarAccounts.length === 0,
+        isPrimary: calendar.calendarAccounts.length === 0,
         connected: true,
         mocked: false,
         authProvider: result.authProvider,
@@ -203,7 +207,7 @@ export default function IntegrationsSurface() {
       });
 
       addSourcesIfMissing(accountId, result.calendars);
-      app.updateIntegration('int-google', {
+      settings.updateIntegration('int-google', {
         status: 'connected',
         configuredAt: new Date().toISOString(),
         lastError: undefined,
@@ -234,7 +238,7 @@ export default function IntegrationsSurface() {
       }
 
       const result = await reconnectGoogleCalendarOAuthAccount(account, clientId.trim());
-      app.updateCalendarAccount(account.id, {
+      calendar.updateCalendarAccount(account.id, {
         name: result.accountName,
         authProvider: result.authProvider,
         authStatus: 'connected',
@@ -245,7 +249,7 @@ export default function IntegrationsSurface() {
         syncError: undefined,
       });
       addSourcesIfMissing(account.id, result.calendars);
-      app.updateIntegration('int-google', {
+      settings.updateIntegration('int-google', {
         status: 'connected',
         configuredAt: new Date().toISOString(),
         lastError: undefined,
@@ -254,7 +258,7 @@ export default function IntegrationsSurface() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Reconnect failed';
       setGoogleError(message);
-      app.updateCalendarAccount(account.id, {
+      calendar.updateCalendarAccount(account.id, {
         authProvider: error instanceof GoogleCalendarReconnectRequiredError ? error.authProvider : account.authProvider,
         authStatus: error instanceof GoogleCalendarReconnectRequiredError
           ? error.authStatus
@@ -308,11 +312,11 @@ export default function IntegrationsSurface() {
 
     clearGoogleCalendarAuth(accountId);
 
-    app.removeCalendarAccount(accountId);
+    calendar.removeCalendarAccount(accountId);
 
     const remaining = googleAccounts.filter(account => account.id !== accountId);
     if (remaining.length === 0) {
-      app.updateIntegration('int-google', {
+      settings.updateIntegration('int-google', {
         status: 'disconnected',
         configuredAt: undefined,
         lastError: undefined,
@@ -338,7 +342,7 @@ export default function IntegrationsSurface() {
   const handleMockConnect = (id: string, provider: string) => {
     const info = getInfo(provider);
     if (info.mockable) {
-      app.updateIntegration(id, { status: 'mocked' as IntegrationStatus, configuredAt: new Date().toISOString() });
+      settings.updateIntegration(id, { status: 'mocked' as IntegrationStatus, configuredAt: new Date().toISOString() });
     }
     setConfiguring(null);
   };
@@ -363,7 +367,7 @@ export default function IntegrationsSurface() {
           </div>
         )}
 
-        {app.integrations.map(integration => {
+        {settings.integrations.map(integration => {
           const info = getInfo(integration.provider);
           const isActive = integration.status === 'connected' || integration.status === 'mocked';
           const isGoogle = integration.provider === 'google';
@@ -530,7 +534,7 @@ export default function IntegrationsSurface() {
                               : googleAccounts.length > 0 ? 'Add Another Google Account' : 'Connect Google Calendar'}
                           </button>
                           {!clientId?.trim() && (
-                            <button className="btn btn-secondary btn-sm" onClick={() => app.navigate('settings')}>Go to Settings</button>
+                            <button className="btn btn-secondary btn-sm" onClick={() => shell.navigate('settings')}>Go to Settings</button>
                           )}
                           <button className="btn btn-secondary btn-sm" onClick={() => { setConfiguring(null); setGoogleError(null); }}>Cancel</button>
                         </div>
@@ -568,7 +572,7 @@ export default function IntegrationsSurface() {
                       <div className="confirm-bar" style={{ margin: 0 }} role="alert">
                         Disconnect {integration.name}?
                         <button className="btn btn-danger btn-sm" onClick={() => {
-                          app.updateIntegration(integration.id, { status: 'disconnected', configuredAt: undefined, lastError: undefined });
+                          settings.updateIntegration(integration.id, { status: 'disconnected', configuredAt: undefined, lastError: undefined });
                           setConfirmDisconnect(null);
                         }}>
                           Disconnect

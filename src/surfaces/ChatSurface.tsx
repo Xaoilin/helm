@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { useApp } from '../store/AppContext';
+import { useChatContext } from "../store/contexts/ChatContext";
+import { useSettingsContext } from "../store/contexts/SettingsContext";
 import { TIMING } from '../config/constants';
 import { getCurrentUserId, isAuthenticated, isSupabaseReady } from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
@@ -66,7 +67,8 @@ function formatConversationUpdatedAt(timestamp: string): string {
 }
 
 export default function ChatSurface() {
-  const app = useApp();
+  const chat = useChatContext();
+  const settings = useSettingsContext();
   const [input, setInput] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -76,10 +78,10 @@ export default function ChatSurface() {
   const [exportFeedback, setExportFeedback] = useState<ExportFeedback | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const authSyncKey = `${isSupabaseReady()}:${isAuthenticated()}:${getCurrentUserId() || ''}`;
-  const selectedProvider = getAssistantProviderSetting(app.settings);
-  const hostedModelLabel = getHostedAssistantModelLabel(getHostedAssistantModelSetting(app.settings));
+  const selectedProvider = getAssistantProviderSetting(settings.settings);
+  const hostedModelLabel = getHostedAssistantModelLabel(getHostedAssistantModelSetting(settings.settings));
 
-  const activeConv = app.conversations.find(c => c.id === app.activeConversationId);
+  const activeConv = chat.conversations.find(c => c.id === chat.activeConversationId);
   const canExportConversation = Boolean(activeConv && activeConv.messages.length > 0);
   const billingSummary = summarizeConversationAssistantBilling(activeConv);
   const billingTokenSummary = billingSummary
@@ -90,15 +92,15 @@ export default function ChatSurface() {
     let cancelled = false;
     getAssistantRuntimeStatus({
       assistantProvider: selectedProvider,
-      hostedModel: app.settings.hostedModel,
-      ollamaEndpoint: app.settings.ollamaEndpoint,
+      hostedModel: settings.settings.hostedModel,
+      ollamaEndpoint: settings.settings.ollamaEndpoint,
     }).then(status => {
       if (!cancelled) setAssistantStatus(status);
     });
     return () => {
       cancelled = true;
     };
-  }, [selectedProvider, app.settings.hostedModel, app.settings.ollamaEndpoint, authSyncKey]);
+  }, [selectedProvider, settings.settings.hostedModel, settings.settings.ollamaEndpoint, authSyncKey]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -117,13 +119,13 @@ export default function ChatSurface() {
   const handleSend = async () => {
     const text = input.trim();
     if (!text || isTyping) return;
-    let convId = app.activeConversationId;
+    let convId = chat.activeConversationId;
     if (!convId) {
-      convId = app.createConversation();
+      convId = chat.createConversation();
     }
     setInput('');
     setIsTyping(true);
-    await app.sendMessage(convId, text);
+    await chat.sendMessage(convId, text);
     setIsTyping(false);
   };
 
@@ -189,25 +191,25 @@ export default function ChatSurface() {
       <div className="chat-sidebar">
         <div className="chat-sidebar-header">
           <h3>Conversations</h3>
-          <button className="btn-icon" onClick={() => { app.createConversation(); }} title="New conversation" aria-label="New conversation">+</button>
+          <button className="btn-icon" onClick={() => { chat.createConversation(); }} title="New conversation" aria-label="New conversation">+</button>
         </div>
         <div className="chat-list">
-          {app.conversations.length === 0 && (
+          {chat.conversations.length === 0 && (
             <div style={{ padding: '20px 16px', color: '#4a4e62', fontSize: '12px' }} role="status">
               No conversations yet
             </div>
           )}
-          {app.conversations.map(conv => (
+          {chat.conversations.map(conv => (
             <div key={conv.id}>
               <div
-                className={`chat-list-item ${conv.id === app.activeConversationId ? 'active' : ''}`}
+                className={`chat-list-item ${conv.id === chat.activeConversationId ? 'active' : ''}`}
                 role="button"
                 tabIndex={0}
-                onClick={() => app.setActiveConversation(conv.id)}
+                onClick={() => chat.setActiveConversation(conv.id)}
                 onKeyDown={event => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    app.setActiveConversation(conv.id);
+                    chat.setActiveConversation(conv.id);
                   }
                 }}
               >
@@ -219,12 +221,12 @@ export default function ChatSurface() {
                       value={editTitle}
                       onChange={e => setEditTitle(e.target.value)}
                       onBlur={() => {
-                        if (editTitle.trim()) app.renameConversation(conv.id, editTitle.trim());
+                        if (editTitle.trim()) chat.renameConversation(conv.id, editTitle.trim());
                         setEditingId(null);
                       }}
                       onKeyDown={e => {
                         if (e.key === 'Enter') {
-                          if (editTitle.trim()) app.renameConversation(conv.id, editTitle.trim());
+                          if (editTitle.trim()) chat.renameConversation(conv.id, editTitle.trim());
                           setEditingId(null);
                         }
                         if (e.key === 'Escape') setEditingId(null);
@@ -260,7 +262,7 @@ export default function ChatSurface() {
               {deletingId === conv.id && (
                 <div className="confirm-bar" style={{ margin: '4px 8px' }} role="alert">
                   Delete this conversation?
-                  <button className="btn btn-danger btn-sm" onClick={() => { app.deleteConversation(conv.id); setDeletingId(null); }}>Delete</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => { chat.deleteConversation(conv.id); setDeletingId(null); }}>Delete</button>
                   <button className="btn btn-secondary btn-sm" onClick={() => setDeletingId(null)}>Cancel</button>
                 </div>
               )}
@@ -282,7 +284,7 @@ export default function ChatSurface() {
               <div className="chat-main-copy">
                 <button
                   className="chat-mobile-back"
-                  onClick={() => app.setActiveConversation(null)}
+                  onClick={() => chat.setActiveConversation(null)}
                   aria-label="Back to conversations"
                 >
                   &lsaquo; Conversations
@@ -407,16 +409,16 @@ export default function ChatSurface() {
             <p>
               {getEmptyStateMessage(assistantStatus, hostedModelLabel)}
             </p>
-            <button className="btn btn-primary" onClick={() => app.createConversation()}>New conversation</button>
-            {app.conversations.length === 0 && (
+            <button className="btn btn-primary" onClick={() => chat.createConversation()}>New conversation</button>
+            {chat.conversations.length === 0 && (
               <div style={{ marginTop: 24, display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
                 {quickPrompts.map(p => (
                   <button
                     key={p}
                     className="btn btn-secondary btn-sm"
                     onClick={() => {
-                      const id = app.createConversation();
-                      app.sendMessage(id, p);
+                      const id = chat.createConversation();
+                      chat.sendMessage(id, p);
                     }}
                   >
                     {p}
@@ -433,9 +435,9 @@ export default function ChatSurface() {
   // Helper for quick prompts inside active conversation
   async function handleSendQuick(text: string) {
     if (isTyping) return;
-    const convId = activeConv?.id || app.createConversation();
+    const convId = activeConv?.id || chat.createConversation();
     setIsTyping(true);
-    await app.sendMessage(convId, text);
+    await chat.sendMessage(convId, text);
     setIsTyping(false);
   }
 }

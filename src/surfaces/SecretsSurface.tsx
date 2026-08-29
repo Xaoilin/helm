@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
-import { useApp } from '../store/AppContext';
+import { useProjectContext } from "../store/contexts/ProjectContext";
+import { useSettingsContext } from "../store/contexts/SettingsContext";
 import { subscribeHelmSecretChanges, subscribeSyncSession } from '../store/persistence';
 import {
   listHelmSecrets,
@@ -77,7 +78,8 @@ function safeExternalUrl(value: string): string | null {
 }
 
 export default function SecretsSurface() {
-  const app = useApp();
+  const projects = useProjectContext();
+  const settings = useSettingsContext();
   const syncAvailability = useSyncAvailability();
   const [secrets, setSecrets] = useState<HelmSecretSummary[]>([]);
   const [revealed, setRevealed] = useState<Record<string, HelmSecretDetail>>({});
@@ -159,19 +161,19 @@ export default function SecretsSurface() {
   useEffect(() => {
     if (loading || importedDeviceSecrets.current) return;
     importedDeviceSecrets.current = true;
-    const helmProjectKey = app.projects.find(project => project.name.trim().toLowerCase() === 'helm')?.catalogKey
+    const helmProjectKey = projects.projects.find(project => project.name.trim().toLowerCase() === 'helm')?.catalogKey
       || 'catalog:helm';
     const candidates: Array<{ sourceRef: string; label: string; value: string | undefined; kind: SecretKind }> = [
       {
         sourceRef: 'device-settings:deepgramApiKey:v1',
         label: 'Sabah One Deepgram API key',
-        value: app.settings.deepgramApiKey,
+        value: settings.settings.deepgramApiKey,
         kind: 'api_key',
       },
       {
         sourceRef: 'device-settings:elevenLabsApiKey:v1',
         label: 'Sabah One ElevenLabs API key',
-        value: app.settings.elevenLabsApiKey,
+        value: settings.settings.elevenLabsApiKey,
         kind: 'api_key',
       },
     ];
@@ -206,17 +208,17 @@ export default function SecretsSurface() {
     })().catch(importError => {
       setError(importError instanceof Error ? importError.message : String(importError));
     });
-  }, [app.projects, app.settings.deepgramApiKey, app.settings.elevenLabsApiKey, fetchSummaries, loading, secrets]);
+  }, [projects.projects, settings.settings.deepgramApiKey, settings.settings.elevenLabsApiKey, fetchSummaries, loading, secrets]);
 
   const environments = useMemo(() => [...new Set(
     secrets.map(secret => secret.environment).filter((value): value is string => Boolean(value)),
   )].sort(), [secrets]);
 
   const projectLabels = useMemo(() => new Map(
-    app.projects
+    projects.projects
       .filter(project => project.catalogKey)
       .map(project => [project.catalogKey!, project.name]),
-  ), [app.projects]);
+  ), [projects.projects]);
 
   const visibleSecrets = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -407,7 +409,7 @@ export default function SecretsSurface() {
           </select>
           <select className="form-select" value={projectFilter} onChange={event => setProjectFilter(event.target.value)} aria-label="Filter by project">
             <option value="all">All projects</option>
-            {app.projects.filter(project => project.catalogKey).map(project => (
+            {projects.projects.filter(project => project.catalogKey).map(project => (
               <option key={project.catalogKey} value={project.catalogKey}>{project.name}</option>
             ))}
           </select>
@@ -525,7 +527,7 @@ export default function SecretsSurface() {
 
             <fieldset className="secret-project-picker">
               <legend>Projects</legend>
-              {app.projects.filter(project => project.catalogKey).map(project => (
+              {projects.projects.filter(project => project.catalogKey).map(project => (
                 <label key={project.catalogKey}>
                   <input type="checkbox" checked={form.projectCatalogKeys.includes(project.catalogKey!)} onChange={() => toggleProject(project.catalogKey!)} />
                   <span>{project.name}</span>

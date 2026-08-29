@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useApp } from '../store/AppContext';
+import { useFinanceContext } from "../store/contexts/FinanceContext";
 import type { TransactionType, TransactionCategory, ExpenseCategory, FinanceAccount, FinanceAccountType, Transaction } from '../types/domain';
 import { MONZO_ACCESS_TOKEN } from '../config';
 import { fetchMonzoAccounts, fetchMonzoTransactions, mapMonzoTransaction, isAlreadyImported, verifyToken } from '../services/monzoApi';
@@ -13,7 +13,7 @@ import {
 type Tab = 'overview' | 'transactions' | 'accounts' | 'budgets';
 
 export default function FinanceSurface() {
-  const app = useApp();
+  const finance = useFinanceContext();
   const [tab, setTab] = useState<Tab>('overview');
   const todayStr = toLocalDateStr(new Date());
   const currentMonth = toMonthStr(new Date());
@@ -53,20 +53,20 @@ export default function FinanceSurface() {
   const [monzoStatus, setMonzoStatus] = useState<string | null>(null);
 
   // ── Derived data ──
-  const netWorth = useMemo(() => calculateNetWorth(app.financeAccounts), [app.financeAccounts]);
-  const monthly = useMemo(() => monthlyTotals(app.transactions, currentMonth), [app.transactions, currentMonth]);
-  const defaultAccountId = app.financeAccounts[0]?.id || '';
+  const netWorth = useMemo(() => calculateNetWorth(finance.financeAccounts), [finance.financeAccounts]);
+  const monthly = useMemo(() => monthlyTotals(finance.transactions, currentMonth), [finance.transactions, currentMonth]);
+  const defaultAccountId = finance.financeAccounts[0]?.id || '';
 
   const recentTxs = useMemo(() =>
-    [...app.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)).slice(0, 10),
-    [app.transactions]
+    [...finance.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)).slice(0, 10),
+    [finance.transactions]
   );
 
   const filteredTxs = useMemo(() => {
-    let txs = [...app.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+    let txs = [...finance.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
     if (filterType !== 'all') txs = txs.filter(t => t.type === filterType);
     return txs;
-  }, [app.transactions, filterType]);
+  }, [finance.transactions, filterType]);
 
   // ── Quick add ──
   const handleQuickAdd = () => {
@@ -74,7 +74,7 @@ export default function FinanceSurface() {
     if (!amount || !txCategory) return;
     const accountId = txAccountId || defaultAccountId;
     if (!accountId) return;
-    app.addTransaction({ type: txType, amount, category: txCategory, accountId, description: txDesc.trim(), date: todayStr, toAccountId: undefined });
+    finance.addTransaction({ type: txType, amount, category: txCategory, accountId, description: txDesc.trim(), date: todayStr, toAccountId: undefined });
     setTxAmount(''); setTxDesc('');
     setTxSaved(true); setTimeout(() => setTxSaved(false), 2000);
   };
@@ -87,9 +87,9 @@ export default function FinanceSurface() {
     const balance = parseToPence(accBalance);
     const isDebt = ACCOUNT_TYPES.find(t => t.value === accType)?.isDebt;
     if (editingAcc) {
-      app.updateFinanceAccount(editingAcc.id, { name: accName.trim(), type: accType, balance, color: accColor });
+      finance.updateFinanceAccount(editingAcc.id, { name: accName.trim(), type: accType, balance, color: accColor });
     } else {
-      app.addFinanceAccount({ name: accName.trim(), type: accType, balance: isDebt ? -Math.abs(balance) : balance, currency: 'GBP', color: accColor, icon: ACCOUNT_TYPES.find(t => t.value === accType)?.icon || '\u{1F3E6}', includeInNetWorth: true, sortOrder: app.financeAccounts.length });
+      finance.addFinanceAccount({ name: accName.trim(), type: accType, balance: isDebt ? -Math.abs(balance) : balance, currency: 'GBP', color: accColor, icon: ACCOUNT_TYPES.find(t => t.value === accType)?.icon || '\u{1F3E6}', includeInNetWorth: true, sortOrder: finance.financeAccounts.length });
     }
     setShowAccForm(false);
   };
@@ -97,7 +97,7 @@ export default function FinanceSurface() {
   // ── Render helpers ──
   const renderTxRow = (tx: Transaction) => {
     const cat = getCategoryDef(tx.category);
-    const acc = app.financeAccounts.find(a => a.id === tx.accountId);
+    const acc = finance.financeAccounts.find(a => a.id === tx.accountId);
     return (
       <div key={tx.id} className="finance-tx-row">
         <span className="finance-tx-icon">{cat.icon}</span>
@@ -111,7 +111,7 @@ export default function FinanceSurface() {
         <div className="task-actions">
           {deletingId === tx.id ? (
             <div className="confirm-bar" role="alert" style={{ margin: 0, padding: '3px 6px', fontSize: 9 }}>
-              <button className="btn btn-danger btn-sm" onClick={() => { app.removeTransaction(tx.id); setDeletingId(null); }}>Yes</button>
+              <button className="btn btn-danger btn-sm" onClick={() => { finance.removeTransaction(tx.id); setDeletingId(null); }}>Yes</button>
               <button className="btn btn-secondary btn-sm" onClick={() => setDeletingId(null)}>No</button>
             </div>
           ) : (
@@ -141,18 +141,18 @@ export default function FinanceSurface() {
       for (const mAcc of monzoAccounts) {
         // Find Sabah One account by Monzo account ID tag, or create one
         const monzoTag = `monzo:${mAcc.id}`;
-        const helmAcc = app.financeAccounts.find(a =>
-          app.transactions.some(t => t.accountId === a.id && t.tags?.includes(monzoTag))
-        ) || app.financeAccounts.find(a => a.name === `Monzo ${mAcc.description || 'Account'}`);
+        const helmAcc = finance.financeAccounts.find(a =>
+          finance.transactions.some(t => t.accountId === a.id && t.tags?.includes(monzoTag))
+        ) || finance.financeAccounts.find(a => a.name === `Monzo ${mAcc.description || 'Account'}`);
         let helmAccId: string;
         if (!helmAcc) {
-          helmAccId = app.addFinanceAccount({
+          helmAccId = finance.addFinanceAccount({
             name: `Monzo ${mAcc.description || 'Account'}`,
             type: mAcc.type?.includes('savings') ? 'savings' : 'current',
             balance: 0, currency: 'GBP',
             color: MONZO_COLORS[monzoAccountIndex++ % MONZO_COLORS.length],
             icon: '\u{1F3E6}',
-            includeInNetWorth: true, sortOrder: app.financeAccounts.length,
+            includeInNetWorth: true, sortOrder: finance.financeAccounts.length,
           });
         } else {
           helmAccId = helmAcc.id;
@@ -162,9 +162,9 @@ export default function FinanceSurface() {
         try {
           const monzoTxs = await fetchMonzoTransactions(MONZO_ACCESS_TOKEN, mAcc.id);
           for (const mTx of monzoTxs) {
-            if (!isAlreadyImported(mTx.id, app.transactions)) {
+            if (!isAlreadyImported(mTx.id, finance.transactions)) {
               const mapped = mapMonzoTransaction(mTx, helmAccId);
-              app.addTransaction(mapped);
+              finance.addTransaction(mapped);
               totalImported++;
             }
           }
@@ -215,9 +215,9 @@ export default function FinanceSurface() {
       {showTxDetails && (
         <>
           <input className="form-input" style={{ maxWidth: 150, fontSize: 12, padding: '5px 8px' }} placeholder="Description..." value={txDesc} onChange={e => setTxDesc(e.target.value)} />
-          {app.financeAccounts.length > 1 && (
+          {finance.financeAccounts.length > 1 && (
             <select className="form-select" style={{ maxWidth: 120, fontSize: 12 }} value={txAccountId || defaultAccountId} onChange={e => setTxAccountId(e.target.value)}>
-              {app.financeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {finance.financeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           )}
         </>
@@ -241,15 +241,15 @@ export default function FinanceSurface() {
       <div className="surface-body">
         <div className="tabs">
           <button className={`tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
-          <button className={`tab ${tab === 'transactions' ? 'active' : ''}`} onClick={() => setTab('transactions')}>Transactions{app.transactions.length > 0 && <span style={{ marginLeft: 4, fontSize: 10, color: '#6b6f85' }}>{app.transactions.length}</span>}</button>
-          <button className={`tab ${tab === 'accounts' ? 'active' : ''}`} onClick={() => setTab('accounts')}>Accounts{app.financeAccounts.length > 0 && <span style={{ marginLeft: 4, fontSize: 10, color: '#6b6f85' }}>{app.financeAccounts.length}</span>}</button>
+          <button className={`tab ${tab === 'transactions' ? 'active' : ''}`} onClick={() => setTab('transactions')}>Transactions{finance.transactions.length > 0 && <span style={{ marginLeft: 4, fontSize: 10, color: '#6b6f85' }}>{finance.transactions.length}</span>}</button>
+          <button className={`tab ${tab === 'accounts' ? 'active' : ''}`} onClick={() => setTab('accounts')}>Accounts{finance.financeAccounts.length > 0 && <span style={{ marginLeft: 4, fontSize: 10, color: '#6b6f85' }}>{finance.financeAccounts.length}</span>}</button>
           <button className={`tab ${tab === 'budgets' ? 'active' : ''}`} onClick={() => setTab('budgets')}>Budgets & Goals</button>
         </div>
 
         {/* ══ Overview ══ */}
         {tab === 'overview' && (
           <>
-            {app.financeAccounts.length === 0 ? (
+            {finance.financeAccounts.length === 0 ? (
               <div className="empty-state" role="status">
                 <div className="empty-icon" style={{ fontSize: 36 }}>{'\u{1F4B7}'}</div>
                 <h3>Set up your finances</h3>
@@ -289,7 +289,7 @@ export default function FinanceSurface() {
                     <div className="dash-card-header"><span>Net Worth</span></div>
                     <div className="finance-net-worth">{formatGBP(netWorth)}</div>
                     <div style={{ marginTop: 8 }}>
-                      {app.financeAccounts.sort((a, b) => b.balance - a.balance).map(acc => (
+                      {finance.financeAccounts.sort((a, b) => b.balance - a.balance).map(acc => (
                         <div key={acc.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0', color: '#9499b0' }}>
                           <span>{acc.icon} {acc.name}</span>
                           <span style={{ color: acc.balance < 0 ? '#ff6b6b' : '#e1e4ea', fontWeight: 500 }}>{formatGBP(acc.balance)}</span>
@@ -300,11 +300,11 @@ export default function FinanceSurface() {
                 </div>
 
                 {/* Budget status */}
-                {app.financeBudgets.length > 0 && (
+                {finance.financeBudgets.length > 0 && (
                   <div className="dash-card" style={{ marginTop: 16 }}>
                     <div className="dash-card-header"><span>Budget Status</span></div>
-                    {app.financeBudgets.map(b => {
-                      const spent = categorySpend(app.transactions, b.category, currentMonth);
+                    {finance.financeBudgets.map(b => {
+                      const spent = categorySpend(finance.transactions, b.category, currentMonth);
                       const pct = b.monthlyLimit > 0 ? (spent / b.monthlyLimit) * 100 : 0;
                       const cat = getCategoryDef(b.category);
                       return (
@@ -336,7 +336,7 @@ export default function FinanceSurface() {
         {/* ══ Transactions ══ */}
         {tab === 'transactions' && (
           <>
-            {app.financeAccounts.length > 0 && quickAddBar}
+            {finance.financeAccounts.length > 0 && quickAddBar}
             <div className="filter-bar" style={{ marginTop: 12 }}>
               {(['all', 'expense', 'income', 'transfer'] as const).map(f => (
                 <button key={f} className={`btn btn-sm ${filterType === f ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilterType(f)}>
@@ -370,7 +370,7 @@ export default function FinanceSurface() {
                 <a href="https://developers.monzo.com/" target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', fontSize: 10, color: '#4f5bff' }}>Get token</a>
               </div>
             )}
-            {app.financeAccounts.length === 0 ? (
+            {finance.financeAccounts.length === 0 ? (
               <div className="empty-state" role="status">
                 <div className="empty-icon" style={{ fontSize: 36 }}>{'\u{1F3E6}'}</div>
                 <h3>No accounts</h3>
@@ -380,7 +380,7 @@ export default function FinanceSurface() {
             ) : (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-                  {app.financeAccounts.map(acc => {
+                  {finance.financeAccounts.map(acc => {
                     const typeDef = ACCOUNT_TYPES.find(t => t.value === acc.type);
                     return (
                       <div key={acc.id} className="card" style={{ borderLeft: `3px solid ${acc.color}` }}>
@@ -396,7 +396,7 @@ export default function FinanceSurface() {
                           {deletingId === acc.id ? (
                             <div className="confirm-bar" role="alert" style={{ margin: 0 }}>
                               Delete account + transactions?
-                              <button className="btn btn-danger btn-sm" onClick={() => { app.removeFinanceAccount(acc.id); setDeletingId(null); }}>Yes</button>
+                              <button className="btn btn-danger btn-sm" onClick={() => { finance.removeFinanceAccount(acc.id); setDeletingId(null); }}>Yes</button>
                               <button className="btn btn-secondary btn-sm" onClick={() => setDeletingId(null)}>No</button>
                             </div>
                           ) : (
@@ -420,7 +420,7 @@ export default function FinanceSurface() {
         {tab === 'budgets' && (
           <>
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Monthly Budgets</h3>
-            {app.financeBudgets.length === 0 ? (
+            {finance.financeBudgets.length === 0 ? (
               <div className="empty-state" role="status" style={{ padding: '30px 16px' }}>
                 <h3 style={{ fontSize: 13 }}>No budgets</h3>
                 <p style={{ fontSize: 12 }}>Set monthly spending limits per category.</p>
@@ -428,8 +428,8 @@ export default function FinanceSurface() {
               </div>
             ) : (
               <>
-                {app.financeBudgets.map(b => {
-                  const spent = categorySpend(app.transactions, b.category, currentMonth);
+                {finance.financeBudgets.map(b => {
+                  const spent = categorySpend(finance.transactions, b.category, currentMonth);
                   const pct = b.monthlyLimit > 0 ? (spent / b.monthlyLimit) * 100 : 0;
                   const cat = getCategoryDef(b.category);
                   return (
@@ -439,7 +439,7 @@ export default function FinanceSurface() {
                         <div className="progress-bar"><div className="progress-fill" style={{ width: `${Math.min(100, pct)}%`, background: pct > 90 ? '#ff6b6b' : pct > 75 ? '#f59e0b' : '#4f5bff' }} /></div>
                       </div>
                       <span className="finance-budget-values">{formatGBP(spent)} / {formatGBP(b.monthlyLimit)}</span>
-                      <button className="btn-icon btn-sm" onClick={() => { app.removeFinanceBudget(b.id); }} style={{ color: '#ff6b6b', fontSize: 11 }}>&times;</button>
+                      <button className="btn-icon btn-sm" onClick={() => { finance.removeFinanceBudget(b.id); }} style={{ color: '#ff6b6b', fontSize: 11 }}>&times;</button>
                     </div>
                   );
                 })}
@@ -448,7 +448,7 @@ export default function FinanceSurface() {
             )}
 
             <h3 style={{ fontSize: 14, fontWeight: 600, margin: '24px 0 12px' }}>Savings Goals</h3>
-            {app.savingsGoals.length === 0 ? (
+            {finance.savingsGoals.length === 0 ? (
               <div className="empty-state" role="status" style={{ padding: '30px 16px' }}>
                 <h3 style={{ fontSize: 13 }}>No savings goals</h3>
                 <p style={{ fontSize: 12 }}>Set targets to save towards.</p>
@@ -456,7 +456,7 @@ export default function FinanceSurface() {
               </div>
             ) : (
               <>
-                {app.savingsGoals.map(g => {
+                {finance.savingsGoals.map(g => {
                   const pct = g.targetAmount > 0 ? (g.currentAmount / g.targetAmount) * 100 : 0;
                   return (
                     <div key={g.id} className="goal-card" style={{ marginBottom: 10 }}>
@@ -468,9 +468,9 @@ export default function FinanceSurface() {
                       <div className="actions-row" style={{ marginTop: 8 }}>
                         <button className="btn btn-secondary btn-sm" onClick={() => {
                           const input = prompt('Current amount (\u00a3):', (g.currentAmount / 100).toFixed(2));
-                          if (input) app.updateSavingsGoal(g.id, { currentAmount: parseToPence(input) });
+                          if (input) finance.updateSavingsGoal(g.id, { currentAmount: parseToPence(input) });
                         }}>Update</button>
-                        <button className="btn btn-danger btn-sm" onClick={() => app.removeSavingsGoal(g.id)}>Remove</button>
+                        <button className="btn btn-danger btn-sm" onClick={() => finance.removeSavingsGoal(g.id)}>Remove</button>
                       </div>
                     </div>
                   );
@@ -534,7 +534,7 @@ export default function FinanceSurface() {
             </div>
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowBudgetForm(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => { if (budgetLimit) { app.addFinanceBudget({ category: budgetCat, monthlyLimit: parseToPence(budgetLimit) }); setShowBudgetForm(false); setBudgetLimit(''); } }} disabled={!budgetLimit}>Add</button>
+              <button className="btn btn-primary" onClick={() => { if (budgetLimit) { finance.addFinanceBudget({ category: budgetCat, monthlyLimit: parseToPence(budgetLimit) }); setShowBudgetForm(false); setBudgetLimit(''); } }} disabled={!budgetLimit}>Add</button>
             </div>
           </div>
         </div>
@@ -561,7 +561,7 @@ export default function FinanceSurface() {
               <button className="btn btn-secondary" onClick={() => setShowGoalForm(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={() => {
                 if (goalName.trim() && goalTarget) {
-                  app.addSavingsGoal({ name: goalName.trim(), targetAmount: parseToPence(goalTarget), currentAmount: parseToPence(goalCurrent || '0'), icon: goalIcon, completed: false, completedAt: undefined, deadline: undefined, linkedAccountId: undefined });
+                  finance.addSavingsGoal({ name: goalName.trim(), targetAmount: parseToPence(goalTarget), currentAmount: parseToPence(goalCurrent || '0'), icon: goalIcon, completed: false, completedAt: undefined, deadline: undefined, linkedAccountId: undefined });
                   setShowGoalForm(false); setGoalName(''); setGoalTarget(''); setGoalCurrent('');
                 }
               }} disabled={!goalName.trim() || !goalTarget}>Add</button>
