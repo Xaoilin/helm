@@ -141,6 +141,46 @@ interface MomentumActivityProps {
   onRecord: (templateId: string, stepId: string) => void;
 }
 
+const ACTIVITY_HELP_TEXT: Record<string, string> = {
+  'learn-reading': 'Read pages from a book, article, or other focused material.',
+  'learn-course': 'Spend minutes on a structured course or lesson.',
+  'move-walk': 'Purposeful walking, such as outdoors, on a treadmill, or indoors.',
+  'move-workout': 'Planned exercise, such as strength, cardio, gym, home exercise, or sport.',
+  'move-stretching': 'Held or gentle stretches, such as calves, hamstrings, chest, or shoulders.',
+};
+
+function getActivityHelpText(activity: DailyMomentumActivityDay): string {
+  return ACTIVITY_HELP_TEXT[activity.template.id]
+    ?? `${activity.template.label} activity. Use the progress control to work toward today's goal.`;
+}
+
+function ActivityTitleHelp({ pillar, activity }: Pick<MomentumActivityProps, 'pillar' | 'activity'>) {
+  const [visible, setVisible] = useState(false);
+  const tooltipId = `nc-${pillar}-${activity.template.id}-help`;
+
+  return (
+    <span className={`nc-activity-help${visible ? ' is-visible' : ''}`}>
+      <button
+        type="button"
+        className="nc-activity-help-trigger"
+        aria-label={`About ${activity.template.label}`}
+        aria-controls={tooltipId}
+        aria-expanded={visible}
+        aria-describedby={visible ? tooltipId : undefined}
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+      >
+        <span aria-hidden="true">?</span>
+      </button>
+      <span id={tooltipId} className="nc-activity-tooltip" role="tooltip" hidden={!visible}>
+        {getActivityHelpText(activity)}
+      </span>
+    </span>
+  );
+}
+
 function MomentumActivity({ pillar, activity, busy, onRecord }: MomentumActivityProps) {
   const nextLevel = activity.template.levels[Math.min(activity.achievedLevel, 4)];
   const status = activity.complete
@@ -157,7 +197,10 @@ function MomentumActivity({ pillar, activity, busy, onRecord }: MomentumActivity
     >
       <div className="nc-activity-heading">
         <div>
-          <h3 id={`nc-${pillar}-${activity.template.id}-title`}>{activity.template.label}</h3>
+          <div className="nc-activity-title">
+            <h3 id={`nc-${pillar}-${activity.template.id}-title`}>{activity.template.label}</h3>
+            <ActivityTitleHelp pillar={pillar} activity={activity} />
+          </div>
           <p>{status}</p>
         </div>
         <span className={`nc-activity-status ${activity.complete ? 'complete' : ''}`}>

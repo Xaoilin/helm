@@ -6010,11 +6010,76 @@ textarea.form-input {
 
 .nc-activity-heading > div { min-width: 0; }
 
+.nc-activity-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .nc-activity-heading h3 {
   margin: 0;
   color: var(--nc-text);
   font-size: 13px;
   font-weight: 700;
+}
+
+.nc-activity-help {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.nc-activity-help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 1px solid rgba(145, 160, 184, 0.5);
+  border-radius: 50%;
+  color: var(--nc-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nc-activity-help-trigger:hover,
+.nc-activity-help-trigger:focus-visible {
+  border-color: currentColor;
+  color: var(--nc-text);
+}
+
+.nc-activity-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 2;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 48px));
+  padding: 8px 10px;
+  border: 1px solid rgba(145, 160, 184, 0.42);
+  border-radius: 8px;
+  color: var(--nc-text);
+  background: #101b2c;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.nc-activity-help.is-visible .nc-activity-tooltip {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .nc-activity-heading p {

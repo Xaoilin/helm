@@ -13,7 +13,14 @@ import type {
 } from '../types/domain';
 import { toLocalDateStr } from './financeHelpers';
 
-export const DAILY_MOMENTUM_SCHEMA_VERSION = 1;
+export const DAILY_MOMENTUM_SCHEMA_VERSION = 2;
+
+const LEGACY_DAILY_MOMENTUM_SCHEMA_VERSION = 1;
+const LEGACY_DEFAULT_MOVE_TEMPLATE_IDS = new Set([
+  'move-active-minutes',
+  'move-mobility',
+  'move-tiny-circuit',
+]);
 
 const PILLARS = new Set<DailyPillar>(['learn', 'move']);
 const METRICS = new Set<ProgressMetric>(['pages', 'minutes', 'rounds']);
@@ -166,46 +173,49 @@ export function createDefaultDailyActivityTemplates(): DailyActivityTemplate[] {
       levels: scalarLevels({ id: 'course-minutes', label: 'Course', metric: 'minutes' }, [5, 10, 20, 35, 50]),
     },
     {
-      id: 'move-active-minutes',
+      id: 'move-walk',
       pillar: 'move',
-      label: 'Active minutes',
+      label: 'Walk',
       version: 1,
-      levels: scalarLevels({ id: 'active-minutes', label: 'Active time', metric: 'minutes' }, [5, 10, 20, 35, 50]),
+      levels: scalarLevels({ id: 'walk-minutes', label: 'Walk', metric: 'minutes' }, [5, 10, 20, 35, 50]),
     },
     {
-      id: 'move-mobility',
+      id: 'move-workout',
       pillar: 'move',
-      label: 'Mobility',
+      label: 'Workout',
       version: 1,
-      levels: scalarLevels({ id: 'mobility-minutes', label: 'Mobility', metric: 'minutes' }, [5, 10, 15, 20, 30]),
+      levels: scalarLevels({ id: 'workout-minutes', label: 'Workout', metric: 'minutes' }, [5, 10, 20, 35, 50]),
     },
     {
-      id: 'move-tiny-circuit',
+      id: 'move-stretching',
       pillar: 'move',
-      label: 'Tiny circuit',
+      label: 'Stretching',
       version: 1,
-      circuit: { exercises: [] },
-      levels: [
-        { level: 1, steps: [{ id: 'circuit-rounds', label: 'Circuit rounds', metric: 'rounds', amount: 1 }] },
-        { level: 2, steps: [{ id: 'circuit-rounds', label: 'Circuit rounds', metric: 'rounds', amount: 2 }] },
-        { level: 3, steps: [{ id: 'circuit-rounds', label: 'Circuit rounds', metric: 'rounds', amount: 3 }] },
-        {
-          level: 4,
-          steps: [
-            { id: 'circuit-rounds', label: 'Circuit rounds', metric: 'rounds', amount: 3 },
-            { id: 'walk-minutes', label: 'Walk', metric: 'minutes', amount: 10 },
-          ],
-        },
-        {
-          level: 5,
-          steps: [
-            { id: 'circuit-rounds', label: 'Circuit rounds', metric: 'rounds', amount: 3 },
-            { id: 'walk-minutes', label: 'Walk', metric: 'minutes', amount: 20 },
-          ],
-        },
-      ],
+      levels: scalarLevels({ id: 'stretching-minutes', label: 'Stretching', metric: 'minutes' }, [5, 10, 15, 20, 30]),
     },
   ];
+}
+
+function migrateLegacyDefaultMoveTemplates(
+  templates: DailyActivityTemplate[],
+): DailyActivityTemplate[] {
+  let replaced = false;
+  let defaultsInserted = false;
+  const migrated: DailyActivityTemplate[] = [];
+  for (const template of templates) {
+    const isLegacyDefaultMove = template.pillar === 'move'
+      && LEGACY_DEFAULT_MOVE_TEMPLATE_IDS.has(template.id);
+    if (!isLegacyDefaultMove) {
+      migrated.push(template);
+      continue;
+    }
+    replaced = true;
+    if (!defaultsInserted) {
+      migrated.push(...createDefaultDailyActivityTemplates().filter(candidate => candidate.pillar === 'move'));
+      defaultsInserted = true;
+    }
+  }
+  return replaced ? migrated : templates;
 }
 
 export function createDefaultDailyMomentumState(): DailyMomentumState {
@@ -288,12 +298,18 @@ export function normalizeDailyMomentumState(value: unknown): DailyMomentumState 
   if (value == null) return createDefaultDailyMomentumState();
   if (!isRecord(value)) throw new Error('Daily momentum account data must be an object.');
   const schemaVersion = value.schemaVersion ?? DAILY_MOMENTUM_SCHEMA_VERSION;
-  if (schemaVersion !== DAILY_MOMENTUM_SCHEMA_VERSION) {
+  if (
+    schemaVersion !== DAILY_MOMENTUM_SCHEMA_VERSION
+    && schemaVersion !== LEGACY_DAILY_MOMENTUM_SCHEMA_VERSION
+  ) {
     throw new Error(`Daily momentum schemaVersion ${String(schemaVersion)} is not supported by this client.`);
   }
   const templateValues = value.templates ?? createDefaultDailyActivityTemplates();
   if (!Array.isArray(templateValues)) throw new Error('Daily momentum templates must be an array.');
-  const templates = templateValues.map(normalizeDailyActivityTemplate);
+  const normalizedTemplates = templateValues.map(normalizeDailyActivityTemplate);
+  const templates = schemaVersion === LEGACY_DAILY_MOMENTUM_SCHEMA_VERSION
+    ? migrateLegacyDefaultMoveTemplates(normalizedTemplates)
+    : normalizedTemplates;
   const templateIds = new Set<string>();
   for (const template of templates) {
     if (templateIds.has(template.id)) throw new Error(`Daily momentum template id ${template.id} is duplicated.`);
@@ -311,7 +327,7 @@ export function normalizeDailyMomentumState(value: unknown): DailyMomentumState 
   }
   return {
     ...value,
-    schemaVersion: schemaVersion as number,
+    schemaVersion: DAILY_MOMENTUM_SCHEMA_VERSION,
     templates,
     logs,
     reminderPreferences: {
