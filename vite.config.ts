@@ -1,15 +1,11 @@
 /// <reference types="vitest/config" />
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import path from 'path'
 
 const packageJson = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
 ) as { version: string }
-const rootDirectory = fileURLToPath(new URL('.', import.meta.url))
-
 export function resolveAssetBase(): string {
   return '/helm/'
 }
@@ -42,8 +38,5 @@ export default defineConfig({
     // Keep successful expected warnings out of hosted logs; failed-test output remains visible.
     silent: 'passed-only',
     exclude: vitestExcludedPaths,
-    alias: {
-      'openwakeword-wasm-browser': path.resolve(rootDirectory, 'src/test/__mocks__/openwakeword.ts'),
-    },
   },
 })

@@ -16,7 +16,7 @@ export default defineConfig({
   testDir: './e2e',
   outputDir: `test-results/playwright/${runId}`,
   timeout: 30_000,
-  retries: isCi ? 1 : 0,
+  retries: 0,
   failOnFlakyTests: isCi,
   use: {
     baseURL,
