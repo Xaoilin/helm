@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { executeActionPlan } from '../assistant/executor';
 import { parseActionPlan } from '../assistant/plannerSchema';
@@ -120,5 +122,16 @@ describe('assistant planner and executor boundary', () => {
       },
     });
     expect(updateTask).not.toHaveBeenCalled();
+  });
+
+  it('proves chat and voice enter the same runtime before the shared executor', () => {
+    const root = resolve(__dirname, '../..');
+    const chat = readFileSync(resolve(root, 'src/store/contexts/ChatContext.tsx'), 'utf8');
+    const voice = readFileSync(resolve(root, 'src/components/VoiceAssistant.tsx'), 'utf8');
+    const runtime = readFileSync(resolve(root, 'src/assistant/runtime.ts'), 'utf8');
+
+    expect(chat).toContain("import { runAssistantTurn } from '../../assistant/runtime'");
+    expect(voice).toContain("import { runAssistantTurn } from '../assistant/runtime'");
+    expect(runtime).toContain("import { executeActionPlan } from './executor'");
   });
 });

@@ -39,7 +39,18 @@ Baseline tree `ef9e20abe66113331c42de731b2d0d0e100f36b3` contained 128 authored 
 
 Three same-host warm `npm run check` attempts were measured before replacement. One passed in 36.02 seconds; two failed in unrelated browser cases after 33.84 and 34.41 seconds. Because the old portfolio could not provide three successful comparable samples, KAN-252 uses the accepted v0.2.110 local receipt of 35.2 seconds as its labelled historical comparison, as allowed by the ticket.
 
-Candidate timings, final file inventory, source CI elapsed time, and deliberate unit/E2E/database failure-probe receipts are recorded with the accepted KAN-252 release evidence. Timings exclude unavoidable one-time Supabase engine startup when the database execution itself is compared.
+The candidate contains 19 authored files: 9 under `src/test`, 5 under `e2e`, and 5 under `supabase/tests`. The warm replacement samples before the final complete gate were:
+
+| Boundary | Three successful samples | Median |
+| --- | --- | --- |
+| Unit | 1.49s, 1.11s, 1.10s | 1.11s |
+| Browser E2E | 7.3s, 7.3s, 7.2s | 7.3s |
+| Database, engine already warm | 54.38s, 50.33s, 49.95s | 50.33s |
+| `agent:fast` | 7.58s, 7.62s, 7.58s | 7.58s |
+
+The unit, E2E, and database gates were also run with deliberate representative faults. Workflow operations `4690e698-a7af-44bc-a1f3-e4b24bc38687`, `e756979f-39ae-412a-af33-73d1185eef13`, and `bf674255-54cd-440d-8470-63c3805eff8e` each rejected its broken check; every probe was then removed or restored before the candidate was frozen.
+
+The final three-run `npm run check` table and accepted source CI elapsed time are release receipts and are added only after those exact candidate runs exist.
 
 ## Known Unproven Behavior
 
