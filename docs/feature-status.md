@@ -1,6 +1,6 @@
 # Feature Status
 
-Use this matrix when updating documentation or UI copy. `real` means the hosted website has an implemented path; `placeholder/simulated` means the integration is intentionally not presented as live.
+Use this matrix when updating documentation or UI copy. `real` means the hosted website has an implemented path; `placeholder/simulated` means the integration is intentionally not presented as live; `required-gap` means policy requires the capability but the implemented path is not yet available.
 
 | Area | Status | Notes |
 | --- | --- | --- |
@@ -18,6 +18,9 @@ Use this matrix when updating documentation or UI copy. `real` means the hosted 
 | Lina activity log and undo | `real` | Chat and voice mutations create account-backed audit entries with grounded undo metadata. One workflow-named coordinator owns the supported task, prayer, calendar, finance, and knowledge inverse operations. |
 | Global Inventory | `real` | Account-backed Owned and Needed records support search, filters, dimensions, specifications, stock changes, acquisition, archive, and reviewed multiline import. Projects link to the same catalogue by stable key. |
 | Inventory planning boundary | `real` | The authenticated `sabah-one-inventory-mcp` Edge Function exposes seven narrow Inventory tools through Supabase OAuth, RLS, and dedicated RPCs. It does not expose Secrets, finance, calendars, chats, settings, or broad mutations. |
+| Employment application tracker | `real` | The account-backed Employment tab tracks company, role, URL, work type, fully-remote eligibility and evidence, compensation, pipeline status, application date, next action/date, notes, and contact/evidence history. It includes summaries, filters, current opportunities, daily activity, empty states, and the three confirmed seed records. |
+| Employment external agent access | `required-gap` | Lina can navigate to Employment, but no external Employment mutation tool is published. Direct database and UI fallbacks are prohibited; a dedicated OAuth approval and least-privilege MCP/RPC boundary is required. |
+| Cross-feature external agent access | `required-gap` | `docs/agent-access.md` makes domain-scoped MCP the required external AI interface. Inventory is currently the only published external domain; other features must add a narrow MCP contract when materially changed. Secrets remain intentionally excluded. |
 | AI diagnostics in Debug | `real` | Debug shows hosted assistant readiness, the latest planning and validation trace, pending confirmation, execution facts, narration response, and hosted usage estimates without exposing tokens. |
 | User-facing Database / AI Health Center | `real` | Dashboard and Settings show Supabase session, Broadcast, Google Calendar, hosted assistant, and voice readiness with actionable reconnect or unavailable states. |
 | Night Compass prayer-first dashboard | `real` | Dashboard renders the canonical five-prayer sequence first, followed by a source-reviewed Quran motivation card, Learn and Move progression, and one compact Tasks route. Meaning is labelled as paraphrase and linked to the exact Quran.com source. |

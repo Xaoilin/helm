@@ -6,6 +6,8 @@ Lina should understand and execute app commands conversationally, while staying 
 
 For the turn-by-turn contract, see `docs/assistant-conversational-architecture.md`.
 
+Lina is the in-app agent layer. External AI agents use domain-scoped MCP tools under the separate contract in [`agent-access.md`](agent-access.md); they must not automate Lina's UI or call account storage directly.
+
 ## Current Runtime
 
 The shipped runtime in `src/assistant/` provides:
@@ -106,6 +108,8 @@ It can sound smart while hallucinating entities, inventing actions, or skipping 
 ### UI automation
 
 It is the wrong abstraction for an app we own. Lina should use semantic capabilities and account boundaries, not approximate clicks.
+
+The same rule applies to external agents: use a published Sabah One MCP capability or report that the domain is unavailable.
 
 ## Module Layout
 

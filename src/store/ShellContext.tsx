@@ -21,6 +21,7 @@ import { useCalendar } from './contexts/CalendarContext';
 import { useChatContext } from './contexts/ChatContext';
 import { useClockContext } from './contexts/ClockContext';
 import { useDashboardFocusContext } from './contexts/DashboardFocusContext';
+import { useEmploymentContext } from './contexts/EmploymentContext';
 import { useFinanceContext } from './contexts/FinanceContext';
 import { useGamificationContext } from './contexts/GamificationContext';
 import { useHealthContext } from './contexts/HealthContext';
@@ -59,6 +60,7 @@ function isShellSurface(value: string | null): value is Surface {
     case 'inventory':
     case 'secrets':
     case 'tasks':
+    case 'employment':
     case 'finance':
     case 'health':
     case 'knowledge':
@@ -90,6 +92,7 @@ function AppReadinessGate({ children }: { children: ReactNode }) {
   const chatLoaded = useChatContext().loaded;
   const knowledgeLoaded = useKnowledgeContext().loaded;
   const inventoryLoaded = useInventoryContext().loaded;
+  const employmentLoaded = useEmploymentContext().loaded;
   const healthLoaded = useHealthContext().loaded;
   const financeLoaded = useFinanceContext().loaded;
   const gamificationLoaded = useGamificationContext().loaded;
@@ -106,6 +109,7 @@ function AppReadinessGate({ children }: { children: ReactNode }) {
     && chatLoaded
     && knowledgeLoaded
     && inventoryLoaded
+    && employmentLoaded
     && healthLoaded
     && financeLoaded
     && gamificationLoaded

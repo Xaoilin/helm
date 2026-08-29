@@ -19,12 +19,14 @@ HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the lin
 - Secret values belong in the account-owned Supabase Vault path. Never place plaintext in shared records, browser storage, Broadcast payloads, logs, exports, assistant context, or durable memory.
 - Project catalogue records may sync names, links, documentation, and display-only guidance; private credentials never enter shared records or assistant context.
 - Prayer reminders use a page-open browser timer and Web Notifications when permitted. The in-app banner is the fallback when notification permission or delivery is unavailable.
+- External AI agents use published Sabah One MCP tools for account reads and mutations. Never substitute direct database access, generic record RPCs, shared-file edits, or UI automation when a domain MCP tool is unavailable.
 - Do not swallow errors. Surface user-actionable failures and preserve diagnostics for opaque integrations.
 
 ## Delivery Rules
 
 - Reproduce defects, trace the root cause, and add the smallest relevant regression coverage.
 - Update relevant docs and `docs/feature-status.md` when product status changes.
+- A new or materially changed account-data feature must expose and test a narrow semantic agent interface, or record the missing MCP capability as an explicit acceptance blocker. See `docs/agent-access.md`.
 - Keep the required GitHub checks and their stable names aligned with the hosted web pipeline.
 - Protected `master` promotion, GitHub Pages deployment, Supabase function deployment, and live verification are Sol-owned acceptance steps.
 - Never describe branch-only work as deployed or live.
@@ -36,6 +38,7 @@ HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the lin
 - `docs/feature-status.md`
 - `docs/prayer-tracking-and-reminders.md`
 - `docs/assistant-command-architecture.md`
+- `docs/agent-access.md`
 - `docs/agentic-coding-workflow.md`
 <!-- BEGIN CORTEX ONE -->
 <!-- CORTEX ONE BRIDGE VERSION: 1 -->

@@ -13,8 +13,8 @@ export interface EncodedStoreRecord {
   position: number | null;
 }
 
-const SINGLETON_STORE_KEYS = new Set(['settings']);
-const COMPLEX_STORE_KEYS = new Set(['clock', 'gamification', 'prayerTracking']);
+const SINGLETON_STORE_KEYS = new Set(['settings', 'employment']);
+const COMPLEX_STORE_KEYS = new Set(['clock', 'employment', 'gamification', 'prayerTracking']);
 
 export const DEVICE_SETTING_FIELDS = [
   'deepgramApiKey',

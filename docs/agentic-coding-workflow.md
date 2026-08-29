@@ -26,6 +26,12 @@ The policy scanner keeps these contracts visible:
 - CI keeps stable required job names, exact-tree verification, and review fallback behavior;
 - deployment cannot publish a candidate whose database or Supabase function prerequisite is missing.
 
+## AI Agent Product Access
+
+External agents use published, domain-scoped Sabah One MCP tools. A CLI is reserved for repository validation and fixtures; it must not become a direct account-data path. Direct Supabase access, generic record mutations, session-token reuse, and UI automation are not supported fallbacks.
+
+New or materially changed account-data features must deliver a narrow semantic MCP surface or carry the missing capability as an explicit acceptance blocker. The complete contract and current domain matrix are in [`agent-access.md`](agent-access.md).
+
 ## Sabah One Inventory MCP
 
 Sabah One has one narrow MCP boundary for cross-project Inventory planning. Live records and actions come from the authenticated `sabah-one-inventory-mcp` Supabase Edge Function; the private planning integration supplies repeatable project-chat behavior. The MCP does not expose generic app state, Secrets, finance, calendars, chats, settings, or broad mutations.
