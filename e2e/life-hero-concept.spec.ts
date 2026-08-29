@@ -32,6 +32,13 @@ async function readViewerState(page: import('@playwright/test').Page) {
   });
 }
 
+async function forcePrimaryQuality(page: import('@playwright/test').Page) {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'deviceMemory', { configurable: true, value: 8 });
+    Object.defineProperty(navigator, 'hardwareConcurrency', { configurable: true, value: 8 });
+  });
+}
+
 test.describe('Life Hero maximum-quality GLB proof', () => {
   test.describe.configure({ timeout: 120_000 });
 
@@ -85,6 +92,7 @@ test.describe('Life Hero maximum-quality GLB proof', () => {
   });
 
   test('renders the actual maximum-quality GLB and toggles the jacket without replacing the body', async ({ page }) => {
+    await forcePrimaryQuality(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(CONCEPT_PATH);
     await waitForModel(page);
