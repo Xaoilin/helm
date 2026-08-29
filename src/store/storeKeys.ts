@@ -21,6 +21,7 @@ export const SHARED_STORE_KEYS = [
   { key: 'projectPages', label: 'Project pages', description: 'Project wiki pages.' },
   { key: 'inventoryItems', label: 'Inventory items', description: 'Owned tools, equipment, materials, and stock.' },
   { key: 'inventoryNeeds', label: 'Inventory needs', description: 'Needed, ordered, acquired, and dismissed requirements.' },
+  { key: 'employment', label: 'Employment tracker', description: 'Job-search pipeline, next actions, and evidence history.' },
   { key: 'tasks', label: 'Tasks', description: 'Tasks, habits, goals, and board state.' },
   { key: 'dashboardFocusFeedback', label: 'Dashboard focus feedback', description: 'Up Next feedback history.' },
   { key: 'knowledgeTopics', label: 'Knowledge topics', description: 'Knowledge base topic taxonomy.' },

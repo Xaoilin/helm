@@ -187,6 +187,61 @@ export interface ProjectPage {
   updatedAt: string;
 }
 
+// ── Employment ──
+export type EmploymentWorkType = 'contract' | 'permanent' | 'unknown';
+export type EmploymentRemoteRegion = 'uk' | 'emea' | 'global' | 'unknown';
+export type EmploymentRemoteStatus = 'confirmed' | 'needs_verification';
+export type EmploymentApplicationStatus =
+  | 'lead'
+  | 'recruiter'
+  | 'applied'
+  | 'interview'
+  | 'offer'
+  | 'closed';
+export type EmploymentHistoryKind =
+  | 'application'
+  | 'contact'
+  | 'document'
+  | 'remote_evidence'
+  | 'note';
+
+export interface EmploymentHistoryEntry {
+  id: string;
+  kind: EmploymentHistoryKind;
+  /** Local calendar date when confirmed. Omitted when the source did not supply one. */
+  date?: string;
+  summary: string;
+  details: string;
+  evidenceUrl?: string;
+}
+
+export interface EmploymentApplication {
+  id: string;
+  company: string;
+  role: string;
+  url?: string;
+  workType: EmploymentWorkType;
+  remoteRegion: EmploymentRemoteRegion;
+  remoteStatus: EmploymentRemoteStatus;
+  remoteEvidence: string;
+  remoteCaveat?: string;
+  compensation?: string;
+  status: EmploymentApplicationStatus;
+  /** Local calendar date; omitted until an application is actually submitted. */
+  applicationDate?: string;
+  nextAction: string;
+  nextActionDate?: string;
+  notes: string;
+  history: EmploymentHistoryEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmploymentTrackerState {
+  seedVersion: number;
+  applications: EmploymentApplication[];
+}
+
 // ── Inventory ──
 export type InventoryCategory =
   | 'machine'
@@ -1091,6 +1146,7 @@ export type Surface =
   | 'inventory'
   | 'secrets'
   | 'tasks'
+  | 'employment'
   | 'finance'
   | 'health'
   | 'knowledge'

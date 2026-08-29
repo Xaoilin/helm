@@ -38,6 +38,7 @@ const SURFACE_REGISTRY = {
   inventory: { label: 'Inventory', icon: '\u{1F9F0}', component: lazy(() => import('./surfaces/InventorySurface')) },
   secrets: { label: 'Secrets', icon: '\u{1F510}', component: lazy(() => import('./surfaces/SecretsSurface')) },
   tasks: { label: 'Tasks', icon: '\u2705', component: lazy(() => import('./surfaces/TasksSurface')) },
+  employment: { label: 'Employment', icon: '\u{1F4BC}', component: lazy(() => import('./surfaces/EmploymentSurface')) },
   finance: { label: 'Finance', icon: '\u{1F4B7}', component: lazy(() => import('./surfaces/FinanceSurface')) },
   health: { label: 'Health', icon: '\u{1F34E}', component: lazy(() => import('./surfaces/HealthSurface')) },
   knowledge: { label: 'Knowledge', icon: '\u{1F4DA}', component: lazy(() => import('./surfaces/KnowledgeSurface')) },
@@ -227,6 +228,7 @@ function AppInner() {
         aria-label={`${shell.surface} surface`}
         aria-disabled={readOnly || undefined}
         inert={readOnly || undefined}
+        tabIndex={0}
       >
         {renderSurface()}
       </main>

@@ -39,6 +39,7 @@ const SURFACE_VALUES: readonly Surface[] = [
   'inventory',
   'secrets',
   'tasks',
+  'employment',
   'finance',
   'health',
   'knowledge',

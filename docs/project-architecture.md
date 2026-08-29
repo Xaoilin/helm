@@ -18,7 +18,7 @@ The current stack is:
 
 ### Hosted web shell
 
-The React shell renders navigation, the active surface, the global Lina panel, and Supabase sign-in controls. The supported surfaces are Dashboard, Chat, Calendar, Clock, Trips, Tasks, Projects, Inventory, Secrets, Finance, Health, Knowledge, Profile, Integrations, Activity, Settings, and Debug.
+The React shell renders navigation, the active surface, the global Lina panel, and Supabase sign-in controls. The supported surfaces are Dashboard, Chat, Calendar, Clock, Trips, Tasks, Employment, Projects, Inventory, Secrets, Finance, Health, Knowledge, Profile, Integrations, Activity, Settings, and Debug.
 
 The visible version comes from the web build and the deployed `public/release.json` manifest. Open pages check the manifest and perform one browser reload when a newer deployed semver is available. The active surface is kept in browser session state so a legitimate reload can return the user to the same section.
 
@@ -49,7 +49,7 @@ Browser session state is limited to transient UI state, permission state, and bo
 - chat conversations, messages, assistant activity, and undo metadata
 - calendar accounts, sources, and events
 - tasks, goals, daily habits, prayer tasks, and project workflow metadata
-- projects, project wiki pages, Inventory items, and acquisition needs
+- projects, project wiki pages, Inventory items, acquisition needs, and Employment applications with contact/evidence history
 - encrypted secret metadata and one-at-a-time revealed secret details
 - Clock timers and stopwatches, knowledge entries, health logs, finance records, trips, integrations, and settings
 
@@ -120,6 +120,7 @@ Network failures use visible error states and the established retry, circuit-bre
 - Tasks and gamification share canonical task, prayer outcome, XP, and streak boundaries. Prayer outcomes are keyed by local prayer date and prayer name rather than task ID.
 - Projects is a reference-first account catalogue. Searchable cards expose links, repositories, documentation, display-only prerequisites, and portable guidance; Board, Milestones, and Wiki remain available through Manage project. No private credentials or machine-specific paths are part of the shared catalogue.
 - Inventory is a global account-backed Owned and Needed catalogue. Project views filter the same records by stable catalogue key rather than making project copies.
+- Employment is an account-backed singleton tracker containing the pipeline, remote evidence, compensation, next actions, notes, and contact/evidence history. Prayer, Learn, and Move remain the structurally dominant Dashboard pillars; Employment is a separate navigation surface.
 - Secrets is an account-owned encrypted credential catalogue with search, filters, immediate Reveal/Hide/Copy, metadata editing, and reversible Archive/Restore.
 - Clock persists multiple account-backed timer and stopwatch records. Health, Knowledge, Finance, and Trips likewise use the signed-in account database.
 - Integrations is the operational hub for connected Google Calendar and other supported or placeholder providers.
@@ -129,6 +130,12 @@ Network failures use visible error states and the established retry, circuit-bre
 The `sabah-one-inventory-mcp` Edge Function exposes exactly seven narrow Inventory tools through a remote MCP endpoint. Supabase OAuth 2.1 with PKCE supplies user tokens; the function validates the token and uses the normal authenticated client. RLS and dedicated RPCs limit access to `inventoryItems`, `inventoryNeeds`, and minimal project name/catalogue-key resolution. Generic snapshots, Secrets, finance, calendars, chats, settings, and broad mutation RPCs reject OAuth-client sessions.
 
 The private planning integration checks live Inventory records before recommendations, requires explicit approval for writes, and keeps bulk or ambiguous changes behind review.
+
+### AI agent access
+
+External AI agents use published domain MCP tools, never direct account storage or UI automation. Each domain endpoint owns explicit OAuth consent, least-privilege RPCs, semantic operations, confirmation policy, and receipt-backed claims. A missing MCP capability is an unavailable state rather than permission to reuse another domain's approval.
+
+The Inventory MCP is currently the only published external agent boundary. Employment navigation is grounded in Lina, but Employment account mutations remain blocked for external agents until a dedicated approval and RPC boundary is delivered. The acceptance contract and current matrix are maintained in [`agent-access.md`](agent-access.md).
 
 ## Testing And Operational Reality
 
