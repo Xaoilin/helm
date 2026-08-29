@@ -27,6 +27,14 @@ import {
 } from '../persistence';
 import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return String(error);
+}
+
 export interface EmploymentContextValue {
   applications: EmploymentApplication[];
   loaded: boolean;
@@ -67,8 +75,13 @@ export function EmploymentProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     let initializing = false;
+    let retryRequested = false;
+    let receivedInitialSessionSnapshot = false;
     const initialize = async () => {
-      if (initializing) return;
+      if (initializing) {
+        retryRequested = true;
+        return;
+      }
       initializing = true;
       try {
         const stored = await loadStore<EmploymentTrackerState>('employment');
@@ -90,24 +103,31 @@ export function EmploymentProvider({ children }: { children: ReactNode }) {
         if (active) {
           stateRef.current = { seedVersion: 0, applications: [] };
           setState(stateRef.current);
-          setError(loadError instanceof Error ? loadError.message : String(loadError));
+          setError(getErrorMessage(loadError));
         }
       } finally {
         initializing = false;
         if (active) setLoaded(true);
+        if (active && retryRequested && stateRef.current.seedVersion === 0) {
+          retryRequested = false;
+          void initialize();
+        } else {
+          retryRequested = false;
+        }
       }
     };
 
-    void initialize();
     const unsubscribe = subscribeSyncSession(snapshot => {
       if (
         snapshot.status === 'ready'
         && !snapshot.readOnly
         && stateRef.current.seedVersion === 0
       ) {
+        receivedInitialSessionSnapshot = true;
         void initialize();
       }
     });
+    if (!receivedInitialSessionSnapshot) void initialize();
     return () => {
       active = false;
       unsubscribe();
@@ -121,7 +141,7 @@ export function EmploymentProvider({ children }: { children: ReactNode }) {
       if (!stored) throw new Error('Employment tracker data is unavailable from the signed-in account.');
       publish(stored);
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
+      setError(getErrorMessage(refreshError));
     }
   });
 
@@ -144,7 +164,7 @@ export function EmploymentProvider({ children }: { children: ReactNode }) {
         if (!confirmed) throw new Error('The database did not return the confirmed Employment tracker change.');
         publish(confirmed);
       } catch (mutationError) {
-        setError(mutationError instanceof Error ? mutationError.message : String(mutationError));
+        setError(getErrorMessage(mutationError));
         throw mutationError;
       } finally {
         pendingMutationsRef.current -= 1;

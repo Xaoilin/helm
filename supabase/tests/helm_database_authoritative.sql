@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(33);
+select plan(38);
 
 select has_table('public', 'helm_account_state', 'account state schema exists');
 select has_table('public', 'helm_records', 'normalized record schema exists');
@@ -31,6 +31,21 @@ select ok(
 select ok(
   has_function_privilege('authenticated', 'public.apply_helm_mutations(uuid, jsonb)', 'execute'),
   'authenticated role can execute the mutation RPC'
+);
+select ok(
+  (
+    select internal_function.prosecdef
+      and internal_function.proowner = public_function.proowner
+    from pg_proc as internal_function
+    cross join pg_proc as public_function
+    where internal_function.oid = 'helm_private.apply_helm_mutations_direct(uuid, jsonb)'::regprocedure
+      and public_function.oid = 'public.apply_helm_mutations(uuid, jsonb)'::regprocedure
+  ),
+  'internal mutation function remains SECURITY DEFINER with its established owner'
+);
+select ok(
+  not has_function_privilege('anon', 'public.apply_helm_mutations(uuid, jsonb)', 'execute'),
+  'anonymous callers cannot execute the mutation RPC'
 );
 select ok(
   not has_table_privilege('authenticated', 'public.helm_records', 'insert'),
@@ -192,6 +207,34 @@ select ok(
       and record -> 'payload' ->> 'title' = 'Patched in transaction'
   ),
   'snapshot exposes the complete restored record'
+);
+select is(
+  (
+    public.apply_helm_mutations(
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0006',
+      '[{"op":"create","collection":"employment","recordId":"employment-fix","payload":{"id":"employment-fix","company":"Example Ltd","role":"Backend Engineer","status":"lead"}}]'::jsonb
+    ) ->> 'accountVersion'
+  )::bigint,
+  6::bigint,
+  'an authenticated session can mutate the Employment collection'
+);
+select is(
+  (select payload ->> 'company'
+   from public.helm_records
+   where user_id = '11111111-1111-4111-8111-111111111111'
+     and collection = 'employment'
+     and record_id = 'employment-fix'),
+  'Example Ltd',
+  'Employment mutations persist through the normalized record boundary'
+);
+select throws_ok(
+  $$select public.apply_helm_mutations(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0007',
+    '[{"op":"create","collection":"inventoryItems","recordId":"blocked-inventory","payload":{"id":"blocked-inventory"}}]'::jsonb
+  )$$,
+  '42501',
+  'Inventory mutations must use the bounded Inventory interface.',
+  'the generic mutation RPC still excludes Inventory mutations'
 );
 
 select set_config(
