@@ -70,6 +70,8 @@ describe('Night Compass activity title help', () => {
       expect(screen.getByRole('heading', { name: label, level: 3 })).toBeInTheDocument();
       const trigger = screen.getByRole('button', { name: `About ${label}` });
       const tooltipId = `nc-${pillar}-${templateId}-help`;
+      expect(trigger).not.toHaveTextContent('?');
+      expect(trigger.querySelector('[data-icon="eye"]')).toBeInTheDocument();
       expect(trigger).toHaveAttribute('aria-controls', tooltipId);
       expect(trigger).toHaveAttribute('aria-expanded', 'false');
       expect(trigger.closest('.nc-progress-controls')).toBeNull();
