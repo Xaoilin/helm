@@ -84,34 +84,12 @@ function frameModel(root) {
   setView(state.view)
 }
 
-function getHandBounds(boneName) {
-  const base = state.base
-  if (!base?.isSkinnedMesh) return null
-  const boneIndex = base.skeleton.bones.findIndex(bone => bone.name === boneName)
-  const positionAttribute = base.geometry.getAttribute('position')
-  const skinIndexAttribute = base.geometry.getAttribute('skinIndex')
-  const skinWeightAttribute = base.geometry.getAttribute('skinWeight')
-  if (boneIndex < 0 || !positionAttribute || !skinIndexAttribute || !skinWeightAttribute) return null
-
-  const box = new THREE.Box3()
-  const point = new THREE.Vector3()
-  const components = ['x', 'y', 'z', 'w']
-  base.updateMatrixWorld(true)
-  for (let vertex = 0; vertex < positionAttribute.count; vertex += 1) {
-    let handWeight = 0
-    for (let component = 0; component < 4; component += 1) {
-      const joint = skinIndexAttribute[`get${components[component].toUpperCase()}`](vertex)
-      if (joint === boneIndex) {
-        handWeight += skinWeightAttribute[`get${components[component].toUpperCase()}`](vertex)
-      }
-    }
-    if (handWeight < 0.35) continue
-    point.fromBufferAttribute(positionAttribute, vertex)
-    base.applyBoneTransform(vertex, point)
-    base.localToWorld(point)
-    box.expandByPoint(point)
-  }
-  return box.isEmpty() ? null : box
+function getHandFocus(boneName) {
+  const bone = state.root?.getObjectByName(boneName)
+  if (!bone) return null
+  const focus = new THREE.Vector3()
+  bone.getWorldPosition(focus)
+  return focus
 }
 
 function setView(viewName) {
@@ -140,16 +118,12 @@ function setView(viewName) {
     camera.fov = 27
   } else if (viewName === 'left-hand' || viewName === 'right-hand') {
     const boneName = viewName === 'left-hand' ? 'LeftHand' : 'RightHand'
-    const handBox = getHandBounds(boneName)
-    if (!handBox) return false
-    handBox.getCenter(target)
-    const handSize = handBox.getSize(new THREE.Vector3())
+    const handFocus = getHandFocus(boneName)
+    if (!handFocus) return false
+    target.copy(handFocus)
+    target.y += height * 0.015
     camera.fov = 27
-    const handExtent = Math.max(handSize.x, handSize.y, handSize.z)
-    const distance = Math.max(
-      handExtent / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.35,
-      height * 0.24,
-    )
+    const distance = height * 0.24
     position.copy(target)
     position.x += (viewName === 'left-hand' ? -1 : 1) * distance * 0.16
     position.y += distance * 0.04

@@ -28,8 +28,8 @@ function accessorSha256(model, accessorIndex) {
 }
 
 function hasEmissive(material) {
-  return material?.emissiveTexture !== undefined
-    || material?.emissiveFactor?.some(component => component !== 0)
+  return Boolean(material?.emissiveTexture !== undefined
+    || material?.emissiveFactor?.some(component => component !== 0))
 }
 
 function inspectMaxQuality(model, errors) {
