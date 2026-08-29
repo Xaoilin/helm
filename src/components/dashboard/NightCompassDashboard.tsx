@@ -604,7 +604,9 @@ export default function NightCompassDashboard() {
                         onClick={() => prayer.requestPrayerCompletion(name, { source: 'dashboard' })}
                       >
                         <span className="nc-prayer-name">{name}</span>
-                        <span className="nc-prayer-symbol" aria-hidden="true">{PRAYER_SYMBOLS[name]}</span>
+                        <span className="nc-prayer-symbol" data-prayer={name} aria-hidden="true">
+                          {PRAYER_SYMBOLS[name]}
+                        </span>
                         <span className="nc-prayer-arabic">{entry?.nameArabic ?? PRAYER_NAMES[name]?.arabic}</span>
                         <time>{entry?.time ?? '—'}</time>
                         <span className="nc-prayer-state">{stateLabel}</span>
