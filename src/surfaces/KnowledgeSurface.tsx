@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useKnowledgeContext } from "../store/contexts/KnowledgeContext";
+import ElifBManualEvidence from '../components/knowledge/ElifBManualEvidence';
 import type { KnowledgeTopic, KnowledgeEntry, KnowledgeSource, LifestyleItem, LifestyleType, LifestyleStatus } from '../types/domain';
 
 type Tab = 'browse' | 'add' | 'search' | 'lifestyle';
@@ -454,6 +455,7 @@ export default function KnowledgeSurface() {
         <button className="btn btn-primary" onClick={() => openAddEntry()}>+ Add Entry</button>
       </div>
       <div className="surface-body">
+        <ElifBManualEvidence />
         <div className="tabs">
           <button className={`tab ${tab === 'browse' ? 'active' : ''}`} onClick={() => { setTab('browse'); setSelectedTopicId(null); }}>Browse</button>
           <button className={`tab ${tab === 'add' ? 'active' : ''}`} onClick={() => { setTab('add'); if (!editingEntry) resetEntryForm(); }}>
