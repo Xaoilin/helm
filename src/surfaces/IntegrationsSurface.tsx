@@ -14,6 +14,7 @@ import {
   completeGithubLifeHeroInstallation,
   disconnectGithubLifeHero,
   githubConnectionNeedsReconnect,
+  githubInstalledAppId,
   getGithubLifeHeroStatus,
   listGithubLifeHeroRepositories,
   saveGithubLifeHeroSelection,
@@ -160,7 +161,13 @@ export default function IntegrationsSurface() {
     setGithubBusy('authorize');
     setGithubError(null);
     try {
+      const installationId = githubInstalledAppId(window.location.search);
       const result = await beginGithubLifeHeroAuthorization(window.location.href.split('?')[0]);
+      if (installationId) {
+        const completion = await completeGithubLifeHeroInstallation(result.state, installationId);
+        window.location.assign(completion.authorizationUrl);
+        return;
+      }
       window.location.assign(result.installationUrl);
     } catch (error) {
       setGithubError(error instanceof Error ? error.message : 'GitHub authorization could not start.');

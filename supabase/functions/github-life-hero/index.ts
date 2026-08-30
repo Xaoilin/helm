@@ -421,7 +421,7 @@ async function beginAuthorization(service: SupabaseClient, userId: string, redir
   authorization.searchParams.set('client_id', GITHUB_APP_CLIENT_ID);
   authorization.searchParams.set('redirect_uri', redirectUri);
   authorization.searchParams.set('state', state);
-  return success({ installationUrl: installation.toString(), authorizationUrl: authorization.toString() });
+  return success({ installationUrl: installation.toString(), authorizationUrl: authorization.toString(), state });
 }
 
 async function completeInstallation(service: SupabaseClient, userId: string, state: string, installationId: number): Promise<Response> {

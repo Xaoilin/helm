@@ -14,6 +14,7 @@ import { withAllowedOriginCors } from '../../supabase/functions/github-life-hero
 import {
   GithubLifeHeroError,
   githubConnectionNeedsReconnect,
+  githubInstalledAppId,
   parseGithubLifeHeroResponse,
 } from '../services/githubLifeHero';
 
@@ -51,6 +52,13 @@ describe('GitHub Life Hero evidence qualification', () => {
       new Set([allowedOrigin]),
     );
     expect(blocked.headers.has('Access-Control-Allow-Origin')).toBe(false);
+  });
+
+  it('reuses a verified existing installation callback for OAuth', () => {
+    expect(githubInstalledAppId('?installation_id=157729668&setup_action=install')).toBe(157729668);
+    expect(githubInstalledAppId('?installation_id=0')).toBeNull();
+    expect(githubInstalledAppId('?installation_id=not-a-number')).toBeNull();
+    expect(githubFunctionSource).toContain('authorizationUrl: authorization.toString(), state');
   });
 
   it('requires an authored merged pull request with a stable provider identity', () => {

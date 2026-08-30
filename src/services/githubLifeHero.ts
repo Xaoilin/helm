@@ -45,6 +45,11 @@ export function githubConnectionNeedsReconnect(status: GithubLifeHeroStatus | nu
   return status?.status === 'revoked';
 }
 
+export function githubInstalledAppId(search: string): number | null {
+  const installationId = Number(new URLSearchParams(search).get('installation_id'));
+  return Number.isSafeInteger(installationId) && installationId > 0 ? installationId : null;
+}
+
 export interface GithubLifeHeroSyncReceipt {
   status: 'success' | 'empty';
   scanned: number;
@@ -156,12 +161,14 @@ async function invoke<T>(body: Record<string, unknown>): Promise<T> {
 export async function beginGithubLifeHeroAuthorization(redirectUri: string): Promise<{
   installationUrl: string;
   authorizationUrl: string;
+  state: string;
 }> {
-  const result = await invoke<{ installationUrl: string; authorizationUrl: string }>({
+  const result = await invoke<{ installationUrl: string; authorizationUrl: string; state: string }>({
     action: 'begin_authorization',
     redirectUri,
   });
-  if (!result || typeof result.installationUrl !== 'string' || typeof result.authorizationUrl !== 'string') {
+  if (!result || typeof result.installationUrl !== 'string' || typeof result.authorizationUrl !== 'string'
+    || typeof result.state !== 'string' || !result.state) {
     throw new GithubLifeHeroError('temporary_unavailable', 'The GitHub authorization response was invalid.');
   }
   return result;
