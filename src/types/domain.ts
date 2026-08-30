@@ -1002,9 +1002,27 @@ export interface GamificationProfile {
   /** Additive pillar records kept in older-reader-tolerant profile fields. */
   dailyMomentumLearn?: DailyMomentumState;
   dailyMomentumMove?: DailyMomentumState;
+  /** Account-owned checkpoint for the non-progression Life Hero daily adventure. */
+  lifeHeroAdventure?: LifeHeroAdventureState;
 }
 
 // ── Life Hero progression ──
+export type LifeHeroAdventureAction = 'strike' | 'guard' | 'focus';
+export type LifeHeroAdventureStatus = 'ready' | 'in_progress' | 'complete' | 'defeated';
+
+export interface LifeHeroAdventureState {
+  schemaVersion: 1;
+  localDate: string;
+  status: LifeHeroAdventureStatus;
+  round: number;
+  heroHp: number;
+  foeHp: number;
+  focused: boolean;
+  log: string[];
+  updatedAt: string;
+  completedAt?: string;
+}
+
 export type LifeHeroStat =
   | 'faith'
   | 'vitality'

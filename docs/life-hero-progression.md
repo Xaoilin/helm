@@ -1,6 +1,6 @@
 # Life Hero Progression
 
-KAN-258 establishes the permanent, database-authoritative progression foundation. It does not add the dashboard character, external evidence providers, voice, combat, or product-usage rewards.
+KAN-258 establishes the permanent, database-authoritative progression foundation. KAN-270 adds a short daily adventure that consumes this read model without becoming a progression or usage-reward path. The dashboard character, external evidence providers, and voice remain separate concerns.
 
 ## Permanent model
 
@@ -43,6 +43,23 @@ All owner tables use RLS. Authenticated users can read only their rows and canno
 Metadata is limited to an 8 KiB flat scalar object and rejects credential-like keys. Raw provider payloads, tokens, secrets, cookies, and credentials do not belong in the ledger.
 
 Product usage analytics has no evidence type, rule, client input, service mapping, or RPC capable of granting XP. Usage analytics may inform product decisions in a later ticket, but it remains separate from real-world progression.
+
+## Daily adventure boundary
+
+KAN-270's daily adventure is a deterministic practice encounter. Its capability
+is derived from the current seven-stat snapshot, overall level, momentum, and
+temporary conditions. The browser persists only an account-owned same-day
+checkpoint in the existing `gamification/profile` record, so an interrupted
+encounter can resume after navigation or a reload.
+
+The three moves are fixed and keyboard-operable: Brave/Steady Strike, Guarded
+Step, and Renewing Focus. The daily seed fixes the opponent and response pattern;
+there is no randomness, gambling, loot box, paid power, music, or copied IP.
+Completion is a deterministic practice reward and does not award XP, badges,
+levels, trophies, or stat changes. Defeat and inactivity retain the checkpoint
+and all permanent progress; retrying resets only the ephemeral encounter state.
+Pets and permanent equipment/trophy systems are intentionally not introduced
+because the current Life Hero domain has no such authoritative records.
 
 ## Existing Sabah One evidence sync
 

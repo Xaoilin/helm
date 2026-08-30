@@ -6863,6 +6863,189 @@ textarea.form-input {
   background: rgba(47, 203, 143, 0.13);
 }
 
+.life-hero-adventure {
+  display: grid;
+  gap: 9px;
+  margin: 0 15px 13px;
+  padding: 11px;
+  border: 1px solid rgba(230, 198, 106, 0.34);
+  border-radius: 13px;
+  background: rgba(42, 35, 19, 0.26);
+}
+
+.life-hero-adventure-heading,
+.life-hero-encounter-header,
+.life-hero-health-bar > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.life-hero-adventure-heading h3 {
+  margin: 2px 0 0;
+  color: var(--nc-text);
+  font-size: 12px;
+}
+
+.life-hero-encounter-header strong,
+.life-hero-adventure-power,
+.life-hero-encounter-header span:last-child {
+  color: #eadca6;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.life-hero-adventure-intro,
+.life-hero-adventure-outcome {
+  display: grid;
+  gap: 7px;
+}
+
+.life-hero-adventure p {
+  margin: 0;
+  color: #d4dfec;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.life-hero-adventure-meta,
+.life-hero-adventure-safety,
+.life-hero-encounter-header span:first-of-type {
+  color: var(--nc-text-muted) !important;
+  font-size: 8px !important;
+}
+
+.life-hero-adventure-primary,
+.life-hero-ability {
+  min-height: 38px;
+  border: 1px solid rgba(230, 198, 106, 0.42);
+  border-radius: 10px;
+  color: #f5ebc5;
+  background: rgba(74, 58, 20, 0.4);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.life-hero-adventure-primary { padding: 7px 10px; }
+.life-hero-adventure-primary:disabled,
+.life-hero-ability:disabled { cursor: not-allowed; opacity: 0.55; }
+
+.life-hero-encounter {
+  display: grid;
+  gap: 9px;
+}
+
+.life-hero-health-grid {
+  display: grid;
+  gap: 7px;
+}
+
+.life-hero-health-bar > div:first-child {
+  color: #d4dfec;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.life-hero-health-bar strong { color: #f5ebc5; font-variant-numeric: tabular-nums; }
+
+.life-hero-health-track {
+  height: 6px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(145, 160, 184, 0.2);
+}
+
+.life-hero-health-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #e6c66a, #2fcb8f);
+  transition: width 160ms ease;
+}
+
+.life-hero-adventure-conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.life-hero-adventure-conditions span {
+  padding: 3px 6px;
+  border: 1px solid rgba(145, 160, 184, 0.25);
+  border-radius: 999px;
+  color: #b8c8d9;
+  font-size: 7px;
+}
+
+.life-hero-adventure-conditions span:first-child {
+  border: 0;
+  padding-left: 0;
+  color: var(--nc-text-muted);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.life-hero-abilities {
+  display: grid;
+  gap: 5px;
+}
+
+.life-hero-ability {
+  display: grid;
+  gap: 3px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.life-hero-ability span { color: #f5ebc5; }
+.life-hero-ability kbd {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 1px solid rgba(230, 198, 106, 0.4);
+  border-radius: 4px;
+  color: #eadca6;
+  font-size: 8px;
+}
+
+.life-hero-ability small {
+  color: #b8c8d9;
+  font-size: 7px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.life-hero-adventure-log {
+  display: grid;
+  gap: 3px;
+  max-height: 58px;
+  overflow-y: auto;
+  padding: 6px 7px;
+  border-radius: 8px;
+  color: #b8c8d9;
+  background: rgba(7, 17, 31, 0.48);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+.life-hero-adventure-outcome-mark {
+  color: #8fe7c4;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.life-hero-adventure-outcome-mark.is-safe { color: #eadca6; }
+.life-hero-adventure-outcome strong { color: #f5ebc5; font-size: 12px; }
+.life-hero-adventure-error { color: #ffadad; font-size: 8px; line-height: 1.4; }
+.life-hero-adventure-safety { margin-top: 1px !important; }
+
 .life-hero-companion.is-collapsed {
   width: auto;
   max-height: none;
@@ -6948,8 +7131,9 @@ textarea.form-input {
   .life-hero-summary,
   .life-hero-message { grid-row: 2; }
   .life-hero-voice { grid-row: 3; }
-  .life-hero-details-toggle { grid-row: 4; }
-  .life-hero-details { grid-row: 5; }
+  .life-hero-adventure { grid-column: 2; grid-row: 4; }
+  .life-hero-details-toggle { grid-row: 5; }
+  .life-hero-details { grid-row: 6; }
   .life-hero-collapsed-button { justify-content: center; border-radius: 14px; }
 }
 
