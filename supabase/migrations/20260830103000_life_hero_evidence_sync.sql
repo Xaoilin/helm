@@ -26,6 +26,25 @@ exception when others then
 end;
 $$;
 
+create or replace function helm_private.life_hero_local_date_in_zone(
+  p_value timestamptz,
+  p_time_zone text
+)
+returns date
+language plpgsql
+immutable
+set search_path = ''
+as $$
+begin
+  if p_value is null or nullif(p_time_zone, '') is null then
+    return null;
+  end if;
+  return timezone(p_time_zone, p_value)::date;
+exception when others then
+  return null;
+end;
+$$;
+
 create or replace function helm_private.life_hero_daily_momentum_level(p_log jsonb)
 returns integer
 language plpgsql
@@ -77,6 +96,8 @@ $$;
 
 revoke all on function helm_private.life_hero_try_date(text) from public, anon, authenticated;
 revoke all on function helm_private.life_hero_try_timestamptz(text) from public, anon, authenticated;
+revoke all on function helm_private.life_hero_local_date_in_zone(timestamptz, text)
+from public, anon, authenticated;
 revoke all on function helm_private.life_hero_daily_momentum_level(jsonb) from public, anon, authenticated;
 
 create or replace function public.sync_life_hero_evidence(
@@ -113,6 +134,76 @@ begin
         record.created_at, record.updated_at
       from public.helm_records as record
       where record.user_id = v_user_id and record.deleted_at is null
+    ),
+    account_context as (
+      select coalesce(
+        nullif((
+          select settings.payload ->> 'appTimezone'
+          from owner_records as settings
+          where settings.collection = 'settings' and settings.record_id = 'singleton'
+          limit 1
+        ), ''),
+        'UTC'
+      ) as time_zone
+    ),
+    task_completions as (
+      select
+        task.record_id,
+        task.payload,
+        parsed.completed_at,
+        coalesce(
+          explicit.local_date,
+          helm_private.life_hero_local_date_in_zone(
+            parsed.completed_at,
+            nullif(task.payload ->> 'completionTimeZone', '')
+          ),
+          helm_private.life_hero_local_date_in_zone(
+            parsed.completed_at,
+            account.time_zone
+          ),
+          parsed.completed_at::date
+        ) as local_date,
+        case
+          when explicit.local_date is not null then 'explicit'
+          when helm_private.life_hero_local_date_in_zone(
+            parsed.completed_at,
+            nullif(task.payload ->> 'completionTimeZone', '')
+          ) is not null then 'completion_timezone_fallback'
+          when helm_private.life_hero_local_date_in_zone(
+            parsed.completed_at,
+            account.time_zone
+          ) is not null then 'account_timezone_fallback'
+          else 'utc_fallback'
+        end as local_date_source,
+        case
+          when explicit.local_date is not null then
+            nullif(task.payload ->> 'completionTimeZone', '')
+          when helm_private.life_hero_local_date_in_zone(
+            parsed.completed_at,
+            nullif(task.payload ->> 'completionTimeZone', '')
+          ) is not null then nullif(task.payload ->> 'completionTimeZone', '')
+          when helm_private.life_hero_local_date_in_zone(
+            parsed.completed_at,
+            account.time_zone
+          ) is not null then account.time_zone
+          else 'UTC'
+        end as time_zone
+      from owner_records as task
+      cross join account_context as account
+      cross join lateral (
+        select helm_private.life_hero_try_timestamptz(
+          task.payload ->> 'completedAt'
+        ) as completed_at
+      ) as parsed
+      cross join lateral (
+        select helm_private.life_hero_try_date(
+          task.payload ->> 'completedLocalDate'
+        ) as local_date
+      ) as explicit
+      where task.collection = 'tasks'
+        and task.payload ->> 'completed' = 'true'
+        and coalesce(task.payload ->> 'category', 'task') <> 'prayer'
+        and parsed.completed_at is not null
     ),
     momentum_logs as (
       select
@@ -221,23 +312,27 @@ begin
       select
         'discipline_commitment',
         'self_reported',
-        'helm:tasks:' || record.record_id || ':completion:'
-          || left(record.payload ->> 'completedAt', 10),
-        (helm_private.life_hero_try_date(left(record.payload ->> 'completedAt', 10))::timestamp
-          + interval '12 hours') at time zone 'UTC',
-        helm_private.life_hero_try_date(left(record.payload ->> 'completedAt', 10)),
+        'helm:tasks:' || completion.record_id || ':completion:' || case
+          when completion.local_date_source = 'explicit'
+            then 'local-date:' || completion.local_date::text
+          else 'legacy-instant:' || encode(extensions.digest(
+            completion.payload ->> 'completedAt', 'sha256'
+          ), 'hex')
+        end,
+        completion.completed_at,
+        completion.local_date,
         jsonb_build_object(
-          'reason', case when record.payload ->> 'category' = 'goal'
+          'reason', case when completion.payload ->> 'category' = 'goal'
             then 'goal_completed' else 'task_completed' end,
           'sourceCollection', 'tasks',
-          'sourceRecordId', record.record_id,
-          'category', coalesce(record.payload ->> 'category', 'task')
+          'sourceRecordId', completion.record_id,
+          'category', coalesce(completion.payload ->> 'category', 'task'),
+          'completedAt', completion.payload ->> 'completedAt',
+          'completionLocalDate', completion.local_date,
+          'completionTimeZone', completion.time_zone,
+          'localDateSource', completion.local_date_source
         )
-      from owner_records as record
-      where record.collection = 'tasks'
-        and record.payload ->> 'completed' = 'true'
-        and coalesce(record.payload ->> 'category', 'task') <> 'prayer'
-        and helm_private.life_hero_try_timestamptz(record.payload ->> 'completedAt') is not null
+      from task_completions as completion
 
       union all
 
@@ -288,13 +383,13 @@ begin
       select
         'financial_progress', 'self_reported',
         'helm:savingsGoals:' || record.record_id || ':progress',
-        (coalesce(
-          helm_private.life_hero_try_date(left(record.payload ->> 'createdAt', 10)),
-          record.created_at::date
-        )::timestamp + interval '12 hours') at time zone 'UTC',
+        progress.occurred_at,
         coalesce(
-          helm_private.life_hero_try_date(left(record.payload ->> 'createdAt', 10)),
-          record.created_at::date
+          helm_private.life_hero_local_date_in_zone(
+            progress.occurred_at,
+            account.time_zone
+          ),
+          progress.occurred_at::date
         ),
         jsonb_build_object(
           'reason', 'savings_progress_recorded',
@@ -302,6 +397,15 @@ begin
           'sourceRecordId', record.record_id
         )
       from owner_records as record
+      cross join account_context as account
+      cross join lateral (
+        select coalesce(
+          helm_private.life_hero_try_timestamptz(record.payload ->> 'updatedAt'),
+          record.updated_at,
+          helm_private.life_hero_try_timestamptz(record.payload ->> 'createdAt'),
+          record.created_at
+        ) as occurred_at
+      ) as progress
       where record.collection = 'savingsGoals'
         and jsonb_typeof(record.payload -> 'currentAmount') = 'number'
         and (record.payload ->> 'currentAmount')::numeric > 0

@@ -62,6 +62,8 @@ All current account-record adapters use the conservative `self_reported` source 
 
 Finance evidence records behavior and milestone identity, never award amount from balances, income, net worth, target size, or absolute savings. Monzo tags remain provenance inside the same finance rules; importing a provider record does not itself award XP and no raw provider payload or amount enters Life Hero metadata.
 
+New task completions persist `completedLocalDate` and the IANA `completionTimeZone` alongside the UTC completion instant. Recurring tasks reuse their task ID but receive one stable source identity per explicit local completion date. Existing task records without those fields fall back first to a persisted completion zone, then the account app time zone, and finally UTC; their stable legacy identity is derived from the original completion instant so a later time-zone preference change cannot duplicate an award. Savings progress uses the goal's `updatedAt`, then the database record update time, with creation time only as a legacy fallback.
+
 Prayer weakness remains renewable. Positive Prayer evidence permanently increases Faith; later missed or absent evidence can only make the computed condition `renewal_due`. It never deletes an award or lowers XP or level.
 
 These controls follow the current Supabase guidance for [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security), [database functions](https://supabase.com/docs/guides/database/functions), and [Data API security](https://supabase.com/docs/guides/api/securing-your-api).

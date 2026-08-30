@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(20);
+select plan(27);
 
 select has_function(
   'public', 'sync_life_hero_evidence', array['date'],
@@ -27,6 +27,11 @@ insert into public.helm_records (
   user_id, collection, record_id, payload, revision, account_version, created_at, updated_at
 ) values
   (
+    '11111111-1111-4111-8111-111111111111', 'settings', 'singleton',
+    '{"appTimezone":"Europe/London"}',
+    1, 10, '2026-05-01T00:00:00Z', '2026-05-01T00:00:00Z'
+  ),
+  (
     '11111111-1111-4111-8111-111111111111', 'prayerTracking', 'record:2026-05-01:Fajr',
     '{"date":"2026-05-01","prayerName":"Fajr","status":"on_time","recordedAt":"2026-05-01T04:30:00Z"}',
     1, 10, '2026-05-01T04:30:00Z', '2026-05-01T04:30:00Z'
@@ -38,8 +43,8 @@ insert into public.helm_records (
   ),
   (
     '11111111-1111-4111-8111-111111111111', 'tasks', 'completed-task',
-    '{"id":"completed-task","title":"Complete the plan","completed":true,"completedAt":"2026-06-03T10:00:00Z","category":"task"}',
-    1, 10, '2026-06-01T10:00:00Z', '2026-06-03T10:00:00Z'
+    '{"id":"completed-task","title":"Complete the plan","completed":true,"completedAt":"2026-06-03T23:30:00Z","category":"task","recurring":{"frequency":"daily","lastReset":"2026-06-04"}}',
+    1, 10, '2026-06-01T10:00:00Z', '2026-06-03T23:30:00Z'
   ),
   (
     '11111111-1111-4111-8111-111111111111', 'tasks', 'prayer-task',
@@ -58,7 +63,7 @@ insert into public.helm_records (
   ),
   (
     '11111111-1111-4111-8111-111111111111', 'savingsGoals', 'emergency-goal',
-    '{"id":"emergency-goal","name":"Emergency fund","targetAmount":100000,"currentAmount":50000,"completed":true,"createdAt":"2026-06-02T09:00:00Z","completedAt":"2026-08-20T09:00:00Z"}',
+    '{"id":"emergency-goal","name":"Emergency fund","targetAmount":100000,"currentAmount":50000,"completed":true,"createdAt":"2026-06-02T09:00:00Z","updatedAt":"2026-08-18T09:00:00Z","completedAt":"2026-08-20T09:00:00Z"}',
     1, 10, '2026-06-02T09:00:00Z', '2026-08-20T09:00:00Z'
   ),
   (
@@ -146,6 +151,26 @@ select is(
   'completed non-prayer Sabah One tasks map to Discipline without double-counting Prayer tasks'
 );
 select is(
+  (
+    select local_date
+    from public.life_hero_evidence
+    where metadata ->> 'sourceCollection' = 'tasks'
+      and metadata ->> 'sourceRecordId' = 'completed-task'
+  ),
+  '2026-06-04'::date,
+  'legacy task timestamps use the account time zone across the BST midnight boundary'
+);
+select is(
+  (
+    select metadata ->> 'localDateSource'
+    from public.life_hero_evidence
+    where metadata ->> 'sourceCollection' = 'tasks'
+      and metadata ->> 'sourceRecordId' = 'completed-task'
+  ),
+  'account_timezone_fallback',
+  'legacy task fallback provenance remains explicit and auditable'
+);
+select is(
   (select count(*)::integer from public.life_hero_evidence where stat = 'finances'),
   6,
   'budgeting, savings milestones, saving transfers, and spend improvement map to Finances'
@@ -166,6 +191,24 @@ select ok(
       and metadata ->> 'includesMonzo' = 'true'
   ),
   'Monzo records contribute through evidenced spending improvement'
+);
+select is(
+  (
+    select occurred_at
+    from public.life_hero_evidence
+    where metadata ->> 'reason' = 'savings_progress_recorded'
+  ),
+  '2026-08-18T09:00:00Z'::timestamptz,
+  'savings progress occurs at the authoritative payload update time'
+);
+select is(
+  (
+    select local_date
+    from public.life_hero_evidence
+    where metadata ->> 'reason' = 'savings_progress_recorded'
+  ),
+  '2026-08-18'::date,
+  'savings progress local date follows the authoritative update time'
 );
 select ok(
   not exists (
@@ -202,6 +245,48 @@ select is(
   (public.get_life_hero_snapshot('2026-09-01') ->> 'totalXp')::integer,
   170,
   'renewal status never subtracts permanent progress'
+);
+
+reset role;
+update public.helm_records
+set payload = payload || '{
+  "completedAt":"2026-06-04T23:30:00Z",
+  "completedLocalDate":"2026-06-05",
+  "completionTimeZone":"Europe/London",
+  "recurring":{"frequency":"daily","lastReset":"2026-06-05"}
+}'::jsonb,
+  revision = revision + 1,
+  account_version = 11,
+  updated_at = '2026-06-04T23:30:00Z'
+where user_id = '11111111-1111-4111-8111-111111111111'
+  and collection = 'tasks'
+  and record_id = 'completed-task';
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","is_anonymous":false}',
+  true
+);
+select is(
+  (public.sync_life_hero_evidence('2026-09-01') ->> 'accepted')::integer,
+  1,
+  'a recurring same-ID task accepts the next explicit local completion date once'
+);
+select is(
+  (
+    select array_agg(local_date order by local_date)::text
+    from public.life_hero_evidence
+    where metadata ->> 'sourceCollection' = 'tasks'
+      and metadata ->> 'sourceRecordId' = 'completed-task'
+  ),
+  '{2026-06-04,2026-06-05}',
+  'recurring same-ID task evidence preserves both true local completion dates'
+);
+select is(
+  (public.sync_life_hero_evidence('2026-09-01') ->> 'accepted')::integer,
+  0,
+  'repeating the same recurring completion date remains idempotent'
 );
 
 reset role;
