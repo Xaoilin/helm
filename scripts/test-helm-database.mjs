@@ -21,6 +21,7 @@ try {
     'supabase/tests/sabah_one_inventory_oauth.sql',
     'supabase/tests/helm_legacy_migration.sql',
     'supabase/tests/life_hero_progression.sql',
+    'supabase/tests/life_hero_evidence_mapping.sql',
     'supabase/tests/product_usage_analytics.sql',
   ])
   await runConcurrencyScenario()

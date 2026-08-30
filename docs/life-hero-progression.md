@@ -1,6 +1,6 @@
 # Life Hero Progression
 
-KAN-258 establishes the permanent, database-authoritative progression foundation. It does not add the dashboard character, external evidence providers, voice, combat, or product-usage rewards.
+KAN-258 establishes the permanent, database-authoritative progression foundation. KAN-262 adds a narrow database-authoritative source mapping boundary without adding the dashboard character, external evidence providers, voice, combat, or product-usage rewards.
 
 ## Permanent model
 
@@ -44,6 +44,23 @@ Metadata is limited to an 8 KiB flat scalar object and rejects credential-like k
 
 Product usage analytics has no evidence type, rule, client input, service mapping, or RPC capable of granting XP. Usage analytics may inform product decisions in a later ticket, but it remains separate from real-world progression.
 
+## KAN-262 source mapping
+
+`sync_life_hero_evidence` and its migration-time backfill read only active, account-owned `helm_records`. Each accepted row keeps a stable `source_reference` plus flat metadata for `mappingVersion`, source collection, source record ID, source revision, source update time, and a deterministic reason. The same source identity is safe to replay.
+
+| Source record | Hero evidence | Acceptance rule |
+| --- | --- | --- |
+| Canonical `prayerTracking` outcome | Faith | `on_time` or `late`; missed and unclassified outcomes are excluded |
+| Daily Momentum Learn | Knowledge | Positive dated progress |
+| Daily Momentum Move | Vitality | Positive dated progress |
+| Completed non-prayer task | Discipline | Completed task record; prayer tasks remain owned by Prayer |
+| Finance budget | Finances | Positive monthly budget limit |
+| Savings goal | Finances | Positive current amount or completed goal |
+| Finance transaction | Finances | Transfer into a savings account or lower/explicitly reduced avoidable spend |
+| Monzo-imported transaction | Finances | Same financial-practice rules, with `trusted_integration` provenance from its stable `monzo:` tag |
+
+Finance account balances, income, ordinary spend, wealth growth, and product-usage events never award XP. Mapping creates no negative evidence, so conditions can become `renewal_due` while permanent XP and levels remain unchanged.
+
 These controls follow the current Supabase guidance for [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security), [database functions](https://supabase.com/docs/guides/database/functions), and [Data API security](https://supabase.com/docs/guides/api/securing-your-api).
 
 ## Legacy handling
@@ -52,6 +69,6 @@ The migration captures an existing `gamification/profile` total and level only a
 
 ## Verification and rollback
 
-`npm run test:database` rebuilds the historical migration chain, proves owner and anonymous boundaries, duplicate identity, atomic award behavior, momentum snapshots, monotonic progress, conditions, deterministic recomputation, safe legacy capture, and a non-destructive rollback/resume.
+`npm run test:database` rebuilds the historical migration chain, proves owner and anonymous boundaries, duplicate identity, atomic award behavior, momentum snapshots, monotonic progress, conditions, deterministic recomputation, safe legacy capture, KAN-262 source mappings and replay suppression, and a non-destructive rollback/resume.
 
 If awards must be paused, apply `supabase/rollback/20260830070000_pause_life_hero_progression.sql`. It revokes evidence and recomputation execution while preserving readable profiles, evidence, awards, and legacy snapshots. After the defect is fixed, apply `supabase/rollback/20260830070000_resume_life_hero_progression.sql`. No evidence replay is needed.
