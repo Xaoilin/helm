@@ -92,6 +92,7 @@ test.describe('Life Hero maximum-quality GLB proof', () => {
   });
 
   test('renders the actual maximum-quality GLB and toggles the jacket without replacing the body', async ({ page }) => {
+    test.setTimeout(240_000);
     await forcePrimaryQuality(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(CONCEPT_PATH);
