@@ -1119,6 +1119,7 @@ export type LifeHeroProviderCapabilityStatus =
   | 'supported_read_only'
   | 'regulated_automation_not_selected'
   | 'user_export_supported_api_unknown'
+  | 'user_export_supported_native_api_unavailable_to_hosted_web'
   | 'provider_identity_unknown';
 
 export type LifeHeroProviderRouteDecision =
@@ -1142,10 +1143,39 @@ export type LifeHeroProviderSecretBoundary =
   | 'supabase_vault_server_only'
   | 'no_provider_secret';
 
+export interface LifeHeroProviderPermission {
+  resource: 'metadata' | 'pull_requests';
+  access: 'read';
+}
+
+export type LifeHeroProviderTokenPolicy =
+  | 'not_applicable'
+  | 'github_user_to_server_expiration_required';
+
+export type LifeHeroProviderSourceClaim =
+  | 'barclays_open_banking_third_party_sharing'
+  | 'barclays_statement_pdf_export'
+  | 'open_banking_api_specification'
+  | 'open_banking_provider_enrolment'
+  | 'eight_sleep_data_copy_request'
+  | 'eight_sleep_data_handling_terms'
+  | 'apple_health_xml_export'
+  | 'apple_healthkit_native_api'
+  | 'apple_healthkit_per_type_authorization'
+  | 'apple_movement_quantity_type'
+  | 'github_app_selected_repository_access'
+  | 'github_app_permission_selection'
+  | 'github_repository_metadata_read_permission'
+  | 'github_user_access_token_web_flow'
+  | 'github_user_token_expiration_opt_in'
+  | 'github_pull_request_read_permission'
+  | 'github_rest_rate_limit_handling';
+
 export interface LifeHeroProviderPrimarySource {
   owner: string;
   title: string;
   url: string;
+  supports: readonly LifeHeroProviderSourceClaim[];
   /** Source publication/update date when the publisher exposes one. */
   sourceDate?: string;
   checkedAt: string;
@@ -1165,6 +1195,8 @@ export interface LifeHeroProviderRouteContract {
   sourceTier: LifeHeroEvidenceSourceTier;
   authenticationBoundary: LifeHeroProviderAuthenticationBoundary;
   secretBoundary: LifeHeroProviderSecretBoundary;
+  providerPermissions: readonly LifeHeroProviderPermission[];
+  tokenPolicy: LifeHeroProviderTokenPolicy;
   userAssistedSteps: readonly string[];
   acceptedInput: string;
   qualifyingRule: string;
