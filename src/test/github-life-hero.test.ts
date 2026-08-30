@@ -10,6 +10,7 @@ import {
   parseGithubInstallationRepositoriesPage,
   type GithubPullRequestEvidenceInput,
 } from '../../supabase/functions/github-life-hero/evidence';
+import { withAllowedOriginCors } from '../../supabase/functions/github-life-hero/cors';
 import {
   GithubLifeHeroError,
   githubConnectionNeedsReconnect,
@@ -33,6 +34,25 @@ const mergedByOwner: GithubPullRequestEvidenceInput = {
 };
 
 describe('GitHub Life Hero evidence qualification', () => {
+  it('returns every hosted response to an allowed browser origin', async () => {
+    const allowedOrigin = 'https://xaoilin.github.io';
+    const response = withAllowedOriginCors(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      allowedOrigin,
+      new Set([allowedOrigin]),
+    );
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+
+    const blocked = withAllowedOriginCors(
+      new Response(null, { status: 403 }),
+      'https://example.com',
+      new Set([allowedOrigin]),
+    );
+    expect(blocked.headers.has('Access-Control-Allow-Origin')).toBe(false);
+  });
+
   it('requires an authored merged pull request with a stable provider identity', () => {
     expect(githubPullRequestQualifies(mergedByOwner, 42)).toBe(true);
     expect(githubPullRequestQualifies({ ...mergedByOwner, merged_at: null }, 42)).toBe(false);

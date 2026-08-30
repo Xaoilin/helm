@@ -8,6 +8,7 @@ import {
   parseGithubInstallationRepositoriesPage,
   type GithubPullRequestEvidenceInput,
 } from './evidence.ts';
+import { withAllowedOriginCors } from './cors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
@@ -697,4 +698,8 @@ async function handle(request: Request): Promise<Response> {
   }
 }
 
-Deno.serve(async request => handle(request));
+Deno.serve(async request => withAllowedOriginCors(
+  await handle(request),
+  request.headers.get('origin'),
+  GITHUB_ALLOWED_ORIGINS,
+));
