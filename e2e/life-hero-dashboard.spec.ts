@@ -82,7 +82,7 @@ test.describe('Life Hero dashboard companion', () => {
     await expect(hero).toBeVisible();
     await expect(hero.getByText('Overall level')).toBeVisible();
     await expect(hero.getByText('Best active momentum')).toBeVisible();
-    await expect(hero.getByText('7 days')).toBeVisible();
+    await expect(hero.getByText('7 days', { exact: true })).toBeVisible();
 
     await hero.getByRole('button', { name: 'Open hero details' }).click();
     await expect(hero.locator('.life-hero-stat-list > li')).toHaveCount(7);

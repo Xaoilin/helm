@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   browserSpeak: vi.fn(),
   elevenLabsSpeak: vi.fn(),
   speechCancel: vi.fn(),
+  loadStore: vi.fn(),
+  saveStoreRecordFieldsCommitted: vi.fn(),
 }));
 
 vi.mock('../store/supabase', () => ({
@@ -21,6 +23,11 @@ vi.mock('../store/supabase', () => ({
 
 vi.mock('../store/contexts/useRemoteStoreRefresh', () => ({
   useRemoteStoreRefresh: vi.fn(),
+}));
+
+vi.mock('../store/persistence', () => ({
+  loadStore: mocks.loadStore,
+  saveStoreRecordFieldsCommitted: mocks.saveStoreRecordFieldsCommitted,
 }));
 
 vi.mock('../services/voiceAssistant', () => ({
@@ -56,6 +63,8 @@ beforeEach(() => {
   mocks.browserSpeak.mockReset().mockResolvedValue('played');
   mocks.elevenLabsSpeak.mockReset();
   mocks.speechCancel.mockReset();
+  mocks.loadStore.mockReset().mockResolvedValue(null);
+  mocks.saveStoreRecordFieldsCommitted.mockReset().mockResolvedValue(undefined);
   Object.defineProperty(window, 'speechSynthesis', {
     configurable: true,
     value: { cancel: mocks.speechCancel },
