@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(24);
+select plan(28);
 
 select has_function(
   'public', 'sync_life_hero_evidence', array['date'],
@@ -25,6 +25,30 @@ select ok(
 
 reset role;
 insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, is_anonymous, created_at, updated_at
+) values (
+  '00000000-0000-0000-0000-000000000000',
+  '44444444-4444-4444-8444-444444444444',
+  'authenticated', 'authenticated', null, '', true, now(), now()
+);
+insert into public.helm_records (
+  user_id, collection, record_id, payload, revision, account_version, created_at, updated_at
+) values (
+  '44444444-4444-4444-8444-444444444444', 'tasks', 'anonymous-completed-task',
+  '{"id":"anonymous-completed-task","title":"Anonymous task","category":"task","completed":true,"completedAt":"2026-08-30T12:00:00Z"}'::jsonb,
+  1, 1, '2026-08-30T11:00:00Z', '2026-08-30T12:00:00Z'
+);
+do $$ begin
+  perform helm_private.backfill_life_hero_evidence('2026-08-30'::date);
+end $$;
+select is(
+  (select count(*)::integer from public.life_hero_evidence
+   where user_id = '44444444-4444-4444-8444-444444444444'),
+  0,
+  'migration backfill excludes anonymous auth users'
+);
+
+insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, created_at, updated_at
 ) values (
   '00000000-0000-0000-0000-000000000000',
@@ -45,8 +69,13 @@ insert into public.helm_records (
   1, 1, '2026-08-30T14:00:00Z', '2026-08-30T14:00:00Z'
 ),
 (
+  '33333333-3333-4333-8333-333333333333', 'prayerTracking', 'record:2026-08-31:Asr',
+  '{"date":"2026-08-31","prayerName":"Asr","status":"on_time","recordedAt":"2026-08-31T16:30:00Z"}'::jsonb,
+  1, 1, '2026-08-31T16:30:00Z', '2026-08-31T16:30:00Z'
+),
+(
   '33333333-3333-4333-8333-333333333333', 'gamification', 'profile',
-  '{"dailyMomentumLearn":{"logs":{"2026-08-30:learn:learn-reading":{"date":"2026-08-30","pillar":"learn","progress":{"pages":5},"updatedAt":"2026-08-30T10:00:00Z"}}},"dailyMomentumMove":{"logs":{"2026-08-30:move:move-walk":{"date":"2026-08-30","pillar":"move","progress":{"walk-minutes":20},"updatedAt":"2026-08-30T11:00:00Z"}}}}'::jsonb,
+  '{"dailyMomentumLearn":{"logs":{"2026-08-30:learn:learn-reading":{"date":"2026-08-30","pillar":"learn","progress":{"pages":5},"updatedAt":"2026-08-30T10:00:00Z"},"2026-08-31:learn:learn-reading":{"date":"2026-08-31","pillar":"learn","progress":{"pages":3},"updatedAt":"2026-08-31T10:00:00Z"}}},"dailyMomentumMove":{"logs":{"2026-08-30:move:move-walk":{"date":"2026-08-30","pillar":"move","progress":{"walk-minutes":20},"updatedAt":"2026-08-30T11:00:00Z"},"2026-08-31:move:move-walk":{"date":"2026-08-31","pillar":"move","progress":{"walk-minutes":10},"updatedAt":"2026-08-31T11:00:00Z"}}}}'::jsonb,
   1, 1, '2026-08-30T11:00:00Z', '2026-08-30T11:00:00Z'
 ),
 (
@@ -65,6 +94,11 @@ insert into public.helm_records (
   1, 1, '2026-08-30T04:00:00Z', '2026-08-30T04:30:00Z'
 ),
 (
+  '33333333-3333-4333-8333-333333333333', 'tasks', 'future-task',
+  '{"id":"future-task","title":"Tomorrow task","category":"task","completed":true,"completedAt":"2026-08-31T12:00:00Z"}'::jsonb,
+  1, 1, '2026-08-31T11:00:00Z', '2026-08-31T12:00:00Z'
+),
+(
   '33333333-3333-4333-8333-333333333333', 'financeAccounts', 'current-account',
   '{"id":"current-account","name":"Current","type":"current","balance":100000,"currency":"GBP"}'::jsonb,
   1, 1, '2026-08-29T08:00:00Z', '2026-08-29T08:00:00Z'
@@ -80,14 +114,34 @@ insert into public.helm_records (
   1, 1, '2026-08-30T08:00:00Z', '2026-08-30T08:00:00Z'
 ),
 (
+  '33333333-3333-4333-8333-333333333333', 'financeBudgets', 'future-budget',
+  '{"id":"future-budget","category":"entertainment","monthlyLimit":10000,"createdAt":"2026-08-31T08:00:00Z"}'::jsonb,
+  1, 1, '2026-08-31T08:00:00Z', '2026-08-31T08:00:00Z'
+),
+(
   '33333333-3333-4333-8333-333333333333', 'savingsGoals', 'emergency-fund',
   '{"id":"emergency-fund","name":"Emergency Fund","targetAmount":100000,"currentAmount":25000,"completed":false,"updatedAt":"2026-08-30T08:30:00Z"}'::jsonb,
   1, 1, '2026-08-30T08:30:00Z', '2026-08-30T08:30:00Z'
 ),
 (
+  '33333333-3333-4333-8333-333333333333', 'savingsGoals', 'future-goal',
+  '{"id":"future-goal","name":"Tomorrow Goal","targetAmount":100000,"currentAmount":5000,"completed":false,"updatedAt":"2026-08-31T08:30:00Z"}'::jsonb,
+  1, 1, '2026-08-31T08:30:00Z', '2026-08-31T08:30:00Z'
+),
+(
   '33333333-3333-4333-8333-333333333333', 'transactions', 'savings-transfer',
   '{"id":"savings-transfer","type":"transfer","amount":10000,"category":"transfer","accountId":"current-account","toAccountId":"savings-account","date":"2026-08-30","createdAt":"2026-08-30T13:00:00Z"}'::jsonb,
   1, 1, '2026-08-30T13:00:00Z', '2026-08-30T13:00:00Z'
+),
+(
+  '33333333-3333-4333-8333-333333333333', 'transactions', 'future-savings-transfer',
+  '{"id":"future-savings-transfer","type":"transfer","amount":3000,"category":"transfer","accountId":"current-account","toAccountId":"savings-account","date":"2026-08-31","createdAt":"2026-08-31T13:00:00Z"}'::jsonb,
+  1, 1, '2026-08-31T13:00:00Z', '2026-08-31T13:00:00Z'
+),
+(
+  '33333333-3333-4333-8333-333333333333', 'transactions', 'prior-lower-dining',
+  '{"id":"prior-lower-dining","type":"expense","amount":5000,"category":"eating-out","accountId":"current-account","date":"2026-08-28","createdAt":"2026-08-28T13:00:00Z"}'::jsonb,
+  1, 1, '2026-08-28T13:00:00Z', '2026-08-28T13:00:00Z'
 ),
 (
   '33333333-3333-4333-8333-333333333333', 'transactions', 'prior-dining',
@@ -133,25 +187,22 @@ select set_config(
 );
 
 select is(
-  (public.sync_life_hero_evidence('2026-08-31'::date) ->> 'newEvidence')::integer,
-  9,
-  'first sync maps Prayer, Learn, Move, tasks, budget, savings, saving, reduced-spend, and Monzo records'
+  (public.sync_life_hero_evidence('2026-08-30'::date) ->> 'newEvidence')::integer,
+  8,
+  'first sync maps only positive source records on or before the requested local date'
 );
-select is((select count(*)::integer from public.life_hero_evidence), 9, 'one evidence row exists per positive source event');
+select is((select count(*)::integer from public.life_hero_evidence), 8, 'one evidence row exists per eligible source event');
 select is((select count(*)::integer from public.life_hero_evidence where stat = 'faith'), 1, 'Prayer maps only to Faith');
 select is((select count(*)::integer from public.life_hero_evidence where stat = 'knowledge'), 1, 'Learn progress maps to Knowledge');
 select is((select count(*)::integer from public.life_hero_evidence where stat = 'vitality'), 1, 'Move maps to Vitality');
 select is((select count(*)::integer from public.life_hero_evidence where stat = 'discipline'), 1, 'completed non-prayer tasks map to Discipline');
-select is((select count(*)::integer from public.life_hero_evidence where stat = 'finances'), 5, 'budgeting, savings, saving transfer, and reduced avoidable spend map to Finances');
-select is((select count(*)::integer from public.life_hero_evidence where source_tier = 'trusted_integration'), 1, 'Monzo evidence is marked as trusted integration');
+select is((select count(*)::integer from public.life_hero_evidence where stat = 'finances'), 4, 'eligible budgeting, savings, saving transfer, and reduced avoidable spend map to Finances');
 select ok(
-  exists (
+  not exists (
     select 1 from public.life_hero_evidence
-    where source_reference = 'life-hero:monzo:tx-001'
-      and metadata ->> 'sourceCollection' = 'transactions'
-      and nullif(metadata ->> 'reason', '') is not null
+    where local_date > '2026-08-30'::date
   ),
-  'Monzo evidence retains stable source identity and a deterministic reason'
+  'future Prayer, Learn, Move, task, budget, savings-goal, and transaction records are skipped'
 );
 select ok(
   not exists (
@@ -179,8 +230,29 @@ select ok(
   ),
   'mapped evidence records source revision and mapping version'
 );
+select is(
+  (select metadata ->> 'reason' from public.life_hero_evidence
+   where source_reference = 'life-hero:transactions:reduced-dining:avoidable-improvement'),
+  'Avoidable eating-out spending improved from 10000 to 7000 pence.',
+  'avoidable-spend evidence cites an actual prior amount greater than the current amount'
+);
+select is(
+  (public.sync_life_hero_evidence('2026-08-31'::date) ->> 'newEvidence')::integer,
+  8,
+  'advancing the local date maps each previously skipped future source once'
+);
+select is((select count(*)::integer from public.life_hero_evidence where source_tier = 'trusted_integration'), 1, 'Monzo evidence is marked as trusted integration');
+select ok(
+  exists (
+    select 1 from public.life_hero_evidence
+    where source_reference = 'life-hero:monzo:tx-001'
+      and metadata ->> 'sourceCollection' = 'transactions'
+      and nullif(metadata ->> 'reason', '') is not null
+  ),
+  'Monzo evidence retains stable source identity and a deterministic reason'
+);
 select is((public.sync_life_hero_evidence('2026-08-31'::date) ->> 'newEvidence')::integer, 0, 'repeated sync creates no new evidence');
-select is((select count(*)::integer from public.life_hero_evidence), 9, 'repeated sync preserves one ledger row per source identity');
+select is((select count(*)::integer from public.life_hero_evidence), 16, 'repeated sync preserves one ledger row per source identity');
 select is(
   (public.get_life_hero_snapshot('2026-09-10'::date) ->> 'totalXp')::integer,
   (select sum(awarded_xp)::integer from public.life_hero_awards),

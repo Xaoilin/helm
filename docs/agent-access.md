@@ -41,8 +41,13 @@ An internal Lina capability may share the same domain service, but it does not r
 | Inventory | Grounded read/write capabilities | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. |
 | Employment | Navigation only in this candidate | Not yet published | Do not read or mutate Employment account data externally. A dedicated Employment MCP approval and RPC boundary is required. |
 | Tasks, Calendar, Finance, Knowledge, Prayer | Grounded capabilities vary by operation | Not yet published | Use Lina in the app; external agents stop at the missing MCP boundary. |
+| Life Hero | Companion synchronizes account-owned evidence before reading its snapshot | Not yet published | KAN-262 is an explicit external-agent acceptance gap; agents cannot read or synchronize Life Hero through direct database, generic RPC, or UI fallbacks. |
 | Other Sabah One features | Surface-dependent | Not yet published | Treat external access as unavailable until a domain MCP contract is delivered and listed here. |
 | Secrets | Intentionally unavailable | Intentionally unavailable | Secret plaintext remains outside assistant context and agent tools. |
+
+## Life Hero MCP Acceptance Gap
+
+KAN-262 materially changes account-derived Life Hero evidence, but this bounded ticket does not publish a new external provider or MCP surface. A later dedicated Life Hero MCP contract must provide an owner-scoped snapshot read and a bounded evidence synchronization operation, derive account identity from OAuth, preserve the existing anonymous-user denial and idempotency rules, and include focused contract and denial tests. Until that contract is implemented, deployed, and approved, external agents must stop at this documented gap.
 
 ## Employment MCP Requirement
 

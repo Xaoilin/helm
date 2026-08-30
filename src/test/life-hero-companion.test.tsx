@@ -4,6 +4,7 @@ import LifeHeroCompanion from '../components/dashboard/LifeHeroCompanion';
 import type { LifeHeroSnapshot, LifeHeroStat } from '../types/domain';
 
 const mocks = vi.hoisted(() => ({
+  syncEvidence: vi.fn(),
   fetchSnapshot: vi.fn(),
   browserSpeak: vi.fn(),
   elevenLabsSpeak: vi.fn(),
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../store/supabase', () => ({
+  syncLifeHeroEvidence: mocks.syncEvidence,
   fetchLifeHeroSnapshot: mocks.fetchSnapshot,
 }));
 
@@ -43,6 +45,13 @@ function snapshot(): LifeHeroSnapshot {
 }
 
 beforeEach(() => {
+  mocks.syncEvidence.mockReset().mockResolvedValue({
+    mappingVersion: 'life-hero-source-mapping-v1',
+    asOfLocalDate: '2026-08-30',
+    newEvidence: 0,
+    duplicates: 0,
+    skipped: 0,
+  });
   mocks.fetchSnapshot.mockReset();
   mocks.browserSpeak.mockReset().mockResolvedValue('played');
   mocks.elevenLabsSpeak.mockReset();
@@ -62,6 +71,23 @@ beforeEach(() => {
 });
 
 describe('Life Hero companion', () => {
+  it('syncs authoritative evidence before fetching and retries a sync failure', async () => {
+    mocks.syncEvidence.mockRejectedValueOnce(new Error('sync unavailable'));
+    mocks.fetchSnapshot.mockResolvedValue(snapshot());
+    render(<LifeHeroCompanion localDate="2026-08-30" />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Your stored progress is safe');
+    expect(mocks.fetchSnapshot).not.toHaveBeenCalled();
+
+    fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('Overall level')).toBeInTheDocument();
+    expect(mocks.syncEvidence).toHaveBeenCalledTimes(2);
+    expect(mocks.fetchSnapshot).toHaveBeenCalledTimes(1);
+    expect(mocks.syncEvidence.mock.invocationCallOrder[1])
+      .toBeLessThan(mocks.fetchSnapshot.mock.invocationCallOrder[0]);
+  });
+
   it('renders loading, summary, seven paths, and conditions accessibly', async () => {
     mocks.fetchSnapshot.mockResolvedValue(snapshot());
     render(<LifeHeroCompanion localDate="2026-08-30" />);

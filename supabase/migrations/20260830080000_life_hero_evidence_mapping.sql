@@ -345,6 +345,7 @@ begin
     v_local_date := helm_private.life_hero_safe_date(v_record.payload ->> 'date');
     v_occurred_at := coalesce(helm_private.life_hero_safe_timestamptz(v_record.payload ->> 'recordedAt'), v_record.updated_at);
     if v_local_date is null
+      or v_local_date > p_as_of_local_date
       or coalesce(v_record.payload ->> 'prayerName', '') = ''
       or coalesce(v_record.payload ->> 'status', '') not in ('on_time', 'late')
     then
@@ -382,6 +383,7 @@ begin
         v_local_date := helm_private.life_hero_safe_date(v_log.value ->> 'date');
         v_occurred_at := coalesce(helm_private.life_hero_safe_timestamptz(v_log.value ->> 'updatedAt'), v_profile.updated_at);
         if v_local_date is null
+          or v_local_date > p_as_of_local_date
           or (v_log.value ->> 'pillar') <> (case when v_pillar.label = 'Learn' then 'learn' else 'move' end)
           or jsonb_typeof(v_log.value -> 'progress') <> 'object'
           or not exists (
@@ -419,6 +421,10 @@ begin
     end if;
     v_occurred_at := coalesce(helm_private.life_hero_safe_timestamptz(v_record.payload ->> 'completedAt'), v_record.updated_at);
     v_local_date := v_occurred_at::date;
+    if v_local_date > p_as_of_local_date then
+      v_skipped_count := v_skipped_count + 1;
+      continue;
+    end if;
     v_source_reference := format('life-hero:tasks:%s', v_record.record_id);
     v_reason := format('Completed Sabah One %s task %s on %s.', coalesce(nullif(v_record.payload ->> 'category', ''), 'task'), v_record.record_id, v_local_date);
     v_duplicate := helm_private.record_life_hero_source_evidence(
@@ -443,6 +449,10 @@ begin
     end if;
     v_occurred_at := coalesce(helm_private.life_hero_safe_timestamptz(v_record.payload ->> 'createdAt'), v_record.updated_at);
     v_local_date := v_occurred_at::date;
+    if v_local_date > p_as_of_local_date then
+      v_skipped_count := v_skipped_count + 1;
+      continue;
+    end if;
     v_source_reference := format('life-hero:financeBudgets:%s', v_record.record_id);
     v_reason := format('Budget %s was configured with a positive limit.', v_record.record_id);
     v_duplicate := helm_private.record_life_hero_source_evidence(
@@ -466,6 +476,10 @@ begin
     end if;
     v_occurred_at := coalesce(helm_private.life_hero_safe_timestamptz(v_record.payload ->> 'updatedAt'), v_record.updated_at);
     v_local_date := v_occurred_at::date;
+    if v_local_date > p_as_of_local_date then
+      v_skipped_count := v_skipped_count + 1;
+      continue;
+    end if;
     v_source_reference := format('life-hero:savingsGoals:%s:%s', v_record.record_id,
       case when v_record.payload ->> 'completed' = 'true' then 'completed' else v_record.payload ->> 'currentAmount' end);
     v_reason := format('Savings goal %s recorded positive progress.', v_record.record_id);
@@ -494,6 +508,7 @@ begin
     v_amount := (v_record.payload ->> 'amount')::numeric;
     v_local_date := helm_private.life_hero_safe_date(v_record.payload ->> 'date');
     if v_local_date is null then v_skipped_count := v_skipped_count + 1; continue; end if;
+    if v_local_date > p_as_of_local_date then v_skipped_count := v_skipped_count + 1; continue; end if;
     v_created_at := coalesce(helm_private.life_hero_safe_timestamptz(v_record.payload ->> 'createdAt'), v_record.updated_at);
     v_monzo_tag := null;
     select tag into v_monzo_tag
@@ -539,7 +554,8 @@ begin
         and prior.record_id <> v_record.record_id and prior.payload ->> 'type' = 'expense'
         and prior.payload ->> 'category' = v_record.payload ->> 'category'
         and helm_private.life_hero_safe_date(prior.payload ->> 'date') < v_local_date
-        and jsonb_typeof(prior.payload -> 'amount') = 'number';
+        and jsonb_typeof(prior.payload -> 'amount') = 'number'
+        and (prior.payload ->> 'amount')::numeric > v_amount;
       v_source_reference := case when v_monzo_tag is not null
         then format('life-hero:monzo:%s', substring(v_monzo_tag from 7))
         else format('life-hero:transactions:%s:avoidable-improvement', v_record.record_id) end;
@@ -591,15 +607,44 @@ $$;
 revoke all on function public.sync_life_hero_evidence(date) from public, anon;
 grant execute on function public.sync_life_hero_evidence(date) to authenticated;
 
--- Backfill only authenticated, database-owned records. It never reads an
--- external provider and never converts legacy gamification totals into XP.
-do $backfill_life_hero_source_evidence$
+create or replace function helm_private.backfill_life_hero_evidence(
+  p_as_of_local_date date default current_date
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+set statement_timeout = '10s'
+set lock_timeout = '3s'
+as $$
 declare
   v_user_id uuid;
+  v_account_count integer := 0;
 begin
-  for v_user_id in select id from auth.users loop
-    perform helm_private.sync_life_hero_evidence(v_user_id, current_date);
+  if p_as_of_local_date is null then
+    raise exception 'A Life Hero backfill local date is required.' using errcode = '22023';
+  end if;
+  for v_user_id in
+    select id
+    from auth.users
+    where not coalesce(is_anonymous, false)
+    order by id
+  loop
+    perform helm_private.sync_life_hero_evidence(v_user_id, p_as_of_local_date);
+    v_account_count := v_account_count + 1;
   end loop;
+  return v_account_count;
+end;
+$$;
+
+revoke all on function helm_private.backfill_life_hero_evidence(date)
+  from public, anon, authenticated;
+
+-- Backfill only permanent authenticated accounts with database-owned records.
+-- It never reads an external provider or converts legacy totals into XP.
+do $backfill_life_hero_source_evidence$
+begin
+  perform helm_private.backfill_life_hero_evidence(current_date);
 end;
 $backfill_life_hero_source_evidence$;
 
@@ -607,5 +652,7 @@ comment on function public.sync_life_hero_evidence(date) is
   'Synchronizes positive database-authoritative Sabah One life records into the idempotent Life Hero evidence ledger.';
 comment on function helm_private.sync_life_hero_evidence(uuid, date) is
   'KAN-262 source mapping: Prayer, Learn, Move, tasks, budgeting, savings, and bounded financial-practice evidence only.';
+comment on function helm_private.backfill_life_hero_evidence(date) is
+  'Backfills KAN-262 evidence for permanent authenticated accounts only; anonymous auth users are excluded.';
 
 commit;
