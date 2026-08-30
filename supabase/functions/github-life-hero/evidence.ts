@@ -5,6 +5,10 @@ export interface GithubPullRequestEvidenceInput {
   merged_at?: string | null;
 }
 
+export interface GithubInstallationInput {
+  id?: number;
+}
+
 export interface GithubEvidenceCandidate {
   idempotencyKey: string;
   sourceReference: string;
@@ -40,6 +44,26 @@ export function parseGithubInstallationRepositoriesPage<T>(value: unknown): T[] 
     && Array.isArray(row.repositories)
     ? row.repositories as T[]
     : null;
+}
+
+export function parseGithubInstallationsPage<T extends GithubInstallationInput>(value: unknown): T[] | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as { total_count?: unknown; installations?: unknown };
+  if (!Number.isSafeInteger(row.total_count) || (row.total_count as number) < 0
+    || !Array.isArray(row.installations)) return null;
+  return row.installations.every(installation => (
+    installation
+    && typeof installation === 'object'
+    && validId((installation as GithubInstallationInput).id)
+  )) ? row.installations as T[] : null;
+}
+
+export function githubInstallationIsAccessible(
+  installations: readonly GithubInstallationInput[],
+  installationId: number,
+): boolean {
+  return validId(installationId)
+    && installations.some(installation => installation.id === installationId);
 }
 
 export function githubSelectionIsInstallationScoped(

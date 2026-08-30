@@ -3,11 +3,13 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   githubEvidenceCandidate,
+  githubInstallationIsAccessible,
   githubInstallationRepositoriesPath,
   githubPullRequestQualifies,
   githubSelectionIsInstallationScoped,
   isSafeGithubPaginationUrl,
   parseGithubInstallationRepositoriesPage,
+  parseGithubInstallationsPage,
   type GithubPullRequestEvidenceInput,
 } from '../../supabase/functions/github-life-hero/evidence';
 import { withAllowedOriginCors } from '../../supabase/functions/github-life-hero/cors';
@@ -59,6 +61,22 @@ describe('GitHub Life Hero evidence qualification', () => {
     expect(githubInstalledAppId('?installation_id=0')).toBeNull();
     expect(githubInstalledAppId('?installation_id=not-a-number')).toBeNull();
     expect(githubFunctionSource).toContain('authorizationUrl: authorization.toString(), state');
+  });
+
+  it('rejects spoofed installation ids before credential storage', () => {
+    const installations = parseGithubInstallationsPage({
+      total_count: 1,
+      installations: [{ id: 157729668 }],
+    });
+    expect(installations).toEqual([{ id: 157729668 }]);
+    expect(githubInstallationIsAccessible(installations ?? [], 157729668)).toBe(true);
+    expect(githubInstallationIsAccessible(installations ?? [], 999999999)).toBe(false);
+    expect(parseGithubInstallationsPage({ total_count: 1, installations: [{ id: 0 }] })).toBeNull();
+
+    const verification = githubFunctionSource.indexOf('if (!githubInstallationIsAccessible');
+    const credentialStorage = githubFunctionSource.indexOf("service.rpc('save_github_life_hero_credential'", verification);
+    expect(verification).toBeGreaterThan(0);
+    expect(credentialStorage).toBeGreaterThan(verification);
   });
 
   it('requires an authored merged pull request with a stable provider identity', () => {
