@@ -6,9 +6,11 @@ import {
   useState,
 } from 'react';
 import type { AnimationAction, AnimationMixer, Object3D } from 'three';
+import { useLifeHeroVoice } from '../../hooks/useLifeHeroVoice';
 import { fetchLifeHeroSnapshot } from '../../store/supabase';
 import {
   deriveLifeHeroDashboardView,
+  deriveLifeHeroMotivationalLine,
   LIFE_HERO_AVATAR_CONTRACT,
   LIFE_HERO_CONDITION_PRESENTATION,
   LIFE_HERO_STAT_PRESENTATION,
@@ -121,6 +123,8 @@ export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps)
 
         <LifeHeroSummary state={snapshotState} view={view} onRetry={loadSnapshot} />
 
+        {view && <LifeHeroVoicePanel view={view} />}
+
         <button
           type="button"
           className="life-hero-details-toggle"
@@ -191,6 +195,77 @@ export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps)
         )}
       </div>
     </aside>
+  );
+}
+
+function LifeHeroVoicePanel({ view }: { view: LifeHeroDashboardView }) {
+  const line = useMemo(() => deriveLifeHeroMotivationalLine(view), [view]);
+  const voice = useLifeHeroVoice('en');
+  const busy = voice.status === 'loading' || voice.status === 'speaking';
+  const disabled = voice.muted || busy || voice.coolingDown;
+  const statusText = voice.error
+    ?? (voice.status === 'loading'
+      ? 'Preparing the motivational voice…'
+      : voice.status === 'speaking'
+        ? 'Speaking encouragement…'
+        : voice.notice
+          ?? (voice.coolingDown ? 'Voice is resting briefly to prevent repeated playback.' : 'Ready when you choose to listen.'));
+
+  return (
+    <section
+      className="life-hero-voice"
+      aria-labelledby="life-hero-voice-title"
+      aria-busy={busy}
+      data-voice-status={voice.status}
+      data-line-category={line.category}
+    >
+      <div className="life-hero-voice-heading">
+        <div>
+          <h3 id="life-hero-voice-title">Hero voice</h3>
+          <span>Optional encouragement</span>
+        </div>
+        <button
+          type="button"
+          className="life-hero-mute-button"
+          aria-pressed={voice.muted}
+          aria-label={voice.muted ? 'Turn Life Hero voice on' : 'Mute Life Hero voice'}
+          onClick={voice.toggleMuted}
+        >
+          <span aria-hidden="true">{voice.muted ? '○' : '◖'}</span>
+          {voice.muted ? 'Muted' : 'Voice on'}
+        </button>
+      </div>
+      <p className="life-hero-voice-line">“{line.text}”</p>
+      <div className="life-hero-voice-actions">
+        <button
+          type="button"
+          disabled={disabled}
+          aria-describedby="life-hero-voice-status"
+          onClick={() => void voice.play(line.text)}
+        >
+          {voice.muted
+            ? 'Text only'
+            : voice.status === 'loading'
+              ? 'Preparing…'
+              : voice.status === 'speaking'
+                ? 'Speaking…'
+                : voice.coolingDown
+                  ? 'Ready shortly'
+                  : 'Hear encouragement'}
+        </button>
+        {voice.status === 'speaking' && (
+          <button type="button" className="is-secondary" onClick={voice.stop}>Stop</button>
+        )}
+      </div>
+      <div
+        id="life-hero-voice-status"
+        className={`life-hero-voice-status${voice.error ? ' is-error' : ''}`}
+        role={voice.error ? 'alert' : 'status'}
+        aria-live={voice.error ? 'assertive' : 'polite'}
+      >
+        {statusText}
+      </div>
+    </section>
   );
 }
 

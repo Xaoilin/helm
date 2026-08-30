@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, openApp, test } from './support/helm-fixture';
 
 function requestedViewports(): string[] {
@@ -5,6 +6,50 @@ function requestedViewports(): string[] {
     .split(',')
     .map(value => value.trim())
     .filter(value => /^\d+x\d+$/u.test(value));
+}
+
+async function installSpeechHarness(page: Page, outcome: 'played' | 'failed' = 'played') {
+  await page.addInitScript((speechOutcome) => {
+    const speechWindow = window as typeof window & { __lifeHeroSpeechCalls: number };
+    speechWindow.__lifeHeroSpeechCalls = 0;
+
+    class MockUtterance {
+      text: string;
+      rate = 1;
+      pitch = 1;
+      lang = 'en-GB';
+      voice: null = null;
+      onstart: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: ((event: { error: string }) => void) | null = null;
+
+      constructor(text: string) {
+        this.text = text;
+      }
+    }
+
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+      configurable: true,
+      value: MockUtterance,
+    });
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        cancel: () => {},
+        getVoices: () => [],
+        speak: (utterance: MockUtterance) => {
+          speechWindow.__lifeHeroSpeechCalls += 1;
+          window.setTimeout(() => {
+            utterance.onstart?.();
+            window.setTimeout(() => {
+              if (speechOutcome === 'failed') utterance.onerror?.({ error: 'audio-busy' });
+              else utterance.onend?.();
+            }, 220);
+          }, 40);
+        },
+      },
+    });
+  }, outcome);
 }
 
 test.describe('Life Hero dashboard companion', () => {
@@ -65,6 +110,49 @@ test.describe('Life Hero dashboard companion', () => {
     await expect(hero.locator('canvas')).toHaveCount(0);
     await hero.getByRole('button', { name: 'Open hero details' }).click();
     await expect(hero.getByRole('heading', { name: 'Movement' })).toHaveCount(0);
+  });
+
+  test('keeps motivational voice explicit, rate-limited, muteable, and text-complete', async ({ page, scenario }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await installSpeechHarness(page);
+    await scenario();
+    await openApp(page);
+
+    const hero = page.getByRole('complementary', { name: 'Life Hero' });
+    const voice = hero.getByRole('region', { name: 'Hero voice' });
+    await expect(voice.getByText(/Your progress is safe/)).toBeVisible();
+    expect(await page.evaluate(() => (
+      window as typeof window & { __lifeHeroSpeechCalls: number }
+    ).__lifeHeroSpeechCalls)).toBe(0);
+
+    const play = voice.locator('.life-hero-voice-actions > button').first();
+    await expect(play).toHaveText('Hear encouragement');
+    await play.click();
+    await expect(voice).toHaveAttribute('data-voice-status', 'speaking');
+    await expect(play).toBeDisabled();
+    await expect(voice).toHaveAttribute('data-voice-status', 'idle');
+    expect(await page.evaluate(() => (
+      window as typeof window & { __lifeHeroSpeechCalls: number }
+    ).__lifeHeroSpeechCalls)).toBe(1);
+    await expect(voice.getByRole('button', { name: 'Ready shortly' })).toBeDisabled();
+
+    await voice.getByRole('button', { name: 'Mute Life Hero voice' }).click();
+    await expect(voice.getByRole('button', { name: 'Turn Life Hero voice on' }))
+      .toHaveAttribute('aria-pressed', 'true');
+    await expect(voice.getByRole('button', { name: 'Text only' })).toBeDisabled();
+    await expect(voice.getByText('Muted. Encouragement remains available as text.')).toBeVisible();
+  });
+
+  test('renders an actionable text fallback when browser speech fails', async ({ page, scenario }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installSpeechHarness(page, 'failed');
+    await scenario();
+    await openApp(page);
+
+    await page.getByRole('button', { name: /Show Life Hero companion/ }).click();
+    const voice = page.getByRole('region', { name: 'Hero voice' });
+    await voice.getByRole('button', { name: 'Hear encouragement' }).click();
+    await expect(voice.getByRole('alert')).toContainText('Use the encouragement above as text');
   });
 
   test('fails closed on an invalid snapshot without replacing Prayer', async ({ page, scenario }) => {

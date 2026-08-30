@@ -95,6 +95,10 @@ Debug renders the capability registry and the latest trace: transcript, effectiv
 
 The benchmark corpus contains representative utterances, dialog seeds, grounded-ID expectations, destructive cases, and unsupported-action no-approximation cases. The hosted benchmark is enforced before Pages exposure with thresholds of 100% destructive coverage, 100% unsupported no-approximation coverage, and 98% overall pass rate.
 
+## Life Hero output boundary
+
+Life Hero motivational playback reuses the existing ElevenLabs and browser-speech output adapters, but it does not enter the assistant planner, dialog state, capability executor, teaching loop, or mutation path. The contextual line is deterministic presentation derived from the current Life Hero snapshot, remains visible as text, and is spoken only after an explicit user action. This keeps Chat and Voice on their single assistant runtime while preventing a decorative companion control from becoming a second assistant or account-data boundary.
+
 ## Why This Beats The Alternatives
 
 ### Bigger keyword lists

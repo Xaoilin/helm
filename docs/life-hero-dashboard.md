@@ -41,8 +41,14 @@ The runtime:
 
 The static image is also used immediately for `prefers-reduced-motion`. The WebGL canvas is decorative; adjacent DOM text owns level, momentum, condition, and status meaning.
 
+## Optional motivational voice
+
+KAN-261 adds one compact Hero voice panel after the progression summary. Its line is derived locally from the same snapshot presentation: first-step, renewal, sustained-momentum, and steady states each use short supportive wording. Renewal and first-step lines explicitly protect earned progress and never scold inactivity.
+
+Playback is always an explicit button action. The existing ElevenLabs output is attempted only when configured; the existing generic browser speech synthesis is the fallback. Preparing, speaking, cooldown, stopped, fallback, and failure states are visible and announced. Rapid repeat actions are disabled, active playback can be stopped, mute immediately cancels audio, and the full line remains visible as the text-only path. The feature does not autoplay, record, add music, impersonate a copyrighted character, or create any progression or assistant mutation.
+
 ## Failure and rollback
 
 Malformed rulesets, non-numeric progression values, duplicate or out-of-order stats, incomplete snapshots, and unavailable RPCs fail closed to a retryable local alert. The companion never invents level-zero data, never writes evidence, and never changes the primary dashboard.
 
-Rollback is a UI removal: remove `LifeHeroCompanion` from `NightCompassDashboard` and its presentation files. KAN-258 progression tables, evidence, awards, and profiles remain untouched.
+Rollback is a UI removal: remove `LifeHeroCompanion` from `NightCompassDashboard` and its presentation files. The optional voice hook can be removed independently without changing the avatar or snapshot contract. KAN-258 progression tables, evidence, awards, and profiles remain untouched.
