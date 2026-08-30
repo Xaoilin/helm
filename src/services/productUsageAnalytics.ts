@@ -225,7 +225,7 @@ function detachLifecycle(): void {
 }
 
 export function configureProductUsageAnalytics(configuration: ProductUsageConfiguration): void {
-  releaseVersion = configuration.releaseVersion;
+  releaseVersion = configuration.releaseVersion.replace(/^v/u, '');
   sink = configuration.sink;
 
   if (!configuration.enabled || !configuration.accountId) {
