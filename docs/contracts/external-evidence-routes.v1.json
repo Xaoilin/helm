@@ -1,0 +1,628 @@
+{
+  "$schema": "sabah-one/external-evidence-routes/v1",
+  "ticket": "KAN-263",
+  "researchCutoff": "2026-08-30",
+  "approvalGate": "pending-sol-presentation-and-my-liege-approval",
+  "globalContract": {
+    "runtime": "hosted-github-pages-with-supabase-boundaries",
+    "accountAuthority": "signed-in-database-authoritative-online-only",
+    "failureMode": "fail-closed-with-visible-retry-or-fallback",
+    "credentialBoundary": {
+      "browserStorage": "none",
+      "sharedRecords": "none",
+      "broadcastPayloads": "none",
+      "logs": "none",
+      "assistantContext": "none",
+      "durableMemory": "none",
+      "accountSecrets": "supabase-vault-only"
+    },
+    "provenanceRule": "Every accepted record names provider, route version, stable source identity, occurrence range, local date, freshness, and source tier.",
+    "retentionRule": "Retain only normalized fields needed by the owning feature; discard raw files and provider payloads after a successful atomic import.",
+    "heroRule": "Provider presence never awards XP by itself. Only a versioned, meaningful behavior mapping may submit bounded non-sensitive evidence.",
+    "idempotencyRule": "Use owner-scoped provider identities and deterministic route-versioned keys; retries return the original result and changed input under one key fails visibly."
+  },
+  "routes": [
+    {
+      "provider": "github",
+      "displayName": "GitHub",
+      "capabilityFinding": "supported",
+      "recommendedRoute": "github-app-read-only",
+      "approvalStatus": "proposed",
+      "automation": {
+        "supported": true,
+        "mode": "server-mediated-github-app",
+        "summary": "A GitHub App installed only on user-selected repositories receives signed pull-request webhooks and performs bounded reconciliation with read-only permissions."
+      },
+      "userAssistedSteps": [
+        "Approve the GitHub App installation.",
+        "Select only the repositories Sabah One may read.",
+        "Reconnect explicitly after installation removal or authorization revocation."
+      ],
+      "authentication": {
+        "mechanism": "github-app-installation-and-account-bound-setup-state",
+        "permissions": [
+          "repository-metadata-read",
+          "pull-requests-read"
+        ],
+        "writesAllowed": false,
+        "clientSecretInBrowser": false
+      },
+      "credentialBoundary": {
+        "browser": "Receives setup status and normalized records only; no GitHub token or app secret.",
+        "server": "GitHub App credentials remain server-side; installation tokens are short-lived and are not written to account records.",
+        "account": "Store only the installation identifier, selected repository identities, permission snapshot, connection status, and timestamps."
+      },
+      "dataMinimisation": {
+        "retainedFields": [
+          "repository-node-id",
+          "repository-name",
+          "pull-request-node-id",
+          "pull-request-number",
+          "author-login",
+          "merged-at",
+          "default-branch",
+          "source-updated-at"
+        ],
+        "discardedFields": [
+          "repository-content",
+          "diffs",
+          "patches",
+          "issue-bodies",
+          "pull-request-bodies",
+          "comments",
+          "workflow-logs",
+          "provider-payload"
+        ]
+      },
+      "provenance": {
+        "sourceTier": "trusted_integration",
+        "stableIdentity": "github:{repositoryNodeId}:pull-request:{pullRequestNodeId}:merged",
+        "freshness": "provider-updated-at-and-last-successful-sync-at"
+      },
+      "heroMapping": {
+        "status": "proposed",
+        "evidenceType": "craft_practice",
+        "reason": "github_pull_request_merged",
+        "qualification": "The connected GitHub identity authored a pull request that GitHub reports merged into a selected repository's default branch.",
+        "excluded": [
+          "commit-count",
+          "line-count",
+          "stars",
+          "notifications",
+          "opened-or-unmerged-pull-requests"
+        ]
+      },
+      "failureBehavior": [
+        "Reject unsigned or invalidly signed webhooks.",
+        "Treat duplicate deliveries and reconciliation overlap as one source event.",
+        "Show rate-limit, revoked-auth, removed-installation, empty, and partial-sync states without inventing activity.",
+        "Preserve the last successful normalized record set but label its freshness until reconciliation succeeds."
+      ],
+      "fallback": {
+        "route": "existing-sabah-one-project-and-learn-records",
+        "sourceTier": "self_reported",
+        "behavior": "Keep GitHub shown as simulated/disconnected and award no GitHub-derived progress."
+      },
+      "costsAndPrerequisites": [
+        "Registering and configuring a GitHub App is required.",
+        "Installation requires personal-repository ownership or repository/organization admin permission.",
+        "Supabase Edge Function hosting and secret configuration are required.",
+        "No provider price was established by this research; verify current GitHub and hosting terms before implementation."
+      ],
+      "tests": [
+        "permission-manifest-allows-no-write-capability",
+        "valid-and-invalid-webhook-signature",
+        "duplicate-delivery-and-reconciliation-idempotency",
+        "merged-default-branch-author-attribution",
+        "revoked-auth-removed-installation-rate-limit-empty-and-partial-sync",
+        "private-content-and-provider-payload-never-persist-or-log"
+      ],
+      "primaryEvidence": [
+        {
+          "title": "Differences between GitHub Apps and OAuth apps",
+          "url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/differences-between-github-apps-and-oauth-apps",
+          "checkedAt": "2026-08-30",
+          "finding": "GitHub Apps are preferred, support selected repositories, fine-grained permissions, short-lived tokens, and built-in webhooks."
+        },
+        {
+          "title": "Choosing permissions for a GitHub App",
+          "url": "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app",
+          "checkedAt": "2026-08-30",
+          "finding": "GitHub Apps have no permissions by default and should request only the minimum endpoint permissions."
+        },
+        {
+          "title": "Rate limits for the REST API",
+          "url": "https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api",
+          "checkedAt": "2026-08-30",
+          "finding": "Authenticated and GitHub App requests are rate-limited and clients must surface and respect provider limits."
+        },
+        {
+          "title": "Validating webhook deliveries",
+          "url": "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries",
+          "checkedAt": "2026-08-30",
+          "finding": "GitHub requires server-side webhook secret storage and X-Hub-Signature-256 validation before processing a delivery."
+        },
+        {
+          "title": "Webhook events and payloads",
+          "url": "https://docs.github.com/en/webhooks/webhook-events-and-payloads",
+          "checkedAt": "2026-08-30",
+          "finding": "GitHub documents pull_request webhook events and delivery headers used by the proposed route."
+        }
+      ],
+      "revisitTriggers": [
+        "GitHub materially changes GitHub App permissions, token lifetime, webhook signing, or relevant API availability.",
+        "A required meaningful event cannot be obtained without repository contents or write permission."
+      ]
+    },
+    {
+      "provider": "barclays",
+      "displayName": "Barclays",
+      "capabilityFinding": "supported-only-through-regulated-open-banking-participant",
+      "recommendedRoute": "user-supplied-transaction-import-with-manual-entry-fallback",
+      "approvalStatus": "proposed",
+      "automation": {
+        "supported": false,
+        "mode": "deferred-regulated-aisp",
+        "summary": "Barclays supports Open Banking account-data sharing, but Sabah One is not an evidenced regulated AISP and cannot connect directly without an approved regulated provider route."
+      },
+      "userAssistedSteps": [
+        "If Barclays currently exposes a transaction export, download it directly while signed in to Barclays.",
+        "Upload the file to the signed-in Sabah One import review.",
+        "Map and confirm account, date, description, amount, currency, and provider transaction identity before commit.",
+        "If no compatible export is available, use the existing manual Finance path."
+      ],
+      "authentication": {
+        "mechanism": "none-for-file-import",
+        "permissions": [
+          "signed-in-sabah-one-account"
+        ],
+        "writesAllowed": false,
+        "clientSecretInBrowser": false
+      },
+      "credentialBoundary": {
+        "browser": "The user selects a local file; no Barclays login, PIN, password, cookie, or Open Banking credential is requested or retained.",
+        "server": "Receives only reviewed normalized finance records in the normal account mutation path.",
+        "account": "Stores normalized account and transaction records, import provenance, source hash, and freshness; never the raw file or banking credentials."
+      },
+      "dataMinimisation": {
+        "retainedFields": [
+          "account-stable-alias",
+          "provider-transaction-id-when-present",
+          "booking-date-time",
+          "amount",
+          "currency",
+          "normalized-description",
+          "category",
+          "import-source-hash",
+          "imported-at"
+        ],
+        "discardedFields": [
+          "raw-file",
+          "raw-row",
+          "full-account-number",
+          "card-number",
+          "bank-login",
+          "pin",
+          "cookies",
+          "open-banking-consent-artifact"
+        ]
+      },
+      "provenance": {
+        "sourceTier": "self_reported",
+        "stableIdentity": "barclays-import:{accountAlias}:{providerTransactionId-or-rowFingerprint}",
+        "freshness": "statement-or-export-range-end-and-imported-at"
+      },
+      "heroMapping": {
+        "status": "approved-existing-behavior-only",
+        "evidenceType": "financial_progress",
+        "reason": "none-on-import",
+        "qualification": "Importing balances or transactions never awards XP. Only existing versioned savings-transfer or avoidable-spend-improvement behavior may later qualify.",
+        "excluded": [
+          "balance",
+          "income",
+          "wealth",
+          "transaction-volume",
+          "import-completion"
+        ]
+      },
+      "failureBehavior": [
+        "Reject unknown or ambiguous files before mutation.",
+        "Show a reviewable row-level error without logging raw financial data.",
+        "Commit accepted rows atomically and make repeated imports idempotent.",
+        "Do not offer payments, transfers, or any write-capable banking operation."
+      ],
+      "fallback": {
+        "route": "existing-manual-finance-records",
+        "sourceTier": "self_reported",
+        "behavior": "The user records only the finance behavior needed; no Barclays automation or provider verification is claimed."
+      },
+      "costsAndPrerequisites": [
+        "File import has no new provider prerequisite beyond a user-visible Barclays export, whose current supported formats remain unconfirmed.",
+        "Live automation requires an FCA-authorized or registered AISP route, explicit user consent, Open Banking enrolment/certificates or an approved regulated provider, and may carry provider cost.",
+        "No regulated provider or price is approved by this ticket."
+      ],
+      "tests": [
+        "known-format-mapping-and-explicit-review",
+        "unknown-format-and-ambiguous-column-rejection",
+        "duplicate-file-and-row-idempotency",
+        "account-isolation-and-atomic-commit",
+        "raw-file-financial-data-and-credentials-absent-from-logs-and-shared-payloads",
+        "no-payment-or-transfer-capability"
+      ],
+      "primaryEvidence": [
+        {
+          "title": "Barclays Open Banking",
+          "url": "https://www.barclays.co.uk/ways-to-bank/open-banking/",
+          "checkedAt": "2026-08-30",
+          "finding": "Barclays says account data is shared only after explicit permission with registered third-party providers and login details are not shared."
+        },
+        {
+          "title": "Open Banking Directory",
+          "url": "https://www.openbanking.org.uk/directory/",
+          "checkedAt": "2026-08-30",
+          "finding": "TPP enrolment supplies the profiles, digital certificates, and software statements needed to connect to account providers."
+        },
+        {
+          "title": "Account Information Services",
+          "url": "https://standards.openbanking.org.uk/customer-experience-guidelines/account-information-services/latest/",
+          "checkedAt": "2026-08-30",
+          "finding": "The current standard limits account-information API access to AISPs with the payment-service user's explicit consent."
+        }
+      ],
+      "unknownFinding": {
+        "checkedAt": "2026-08-30",
+        "finding": "No current Barclays primary source was found that confirms a stable personal transaction-export format suitable for this import contract.",
+        "safeConsequence": "KAN-265 must validate a real user-provided sample and current Barclays export instructions before accepting any parser; otherwise it keeps manual Finance entry."
+      },
+      "revisitTriggers": [
+        "A regulated read-only provider is selected with current price, coverage, authorization, and data-retention evidence.",
+        "Barclays publishes a stable supported personal export format or changes Open Banking requirements."
+      ]
+    },
+    {
+      "provider": "iphone-movement",
+      "displayName": "iPhone movement",
+      "capabilityFinding": "supported-user-assisted-bridge",
+      "recommendedRoute": "apple-shortcuts-health-sample-browser-handoff",
+      "approvalStatus": "proposed",
+      "automation": {
+        "supported": true,
+        "mode": "user-run-shortcut-to-authenticated-browser-review",
+        "summary": "An inspectable Apple Shortcut finds iPhone step samples, aggregates one local day, and hands a bounded payload to a signed-in Sabah One review without claiming browser HealthKit access."
+      },
+      "userAssistedSteps": [
+        "Install and inspect the published Shortcut.",
+        "Grant the Shortcut read access only to step samples.",
+        "Run it for one local day and review the date, range, total, and source before accepting in signed-in Sabah One."
+      ],
+      "authentication": {
+        "mechanism": "existing-sabah-one-browser-session-after-shortcut-handoff",
+        "permissions": [
+          "apple-health-step-count-read"
+        ],
+        "writesAllowed": false,
+        "clientSecretInBrowser": false
+      },
+      "credentialBoundary": {
+        "browser": "Uses the existing in-memory authenticated Sabah One session for confirmation; the handoff is immediately cleared and is never written to browser storage.",
+        "server": "Receives only the confirmed bounded daily summary through a narrow account mutation.",
+        "account": "Stores normalized daily movement provenance and no Apple credential, Health export, location, route, or raw sample list."
+      },
+      "dataMinimisation": {
+        "retainedFields": [
+          "local-date",
+          "iana-time-zone",
+          "range-start",
+          "range-end",
+          "daily-step-total",
+          "source-label",
+          "route-version",
+          "accepted-at"
+        ],
+        "discardedFields": [
+          "raw-health-samples",
+          "location",
+          "route",
+          "device-identifiers",
+          "unrelated-health-types",
+          "health-export-file"
+        ]
+      },
+      "provenance": {
+        "sourceTier": "self_reported",
+        "stableIdentity": "apple-health-shortcut:steps:{localDate}:v1",
+        "freshness": "range-end-and-accepted-at"
+      },
+      "heroMapping": {
+        "status": "blocked-pending-explicit-threshold-approval",
+        "evidenceType": "vitality_activity",
+        "reason": "iphone_step_target_met",
+        "qualification": "At most one award per local date after a versioned approved daily threshold is met; KAN-266 must not invent that threshold.",
+        "excluded": [
+          "location",
+          "pace",
+          "route",
+          "all-health-export",
+          "multiple-awards-as-the-total-grows"
+        ]
+      },
+      "failureBehavior": [
+        "Reject missing permission, malformed dates, invalid totals, future ranges, oversized payloads, and duplicate local-day identities.",
+        "Never claim direct HealthKit access from the GitHub Pages browser.",
+        "Show the last accepted local date and an explicit run-again action when stale."
+      ],
+      "fallback": {
+        "route": "ephemeral-browser-apple-health-xml-review-or-existing-move-entry",
+        "sourceTier": "self_reported",
+        "behavior": "If Shortcuts cannot run, parse an Apple Health XML export locally and retain only one reviewed daily step summary; if that is too broad, use existing Move progress."
+      },
+      "costsAndPrerequisites": [
+        "Requires an iPhone with Health step data and Apple Shortcuts; no watch is required because Apple documents that iPhone records step samples.",
+        "No Apple Developer Program is required; the proposed user-run bridge ends at the hosted Sabah One browser review.",
+        "The fallback Health export contains broad sensitive data and is acceptable only with ephemeral browser-side parsing and immediate discard."
+      ],
+      "tests": [
+        "shortcut-fixture-aggregates-one-local-day",
+        "permission-denied-and-no-sample-state",
+        "malformed-future-oversized-and-cross-day-payload-rejection",
+        "same-day-idempotency-and-no-growing-total-duplicate-award",
+        "no-location-unrelated-health-type-raw-sample-or-browser-storage",
+        "signed-out-and-expired-session-fail-closed"
+      ],
+      "primaryEvidence": [
+        {
+          "title": "HealthKit",
+          "url": "https://developer.apple.com/documentation/healthkit",
+          "checkedAt": "2026-08-30",
+          "finding": "HealthKit is the permissioned iPhone and Apple Watch repository used by apps; it is not documented as a browser API."
+        },
+        {
+          "title": "stepCount",
+          "url": "https://developer.apple.com/documentation/healthkit/hkquantitytypeidentifier/stepcount",
+          "checkedAt": "2026-08-30",
+          "finding": "Apple documents that the system automatically records step-count samples on iPhone and Apple Watch."
+        },
+        {
+          "title": "Find and Filter actions in Shortcuts",
+          "url": "https://support.apple.com/guide/shortcuts/intro-to-find-and-filter-actions-apd3c845e881/ios",
+          "checkedAt": "2026-08-30",
+          "finding": "Apple Shortcuts includes Find Health Samples."
+        },
+        {
+          "title": "Request an API in Shortcuts",
+          "url": "https://support.apple.com/guide/shortcuts/request-your-first-api-apd58d46713f/ios",
+          "checkedAt": "2026-08-30",
+          "finding": "Shortcuts can make user-built URL requests with bounded JSON, form, or file bodies."
+        },
+        {
+          "title": "Share your data in Health on iPhone",
+          "url": "https://support.apple.com/guide/iphone/share-your-health-data-iph5ede58c3d/ios",
+          "checkedAt": "2026-08-30",
+          "finding": "Apple supports user export of all Health data as XML, which is a broad fallback rather than the preferred minimized route."
+        }
+      ],
+      "revisitTriggers": [
+        "Apple removes or materially changes Find Health Samples, Shortcuts handoff behavior, or iPhone step recording.",
+        "Sabah One gains an explicitly approved native Apple runtime."
+      ]
+    },
+    {
+      "provider": "eight-sleep",
+      "displayName": "Eight Sleep",
+      "capabilityFinding": "public-read-api-unknown",
+      "recommendedRoute": "manual-finalized-sleep-summary",
+      "approvalStatus": "proposed",
+      "automation": {
+        "supported": false,
+        "mode": "none-confirmed",
+        "summary": "Eight Sleep documents app reports, health data, Apple Health linking, and data-access requests, but no supported public read API or routine export contract was confirmed."
+      },
+      "userAssistedSteps": [
+        "Open a finalized Sleep and Health report in the Eight Sleep app.",
+        "Record only the local sleep date and that a finalized session exists.",
+        "Optionally record the bounded sleep window only if the user chooses; do not copy scores, stages, biometrics, or screenshots."
+      ],
+      "authentication": {
+        "mechanism": "none",
+        "permissions": [
+          "signed-in-sabah-one-account"
+        ],
+        "writesAllowed": false,
+        "clientSecretInBrowser": false
+      },
+      "credentialBoundary": {
+        "browser": "Never requests an Eight Sleep email, password, session cookie, token, or private API endpoint.",
+        "server": "Receives only the user-confirmed normalized summary.",
+        "account": "Stores source label, local date, optional bounded window, report-finalized flag, and acceptance time; no credentials or raw health report."
+      },
+      "dataMinimisation": {
+        "retainedFields": [
+          "local-sleep-date",
+          "optional-sleep-window-start",
+          "optional-sleep-window-end",
+          "report-finalized",
+          "source-label",
+          "accepted-at"
+        ],
+        "discardedFields": [
+          "heart-rate",
+          "heart-rate-variability",
+          "respiratory-rate",
+          "sleep-stages",
+          "snoring",
+          "temperature",
+          "sleep-score",
+          "screenshot",
+          "provider-payload"
+        ]
+      },
+      "provenance": {
+        "sourceTier": "self_reported",
+        "stableIdentity": "eight-sleep:finalized-session:{localSleepDate}",
+        "freshness": "local-sleep-date-and-accepted-at"
+      },
+      "heroMapping": {
+        "status": "proposed",
+        "evidenceType": "vitality_activity",
+        "reason": "eight_sleep_session_confirmed",
+        "qualification": "One finalized sleep session per local sleep date; it supports a non-medical restorative-habit record only.",
+        "excluded": [
+          "diagnosis",
+          "biometric-thresholds",
+          "sleep-score-ranking",
+          "punitive-loss",
+          "multiple-awards-for-one-night"
+        ]
+      },
+      "failureBehavior": [
+        "Keep automation visibly unavailable and never call an undocumented private endpoint.",
+        "Reject incomplete, future, duplicate, or implausibly long optional windows.",
+        "Treat tiredness as a temporary user-reported condition that never subtracts permanent progress."
+      ],
+      "fallback": {
+        "route": "existing-health-reflection-or-no-evidence",
+        "sourceTier": "self_reported",
+        "behavior": "The user may record a general reflection, or skip evidence entirely; Sabah One never fabricates Eight Sleep availability."
+      },
+      "costsAndPrerequisites": [
+        "Requires an existing Eight Sleep device/account and access to finalized app reports; this ticket authorizes no purchase or membership change.",
+        "A data-access request is user-assisted, may be slow, and is not suitable as routine sync.",
+        "No public API price or developer prerequisite was found because no supported public API was confirmed."
+      ],
+      "tests": [
+        "one-finalized-session-per-local-date",
+        "optional-window-validation",
+        "no-biometric-score-stage-screenshot-provider-payload-or-credential-retention",
+        "automation-unavailable-and-no-private-endpoint",
+        "temporary-condition-never-reduces-xp"
+      ],
+      "primaryEvidence": [
+        {
+          "title": "What data does Eight Sleep collect?",
+          "url": "https://help.eightsleep.com/en_us/what-data-does-the-eight-sleep-tracker-collect-Hk79MjgUm",
+          "checkedAt": "2026-08-30",
+          "finding": "Eight Sleep documents sensitive sleep and biometric collection and a user-initiated data-copy request in the app."
+        },
+        {
+          "title": "Eight Sleep App Terms and Conditions",
+          "url": "https://www.eightsleep.com/app-terms-conditions/",
+          "checkedAt": "2026-08-30",
+          "finding": "Eight Sleep documents user-directed third-party sharing and Apple Health connection, but not a Sabah One-compatible public API or data direction contract."
+        },
+        {
+          "title": "How do I edit or delete my sleep session?",
+          "url": "https://help.eightsleep.com/en_us/how-do-i-edit-or-delete-my-sleep-session-HynxgIj4",
+          "checkedAt": "2026-08-30",
+          "finding": "Eight Sleep documents finalized Sleep and Health reports and editable session boundaries, so manual provenance must not be treated as immutable provider verification."
+        }
+      ],
+      "unknownFinding": {
+        "checkedAt": "2026-08-30",
+        "finding": "No current official public developer API, supported routine export, or confirmed outbound Apple Health sleep-data contract was found.",
+        "safeConsequence": "KAN-267 must retain the manual self-reported route unless Eight Sleep publishes or explicitly grants a supported read-only contract."
+      },
+      "revisitTriggers": [
+        "Eight Sleep publishes a supported public API, routine export, or clearly documented outbound Apple Health sleep route.",
+        "The selected fallback would require biometric or diagnostic data."
+      ]
+    },
+    {
+      "provider": "elif-b",
+      "displayName": "Elif B",
+      "capabilityFinding": "provider-identity-and-api-unknown",
+      "recommendedRoute": "existing-learn-completion-with-provider-label",
+      "approvalStatus": "proposed",
+      "automation": {
+        "supported": false,
+        "mode": "none-confirmed",
+        "summary": "The ticket and repository do not identify an official Elif B product URL, legal provider, API, export, or account contract."
+      },
+      "userAssistedSteps": [
+        "Record the course or lesson as a Sabah One Learn activity without copying protected course content.",
+        "Mark the activity complete through the existing Learn flow.",
+        "Keep the provider label as user-supplied and unverified until an official product identity is supplied."
+      ],
+      "authentication": {
+        "mechanism": "none",
+        "permissions": [
+          "signed-in-sabah-one-account"
+        ],
+        "writesAllowed": false,
+        "clientSecretInBrowser": false
+      },
+      "credentialBoundary": {
+        "browser": "Never requests an Elif B password, cookie, token, screenshot, or browser automation session.",
+        "server": "Uses the existing Learn account mutation only.",
+        "account": "Stores the user-authored activity label, local date, completion state, and normal Learn provenance; no protected lesson content."
+      },
+      "dataMinimisation": {
+        "retainedFields": [
+          "user-authored-provider-label",
+          "user-authored-course-reference",
+          "local-date",
+          "learn-level-completion",
+          "accepted-at"
+        ],
+        "discardedFields": [
+          "course-content",
+          "answers",
+          "audio",
+          "video",
+          "screenshots",
+          "credentials",
+          "browser-session",
+          "provider-payload"
+        ]
+      },
+      "provenance": {
+        "sourceTier": "self_reported",
+        "stableIdentity": "sabah-one-learn:{activityId}:{localDate}:level-1",
+        "freshness": "learn-completed-local-date-and-record-updated-at"
+      },
+      "heroMapping": {
+        "status": "approved-existing-behavior-only",
+        "evidenceType": "knowledge_learning",
+        "reason": "learn_target_completed",
+        "qualification": "Use the existing Learn level-1 completion mapping once per activity and local date; do not add a second Discipline award for the same action.",
+        "excluded": [
+          "course-login",
+          "lesson-scraping",
+          "content-copying",
+          "fabricated-provider-verification",
+          "double-award"
+        ]
+      },
+      "failureBehavior": [
+        "Keep provider capability labelled unknown.",
+        "Reject any route that depends on password capture, credentialed scraping, hidden computer use, or copied protected content.",
+        "Preserve the existing Learn flow when provider-specific evidence is absent."
+      ],
+      "fallback": {
+        "route": "existing-sabah-one-learn-completion",
+        "sourceTier": "self_reported",
+        "behavior": "Existing Learn evidence remains transparent and idempotent without claiming external verification."
+      },
+      "costsAndPrerequisites": [
+        "No new cost or provider prerequisite is approved.",
+        "Provider-specific automation remains blocked until the exact official product URL and current API/export terms are supplied and verified."
+      ],
+      "tests": [
+        "existing-learn-level-1-mapping-remains-once-per-activity-date",
+        "provider-label-remains-user-supplied-and-unverified",
+        "no-course-content-answer-media-screenshot-credential-or-provider-payload-retention",
+        "no-second-discipline-award",
+        "provider-specific-route-fails-closed-without-official-identity"
+      ],
+      "primaryEvidence": [],
+      "unknownFinding": {
+        "checkedAt": "2026-08-30",
+        "finding": "Repository and Jira searches found no official Elif B URL or legal provider identity; web searches returned multiple unrelated similarly named Arabic-learning products, so selecting one would be a guess.",
+        "safeConsequence": "KAN-268 keeps the existing self-reported Learn route until Sol obtains the exact provider identity and verifies current official capability."
+      },
+      "revisitTriggers": [
+        "The exact official Elif B product URL or app-store identity is supplied.",
+        "The verified provider publishes a supported progress API or export."
+      ]
+    }
+  ]
+}

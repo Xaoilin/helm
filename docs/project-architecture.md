@@ -108,6 +108,8 @@ The app also integrates with:
 - Monzo for finance import when configured
 - the authenticated `sabah-one-inventory-mcp` Supabase Edge Function for the narrow Inventory planning boundary
 
+Proposed Life Hero provider routes are governed by [`external-evidence-routes.md`](external-evidence-routes.md). The contract records current primary-source evidence and explicit unknowns for GitHub, Barclays, iPhone movement, Eight Sleep, and Elif B. It adds no connector: every later implementation remains fail-closed until its route is approved, and undocumented APIs, credentialed scraping, browser-login automation, and provider writes remain prohibited.
+
 Network failures use visible error states and the established retry, circuit-breaker, and logging utilities. Diagnostics redact tokens and preserve request IDs and normalized failure codes where available.
 
 ## Surface Notes
