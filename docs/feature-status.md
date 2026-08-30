@@ -1,6 +1,6 @@
 # Feature Status
 
-Use this matrix when updating documentation or UI copy. `real` means the hosted website has an implemented path; `placeholder/simulated` means the integration is intentionally not presented as live; `required-gap` means policy requires the capability but the implemented path is not yet available.
+Use this matrix when updating documentation or UI copy. `real` means the hosted website has an implemented path; `contract-only` means a reviewed implementation boundary exists but no connector is live; `placeholder/simulated` means the integration is intentionally not presented as live; `required-gap` means policy requires the capability but the implemented path is not yet available.
 
 | Area | Status | Notes |
 | --- | --- | --- |
@@ -29,6 +29,7 @@ Use this matrix when updating documentation or UI copy. `real` means the hosted 
 | Life Hero dashboard companion | `real` | The signed-in Night Compass dashboard reads the permanent seven-stat snapshot into a collapsible bottom-right desktop companion and dedicated mobile panel. It shows level, best active stat momentum, non-punitive conditions, visual evolution stages, and the approved base body with shorts while the rejected grey jacket remains hidden. Maximum-quality 3D, constrained GLB, reduced-motion/static, load/decode failure, invalid snapshot, keyboard, and screen-reader-equivalent states fail closed without blocking Prayer or awarding XP. |
 | Life Hero motivational voice | `real` | The companion derives short supportive first-step, renewal, momentum, and steady lines from its current snapshot. Playback is user-triggered only through the existing ElevenLabs/browser-speech output, with visible preparing, speaking, cooldown, stopped, and actionable failure states. Mute cancels audio, text stays visible, repeated actions are rate-limited, and the feature never autoplays, records, adds music, impersonates a character, or mutates progress. |
 | Private product usage analytics | `real` | Signed-in session, navigation, action, outcome, error, and performance events use a typed content-free taxonomy, bounded non-blocking browser batching, database idempotency, owner-only RLS, and a security-definer ingest RPC. Raw domain values, assistant content, credentials, and provider payloads are rejected. Usage has no Life Hero XP path. The private Activity viewer and recommendations remain a later ticket. |
+| Life Hero external evidence routes | `contract-only` | KAN-263 freezes GitHub App read-only automation plus Barclays statement, Apple Health XML, Eight Sleep data-export, and Elif B manual-confirmation fallbacks. No production connector, credential, provider payload, or award path is added; Eight Sleep's export schema/API and Elif B's provider identity remain explicit unknowns. |
 | Daily Learn and Move progression | `real` | Signed-in accounts have versioned templates, five cumulative levels, local-date progress logs, editable prayer-relative anchors, account-owned preferences, one snooze, and visible in-app states for unavailable schedules. |
 | Dashboard focus ranking diagnostics | `real` | Grounded candidates and hosted review traces remain available for Debug; generic ranking does not control the Night Compass hierarchy. |
 | Voice assistant | `real` | Voice shares the hosted GPT assistant runtime with Chat. Browser microphone, transcript, wake-word, speech output, and in-app controls are capability-dependent; Chat remains available when a voice capability is unavailable. |
@@ -45,6 +46,6 @@ Use this matrix when updating documentation or UI copy. `real` means the hosted 
 | Knowledge base and lifestyle tracker | `real` | Account-backed CRUD converges across signed-in sessions, and Knowledge entries can move between topics without recreation. |
 | Projects reference hub | `real` | Searchable Pinned, Projects, and Archived sections expose links, repositories, documentation, display-only prerequisites, and portable guidance. Shared catalogue metadata is keyed by stable `catalogKey`. |
 | Trips planner | `real` | Account-backed multi-country trips, ordered legs, itinerary items, bookings, budgets, and explicit calendar import are implemented. |
-| GitHub integration | `placeholder/simulated` | Simulated connection flow only. |
+| GitHub integration | `placeholder/simulated` | Simulated connection flow only. A later ticket owns the frozen read-only GitHub App route; KAN-263 does not connect or replace this flow. |
 | Slack integration | `placeholder/simulated` | Simulated connection flow only. |
 | Linear integration | `placeholder/simulated` | Simulated connection flow only. |

@@ -1107,6 +1107,76 @@ export interface LifeHeroEvidenceSyncReceipt {
   snapshot: LifeHeroSnapshot;
 }
 
+// ── Life Hero external evidence route contracts ──
+export type LifeHeroExternalEvidenceProvider =
+  | 'barclays'
+  | 'eight_sleep'
+  | 'elif_b'
+  | 'iphone_movement'
+  | 'github';
+
+export type LifeHeroProviderCapabilityStatus =
+  | 'supported_read_only'
+  | 'regulated_automation_not_selected'
+  | 'user_export_supported_api_unknown'
+  | 'provider_identity_unknown';
+
+export type LifeHeroProviderRouteDecision =
+  | 'barclays_statement_import'
+  | 'eight_sleep_data_export_import'
+  | 'elif_b_manual_confirmation'
+  | 'apple_health_xml_import'
+  | 'github_app_read_only';
+
+export type LifeHeroProviderAutomationLevel =
+  | 'read_only_automatic'
+  | 'user_assisted_import'
+  | 'manual_confirmation';
+
+export type LifeHeroProviderAuthenticationBoundary =
+  | 'provider_authorization_server_exchange'
+  | 'provider_session_outside_sabah_one'
+  | 'no_provider_authentication';
+
+export type LifeHeroProviderSecretBoundary =
+  | 'supabase_vault_server_only'
+  | 'no_provider_secret';
+
+export interface LifeHeroProviderPrimarySource {
+  owner: string;
+  title: string;
+  url: string;
+  /** Source publication/update date when the publisher exposes one. */
+  sourceDate?: string;
+  checkedAt: string;
+}
+
+/**
+ * Contract-only route frozen by KAN-263. It is not connection state and does
+ * not authorize a provider request, file read, account mutation, or XP award.
+ */
+export interface LifeHeroProviderRouteContract {
+  provider: LifeHeroExternalEvidenceProvider;
+  ownerTicket: 'KAN-264' | 'KAN-265' | 'KAN-266' | 'KAN-267' | 'KAN-268';
+  capabilityStatus: LifeHeroProviderCapabilityStatus;
+  route: LifeHeroProviderRouteDecision;
+  automation: LifeHeroProviderAutomationLevel;
+  evidenceKind: LifeHeroEvidenceKind;
+  sourceTier: LifeHeroEvidenceSourceTier;
+  authenticationBoundary: LifeHeroProviderAuthenticationBoundary;
+  secretBoundary: LifeHeroProviderSecretBoundary;
+  userAssistedSteps: readonly string[];
+  acceptedInput: string;
+  qualifyingRule: string;
+  dataMinimisation: readonly string[];
+  provenance: readonly string[];
+  failureBehavior: string;
+  safeFallback: string;
+  costAndPrerequisites: readonly string[];
+  requiredTests: readonly string[];
+  primarySources: readonly LifeHeroProviderPrimarySource[];
+}
+
 // ── Private product usage analytics ──
 export type ProductUsageEventKind =
   | 'session'
