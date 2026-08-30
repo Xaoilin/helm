@@ -9467,6 +9467,131 @@ textarea.form-input {
   align-items: start;
 }
 
+.apple-health-import {
+  max-width: 960px;
+  margin: 0 auto 18px;
+  padding: 20px;
+}
+
+.apple-health-import-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid rgba(142, 208, 171, 0.34);
+  border-radius: 999px;
+  color: #b7f3d0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.apple-health-import-copy,
+.apple-health-import-hint {
+  max-width: 760px;
+  margin: 0 0 14px;
+  color: #c1cbd8;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.apple-health-import-hint {
+  margin-top: 12px;
+  margin-bottom: 0;
+  color: #93a1b4;
+  font-size: 11px;
+}
+
+.apple-health-import-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  border: 1px solid #8ed0ab;
+  border-radius: 12px;
+  background: rgba(142, 208, 171, 0.13);
+  color: #e9fff2;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.apple-health-import-picker:focus-within {
+  outline: 3px solid rgba(142, 208, 171, 0.2);
+  outline-offset: 2px;
+}
+
+.apple-health-import-picker input {
+  max-width: 190px;
+  color: #c6d0de;
+  font-size: 11px;
+}
+
+.apple-health-import-picker input:disabled {
+  cursor: wait;
+}
+
+.apple-health-import-status {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #334155;
+  border-radius: 11px;
+  color: #dbeafe;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.apple-health-import-status.is-working {
+  border-color: rgba(129, 140, 248, 0.4);
+  color: #c7d2fe;
+}
+
+.apple-health-import-status.is-success {
+  border-color: rgba(74, 222, 128, 0.4);
+  color: #bbf7d0;
+}
+
+.apple-health-import-status.is-error {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fecaca;
+}
+
+.apple-health-import-receipt {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 14px 0 0;
+  border: 1px solid #2a3344;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #2a3344;
+}
+
+.apple-health-import-receipt > div {
+  min-width: 0;
+  padding: 10px 11px;
+  background: rgba(10, 14, 22, 0.78);
+}
+
+.apple-health-import-receipt dt {
+  margin-bottom: 4px;
+  color: #7f8da2;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.apple-health-import-receipt dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: #dbe4f0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .health-quick-log,
 .health-history {
   display: flex;
@@ -9886,6 +10011,24 @@ textarea.form-input {
   .health-form-footer .btn {
     width: 100%;
     justify-content: center;
+  }
+
+  .apple-health-import {
+    padding: 18px;
+  }
+
+  .apple-health-import-picker {
+    display: flex;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .apple-health-import-picker input {
+    max-width: 100%;
+  }
+
+  .apple-health-import-receipt {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
