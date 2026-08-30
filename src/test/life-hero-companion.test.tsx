@@ -1,12 +1,22 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LifeHeroCompanion from '../components/dashboard/LifeHeroCompanion';
 import type { LifeHeroSnapshot, LifeHeroStat } from '../types/domain';
 
-const mocks = vi.hoisted(() => ({ fetchSnapshot: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  fetchSnapshot: vi.fn(),
+  browserSpeak: vi.fn(),
+  elevenLabsSpeak: vi.fn(),
+  speechCancel: vi.fn(),
+}));
 
 vi.mock('../store/supabase', () => ({
   fetchLifeHeroSnapshot: mocks.fetchSnapshot,
+}));
+
+vi.mock('../services/voiceAssistant', () => ({
+  speakWithBrowserTTS: mocks.browserSpeak,
+  speakWithElevenLabs: mocks.elevenLabsSpeak,
 }));
 
 const STAT_ORDER: LifeHeroStat[] = [
@@ -34,6 +44,13 @@ function snapshot(): LifeHeroSnapshot {
 
 beforeEach(() => {
   mocks.fetchSnapshot.mockReset();
+  mocks.browserSpeak.mockReset().mockResolvedValue('played');
+  mocks.elevenLabsSpeak.mockReset();
+  mocks.speechCancel.mockReset();
+  Object.defineProperty(window, 'speechSynthesis', {
+    configurable: true,
+    value: { cancel: mocks.speechCancel },
+  });
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
     value: vi.fn().mockImplementation(() => ({
@@ -63,6 +80,14 @@ describe('Life Hero companion', () => {
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 
+  it('uses the rendered base-only hero for reduced-motion and loading fallbacks', async () => {
+    mocks.fetchSnapshot.mockResolvedValue(snapshot());
+    render(<LifeHeroCompanion localDate="2026-08-30" />);
+
+    const image = screen.getByRole('img', { name: 'Original Life Hero standing in a ready pose' });
+    expect(image).toHaveAttribute('src', expect.stringContaining('life-hero-jacket-off'));
+  });
+
   it('collapses to an unobtrusive keyboard-operable level button', async () => {
     mocks.fetchSnapshot.mockResolvedValue(snapshot());
     render(<LifeHeroCompanion localDate="2026-08-30" />);
@@ -73,6 +98,68 @@ describe('Life Hero companion', () => {
     expect(collapsed).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(collapsed);
     expect(screen.getByRole('heading', { name: 'Life Hero' })).toBeInTheDocument();
+  });
+
+  it('never autoplays and exposes loading, speaking, text, and rate-limit states', async () => {
+    let startSpeech: (() => void) | undefined;
+    let resolveSpeech: ((result: 'played') => void) | undefined;
+    mocks.fetchSnapshot.mockResolvedValue(snapshot());
+    mocks.browserSpeak.mockImplementation((
+      _text: string,
+      _lang: string,
+      options: { onStart?: () => void },
+    ) => new Promise(resolve => {
+      startSpeech = options.onStart;
+      resolveSpeech = resolve as (result: 'played') => void;
+    }));
+    render(<LifeHeroCompanion localDate="2026-08-30" />);
+
+    const panel = await screen.findByRole('region', { name: 'Hero voice' });
+    expect(within(panel).getByText(/Your progress is safe/)).toBeInTheDocument();
+    expect(mocks.browserSpeak).not.toHaveBeenCalled();
+
+    const play = within(panel).getByRole('button', { name: 'Hear encouragement' });
+    fireEvent.click(play);
+    expect(within(panel).getByText('Preparing the motivational voice…')).toBeInTheDocument();
+    expect(mocks.browserSpeak).toHaveBeenCalledTimes(1);
+
+    act(() => startSpeech?.());
+    expect(within(panel).getByText('Speaking encouragement…')).toBeInTheDocument();
+    expect(play).toBeDisabled();
+    fireEvent.click(play);
+    expect(mocks.browserSpeak).toHaveBeenCalledTimes(1);
+
+    await act(async () => resolveSpeech?.('played'));
+    await waitFor(() => expect(within(panel).getByText(/resting briefly/)).toBeInTheDocument());
+    expect(within(panel).getByRole('button', { name: 'Ready shortly' })).toBeDisabled();
+  });
+
+  it('supports mute and an always-visible text-only fallback', async () => {
+    mocks.fetchSnapshot.mockResolvedValue(snapshot());
+    render(<LifeHeroCompanion localDate="2026-08-30" />);
+
+    const panel = await screen.findByRole('region', { name: 'Hero voice' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Mute Life Hero voice' }));
+    expect(within(panel).getByRole('button', { name: 'Turn Life Hero voice on' }))
+      .toHaveAttribute('aria-pressed', 'true');
+    expect(within(panel).getByRole('button', { name: 'Text only' })).toBeDisabled();
+    expect(within(panel).getByText('Muted. Encouragement remains available as text.'))
+      .toBeInTheDocument();
+    expect(within(panel).getByText(/Your progress is safe/)).toBeInTheDocument();
+    expect(mocks.browserSpeak).not.toHaveBeenCalled();
+    expect(mocks.speechCancel).not.toHaveBeenCalled();
+  });
+
+  it('shows an actionable failure when no speech path can play', async () => {
+    mocks.fetchSnapshot.mockResolvedValue(snapshot());
+    mocks.browserSpeak.mockResolvedValue('unavailable');
+    render(<LifeHeroCompanion localDate="2026-08-30" />);
+
+    const panel = await screen.findByRole('region', { name: 'Hero voice' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Hear encouragement' }));
+    const alert = await within(panel).findByRole('alert');
+    expect(alert).toHaveTextContent('unavailable in this browser');
+    expect(alert).toHaveTextContent('text');
   });
 
   it('shows a truthful first-step state when no progress has been earned yet', async () => {

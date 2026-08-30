@@ -5,24 +5,37 @@ export async function speakWithElevenLabs(
   text: string,
   apiKey: string,
   voiceId: string,
+  signal?: AbortSignal,
 ): Promise<HTMLAudioElement> {
-  const resp = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(API_TIMEOUT.ELEVENLABS_TTS),
-    headers: {
-      'xi-api-key': apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      text,
-      model_id: 'eleven_flash_v2_5',
-      voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.75,
-        style: 0.3,
+  const controller = new AbortController();
+  const abortRequest = () => controller.abort();
+  const timeout = globalThis.setTimeout(abortRequest, API_TIMEOUT.ELEVENLABS_TTS);
+  signal?.addEventListener('abort', abortRequest, { once: true });
+  if (signal?.aborted) abortRequest();
+
+  let resp: Response;
+  try {
+    resp = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'xi-api-key': apiKey,
+        'Content-Type': 'application/json',
       },
-    }),
-  });
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_flash_v2_5',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+          style: 0.3,
+        },
+      }),
+    });
+  } finally {
+    globalThis.clearTimeout(timeout);
+    signal?.removeEventListener('abort', abortRequest);
+  }
 
   if (!resp.ok) {
     throw new Error(`ElevenLabs API error: ${resp.status} ${resp.statusText}`);
@@ -33,21 +46,62 @@ export async function speakWithElevenLabs(
   return new Audio(url);
 }
 
-export function speakWithBrowserTTS(text: string, lang: AssistantLang = 'en'): Promise<void> {
+export type BrowserSpeechResult = 'played' | 'unavailable' | 'cancelled' | 'failed';
+
+export function speakWithBrowserTTS(
+  text: string,
+  lang: AssistantLang = 'en',
+  options: { signal?: AbortSignal; onStart?: () => void } = {},
+): Promise<BrowserSpeechResult> {
   return new Promise((resolve) => {
-    if (!('speechSynthesis' in window)) {
-      resolve();
+    if (
+      typeof window.speechSynthesis === 'undefined'
+      || typeof window.SpeechSynthesisUtterance === 'undefined'
+    ) {
+      resolve('unavailable');
       return;
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
+    const synth = window.speechSynthesis;
+    let settled = false;
+    let started = false;
+    let startTimeout: ReturnType<typeof globalThis.setTimeout> | null = null;
+    const settle = (result: BrowserSpeechResult) => {
+      if (settled) return;
+      settled = true;
+      if (startTimeout !== null) globalThis.clearTimeout(startTimeout);
+      options.signal?.removeEventListener('abort', cancel);
+      utterance.onstart = null;
+      utterance.onend = null;
+      utterance.onerror = null;
+      resolve(result);
+    };
+    const cancel = () => {
+      synth.cancel();
+      settle('cancelled');
+    };
+    startTimeout = globalThis.setTimeout(() => {
+      synth.cancel();
+      settle('failed');
+    }, TIMING.TTS_FALLBACK_TIMEOUT);
+
     utterance.rate = 1.0;
     utterance.pitch = 1.1;
     utterance.lang = lang === 'ar' ? 'ar-SA' : 'en-GB';
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
+    utterance.onstart = () => {
+      started = true;
+      if (startTimeout !== null) globalThis.clearTimeout(startTimeout);
+      options.onStart?.();
+    };
+    utterance.onend = () => settle('played');
+    utterance.onerror = event => settle(
+      options.signal?.aborted || event.error === 'canceled' || event.error === 'interrupted'
+        ? 'cancelled'
+        : 'failed',
+    );
 
-    const voices = speechSynthesis.getVoices();
+    const voices = synth.getVoices();
     if (lang === 'ar') {
       const arabicVoice = voices.find(voice => voice.lang.startsWith('ar'));
       if (arabicVoice) utterance.voice = arabicVoice;
@@ -58,8 +112,19 @@ export function speakWithBrowserTTS(text: string, lang: AssistantLang = 'en'): P
       if (femaleVoice) utterance.voice = femaleVoice;
     }
 
-    speechSynthesis.cancel();
-    speechSynthesis.speak(utterance);
+    options.signal?.addEventListener('abort', cancel, { once: true });
+    if (options.signal?.aborted) {
+      cancel();
+      return;
+    }
+
+    try {
+      synth.cancel();
+      synth.speak(utterance);
+      if (started && startTimeout !== null) globalThis.clearTimeout(startTimeout);
+    } catch {
+      settle('failed');
+    }
   });
 }
 

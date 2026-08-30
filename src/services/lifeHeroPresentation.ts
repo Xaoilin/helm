@@ -90,8 +90,8 @@ export const LIFE_HERO_AVATAR_CONTRACT = {
       qualityTier: 'constrained-capability-fallback',
     },
     static: {
-      path: 'concepts/life-hero/life-hero-concept.png',
-      assetKind: 'static-fallback',
+      path: 'docs/design/evidence/life-hero-jacket-off.png',
+      assetKind: 'rendered-base-only-fallback',
     },
   },
 } as const;
@@ -113,6 +113,11 @@ export interface LifeHeroDashboardView {
   levelProgress: number;
   encouragement: string;
   empty: boolean;
+}
+
+export interface LifeHeroMotivationalLine {
+  category: 'first-step' | 'renewal' | 'momentum' | 'steady';
+  text: string;
 }
 
 export function selectLifeHeroAsset(capability: {
@@ -174,6 +179,33 @@ export function deriveLifeHeroDashboardView(snapshot: LifeHeroSnapshot): LifeHer
           ? `${momentumDays} days of momentum are strengthening your path. Keep choosing the next good step.`
           : 'Real-world progress is shaping your hero. Keep building one steady step at a time.',
     empty,
+  };
+}
+
+export function deriveLifeHeroMotivationalLine(
+  view: LifeHeroDashboardView,
+): LifeHeroMotivationalLine {
+  if (view.empty) {
+    return {
+      category: 'first-step',
+      text: 'One small real-world step is enough to begin. I’m ready when you are.',
+    };
+  }
+  if (view.renewalDueCount > 0) {
+    return {
+      category: 'renewal',
+      text: 'Your progress is safe. Choose one gentle step when you’re ready.',
+    };
+  }
+  if (view.momentumDays >= 7) {
+    return {
+      category: 'momentum',
+      text: `${view.momentumDays} days of steady momentum—you’re building something real. Keep going, one good step at a time.`,
+    };
+  }
+  return {
+    category: 'steady',
+    text: `Level ${view.snapshot.overallLevel} reflects real effort. Keep shaping your path, one steady step at a time.`,
   };
 }
 

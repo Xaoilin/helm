@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   deriveLifeHeroDashboardView,
+  deriveLifeHeroMotivationalLine,
   LIFE_HERO_AVATAR_CONTRACT,
   lifeHeroLevelBounds,
   selectLifeHeroAsset,
@@ -101,6 +102,30 @@ describe('Life Hero dashboard presentation', () => {
     expect(view.awaitingFirstStepCount).toBe(7);
     expect(view.momentumDays).toBe(0);
     expect(view.levelProgress).toBe(0);
+    expect(deriveLifeHeroMotivationalLine(view)).toEqual({
+      category: 'first-step',
+      text: 'One small real-world step is enough to begin. I’m ready when you are.',
+    });
+  });
+
+  it('keeps every motivational voice category concise, contextual, and non-scolding', () => {
+    const renewal = deriveLifeHeroDashboardView(snapshot({
+      stats: STAT_ORDER.map(name => stat(name, name === 'faith' ? 'renewal_due' : 'steady')),
+    }));
+    const momentum = deriveLifeHeroDashboardView(snapshot());
+    const steady = deriveLifeHeroDashboardView(snapshot({ recentActivity: [] }));
+    const lines = [
+      deriveLifeHeroMotivationalLine(renewal),
+      deriveLifeHeroMotivationalLine(momentum),
+      deriveLifeHeroMotivationalLine(steady),
+    ];
+
+    expect(lines.map(line => line.category)).toEqual(['renewal', 'momentum', 'steady']);
+    expect(lines[0].text).toContain('progress is safe');
+    expect(lines[1].text).toContain('7 days');
+    expect(lines[2].text).toContain('real effort');
+    expect(lines.every(line => line.text.length <= 120)).toBe(true);
+    expect(lines.map(line => line.text).join(' ')).not.toMatch(/lazy|failed|weak|should have|missed/iu);
   });
 
   it('uses deterministic quadratic level bounds and capability-based LOD', () => {
@@ -122,5 +147,9 @@ describe('Life Hero dashboard presentation', () => {
       train: 'Running',
     });
     expect(LIFE_HERO_AVATAR_CONTRACT.slots).toContain('torso');
+    expect(LIFE_HERO_AVATAR_CONTRACT.assets.static).toEqual({
+      path: 'docs/design/evidence/life-hero-jacket-off.png',
+      assetKind: 'rendered-base-only-fallback',
+    });
   });
 });

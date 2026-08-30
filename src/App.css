@@ -6465,7 +6465,7 @@ textarea.form-input {
 
 .life-hero-avatar-placeholder {
   object-fit: cover;
-  object-position: center 18%;
+  object-position: center 26%;
   opacity: 1;
   transition: opacity 160ms ease;
 }
@@ -6482,7 +6482,7 @@ textarea.form-input {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 18%;
+  object-position: center 26%;
   transform: scale(1.04);
 }
 
@@ -6624,6 +6624,108 @@ textarea.form-input {
   color: #8fe7c4;
   font-size: 9px;
   font-weight: 700;
+}
+
+.life-hero-voice {
+  display: grid;
+  gap: 9px;
+  margin: 0 15px 13px;
+  padding: 11px;
+  border: 1px solid rgba(111, 145, 179, 0.3);
+  border-radius: 13px;
+  background: rgba(7, 17, 31, 0.58);
+}
+
+.life-hero-voice-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.life-hero-voice-heading h3 {
+  margin: 0;
+  color: var(--nc-text);
+  font-size: 12px;
+}
+
+.life-hero-voice-heading > div > span {
+  display: block;
+  margin-top: 2px;
+  color: var(--nc-text-muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.life-hero-mute-button,
+.life-hero-voice-actions button {
+  min-height: 38px;
+  border: 1px solid rgba(145, 160, 184, 0.3);
+  border-radius: 10px;
+  color: var(--nc-text);
+  background: rgba(10, 27, 43, 0.9);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.life-hero-mute-button {
+  display: inline-flex;
+  min-width: 78px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+}
+
+.life-hero-mute-button[aria-pressed='true'] {
+  border-color: rgba(230, 198, 106, 0.46);
+  color: #eadca6;
+  background: rgba(80, 66, 27, 0.24);
+}
+
+.life-hero-voice-line {
+  margin: 0;
+  color: #d4dfec;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.life-hero-voice-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.life-hero-voice-actions button {
+  flex: 1;
+  padding: 7px 10px;
+  border-color: rgba(47, 203, 143, 0.4);
+  color: #b9f2dc;
+}
+
+.life-hero-voice-actions button.is-secondary {
+  flex: 0 0 auto;
+  border-color: rgba(145, 160, 184, 0.3);
+  color: #c8d4e2;
+}
+
+.life-hero-voice :is(button):disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.life-hero-voice-status {
+  min-height: 14px;
+  color: var(--nc-text-muted);
+  font-size: 8.5px;
+  line-height: 1.4;
+}
+
+.life-hero-voice-status.is-error {
+  color: #ffadad;
 }
 
 .life-hero-message {
@@ -6835,17 +6937,19 @@ textarea.form-input {
   .life-hero-header,
   .life-hero-summary,
   .life-hero-message,
+  .life-hero-voice,
   .life-hero-details-toggle,
   .life-hero-details {
     grid-column: 2;
   }
 
   .life-hero-header { grid-row: 1; }
-  .life-hero-stage { grid-column: 1; grid-row: 1 / span 4; height: auto; min-height: 320px; margin: 10px; }
+  .life-hero-stage { grid-column: 1; grid-row: 1 / span 5; height: auto; min-height: 320px; margin: 10px; }
   .life-hero-summary,
   .life-hero-message { grid-row: 2; }
-  .life-hero-details-toggle { grid-row: 3; }
-  .life-hero-details { grid-row: 4; }
+  .life-hero-voice { grid-row: 3; }
+  .life-hero-details-toggle { grid-row: 4; }
+  .life-hero-details { grid-row: 5; }
   .life-hero-collapsed-button { justify-content: center; border-radius: 14px; }
 }
 
