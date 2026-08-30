@@ -26,6 +26,34 @@ function validId(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
+export function githubInstallationRepositoriesPath(installationId: number | undefined): string | null {
+  return validId(installationId)
+    ? `/user/installations/${installationId}/repositories?per_page=100`
+    : null;
+}
+
+export function githubSelectionIsInstallationScoped(
+  availableRepositoryIds: readonly number[],
+  selectedRepositoryIds: readonly number[],
+): boolean {
+  const available = new Set(availableRepositoryIds);
+  return selectedRepositoryIds.every(repositoryId => available.has(repositoryId));
+}
+
+export function isSafeGithubPaginationUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.origin === 'https://api.github.com'
+      && url.protocol === 'https:'
+      && url.hostname === 'api.github.com'
+      && !url.username
+      && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 export function githubPullRequestQualifies(
   pullRequest: GithubPullRequestEvidenceInput,
   authorizedUserId: number,

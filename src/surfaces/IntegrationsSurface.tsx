@@ -13,6 +13,7 @@ import {
   completeGithubLifeHeroAuthorization,
   completeGithubLifeHeroInstallation,
   disconnectGithubLifeHero,
+  githubConnectionNeedsReconnect,
   getGithubLifeHeroStatus,
   listGithubLifeHeroRepositories,
   saveGithubLifeHeroSelection,
@@ -86,6 +87,7 @@ export default function IntegrationsSurface() {
   const githubConfiguredAt = githubIntegration?.configuredAt;
   const updateIntegration = settings.updateIntegration;
   const githubConnection = githubStatus?.connection ?? null;
+  const githubNeedsReconnect = githubConnectionNeedsReconnect(githubStatus);
 
   const setGithubConnectionStatus = useCallback((status: GithubLifeHeroStatus | null, error?: string) => {
     setGithubStatus(status);
@@ -629,6 +631,11 @@ export default function IntegrationsSurface() {
                   )}
                   {isSignedIn && githubBusy === 'status' && <div role="status" aria-live="polite">Checking hosted GitHub App status...</div>}
                   {githubError && <div className="info-box warning" role="alert">{githubError}</div>}
+                  {githubNeedsReconnect && (
+                    <div className="info-box warning" role="status" style={{ marginBottom: 8 }}>
+                      GitHub access was revoked or expired. Reconnect the GitHub App before syncing evidence or changing repository selection.
+                    </div>
+                  )}
                   {githubConnection && (
                     <div className="info-box" style={{ marginBottom: 8 }}>
                       <strong>Selected repositories: {githubConnection.selectedRepositoryIds.length}</strong>
@@ -638,7 +645,7 @@ export default function IntegrationsSurface() {
                       </div>
                     </div>
                   )}
-                  {configuring === integration.id && isSignedIn && githubConnection && (
+                  {configuring === integration.id && isSignedIn && githubConnection && !githubNeedsReconnect && (
                     <div className="info-box" style={{ marginBottom: 8 }}>
                       <div style={{ marginBottom: 8 }}>Choose the repositories whose merged pull requests may contribute one fixed Craft award per authored merge.</div>
                       {githubRepositories.length === 0 ? (
@@ -762,9 +769,9 @@ export default function IntegrationsSurface() {
                   </>
                 ) : isGithub ? (
                   <>
-                    {!isSignedIn ? null : !githubConnection ? (
+                    {!isSignedIn ? null : !githubConnection || githubNeedsReconnect ? (
                       <button className="btn btn-primary btn-sm" onClick={handleGithubAuthorize} disabled={githubBusy === 'authorize'}>
-                        {githubBusy === 'authorize' ? <><span className="spinner" /> Opening GitHub...</> : 'Install and authorize GitHub App'}
+                        {githubBusy === 'authorize' ? <><span className="spinner" /> Opening GitHub...</> : githubNeedsReconnect ? 'Reconnect GitHub App' : 'Install and authorize GitHub App'}
                       </button>
                     ) : (
                       <>

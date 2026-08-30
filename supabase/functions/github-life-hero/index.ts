@@ -1,7 +1,10 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.100.1';
 import {
   githubEvidenceCandidate,
+  githubInstallationRepositoriesPath,
   githubPullRequestQualifies,
+  githubSelectionIsInstallationScoped,
+  isSafeGithubPaginationUrl,
   type GithubPullRequestEvidenceInput,
 } from './evidence.ts';
 
@@ -221,6 +224,7 @@ function localDateFor(instant: string, timeZone: string): string {
 
 async function githubRequest<T>(path: string, accessToken: string, apiVersion = GITHUB_API_VERSION): Promise<{ data: T; response: Response }> {
   const response = await fetch(`${GITHUB_API}${path}`, {
+    redirect: 'error',
     headers: {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${accessToken}`,
@@ -241,7 +245,12 @@ async function githubRequest<T>(path: string, accessToken: string, apiVersion = 
 function nextPage(response: Response): string | null {
   const link = response.headers.get('link') || '';
   const match = link.match(/<([^>]+)>;\s*rel="next"/u);
-  return match?.[1] || null;
+  const next = match?.[1];
+  if (!next) return null;
+  if (!isSafeGithubPaginationUrl(next)) {
+    throw new GithubSyncError('partial_sync', 'GitHub returned an unsafe pagination link.');
+  }
+  return next;
 }
 
 async function fetchAllPages<T>(path: string, accessToken: string, apiVersion: string): Promise<T[]> {
@@ -252,6 +261,7 @@ async function fetchAllPages<T>(path: string, accessToken: string, apiVersion: s
     pageCount += 1;
     if (pageCount > MAX_PAGES) throw new GithubSyncError('partial_sync', 'GitHub pagination exceeded the safe bound.');
     const response = await fetch(nextUrl, {
+      redirect: 'error',
       headers: {
         Accept: 'application/vnd.github+json',
         Authorization: `Bearer ${accessToken}`,
@@ -411,8 +421,15 @@ async function completeInstallation(service: SupabaseClient, userId: string, sta
   const row = await loadState(service, state);
   if (!row || row.user_id !== userId) return failure('needs_reconnect', 'The GitHub authorization session expired. Start again.');
   const stateHash = await hashState(state);
-  const { error } = await service.from('github_life_hero_oauth_states').update({ installation_id: installationId }).eq('state_hash', stateHash);
+  const { data, error } = await service.from('github_life_hero_oauth_states')
+    .update({ installation_id: installationId })
+    .eq('state_hash', stateHash)
+    .eq('user_id', userId)
+    .is('used_at', null)
+    .select('state_hash')
+    .maybeSingle();
   if (error) return failure('temporary_unavailable', 'The GitHub installation could not be recorded.');
+  if (!data) return failure('needs_reconnect', 'The GitHub authorization session has already been used. Start again.');
   const authorization = new URL(`${GITHUB_OAUTH}/authorize`);
   authorization.searchParams.set('client_id', GITHUB_APP_CLIENT_ID);
   authorization.searchParams.set('redirect_uri', String(row.redirect_uri));
@@ -430,6 +447,16 @@ async function completeAuthorization(
   if (!row || row.user_id !== userId || !numericId(row.installation_id)) {
     return failure('needs_reconnect', 'Complete the selected-repository GitHub App installation before authorizing.');
   }
+  const stateHash = await hashState(state);
+  const { data: consumedState, error: consumeError } = await service.from('github_life_hero_oauth_states')
+    .update({ used_at: nowIso() })
+    .eq('state_hash', stateHash)
+    .eq('user_id', userId)
+    .is('used_at', null)
+    .select('state_hash')
+    .maybeSingle();
+  if (consumeError) return failure('temporary_unavailable', 'The GitHub authorization session could not be finalized securely.');
+  if (!consumedState) return failure('needs_reconnect', 'The GitHub authorization session has already been used. Start again.');
   const response = await fetch(`${GITHUB_OAUTH}/access_token`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -469,8 +496,6 @@ async function completeAuthorization(
     p_api_version: GITHUB_API_VERSION,
   });
   if (error || !mapConnection(data)) return failure('temporary_unavailable', 'The GitHub credential could not be stored securely.');
-  const stateHash = await hashState(state);
-  await service.from('github_life_hero_oauth_states').update({ used_at: nowIso() }).eq('state_hash', stateHash);
   return success(mapConnection(data));
 }
 
@@ -483,8 +508,10 @@ async function getStatus(service: SupabaseClient, userId: string): Promise<Respo
 }
 
 async function listRepositories(credential: CredentialState): Promise<Array<{ id: number; fullName: string; private: boolean }>> {
+  const path = githubInstallationRepositoriesPath(credential.installationId);
+  if (!path) throw new GithubSyncError('needs_reconnect', 'The GitHub App installation is unavailable. Reconnect explicitly.');
   const repositories = await fetchAllPages<GithubRepository>(
-    '/user/repos?per_page=100&affiliation=owner,collaborator,organization_member&sort=full_name',
+    path,
     credential.accessToken,
     credential.apiVersion,
   );
@@ -499,8 +526,9 @@ async function listRepositories(credential: CredentialState): Promise<Array<{ id
 async function selectRepositories(service: SupabaseClient, userId: string, ids: number[]): Promise<Response> {
   const credential = await getFreshCredential(service, userId);
   const repositories = await listRepositories(credential);
-  const available = new Set(repositories.map(repository => repository.id));
-  if (ids.some(id => !available.has(id))) return failure('forbidden', 'Select only repositories available to the installed GitHub App.');
+  if (!githubSelectionIsInstallationScoped(repositories.map(repository => repository.id), ids)) {
+    return failure('forbidden', 'Select only repositories available to the installed GitHub App.');
+  }
   const { data, error } = await service.rpc('set_github_life_hero_selection', {
     p_user_id: userId,
     p_repository_ids: ids,
@@ -521,6 +549,12 @@ async function syncEvidence(
   if (credential.selectedRepositoryIds.length === 0) {
     await markSync(service, userId, 'empty', 'empty_selection', 'Select at least one repository before syncing GitHub evidence.');
     return success({ status: 'empty', scanned: 0, qualifying: 0, accepted: 0, duplicates: 0 });
+  }
+
+  const repositories = await listRepositories(credential);
+  if (!githubSelectionIsInstallationScoped(repositories.map(repository => repository.id), credential.selectedRepositoryIds)) {
+    await markSync(service, userId, 'unavailable', 'selection_out_of_scope', 'A selected repository is no longer available to the installed GitHub App.');
+    throw new GithubSyncError('unavailable', 'A selected repository is no longer available to the installed GitHub App.');
   }
 
   const githubUser = (await githubRequest<GithubUser>('/user', credential.accessToken, credential.apiVersion)).data;
@@ -616,7 +650,10 @@ async function handle(request: Request): Promise<Response> {
       case 'sync':
         return await syncEvidence(service, identity.id, body.localDate, body.timeZone);
       case 'disconnect':
-        await service.rpc('delete_github_life_hero_connection', { p_user_id: identity.id });
+        {
+          const { error } = await service.rpc('delete_github_life_hero_connection', { p_user_id: identity.id });
+          if (error) return failure('temporary_unavailable', 'GitHub disconnect could not be completed. Existing credential state is unchanged.');
+        }
         return success({ disconnected: true });
       default:
         return failure('invalid_request', 'The GitHub action is unsupported.');

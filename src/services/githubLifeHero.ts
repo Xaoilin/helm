@@ -41,6 +41,10 @@ export interface GithubLifeHeroStatus {
   connection: GithubLifeHeroConnection | null;
 }
 
+export function githubConnectionNeedsReconnect(status: GithubLifeHeroStatus | null): boolean {
+  return status?.status === 'revoked';
+}
+
 export interface GithubLifeHeroSyncReceipt {
   status: 'success' | 'empty';
   scanned: number;
