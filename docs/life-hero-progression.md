@@ -62,6 +62,12 @@ All current account-record adapters use the conservative `self_reported` source 
 
 Finance evidence records behavior and milestone identity, never award amount from balances, income, net worth, target size, or absolute savings. Monzo tags remain provenance inside the same finance rules; importing a provider record does not itself award XP and no raw provider payload or amount enters Life Hero metadata.
 
+### GitHub trusted integration
+
+KAN-264 adds the frozen GitHub App route through the hosted `github-life-hero` Edge Function. The function requires the selected-repository installation and user-to-server token expiration prerequisite, requests only `Metadata: read` and `Pull requests: read`, and keeps access and refresh tokens in Supabase Vault. The browser receives sanitized connection and sync status only.
+
+Only a pull request whose GitHub author ID matches the authorized GitHub user, whose merged instant is valid, and whose selected repository was read completely can qualify. Each qualifying pull request produces at most one fixed Craft award, keyed by repository ID and pull-request node ID. The batch is committed atomically after all selected repository pages are validated; rate limits, revocation, insufficient access, malformed responses, timeouts, and partial pagination leave previous evidence and progress unchanged. No source code, titles, bodies, commits, comments, branch names, private repository names, or token values enter Life Hero records, diagnostics, analytics, exports, assistant context, or browser storage.
+
 New task completions persist `completedLocalDate` and the IANA `completionTimeZone` alongside the UTC completion instant. Recurring tasks reuse their task ID but receive one stable source identity per explicit local completion date. Existing task records without those fields fall back first to a persisted completion zone, then the account app time zone, and finally UTC; their stable legacy identity is derived from the original completion instant so a later time-zone preference change cannot duplicate an award. Savings progress uses the goal's `updatedAt`, then the database record update time, with creation time only as a legacy fallback.
 
 Prayer weakness remains renewable. Positive Prayer evidence permanently increases Faith; later missed or absent evidence can only make the computed condition `renewal_due`. It never deletes an award or lowers XP or level.
