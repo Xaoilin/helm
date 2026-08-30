@@ -81,6 +81,27 @@ describe('private product usage analytics', () => {
     });
   });
 
+  it('emits a database-compatible release version from the app display version', async () => {
+    const batches: ProductUsageEvent[][] = [];
+    configureProductUsageAnalytics({
+      enabled: true,
+      accountId: '11111111-1111-4111-8111-111111111111',
+      releaseVersion: 'v0.2.132',
+      sink: async events => {
+        batches.push(events);
+        return { accepted: events.length, duplicates: 0 };
+      },
+    });
+
+    await flushProductUsageEvents();
+
+    expect(batches[0]).toHaveLength(1);
+    expect(batches[0][0].releaseVersion).toBe('0.2.132');
+    expect(batches[0][0].releaseVersion).toMatch(
+      /^\d+\.\d+\.\d+(?:[+-][A-Za-z0-9.-]+)?$/u,
+    );
+  });
+
   it('rejects unbounded taxonomy before it reaches the database', async () => {
     const sink = vi.fn(async (events: ProductUsageEvent[]) => ({
       accepted: events.length,
