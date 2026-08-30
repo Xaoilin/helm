@@ -57,6 +57,9 @@ export const HOSTED_ASSISTANT_BILLING_FUNCTION = getEnv('VITE_HOSTED_ASSISTANT_B
 /** Hosted Google Calendar OAuth function name (Supabase Edge Function). */
 export const GOOGLE_CALENDAR_OAUTH_FUNCTION = getEnv('VITE_GOOGLE_CALENDAR_OAUTH_FUNCTION') || 'google-calendar-oauth';
 
+/** Hosted GitHub App Life Hero evidence function name (Supabase Edge Function). */
+export const GITHUB_LIFE_HERO_FUNCTION = getEnv('VITE_GITHUB_LIFE_HERO_FUNCTION') || 'github-life-hero';
+
 /** Hosted assistant model label for truthful UI copy. */
 export const HOSTED_ASSISTANT_MODEL = getEnv('VITE_HOSTED_ASSISTANT_MODEL') || 'gpt-5.4';
 

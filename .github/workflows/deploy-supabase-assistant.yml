@@ -46,6 +46,10 @@ jobs:
       GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
       GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
       GOOGLE_OAUTH_ALLOWED_ORIGINS: ${{ secrets.GOOGLE_OAUTH_ALLOWED_ORIGINS }}
+      GITHUB_APP_CLIENT_ID: ${{ secrets.GITHUB_APP_CLIENT_ID }}
+      GITHUB_APP_CLIENT_SECRET: ${{ secrets.GITHUB_APP_CLIENT_SECRET }}
+      GITHUB_APP_SLUG: ${{ secrets.GITHUB_APP_SLUG }}
+      GITHUB_LIFE_HERO_ALLOWED_ORIGINS: ${{ secrets.GITHUB_LIFE_HERO_ALLOWED_ORIGINS }}
     steps:
       - id: preflight
         name: Check deploy secrets
@@ -69,6 +73,11 @@ jobs:
             echo "deploy_google_calendar_oauth=true" >> "$GITHUB_OUTPUT"
           else
             echo "deploy_google_calendar_oauth=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$GITHUB_APP_CLIENT_ID" ] && [ -n "$GITHUB_APP_CLIENT_SECRET" ] && [ -n "$GITHUB_APP_SLUG" ]; then
+            echo "deploy_github_life_hero=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy_github_life_hero=false" >> "$GITHUB_OUTPUT"
           fi
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' }}
@@ -187,3 +196,17 @@ jobs:
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_google_calendar_oauth == 'true' }}
         name: Deploy google-calendar-oauth
         run: npx supabase functions deploy google-calendar-oauth --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
+
+      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_github_life_hero == 'true' }}
+        name: Sync GitHub Life Hero function secrets
+        run: |
+          npx supabase secrets set \
+            GITHUB_APP_CLIENT_ID="$GITHUB_APP_CLIENT_ID" \
+            GITHUB_APP_CLIENT_SECRET="$GITHUB_APP_CLIENT_SECRET" \
+            GITHUB_APP_SLUG="$GITHUB_APP_SLUG" \
+            GITHUB_LIFE_HERO_ALLOWED_ORIGINS="${GITHUB_LIFE_HERO_ALLOWED_ORIGINS:-https://xaoilin.github.io,http://localhost:5173,http://localhost:5174}" \
+            --project-ref "$SUPABASE_PROJECT_REF" --yes
+
+      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_github_life_hero == 'true' }}
+        name: Deploy github-life-hero
+        run: npx supabase functions deploy github-life-hero --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes

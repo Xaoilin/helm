@@ -1,6 +1,6 @@
 # Life Hero External Evidence Routes
 
-KAN-263 freezes the provider boundary for KAN-264 through KAN-268. It does not connect an account, parse a real export, store a credential, or award XP. The executable mirror is `src/types/lifeHeroProviderRoutes.ts`; later tickets must preserve it or record a reviewed superseding decision.
+KAN-263 froze the provider boundary for KAN-264 through KAN-268. KAN-264 implements only the GitHub row: a hosted Edge Function performs the read-only App exchange, keeps expiring credentials in Supabase Vault, and submits a bounded atomic evidence batch. The remaining routes stay contract-only. The executable mirror is `src/types/lifeHeroProviderRoutes.ts`; later tickets must preserve it or record a reviewed superseding decision.
 
 All evidence was checked against first-party pages on 2026-08-30. A checked date proves the page was reviewed then, not that an undocumented API does or does not exist.
 
@@ -23,6 +23,14 @@ All evidence was checked against first-party pages on 2026-08-30. A checked date
 - Elif B: one `knowledge_learning` per explicitly confirmed session. Duration, lesson count, grades, and content do not change XP. The route remains `self_reported` until the provider identity and a supported authenticated or signed interface are known.
 
 Every route uses the existing database-owned award rules, stable idempotency/source identity, and no-caller-XP RPC. Raw provider payloads, files, messages, code, financial details, health samples, credentials, and secrets are excluded from shared records, Life Hero metadata, logs, analytics, Broadcast, exports, assistant context, and durable memory.
+
+## KAN-264 GitHub implementation
+
+The `github-life-hero` hosted function is the only GitHub data boundary. It requires a signed-in Sabah One session, starts a state-bound App installation and user authorization flow, validates the GitHub account identity, refreshes expiring user-to-server credentials server-side, and never returns a token to the browser. Connection metadata contains only the GitHub user identity, selected repository IDs, API version, installation ID, and bounded sync status; the credential payload is held in Supabase Vault.
+
+The user explicitly selects up to 25 repositories after installation. Sync reads closed pull requests page by page, validates the authorized-user match and non-null merged instant, converts the merged instant to the account app time zone, and submits all candidates in one bounded transaction. A candidate is one fixed `craft_practice` event identified by repository ID plus pull-request node ID. The database resolves XP from the existing `life-hero-v1` rules; commits, lines changed, comments, issue volume, titles, bodies, source code, and repository popularity never affect progression.
+
+The UI labels unconfigured, signed-out, revoked/reconnect, forbidden/unavailable, rate-limited, empty-selection/no-qualifying-PR, partial-sync, and temporary-unavailable states. A provider or pagination failure is recorded as bounded diagnostic metadata and commits no candidates, so previous Life Hero progress remains unchanged. Replaying a completed sync returns duplicates through the existing stable source/idempotency protections without a second award.
 
 ## Later-ticket acceptance contract
 

@@ -22,6 +22,7 @@ try {
     'supabase/tests/helm_legacy_migration.sql',
     'supabase/tests/life_hero_progression.sql',
     'supabase/tests/life_hero_evidence_sync.sql',
+    'supabase/tests/github_life_hero.sql',
     'supabase/tests/product_usage_analytics.sql',
   ])
   await runConcurrencyScenario()

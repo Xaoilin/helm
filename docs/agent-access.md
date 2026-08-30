@@ -40,7 +40,7 @@ An internal Lina capability may share the same domain service, but it does not r
 | --- | --- | --- | --- |
 | Inventory | Grounded read/write capabilities | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. |
 | Employment | Navigation only in this candidate | Not yet published | Do not read or mutate Employment account data externally. A dedicated Employment MCP approval and RPC boundary is required. |
-| Life Hero | Dashboard reads and automatic account-evidence reconciliation | Not yet published | The first-party companion may reconcile owned Sabah One records through its narrow RPC. External agents cannot read snapshots or submit evidence until a Life Hero OAuth/MCP contract is published. |
+| Life Hero | Dashboard reads, account-evidence reconciliation, and hosted GitHub evidence sync | Not yet published | KAN-264 keeps GitHub credentials and provider sync first-party/server-only; external agents cannot read snapshots or submit evidence until a dedicated Life Hero OAuth/MCP contract is published. This missing MCP surface is an explicit acceptance gap, not permission to use the GitHub function or database RPC directly. |
 | Tasks, Calendar, Finance, Knowledge, Prayer | Grounded capabilities vary by operation | Not yet published | Use Lina in the app; external agents stop at the missing MCP boundary. |
 | Other Sabah One features | Surface-dependent | Not yet published | Treat external access as unavailable until a domain MCP contract is delivered and listed here. |
 | Secrets | Intentionally unavailable | Intentionally unavailable | Secret plaintext remains outside assistant context and agent tools. |

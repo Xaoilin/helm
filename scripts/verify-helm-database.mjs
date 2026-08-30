@@ -35,11 +35,12 @@ const [migrationRows, verificationRows] = await Promise.all([
             'life_hero_momentum_rules', 'life_hero_profiles',
             'life_hero_stat_profiles', 'life_hero_evidence',
             'life_hero_awards', 'life_hero_legacy_snapshots',
-            'product_usage_events'
+            'product_usage_events', 'github_life_hero_connections',
+            'github_life_hero_oauth_states'
           ])
       ),
       'allHelmTablesUseRls', (
-        select count(*) = 17 and bool_and(c.relrowsecurity)
+        select count(*) = 19 and bool_and(c.relrowsecurity)
         from pg_class c
         join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public'
@@ -53,7 +54,8 @@ const [migrationRows, verificationRows] = await Promise.all([
             'life_hero_momentum_rules', 'life_hero_profiles',
             'life_hero_stat_profiles', 'life_hero_evidence',
             'life_hero_awards', 'life_hero_legacy_snapshots',
-            'product_usage_events'
+            'product_usage_events', 'github_life_hero_connections',
+            'github_life_hero_oauth_states'
           ])
       ),
       'authenticatedRecordsRead', has_table_privilege('authenticated', 'public.helm_records', 'select'),
@@ -495,7 +497,7 @@ if (!verification || typeof verification !== 'object') {
 }
 
 const expected = {
-  helmTableCount: 17,
+  helmTableCount: 19,
   allHelmTablesUseRls: true,
   authenticatedRecordsRead: true,
   authenticatedRecordsWrite: false,
