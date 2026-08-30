@@ -538,17 +538,15 @@ export default function SettingsSurface() {
         {/* Privacy */}
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Privacy</h3>
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div style={{ marginBottom: 14 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>Telemetry</div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>Private usage history</div>
               <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 2 }}>
-                Send anonymous usage data to help improve Sabah One. No personal data is ever sent.
+                Signed-in visits, actions, outcomes, errors, and timings are stored in your own
+                Sabah One account. Content, secrets, financial values, and provider payloads are
+                excluded, and app usage never grants Life Hero XP.
               </div>
             </div>
-            <label className="toggle">
-              <input type="checkbox" checked={settings.telemetry} onChange={e => settingsContext.updateSettings({ telemetry: e.target.checked })} aria-label="Toggle telemetry" />
-              <span className="slider" />
-            </label>
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>

@@ -1096,6 +1096,65 @@ export interface LifeHeroEvidenceReceipt {
   snapshot: LifeHeroSnapshot;
 }
 
+// ── Private product usage analytics ──
+export type ProductUsageEventKind =
+  | 'session'
+  | 'navigation'
+  | 'action'
+  | 'outcome'
+  | 'error'
+  | 'performance';
+
+export type ProductUsageOutcome = 'success' | 'failure' | 'cancelled' | 'unavailable';
+export type ProductUsageDeviceClass = 'mobile' | 'tablet' | 'desktop';
+export type ProductUsageInputKind = 'pointer' | 'keyboard' | 'voice' | 'assistant' | 'system';
+export type ProductUsageMetadataValue = string | number | boolean | null;
+
+/**
+ * A deliberately content-free product event. Feature and action are stable
+ * product taxonomy keys, never labels, user text, domain values, or provider
+ * payloads.
+ */
+export interface ProductUsageEvent {
+  eventId: string;
+  schemaVersion: 1;
+  sessionId: string;
+  sequence: number;
+  kind: ProductUsageEventKind;
+  occurredAt: string;
+  surface?: Surface;
+  feature: string;
+  action: string;
+  outcome?: ProductUsageOutcome;
+  durationMs?: number;
+  errorCode?: string;
+  target?: string;
+  releaseVersion: string;
+  deviceClass: ProductUsageDeviceClass;
+  inputKind: ProductUsageInputKind;
+  online: boolean;
+  reducedMotion: boolean;
+  metadata?: Record<string, ProductUsageMetadataValue>;
+}
+
+export interface ProductUsageIngestReceipt {
+  accepted: number;
+  duplicates: number;
+}
+
+export interface ProductUsageDiagnostics {
+  enabled: boolean;
+  sessionId: string | null;
+  queued: number;
+  accepted: number;
+  duplicates: number;
+  dropped: number;
+  rejected: number;
+  failedBatches: number;
+  lastFlushAt: string | null;
+  lastFailureCode: string | null;
+}
+
 // ── Assistant Activity ──
 export type AssistantActivityActor = 'chat' | 'voice' | 'system';
 export type AssistantActivityDomain = 'assistant' | 'calendar' | 'finance' | 'inventory' | 'knowledge' | 'tasks' | 'trips';

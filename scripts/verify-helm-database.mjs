@@ -34,11 +34,12 @@ const [migrationRows, verificationRows] = await Promise.all([
             'life_hero_evidence_rules', 'life_hero_source_tier_rules',
             'life_hero_momentum_rules', 'life_hero_profiles',
             'life_hero_stat_profiles', 'life_hero_evidence',
-            'life_hero_awards', 'life_hero_legacy_snapshots'
+            'life_hero_awards', 'life_hero_legacy_snapshots',
+            'product_usage_events'
           ])
       ),
       'allHelmTablesUseRls', (
-        select count(*) = 16 and bool_and(c.relrowsecurity)
+        select count(*) = 17 and bool_and(c.relrowsecurity)
         from pg_class c
         join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public'
@@ -51,7 +52,8 @@ const [migrationRows, verificationRows] = await Promise.all([
             'life_hero_evidence_rules', 'life_hero_source_tier_rules',
             'life_hero_momentum_rules', 'life_hero_profiles',
             'life_hero_stat_profiles', 'life_hero_evidence',
-            'life_hero_awards', 'life_hero_legacy_snapshots'
+            'life_hero_awards', 'life_hero_legacy_snapshots',
+            'product_usage_events'
           ])
       ),
       'authenticatedRecordsRead', has_table_privilege('authenticated', 'public.helm_records', 'select'),
@@ -231,6 +233,53 @@ const [migrationRows, verificationRows] = await Promise.all([
         select 1 from public.life_hero_evidence
         where evidence_type like 'legacy_%'
       ),
+      'productUsageOwnerReadPolicy', (
+        select count(*) = 1
+        from pg_policies
+        where schemaname = 'public'
+          and tablename = 'product_usage_events'
+          and cmd = 'SELECT'
+          and roles = array['authenticated']::name[]
+      ),
+      'productUsagePrivileges',
+        has_table_privilege('authenticated', 'public.product_usage_events', 'select')
+        and not has_table_privilege('authenticated', 'public.product_usage_events', 'insert')
+        and not has_table_privilege('authenticated', 'public.product_usage_events', 'update')
+        and not has_table_privilege('authenticated', 'public.product_usage_events', 'delete')
+        and not has_table_privilege('anon', 'public.product_usage_events', 'select'),
+      'productUsageRpcSecurity',
+        has_function_privilege(
+          'authenticated', 'public.ingest_product_usage_events(jsonb)', 'execute'
+        )
+        and not has_function_privilege(
+          'anon', 'public.ingest_product_usage_events(jsonb)', 'execute'
+        )
+        and (
+          select prosecdef
+          from pg_proc
+          where oid = 'public.ingest_product_usage_events(jsonb)'::regprocedure
+        ),
+      'productUsageRowsContentFree', not exists (
+        select 1
+        from public.product_usage_events event
+        where not helm_private.product_usage_metadata_is_safe(event.metadata)
+          or event.feature !~ '^[a-z][a-z0-9_]{0,63}$'
+          or event.action !~ '^[a-z][a-z0-9_]{0,63}$'
+      ),
+      'productUsageCannotGrantXp',
+        not exists (
+          select 1 from public.life_hero_evidence_rules
+          where evidence_type = any(array['app_usage', 'product_usage', 'analytics_event'])
+        )
+        and not exists (
+          select 1
+          from pg_constraint
+          where conrelid = 'public.product_usage_events'::regclass
+            and confrelid in (
+              'public.life_hero_evidence'::regclass,
+              'public.life_hero_awards'::regclass
+            )
+        ),
       'accountReadPolicies', (
         select count(*)
         from pg_policies
@@ -442,7 +491,7 @@ if (!verification || typeof verification !== 'object') {
 }
 
 const expected = {
-  helmTableCount: 16,
+  helmTableCount: 17,
   allHelmTablesUseRls: true,
   authenticatedRecordsRead: true,
   authenticatedRecordsWrite: false,
@@ -469,6 +518,11 @@ const expected = {
   lifeHeroAnonymousAccess: false,
   lifeHeroRpcSecurity: true,
   lifeHeroLegacyBackfillSafe: true,
+  productUsageOwnerReadPolicy: true,
+  productUsagePrivileges: true,
+  productUsageRpcSecurity: true,
+  productUsageRowsContentFree: true,
+  productUsageCannotGrantXp: true,
   accountReadPolicies: 2,
   privateBroadcastPolicy: true,
   legacyKvPublished: false,
