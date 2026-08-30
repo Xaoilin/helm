@@ -1000,6 +1000,102 @@ export interface GamificationProfile {
   dailyMomentumMove?: DailyMomentumState;
 }
 
+// ── Life Hero progression ──
+export type LifeHeroStat =
+  | 'faith'
+  | 'vitality'
+  | 'knowledge'
+  | 'discipline'
+  | 'finances'
+  | 'craft'
+  | 'community';
+
+export type LifeHeroEvidenceKind =
+  | 'faith_practice'
+  | 'vitality_activity'
+  | 'knowledge_learning'
+  | 'discipline_commitment'
+  | 'financial_progress'
+  | 'craft_practice'
+  | 'community_service';
+
+export type LifeHeroEvidenceSourceTier =
+  | 'verified'
+  | 'trusted_integration'
+  | 'self_reported';
+
+export type LifeHeroConditionState = 'awaiting_first_step' | 'steady' | 'renewal_due';
+
+export type LifeHeroEvidenceMetadataValue = string | number | boolean | null;
+
+export interface LifeHeroEvidenceInput {
+  idempotencyKey: string;
+  evidenceType: LifeHeroEvidenceKind;
+  sourceTier: LifeHeroEvidenceSourceTier;
+  sourceReference: string;
+  occurredAt: string;
+  localDate: string;
+  metadata?: Record<string, LifeHeroEvidenceMetadataValue>;
+}
+
+export interface LifeHeroEvidence {
+  id: string;
+  rulesetVersion: string;
+  stat: LifeHeroStat;
+  evidenceType: LifeHeroEvidenceKind;
+  sourceTier: LifeHeroEvidenceSourceTier;
+  sourceReference: string;
+  idempotencyKey: string;
+  occurredAt: string;
+  localDate: string;
+  metadata: Record<string, LifeHeroEvidenceMetadataValue>;
+  createdAt: string;
+}
+
+export interface LifeHeroAward {
+  id: string;
+  evidenceId: string;
+  rulesetVersion: string;
+  stat: LifeHeroStat;
+  baseXp: number;
+  sourceMultiplier: number;
+  momentumDays: number;
+  momentumMultiplier: number;
+  awardedXp: number;
+  awardedAt: string;
+}
+
+export interface LifeHeroStatProgress {
+  stat: LifeHeroStat;
+  totalXp: number;
+  level: number;
+  lastEvidenceLocalDate: string | null;
+  condition: LifeHeroConditionState;
+  attentionAfterDays: number;
+}
+
+export interface LifeHeroActivityEntry {
+  evidence: LifeHeroEvidence;
+  award: LifeHeroAward;
+}
+
+export interface LifeHeroSnapshot {
+  rulesetVersion: string;
+  totalXp: number;
+  overallLevel: number;
+  updatedAt: string;
+  recomputedAt: string;
+  stats: LifeHeroStatProgress[];
+  recentActivity: LifeHeroActivityEntry[];
+}
+
+export interface LifeHeroEvidenceReceipt {
+  duplicate: boolean;
+  evidence: LifeHeroEvidence;
+  award: LifeHeroAward;
+  snapshot: LifeHeroSnapshot;
+}
+
 // ── Assistant Activity ──
 export type AssistantActivityActor = 'chat' | 'voice' | 'system';
 export type AssistantActivityDomain = 'assistant' | 'calendar' | 'finance' | 'inventory' | 'knowledge' | 'tasks' | 'trips';

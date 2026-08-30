@@ -20,8 +20,10 @@ try {
     'supabase/tests/helm_secret_vault.sql',
     'supabase/tests/sabah_one_inventory_oauth.sql',
     'supabase/tests/helm_legacy_migration.sql',
+    'supabase/tests/life_hero_progression.sql',
   ])
   await runConcurrencyScenario()
+  await runLifeHeroRollbackScenario()
 } catch (error) {
   failure = error
 } finally {
@@ -184,6 +186,52 @@ async function runConcurrencyScenario() {
   }
 
   console.log('Concurrent database sessions: 6 assertions passed')
+}
+
+async function runLifeHeroRollbackScenario() {
+  runSqlFile('supabase/rollback/20260830070000_pause_life_hero_progression.sql')
+  await runSql(`
+    do $$
+    begin
+      if has_function_privilege(
+        'authenticated',
+        'public.accept_life_hero_evidence(text,text,text,text,timestamptz,date,jsonb)',
+        'execute'
+      ) or has_function_privilege(
+        'authenticated',
+        'public.recompute_life_hero_profile(date)',
+        'execute'
+      ) then
+        raise exception 'Life Hero non-destructive rollback did not pause writes.';
+      end if;
+      if to_regclass('public.life_hero_awards') is null
+        or to_regclass('public.life_hero_evidence') is null
+      then
+        raise exception 'Life Hero non-destructive rollback removed durable history.';
+      end if;
+    end
+    $$;
+  `)
+
+  runSqlFile('supabase/rollback/20260830070000_resume_life_hero_progression.sql')
+  await runSql(`
+    do $$
+    begin
+      if not has_function_privilege(
+        'authenticated',
+        'public.accept_life_hero_evidence(text,text,text,text,timestamptz,date,jsonb)',
+        'execute'
+      ) or not has_function_privilege(
+        'authenticated',
+        'public.recompute_life_hero_profile(date)',
+        'execute'
+      ) then
+        raise exception 'Life Hero resume did not restore the bounded write interface.';
+      end if;
+    end
+    $$;
+  `)
+  console.log('Life Hero rollback and resume: 4 assertions passed')
 }
 
 async function runGatedPair(claims, statements) {
