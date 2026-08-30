@@ -2,6 +2,8 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { HEALTH_FAST_FOOD } from '../config/constants';
 import { toLocalDateStr } from '../services/financeHelpers';
 import { useHealthContext } from "../store/contexts/HealthContext";
+import AppleHealthMovementImport from '../components/AppleHealthMovementImport';
+import { useSettingsContext } from '../store/contexts/SettingsContext';
 import type {
   FastFoodExperienceRating,
   FastFoodLogEntry,
@@ -75,6 +77,7 @@ function entrySummary(entry: FastFoodLogEntry): string {
 
 export default function HealthSurface() {
   const health = useHealthContext();
+  const { appTimeZone } = useSettingsContext();
   const [referenceDate] = useState(() => new Date());
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [draft, setDraft] = useState<FastFoodDraft>(() => buildDefaultDraft(referenceDate));
@@ -221,6 +224,8 @@ export default function HealthSurface() {
             </div>
           </div>
         </section>
+
+        <AppleHealthMovementImport timeZone={appTimeZone.effectiveTimeZone} />
 
         <div className="health-layout">
           <section className="health-quick-log">
