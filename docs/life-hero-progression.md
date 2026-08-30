@@ -44,6 +44,28 @@ Metadata is limited to an 8 KiB flat scalar object and rejects credential-like k
 
 Product usage analytics has no evidence type, rule, client input, service mapping, or RPC capable of granting XP. Usage analytics may inform product decisions in a later ticket, but it remains separate from real-world progression.
 
+## Existing Sabah One evidence sync
+
+`sync_life_hero_evidence` scans only the signed-in account's database-authoritative Sabah One records. The migration runs it once for existing accounts, and the Life Hero companion runs it before reading a snapshot and again when a relevant account collection changes. A deterministic idempotency key and stable source reference make backfill and repeated reconciliation safe: accepted source evidence becomes immutable even if a mutable source record is later reset or removed.
+
+All current account-record adapters use the conservative `self_reported` source tier. Database authority establishes ownership and durability; it does not turn a user-entered action into external verification.
+
+| Sabah One source | Qualifying behavior | Hero mapping | Auditable reason |
+| --- | --- | --- | --- |
+| Prayer outcomes | Explicit `on_time` or `late` completion; missed, pending, reminders, and prayer tasks do not award | Faith / `faith_practice` | `prayer_completed_on_time` or `prayer_completed_late` |
+| Learn momentum | An activity reaches cumulative level 1 or higher for its local date | Knowledge / `knowledge_learning` | `learn_target_completed` |
+| Move momentum | An activity reaches cumulative level 1 or higher for its local date | Vitality / `vitality_activity` | `move_target_completed` |
+| Sabah One tasks and goal tasks | A non-prayer task has an explicit completion timestamp | Discipline / `discipline_commitment` | `task_completed` or `goal_completed` |
+| Budgets | A bounded category budget is created | Finances / `financial_progress` | `budget_created` |
+| Savings goals | A goal is started, records positive progress, or is completed | Finances / `financial_progress` | `savings_goal_started`, `savings_progress_recorded`, or `savings_goal_completed` |
+| Finance and Monzo-backed transactions | A transfer targets a savings account, or a completed month has lower avoidable-category spend than the prior month | Finances / `financial_progress` | `transfer_to_savings` or `avoidable_spend_improved` |
+
+Finance evidence records behavior and milestone identity, never award amount from balances, income, net worth, target size, or absolute savings. Monzo tags remain provenance inside the same finance rules; importing a provider record does not itself award XP and no raw provider payload or amount enters Life Hero metadata.
+
+New task completions persist `completedLocalDate` and the IANA `completionTimeZone` alongside the UTC completion instant. Recurring tasks reuse their task ID but receive one stable source identity per explicit local completion date. Existing task records without those fields fall back first to a persisted completion zone, then the account app time zone, and finally UTC; their stable legacy identity is derived from the original completion instant so a later time-zone preference change cannot duplicate an award. Savings progress uses the goal's `updatedAt`, then the database record update time, with creation time only as a legacy fallback.
+
+Prayer weakness remains renewable. Positive Prayer evidence permanently increases Faith; later missed or absent evidence can only make the computed condition `renewal_due`. It never deletes an award or lowers XP or level.
+
 These controls follow the current Supabase guidance for [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security), [database functions](https://supabase.com/docs/guides/database/functions), and [Data API security](https://supabase.com/docs/guides/api/securing-your-api).
 
 ## Legacy handling
@@ -52,6 +74,6 @@ The migration captures an existing `gamification/profile` total and level only a
 
 ## Verification and rollback
 
-`npm run test:database` rebuilds the historical migration chain, proves owner and anonymous boundaries, duplicate identity, atomic award behavior, momentum snapshots, monotonic progress, conditions, deterministic recomputation, safe legacy capture, and a non-destructive rollback/resume.
+`npm run test:database` rebuilds the historical migration chain, proves owner and anonymous boundaries, duplicate identity, atomic award behavior, source mappings, finance behavior boundaries, idempotent reconciliation, momentum snapshots, monotonic progress, conditions, deterministic recomputation, safe legacy capture, and a non-destructive rollback/resume.
 
 If awards must be paused, apply `supabase/rollback/20260830070000_pause_life_hero_progression.sql`. It revokes evidence and recomputation execution while preserving readable profiles, evidence, awards, and legacy snapshots. After the defect is fixed, apply `supabase/rollback/20260830070000_resume_life_hero_progression.sql`. No evidence replay is needed.

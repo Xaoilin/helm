@@ -8,6 +8,8 @@ import {
   getPrayerTaskTitle,
   isPrayerTask,
 } from '../../services/prayerTasks';
+import { createTaskCompletionStamp } from '../../services/taskCompletion';
+import { useSettingsContext } from './SettingsContext';
 
 export interface TaskContextValue {
   tasks: Task[];
@@ -28,6 +30,9 @@ function normalizeTask(task: Task): Task {
 
   return {
     ...task,
+    completedAt: task.completed ? task.completedAt : undefined,
+    completedLocalDate: task.completed ? task.completedLocalDate : undefined,
+    completionTimeZone: task.completed ? task.completionTimeZone : undefined,
     category: isPrayerTask(task) ? 'prayer' : task.category,
     title: prayerName && task.category === 'prayer' ? getPrayerTaskTitle(prayerName) : task.title,
     prayerName: prayerName || undefined,
@@ -47,6 +52,7 @@ export function useTaskContext(): TaskContextValue {
 }
 
 export function TaskProvider({ children }: { children: ReactNode }) {
+  const { appTimeZone } = useSettingsContext();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -68,17 +74,40 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const addTask = useCallback((task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): string => {
     const id = uuid();
     const now = new Date().toISOString();
-    setTasks(prev => [...prev, normalizeTask({ ...task, id, createdAt: now, updatedAt: now })]);
+    const completion = task.completed
+      ? createTaskCompletionStamp(task.completedAt || now, appTimeZone.effectiveTimeZone)
+      : {};
+    setTasks(prev => [...prev, normalizeTask({
+      ...task,
+      ...completion,
+      id,
+      createdAt: now,
+      updatedAt: now,
+    })]);
     return id;
-  }, []);
+  }, [appTimeZone.effectiveTimeZone]);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
     setTasks(prev =>
-      prev.map(t => (t.id === id
-        ? normalizeTask({ ...t, ...updates, updatedAt: new Date().toISOString() })
-        : t))
+      prev.map(t => {
+        if (t.id !== id) return t;
+        const updatedAt = new Date().toISOString();
+        const completion = updates.completed === true && !t.completed
+          ? createTaskCompletionStamp(
+              updates.completedAt || updatedAt,
+              appTimeZone.effectiveTimeZone,
+            )
+          : updates.completed === false
+            ? {
+                completedAt: undefined,
+                completedLocalDate: undefined,
+                completionTimeZone: undefined,
+              }
+            : {};
+        return normalizeTask({ ...t, ...updates, ...completion, updatedAt });
+      })
     );
-  }, []);
+  }, [appTimeZone.effectiveTimeZone]);
 
   const removeTask = useCallback((id: string) => {
     setTasks(prev => prev.filter(t => t.id !== id));

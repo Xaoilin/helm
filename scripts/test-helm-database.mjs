@@ -21,6 +21,7 @@ try {
     'supabase/tests/sabah_one_inventory_oauth.sql',
     'supabase/tests/helm_legacy_migration.sql',
     'supabase/tests/life_hero_progression.sql',
+    'supabase/tests/life_hero_evidence_sync.sql',
     'supabase/tests/product_usage_analytics.sql',
   ])
   await runConcurrencyScenario()
@@ -203,6 +204,10 @@ async function runLifeHeroRollbackScenario() {
         'authenticated',
         'public.recompute_life_hero_profile(date)',
         'execute'
+      ) or has_function_privilege(
+        'authenticated',
+        'public.sync_life_hero_evidence(date)',
+        'execute'
       ) then
         raise exception 'Life Hero non-destructive rollback did not pause writes.';
       end if;
@@ -226,6 +231,10 @@ async function runLifeHeroRollbackScenario() {
       ) or not has_function_privilege(
         'authenticated',
         'public.recompute_life_hero_profile(date)',
+        'execute'
+      ) or not has_function_privilege(
+        'authenticated',
+        'public.sync_life_hero_evidence(date)',
         'execute'
       ) then
         raise exception 'Life Hero resume did not restore the bounded write interface.';

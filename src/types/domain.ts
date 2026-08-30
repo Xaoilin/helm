@@ -529,6 +529,10 @@ export interface Task {
   description: string;
   completed: boolean;
   completedAt?: string;
+  /** Source-local calendar date captured when this completion occurred. */
+  completedLocalDate?: string;
+  /** IANA zone used to derive completedLocalDate. */
+  completionTimeZone?: string;
   priority: TaskPriority;
   category: TaskCategory;
   dueDate?: string;
@@ -1093,6 +1097,13 @@ export interface LifeHeroEvidenceReceipt {
   duplicate: boolean;
   evidence: LifeHeroEvidence;
   award: LifeHeroAward;
+  snapshot: LifeHeroSnapshot;
+}
+
+export interface LifeHeroEvidenceSyncReceipt {
+  scanned: number;
+  accepted: number;
+  duplicates: number;
   snapshot: LifeHeroSnapshot;
 }
 

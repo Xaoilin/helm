@@ -11,7 +11,16 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../store/supabase', () => ({
-  fetchLifeHeroSnapshot: mocks.fetchSnapshot,
+  syncLifeHeroEvidence: async (...args: unknown[]) => ({
+    scanned: 0,
+    accepted: 0,
+    duplicates: 0,
+    snapshot: await mocks.fetchSnapshot(...args),
+  }),
+}));
+
+vi.mock('../store/contexts/useRemoteStoreRefresh', () => ({
+  useRemoteStoreRefresh: vi.fn(),
 }));
 
 vi.mock('../services/voiceAssistant', () => ({
