@@ -32,6 +32,16 @@ export function githubInstallationRepositoriesPath(installationId: number | unde
     : null;
 }
 
+export function parseGithubInstallationRepositoriesPage<T>(value: unknown): T[] | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as { total_count?: unknown; repositories?: unknown };
+  return Number.isSafeInteger(row.total_count)
+    && (row.total_count as number) >= 0
+    && Array.isArray(row.repositories)
+    ? row.repositories as T[]
+    : null;
+}
+
 export function githubSelectionIsInstallationScoped(
   availableRepositoryIds: readonly number[],
   selectedRepositoryIds: readonly number[],

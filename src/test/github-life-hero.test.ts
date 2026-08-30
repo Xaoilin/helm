@@ -7,6 +7,7 @@ import {
   githubPullRequestQualifies,
   githubSelectionIsInstallationScoped,
   isSafeGithubPaginationUrl,
+  parseGithubInstallationRepositoriesPage,
   type GithubPullRequestEvidenceInput,
 } from '../../supabase/functions/github-life-hero/evidence';
 import {
@@ -84,6 +85,14 @@ describe('GitHub Life Hero evidence qualification', () => {
     expect(githubSelectionIsInstallationScoped([1, 2], [3])).toBe(false);
     expect(githubFunctionSource).toContain('githubInstallationRepositoriesPath(credential.installationId)');
     expect(githubFunctionSource).toContain('githubSelectionIsInstallationScoped(repositories.map(repository => repository.id), credential.selectedRepositoryIds)');
+  });
+
+  it('parses the documented installation repository response envelope', () => {
+    const repository = { id: 123, full_name: 'octocat/hello-world' };
+    expect(parseGithubInstallationRepositoriesPage({ total_count: 1, repositories: [repository] }))
+      .toEqual([repository]);
+    expect(parseGithubInstallationRepositoriesPage([repository])).toBeNull();
+    expect(githubFunctionSource).toContain('parseGithubInstallationRepositoriesPage');
   });
 
   it('rejects malicious pagination targets before an authenticated request can follow them', () => {

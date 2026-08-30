@@ -5,6 +5,7 @@ import {
   githubPullRequestQualifies,
   githubSelectionIsInstallationScoped,
   isSafeGithubPaginationUrl,
+  parseGithubInstallationRepositoriesPage,
   type GithubPullRequestEvidenceInput,
 } from './evidence.ts';
 
@@ -253,7 +254,12 @@ function nextPage(response: Response): string | null {
   return next;
 }
 
-async function fetchAllPages<T>(path: string, accessToken: string, apiVersion: string): Promise<T[]> {
+async function fetchAllPages<T>(
+  path: string,
+  accessToken: string,
+  apiVersion: string,
+  parsePage: (value: unknown) => T[] | null = value => Array.isArray(value) ? value as T[] : null,
+): Promise<T[]> {
   const values: T[] = [];
   let nextUrl: string | null = `${GITHUB_API}${path}`;
   let pageCount = 0;
@@ -274,8 +280,8 @@ async function fetchAllPages<T>(path: string, accessToken: string, apiVersion: s
       );
       throw new GithubApiError(response.status, rateLimited, response.headers.get('retry-after') || undefined);
     }
-    const page = await response.json().catch(() => null) as T[] | null;
-    if (!Array.isArray(page)) throw new GithubSyncError('partial_sync', 'GitHub returned an invalid paginated response.');
+    const page = parsePage(await response.json().catch(() => null));
+    if (!page) throw new GithubSyncError('partial_sync', 'GitHub returned an invalid paginated response.');
     values.push(...page);
     nextUrl = nextPage(response);
   }
@@ -514,6 +520,7 @@ async function listRepositories(credential: CredentialState): Promise<Array<{ id
     path,
     credential.accessToken,
     credential.apiVersion,
+    parseGithubInstallationRepositoriesPage,
   );
   return repositories.map(repository => {
     if (!numericId(repository.id) || typeof repository.full_name !== 'string') {
