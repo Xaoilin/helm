@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react';
 import { logError } from '../services/logger';
+import { trackProductUsageEvent } from '../services/productUsageAnalytics';
 
 interface Props {
   children: ReactNode;
@@ -31,12 +32,27 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
     logError(`ErrorBoundary:${this.props.name}`, error);
+    trackProductUsageEvent({
+      kind: 'error',
+      feature: 'surface',
+      action: 'render_failed',
+      errorCode: 'react_render_error',
+      target: this.props.name.toLowerCase().replace(/[^a-z0-9_:-]/g, '_'),
+      outcome: 'failure',
+    });
     if (info.componentStack) {
       logWarnStack(this.props.name, info.componentStack);
     }
   }
 
   handleRetry = (): void => {
+    trackProductUsageEvent({
+      kind: 'action',
+      feature: 'surface',
+      action: 'render_retry',
+      target: this.props.name.toLowerCase().replace(/[^a-z0-9_:-]/g, '_'),
+      inputKind: 'pointer',
+    });
     this.setState({ hasError: false, error: null });
   };
 

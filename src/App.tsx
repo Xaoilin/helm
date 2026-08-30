@@ -1,5 +1,5 @@
 import './App.css';
-import { lazy, Suspense, useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import type { ComponentType } from 'react';
 import { useShell } from "./store/ShellContext";
 import { useCalendar } from "./store/contexts/CalendarContext";
@@ -9,6 +9,7 @@ import PrayerGlobalOverlays from './components/prayer/PrayerGlobalOverlays';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
   isSupabaseReady,
+  ingestProductUsageEvents,
   signInWithGoogle as startGoogleSignIn,
   signOut as endSupabaseSession,
 } from './store/supabase';
@@ -21,6 +22,11 @@ import {
 import { useReleaseRefresh } from './hooks/useReleaseRefresh';
 import { useOptionalAuthSession } from './store/AuthSessionContext';
 import { useSyncAvailability } from './store/SyncAvailabilityContext';
+import {
+  configureProductUsageAnalytics,
+  flushProductUsageEvents,
+  trackProductUsageEvent,
+} from './services/productUsageAnalytics';
 
 type SurfaceDefinition = {
   label: string;
@@ -67,13 +73,77 @@ function AppInner() {
   const { readOnly } = useSyncAvailability();
   const authSession = useOptionalAuthSession();
   const authUser = authSession?.authUser ?? null;
+  const authUserId = authUser?.id ?? null;
   const authLoading = authSession?.loading ?? false;
   const signInWithGoogle = authSession?.signInWithGoogle ?? startGoogleSignIn;
   const signOut = authSession?.signOut ?? endSupabaseSession;
   const supabaseReady = authSession?.supabaseReady ?? isSupabaseReady();
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const previousSurface = useRef<{ surface: Surface; startedAt: number } | null>(null);
 
   useReleaseRefresh();
+
+  useEffect(() => {
+    configureProductUsageAnalytics({
+      enabled: Boolean(authUserId && supabaseReady),
+      accountId: authUserId,
+      releaseVersion: APP_RELEASE_VERSION,
+      sink: ingestProductUsageEvents,
+    });
+    if (authUserId && supabaseReady) {
+      trackProductUsageEvent({
+        kind: 'performance',
+        feature: 'application',
+        action: 'ready',
+        outcome: 'success',
+        durationMs: Math.min(performance.now(), 1_800_000),
+      });
+    }
+    return () => {
+      previousSurface.current = null;
+      configureProductUsageAnalytics({
+        enabled: false,
+        accountId: null,
+        releaseVersion: APP_RELEASE_VERSION,
+        sink: ingestProductUsageEvents,
+      });
+    };
+  }, [authUserId, supabaseReady]);
+
+  useEffect(() => {
+    if (!authUserId || !supabaseReady) return;
+    const now = performance.now();
+    const previous = previousSurface.current;
+    if (previous) {
+      trackProductUsageEvent({
+        kind: 'performance',
+        feature: 'surface',
+        action: 'active_duration',
+        surface: previous.surface,
+        target: previous.surface,
+        durationMs: Math.min(now - previous.startedAt, 1_800_000),
+      });
+    }
+    trackProductUsageEvent({
+      kind: 'navigation',
+      feature: 'surface',
+      action: 'viewed',
+      surface: shell.surface,
+      target: shell.surface,
+      outcome: 'success',
+      metadata: previous ? { previousSurface: previous.surface } : undefined,
+    });
+    trackProductUsageEvent({
+      kind: 'outcome',
+      feature: 'navigation',
+      action: 'surface_opened',
+      surface: shell.surface,
+      target: shell.surface,
+      outcome: 'success',
+      durationMs: 0,
+    });
+    previousSurface.current = { surface: shell.surface, startedAt: now };
+  }, [authUserId, shell.surface, supabaseReady]);
 
   useEffect(() => {
     if (!mobileMoreOpen) return;
@@ -138,7 +208,26 @@ function AppInner() {
   };
 
   const handleSignOut = async () => {
-    await signOut();
+    trackProductUsageEvent({
+      kind: 'action',
+      feature: 'authentication',
+      action: 'sign_out',
+      inputKind: 'pointer',
+    });
+    try {
+      await flushProductUsageEvents();
+      await signOut();
+    } catch (error) {
+      trackProductUsageEvent({
+        kind: 'error',
+        feature: 'authentication',
+        action: 'sign_out_failed',
+        outcome: 'failure',
+        errorCode: 'sign_out_failed',
+        inputKind: 'system',
+      });
+      throw error;
+    }
   };
 
   const renderSurface = () => {
@@ -182,7 +271,20 @@ function AppInner() {
     );
   };
 
-  const navigateFromMobile = (surface: Surface) => {
+  const recordNavigationAction = (surface: Surface, inputKind: 'pointer' | 'keyboard') => {
+    trackProductUsageEvent({
+      kind: 'action',
+      feature: 'navigation',
+      action: 'surface_selected',
+      surface: shell.surface,
+      target: surface,
+      outcome: 'success',
+      inputKind,
+    });
+  };
+
+  const navigateFromMobile = (surface: Surface, inputKind: 'pointer' | 'keyboard') => {
+    recordNavigationAction(surface, inputKind);
     shell.navigate(surface);
     setMobileMoreOpen(false);
   };
@@ -201,7 +303,10 @@ function AppInner() {
             <button
               key={item.surface}
               className={`sidebar-item ${shell.surface === item.surface ? 'active' : ''}`}
-              onClick={() => shell.navigate(item.surface)}
+              onClick={event => {
+                recordNavigationAction(item.surface, event.detail === 0 ? 'keyboard' : 'pointer');
+                shell.navigate(item.surface);
+              }}
               aria-current={shell.surface === item.surface ? 'page' : undefined}
               aria-label={`Navigate to ${item.label}`}
             >
@@ -256,7 +361,10 @@ function AppInner() {
                 <button
                   key={item.surface}
                   className={`mobile-more-item ${shell.surface === item.surface ? 'active' : ''}`}
-                  onClick={() => navigateFromMobile(item.surface)}
+                  onClick={event => navigateFromMobile(
+                    item.surface,
+                    event.detail === 0 ? 'keyboard' : 'pointer',
+                  )}
                   aria-current={shell.surface === item.surface ? 'page' : undefined}
                 >
                   <span className="mobile-more-icon" aria-hidden="true">{item.icon}</span>
@@ -282,7 +390,10 @@ function AppInner() {
           <button
             key={item.surface}
             className={`mobile-nav-item ${shell.surface === item.surface ? 'active' : ''}`}
-            onClick={() => navigateFromMobile(item.surface)}
+            onClick={event => navigateFromMobile(
+              item.surface,
+              event.detail === 0 ? 'keyboard' : 'pointer',
+            )}
             aria-current={shell.surface === item.surface ? 'page' : undefined}
             aria-label={`Navigate to ${item.label}`}
           >

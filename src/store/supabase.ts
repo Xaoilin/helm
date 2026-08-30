@@ -30,6 +30,8 @@ import type {
   LifeHeroSnapshot,
   LifeHeroStat,
   LifeHeroStatProgress,
+  ProductUsageEvent,
+  ProductUsageIngestReceipt,
   SaveHelmSecretInput,
   SecretKind,
 } from '../types/domain';
@@ -369,6 +371,32 @@ export async function recomputeLifeHeroProfile(asOfLocalDate: string): Promise<L
   });
   if (error) throw error;
   return mapLifeHeroSnapshot(data);
+}
+
+export async function ingestProductUsageEvents(
+  events: ProductUsageEvent[],
+): Promise<ProductUsageIngestReceipt> {
+  if (events.length < 1 || events.length > 25) {
+    throw new Error('Product usage batches must contain between 1 and 25 events.');
+  }
+  const database = requireClient();
+  const { data, error } = await database.rpc('ingest_product_usage_events', {
+    p_events: events,
+  });
+  if (error) throw error;
+  const receipt = asRecord(data);
+  const accepted = Number(receipt.accepted);
+  const duplicates = Number(receipt.duplicates);
+  if (
+    !Number.isInteger(accepted)
+    || !Number.isInteger(duplicates)
+    || accepted < 0
+    || duplicates < 0
+    || accepted + duplicates !== events.length
+  ) {
+    throw new Error('The Sabah One product analytics receipt was invalid.');
+  }
+  return { accepted, duplicates };
 }
 
 interface HelmRecordRow {
