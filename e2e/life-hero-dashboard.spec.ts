@@ -23,7 +23,7 @@ test.describe('Life Hero dashboard companion', () => {
     await expect(hero.locator('.life-hero-stat-list > li')).toHaveCount(7);
     await expect(hero.getByText('Ready to renew')).toBeVisible();
     await expect(hero.getByText('First step ready')).toBeVisible();
-    await expect(hero.getByRole('switch', { name: /Training jacket/ })).toBeDisabled();
+    await expect(hero.getByRole('switch')).toHaveCount(0);
     await expect(hero.getByText('No progress loss')).toBeVisible();
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -125,7 +125,7 @@ test('captures the actual maximum-quality dashboard avatar at desktop and mobile
     await expect(hero).toBeVisible();
     await expect(hero).toHaveAttribute('data-avatar-status', 'ready', { timeout: 120_000 });
     await hero.getByRole('button', { name: 'Open hero details' }).click();
-    await expect(hero.getByRole('switch', { name: /Training jacket/ })).toBeEnabled();
+    await expect(hero.locator('canvas')).toHaveAttribute('data-garment', 'base-only');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: test.info().outputPath(`life-hero-dashboard-${viewport}.png`) });
   }

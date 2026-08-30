@@ -6645,7 +6645,6 @@ textarea.form-input {
 
 .life-hero-message button,
 .life-hero-details-toggle,
-.life-hero-loadout button,
 .life-hero-motion button {
   min-height: 40px;
   border: 1px solid rgba(145, 160, 184, 0.28);
@@ -6744,16 +6743,6 @@ textarea.form-input {
 .life-hero-stat-copy small,
 .life-hero-stat-value small { color: var(--nc-text-muted); font-size: 8px; }
 .life-hero-stat-value { align-items: flex-end; font-variant-numeric: tabular-nums; }
-
-.life-hero-loadout button {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-}
-
-.life-hero-loadout button strong { color: #8fe7c4; }
 
 .life-hero-motion > div[role='group'] {
   display: grid;

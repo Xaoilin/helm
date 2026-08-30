@@ -37,10 +37,8 @@ export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps)
     typeof window !== 'undefined' && window.innerWidth <= 900
   ));
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [jacketEquipped, setJacketEquipped] = useState(true);
   const [motion, setMotion] = useState<LifeHeroMotionState>('idle');
   const [avatarStatus, setAvatarStatus] = useState<AvatarStatus>('loading');
-  const [jacketAvailable, setJacketAvailable] = useState(false);
   const reducedMotion = useReducedMotion();
 
   const loadSnapshot = useCallback(async () => {
@@ -111,11 +109,9 @@ export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps)
         <div className="life-hero-stage" data-tier={view?.evolution.tier ?? 1}>
           <div className="life-hero-base" aria-hidden="true"><i /><i /><i /></div>
           <LifeHeroAvatar
-            equippedJacket={jacketEquipped}
             motion={motion}
             reducedMotion={reducedMotion}
             onStatus={setAvatarStatus}
-            onJacketAvailability={setJacketAvailable}
           />
           <div className="life-hero-stage-badges">
             <span>{view?.evolution.name ?? 'Preparing hero'}</span>
@@ -164,25 +160,6 @@ export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps)
                   );
                 })}
               </ul>
-            </section>
-
-            <section className="life-hero-loadout" aria-labelledby="life-hero-loadout-title">
-              <div className="life-hero-section-heading">
-                <h3 id="life-hero-loadout-title">Modular loadout</h3>
-                <span>Torso slot</span>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={jacketEquipped}
-                disabled={avatarStatus !== 'ready' || !jacketAvailable}
-                onClick={() => setJacketEquipped(current => !current)}
-              >
-                <span>Training jacket</span>
-                <strong>{avatarStatus === 'ready' && jacketAvailable
-                  ? jacketEquipped ? 'Equipped' : 'Unequipped'
-                  : '3D view required'}</strong>
-              </button>
             </section>
 
             {!reducedMotion && avatarStatus === 'ready' && (
@@ -275,21 +252,15 @@ function LifeHeroSummary({
 }
 
 function LifeHeroAvatar({
-  equippedJacket,
   motion,
   reducedMotion,
   onStatus,
-  onJacketAvailability,
 }: {
-  equippedJacket: boolean;
   motion: LifeHeroMotionState;
   reducedMotion: boolean;
   onStatus: (status: AvatarStatus) => void;
-  onJacketAvailability: (available: boolean) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const jacketRef = useRef<Object3D | null>(null);
-  const equippedJacketRef = useRef(equippedJacket);
   const mixerRef = useRef<AnimationMixer | null>(null);
   const actionsRef = useRef<Partial<Record<LifeHeroMotionState, AnimationAction>>>({});
   const currentActionRef = useRef<AnimationAction | null>(null);
@@ -303,16 +274,8 @@ function LifeHeroAvatar({
   }, [onStatus]);
 
   useEffect(() => {
-    equippedJacketRef.current = equippedJacket;
-    jacketRef.current?.traverse(object => {
-      object.visible = equippedJacket;
-    });
-  }, [equippedJacket]);
-
-  useEffect(() => {
     if (staticMode) {
       reportStatus('static');
-      onJacketAvailability(false);
       return;
     }
     const canvas = canvasRef.current;
@@ -323,7 +286,6 @@ function LifeHeroAvatar({
     let renderer: import('three').WebGLRenderer | null = null;
     let loadedRoot: Object3D | null = null;
     reportStatus('loading');
-    onJacketAvailability(false);
     setFailed(false);
 
     void Promise.all([
@@ -368,7 +330,6 @@ function LifeHeroAvatar({
           ? (['primary', 'fallback'] as const)
           : (['fallback'] as const);
         let accepted: Awaited<ReturnType<typeof loader.loadAsync>> | null = null;
-        let acceptedJacket: Object3D | null = null;
 
         for (const tier of tiers) {
           try {
@@ -392,18 +353,10 @@ function LifeHeroAvatar({
               continue;
             }
 
-            const jacketMesh = jacket as import('three').SkinnedMesh | undefined;
-            const jacketJoints = jacketMesh?.isSkinnedMesh
-              ? jacketMesh.skeleton.bones.map(bone => bone.name)
-              : [];
-            const jacketCompatible = Boolean(
-              jacketMesh?.isSkinnedMesh
-              && jacketJoints.length === expectedJoints.length
-              && jacketJoints.every((name, index) => name === expectedJoints[index]),
-            );
-            if (jacket && !jacketCompatible) jacket.visible = false;
+            // Keep the rejected concept jacket out of the dashboard. Its modular
+            // slot remains documented for a better authored garment later.
+            if (jacket) jacket.visible = false;
             accepted = candidate;
-            acceptedJacket = jacketCompatible ? jacket! : null;
             break;
           } catch {
             // Try the constrained asset before using the static fallback.
@@ -413,16 +366,12 @@ function LifeHeroAvatar({
         if (!accepted || disposed || !renderer) {
           if (!disposed) {
             setFailed(true);
-            onJacketAvailability(false);
             reportStatus('error');
           }
           return;
         }
 
         loadedRoot = accepted.scene;
-        jacketRef.current = acceptedJacket;
-        if (acceptedJacket) acceptedJacket.visible = equippedJacketRef.current;
-        onJacketAvailability(Boolean(acceptedJacket));
         const box = new THREE.Box3().setFromObject(accepted.scene);
         const size = box.getSize(new THREE.Vector3());
         const centre = box.getCenter(new THREE.Vector3());
@@ -481,9 +430,8 @@ function LifeHeroAvatar({
       mixerRef.current = null;
       actionsRef.current = {};
       currentActionRef.current = null;
-      jacketRef.current = null;
     };
-  }, [onJacketAvailability, reportStatus, staticMode]);
+  }, [reportStatus, staticMode]);
 
   useEffect(() => {
     const nextAction = actionsRef.current[motion] ?? actionsRef.current.idle;
@@ -514,7 +462,7 @@ function LifeHeroAvatar({
         alt=""
         aria-hidden="true"
       />
-      <canvas ref={canvasRef} aria-hidden="true" data-motion={motion} />
+      <canvas ref={canvasRef} aria-hidden="true" data-motion={motion} data-garment="base-only" />
       <span className="sr-only" role="status">
         {renderStatus === 'ready' ? 'Animated Life Hero ready.' : 'Preparing the animated Life Hero.'}
       </span>

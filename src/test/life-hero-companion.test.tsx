@@ -45,7 +45,7 @@ beforeEach(() => {
 });
 
 describe('Life Hero companion', () => {
-  it('renders loading, summary, seven paths, conditions, and modular jacket control accessibly', async () => {
+  it('renders loading, summary, seven paths, and conditions accessibly', async () => {
     mocks.fetchSnapshot.mockResolvedValue(snapshot());
     render(<LifeHeroCompanion localDate="2026-08-30" />);
 
@@ -60,10 +60,7 @@ describe('Life Hero companion', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(7);
     expect(screen.getByText('Ready to renew')).toBeInTheDocument();
 
-    const jacket = screen.getByRole('switch', { name: /Training jacket/ });
-    expect(jacket).toHaveAttribute('aria-checked', 'true');
-    expect(jacket).toBeDisabled();
-    expect(jacket).toHaveTextContent('3D view required');
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 
   it('collapses to an unobtrusive keyboard-operable level button', async () => {

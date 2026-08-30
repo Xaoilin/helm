@@ -27,19 +27,19 @@ These labels do not change database rules, XP, evidence, or equipment ownership.
 
 ## Modular avatar contract
 
-`life-hero-avatar/v1` wraps the approved same-body GLBs in a consumer manifest with a pinned 24-joint skeleton identity, body variant, body regions, equipment slots, semantic clip mapping, and exact asset hashes. The verified training jacket is a separate skinned torso item. No other SVG concept layer is presented as real 3D equipment.
+`life-hero-avatar/v1` wraps the approved same-body GLBs in a consumer manifest with a pinned 24-joint skeleton identity, body variant, body regions, equipment slots, semantic clip mapping, and exact asset hashes. The current dashboard deliberately hides the rejected concept jacket and presents only the neutral base body with shorts. The separate jacket node remains in the manifest solely as compatibility evidence for a better authored garment later. No SVG concept layer is presented as real 3D equipment.
 
 The runtime:
 
 1. selects the maximum-quality asset on ordinary hardware;
 2. uses the constrained GLB on devices reporting no more than 4 GB memory or 4 hardware threads;
 3. validates the body and exact skeleton before rendering;
-4. omits an incompatible optional jacket while keeping the neutral body;
+4. hides the current optional jacket while keeping the neutral body;
 5. maps missing optional movement clips to the verified idle clip;
 6. tries the constrained GLB after a primary load or decode failure;
 7. uses the approved static image if both 3D assets fail.
 
-The static image is also used immediately for `prefers-reduced-motion`. The WebGL canvas is decorative; adjacent DOM text owns level, momentum, condition, loadout, and status meaning.
+The static image is also used immediately for `prefers-reduced-motion`. The WebGL canvas is decorative; adjacent DOM text owns level, momentum, condition, and status meaning.
 
 ## Failure and rollback
 
