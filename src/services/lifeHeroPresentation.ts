@@ -115,6 +115,32 @@ export interface LifeHeroDashboardView {
   empty: boolean;
 }
 
+export type LifeHeroMotivationCategory = 'first_step' | 'renewal' | 'momentum' | 'steady';
+
+export interface LifeHeroMotivation {
+  category: LifeHeroMotivationCategory;
+  text: string;
+}
+
+const LIFE_HERO_MOTIVATION_LINES = {
+  first_step: [
+    'You do not need a perfect start. One small step is enough to begin.',
+    'Start gently. A single real step can open the way forward.',
+  ],
+  renewal: [
+    'Your progress is safe. Take one gentle step when you are ready.',
+    'Nothing earned is lost. Today can begin again with one small action.',
+  ],
+  momentum: [
+    'Your steady rhythm is showing. Keep moving forward one good step at a time.',
+    'You built this momentum. Stand tall and keep the next step simple.',
+  ],
+  steady: [
+    'You earned this progress. Keep going with calm strength.',
+    'Your path is moving forward. Choose the next good step and make it yours.',
+  ],
+} as const satisfies Record<LifeHeroMotivationCategory, readonly string[]>;
+
 export function selectLifeHeroAsset(capability: {
   deviceMemory?: number;
   hardwareConcurrency?: number;
@@ -175,6 +201,24 @@ export function deriveLifeHeroDashboardView(snapshot: LifeHeroSnapshot): LifeHer
           : 'Real-world progress is shaping your hero. Keep building one steady step at a time.',
     empty,
   };
+}
+
+export function selectLifeHeroMotivation(
+  view: LifeHeroDashboardView,
+  sequence = 0,
+): LifeHeroMotivation {
+  const category: LifeHeroMotivationCategory = view.empty
+    ? 'first_step'
+    : view.renewalDueCount > 0
+      ? 'renewal'
+      : view.momentumDays >= 7
+        ? 'momentum'
+        : view.awaitingFirstStepCount > 0
+          ? 'first_step'
+          : 'steady';
+  const lines = LIFE_HERO_MOTIVATION_LINES[category];
+  const index = Math.abs(Math.trunc(sequence)) % lines.length;
+  return { category, text: lines[index] };
 }
 
 function evolutionForLevel(level: number): LifeHeroDashboardView['evolution'] {

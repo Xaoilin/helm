@@ -3,10 +3,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LifeHeroCompanion from '../components/dashboard/LifeHeroCompanion';
 import type { LifeHeroSnapshot, LifeHeroStat } from '../types/domain';
 
-const mocks = vi.hoisted(() => ({ fetchSnapshot: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  fetchSnapshot: vi.fn(),
+  speak: vi.fn(),
+  stopSpeaking: vi.fn(),
+  isSpeaking: false,
+}));
 
 vi.mock('../store/supabase', () => ({
   fetchLifeHeroSnapshot: mocks.fetchSnapshot,
+}));
+
+vi.mock('../hooks/useVoiceOutput', () => ({
+  useVoiceOutput: () => ({
+    speak: mocks.speak,
+    stopSpeaking: mocks.stopSpeaking,
+    isSpeaking: mocks.isSpeaking,
+    audioRef: { current: null },
+  }),
 }));
 
 const STAT_ORDER: LifeHeroStat[] = [
@@ -34,6 +48,10 @@ function snapshot(): LifeHeroSnapshot {
 
 beforeEach(() => {
   mocks.fetchSnapshot.mockReset();
+  mocks.speak.mockReset();
+  mocks.speak.mockResolvedValue(undefined);
+  mocks.stopSpeaking.mockReset();
+  mocks.isSpeaking = false;
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
     value: vi.fn().mockImplementation(() => ({
@@ -60,7 +78,9 @@ describe('Life Hero companion', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(7);
     expect(screen.getByText('Ready to renew')).toBeInTheDocument();
 
-    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: /jacket|clothing|garment/iu }))
+      .not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Mute Life Hero voice' })).toBeInTheDocument();
   });
 
   it('collapses to an unobtrusive keyboard-operable level button', async () => {
@@ -107,5 +127,54 @@ describe('Life Hero companion', () => {
     fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(mocks.fetchSnapshot).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Overall level')).toBeInTheDocument();
+  });
+
+  it('never autoplays and supports a rate-limited text-only mute path', async () => {
+    mocks.fetchSnapshot.mockResolvedValue(snapshot());
+    render(<LifeHeroCompanion localDate="2026-08-30" />);
+    await screen.findByText('Overall level');
+
+    expect(mocks.speak).not.toHaveBeenCalled();
+    expect(screen.getByText('Voice never starts automatically.')).toBeInTheDocument();
+
+    const mute = screen.getByRole('switch', { name: 'Mute Life Hero voice' });
+    fireEvent.click(mute);
+    expect(screen.getByRole('switch', { name: 'Unmute Life Hero voice' }))
+      .toHaveAttribute('aria-checked', 'true');
+
+    const request = screen.getByRole('button', { name: 'Show motivation' });
+    fireEvent.click(request);
+    fireEvent.click(request);
+
+    expect(mocks.speak).not.toHaveBeenCalled();
+    expect(screen.getByText(/Your progress is safe\. Take one gentle step when you are ready\./u))
+      .toBeInTheDocument();
+    expect(request).toBeDisabled();
+    expect(screen.getByText('Voice is muted. Motivation is shown as text only.'))
+      .toBeInTheDocument();
+  });
+
+  it('shows loading, speaking, and actionable playback failure states', async () => {
+    let rejectPlayback: ((reason?: unknown) => void) | undefined;
+    mocks.fetchSnapshot.mockResolvedValue(snapshot());
+    mocks.speak.mockImplementation(() => new Promise<void>((_resolve, reject) => {
+      rejectPlayback = reject;
+    }));
+    const rendered = render(<LifeHeroCompanion localDate="2026-08-30" />);
+    await screen.findByText('Overall level');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hear motivation' }));
+    expect(screen.getByText('Preparing voice…')).toBeInTheDocument();
+
+    mocks.isSpeaking = true;
+    rendered.rerender(<LifeHeroCompanion localDate="2026-08-30" />);
+    expect(screen.getByText('Speaking…')).toBeInTheDocument();
+
+    mocks.isSpeaking = false;
+    rejectPlayback?.(new Error('playback unavailable'));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Check browser audio and try again; the message remains available as text.',
+    );
+    expect(mocks.speak).toHaveBeenCalledTimes(1);
   });
 });

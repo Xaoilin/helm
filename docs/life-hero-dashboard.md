@@ -46,3 +46,11 @@ The static image is also used immediately for `prefers-reduced-motion`. The WebG
 Malformed rulesets, non-numeric progression values, duplicate or out-of-order stats, incomplete snapshots, and unavailable RPCs fail closed to a retryable local alert. The companion never invents level-zero data, never writes evidence, and never changes the primary dashboard.
 
 Rollback is a UI removal: remove `LifeHeroCompanion` from `NightCompassDashboard` and its presentation files. KAN-258 progression tables, evidence, awards, and profiles remain untouched.
+
+## Optional motivational voice
+
+KAN-261 adds one explicit `Hear motivation` action inside the companion. It selects a short line from the current presentation state: an untouched path, a renewal-due path, sustained momentum, or ordinary steady progress. Renewal wording always protects earned progress and never scolds weakness, inactivity, or a missed routine.
+
+Playback reuses the existing ElevenLabs output with browser speech synthesis as its fallback. The generic energetic delivery uses the existing provider voice settings; it does not name, clone, or impersonate a protected character or celebrity. No recording, music, gambling prompt, or assistant mutation path is involved.
+
+The control never autoplays. It shows preparing, speaking, completion, mute, and actionable failure states; the selected line remains visible as text regardless of playback. Mute is local to the mounted companion and immediately stops its current request. A five-second in-page cooldown plus in-flight protection prevents repeated actions from stacking audio. No account data, progression evidence, settings record, or external-agent capability changes.

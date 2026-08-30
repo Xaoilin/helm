@@ -3,6 +3,7 @@ import {
   deriveLifeHeroDashboardView,
   LIFE_HERO_AVATAR_CONTRACT,
   lifeHeroLevelBounds,
+  selectLifeHeroMotivation,
   selectLifeHeroAsset,
 } from '../services/lifeHeroPresentation';
 import type { LifeHeroSnapshot, LifeHeroStat, LifeHeroStatProgress } from '../types/domain';
@@ -122,5 +123,28 @@ describe('Life Hero dashboard presentation', () => {
       train: 'Running',
     });
     expect(LIFE_HERO_AVATAR_CONTRACT.slots).toContain('torso');
+  });
+
+  it('selects supportive context-aware lines for first-step, renewal, momentum, and steady states', () => {
+    const firstStep = selectLifeHeroMotivation(deriveLifeHeroDashboardView(snapshot({
+      totalXp: 0,
+      overallLevel: 1,
+      stats: STAT_ORDER.map(name => ({ ...stat(name, 'awaiting_first_step'), totalXp: 0, level: 1 })),
+      recentActivity: [],
+    })));
+    const renewal = selectLifeHeroMotivation(deriveLifeHeroDashboardView(snapshot({
+      stats: STAT_ORDER.map(name => stat(name, name === 'faith' ? 'renewal_due' : 'steady')),
+      recentActivity: [],
+    })));
+    const momentum = selectLifeHeroMotivation(deriveLifeHeroDashboardView(snapshot()));
+    const steady = selectLifeHeroMotivation(deriveLifeHeroDashboardView(snapshot({ recentActivity: [] })));
+
+    expect(firstStep.category).toBe('first_step');
+    expect(renewal.category).toBe('renewal');
+    expect(momentum.category).toBe('momentum');
+    expect(steady.category).toBe('steady');
+    for (const motivation of [firstStep, renewal, momentum, steady]) {
+      expect(motivation.text).not.toMatch(/lazy|failure|disappoint|should have|weak|scold/iu);
+    }
   });
 });

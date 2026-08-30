@@ -23,7 +23,8 @@ test.describe('Life Hero dashboard companion', () => {
     await expect(hero.locator('.life-hero-stat-list > li')).toHaveCount(7);
     await expect(hero.getByText('Ready to renew')).toBeVisible();
     await expect(hero.getByText('First step ready')).toBeVisible();
-    await expect(hero.getByRole('switch')).toHaveCount(0);
+    await expect(hero.getByRole('switch', { name: /jacket|clothing|garment/iu })).toHaveCount(0);
+    await expect(hero.getByRole('switch', { name: 'Mute Life Hero voice' })).toHaveCount(1);
     await expect(hero.getByText('No progress loss')).toBeVisible();
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -65,6 +66,49 @@ test.describe('Life Hero dashboard companion', () => {
     await expect(hero.locator('canvas')).toHaveCount(0);
     await hero.getByRole('button', { name: 'Open hero details' }).click();
     await expect(hero.getByRole('heading', { name: 'Movement' })).toHaveCount(0);
+  });
+
+  test('never autoplays and keeps muted motivation available as rate-limited text', async ({ page, scenario }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(() => {
+      Object.defineProperty(window, '__lifeHeroSpeechCount', {
+        configurable: true,
+        value: 0,
+        writable: true,
+      });
+      const speech = window.speechSynthesis;
+      if (speech) {
+        const originalSpeak = speech.speak.bind(speech);
+        speech.speak = utterance => {
+          (window as Window & { __lifeHeroSpeechCount: number }).__lifeHeroSpeechCount += 1;
+          originalSpeak(utterance);
+        };
+      }
+    });
+    await scenario();
+    await openApp(page);
+
+    const hero = page.getByRole('complementary', { name: 'Life Hero' });
+    await expect(hero.getByText('Optional · no autoplay')).toBeVisible();
+    expect(await page.evaluate(() => (
+      (window as Window & { __lifeHeroSpeechCount: number }).__lifeHeroSpeechCount
+    ))).toBe(0);
+
+    const mute = hero.getByRole('switch', { name: 'Mute Life Hero voice' });
+    await mute.focus();
+    await expect(mute).toBeFocused();
+    await page.keyboard.press('Space');
+    const request = hero.getByRole('button', { name: 'Show motivation' });
+    await request.focus();
+    await expect(request).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(hero.getByText('Voice is muted. Motivation is shown as text only.')).toBeVisible();
+    await expect(hero.getByText('Your progress is safe. Take one gentle step when you are ready.'))
+      .toBeVisible();
+    await expect(request).toBeDisabled();
+    expect(await page.evaluate(() => (
+      (window as Window & { __lifeHeroSpeechCount: number }).__lifeHeroSpeechCount
+    ))).toBe(0);
   });
 
   test('fails closed on an invalid snapshot without replacing Prayer', async ({ page, scenario }) => {

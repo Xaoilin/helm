@@ -14,6 +14,7 @@ interface UseVoiceOutputOptions {
   lang: AssistantLang;
   elevenLabsApiKey: string | undefined;
   elevenLabsVoiceId: string | undefined;
+  strict?: boolean;
 }
 
 interface UseVoiceOutputReturn {
@@ -28,18 +29,33 @@ export function useVoiceOutput({
   lang,
   elevenLabsApiKey,
   elevenLabsVoiceId,
+  strict = false,
 }: UseVoiceOutputOptions): UseVoiceOutputReturn {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const cancelRef = useRef<(() => void) | null>(null);
 
   const speak = useCallback(async (text: string): Promise<void> => {
     setIsSpeaking(true);
+    let cancelPlayback: (() => void) | null = null;
+    let wasCancelled = false;
+    const cancelled = new Promise<void>(resolve => {
+      cancelPlayback = () => {
+        wasCancelled = true;
+        resolve();
+      };
+      cancelRef.current = cancelPlayback;
+    });
     try {
       if (hasElevenLabs && elevenLabsApiKey && elevenLabsVoiceId) {
         try {
           const audio = await speakWithElevenLabs(text, elevenLabsApiKey, elevenLabsVoiceId);
+          if (wasCancelled) {
+            audio.pause();
+            return;
+          }
           audioRef.current = audio;
-          await new Promise<void>((resolve, reject) => {
+          const playback = new Promise<void>((resolve, reject) => {
             audio.onended = () => {
               audioRef.current = null;
               resolve();
@@ -50,25 +66,34 @@ export function useVoiceOutput({
             };
             audio.play().catch(reject);
           });
+          await Promise.race([playback, cancelled]);
           return;
         } catch (error) {
           audioRef.current = null;
+          if (wasCancelled) return;
           logError('useVoiceOutput', error);
         }
       }
 
-      await speakWithBrowserTTS(text, lang);
+      if (wasCancelled) return;
+      await Promise.race([
+        speakWithBrowserTTS(text, lang, { rejectOnError: strict }),
+        cancelled,
+      ]);
     } finally {
+      if (cancelRef.current === cancelPlayback) cancelRef.current = null;
       setIsSpeaking(false);
     }
-  }, [hasElevenLabs, elevenLabsApiKey, elevenLabsVoiceId, lang]);
+  }, [hasElevenLabs, elevenLabsApiKey, elevenLabsVoiceId, lang, strict]);
 
   const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
     }
-    speechSynthesis?.cancel();
+    window.speechSynthesis?.cancel();
+    cancelRef.current?.();
+    cancelRef.current = null;
     setIsSpeaking(false);
   }, []);
 
