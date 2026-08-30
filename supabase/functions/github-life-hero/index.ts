@@ -1,11 +1,14 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.100.1';
 import {
   githubEvidenceCandidate,
+  githubInstallationIsAccessible,
   githubInstallationRepositoriesPath,
   githubPullRequestQualifies,
   githubSelectionIsInstallationScoped,
   isSafeGithubPaginationUrl,
   parseGithubInstallationRepositoriesPage,
+  parseGithubInstallationsPage,
+  type GithubInstallationInput,
   type GithubPullRequestEvidenceInput,
 } from './evidence.ts';
 import { withAllowedOriginCors } from './cors.ts';
@@ -451,7 +454,8 @@ async function completeAuthorization(
   code: string,
 ): Promise<Response> {
   const row = await loadState(service, state);
-  if (!row || row.user_id !== userId || !numericId(row.installation_id)) {
+  const installationId = numericId(row?.installation_id);
+  if (!row || row.user_id !== userId || !installationId) {
     return failure('needs_reconnect', 'Complete the selected-repository GitHub App installation before authorizing.');
   }
   const stateHash = await hashState(state);
@@ -488,6 +492,22 @@ async function completeAuthorization(
   }
   const githubUserId = numericId(githubUser.id);
   if (!githubUserId) return failure('unavailable', 'GitHub returned an invalid account identity.');
+
+  let installations: GithubInstallationInput[];
+  try {
+    installations = await fetchAllPages<GithubInstallationInput>(
+      '/user/installations?per_page=100',
+      payload.access_token,
+      GITHUB_API_VERSION,
+      parseGithubInstallationsPage,
+    );
+  } catch {
+    return failure('unavailable', 'The GitHub App installation could not be verified for this account.');
+  }
+  if (!githubInstallationIsAccessible(installations, installationId)) {
+    return failure('forbidden', 'The GitHub App installation is not available to the authorized account.');
+  }
+
   const { data, error } = await service.rpc('save_github_life_hero_credential', {
     p_user_id: userId,
     p_github_user_id: githubUserId,
@@ -499,7 +519,7 @@ async function completeAuthorization(
     p_refresh_token_expires_at: positiveNumber(payload.refresh_token_expires_in)
       ? new Date(Date.now() + payload.refresh_token_expires_in * 1_000).toISOString()
       : null,
-    p_installation_id: row.installation_id,
+    p_installation_id: installationId,
     p_api_version: GITHUB_API_VERSION,
   });
   if (error || !mapConnection(data)) return failure('temporary_unavailable', 'The GitHub credential could not be stored securely.');
