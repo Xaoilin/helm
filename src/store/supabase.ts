@@ -6,6 +6,7 @@ import { createClient, type AuthChangeEvent, type Session, type SupabaseClient, 
 import { logError, logWarn } from '../services/logger';
 import {
   isLifeHeroEvidenceKind,
+  LIFE_HERO_RULESET_VERSION,
   LIFE_HERO_STATS,
   validateLifeHeroEvidenceInput,
 } from '../services/lifeHeroProgression';
@@ -265,10 +266,15 @@ function mapLifeHeroAward(value: unknown): LifeHeroAward {
   } satisfies LifeHeroAward;
   if (
     !Number.isInteger(award.baseXp)
+    || award.baseXp < 0
     || !Number.isFinite(award.sourceMultiplier)
+    || award.sourceMultiplier <= 0
     || !Number.isInteger(award.momentumDays)
+    || award.momentumDays < 1
     || !Number.isFinite(award.momentumMultiplier)
+    || award.momentumMultiplier < 1
     || !Number.isInteger(award.awardedXp)
+    || award.awardedXp < 0
   ) {
     throw new Error('The Sabah One Life Hero response contained invalid award values.');
   }
@@ -280,14 +286,25 @@ function mapLifeHeroStatProgress(value: unknown): LifeHeroStatProgress {
   if (typeof row.condition !== 'string' || !LIFE_HERO_CONDITIONS.has(row.condition as LifeHeroConditionState)) {
     throw new Error('The Sabah One Life Hero response contained an invalid condition.');
   }
-  return {
+  const progress = {
     stat: lifeHeroStat(row.stat),
     totalXp: Number(row.totalXp),
     level: Number(row.level),
     lastEvidenceLocalDate: typeof row.lastEvidenceLocalDate === 'string' ? row.lastEvidenceLocalDate : null,
     condition: row.condition as LifeHeroConditionState,
     attentionAfterDays: Number(row.attentionAfterDays),
-  };
+  } satisfies LifeHeroStatProgress;
+  if (
+    !Number.isInteger(progress.totalXp)
+    || progress.totalXp < 0
+    || !Number.isInteger(progress.level)
+    || progress.level < 1
+    || !Number.isInteger(progress.attentionAfterDays)
+    || progress.attentionAfterDays < 1
+  ) {
+    throw new Error('The Sabah One Life Hero snapshot contained invalid stat progress.');
+  }
+  return progress;
 }
 
 function mapLifeHeroActivity(value: unknown): LifeHeroActivityEntry {
@@ -302,6 +319,7 @@ function mapLifeHeroSnapshot(value: unknown): LifeHeroSnapshot {
   const row = asRecord(value);
   if (
     typeof row.rulesetVersion !== 'string'
+    || row.rulesetVersion !== LIFE_HERO_RULESET_VERSION
     || typeof row.updatedAt !== 'string'
     || typeof row.recomputedAt !== 'string'
     || !Array.isArray(row.stats)
@@ -320,8 +338,12 @@ function mapLifeHeroSnapshot(value: unknown): LifeHeroSnapshot {
   } satisfies LifeHeroSnapshot;
   if (
     !Number.isInteger(snapshot.totalXp)
+    || snapshot.totalXp < 0
     || !Number.isInteger(snapshot.overallLevel)
+    || snapshot.overallLevel < 1
     || snapshot.stats.length !== LIFE_HERO_STATS.length
+    || snapshot.stats.some((stat, index) => stat.stat !== LIFE_HERO_STATS[index])
+    || new Set(snapshot.stats.map(stat => stat.stat)).size !== LIFE_HERO_STATS.length
   ) {
     throw new Error('The Sabah One Life Hero snapshot response was incomplete.');
   }

@@ -23,6 +23,7 @@ import { useTaskContext } from "../../store/contexts/TaskContext";
 import { useDailyMomentumContext } from '../../store/contexts/DailyMomentumContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import PrayerStatsCard from './PrayerStatsCard';
+import LifeHeroCompanion from './LifeHeroCompanion';
 import type {
   DailyPillar,
   PrayerName,
@@ -712,6 +713,8 @@ export default function NightCompassDashboard() {
         showPrayerLog={showPrayerLog}
         onTogglePrayerLog={() => setShowPrayerLog(current => !current)}
       />
+
+      <LifeHeroCompanion localDate={prayer.today} />
     </section>
   );
 }
