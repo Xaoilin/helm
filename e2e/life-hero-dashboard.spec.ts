@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, openApp, test } from './support/helm-fixture';
+import { expect, openApp, test, waitForLifeHeroSync } from './support/helm-fixture';
 
 function requestedViewports(): string[] {
   return (process.env.HELM_E2E_VISUAL_VIEWPORTS || '390x844,1440x900')
@@ -56,9 +56,11 @@ test.describe('Life Hero dashboard companion', () => {
   test('shows the permanent progression model in an unobtrusive desktop companion', async ({ page, scenario }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await scenario();
+    const lifeHeroSync = waitForLifeHeroSync(page);
     await openApp(page);
 
     const hero = page.getByRole('complementary', { name: 'Life Hero' });
+    expect((await lifeHeroSync).ok()).toBe(true);
     await expect(hero).toBeVisible();
     await expect(hero.getByText('Overall level')).toBeVisible();
     await expect(hero.getByText('Best active momentum')).toBeVisible();
@@ -185,6 +187,24 @@ test.describe('Life Hero dashboard companion', () => {
     const hero = page.getByRole('complementary', { name: 'Life Hero' });
     await expect(hero.getByRole('alert')).toContainText('Your stored progress is safe');
     await expect(hero.getByText('Overall level')).toHaveCount(0);
+  });
+
+  test('fails closed when authoritative evidence synchronization fails', async ({ page, scenario }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const snapshotRequests: string[] = [];
+    page.on('request', request => {
+      if (request.url().includes('/rest/v1/rpc/get_life_hero_snapshot')) {
+        snapshotRequests.push(request.url());
+      }
+    });
+    await scenario({ lifeHero: { syncFailureStatus: 503 } });
+    await openApp(page);
+
+    await expect(page.getByRole('heading', { name: 'Prayer', exact: true })).toBeVisible();
+    const hero = page.getByRole('complementary', { name: 'Life Hero' });
+    await expect(hero.getByRole('alert')).toContainText('Your stored progress is safe');
+    await expect(hero.getByText('Overall level')).toHaveCount(0);
+    expect(snapshotRequests).toHaveLength(0);
   });
 });
 

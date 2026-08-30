@@ -8,7 +8,7 @@ import {
 import type { AnimationAction, AnimationMixer, Object3D } from 'three';
 import lifeHeroBaseOnlyStaticUrl from '../../../docs/design/evidence/life-hero-jacket-off.png';
 import { useLifeHeroVoice } from '../../hooks/useLifeHeroVoice';
-import { fetchLifeHeroSnapshot } from '../../store/supabase';
+import { fetchLifeHeroSnapshot, syncLifeHeroEvidence } from '../../store/supabase';
 import {
   deriveLifeHeroDashboardView,
   deriveLifeHeroMotivationalLine,
@@ -47,6 +47,7 @@ export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps)
   const loadSnapshot = useCallback(async () => {
     setSnapshotState(INITIAL_STATE);
     try {
+      await syncLifeHeroEvidence(localDate);
       const snapshot = await fetchLifeHeroSnapshot(localDate);
       setSnapshotState({ status: 'ready', snapshot, error: null });
     } catch {

@@ -28,6 +28,7 @@ import type {
   LifeHeroEvidenceInput,
   LifeHeroEvidenceReceipt,
   LifeHeroEvidenceSourceTier,
+  LifeHeroEvidenceSyncReceipt,
   LifeHeroSnapshot,
   LifeHeroStat,
   LifeHeroStatProgress,
@@ -348,6 +349,41 @@ function mapLifeHeroSnapshot(value: unknown): LifeHeroSnapshot {
     throw new Error('The Sabah One Life Hero snapshot response was incomplete.');
   }
   return snapshot;
+}
+
+function mapLifeHeroEvidenceSyncReceipt(value: unknown): LifeHeroEvidenceSyncReceipt {
+  const row = asRecord(value);
+  const receipt = {
+    mappingVersion: row.mappingVersion,
+    asOfLocalDate: row.asOfLocalDate,
+    newEvidence: Number(row.newEvidence),
+    duplicates: Number(row.duplicates),
+    skipped: Number(row.skipped),
+  };
+  if (
+    receipt.mappingVersion !== 'life-hero-source-mapping-v1'
+    || typeof receipt.asOfLocalDate !== 'string'
+    || !Number.isInteger(receipt.newEvidence)
+    || receipt.newEvidence < 0
+    || !Number.isInteger(receipt.duplicates)
+    || receipt.duplicates < 0
+    || !Number.isInteger(receipt.skipped)
+    || receipt.skipped < 0
+  ) {
+    throw new Error('The Sabah One Life Hero synchronization receipt was invalid.');
+  }
+  return receipt as LifeHeroEvidenceSyncReceipt;
+}
+
+export async function syncLifeHeroEvidence(
+  asOfLocalDate: string,
+): Promise<LifeHeroEvidenceSyncReceipt> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('sync_life_hero_evidence', {
+    p_as_of_local_date: asOfLocalDate,
+  });
+  if (error) throw error;
+  return mapLifeHeroEvidenceSyncReceipt(data);
 }
 
 export async function fetchLifeHeroSnapshot(asOfLocalDate: string): Promise<LifeHeroSnapshot> {

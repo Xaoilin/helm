@@ -196,6 +196,9 @@ const [migrationRows, verificationRows] = await Promise.all([
         )
         and has_function_privilege(
           'authenticated', 'public.recompute_life_hero_profile(date)', 'execute'
+        )
+        and has_function_privilege(
+          'authenticated', 'public.sync_life_hero_evidence(date)', 'execute'
         ),
       'lifeHeroAnonymousAccess',
         has_table_privilege('anon', 'public.life_hero_profiles', 'select')
@@ -207,10 +210,11 @@ const [migrationRows, verificationRows] = await Promise.all([
           'execute'
         )
         or has_function_privilege('anon', 'public.get_life_hero_snapshot(date)', 'execute')
-        or has_function_privilege('anon', 'public.recompute_life_hero_profile(date)', 'execute'),
+        or has_function_privilege('anon', 'public.recompute_life_hero_profile(date)', 'execute')
+        or has_function_privilege('anon', 'public.sync_life_hero_evidence(date)', 'execute'),
       'lifeHeroRpcSecurity', (
         select
-          count(*) = 3
+          count(*) = 4
           and bool_and(case
             when p.proname = 'get_life_hero_snapshot' then not p.prosecdef
             else p.prosecdef
@@ -220,7 +224,7 @@ const [migrationRows, verificationRows] = await Promise.all([
         where n.nspname = 'public'
           and p.proname = any(array[
             'accept_life_hero_evidence', 'get_life_hero_snapshot',
-            'recompute_life_hero_profile'
+            'recompute_life_hero_profile', 'sync_life_hero_evidence'
           ])
       ),
       'lifeHeroLegacyBackfillSafe', not exists (

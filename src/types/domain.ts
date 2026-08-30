@@ -1096,6 +1096,14 @@ export interface LifeHeroEvidenceReceipt {
   snapshot: LifeHeroSnapshot;
 }
 
+export interface LifeHeroEvidenceSyncReceipt {
+  mappingVersion: 'life-hero-source-mapping-v1';
+  asOfLocalDate: string;
+  newEvidence: number;
+  duplicates: number;
+  skipped: number;
+}
+
 // ── Private product usage analytics ──
 export type ProductUsageEventKind =
   | 'session'

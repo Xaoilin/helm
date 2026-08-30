@@ -39,6 +39,7 @@ export interface HelmScenarioOptions {
   lifeHero?: {
     failureStatus?: number;
     snapshot?: Record<string, unknown>;
+    syncFailureStatus?: number;
   };
   now?: string;
   prayer?: {
@@ -85,6 +86,13 @@ export function waitForMutation(page: Page, collection: string): Promise<Respons
       return false;
     }
   });
+}
+
+export function waitForLifeHeroSync(page: Page): Promise<Response> {
+  return page.waitForResponse(response => (
+    response.request().method() === 'POST'
+    && response.url().includes('/rest/v1/rpc/sync_life_hero_evidence')
+  ));
 }
 
 async function installScenario(page: Page, options: HelmScenarioOptions = {}): Promise<void> {
@@ -197,6 +205,29 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
   }
 
   await mockRealtime(page);
+
+  await page.route('**/rest/v1/rpc/sync_life_hero_evidence*', async route => {
+    if (options.lifeHero?.syncFailureStatus) {
+      await route.fulfill({
+        status: options.lifeHero.syncFailureStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Life Hero synchronization fixture unavailable.' }),
+      });
+      return;
+    }
+    const request = route.request().postDataJSON() as { p_as_of_local_date?: string };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        mappingVersion: 'life-hero-source-mapping-v1',
+        asOfLocalDate: request.p_as_of_local_date ?? '2026-08-01',
+        newEvidence: 0,
+        duplicates: 0,
+        skipped: 0,
+      }),
+    });
+  });
 
   await page.route('**/rest/v1/rpc/get_life_hero_snapshot*', async route => {
     if (options.lifeHero?.failureStatus) {
