@@ -7,5 +7,7 @@ revoke execute on function public.accept_life_hero_evidence(
 ) from authenticated;
 revoke execute on function public.recompute_life_hero_profile(date)
 from authenticated;
+revoke execute on function public.sync_life_hero_evidence(date)
+from authenticated;
 
 commit;

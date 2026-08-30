@@ -8,7 +8,8 @@ import {
 import type { AnimationAction, AnimationMixer, Object3D } from 'three';
 import lifeHeroBaseOnlyStaticUrl from '../../../docs/design/evidence/life-hero-jacket-off.png';
 import { useLifeHeroVoice } from '../../hooks/useLifeHeroVoice';
-import { fetchLifeHeroSnapshot } from '../../store/supabase';
+import { syncLifeHeroEvidence } from '../../store/supabase';
+import { useRemoteStoreRefresh } from '../../store/contexts/useRemoteStoreRefresh';
 import {
   deriveLifeHeroDashboardView,
   deriveLifeHeroMotivationalLine,
@@ -47,7 +48,7 @@ export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps)
   const loadSnapshot = useCallback(async () => {
     setSnapshotState(INITIAL_STATE);
     try {
-      const snapshot = await fetchLifeHeroSnapshot(localDate);
+      const { snapshot } = await syncLifeHeroEvidence(localDate);
       setSnapshotState({ status: 'ready', snapshot, error: null });
     } catch {
       setSnapshotState({
@@ -61,6 +62,16 @@ export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps)
   useEffect(() => {
     void loadSnapshot();
   }, [loadSnapshot]);
+
+  useRemoteStoreRefresh([
+    'prayerTracking',
+    'gamification',
+    'tasks',
+    'financeAccounts',
+    'transactions',
+    'financeBudgets',
+    'savingsGoals',
+  ], loadSnapshot);
 
   const view = useMemo(() => snapshotState.snapshot
     ? deriveLifeHeroDashboardView(snapshotState.snapshot)

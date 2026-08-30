@@ -198,6 +198,27 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
 
   await mockRealtime(page);
 
+  await page.route('**/rest/v1/rpc/sync_life_hero_evidence*', async route => {
+    if (options.lifeHero?.failureStatus) {
+      await route.fulfill({
+        status: options.lifeHero.failureStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Life Hero evidence sync fixture unavailable.' }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        scanned: 0,
+        accepted: 0,
+        duplicates: 0,
+        snapshot: options.lifeHero?.snapshot ?? defaultLifeHeroSnapshot(),
+      }),
+    });
+  });
+
   await page.route('**/rest/v1/rpc/get_life_hero_snapshot*', async route => {
     if (options.lifeHero?.failureStatus) {
       await route.fulfill({

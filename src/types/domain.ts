@@ -1096,6 +1096,13 @@ export interface LifeHeroEvidenceReceipt {
   snapshot: LifeHeroSnapshot;
 }
 
+export interface LifeHeroEvidenceSyncReceipt {
+  scanned: number;
+  accepted: number;
+  duplicates: number;
+  snapshot: LifeHeroSnapshot;
+}
+
 // ── Private product usage analytics ──
 export type ProductUsageEventKind =
   | 'session'

@@ -27,6 +27,7 @@ import type {
   LifeHeroEvidence,
   LifeHeroEvidenceInput,
   LifeHeroEvidenceReceipt,
+  LifeHeroEvidenceSyncReceipt,
   LifeHeroEvidenceSourceTier,
   LifeHeroSnapshot,
   LifeHeroStat,
@@ -357,6 +358,37 @@ export async function fetchLifeHeroSnapshot(asOfLocalDate: string): Promise<Life
   });
   if (error) throw error;
   return mapLifeHeroSnapshot(data);
+}
+
+export async function syncLifeHeroEvidence(
+  asOfLocalDate: string,
+): Promise<LifeHeroEvidenceSyncReceipt> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('sync_life_hero_evidence', {
+    p_as_of_local_date: asOfLocalDate,
+  });
+  if (error) {
+    logError('Supabase', error);
+    throw error;
+  }
+  const result = asRecord(data);
+  const scanned = Number(result.scanned);
+  const accepted = Number(result.accepted);
+  const duplicates = Number(result.duplicates);
+  if (
+    !Number.isInteger(scanned) || scanned < 0
+    || !Number.isInteger(accepted) || accepted < 0
+    || !Number.isInteger(duplicates) || duplicates < 0
+    || accepted + duplicates !== scanned
+  ) {
+    throw new Error('The Sabah One Life Hero evidence sync response was invalid.');
+  }
+  return {
+    scanned,
+    accepted,
+    duplicates,
+    snapshot: mapLifeHeroSnapshot(result.snapshot),
+  };
 }
 
 export async function acceptLifeHeroEvidence(
