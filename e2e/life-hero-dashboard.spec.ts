@@ -106,7 +106,9 @@ test.describe('Life Hero dashboard companion', () => {
     await openApp(page);
 
     const hero = page.getByRole('complementary', { name: 'Life Hero' });
-    await expect(hero.getByRole('img', { name: 'Original Life Hero standing in a ready pose' })).toBeVisible();
+    const fallback = hero.getByRole('img', { name: 'Original Life Hero standing in a ready pose' });
+    await expect(fallback).toBeVisible();
+    await expect(fallback).toHaveAttribute('src', /life-hero-jacket-off/u);
     await expect(hero.locator('canvas')).toHaveCount(0);
     await hero.getByRole('button', { name: 'Open hero details' }).click();
     await expect(hero.getByRole('heading', { name: 'Movement' })).toHaveCount(0);
@@ -217,4 +219,18 @@ test('captures the actual maximum-quality dashboard avatar at desktop and mobile
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: test.info().outputPath(`life-hero-dashboard-${viewport}.png`) });
   }
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('button', { name: /Show Life Hero companion/ }).click();
+  const reducedHero = page.locator('aside.life-hero-companion:not(.is-collapsed)');
+  const reducedFallback = reducedHero.getByRole('img', { name: 'Original Life Hero standing in a ready pose' });
+  await expect(reducedFallback).toBeVisible();
+  await expect(reducedFallback).toHaveAttribute('src', /life-hero-jacket-off/u);
+  await expect.poll(() => reducedFallback.evaluate((image: HTMLImageElement) => (
+    image.complete && image.naturalWidth > 0
+  ))).toBe(true);
+  await expect(reducedHero.locator('canvas')).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath('life-hero-dashboard-reduced-motion-390x844.png') });
 });

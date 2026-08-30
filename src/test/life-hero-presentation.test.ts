@@ -147,5 +147,9 @@ describe('Life Hero dashboard presentation', () => {
       train: 'Running',
     });
     expect(LIFE_HERO_AVATAR_CONTRACT.slots).toContain('torso');
+    expect(LIFE_HERO_AVATAR_CONTRACT.assets.static).toEqual({
+      path: 'docs/design/evidence/life-hero-jacket-off.png',
+      assetKind: 'rendered-base-only-fallback',
+    });
   });
 });

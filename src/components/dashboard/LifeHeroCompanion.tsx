@@ -6,6 +6,7 @@ import {
   useState,
 } from 'react';
 import type { AnimationAction, AnimationMixer, Object3D } from 'three';
+import lifeHeroBaseOnlyStaticUrl from '../../../docs/design/evidence/life-hero-jacket-off.png';
 import { useLifeHeroVoice } from '../../hooks/useLifeHeroVoice';
 import { fetchLifeHeroSnapshot } from '../../store/supabase';
 import {
@@ -520,7 +521,7 @@ function LifeHeroAvatar({
     return (
       <div className="life-hero-static-avatar">
         <img
-          src={`${import.meta.env.BASE_URL}${LIFE_HERO_AVATAR_CONTRACT.assets.static.path}`}
+          src={lifeHeroBaseOnlyStaticUrl}
           alt="Original Life Hero standing in a ready pose"
         />
         {failed && <span role="status">3D view unavailable. Showing the approved static hero.</span>}
@@ -533,7 +534,7 @@ function LifeHeroAvatar({
     <div className="life-hero-avatar-stack" data-status={renderStatus}>
       <img
         className="life-hero-avatar-placeholder"
-        src={`${import.meta.env.BASE_URL}${LIFE_HERO_AVATAR_CONTRACT.assets.static.path}`}
+        src={lifeHeroBaseOnlyStaticUrl}
         alt=""
         aria-hidden="true"
       />

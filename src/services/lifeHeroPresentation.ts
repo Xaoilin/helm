@@ -90,8 +90,8 @@ export const LIFE_HERO_AVATAR_CONTRACT = {
       qualityTier: 'constrained-capability-fallback',
     },
     static: {
-      path: 'concepts/life-hero/life-hero-concept.png',
-      assetKind: 'static-fallback',
+      path: 'docs/design/evidence/life-hero-jacket-off.png',
+      assetKind: 'rendered-base-only-fallback',
     },
   },
 } as const;

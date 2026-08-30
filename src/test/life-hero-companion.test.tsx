@@ -80,6 +80,14 @@ describe('Life Hero companion', () => {
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 
+  it('uses the rendered base-only hero for reduced-motion and loading fallbacks', async () => {
+    mocks.fetchSnapshot.mockResolvedValue(snapshot());
+    render(<LifeHeroCompanion localDate="2026-08-30" />);
+
+    const image = screen.getByRole('img', { name: 'Original Life Hero standing in a ready pose' });
+    expect(image).toHaveAttribute('src', expect.stringContaining('life-hero-jacket-off'));
+  });
+
   it('collapses to an unobtrusive keyboard-operable level button', async () => {
     mocks.fetchSnapshot.mockResolvedValue(snapshot());
     render(<LifeHeroCompanion localDate="2026-08-30" />);

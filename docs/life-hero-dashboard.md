@@ -39,7 +39,7 @@ The runtime:
 6. tries the constrained GLB after a primary load or decode failure;
 7. uses the approved static image if both 3D assets fail.
 
-The static image is also used immediately for `prefers-reduced-motion`. The WebGL canvas is decorative; adjacent DOM text owns level, momentum, condition, and status meaning.
+The rendered base-only GLB evidence frame is used immediately for `prefers-reduced-motion` and while the animated model prepares, so loading and static states retain the same bare-torso-and-shorts default with the grey jacket hidden. The older jacketed concept image remains an approval artifact and is not a dashboard fallback. The WebGL canvas is decorative; adjacent DOM text owns level, momentum, condition, and status meaning.
 
 ## Optional motivational voice
 
