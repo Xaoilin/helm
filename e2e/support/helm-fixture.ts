@@ -35,6 +35,10 @@ type PrayerTimingName = keyof typeof DEFAULT_TIMINGS;
 
 export interface HelmScenarioOptions {
   authenticated?: boolean;
+  analytics?: {
+    events?: Array<Record<string, unknown>>;
+    failureStatus?: number;
+  };
   email?: string;
   lifeHero?: {
     failureStatus?: number;
@@ -129,6 +133,7 @@ async function installScenario(page: Page, options: HelmScenarioOptions = {}): P
   await installPrayerRoute(page, options.prayer);
   await installDatabaseRoutes(page, {
     email: options.email || TEST_EMAIL,
+    analytics: options.analytics,
     lifeHero: options.lifeHero,
     snapshotStatus: options.snapshotStatus,
     stores,
@@ -154,6 +159,7 @@ function buildStores(options: HelmScenarioOptions): Record<string, unknown> {
 }
 
 interface DatabaseRouteOptions {
+  analytics?: HelmScenarioOptions['analytics'];
   email: string;
   lifeHero?: HelmScenarioOptions['lifeHero'];
   snapshotStatus?: number;
@@ -241,6 +247,22 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ accepted: events.length, duplicates: 0 }),
+    });
+  });
+
+  await page.route('**/rest/v1/product_usage_events*', async route => {
+    if (options.analytics?.failureStatus) {
+      await route.fulfill({
+        status: options.analytics.failureStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Product usage fixture unavailable.' }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(options.analytics?.events || []),
     });
   });
 
