@@ -53,6 +53,26 @@ async function installSpeechHarness(page: Page, outcome: 'played' | 'failed' = '
 }
 
 test.describe('Life Hero dashboard companion', () => {
+  test('completes the daily adventure on 390px mobile with keyboard controls', async ({ page, scenario }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await scenario();
+    await openApp(page);
+    const hero = page.getByRole('complementary', { name: 'Life Hero' });
+    await hero.getByRole('button', { name: /Show Life Hero companion/ }).click();
+    const adventure = hero.getByRole('region', { name: 'Daily adventure' });
+    const permanentLevel = hero.locator('.life-hero-level-row > div').first().locator('strong');
+    const levelBefore = await permanentLevel.textContent();
+    await adventure.getByRole('button', { name: 'Start today’s adventure' }).click();
+    await expect(adventure.getByText('Continue today’s path')).toBeVisible();
+    await adventure.focus();
+    await page.keyboard.press('1');
+    await expect(adventure.getByText('Round 2 of 4')).toBeVisible();
+    await adventure.getByRole('button', { name: /^1 /u }).click();
+    await expect(adventure.getByText('Today’s path is complete')).toBeVisible();
+    await expect(permanentLevel).toHaveText(levelBefore ?? '');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
   test('shows the permanent progression model in an unobtrusive desktop companion', async ({ page, scenario }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await scenario();

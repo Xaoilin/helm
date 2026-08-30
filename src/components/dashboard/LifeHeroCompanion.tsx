@@ -7,6 +7,7 @@ import {
 } from 'react';
 import type { AnimationAction, AnimationMixer, Object3D } from 'three';
 import lifeHeroBaseOnlyStaticUrl from '../../../docs/design/evidence/life-hero-jacket-off.png';
+import LifeHeroAdventure from './LifeHeroAdventure';
 import { useLifeHeroVoice } from '../../hooks/useLifeHeroVoice';
 import { syncLifeHeroEvidence } from '../../store/supabase';
 import { useRemoteStoreRefresh } from '../../store/contexts/useRemoteStoreRefresh';
@@ -136,6 +137,10 @@ export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps)
         <LifeHeroSummary state={snapshotState} view={view} onRetry={loadSnapshot} />
 
         {view && <LifeHeroVoicePanel view={view} />}
+
+        {view && snapshotState.status === 'ready' && (
+          <LifeHeroAdventure localDate={localDate} snapshot={snapshotState.snapshot} />
+        )}
 
         <button
           type="button"
