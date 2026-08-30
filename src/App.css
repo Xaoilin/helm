@@ -6626,6 +6626,83 @@ textarea.form-input {
   font-weight: 700;
 }
 
+.life-hero-voice {
+  display: grid;
+  gap: 8px;
+  margin: 0 15px 15px;
+  padding: 11px;
+  border: 1px solid rgba(93, 190, 255, 0.28);
+  border-radius: 12px;
+  background: rgba(7, 17, 31, 0.55);
+}
+
+.life-hero-voice-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.life-hero-voice-heading h3 {
+  margin: 0;
+  color: var(--nc-text);
+  font-size: 12px;
+}
+
+.life-hero-voice-heading span {
+  color: var(--nc-text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.life-hero-voice-line,
+.life-hero-voice-status {
+  margin: 0;
+  color: #c7d6e8;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.life-hero-voice-line {
+  min-height: 27px;
+  color: #e8dfc2;
+}
+
+.life-hero-voice-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.life-hero-voice button {
+  min-height: 40px;
+  padding: 7px 10px;
+  border: 1px solid rgba(93, 190, 255, 0.36);
+  border-radius: 10px;
+  color: var(--nc-text);
+  background: rgba(16, 48, 72, 0.74);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.life-hero-voice button[role='switch'][aria-checked='true'] {
+  border-color: rgba(230, 198, 106, 0.48);
+  color: #f0d477;
+  background: rgba(82, 64, 27, 0.35);
+}
+
+.life-hero-voice button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.life-hero-voice-status.is-error {
+  color: #ffb8b8;
+}
+
 .life-hero-message {
   min-height: 104px;
 }
@@ -6835,17 +6912,19 @@ textarea.form-input {
   .life-hero-header,
   .life-hero-summary,
   .life-hero-message,
+  .life-hero-voice,
   .life-hero-details-toggle,
   .life-hero-details {
     grid-column: 2;
   }
 
   .life-hero-header { grid-row: 1; }
-  .life-hero-stage { grid-column: 1; grid-row: 1 / span 4; height: auto; min-height: 320px; margin: 10px; }
+  .life-hero-stage { grid-column: 1; grid-row: 1 / span 5; height: auto; min-height: 320px; margin: 10px; }
   .life-hero-summary,
   .life-hero-message { grid-row: 2; }
-  .life-hero-details-toggle { grid-row: 3; }
-  .life-hero-details { grid-row: 4; }
+  .life-hero-voice { grid-row: 3; }
+  .life-hero-details-toggle { grid-row: 4; }
+  .life-hero-details { grid-row: 5; }
   .life-hero-collapsed-button { justify-content: center; border-radius: 14px; }
 }
 

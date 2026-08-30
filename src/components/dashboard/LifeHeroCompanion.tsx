@@ -12,10 +12,13 @@ import {
   LIFE_HERO_AVATAR_CONTRACT,
   LIFE_HERO_CONDITION_PRESENTATION,
   LIFE_HERO_STAT_PRESENTATION,
+  selectLifeHeroMotivation,
   selectLifeHeroAsset,
   type LifeHeroDashboardView,
   type LifeHeroMotionState,
 } from '../../services/lifeHeroPresentation';
+import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID } from '../../config';
+import { useVoiceOutput } from '../../hooks/useVoiceOutput';
 import type { LifeHeroSnapshot } from '../../types/domain';
 
 interface LifeHeroCompanionProps {
@@ -28,8 +31,10 @@ type SnapshotState =
   | { status: 'error'; snapshot: null; error: string };
 
 type AvatarStatus = 'static' | 'loading' | 'ready' | 'error';
+type HeroVoiceStatus = 'idle' | 'loading' | 'speaking' | 'success' | 'failure' | 'muted';
 
 const INITIAL_STATE: SnapshotState = { status: 'loading', snapshot: null, error: null };
+const HERO_VOICE_COOLDOWN_MS = 5_000;
 
 export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps) {
   const [snapshotState, setSnapshotState] = useState<SnapshotState>(INITIAL_STATE);
@@ -121,6 +126,8 @@ export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps)
 
         <LifeHeroSummary state={snapshotState} view={view} onRetry={loadSnapshot} />
 
+        {view && <LifeHeroVoice view={view} />}
+
         <button
           type="button"
           className="life-hero-details-toggle"
@@ -191,6 +198,131 @@ export default function LifeHeroCompanion({ localDate }: LifeHeroCompanionProps)
         )}
       </div>
     </aside>
+  );
+}
+
+function LifeHeroVoice({ view }: { view: LifeHeroDashboardView }) {
+  const [muted, setMuted] = useState(false);
+  const [line, setLine] = useState('Press the button when you want a short, positive boost.');
+  const [status, setStatus] = useState<HeroVoiceStatus>('idle');
+  const [rateLimited, setRateLimited] = useState(false);
+  const sequenceRef = useRef(0);
+  const nextAllowedAtRef = useRef(0);
+  const cooldownTimerRef = useRef<number | null>(null);
+  const runRef = useRef(0);
+  const hasElevenLabs = Boolean(ELEVENLABS_API_KEY && ELEVENLABS_VOICE_ID);
+  const { speak, stopSpeaking, isSpeaking } = useVoiceOutput({
+    hasElevenLabs,
+    lang: 'en',
+    elevenLabsApiKey: ELEVENLABS_API_KEY,
+    elevenLabsVoiceId: ELEVENLABS_VOICE_ID,
+    strict: true,
+  });
+
+  useEffect(() => {
+    if (isSpeaking && !muted) setStatus('speaking');
+  }, [isSpeaking, muted]);
+
+  useEffect(() => () => {
+    runRef.current += 1;
+    if (cooldownTimerRef.current !== null) window.clearTimeout(cooldownTimerRef.current);
+    stopSpeaking();
+  }, [stopSpeaking]);
+
+  const beginCooldown = useCallback(() => {
+    nextAllowedAtRef.current = Date.now() + HERO_VOICE_COOLDOWN_MS;
+    setRateLimited(true);
+    if (cooldownTimerRef.current !== null) window.clearTimeout(cooldownTimerRef.current);
+    cooldownTimerRef.current = window.setTimeout(() => {
+      nextAllowedAtRef.current = 0;
+      cooldownTimerRef.current = null;
+      setRateLimited(false);
+    }, HERO_VOICE_COOLDOWN_MS);
+  }, []);
+
+  const requestMotivation = useCallback(async () => {
+    if (Date.now() < nextAllowedAtRef.current || isSpeaking) return;
+    const run = runRef.current + 1;
+    runRef.current = run;
+    const motivation = selectLifeHeroMotivation(view, sequenceRef.current);
+    sequenceRef.current += 1;
+    setLine(motivation.text);
+    beginCooldown();
+
+    if (muted) {
+      setStatus('muted');
+      return;
+    }
+
+    setStatus('loading');
+    try {
+      await speak(motivation.text);
+      if (runRef.current === run) setStatus('success');
+    } catch {
+      if (runRef.current === run) setStatus('failure');
+    }
+  }, [beginCooldown, isSpeaking, muted, speak, view]);
+
+  const toggleMute = useCallback(() => {
+    const nextMuted = !muted;
+    runRef.current += 1;
+    setMuted(nextMuted);
+    if (nextMuted) {
+      stopSpeaking();
+      setStatus('muted');
+    } else {
+      setStatus('idle');
+    }
+  }, [muted, stopSpeaking]);
+
+  const busy = status === 'loading' || status === 'speaking' || isSpeaking;
+  const statusMessage = status === 'loading'
+    ? 'Preparing voice…'
+    : status === 'speaking'
+      ? 'Speaking…'
+      : status === 'failure'
+        ? 'Voice could not play. Check browser audio and try again; the message remains available as text.'
+        : status === 'muted'
+          ? 'Voice is muted. Motivation is shown as text only.'
+          : rateLimited
+            ? 'Another boost will be ready in a few seconds.'
+            : status === 'success'
+              ? 'Motivation played.'
+              : 'Voice never starts automatically.';
+
+  return (
+    <section className="life-hero-voice" aria-labelledby="life-hero-voice-title">
+      <div className="life-hero-voice-heading">
+        <h3 id="life-hero-voice-title">Motivational voice</h3>
+        <span>Optional · no autoplay</span>
+      </div>
+      <p className="life-hero-voice-line" aria-live="polite">“{line}”</p>
+      <div className="life-hero-voice-controls">
+        <button
+          type="button"
+          onClick={() => void requestMotivation()}
+          disabled={busy || rateLimited}
+        >
+          {muted ? 'Show motivation' : busy ? 'Preparing…' : 'Hear motivation'}
+        </button>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={muted}
+          aria-label={muted ? 'Unmute Life Hero voice' : 'Mute Life Hero voice'}
+          onClick={toggleMute}
+        >
+          {muted ? 'Muted' : 'Mute'}
+        </button>
+      </div>
+      <p
+        className={`life-hero-voice-status${status === 'failure' ? ' is-error' : ''}`}
+        role={status === 'failure' ? 'alert' : 'status'}
+        aria-live={status === 'failure' ? 'assertive' : 'polite'}
+      >
+        {statusMessage}
+      </p>
+    </section>
   );
 }
 

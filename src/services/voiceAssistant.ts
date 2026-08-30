@@ -33,10 +33,15 @@ export async function speakWithElevenLabs(
   return new Audio(url);
 }
 
-export function speakWithBrowserTTS(text: string, lang: AssistantLang = 'en'): Promise<void> {
-  return new Promise((resolve) => {
+export function speakWithBrowserTTS(
+  text: string,
+  lang: AssistantLang = 'en',
+  options: { rejectOnError?: boolean } = {},
+): Promise<void> {
+  return new Promise((resolve, reject) => {
     if (!('speechSynthesis' in window)) {
-      resolve();
+      if (options.rejectOnError) reject(new Error('Browser speech output is unavailable.'));
+      else resolve();
       return;
     }
 
@@ -45,7 +50,10 @@ export function speakWithBrowserTTS(text: string, lang: AssistantLang = 'en'): P
     utterance.pitch = 1.1;
     utterance.lang = lang === 'ar' ? 'ar-SA' : 'en-GB';
     utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
+    utterance.onerror = () => {
+      if (options.rejectOnError) reject(new Error('Browser speech playback failed.'));
+      else resolve();
+    };
 
     const voices = speechSynthesis.getVoices();
     if (lang === 'ar') {
