@@ -44,6 +44,8 @@ Metadata is limited to an 8 KiB flat scalar object and rejects credential-like k
 
 Product usage analytics has no evidence type, rule, client input, service mapping, or RPC capable of granting XP. Usage analytics may inform product decisions in a later ticket, but it remains separate from real-world progression.
 
+External providers remain unimplemented. KAN-263's dated feasibility findings, proposed route matrix, credential boundaries, minimisation rules, failure behavior, fallbacks, prerequisites, and future contract tests are recorded in [`external-evidence-routes.md`](external-evidence-routes.md). Those routes do not become product capability until Sol presents the matrix and My Liege approves the route; connection or import alone never awards XP.
+
 ## Existing Sabah One evidence sync
 
 `sync_life_hero_evidence` scans only the signed-in account's database-authoritative Sabah One records. The migration runs it once for existing accounts, and the Life Hero companion runs it before reading a snapshot and again when a relevant account collection changes. A deterministic idempotency key and stable source reference make backfill and repeated reconciliation safe: accepted source evidence becomes immutable even if a mutable source record is later reset or removed.
