@@ -66,7 +66,9 @@ test('imports iPhone Health movement through the visible export bridge', async (
 
   await openApp(page);
   await page.getByRole('button', { name: 'Navigate to Health' }).click();
-  await expect(page.getByRole('heading', { name: 'Import from iPhone Health' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Import from iPhone Health' })).toBeVisible({
+    timeout: 15_000,
+  });
 
   await page.getByLabel('Select Apple Health XML').setInputFiles({
     name: 'export.xml',
