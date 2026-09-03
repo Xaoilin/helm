@@ -19,6 +19,7 @@ import { SettingsProvider, useSettingsContext } from './contexts/SettingsContext
 import { TaskProvider, useTaskContext } from './contexts/TaskContext';
 import { TripProvider } from './contexts/TripContext';
 import { AssistantUndoProvider } from './contexts/AssistantUndoContext';
+import { MilestoneCelebrationProvider } from './contexts/MilestoneCelebrationContext';
 import { ShellProvider } from './ShellContext';
 
 function GoogleSyncBridge({ children }: { children: ReactNode }) {
@@ -138,7 +139,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
                                       <ChatBridge>
                                         <ShellProvider>
                                           <AssistantUndoProvider>
-                                            <GoogleSyncBridge>{children}</GoogleSyncBridge>
+                                            <MilestoneCelebrationProvider>
+                                              <GoogleSyncBridge>{children}</GoogleSyncBridge>
+                                            </MilestoneCelebrationProvider>
                                           </AssistantUndoProvider>
                                         </ShellProvider>
                                       </ChatBridge>

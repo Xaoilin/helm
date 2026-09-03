@@ -1,9 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import NightCompassDashboard from '../components/dashboard/NightCompassDashboard';
 import {
   createDefaultDailyMomentumState,
   getDailyMomentumDay,
+  recordDailyMomentumProgress,
 } from '../services/dailyMomentum';
 
 const mocks = vi.hoisted(() => ({
@@ -37,6 +38,7 @@ const mocks = vi.hoisted(() => ({
     recordProgress: vi.fn(),
     resetProgress: vi.fn(),
   },
+  celebration: { celebrate: vi.fn() },
 }));
 
 vi.mock('../store/ShellContext', () => ({ useShell: () => mocks.shell }));
@@ -46,6 +48,9 @@ vi.mock('../store/contexts/PrayerContext', () => ({ usePrayerContext: () => mock
 vi.mock('../store/contexts/DailyMomentumContext', () => ({
   useDailyMomentumContext: () => mocks.momentum,
 }));
+vi.mock('../store/contexts/MilestoneCelebrationContext', () => ({
+  useMilestoneCelebration: () => mocks.celebration,
+}));
 vi.mock('../components/dashboard/PrayerStatsCard', () => ({ default: () => null }));
 vi.mock('../components/dashboard/LifeHeroCompanion', () => ({
   default: () => <aside aria-label="Life Hero companion" />,
@@ -53,6 +58,7 @@ vi.mock('../components/dashboard/LifeHeroCompanion', () => ({
 
 describe('Night Compass activity title help', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     mocks.settings.settings.lifeHeroEnabled = false;
     mocks.momentum.getDay.mockReturnValue(
       getDailyMomentumDay(createDefaultDailyMomentumState(), '2026-08-29'),
@@ -114,5 +120,95 @@ describe('Night Compass activity title help', () => {
       });
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     }
+  });
+
+  it('celebrates a real activity level transition', async () => {
+    const date = '2026-08-29';
+    const onePage = recordDailyMomentumProgress(createDefaultDailyMomentumState(), {
+      date,
+      pillar: 'learn',
+      templateId: 'learn-reading',
+      stepId: 'pages',
+      amount: 1,
+      updatedAt: '2026-08-29T12:00:00.000Z',
+    });
+    const levelOne = recordDailyMomentumProgress(onePage, {
+      date,
+      pillar: 'learn',
+      templateId: 'learn-reading',
+      stepId: 'pages',
+      amount: 1,
+      updatedAt: '2026-08-29T12:01:00.000Z',
+    });
+    mocks.momentum.getDay.mockReturnValue(getDailyMomentumDay(onePage, date));
+    mocks.momentum.recordProgress.mockResolvedValue(levelOne);
+
+    render(<NightCompassDashboard />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 pages' }));
+
+    await waitFor(() => {
+      expect(mocks.celebration.celebrate).toHaveBeenCalledWith({
+        tone: 'learn',
+        eyebrow: 'Learn milestone',
+        title: 'Reading · Level 1',
+        message: "Today's target is complete.",
+        level: 1,
+      });
+    });
+  });
+
+  it('uses the stronger beyond-target receipt when Reading reaches Level 2', async () => {
+    const date = '2026-08-29';
+    let fourPages = createDefaultDailyMomentumState();
+    for (let page = 1; page <= 4; page += 1) {
+      fourPages = recordDailyMomentumProgress(fourPages, {
+        date,
+        pillar: 'learn',
+        templateId: 'learn-reading',
+        stepId: 'pages',
+        amount: 1,
+        updatedAt: `2026-08-29T12:0${page}:00.000Z`,
+      });
+    }
+    const levelTwo = recordDailyMomentumProgress(fourPages, {
+      date,
+      pillar: 'learn',
+      templateId: 'learn-reading',
+      stepId: 'pages',
+      amount: 1,
+      updatedAt: '2026-08-29T12:05:00.000Z',
+    });
+    mocks.momentum.getDay.mockReturnValue(getDailyMomentumDay(fourPages, date));
+    mocks.momentum.recordProgress.mockResolvedValue(levelTwo);
+
+    render(<NightCompassDashboard />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 pages' }));
+
+    await waitFor(() => {
+      expect(mocks.celebration.celebrate).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Reading · Level 2',
+        message: "You went beyond today's target.",
+        level: 2,
+      }));
+    });
+  });
+
+  it('keeps a progress click quiet when no level is reached', async () => {
+    const date = '2026-08-29';
+    const nextState = recordDailyMomentumProgress(createDefaultDailyMomentumState(), {
+      date,
+      pillar: 'learn',
+      templateId: 'learn-reading',
+      stepId: 'pages',
+      amount: 1,
+      updatedAt: '2026-08-29T12:00:00.000Z',
+    });
+    mocks.momentum.recordProgress.mockResolvedValue(nextState);
+
+    render(<NightCompassDashboard />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 pages' }));
+
+    await waitFor(() => expect(mocks.momentum.recordProgress).toHaveBeenCalledOnce());
+    expect(mocks.celebration.celebrate).not.toHaveBeenCalled();
   });
 });

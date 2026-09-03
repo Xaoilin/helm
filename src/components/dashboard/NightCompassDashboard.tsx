@@ -13,14 +13,16 @@ import {
   formatPrayerInstantTime,
   getPrayerZonedClockSeconds,
 } from '../../services/prayerTimeZone';
-import type {
-  DailyMomentumActivityDay,
-  DailyMomentumPillarDay,
+import {
+  getDailyMomentumDay,
+  type DailyMomentumActivityDay,
+  type DailyMomentumPillarDay,
 } from '../../services/dailyMomentum';
 import { useShell } from "../../store/ShellContext";
 import { useSettingsContext } from "../../store/contexts/SettingsContext";
 import { useTaskContext } from "../../store/contexts/TaskContext";
 import { useDailyMomentumContext } from '../../store/contexts/DailyMomentumContext';
+import { useMilestoneCelebration } from '../../store/contexts/MilestoneCelebrationContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import PrayerStatsCard from './PrayerStatsCard';
 import LifeHeroCompanion from './LifeHeroCompanion';
@@ -346,6 +348,7 @@ export default function NightCompassDashboard() {
   const tasks = useTaskContext();
   const prayer = usePrayerContext();
   const momentum = useDailyMomentumContext();
+  const { celebrate } = useMilestoneCelebration();
   const [busyPillar, setBusyPillar] = useState<DailyPillar | null>(null);
   const [actionErrors, setActionErrors] = useState<Partial<Record<DailyPillar, string>>>({});
   const [showPrayerLog, setShowPrayerLog] = useState(false);
@@ -447,7 +450,27 @@ export default function NightCompassDashboard() {
         contextError={momentum.error}
         actionError={actionErrors[pillar] ?? null}
         onRecord={(templateId, stepId) => {
-          void runMomentumAction(pillar, () => momentum.recordProgress(pillar, templateId, stepId, 1));
+          const previousActivity = pillarDay.activities.find(activity => activity.template.id === templateId);
+          const previousLevel = previousActivity?.achievedLevel ?? 0;
+          void runMomentumAction(pillar, async () => {
+            const nextState = await momentum.recordProgress(pillar, templateId, stepId, 1);
+            const nextActivity = getDailyMomentumDay(nextState, pillarDay.date)[pillar].activities
+              .find(activity => activity.template.id === templateId);
+            const reachedLevel = nextActivity?.achievedLevel ?? 0;
+            if (!nextActivity || reachedLevel === 0 || reachedLevel <= previousLevel) return;
+
+            celebrate({
+              tone: pillar,
+              eyebrow: `${pillar === 'learn' ? 'Learn' : 'Move'} milestone`,
+              title: `${nextActivity.template.label} · Level ${reachedLevel}`,
+              message: reachedLevel === 1
+                ? "Today's target is complete."
+                : reachedLevel === 5
+                  ? 'You completed the full daily path.'
+                  : "You went beyond today's target.",
+              level: reachedLevel,
+            });
+          });
         }}
         onReset={() => {
           void runMomentumAction(pillar, () => momentum.resetProgress(pillar, true));

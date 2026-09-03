@@ -120,6 +120,8 @@ Learn and Move receive equal visual weight. Each card contains:
 
 Emerald is Learn's accent. Moon-gold is Move's accent. Neither card may exceed Prayer's title, time, area, or contrast.
 
+Reaching a new L1–L5 activity threshold earns one brief, non-blocking milestone receipt. Ordinary progress increments remain quiet. The receipt may temporarily use stronger contrast and restrained motion, but the settled dashboard state returns to the low-emphasis hierarchy above.
+
 ### Tasks — tier three
 
 Tasks is a single compact row or card after Learn and Move. It may show one grounded count and one route to the Tasks surface. It must not repeat `Up Next`, reproduce a task queue, or compete with Prayer.
@@ -181,6 +183,7 @@ Additional responsive rules:
 - Text contrast target: 4.5:1 for body and metadata, 3:1 for large text and non-text controls.
 - Pair every status colour with visible text and, where useful, an icon.
 - Respect `prefers-reduced-motion`; disable arc sweeps, pulsing stars, and progress animation.
+- Prayer completion and Learn/Move level receipts keep their full text meaning when motion is disabled and never intercept the next action.
 - Do not announce decorative celestial geometry.
 - Preserve existing route names and navigation behavior.
 - Do not add a second mutation path; dashboard actions must reuse the established task, prayer, chat, and voice boundaries.

@@ -1,10 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { getPrayerDeadlineBounds } from '../../services/prayerTracking';
 import { formatPrayerInstantTime } from '../../services/prayerTimeZone';
+import { useMilestoneCelebration } from '../../store/contexts/MilestoneCelebrationContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
+import type { PrayerCompletionStatus } from '../../types/domain';
 
 export default function PrayerCompletionDialog() {
   const prayer = usePrayerContext();
+  const { celebrate } = useMilestoneCelebration();
   const pending = prayer.pendingCompletion;
   const dialogRef = useRef<HTMLElement>(null);
   const onTimeButtonRef = useRef<HTMLButtonElement>(null);
@@ -82,6 +85,29 @@ export default function PrayerCompletionDialog() {
       )}).`
     : 'The current schedule is unavailable, so choose the outcome you know is correct.';
 
+  const confirmCompletion = (status: PrayerCompletionStatus) => {
+    const result = prayer.confirmPrayerCompletion(status);
+    if (!result) return;
+
+    const levelUp = result.gamificationResult?.leveledUp
+      ? result.gamificationResult
+      : null;
+    celebrate({
+      tone: levelUp ? 'achievement' : 'prayer',
+      eyebrow: levelUp
+        ? 'Prayer · Overall level up'
+        : status === 'on_time'
+          ? 'Prayer kept on time'
+          : 'Prayer completed',
+      title: levelUp ? `Level ${levelUp.newLevel} reached` : `${result.prayerName} complete`,
+      message: levelUp
+        ? `${result.prayerName} moved you forward · ${levelUp.newTitle}`
+        : status === 'on_time'
+          ? `A meaningful daily win${result.xpEarned > 0 ? ` · +${result.xpEarned} XP` : '.'}`
+          : `Recorded with honesty${result.xpEarned > 0 ? ` · +${result.xpEarned} XP` : '.'}`,
+    });
+  };
+
   return (
     <div className="prayer-completion-overlay" onMouseDown={prayer.cancelPrayerCompletion}>
       <section
@@ -102,7 +128,7 @@ export default function PrayerCompletionDialog() {
             ref={onTimeButtonRef}
             type="button"
             className={`prayer-outcome-choice on-time ${pending.suggestedStatus === 'on_time' ? 'suggested' : ''}`}
-            onClick={() => prayer.confirmPrayerCompletion('on_time')}
+            onClick={() => confirmCompletion('on_time')}
           >
             <span aria-hidden="true">✓</span>
             <strong>On time</strong>
@@ -112,7 +138,7 @@ export default function PrayerCompletionDialog() {
             ref={lateButtonRef}
             type="button"
             className={`prayer-outcome-choice late ${pending.suggestedStatus === 'late' ? 'suggested' : ''}`}
-            onClick={() => prayer.confirmPrayerCompletion('late')}
+            onClick={() => confirmCompletion('late')}
           >
             <span aria-hidden="true">◷</span>
             <strong>Late</strong>
