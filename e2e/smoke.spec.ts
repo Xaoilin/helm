@@ -27,6 +27,7 @@ test('takes a signed-in user from Night Compass through a persisted task and set
   await openApp(page);
   await expect(page.getByRole('heading', { name: 'Night Compass' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Complete Dhuhr Prayer' })).toContainText('13:00');
+  await expect(page.getByLabel('Life Hero companion')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Open tasks' }).click();
   await expect(page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
@@ -41,6 +42,11 @@ test('takes a signed-in user from Night Compass through a persisted task and set
 
   await page.getByRole('button', { name: 'Navigate to Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  const lifeHeroToggle = page.getByRole('checkbox', { name: 'Toggle Life Hero character companion' });
+  await expect(lifeHeroToggle).not.toBeChecked();
+  const lifeHeroSettingsWrite = waitForMutation(page, 'settings');
+  await lifeHeroToggle.locator('..').click();
+  await lifeHeroSettingsWrite;
   const settingsWrite = waitForMutation(page, 'settings');
   await page.getByLabel('Theme').selectOption('light');
   await settingsWrite;
@@ -48,6 +54,7 @@ test('takes a signed-in user from Night Compass through a persisted task and set
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Toggle Life Hero character companion' })).toBeChecked();
   await expect(page.getByLabel('Theme')).toHaveValue('light');
 
   await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
@@ -55,4 +62,5 @@ test('takes a signed-in user from Night Compass through a persisted task and set
   await page.getByRole('button', { name: 'Navigate to Dashboard' }).click();
   await expect(page.getByRole('heading', { name: 'Night Compass', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Complete Dhuhr Prayer' })).toContainText('13:00');
+  await expect(page.getByLabel('Life Hero companion')).toBeVisible();
 });
