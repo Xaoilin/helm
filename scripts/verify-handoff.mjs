@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import {
   buildGitHubPagesUrl,
   evaluateHandoffVerification,
+  findVersionedJavaScriptAsset,
   findSuccessfulRunForHead,
   isIgnoredWorkingTreePath,
   parseBranchList,
@@ -46,19 +47,14 @@ async function fetchText(url) {
   return response.text()
 }
 
-async function fetchLiveBundleVersionState(pagesUrl) {
+async function fetchLiveBundleVersionState(pagesUrl, version) {
   const html = await fetchText(pagesUrl)
-  const bundleMatch = html.match(/<script[^>]+src="([^"]*assets\/[^"]+\.js)"/iu)
-  if (!bundleMatch) {
-    throw new Error(`Could not find the built JavaScript asset in ${pagesUrl}.`)
-  }
-
-  const assetUrl = new URL(bundleMatch[1], pagesUrl).toString()
-  const bundle = await fetchText(assetUrl)
-  return {
-    assetUrl,
-    bundle,
-  }
+  return findVersionedJavaScriptAsset({
+    fetchAsset: fetchText,
+    html,
+    pagesUrl,
+    version,
+  })
 }
 
 async function main() {
@@ -129,7 +125,7 @@ async function main() {
   let liveSiteContainsVersion = false
 
   try {
-    const liveBundle = await fetchLiveBundleVersionState(pagesUrl)
+    const liveBundle = await fetchLiveBundleVersionState(pagesUrl, version)
     assetUrl = liveBundle.assetUrl
     liveSiteContainsVersion = liveBundle.bundle.includes(version)
   } catch (error) {

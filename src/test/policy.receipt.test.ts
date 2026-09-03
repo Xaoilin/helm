@@ -7,6 +7,9 @@ import {
   evaluatePagesSpaFallback,
 } from '../../scripts/lib/agentPolicy.mjs';
 import {
+  findVersionedJavaScriptAsset,
+} from '../../scripts/lib/handoffVerification.mjs';
+import {
   createTreeRecord,
   evaluateTreeRecord,
   receiptRunTitle,
@@ -38,6 +41,28 @@ describe('hosted build and receipt policy boundaries', () => {
     );
     expect(result.failures).toEqual([]);
     expect(result.ok).toBe(true);
+  });
+
+  it('finds the deployed version when Rollup moves it into a shared preload', async () => {
+    const pagesUrl = 'https://example.test/helm/';
+    const entryUrl = `${pagesUrl}assets/app.js`;
+    const sharedUrl = `${pagesUrl}assets/shared.js`;
+    const fetched: string[] = [];
+    const result = await findVersionedJavaScriptAsset({
+      fetchAsset: async (url: string) => {
+        fetched.push(url);
+        return url === sharedUrl ? 'const release = "0.2.140";' : 'const app = true;';
+      },
+      html: `
+        <script type="module" src="/helm/assets/app.js"></script>
+        <link rel="modulepreload" href="/helm/assets/shared.js">
+      `,
+      pagesUrl,
+      version: '0.2.140',
+    });
+
+    expect(fetched).toEqual([entryUrl, sharedUrl]);
+    expect(result.assetUrl).toBe(sharedUrl);
   });
 
   it('proves a receipt binds source run, pull request, and exact tested tree', () => {

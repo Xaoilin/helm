@@ -23,6 +23,31 @@ export function buildGitHubPagesUrl({ owner, repo }) {
   return `https://${owner.toLowerCase()}.github.io/${repo}/`
 }
 
+export async function findVersionedJavaScriptAsset({
+  fetchAsset,
+  html,
+  pagesUrl,
+  version,
+}) {
+  const assetUrls = [...new Set(
+    [...html.matchAll(/(?:src|href)=["']([^"']*assets\/[^"']+\.js(?:\?[^"']*)?)["']/giu)]
+      .map((match) => new URL(match[1], pagesUrl).toString()),
+  )]
+
+  if (assetUrls.length === 0) {
+    throw new Error(`Could not find built JavaScript assets in ${pagesUrl}.`)
+  }
+
+  for (const assetUrl of assetUrls) {
+    const bundle = await fetchAsset(assetUrl)
+    if (bundle.includes(version)) {
+      return { assetUrl, bundle }
+    }
+  }
+
+  return { assetUrl: null, bundle: '' }
+}
+
 export function parseBranchList(rawOutput) {
   return rawOutput
     .split(/\r?\n/u)
