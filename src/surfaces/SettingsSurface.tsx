@@ -590,6 +590,33 @@ export default function SettingsSurface() {
           </div>
         </div>
 
+        {/* Life Hero */}
+        <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Life Hero</h3>
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>Character companion</div>
+              <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 2 }}>
+                Shows the character-based Life Hero companion and daily adventure on the dashboard. This optional feature is off by default.
+              </div>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={settings.lifeHeroEnabled === true}
+                onChange={event => settingsContext.updateSettings({ lifeHeroEnabled: event.target.checked })}
+                aria-label="Toggle Life Hero character companion"
+              />
+              <span className="slider" />
+            </label>
+          </div>
+          <div style={{ fontSize: 11, color: settings.lifeHeroEnabled === true ? '#6b6f85' : '#f0c040', marginTop: 10 }}>
+            {settings.lifeHeroEnabled === true
+              ? 'The character companion is enabled for this account.'
+              : 'The character companion is disabled.'}
+          </div>
+        </div>
+
         {/* Voice Assistant (Lina) */}
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Voice Assistant (Lina)</h3>
         <div className="card">

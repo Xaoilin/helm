@@ -354,6 +354,7 @@ export default function NightCompassDashboard() {
   const motivation = getQuranMotivationForDate(prayer.today);
 
   const prayerEnabled = settings.settings.prayerEnabled !== false;
+  const lifeHeroEnabled = settings.settings.lifeHeroEnabled === true;
   const scheduleRepairNeeded = prayerEnabled && (
     prayer.scheduleStatus === 'unavailable'
     || Boolean(prayer.schedule && !prayer.scheduleTimezoneValid)
@@ -714,7 +715,7 @@ export default function NightCompassDashboard() {
         onTogglePrayerLog={() => setShowPrayerLog(current => !current)}
       />
 
-      <LifeHeroCompanion localDate={prayer.today} />
+      {lifeHeroEnabled && <LifeHeroCompanion localDate={prayer.today} />}
     </section>
   );
 }

@@ -37,6 +37,7 @@ const defaultSettings: Settings = {
   prayerCountry: 'United Kingdom',
   prayerReminderEnabled: true,
   prayerReminderMinutes: 15,
+  lifeHeroEnabled: false,
   assistantProvider: DEFAULT_ASSISTANT_PROVIDER,
 };
 

@@ -42,6 +42,7 @@ const SHARED_SETTING_FIELDS = new Set<string>([
   'prayerCountry',
   'prayerReminderEnabled',
   'prayerReminderMinutes',
+  'lifeHeroEnabled',
   'assistantEnabled',
   'elevenLabsVoiceId',
   'wakeWordEnabled',

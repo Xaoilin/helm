@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SettingsProvider, useSettingsContext } from '../store/contexts/SettingsContext';
+import { defaultSettings, SettingsProvider, useSettingsContext } from '../store/contexts/SettingsContext';
 import { splitSettings } from '../store/recordCodec';
 import type { Settings } from '../types/domain';
 
@@ -67,16 +67,21 @@ describe('settings shared/device partition', () => {
     expect(splitSettings({
       theme: 'light',
       telemetry: true,
+      lifeHeroEnabled: true,
       deepgramApiKey: 'secret',
       supabaseUrl: 'https://device.example.test',
       unknownField: 'discarded',
     })).toEqual({
-      shared: { theme: 'light', telemetry: true },
+      shared: { theme: 'light', telemetry: true, lifeHeroEnabled: true },
       device: {
         deepgramApiKey: 'secret',
         supabaseUrl: 'https://device.example.test',
       },
     });
+  });
+
+  it('keeps the character-based Life Hero explicitly off by default', () => {
+    expect(defaultSettings.lifeHeroEnabled).toBe(false);
   });
 
   it('allows only validated account-shared IANA app time zones', () => {

@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     requestAssistantNavigation: vi.fn(),
   },
   settings: {
-    settings: { prayerEnabled: false, prayerCity: 'Bedford' },
+    settings: { prayerEnabled: false, prayerCity: 'Bedford', lifeHeroEnabled: false },
     appTimeZone: { effectiveTimeZone: 'UTC' },
   },
   tasks: { tasks: [] },
@@ -47,12 +47,29 @@ vi.mock('../store/contexts/DailyMomentumContext', () => ({
   useDailyMomentumContext: () => mocks.momentum,
 }));
 vi.mock('../components/dashboard/PrayerStatsCard', () => ({ default: () => null }));
+vi.mock('../components/dashboard/LifeHeroCompanion', () => ({
+  default: () => <aside aria-label="Life Hero companion" />,
+}));
 
 describe('Night Compass activity title help', () => {
   beforeEach(() => {
+    mocks.settings.settings.lifeHeroEnabled = false;
     mocks.momentum.getDay.mockReturnValue(
       getDailyMomentumDay(createDefaultDailyMomentumState(), '2026-08-29'),
     );
+  });
+
+  it('does not mount the character companion by default', () => {
+    render(<NightCompassDashboard />);
+
+    expect(screen.queryByLabelText('Life Hero companion')).not.toBeInTheDocument();
+  });
+
+  it('mounts the character companion only after explicit opt-in', () => {
+    mocks.settings.settings.lifeHeroEnabled = true;
+    render(<NightCompassDashboard />);
+
+    expect(screen.getByLabelText('Life Hero companion')).toBeInTheDocument();
   });
 
   it('gives every Learn and Move activity title pointer and keyboard help', () => {

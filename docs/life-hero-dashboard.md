@@ -1,10 +1,11 @@
 # Life Hero dashboard companion
 
-KAN-260 presents the permanent Life Hero snapshot without creating a second progression source. The signed-in browser reads `get_life_hero_snapshot` for the account-local date; loading, invalid, unavailable, and retry states remain local to the companion and never replace Prayer or another dashboard feature.
+KAN-260 presents the permanent Life Hero snapshot without creating a second progression source. KAN-283 makes the character-based companion an explicit account setting that is off by default. When opted in, the signed-in browser reads `get_life_hero_snapshot` for the account-local date; loading, invalid, unavailable, and retry states remain local to the companion and never replace Prayer or another dashboard feature.
 
 ## Placement
 
-- Desktop uses a bottom-right collapsible companion beside the existing voice control. The compact state remains available without taking dashboard grid space.
+- Settings exposes the opt-in `Character companion` toggle. Missing or false values keep the feature unmounted, so existing and new accounts use the non-character dashboard by default.
+- When enabled, desktop uses a bottom-right collapsible companion beside the existing voice control. The compact state remains available without taking dashboard grid space.
 - Mobile starts as a dedicated collapsed Hero button above the bottom navigation. Opening it reveals a bounded, vertically scrollable companion panel; it is not described as an ARIA carousel because it does not rotate slides.
 - The companion is last in dashboard DOM order, so the existing Prayer → Learn → Move → Tasks contract remains intact.
 

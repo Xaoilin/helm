@@ -1377,6 +1377,7 @@ export interface Settings {
   prayerCountry?: string;
   prayerReminderEnabled?: boolean;
   prayerReminderMinutes?: 5 | 10 | 15 | 30;
+  lifeHeroEnabled?: boolean;
   assistantEnabled?: boolean;
   elevenLabsApiKey?: string;
   elevenLabsVoiceId?: string;

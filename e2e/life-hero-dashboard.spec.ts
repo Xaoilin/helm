@@ -1,6 +1,8 @@
 import type { Page } from '@playwright/test';
 import { expect, openApp, test } from './support/helm-fixture';
 
+const LIFE_HERO_SETTINGS = { lifeHeroEnabled: true };
+
 function requestedViewports(): string[] {
   return (process.env.HELM_E2E_VISUAL_VIEWPORTS || '390x844,1440x900')
     .split(',')
@@ -55,7 +57,7 @@ async function installSpeechHarness(page: Page, outcome: 'played' | 'failed' = '
 test.describe('Life Hero dashboard companion', () => {
   test('completes the daily adventure on 390px mobile with keyboard controls', async ({ page, scenario }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await scenario();
+    await scenario({ settings: LIFE_HERO_SETTINGS });
     await openApp(page);
     const hero = page.getByRole('complementary', { name: 'Life Hero' });
     await hero.getByRole('button', { name: /Show Life Hero companion/ }).click();
@@ -75,7 +77,7 @@ test.describe('Life Hero dashboard companion', () => {
 
   test('shows the permanent progression model in an unobtrusive desktop companion', async ({ page, scenario }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await scenario();
+    await scenario({ settings: LIFE_HERO_SETTINGS });
     await openApp(page);
 
     const hero = page.getByRole('complementary', { name: 'Life Hero' });
@@ -98,7 +100,7 @@ test.describe('Life Hero dashboard companion', () => {
 
   test('uses a compact mobile disclosure after the primary dashboard content', async ({ page, scenario }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await scenario();
+    await scenario({ settings: LIFE_HERO_SETTINGS });
     await openApp(page);
 
     const showHero = page.getByRole('button', { name: /Show Life Hero companion, level 2/ });
@@ -122,7 +124,7 @@ test.describe('Life Hero dashboard companion', () => {
   test('honours reduced motion with a static equivalent and no movement controls', async ({ page, scenario }) => {
     await page.setViewportSize({ width: 1024, height: 900 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await scenario();
+    await scenario({ settings: LIFE_HERO_SETTINGS });
     await openApp(page);
 
     const hero = page.getByRole('complementary', { name: 'Life Hero' });
@@ -137,7 +139,7 @@ test.describe('Life Hero dashboard companion', () => {
   test('keeps motivational voice explicit, rate-limited, muteable, and text-complete', async ({ page, scenario }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await installSpeechHarness(page);
-    await scenario();
+    await scenario({ settings: LIFE_HERO_SETTINGS });
     await openApp(page);
 
     const hero = page.getByRole('complementary', { name: 'Life Hero' });
@@ -168,7 +170,7 @@ test.describe('Life Hero dashboard companion', () => {
   test('renders an actionable text fallback when browser speech fails', async ({ page, scenario }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installSpeechHarness(page, 'failed');
-    await scenario();
+    await scenario({ settings: LIFE_HERO_SETTINGS });
     await openApp(page);
 
     await page.getByRole('button', { name: /Show Life Hero companion/ }).click();
@@ -180,6 +182,7 @@ test.describe('Life Hero dashboard companion', () => {
   test('fails closed on an invalid snapshot without replacing Prayer', async ({ page, scenario }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await scenario({
+      settings: LIFE_HERO_SETTINGS,
       lifeHero: {
         snapshot: {
           rulesetVersion: 'life-hero-v1',
@@ -219,7 +222,7 @@ test('captures the actual maximum-quality dashboard avatar at desktop and mobile
     Object.defineProperty(navigator, 'deviceMemory', { configurable: true, value: 8 });
     Object.defineProperty(navigator, 'hardwareConcurrency', { configurable: true, value: 8 });
   });
-  await scenario();
+  await scenario({ settings: LIFE_HERO_SETTINGS });
 
   for (const viewport of requestedViewports()) {
     const [width, height] = viewport.split('x').map(Number);
