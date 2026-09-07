@@ -3,10 +3,10 @@ import {
   FunctionsHttpError,
   FunctionsRelayError,
 } from '@supabase/supabase-js';
-import { HOSTED_ASSISTANT_BILLING_FUNCTION, SUPABASE_ANON_KEY } from '../config';
+import { HOSTED_ASSISTANT_BILLING_FUNCTION } from '../config';
 import { API_TIMEOUT } from '../config/constants';
 import { getClient, isSupabaseReady } from '../store/supabase';
-import { canUseHostedAssistantProjectAccess } from './hostedAssistantAccess';
+import { getHostedAssistantAuthHeaders } from './hostedAssistantAccess';
 
 export interface HostedAssistantProjectCostBucket {
   startTime: number;
@@ -99,20 +99,9 @@ function getHostedAssistantClient() {
   return client;
 }
 
-function getHostedAssistantAuthHeaders(): Record<string, string> {
-  if (!canUseHostedAssistantProjectAccess()) {
-    throw new Error('Hosted AI project access is not configured in this build.');
-  }
-
-  return {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-  };
-}
-
 export async function fetchHostedAssistantProjectBilling(): Promise<HostedAssistantProjectBillingSummary> {
   const client = getHostedAssistantClient();
-  const headers = getHostedAssistantAuthHeaders();
+  const headers = await getHostedAssistantAuthHeaders(client);
   const { data, error } = await client.functions.invoke<HostedAssistantProjectBillingResponse>(HOSTED_ASSISTANT_BILLING_FUNCTION, {
     body: { action: 'summary' },
     headers,

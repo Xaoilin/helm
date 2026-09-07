@@ -1,4 +1,6 @@
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { authenticateAssistant } from '../_shared/assistantAuth.ts';
+import { ASSISTANT_DEPLOY_SHA } from '../_shared/assistantDeployment.ts';
 import {
   buildOpenAIResponsesPayload,
   isAssistantMessage,
@@ -97,6 +99,10 @@ Deno.serve(async (request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  if (request.method !== 'POST') return jsonResponse({ error: 'Use POST.' }, { status: 405 });
+  const identity = await authenticateAssistant(request, true);
+  if (identity instanceof Response) return identity;
+
   if (!OPENAI_API_KEY) {
     return jsonResponse(
       { error: 'OPENAI_API_KEY is not configured for the hosted assistant.' },
@@ -115,6 +121,11 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: 'Missing action.' }, { status: 400 });
   }
 
+  // Machine access can only evaluate planner turns, never chat narration or billing.
+  if (identity.kind === 'benchmark' && !['health', 'turn'].includes(body.action)) {
+    return jsonResponse({ error: 'Benchmark access only permits health and planner turns.' }, { status: 403 });
+  }
+
   const requestedModel = resolveRequestedModel('model' in body ? body.model : undefined);
   if (!requestedModel) {
     return jsonResponse({ error: 'Unsupported OpenAI model requested for the hosted assistant.' }, { status: 400 });
@@ -125,6 +136,7 @@ Deno.serve(async (request) => {
       ok: true,
       provider: 'openai',
       model: requestedModel,
+      deploymentSha: ASSISTANT_DEPLOY_SHA,
     });
   }
 

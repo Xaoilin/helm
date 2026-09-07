@@ -3,13 +3,15 @@ import {
   FunctionsHttpError,
   FunctionsRelayError,
 } from '@supabase/supabase-js';
-import { HOSTED_ASSISTANT_FUNCTION, SUPABASE_ANON_KEY } from '../config';
+import { HOSTED_ASSISTANT_FUNCTION } from '../config';
 import { API_TIMEOUT } from '../config/constants';
 import { getClient, isSupabaseReady } from '../store/supabase';
 import type { HostedAssistantUsageSnapshot } from './assistantBilling';
 import { CircuitOpenError } from './circuitBreaker';
 import {
-  canUseHostedAssistantProjectAccess,
+  getHostedAssistantAuthHeaders,
+  hasHostedAssistantSession,
+  HostedAssistantSignInRequiredError,
   type HostedAssistantAccessMode,
 } from './hostedAssistantAccess';
 import { logError } from './logger';
@@ -84,7 +86,7 @@ export interface HostedAssistantDiagnostics {
   circuitAllowingRequests: boolean;
   lastAccessMode: HostedAssistantAccessMode | null;
   lastModel: string | null;
-  projectAccessAvailable: boolean;
+  sessionAvailable: boolean;
   lastFailureSource: HostedAssistantFailureSource | null;
   lastFailureMessage: string | null;
   lastFailureAt: string | null;
@@ -190,26 +192,13 @@ function decorateCircuitOpenError(error: CircuitOpenError): Error {
   );
 }
 
-function getHostedAssistantAuthHeaders(): Record<string, string> {
-  if (!canUseHostedAssistantProjectAccess()) {
-    lastHostedAssistantAccessMode = 'none';
-    throw new Error('Hosted AI project access is not configured in this build.');
-  }
-
-  lastHostedAssistantAccessMode = 'project_key';
-  return {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-  };
-}
-
 export function getHostedAssistantDiagnostics(): HostedAssistantDiagnostics {
   const lastFailure = getLastHostedAssistantFailure();
   return {
     circuitAllowingRequests: hostedAssistantBreaker.isAvailable,
     lastAccessMode: lastHostedAssistantAccessMode,
     lastModel: lastHostedAssistantModel,
-    projectAccessAvailable: canUseHostedAssistantProjectAccess(),
+    sessionAvailable: hasHostedAssistantSession(),
     lastFailureSource: lastFailure?.source ?? null,
     lastFailureMessage: lastFailure?.message ?? null,
     lastFailureAt: lastFailure?.occurredAt ?? null,
@@ -229,9 +218,10 @@ async function invokeHostedAssistant<T>(
   body: Record<string, unknown>,
 ): Promise<T> {
   try {
+    const client = getHostedAssistantClient();
+    const headers = await getHostedAssistantAuthHeaders(client);
+    lastHostedAssistantAccessMode = 'user_session';
     return await hostedAssistantBreaker.call(async () => {
-      const client = getHostedAssistantClient();
-      const headers = getHostedAssistantAuthHeaders();
       const { data, error } = await client.functions.invoke<T>(HOSTED_ASSISTANT_FUNCTION, {
         body,
         headers,
@@ -239,6 +229,7 @@ async function invokeHostedAssistant<T>(
       });
 
       if (error) {
+        if (isHttpError(error) && error.context.status === 401) throw new HostedAssistantSignInRequiredError();
         const message = await extractFunctionErrorMessage(error);
         rememberHostedAssistantFailure(source, message);
         throw new Error(message);
@@ -254,6 +245,11 @@ async function invokeHostedAssistant<T>(
       return data;
     });
   } catch (error) {
+    if (error instanceof HostedAssistantSignInRequiredError) {
+      lastHostedAssistantAccessMode = 'none';
+      hostedAssistantBreaker.reset();
+      rememberHostedAssistantFailure(source, error.message);
+    }
     if (error instanceof CircuitOpenError) {
       throw decorateCircuitOpenError(error);
     }
@@ -268,10 +264,6 @@ export async function testHostedAssistantConnection(
     return { status: 'not_configured', message: 'Supabase is not configured.' };
   }
 
-  if (!canUseHostedAssistantProjectAccess()) {
-    return { status: 'not_configured', message: 'Hosted AI project access is not configured in this build.' };
-  }
-
   try {
     const data = await invokeHostedAssistant<HostedAssistantHealthResponse>('health', {
       action: 'health',
@@ -284,7 +276,7 @@ export async function testHostedAssistantConnection(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logError('HostedAssistant', error);
-    return { status: 'unavailable', message, accessMode: lastHostedAssistantAccessMode ?? 'none' };
+    return { status: error instanceof HostedAssistantSignInRequiredError ? 'sign_in_required' : 'unavailable', message, accessMode: lastHostedAssistantAccessMode ?? 'none' };
   }
 }
 
