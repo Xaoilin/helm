@@ -385,6 +385,13 @@ deno_version = 2
 [functions.github-life-hero]
 verify_jwt = false
 
+# The handler independently verifies user identity or a short-lived, SHA-scoped benchmark signature.
+[functions.assistant-openai]
+verify_jwt = false
+
+[functions.assistant-openai-billing]
+verify_jwt = true
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

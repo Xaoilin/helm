@@ -41,6 +41,8 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
         !startsWith(github.event.workflow_run.display_title, 'CI receipt source '))
     runs-on: ubuntu-latest
+    outputs:
+      deploy_sha: ${{ steps.identity.outputs.deploy_sha }}
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -48,6 +50,7 @@ jobs:
       HELM_DATABASE_BACKUP_SHA256: ${{ secrets.HELM_DATABASE_BACKUP_SHA256 }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_MODEL: gpt-5.4
+      ASSISTANT_BENCHMARK_SECRET: ${{ secrets.ASSISTANT_BENCHMARK_SECRET }}
       GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
       GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
       GOOGLE_OAUTH_ALLOWED_ORIGINS: ${{ secrets.GOOGLE_OAUTH_ALLOWED_ORIGINS }}
@@ -69,11 +72,11 @@ jobs:
           fi
           echo "should_deploy=true" >> "$GITHUB_OUTPUT"
           echo "deploy_database=true" >> "$GITHUB_OUTPUT"
-          if [ -n "$OPENAI_API_KEY" ]; then
-            echo "deploy_assistant=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "deploy_assistant=false" >> "$GITHUB_OUTPUT"
+          if [ -z "$OPENAI_API_KEY" ] || [ ${#ASSISTANT_BENCHMARK_SECRET} -lt 32 ]; then
+            echo "OPENAI_API_KEY and ASSISTANT_BENCHMARK_SECRET are required for hosted AI acceptance."
+            exit 1
           fi
+          echo "deploy_assistant=true" >> "$GITHUB_OUTPUT"
           if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ] && [ -n "$GOOGLE_OAUTH_CLIENT_SECRET" ]; then
             echo "deploy_google_calendar_oauth=true" >> "$GITHUB_OUTPUT"
           else
@@ -180,13 +183,20 @@ jobs:
             and .oauth_server_authorization_path == "/helm/oauth/consent"
           ' <<<"$oauth_config" >/dev/null
 
+      - id: identity
+        name: Stamp verified assistant build identity
+        run: node ./scripts/stamp-assistant-deployment.mjs
+
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_assistant == 'true' }}
         name: Sync assistant function secrets
-        run: npx supabase secrets set OPENAI_API_KEY="$OPENAI_API_KEY" OPENAI_MODEL="$OPENAI_MODEL" --project-ref "$SUPABASE_PROJECT_REF" --yes
+        run: npx supabase secrets set OPENAI_API_KEY="$OPENAI_API_KEY" OPENAI_MODEL="$OPENAI_MODEL" ASSISTANT_BENCHMARK_SECRET="$ASSISTANT_BENCHMARK_SECRET" --project-ref "$SUPABASE_PROJECT_REF" --yes
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_assistant == 'true' }}
         name: Deploy assistant-openai
-        run: npx supabase functions deploy assistant-openai --project-ref "$SUPABASE_PROJECT_REF" --use-api --yes
+        run: npx supabase functions deploy assistant-openai --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
+
+      - name: Deploy authenticated operator billing boundary
+        run: npx supabase functions deploy assistant-openai-billing --project-ref "$SUPABASE_PROJECT_REF" --use-api --yes
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_google_calendar_oauth == 'true' }}
         name: Sync Google Calendar OAuth function secrets
@@ -221,3 +231,10 @@ jobs:
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_github_life_hero == 'true' }}
         name: Deploy github-life-hero
         run: npx supabase functions deploy github-life-hero --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
+
+  benchmark:
+    needs: deploy
+    uses: ./.github/workflows/post-deploy-assistant-benchmark.yml
+    with:
+      deploy_sha: ${{ needs.deploy.outputs.deploy_sha }}
+    secrets: inherit

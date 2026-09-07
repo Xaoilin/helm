@@ -41,7 +41,7 @@ import {
   testHostedAssistantConnection,
   type HostedAssistantConnectionStatus,
 } from '../../services/hostedAssistantApi';
-import { formatHostedAssistantAccessMode, isLocalhostRuntime } from '../../services/hostedAssistantAccess';
+import { formatHostedAssistantAccessMode } from '../../services/hostedAssistantAccess';
 import { listOllamaModels, testOllamaConnection } from '../../services/ollamaApi';
 import { ollamaBreaker } from '../../services/serviceBreakers';
 import {
@@ -145,7 +145,6 @@ export default function AiDebug() {
   const hostedDiagnostics = getHostedAssistantDiagnostics();
   const hostedAccessMode = formatHostedAssistantAccessMode(hostedDiagnostics.lastAccessMode);
   const hostedModelLabel = hostedDiagnostics.lastModel || selectedHostedModel;
-  const localhostRuntime = isLocalhostRuntime();
 
   const refreshRuntime = useCallback(async () => {
     setRefreshingRuntime(true);
@@ -416,14 +415,10 @@ export default function AiDebug() {
           headline={supabaseReady
             ? authenticated
               ? 'Supabase ready and signed in'
-              : hostedDiagnostics.projectAccessAvailable
-                ? 'Supabase ready with hosted project access'
-                : 'Supabase ready but hosted project access is missing'
+              : 'Sign in to use hosted AI'
             : 'Supabase not configured'}
           detail={supabaseReady
-            ? hostedDiagnostics.projectAccessAvailable
-              ? `Hosted ${hostedModelLabel} can use the configured project access in this build${localhostRuntime ? ' on localhost' : ''}. Supabase sign-in remains for sync and user data.`
-              : 'This build can reach Supabase, but the hosted AI project access key is missing.'
+            ? `Hosted ${hostedModelLabel} requires a current signed-in session, verified by the server.`
             : 'This build does not have Supabase configuration available, so hosted AI cannot run.'}
           checkedAt={runtimeCheckedAt}
         >
@@ -434,7 +429,7 @@ export default function AiDebug() {
           <DataRow label="Provider" value={sessionSnapshot?.provider || 'none'} />
           <DataRow label="Session expires" value={formatExpiry(sessionSnapshot?.expiresAt)} />
           <DataRow label="Access token present" value={formatBoolean(Boolean(sessionSnapshot?.accessTokenPresent))} />
-          <DataRow label="Project access available" value={formatBoolean(hostedDiagnostics.projectAccessAvailable)} />
+          <DataRow label="Session available" value={formatBoolean(hostedDiagnostics.sessionAvailable)} />
           <DataRow label="Provider token present" value={formatBoolean(Boolean(sessionSnapshot?.providerToken))} />
           <DataRow label="Refresh token present" value={formatBoolean(Boolean(sessionSnapshot?.providerRefreshToken))} />
         </StatusCard>
@@ -990,8 +985,8 @@ function mapHostedStatus(status: HostedAssistantConnectionStatus, checkedAt: str
       return {
         state: 'success',
         headline: 'Hosted assistant reachable',
-        detail: status.accessMode === 'project_key'
-          ? 'The Supabase Edge Function responded successfully using the configured project access key.'
+        detail: status.accessMode === 'user_session'
+          ? 'The Supabase Edge Function responded successfully using your signed-in session.'
           : 'The Supabase Edge Function responded successfully.',
         checkedAt,
       };
@@ -1198,7 +1193,7 @@ function buildSnapshotText(
     `Provider: ${sessionSnapshot?.provider || 'none'}`,
     `Session expires: ${formatExpiry(sessionSnapshot?.expiresAt)}`,
     `Access token present: ${formatBoolean(Boolean(sessionSnapshot?.accessTokenPresent))}`,
-    `Project access available: ${formatBoolean(hostedDiagnostics.projectAccessAvailable)}`,
+    `Session available: ${formatBoolean(hostedDiagnostics.sessionAvailable)}`,
     '',
     '[Hosted Assistant]',
     `Function: ${HOSTED_ASSISTANT_FUNCTION}`,

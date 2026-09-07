@@ -1,7 +1,6 @@
 import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import type { AssistantProvider, Settings } from '../types/domain';
 import { testHostedAssistantConnection } from './hostedAssistantApi';
-import { formatHostedAssistantAccessMode, isLocalhostRuntime } from './hostedAssistantAccess';
 import { getHostedAssistantModelLabel, getHostedAssistantModelSetting } from './assistantModels';
 import { testOllamaConnection } from './ollamaApi';
 
@@ -64,14 +63,7 @@ async function getHostedStatus(settings: Pick<Settings, 'hostedModel'>): Promise
   const status = await testHostedAssistantConnection({ model: hostedModel });
   switch (status.status) {
     case 'available':
-      return status.accessMode === 'project_key'
-        ? {
-            activeProvider: 'hosted',
-            state: 'ready',
-            headline: 'Hosted AI ready',
-            detail: `Intent planning is powered by OpenAI ${getHostedAssistantModelLabel(status.model || hostedModel)} through Sabah One's hosted assistant using the configured ${formatHostedAssistantAccessMode(status.accessMode)}${isLocalhostRuntime() ? ' on localhost.' : '.'}`,
-          }
-        : getHostedReadyStatus(getHostedAssistantModelLabel(status.model || hostedModel));
+      return getHostedReadyStatus(getHostedAssistantModelLabel(status.model || hostedModel));
     case 'sign_in_required':
       return getHostedSignInRequiredStatus(hostedModelLabel);
     case 'not_configured':

@@ -19,7 +19,6 @@ import {
   getHostedAssistantModelOption,
   getHostedAssistantModelSetting,
 } from '../services/assistantModels';
-import { canUseHostedAssistantProjectAccess, isLocalhostRuntime } from '../services/hostedAssistantAccess';
 import { testOllamaConnection, listOllamaModels } from '../services/ollamaApi';
 import { APP_RELEASE_VERSION } from '../config/release';
 import {
@@ -66,8 +65,6 @@ export default function SettingsSurface() {
   const selectedHostedModel = getHostedAssistantModelSetting(settings);
   const selectedHostedModelOption = getHostedAssistantModelOption(selectedHostedModel);
   const authSyncKey = `${isSupabaseReady()}:${isAuthenticated()}:${getCurrentUserId() || ''}`;
-  const hostedProjectAccessAvailable = canUseHostedAssistantProjectAccess();
-  const localhostRuntime = isLocalhostRuntime();
 
   // Microphone devices
   const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
@@ -668,9 +665,7 @@ export default function SettingsSurface() {
               <option value="ollama">Local AI (Ollama only)</option>
             </select>
             <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
-              {hostedProjectAccessAvailable
-                ? `Hosted AI uses the Supabase Edge Function, this build's configured project access key, and the selected ${getHostedAssistantModelLabel(selectedHostedModel)} model${localhostRuntime ? ' on localhost' : ''}. Supabase sign-in is still used for sync; browser builds still cannot start Ollama for you.`
-                : 'Hosted AI needs Supabase project access in this build. Browser builds still cannot start Ollama for you.'}
+              Hosted AI uses your signed-in Sabah One session and the selected {getHostedAssistantModelLabel(selectedHostedModel)} model. Sign in again if your session expires. Browser builds cannot start Ollama for you.
             </div>
             <div className="form-group" style={{ marginTop: 12, marginBottom: 0 }}>
               <label htmlFor="settings-hosted-model">Hosted OpenAI model</label>

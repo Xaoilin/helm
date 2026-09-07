@@ -3,6 +3,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import { benchmarkAuthorization } from './lib/assistantBenchmarkAuth';
 import { ASSISTANT_BENCHMARK } from '../src/config/constants';
 import { HOSTED_ASSISTANT_MODEL, OLLAMA_ENDPOINT } from '../src/config';
 import {
@@ -21,6 +22,7 @@ interface HostedAssistantHealthResponse {
   ok: boolean;
   provider: 'openai';
   model: string;
+  deploymentSha: string;
 }
 
 interface HostedAssistantTurnResponse {
@@ -169,7 +171,12 @@ function getHostedConfig(modelOverride?: string) {
     throw new Error('Hosted benchmark requires VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
   }
 
+  const deploymentSha = process.env.ASSISTANT_DEPLOY_SHA || '';
+  const authorization = benchmarkAuthorization(process.env.ASSISTANT_BENCHMARK_SECRET || '', deploymentSha);
+
   return {
+    deploymentSha,
+    authorization,
     url: `${url.replace(/\/+$/u, '')}/functions/v1/${functionName}`,
     anonKey,
     model,
@@ -182,10 +189,10 @@ async function fetchHostedHealth(modelOverride?: string): Promise<string> {
     method: 'POST',
     headers: {
       apikey: config.anonKey,
-      Authorization: `Bearer ${config.anonKey}`,
+      Authorization: config.authorization,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ action: 'health' }),
+    body: JSON.stringify({ action: 'health', model: config.model }),
   });
 
   if (!response.ok) {
@@ -194,6 +201,9 @@ async function fetchHostedHealth(modelOverride?: string): Promise<string> {
   }
 
   const data = await response.json() as HostedAssistantHealthResponse;
+  if (data.deploymentSha !== config.deploymentSha) {
+    throw new Error('Hosted benchmark deployment SHA does not match the verified candidate.');
+  }
   if (!data.ok || !data.model) {
     throw new Error('Hosted benchmark health check returned no model.');
   }
@@ -216,11 +226,12 @@ async function callHostedPlanner(
     method: 'POST',
     headers: {
       apikey: config.anonKey,
-      Authorization: `Bearer ${config.anonKey}`,
+      Authorization: config.authorization,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       action: 'turn',
+      model: config.model,
       messages: request.messages,
       format: request.format,
       tools: request.tools,
@@ -364,7 +375,12 @@ async function main(): Promise<void> {
   });
 
   const outputPath = await ensureOutputPath(args.output);
-  await fs.writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+  await fs.writeFile(outputPath, `${JSON.stringify({ ...report, acceptance: {
+    deploymentSha: args.provider === 'hosted' ? process.env.ASSISTANT_DEPLOY_SHA : null,
+    authentication: args.provider === 'hosted' ? 'sha-scoped-benchmark' : 'local',
+    enforced: args.enforce,
+    thresholdFailures: getAssistantBenchmarkThresholdFailures(report.summary),
+  } }, null, 2)}\n`, 'utf8');
 
   const thresholdFailures = getAssistantBenchmarkThresholdFailures(report.summary);
   const failedCases = report.results.filter(result => !result.passed);

@@ -1,50 +1,73 @@
 name: Post-Deploy Assistant Benchmark
 
 on:
-  workflow_run:
-    workflows: ["Deploy Supabase Assistant Function"]
-    types: [completed]
-    branches: [master]
+  workflow_call:
+    inputs:
+      deploy_sha:
+        description: Exact protected commit deployed by the calling workflow
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   benchmark:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      ASSISTANT_BENCHMARK_SECRET: ${{ secrets.ASSISTANT_BENCHMARK_SECRET }}
+      ASSISTANT_DEPLOY_SHA: ${{ inputs.deploy_sha }}
     steps:
-      - id: preflight
-        name: Check benchmark secrets
+      - name: Require benchmark identity and immutable candidate
         run: |
-          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping assistant benchmark because VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing."
-          else
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ] || [ ${#ASSISTANT_BENCHMARK_SECRET} -lt 32 ]; then
+            echo "Hosted benchmark credentials are missing; deployment is not accepted."
+            exit 1
           fi
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          if ! [[ "$ASSISTANT_DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "An exact deployed SHA is required."
+            exit 1
+          fi
 
-      - if: ${{ steps.preflight.outputs.should_run == 'true' }}
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.deploy_sha }}
 
-      - if: ${{ steps.preflight.outputs.should_run == 'true' }}
-        uses: actions/setup-node@v5
+      - name: Verify benchmark source identity
+        run: test "$(git rev-parse HEAD)" = "$ASSISTANT_DEPLOY_SHA"
+
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
 
-      - if: ${{ steps.preflight.outputs.should_run == 'true' }}
-        run: npm ci
+      - run: npm ci
 
-      - if: ${{ steps.preflight.outputs.should_run == 'true' }}
-        name: Run hosted assistant benchmark gate
+      - name: Prove live user and public access boundaries
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: npx tsx scripts/verify-hosted-assistant-access.ts
+
+      - name: Run hosted assistant benchmark gate
+        env:
           VITE_HOSTED_ASSISTANT_FUNCTION: assistant-openai
           VITE_HOSTED_ASSISTANT_MODEL: gpt-5.4
         run: npm run benchmark:assistant -- --provider hosted --enforce --output test-results/assistant-benchmark-post-deploy.json
+
+      - name: Retain enforced result, including failed thresholds
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: assistant-benchmark-${{ inputs.deploy_sha }}
+          path: |
+            test-results/assistant-benchmark-post-deploy.json
+            test-results/assistant-access-post-deploy.json
+          if-no-files-found: warn
+          retention-days: 14

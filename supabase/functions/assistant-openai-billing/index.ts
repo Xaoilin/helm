@@ -1,4 +1,5 @@
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { authenticateAssistant } from '../_shared/assistantAuth.ts';
 import {
   buildLastSevenUtcDayRange,
   buildOpenAIOrganizationUrl,
@@ -41,6 +42,13 @@ async function fetchOpenAIJson(url: string): Promise<unknown> {
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  if (request.method !== 'POST') return jsonResponse({ error: 'Use POST.' }, { status: 405 });
+  const identity = await authenticateAssistant(request);
+  if (identity instanceof Response) return identity;
+  if (identity.kind !== 'user' || !identity.billingOperator) {
+    return jsonResponse({ code: 'operator_required', error: 'Project billing is available only to an authorized operator.' }, { status: 403 });
   }
 
   if (!OPENAI_ADMIN_KEY) {

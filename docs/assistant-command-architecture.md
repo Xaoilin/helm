@@ -93,7 +93,7 @@ When a user corrects Lina, account-backed assistant memory may store the phrasin
 
 Debug renders the capability registry and the latest trace: transcript, effective transcript, planning bundle, model response, turn type, validator verdict, pending confirmation, execution facts, narration, and typed navigation payloads. Secret values and tokens are excluded.
 
-The benchmark corpus contains representative utterances, dialog seeds, grounded-ID expectations, destructive cases, and unsupported-action no-approximation cases. The hosted benchmark is enforced before Pages exposure with thresholds of 100% destructive coverage, 100% unsupported no-approximation coverage, and 98% overall pass rate.
+The benchmark corpus contains representative utterances, dialog seeds, grounded-ID expectations, destructive cases, and unsupported-action no-approximation cases. The hosted benchmark is a required job in the Supabase deployment workflow, after function deployment, with thresholds of 100% destructive coverage, 100% unsupported no-approximation coverage, and 98% overall pass rate.
 
 ## Life Hero output boundary
 
@@ -135,3 +135,15 @@ The same rule applies to external agents: use a published Sabah One MCP capabili
 - account-backed audit entries for assistant mutations;
 - truthful in-app fallback when hosted planning is unavailable;
 - benchmark-driven iteration and claim-matched evidence.
+
+## Hosted authentication and acceptance
+
+Browser health, chat, voice planner turns and billing send the current Supabase session JWT in `Authorization`, with the public application key only in `apikey`. Each handler independently verifies identity through Supabase Auth before OpenAI work. Missing, invalid, expired and anonymous sessions fail closed; diagnostics ask for sign-in and retain sanitized Auth failure categories. Chat and voice keep the existing shared executor and confirmation rules.
+
+Project-wide billing additionally requires `assistant_billing_operator: true` in current server-owned Auth `app_metadata`. User-editable metadata does not grant access. No account receives that role by default; billing remains unavailable until an operator is explicitly configured. This change adds no application-record interface or alternative mutation path.
+
+The protected function build stamps its verified Git SHA into `assistantDeployment.ts`. The benchmark signs a fresh HMAC grant for every request using the server-only `ASSISTANT_BENCHMARK_SECRET`; a grant expires within five minutes, is bound to that compiled SHA, and permits only health and planner turns. It cannot call narration or billing. `assistant-openai` uses handler authentication with gateway JWT verification disabled for this machine route; billing retains the gateway and independently checks the user and operator role. Neither route treats a public key as identity. Rotate the benchmark secret in GitHub Actions and redeploy through the protected workflow; absent credentials keep acceptance closed.
+
+The deployment calls the benchmark as a required reusable workflow with the exact deployed SHA. Source checkout, health identity, every signed planner request, and the retained enforced report identify that SHA. Missing credentials, mismatched SHA, failed live access checks, or failed thresholds fail deployment acceptance. Both passing and failing result files are uploaded. Pages publication and complete hosted acceptance are distinct; a failed benchmark must never be called an accepted release.
+
+Live acceptance also creates a temporary synthetic Auth identity, verifies user health/chat/voice turns and non-operator billing denial, revokes its session and deletes only that identity. It never reads application records or reuses a person's tokens. The report retains scenario/status results and cleanup confirmation without credentials or identity data.
