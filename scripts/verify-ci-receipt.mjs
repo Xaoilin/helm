@@ -2,20 +2,27 @@ import { execFileSync } from 'node:child_process'
 import {
   appendFileSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
 import {
   createTreeRecord,
   deployRunTitle,
   evaluateCiReceipt,
+  evaluateDeploymentSource,
+  evaluateLatestSourceRun,
   evaluateMergedTree,
   evaluatePreMergeTree,
   evaluateTreeRecord,
   findReusableWorkflowDispatch,
+  findLatestWorkflowRun,
   receiptRunTitle,
+  resolveDeploymentInputs,
   waitForSourceRun,
 } from './lib/ciReceipt.mjs'
 
@@ -94,6 +101,19 @@ async function loadSourceRun(repository, sourceRunId) {
 
 async function loadPullRequest(repository, sourcePr) {
   return githubRequest(`/repos/${repository}/pulls/${sourcePr}`)
+}
+
+async function loadLatestSourceRun(repository, sourceRun) {
+  const runs = []
+  for (let page = 1; ; page += 1) {
+    const response = await githubRequest(
+      `/repos/${repository}/actions/workflows/ci.yml/runs?per_page=100&page=${page}`
+      + `&event=${encodeURIComponent(sourceRun.event)}&head_sha=${encodeURIComponent(sourceRun.head_sha)}`,
+    )
+    runs.push(...response.workflow_runs)
+    if (response.workflow_runs.length < 100 || runs.length >= response.total_count) break
+  }
+  return findLatestWorkflowRun(runs)
 }
 
 async function loadWorkflowDispatchRuns(repository, workflowFile) {
@@ -265,6 +285,12 @@ async function verifyPreMergeTree() {
   const inputs = receiptInputs()
   const record = readRecord()
   if (!report(evaluateTreeRecord(record, inputs))) return
+  const sourceRun = await loadSourceRun(inputs.repository, inputs.sourceRunId)
+  const latestSourceRun = await loadLatestSourceRun(inputs.repository, sourceRun)
+  if (!report(evaluateLatestSourceRun(sourceRun, latestSourceRun))) return
+  if (sourceRun.run_attempt !== record.sourceRunAttempt) {
+    throw new Error('Source CI run attempt changed before merge.')
+  }
 
   git([
     'fetch',
@@ -290,9 +316,7 @@ async function verifyPreMergeTree() {
   console.log(`Verified tested merge-tree is still based on master ${currentMasterSha}.`)
 }
 
-async function verifyReceipt() {
-  const inputs = receiptInputs()
-  const record = readRecord()
+async function verifyReceipt(inputs = receiptInputs(), record = readRecord()) {
   git([
     'fetch',
     '--no-tags',
@@ -304,6 +328,7 @@ async function verifyReceipt() {
     loadPullRequest(inputs.repository, inputs.sourcePr),
     loadSourceJobs(inputs.repository, inputs.sourceRunId),
   ])
+  const latestSourceRun = await loadLatestSourceRun(inputs.repository, sourceRun)
   const currentSha = git(['rev-parse', 'HEAD'])
   const currentTree = git(['rev-parse', 'HEAD^{tree}'])
   const liveMasterSha = git(['rev-parse', 'refs/remotes/origin/master'])
@@ -314,6 +339,7 @@ async function verifyReceipt() {
     jobs: sourceJobs,
     liveMasterSha,
     liveMasterTree,
+    latestSourceRun,
     pullRequest,
     record,
     repository: inputs.repository,
@@ -328,6 +354,48 @@ async function verifyReceipt() {
   console.log(
     `Verified source CI ${inputs.sourceRunId}, PR #${inputs.sourcePr}, and master tree ${currentTree}.`,
   )
+}
+
+async function verifyDeployment() {
+  const repository = requiredEnvironment('GITHUB_REPOSITORY')
+  const inputs = resolveDeploymentInputs({
+    event: JSON.parse(readFileSync(requiredEnvironment('GITHUB_EVENT_PATH'), 'utf8')),
+    eventName: requiredEnvironment('GITHUB_EVENT_NAME'),
+    ref: requiredEnvironment('GITHUB_REF'),
+  })
+  let sourceRun = await loadSourceRun(repository, inputs.sourceRunId)
+  const [latestSourceRun, jobs] = await Promise.all([
+    loadLatestSourceRun(repository, sourceRun),
+    loadSourceJobs(repository, inputs.sourceRunId),
+  ])
+  if (!report(evaluateDeploymentSource({
+    currentSha: git(['rev-parse', 'HEAD']), inputs, jobs, latestSourceRun, repository, sourceRun,
+  }))) return
+
+  // A completed master CI trigger still needs the protected PR's tested-tree
+  // receipt. Never manufacture a receipt from the deployment checkout.
+  if (inputs.eventName === 'workflow_run') {
+    const pullRequests = await githubRequest(`/repos/${repository}/commits/${inputs.deploySha}/pulls`)
+    const matching = pullRequests.filter(pr => pr.merged_at && pr.merge_commit_sha === inputs.deploySha && pr.base.ref === 'master')
+    if (matching.length !== 1) throw new Error('Deployment requires exactly one matching merged pull request.')
+    sourceRun = await loadLatestSourceRun(repository, { event: 'pull_request', head_sha: matching[0].head.sha })
+    if (!sourceRun) throw new Error('Deployment has no matching pull request CI run.')
+  }
+
+  const artifactDir = mkdtempSync(resolve(tmpdir(), 'helm-deployment-receipt-'))
+  try {
+    execFileSync('gh', ['run', 'download', String(sourceRun.id), '--repo', repository,
+      '--name', 'ci-tested-tree', '--dir', artifactDir], { stdio: 'pipe' })
+    const record = JSON.parse(readFileSync(resolve(artifactDir, 'source-tree.json'), 'utf8'))
+    await verifyReceipt({
+      repository,
+      sourcePr: record.sourcePr,
+      sourceRunId: sourceRun.id,
+      testedTree: record.testedTree,
+    }, record)
+  } finally {
+    rmSync(artifactDir, { recursive: true, force: true })
+  }
 }
 
 async function dispatchReceipt() {
@@ -393,6 +461,8 @@ try {
     await verifyMergedTree()
   } else if (command === 'verify') {
     await verifyReceipt()
+  } else if (command === 'deployment') {
+    await verifyDeployment()
   } else if (command === 'dispatch-receipt') {
     await dispatchReceipt()
   } else if (command === 'dispatch-deploys') {
@@ -400,7 +470,7 @@ try {
   } else {
     throw new Error(
       'Usage: node scripts/verify-ci-receipt.mjs '
-      + '<record|wait|merge-state|pre-merge|merged-tree|verify|dispatch-receipt|dispatch-deploys>',
+      + '<record|wait|merge-state|pre-merge|merged-tree|verify|deployment|dispatch-receipt|dispatch-deploys>',
     )
   }
 } catch (error) {

@@ -39,6 +39,20 @@ function runJson(command, args) {
   return JSON.parse(run(command, args))
 }
 
+function loadRunsForHead(repository, workflow, headSha) {
+  const pages = runJson('gh', [
+    'api', `repos/${repository}/actions/workflows/${workflow}/runs?branch=master&head_sha=${headSha}&per_page=100`,
+    '--paginate', '--slurp',
+  ])
+  return pages.flatMap(page => page.workflow_runs).map(run => ({
+    ...run,
+    databaseId: run.id,
+    headSha: run.head_sha,
+    startedAt: run.run_started_at,
+    url: run.html_url,
+  }))
+}
+
 async function fetchText(url) {
   const response = await fetch(url)
   if (!response.ok) {
@@ -78,44 +92,10 @@ async function main() {
     run('git', ['branch', '-r', '--format=%(refname:short)', '--merged', 'origin/master']),
   ).filter((branch) => branch.startsWith('origin/codex/'))
 
-  const ciRuns = runJson('gh', [
-    'run',
-    'list',
-    '--branch',
-    'master',
-    '--workflow',
-    'CI',
-    '--limit',
-    '10',
-    '--json',
-    'databaseId,name,headSha,headBranch,status,conclusion,url,event',
-  ])
-
-  const pagesRuns = runJson('gh', [
-    'run',
-    'list',
-    '--branch',
-    'master',
-    '--workflow',
-    'Deploy to GitHub Pages',
-    '--limit',
-    '10',
-    '--json',
-    'databaseId,name,headSha,headBranch,status,conclusion,url,event',
-  ])
-
-  const supabaseRuns = runJson('gh', [
-    'run',
-    'list',
-    '--branch',
-    'master',
-    '--workflow',
-    'Deploy Supabase Assistant Function',
-    '--limit',
-    '10',
-    '--json',
-    'databaseId,name,headSha,headBranch,status,conclusion,url,event',
-  ])
+  const repository = `${remote.owner}/${remote.repo}`
+  const ciRuns = loadRunsForHead(repository, 'ci.yml', masterHead)
+  const pagesRuns = loadRunsForHead(repository, 'deploy.yml', masterHead)
+  const supabaseRuns = loadRunsForHead(repository, 'deploy-supabase-assistant.yml', masterHead)
 
   const ciRun = findSuccessfulRunForHead(ciRuns, masterHead)
   const pagesRun = findSuccessfulRunForHead(pagesRuns, masterHead)

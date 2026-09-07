@@ -79,9 +79,8 @@ export function isIgnoredWorkingTreePath(path) {
 }
 
 export function findSuccessfulRunForHead(runs, headSha) {
-  return runs.find(
-    (run) => run.headSha === headSha && run.status === 'completed' && run.conclusion === 'success',
-  ) ?? null
+  const latest = findLatestWorkflowRun(runs.filter(run => run.headSha === headSha))
+  return latest?.status === 'completed' && latest.conclusion === 'success' ? latest : null
 }
 
 export function evaluateHandoffVerification(state) {
@@ -148,3 +147,4 @@ export function evaluateHandoffVerification(state) {
     ok: failures.length === 0,
   }
 }
+import { findLatestWorkflowRun } from './ciReceipt.mjs'

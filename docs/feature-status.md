@@ -4,7 +4,7 @@ Use this matrix when updating documentation or UI copy. `real` means the hosted 
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Hosted GitHub Pages website | `real` | The browser website is the only supported Sabah One product runtime. |
+| Hosted GitHub Pages website | `real` | The browser website is the only supported Sabah One product runtime. Protected promotion, Pages and Supabase deployment, and handoff verification require the current candidate's tested tree and latest successful evidence; missing or stale receipts fail closed. |
 | Supabase account persistence | `real` | Authenticated RLS reads, semantic mutations, idempotent receipts, tombstones, explicit ordering, private account Broadcast, and version-gap recovery make Supabase authoritative. Signed-out, expired, or offline sessions fail closed; there is no durable offline mutation queue or conflict chooser. |
 | Encrypted Secrets vault | `real` | The signed-in Secrets surface stores searchable account metadata and encrypted values through Supabase Vault RPCs. Values are masked, revealed one at a time, cleared from browser UI state when hidden or the session changes, and excluded from records, Broadcast, logs, exports, and assistant context. Archive and Restore are reversible; bulk export, sharing, autofill, permanent deletion, and assistant access are absent. |
 | Google Calendar OAuth | `real` | Multi-account Calendar uses hosted authorization-code exchange and server-held refresh credentials. Reconnect is explicit and account-scoped. |

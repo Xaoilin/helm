@@ -57,7 +57,8 @@ async function installSpeechHarness(page: Page, outcome: 'played' | 'failed' = '
 test.describe('Life Hero dashboard companion', () => {
   test('completes the daily adventure on 390px mobile with keyboard controls', async ({ page, scenario }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await scenario({ settings: LIFE_HERO_SETTINGS });
+    // Encounter health varies by date; keep this two-strike keyboard fixture stable.
+    await scenario({ settings: LIFE_HERO_SETTINGS, now: '2026-09-03T12:00:00Z' });
     await openApp(page);
     const hero = page.getByRole('complementary', { name: 'Life Hero' });
     await hero.getByRole('button', { name: /Show Life Hero companion/ }).click();

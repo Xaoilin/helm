@@ -10,11 +10,11 @@ on:
     inputs:
       deploy_sha:
         description: Immutable verified commit to deploy
-        required: false
+        required: true
         type: string
       source_run_id:
         description: Source CI run for idempotent receipt dispatch
-        required: false
+        required: true
         type: string
   workflow_run:
     workflows: ["CI"]
@@ -25,7 +25,9 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 permissions:
+  actions: read
   contents: read
+  pull-requests: read
   pages: write
   id-token: write
 
@@ -47,11 +49,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.deploy_sha || github.event.workflow_run.head_sha || 'master' }}
+          ref: master
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
+      - name: Verify deployment candidate before build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node ./scripts/verify-ci-receipt.mjs deployment
       - run: npm ci
       - name: Wait for authoritative database cutover
         timeout-minutes: 12
@@ -81,5 +88,16 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: master
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Revalidate candidate immediately before Pages deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node ./scripts/verify-ci-receipt.mjs deployment
       - id: deployment
         uses: actions/deploy-pages@v4
