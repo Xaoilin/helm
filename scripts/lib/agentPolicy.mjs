@@ -470,7 +470,8 @@ export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
     "!startsWith(github.event.workflow_run.display_title, 'CI receipt source ')",
     'deploy_sha:',
     'source_run_id:',
-    "ref: ${{ inputs.deploy_sha || github.event.workflow_run.head_sha || 'master' }}",
+    'ref: master',
+    'node ./scripts/verify-ci-receipt.mjs deployment',
     'cancel-in-progress: false',
     'queue: max',
   ]
@@ -481,6 +482,23 @@ export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
   }
   if (requiredPinnedDispatchSnippets.every(snippet => rawWorkflow.includes(snippet))) {
     passes.push(`${workflowName} pins verified deploys and serializes dispatches safely.`)
+  }
+
+  for (const input of ['deploy_sha', 'source_run_id']) {
+    if (!new RegExp(`${input}:\\n\\s+description:[^\\n]+\\n\\s+required: true`, 'u').test(rawWorkflow)) {
+      failures.push(`${workflowName} must require ${input} for manual deployment.`)
+    }
+  }
+  const verifyCommand = 'node ./scripts/verify-ci-receipt.mjs deployment'
+  const verifyIndex = rawWorkflow.indexOf(verifyCommand)
+  if (verifyIndex < 0 || verifyIndex > rawWorkflow.indexOf('run: npm ci')) {
+    failures.push(`${workflowName} must verify the receipt before installing or deploying candidate code.`)
+  }
+  if (workflowName === 'Deploy to GitHub Pages') {
+    const deployJob = rawWorkflow.slice(rawWorkflow.indexOf('\n  deploy:'))
+    if (deployJob.indexOf(verifyCommand) < 0 || deployJob.indexOf(verifyCommand) > deployJob.indexOf('uses: actions/deploy-pages')) {
+      failures.push('Pages must revalidate the receipt immediately before publication.')
+    }
   }
 
   return {

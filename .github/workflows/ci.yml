@@ -442,6 +442,7 @@ jobs:
       - name: Revalidate tested tree immediately before merge
         if: steps.merge_state.outputs.already_merged != 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           SOURCE_PR: ${{ github.event.pull_request.number }}
           SOURCE_RUN_ID: ${{ github.run_id }}
           TESTED_TREE: ${{ steps.record.outputs.tested_tree }}

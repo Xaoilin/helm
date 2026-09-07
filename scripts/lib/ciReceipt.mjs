@@ -30,15 +30,57 @@ export function deployRunTitle(kind, sourceRunId, deploySha) {
 }
 
 export function findReusableWorkflowDispatch(workflowRuns, expectedTitle) {
-  return workflowRuns
-    .filter(run => (
-      run?.display_title === expectedTitle
-      && (
-        run.status !== 'completed'
-        || run.conclusion === 'success'
-      )
-    ))
-    .sort((left, right) => Number(right.id ?? 0) - Number(left.id ?? 0))[0] ?? null
+  const latest = findLatestWorkflowRun(workflowRuns.filter(run => run?.display_title === expectedTitle))
+  return latest && (latest.status !== 'completed' || latest.conclusion === 'success') ? latest : null
+}
+
+export function findLatestWorkflowRun(runs) {
+  const started = run => Date.parse(run.run_started_at ?? run.startedAt ?? run.created_at ?? '') || 0
+  return [...runs].sort((left, right) => (
+    started(right) - started(left)
+    || Number(right.id ?? right.databaseId ?? 0) - Number(left.id ?? left.databaseId ?? 0)
+    || Number(right.run_attempt ?? 0) - Number(left.run_attempt ?? 0)
+  ))[0] ?? null
+}
+
+export function resolveDeploymentInputs({ event, eventName, ref }) {
+  if (ref !== 'refs/heads/master') throw new Error('Deployment must run from protected master.')
+  if (!['workflow_dispatch', 'workflow_run'].includes(eventName)) {
+    throw new Error('Unsupported deployment event.')
+  }
+  const deploySha = eventName === 'workflow_dispatch' ? event.inputs?.deploy_sha : event.workflow_run?.head_sha
+  const sourceRunId = Number(eventName === 'workflow_dispatch' ? event.inputs?.source_run_id : event.workflow_run?.id)
+  if (!isSha(deploySha)) throw new Error('Deployment requires a full deploy_sha.')
+  if (!Number.isSafeInteger(sourceRunId) || sourceRunId <= 0) {
+    throw new Error('Deployment requires a positive source_run_id.')
+  }
+  return { deploySha, eventName, sourceRunId }
+}
+
+export function evaluateLatestSourceRun(sourceRun, latestSourceRun) {
+  const ok = Boolean(sourceRun && latestSourceRun
+    && Number.isSafeInteger(sourceRun.id) && sourceRun.id > 0
+    && Number.isSafeInteger(sourceRun.run_attempt) && sourceRun.run_attempt > 0
+    && sourceRun.id === latestSourceRun.id
+    && sourceRun.run_attempt === latestSourceRun.run_attempt)
+  return { ok, failures: ok ? [] : ['Source CI is not the latest matching workflow attempt.'] }
+}
+
+export function evaluateDeploymentSource({ inputs, currentSha, repository, sourceRun, latestSourceRun, jobs }) {
+  const failures = [...evaluateLatestSourceRun(sourceRun, latestSourceRun).failures]
+  addFailure(failures, currentSha === inputs.deploySha, 'Deployment checkout does not match deploy_sha.')
+  addFailure(failures, sourceRun?.id === inputs.sourceRunId, 'Deployment source run ID does not match.')
+  addFailure(failures, sourceRun?.repository?.full_name === repository, 'Deployment source belongs to a different repository.')
+  addFailure(failures, sourceRun?.path === '.github/workflows/ci.yml', 'Deployment source did not execute CI.')
+  addFailure(failures, sourceRun?.status === 'completed' && sourceRun?.conclusion === 'success', 'Deployment source CI did not complete successfully.')
+  if (inputs.eventName === 'workflow_dispatch') {
+    addFailure(failures, sourceRun?.event === 'pull_request', 'Manual deployment requires a pull request CI receipt.')
+  } else {
+    addFailure(failures, ['push', 'workflow_dispatch'].includes(sourceRun?.event), 'Automatic deployment requires master CI.')
+    addFailure(failures, sourceRun?.head_branch === 'master' && sourceRun?.head_sha === inputs.deploySha, 'Automatic deployment source does not match protected master.')
+    failures.push(...evaluateRequiredJobs(jobs, REQUIRED_SOURCE_JOBS.filter(name => name !== 'codex-review')))
+  }
+  return { ok: failures.length === 0, failures }
 }
 
 export function createTreeRecord({
@@ -173,10 +215,10 @@ export function evaluatePreMergeTree({
   }
 }
 
-function evaluateRequiredJobs(jobs) {
+function evaluateRequiredJobs(jobs, requiredNames = REQUIRED_SOURCE_JOBS) {
   const failures = []
 
-  for (const requiredName of REQUIRED_SOURCE_JOBS) {
+  for (const requiredName of requiredNames) {
     const job = jobs
       .filter(candidate => candidate.name === requiredName)
       .sort((left, right) => (
@@ -203,6 +245,7 @@ export function evaluateCiReceipt({
   jobs,
   liveMasterSha,
   liveMasterTree,
+  latestSourceRun,
   pullRequest,
   record,
   repository,
@@ -219,6 +262,7 @@ export function evaluateCiReceipt({
     testedTree,
   })
   failures.push(...recordResult.failures)
+  failures.push(...evaluateLatestSourceRun(sourceRun, latestSourceRun).failures)
 
   addFailure(failures, isSha(testedTree), 'The requested tested tree is not a valid Git SHA.')
   addFailure(

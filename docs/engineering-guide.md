@@ -53,6 +53,16 @@ Assistant-planning changes also keep the benchmark corpus, dialog seeds, grounde
 - Automated review is advisory when the provider is unavailable; completed high-severity findings remain blocking.
 - Post-promotion verification fails closed for a source, tree, artifact, deployment, or live-version mismatch.
 
+### Verified candidate route
+
+The stable required contexts are `agent-policy`, `database`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and `codex-review`. Add a missing context through the field-scoped branch-protection endpoint, preserving the other contexts, their app bindings, strictness, and all unrelated protection settings; read back the result.
+
+Auto-promotion records the PR merge-tree and source attempt in `ci-tested-tree`, rechecks the latest matching CI attempt and current base before the protected squash merge, and verifies that the resulting master tree is identical. The master receipt reuses that source evidence and dispatches the existing `deploy_sha` and `source_run_id` inputs.
+
+Both deployment workflows run `verify-ci-receipt.mjs deployment` from protected master before deployment work. Manual dispatch requires both inputs and a successful latest PR CI run. Automatic `workflow_run` delivery checks the completed master CI run and resolves its merged PR's latest source receipt. Both routes download the original `ci-tested-tree` artifact and reuse `evaluateCiReceipt` to bind repository, PR, source run/attempt, commit, tree, required jobs, and current `origin/master`. Missing or expired evidence, skipped gates, stale attempts, non-master workflow refs, and mismatches fail closed before remote mutation. Pages rechecks the receipt immediately before publishing its built artifact.
+
+`handoff:check` accepts only the latest matching CI and deployment attempts; an older success cannot mask a newer failure or incomplete run. Recovery supplies fresh successful evidence for the same current candidate through the protected route, without bypassing a failed gate. Acceptance records the exact source/tree, deployment artifact, and live bundle version.
+
 ## Testing Expectations
 
 ### Composition boundaries
