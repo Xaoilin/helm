@@ -26,7 +26,7 @@ The visible version comes from the web build and the deployed `public/release.js
 
 `src/store/AppProviders.tsx` composes the existing domain providers without exposing an app-wide service bag. Components import the smallest owning domain hook they need: Calendar consumers use `useCalendar`, Task consumers use `useTaskContext`, Settings consumers use `useSettingsContext`, and so on. Updating one domain no longer republishes an object containing every other domain capability.
 
-Provider order remains explicit because several providers consume earlier owners. Settings and Gamification wrap Daily Momentum; Calendar precedes Trips; Projects precedes Tasks; Prayer and Dashboard Focus follow the data domains; Assistant Activity follows Assistant; then the named Chat bridge, Shell, assistant-undo coordinator, and Google Sync bridge wrap rendered consumers. `src/test/composition.boundaries.test.ts` checks the order and ownership markers.
+Provider order remains explicit because several providers consume earlier owners. Settings and Gamification wrap Daily Momentum; Calendar precedes Trips; Projects precedes Tasks; Prayer and Clock follow the data domains; Assistant Activity follows Assistant; then the named Chat bridge, Shell, assistant-undo coordinator, and Google Sync bridge wrap rendered consumers. `src/test/composition.boundaries.test.ts` checks the order and ownership markers.
 
 `src/store/ShellContext.tsx` owns only the active surface, one-shot assistant navigation requests, session restoration, and the readiness gate. Chat and voice can hand Shell a typed request to open a Tasks view or reveal a grounded Project without creating a second navigation path. Because rendered consumers mount after readiness, they do not need a cross-domain `loaded` capability.
 
@@ -40,6 +40,10 @@ Cross-domain behavior is retained only where one domain cannot own the invariant
 The selected design reuses existing domain contexts. A dependency-injection container, Redux migration, generic service locator, and replacement all-app context were rejected because they would add another global contract without hiding new knowledge. `scripts/verify-capability-composition.mjs` rejects the retired façade identifiers, generic service-locator names, and non-workflow contracts spanning four or more recognized domains. Revisit this decision only when a concrete workflow cannot preserve its invariant within one owner or one explicitly named coordinator.
 
 Browser session state is limited to transient UI state, permission state, and bounded diagnostics. It is not a source of truth for shared records.
+
+Night Compass reads its owning domains directly. The retired Dashboard Focus provider, ranking, timers, and Debug trace have no runtime replacement. Browser startup removes only `helm:dashboardFocusCache:v1` and `helm:dashboardFocusHostedReview:v1`, even before sign-in; unavailable storage logs a content-free warning and does not block startup. Historical `dashboardFocusFeedback` types, collection compatibility, and migrations remain. See the [audit and retirement decision](audits/2026-09-07.md).
+
+The supported browser wake-word consumers are `useWakeWord` and `WakeWordDebug`. Both explicitly map `hey_lina` to `hey_lina.onnx`; the engine loads that model and `melspectrogram.onnx`, `embedding_model.onnx`, and `silero_vad.onnx`. Those four URLs remain supported. The package-default Jarvis model is retired; there is no declared external model-serving API. The uncertain `icons.svg` URL and approved Life Hero assets remain unchanged.
 
 ### Domain model
 

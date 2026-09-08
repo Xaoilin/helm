@@ -3,6 +3,7 @@ import type { HelmRecord, HelmSecretRealtimeEvent } from '../store/databaseTypes
 import { PersistenceRecordCache } from '../store/persistence/cache';
 import {
   DEVICE_SETTINGS_STORE_KEY,
+  clearRetiredDashboardCaches,
   PersistenceDeviceStore,
   isDeviceStoreKey,
 } from '../store/persistence/deviceStore';
@@ -37,6 +38,25 @@ vi.mock('../store/supabase', () => ({
 }));
 
 const NOW = '2026-08-29T12:00:00.000Z';
+
+describe('retired dashboard cache cleanup', () => {
+  it('continues startup and attempts the other key when browser removal is denied', () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const remove = vi.spyOn(Storage.prototype, 'removeItem')
+      .mockImplementationOnce(() => { throw new DOMException('Storage denied', 'SecurityError'); });
+    try {
+      expect(() => clearRetiredDashboardCaches()).not.toThrow();
+      expect(remove.mock.calls).toEqual([
+        ['helm:dashboardFocusCache:v1'],
+        ['helm:dashboardFocusHostedReview:v1'],
+      ]);
+      expect(warning).toHaveBeenCalledOnce();
+    } finally {
+      remove.mockRestore();
+      warning.mockRestore();
+    }
+  });
+});
 
 function record(
   collection: string,

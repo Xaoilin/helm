@@ -13,7 +13,7 @@ const FORBIDDEN_IDENTIFIERS = [
   'useServices',
 ];
 
-const WORKFLOW_BOUNDARY_NAME = /(Assistant|Bridge|Chat|DashboardFocus|GoogleSync|LLM|Navigation|Removal|Sync|Undo|Workflow|Coordinator)/u;
+const WORKFLOW_BOUNDARY_NAME = /(Assistant|Bridge|Chat|GoogleSync|LLM|Navigation|Removal|Sync|Undo|Workflow|Coordinator)/u;
 const GLOBAL_BAG_NAME = /^(App|Application|Global|Root).*(API|Capabilities|Context|Services|Store)$/u;
 const DOMAIN_PROPERTIES = [
   ['assistant', /^(assistant|corrections|recordAssistant|upsertAssistant|noteAssistant)/u],

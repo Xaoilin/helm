@@ -20,7 +20,6 @@ import { useAssistantContext } from './contexts/AssistantContext';
 import { useCalendar } from './contexts/CalendarContext';
 import { useChatContext } from './contexts/ChatContext';
 import { useClockContext } from './contexts/ClockContext';
-import { useDashboardFocusContext } from './contexts/DashboardFocusContext';
 import { useEmploymentContext } from './contexts/EmploymentContext';
 import { useFinanceContext } from './contexts/FinanceContext';
 import { useGamificationContext } from './contexts/GamificationContext';
@@ -101,7 +100,6 @@ function AppReadinessGate({ children }: { children: ReactNode }) {
   const activityLoaded = useAssistantActivityContext().loaded;
   const clockLoaded = useClockContext().loaded;
   const prayerLoaded = usePrayerContext().loaded;
-  const dashboardFocusLoaded = useDashboardFocusContext().loaded;
   const loaded = calendarLoaded
     && tripsLoaded
     && projectsLoaded
@@ -117,8 +115,7 @@ function AppReadinessGate({ children }: { children: ReactNode }) {
     && assistantLoaded
     && activityLoaded
     && clockLoaded
-    && prayerLoaded
-    && dashboardFocusLoaded;
+    && prayerLoaded;
 
   if (!loaded) {
     return (

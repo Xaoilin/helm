@@ -54,6 +54,7 @@ describe('capability-shaped application composition', () => {
       '<ProjectProvider>',
       '<TaskProvider>',
       '<PrayerProvider>',
+      '<ClockProvider>',
       '<AssistantProvider>',
       '<AssistantActivityProvider>',
       '<ChatBridge>',
@@ -65,6 +66,8 @@ describe('capability-shaped application composition', () => {
     expect(providerOrder.every(index => index >= 0)).toBe(true);
     expect(providerOrder).toEqual([...providerOrder].sort((left, right) => left - right));
     expect(shell).toContain('function AppReadinessGate');
+    expect(providers).not.toContain('DashboardFocus');
+    expect(shell).not.toContain('DashboardFocus');
     expect(providers).toContain('<ChatProvider crossDomain={crossDomain}>');
     expect(providers).toContain('<GoogleSyncProvider app={app}>');
     expect(existsSync(resolve(root, 'src/store/AppContext.tsx'))).toBe(false);

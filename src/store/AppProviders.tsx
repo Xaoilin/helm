@@ -6,7 +6,6 @@ import { CalendarProvider, useCalendar } from './contexts/CalendarContext';
 import { ChatProvider, type ChatCrossDomainData } from './contexts/ChatContext';
 import { ClockProvider } from './contexts/ClockContext';
 import { DailyMomentumProvider } from './contexts/DailyMomentumContext';
-import { DashboardFocusProvider } from './contexts/DashboardFocusContext';
 import { EmploymentProvider } from './contexts/EmploymentContext';
 import { FinanceProvider, useFinanceContext } from './contexts/FinanceContext';
 import { GamificationProvider, useGamificationContext } from './contexts/GamificationContext';
@@ -132,23 +131,21 @@ export function AppProviders({ children }: { children: ReactNode }) {
                         <HealthProvider>
                           <FinanceProvider>
                             <PrayerProvider>
-                              <DashboardFocusProvider>
-                                <ClockProvider>
-                                  <AssistantProvider>
-                                    <AssistantActivityProvider>
-                                      <ChatBridge>
-                                        <ShellProvider>
-                                          <AssistantUndoProvider>
-                                            <MilestoneCelebrationProvider>
-                                              <GoogleSyncBridge>{children}</GoogleSyncBridge>
-                                            </MilestoneCelebrationProvider>
-                                          </AssistantUndoProvider>
-                                        </ShellProvider>
-                                      </ChatBridge>
-                                    </AssistantActivityProvider>
-                                  </AssistantProvider>
-                                </ClockProvider>
-                              </DashboardFocusProvider>
+                              <ClockProvider>
+                                <AssistantProvider>
+                                  <AssistantActivityProvider>
+                                    <ChatBridge>
+                                      <ShellProvider>
+                                        <AssistantUndoProvider>
+                                          <MilestoneCelebrationProvider>
+                                            <GoogleSyncBridge>{children}</GoogleSyncBridge>
+                                          </MilestoneCelebrationProvider>
+                                        </AssistantUndoProvider>
+                                      </ShellProvider>
+                                    </ChatBridge>
+                                  </AssistantActivityProvider>
+                                </AssistantProvider>
+                              </ClockProvider>
                             </PrayerProvider>
                           </FinanceProvider>
                         </HealthProvider>
