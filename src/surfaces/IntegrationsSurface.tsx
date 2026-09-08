@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useShell } from "../store/ShellContext";
 import { useCalendar } from "../store/contexts/CalendarContext";
-import { useSettingsContext } from "../store/contexts/SettingsContext";
-import type { CalendarAccount, IntegrationStatus } from '../types/domain';
+import { defaultIntegrations, useSettingsContext } from "../store/contexts/SettingsContext";
+import type { CalendarAccount } from '../types/domain';
 import { useGoogleSync } from '../hooks/useGoogleSync';
 import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
 import { appendGoogleCalendarDiagnosticEvent } from '../services/googleCalendarDiagnosticEvents';
@@ -40,13 +39,6 @@ import {
   revokeGoogleCalendarCredential,
 } from '../services/googleCalendarServerAuth';
 
-const PROVIDER_INFO: Record<string, { setupHint: string; mockable: boolean }> = {
-  google: { setupHint: 'Requires a Google Cloud OAuth Client ID. Set it in Settings first.', mockable: false },
-  github: { setupHint: 'Uses the hosted, read-only Sabah One GitHub App. No personal access token is accepted.', mockable: false },
-  slack: { setupHint: 'Requires a Slack app with bot token.', mockable: true },
-  linear: { setupHint: 'Requires a Linear API key or OAuth flow.', mockable: true },
-};
-
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -65,7 +57,6 @@ function getStatusTone(account: CalendarAccount): string {
 }
 
 export default function IntegrationsSurface() {
-  const shell = useShell();
   const calendar = useCalendar();
   const settings = useSettingsContext();
   const googleSync = useGoogleSync();
@@ -78,12 +69,19 @@ export default function IntegrationsSurface() {
   const [githubBusy, setGithubBusy] = useState<'status' | 'authorize' | 'repositories' | 'save' | 'sync' | 'disconnect' | null>(null);
   const [githubError, setGithubError] = useState<string | null>(null);
 
-  const getInfo = (provider: string) => PROVIDER_INFO[provider] || { setupHint: 'No setup instructions available.', mockable: false };
+  // One supported card per provider; never persist this display projection.
+  const integrations = defaultIntegrations.map(provider => ({
+    ...provider,
+    ...settings.integrations.find(record => record.provider === provider.provider),
+    name: provider.name,
+    description: provider.description,
+  }));
   const googleAccounts = calendar.calendarAccounts.filter(isGoogleCalendarAccount);
   const clientId = GOOGLE_OAUTH_CLIENT_ID;
   const authSnapshot = getAuthSessionSnapshot();
   const isSignedIn = Boolean(authSnapshot?.userId);
-  const githubIntegration = settings.integrations.find(integration => integration.provider === 'github');
+  const googleIntegrationId = integrations.find(integration => integration.provider === 'google')?.id ?? 'int-google';
+  const githubIntegration = integrations.find(integration => integration.provider === 'github');
   const githubIntegrationId = githubIntegration?.id;
   const githubConfiguredAt = githubIntegration?.configuredAt;
   const updateIntegration = settings.updateIntegration;
@@ -324,7 +322,7 @@ export default function IntegrationsSurface() {
         addSourcesIfMissing(accountId, result.calendars);
       }
 
-      settings.updateIntegration('int-google', {
+      settings.updateIntegration(googleIntegrationId, {
         status: 'connected',
         configuredAt: new Date().toISOString(),
         lastError: undefined,
@@ -345,7 +343,7 @@ export default function IntegrationsSurface() {
     }
 
     if (!clientId?.trim()) {
-      setGoogleError('Please set your Google OAuth Client ID in Settings first.');
+      setGoogleError('Google Calendar setup is unavailable. Ask the site operator to configure Google Calendar, then try again.');
       return;
     }
 
@@ -377,7 +375,7 @@ export default function IntegrationsSurface() {
       });
 
       addSourcesIfMissing(accountId, result.calendars);
-      settings.updateIntegration('int-google', {
+      settings.updateIntegration(googleIntegrationId, {
         status: 'connected',
         configuredAt: new Date().toISOString(),
         lastError: undefined,
@@ -403,7 +401,7 @@ export default function IntegrationsSurface() {
       }
 
       if (!clientId?.trim()) {
-        setGoogleError('Please set your Google OAuth Client ID in Settings first.');
+        setGoogleError('Google Calendar setup is unavailable. Ask the site operator to configure Google Calendar, then try again.');
         return;
       }
 
@@ -419,7 +417,7 @@ export default function IntegrationsSurface() {
         syncError: undefined,
       });
       addSourcesIfMissing(account.id, result.calendars);
-      settings.updateIntegration('int-google', {
+      settings.updateIntegration(googleIntegrationId, {
         status: 'connected',
         configuredAt: new Date().toISOString(),
         lastError: undefined,
@@ -486,7 +484,7 @@ export default function IntegrationsSurface() {
 
     const remaining = googleAccounts.filter(account => account.id !== accountId);
     if (remaining.length === 0) {
-      settings.updateIntegration('int-google', {
+      settings.updateIntegration(googleIntegrationId, {
         status: 'disconnected',
         configuredAt: undefined,
         lastError: undefined,
@@ -509,14 +507,6 @@ export default function IntegrationsSurface() {
     setConfirmDisconnect(null);
   };
 
-  const handleMockConnect = (id: string, provider: string) => {
-    const info = getInfo(provider);
-    if (info.mockable) {
-      settings.updateIntegration(id, { status: 'mocked' as IntegrationStatus, configuredAt: new Date().toISOString() });
-    }
-    setConfiguring(null);
-  };
-
   return (
     <>
       <div className="surface-header">
@@ -527,8 +517,8 @@ export default function IntegrationsSurface() {
       </div>
       <div className="surface-body">
         <div className="info-box">
-          Integrations connect Sabah One to external services. Google Calendar uses server-backed browser credentials, so durable sync requires you to be signed into Sabah One.
-          Other integrations can be simulated for development.
+          Connect Google Calendar or the read-only GitHub App while signed into Sabah One.
+          Slack and Linear connections are unavailable.
         </div>
 
         {hostedGoogleIssue && (
@@ -537,9 +527,8 @@ export default function IntegrationsSurface() {
           </div>
         )}
 
-        {settings.integrations.map(integration => {
-          const info = getInfo(integration.provider);
-          const isActive = integration.status === 'connected' || integration.status === 'mocked';
+        {integrations.map(integration => {
+          const status = integration.status === 'mocked' ? 'disconnected' : integration.status;
           const isGoogle = integration.provider === 'google';
           const isGithub = integration.provider === 'github';
 
@@ -549,7 +538,7 @@ export default function IntegrationsSurface() {
                 <div>
                   <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {integration.name}
-                    <span className={`tag tag-${integration.status}`} role="status">{integration.status}</span>
+                    <span className={`tag tag-${status}`} role="status">{status}</span>
                     {isGoogle && googleAccounts.length > 0 && (
                       <span style={{ fontSize: 11, color: '#6b6f85' }}>({googleAccounts.length} account{googleAccounts.length !== 1 ? 's' : ''})</span>
                     )}
@@ -569,12 +558,13 @@ export default function IntegrationsSurface() {
                         background: account.authStatus === 'connected' ? '#152d1a' : '#1a1d2e',
                         borderColor: account.authStatus === 'connected' ? '#1e4d28' : '#30364d',
                         display: 'flex',
+                        flexWrap: 'wrap',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         gap: 12,
                       }}
                     >
-                      <div style={{ minWidth: 0 }}>
+                      <div style={{ minWidth: 0, flex: '1 1 220px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <strong>{account.email}</strong>
                           <span className={`tag tag-${getStatusTone(account)}`} role="status">
@@ -619,12 +609,6 @@ export default function IntegrationsSurface() {
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
-
-              {integration.status === 'mocked' && !isGithub && (
-                <div className="info-box warning" style={{ marginTop: 8 }}>
-                  This connection is simulated. No real data is being exchanged with {integration.name}.
                 </div>
               )}
 
@@ -719,21 +703,8 @@ export default function IntegrationsSurface() {
 
                         {!clientId?.trim() && (
                           <div className="info-box warning" style={{ marginBottom: 8 }}>
-                            You need to set a Google OAuth Client ID in Settings before adding extra Google Calendar accounts.
-                            <br /><br />
-                            <strong>Setup steps:</strong>
-                            <ol style={{ margin: '6px 0 0', paddingLeft: 18, lineHeight: 1.6 }}>
-                              <li>Go to <strong>Google Cloud Console</strong> &rarr; APIs &amp; Services &rarr; Credentials</li>
-                              <li>Create an OAuth 2.0 Client ID (Web application type)</li>
-                              <li>Add <code>http://localhost:5174</code> as an Authorized JavaScript Origin</li>
-                              <li>Add <code>http://localhost:5174</code> as an Authorized redirect URI because the browser code flow exchanges against the app origin</li>
-                              <li>Enable the <strong>Google Calendar API</strong> in your project</li>
-                              <li>Copy the Client ID and paste it in Sabah One Settings</li>
-                              <li>Set the same Client ID plus the matching client secret as Supabase Edge Function secrets for <code>google-calendar-oauth</code></li>
-                              <li>Keep the <code>google_calendar_credentials</code> migration in the repo so the release workflow can apply the hosted Google Calendar schema before durable browser sync goes live</li>
-                              <li>Prefer keeping <code>SUPABASE_DB_PASSWORD</code> in GitHub Actions so broader Supabase migrations can still use <code>supabase db push</code>; if it is missing, the release workflow now falls back to the targeted hosted Google Calendar schema apply</li>
-                              <li>Deploy <code>google-calendar-oauth</code> with <code>--no-verify-jwt</code> because Sabah One validates the Supabase session inside the function and production sessions may use ES256 tokens</li>
-                            </ol>
+                            Adding another Google account is unavailable because this website has no Google Calendar client configured.
+                            Ask the site operator to configure Google Calendar, then try again.
                           </div>
                         )}
 
@@ -762,9 +733,6 @@ export default function IntegrationsSurface() {
                               ? <><span className="spinner" /> Connecting...</>
                               : googleAccounts.length > 0 ? 'Add Another Google Account' : 'Connect Google Calendar'}
                           </button>
-                          {!clientId?.trim() && (
-                            <button className="btn btn-secondary btn-sm" onClick={() => shell.navigate('settings')}>Go to Settings</button>
-                          )}
                           <button className="btn btn-secondary btn-sm" onClick={() => { setConfiguring(null); setGoogleError(null); }}>Cancel</button>
                         </div>
                       </div>
@@ -798,44 +766,6 @@ export default function IntegrationsSurface() {
                           <button className="btn btn-danger btn-sm" onClick={() => setConfirmDisconnect(integration.id)}>Disconnect</button>
                         )}
                       </>
-                    )}
-                  </>
-                ) : !isActive && integration.status !== 'error' ? (
-                  <>
-                    {configuring === integration.id ? (
-                      <div style={{ flex: 1 }}>
-                        <div className="info-box" style={{ marginBottom: 8 }}>{info.setupHint}</div>
-                        <div className="actions-row">
-                          {info.mockable && (
-                            <button className="btn btn-primary btn-sm" onClick={() => handleMockConnect(integration.id, integration.provider)}>
-                              Simulate Connection
-                            </button>
-                          )}
-                          {!info.mockable && (
-                            <span style={{ fontSize: 12, color: '#6b6f85' }}>Live connection required. Not available in MVP.</span>
-                          )}
-                          <button className="btn btn-secondary btn-sm" onClick={() => setConfiguring(null)}>Cancel</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button className="btn btn-primary btn-sm" onClick={() => { setConfiguring(integration.id); setGoogleError(null); }}>Configure</button>
-                    )}
-                  </>
-                ) : !isGoogle ? (
-                  <>
-                    {confirmDisconnect === integration.id ? (
-                      <div className="confirm-bar" style={{ margin: 0 }} role="alert">
-                        Disconnect {integration.name}?
-                        <button className="btn btn-danger btn-sm" onClick={() => {
-                          settings.updateIntegration(integration.id, { status: 'disconnected', configuredAt: undefined, lastError: undefined });
-                          setConfirmDisconnect(null);
-                        }}>
-                          Disconnect
-                        </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setConfirmDisconnect(null)}>Cancel</button>
-                      </div>
-                    ) : (
-                      <button className="btn btn-danger btn-sm" onClick={() => setConfirmDisconnect(integration.id)}>Disconnect</button>
                     )}
                   </>
                 ) : null}
