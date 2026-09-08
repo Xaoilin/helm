@@ -43,12 +43,18 @@ const defaultSettings: Settings = {
 
 const defaultIntegrations: Integration[] = [
   { id: 'int-google', name: 'Google Calendar', provider: 'google', description: 'Sync Google Calendar events', status: 'disconnected', icon: 'calendar' },
-  { id: 'int-github', name: 'GitHub', provider: 'github', description: 'Repository and PR notifications', status: 'disconnected', icon: 'code' },
-  { id: 'int-slack', name: 'Slack', provider: 'slack', description: 'Team messaging notifications', status: 'disconnected', icon: 'message' },
-  { id: 'int-linear', name: 'Linear', provider: 'linear', description: 'Issue tracking and project management', status: 'disconnected', icon: 'list' },
+  { id: 'int-github', name: 'GitHub', provider: 'github', description: 'Read-only GitHub App for merged pull request evidence', status: 'disconnected', icon: 'code' },
 ];
 
 export { defaultSettings, defaultIntegrations };
+
+function hydrateIntegrations(stored: Integration[] | null): Integration[] {
+  const records = stored ?? [];
+  // Autosave owns the full collection: keep every stored ID and historical row.
+  return [...records, ...defaultIntegrations
+    .filter(provider => !records.some(record => record.provider === provider.provider))
+    .map(provider => ({ ...provider }))];
+}
 
 export interface SettingsContextValue {
   settings: Settings;
@@ -109,7 +115,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       const nextSettings = hydrateSettings(s, device);
       settingsRef.current = nextSettings;
       setSettings(nextSettings);
-      setIntegrations(i ?? defaultIntegrations);
+      setIntegrations(hydrateIntegrations(i));
       setLoaded(true);
     })();
   }, [hydrateSettings]);
@@ -123,7 +129,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const nextSettings = hydrateSettings(sharedSettings, deviceSettings);
     settingsRef.current = nextSettings;
     setSettings(nextSettings);
-    setIntegrations(remoteIntegrations ?? defaultIntegrations);
+    setIntegrations(hydrateIntegrations(remoteIntegrations));
   });
 
   useEffect(() => { if (loaded) saveStore('settings', settings); }, [settings, loaded]);

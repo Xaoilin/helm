@@ -1,6 +1,6 @@
 # Feature Status
 
-Use this matrix when updating documentation or UI copy. `real` means the hosted website has an implemented path; `paused` means provider work is intentionally disabled; `contract-only` means a reviewed implementation boundary exists but no connector is live; `placeholder/simulated` means the integration is intentionally not presented as live; `required-gap` means policy requires the capability but the implemented path is not yet available.
+Use this matrix when updating documentation or UI copy. `real` means the hosted website has an implemented path; `paused` means provider work is intentionally disabled; `unavailable` means there is no supported connection; `contract-only` means a reviewed implementation boundary exists but no connector is live; `placeholder/simulated` means the integration is intentionally not presented as live; `required-gap` means policy requires the capability but the implemented path is not yet available.
 
 | Area | Status | Notes |
 | --- | --- | --- |
@@ -8,6 +8,7 @@ Use this matrix when updating documentation or UI copy. `real` means the hosted 
 | Supabase account persistence | `real` | Authenticated RLS reads, semantic mutations, idempotent receipts, tombstones, explicit ordering, private account Broadcast, and version-gap recovery make Supabase authoritative. Signed-out, expired, or offline sessions fail closed; there is no durable offline mutation queue or conflict chooser. |
 | Encrypted Secrets vault | `real` | The signed-in Secrets surface stores searchable account metadata and encrypted values through Supabase Vault RPCs. Values are masked, revealed one at a time, cleared from browser UI state when hidden or the session changes, and excluded from records, Broadcast, logs, exports, and assistant context. Archive and Restore are reversible; bulk export, sharing, autofill, permanent deletion, and assistant access are absent. |
 | Google Calendar OAuth | `real` | Multi-account Calendar uses hosted authorization-code exchange and server-held refresh credentials. Reconnect is explicit and account-scoped. |
+| Supported integration setup | `real` | Empty and partial account collections retain Google Calendar and GitHub setup. Initial and remote hydration add only missing providers; stored IDs, configuration and historical rows remain intact. The display shows one supported card per provider and never saves its filtered projection. Missing Google deployment configuration points to the site operator, not a nonexistent Settings field. |
 | Google Calendar sync | `real` | Passive account-bound sync uses Google as provider source of truth, preserves cache on unsafe partial failures, and never opens consent during ordinary navigation or refresh. |
 | Google Calendar diagnostics | `real` | Debug shows hosted readiness, credential health, expiry and failure metadata, migration state, ownership checks, sync counts, blocked reasons, and redacted request diagnostics. |
 | Manual calendar accounts | `real` | Manual calendar records belong to the signed-in Sabah One account database and are unavailable while the session is offline. |
@@ -52,5 +53,5 @@ Use this matrix when updating documentation or UI copy. `real` means the hosted 
 | Projects reference hub | `real` | Searchable Pinned, Projects, and Archived sections expose links, repositories, documentation, display-only prerequisites, and portable guidance. Shared catalogue metadata is keyed by stable `catalogKey`. |
 | Trips planner | `real` | Account-backed multi-country trips, ordered legs, itinerary items, bookings, budgets, and explicit calendar import are implemented. |
 | GitHub integration | `real` | Hosted GitHub App authorization with selected-repository read-only access. Expiring credentials remain in Supabase Vault; only authored merged pull requests can create fixed Craft evidence, and provider failures preserve existing progress. |
-| Slack integration | `placeholder/simulated` | Simulated connection flow only. |
-| Linear integration | `placeholder/simulated` | Simulated connection flow only. |
+| Slack integration | `unavailable` | Informational notice only; no simulated connect, ready or disconnect actions. Historical account records remain compatible. |
+| Linear integration | `unavailable` | Informational notice only; no simulated connect, ready or disconnect actions. Historical account records remain compatible. |

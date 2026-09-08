@@ -821,7 +821,7 @@ export default function SettingsSurface() {
           <div className="info-box" style={{ marginTop: 12 }}>
             Runtime status is reported where the feature actually lives:
             <br />
-            Chat shows the active assistant runtime state, Calendar labels manual providers, Integrations marks simulated providers, and Projects keeps account-backed references together.
+            Chat shows the active assistant runtime state, Calendar labels manual providers, Integrations shows supported setup, and Projects keeps account-backed references together.
           </div>
         </div>
       </div>

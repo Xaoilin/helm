@@ -100,6 +100,32 @@ Direct browser review is required for visible user flows and especially for OAut
 - Project catalogue records may include names, links, documentation, and display-only guidance. They must not include private credentials or machine-specific execution state.
 - Use the established local-date-safe helpers for day-based behavior; never derive local dates by slicing UTC ISO strings.
 
+## Integration setup
+
+Integrations always offers Google Calendar and the read-only GitHub App, including
+for empty or partial account collections. Configure Google to link the signed-in
+profile or add another account; reconnect remains explicit for each account.
+GitHub uses **Install and authorize GitHub App**, followed by repository selection
+and evidence sync. Revoked GitHub access requires **Reconnect GitHub App**.
+Provider failures remain visible and leave setup available for an explicit retry.
+Slack and Linear are unavailable; there are no simulated connection actions.
+
+Google deployment configuration belongs to the site operator, not an end-user
+Settings field. The Pages build uses `VITE_GOOGLE_OAUTH_CLIENT_ID`; the hosted
+`google-calendar-oauth` function uses the matching `GOOGLE_OAUTH_CLIENT_ID` and
+server-only `GOOGLE_OAUTH_CLIENT_SECRET`. Use the existing protected deployment
+workflow and authorized website configuration. Missing build configuration
+disables adding another Google account and explains who can restore setup.
+
+Settings hydration appends only missing supported providers by provider identity
+on initial load and remote refresh. It keeps all stored IDs, status, timestamps,
+choices, duplicate historical provider rows and unknown providers in the saved
+collection. The display projection uses current support copy and one card per
+supported provider; it is never autosaved. Supported actions update the selected
+stored record ID. Calendar account -> source -> event identity remains separate.
+This repair adds no provider operation, schema, scope or external agent API;
+the existing external-access gaps in `agent-access.md` remain unchanged.
+
 ## UI And UX Rules
 
 - Preserve the established dark theme and component language unless a redesign is in scope.
