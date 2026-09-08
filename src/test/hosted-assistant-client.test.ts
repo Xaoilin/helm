@@ -46,3 +46,12 @@ it('maps server token rejection to sign-in and recovers immediately after a new 
   getSession.mockResolvedValue({ data: { session: session('signed-in-again') }, error: null });
   expect(await testHostedAssistantConnection()).toMatchObject({ status: 'available' });
 });
+
+it('reports paused health and preserves an actionable paused error without opening the circuit', async () => {
+  invoke.mockResolvedValue({ data: { ok: true, mode: 'paused', message: 'Hosted AI is paused. Use the app controls directly.', model: 'gpt-5.4' }, error: null });
+  expect(await testHostedAssistantConnection()).toMatchObject({ status: 'paused', message: expect.stringContaining('paused') });
+  invoke.mockImplementation(async () => ({ data: null, error: new FunctionsHttpError(Response.json({ code: 'hosted_ai_paused', error: 'Hosted AI is paused. Use the app controls directly.' }, { status: 503 })) }));
+  for (let attempt = 0; attempt < 6; attempt++) await expect(runHostedAssistantTurn(messages)).rejects.toThrow('Hosted AI is paused');
+  invoke.mockResolvedValue({ data: { ok: true, mode: 'enabled', model: 'gpt-5.4' }, error: null });
+  expect(await testHostedAssistantConnection()).toMatchObject({ status: 'available' });
+});

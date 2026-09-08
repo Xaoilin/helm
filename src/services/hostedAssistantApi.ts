@@ -12,6 +12,7 @@ import {
   getHostedAssistantAuthHeaders,
   hasHostedAssistantSession,
   HostedAssistantSignInRequiredError,
+  HostedAssistantPausedError,
   type HostedAssistantAccessMode,
 } from './hostedAssistantAccess';
 import { logError } from './logger';
@@ -21,6 +22,8 @@ import type { AssistantToolDefinition } from '../assistant/toolSchemas';
 
 interface HostedAssistantHealthResponse {
   ok: boolean;
+  mode?: 'enabled' | 'paused';
+  message?: string;
   provider: 'openai';
   model: string;
 }
@@ -68,7 +71,7 @@ export interface HostedAssistantTurnResult {
 }
 
 export interface HostedAssistantConnectionStatus {
-  status: 'available' | 'sign_in_required' | 'not_configured' | 'unavailable';
+  status: 'available' | 'paused' | 'sign_in_required' | 'not_configured' | 'unavailable';
   message?: string;
   accessMode?: HostedAssistantAccessMode;
   model?: string;
@@ -230,6 +233,12 @@ async function invokeHostedAssistant<T>(
 
       if (error) {
         if (isHttpError(error) && error.context.status === 401) throw new HostedAssistantSignInRequiredError();
+        if (isHttpError(error) && error.context.status === 503) {
+          const payload = await error.context.clone().json().catch(() => null);
+          if (payload?.code === 'hosted_ai_paused') {
+            throw new HostedAssistantPausedError(payload.error || 'Hosted AI is paused. Use the app controls directly.');
+          }
+        }
         const message = await extractFunctionErrorMessage(error);
         rememberHostedAssistantFailure(source, message);
         throw new Error(message);
@@ -245,6 +254,10 @@ async function invokeHostedAssistant<T>(
       return data;
     });
   } catch (error) {
+    if (error instanceof HostedAssistantPausedError) {
+      hostedAssistantBreaker.reset();
+      clearHostedAssistantFailure(source);
+    }
     if (error instanceof HostedAssistantSignInRequiredError) {
       lastHostedAssistantAccessMode = 'none';
       hostedAssistantBreaker.reset();
@@ -270,6 +283,9 @@ export async function testHostedAssistantConnection(
       ...(options.model ? { model: options.model } : {}),
     });
     lastHostedAssistantModel = data.model;
+    if (data.mode === 'paused') {
+      return { status: 'paused', message: data.message || 'Hosted AI is paused. Use the app controls directly.', accessMode: lastHostedAssistantAccessMode ?? 'none', model: data.model };
+    }
     return data.ok
       ? { status: 'available', accessMode: lastHostedAssistantAccessMode ?? 'none', model: data.model }
       : { status: 'unavailable', message: 'Hosted assistant health check failed.' };

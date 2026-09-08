@@ -286,6 +286,10 @@ function buildOpenAiItem(input: SystemHealthInput): HealthItem {
     };
   }
 
+  if (openAi.status.status === 'paused') {
+    return { id: 'openai', label: 'OpenAI', headline: 'Hosted AI paused', detail: sanitizeHealthDetail(openAi.status.message) || 'Use the app controls directly while hosted AI is paused.', tone: 'attention', meta: formatCheckedAt(openAi.checkedAt) };
+  }
+
   if (openAi.status.status === 'sign_in_required') {
     return {
       id: 'openai',

@@ -10,7 +10,7 @@ This document records the current automation policy for Sabah One. The product i
 4. The exact tested tree is the candidate. A newer or different tree must not inherit an earlier check result.
 5. Protected `master` promotion verifies the tested tree before GitHub Pages or Supabase Edge Function deployment.
 6. Post-promotion verification compares the deployed website, `public/release.json`, required function state, and source candidate before the change is called live.
-7. Automated review is an additional guard: unavailable provider output is reported as advisory, while completed high-severity findings remain blocking.
+7. API-funded automated review is off by default (`CODEX_API_REVIEW_ENABLED`); Codex source review precedes promotion. If explicitly enabled, automated review is an additional guard: unavailable provider output is reported as advisory, while completed high-severity findings remain blocking.
 
 This workflow keeps delivery evidence separate from browser behavior evidence and from user-outcome claims. A green check proves only the path it exercises.
 

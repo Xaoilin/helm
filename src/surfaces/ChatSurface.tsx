@@ -32,6 +32,7 @@ function getStatusBadge(status: AssistantRuntimeStatus): string {
     case 'ready':
       return `🟢 ${status.headline}`;
     case 'sign_in_required':
+    case 'paused':
     case 'not_configured':
       return `🟡 ${status.headline}`;
     case 'offline':
@@ -82,6 +83,7 @@ export default function ChatSurface() {
   const hostedModelLabel = getHostedAssistantModelLabel(getHostedAssistantModelSetting(settings.settings));
 
   const activeConv = chat.conversations.find(c => c.id === chat.activeConversationId);
+  const aiPaused = assistantStatus.state === 'paused';
   const canExportConversation = Boolean(activeConv && activeConv.messages.length > 0);
   const billingSummary = summarizeConversationAssistantBilling(activeConv);
   const billingTokenSummary = billingSummary
@@ -118,15 +120,18 @@ export default function ChatSurface() {
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || isTyping) return;
+    if (!text || isTyping || aiPaused) return;
     let convId = chat.activeConversationId;
     if (!convId) {
       convId = chat.createConversation();
     }
     setInput('');
     setIsTyping(true);
-    await chat.sendMessage(convId, text);
-    setIsTyping(false);
+    try {
+      await chat.sendMessage(convId, text);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -365,6 +370,7 @@ export default function ChatSurface() {
                       <button
                         key={p}
                         className="btn btn-secondary btn-sm"
+                        disabled={aiPaused}
                         onClick={() => { handleSendQuick(p); }}
                       >
                         {p}
@@ -393,13 +399,13 @@ export default function ChatSurface() {
             <div className="chat-input-bar">
               <input
                 className="form-input"
-                placeholder={isTyping ? 'Lina is thinking...' : 'Type a message...'}
+                placeholder={aiPaused ? 'Hosted AI is paused' : isTyping ? 'Lina is thinking...' : 'Type a message...'}
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                disabled={isTyping}
+                disabled={isTyping || aiPaused}
               />
-              <button className="btn btn-primary" onClick={handleSend} disabled={isTyping || !input.trim()}>Send</button>
+              <button className="btn btn-primary" onClick={handleSend} disabled={isTyping || aiPaused || !input.trim()}>Send</button>
             </div>
           </>
         ) : (
@@ -416,6 +422,7 @@ export default function ChatSurface() {
                   <button
                     key={p}
                     className="btn btn-secondary btn-sm"
+                    disabled={aiPaused}
                     onClick={() => {
                       const id = chat.createConversation();
                       chat.sendMessage(id, p);
@@ -434,10 +441,13 @@ export default function ChatSurface() {
 
   // Helper for quick prompts inside active conversation
   async function handleSendQuick(text: string) {
-    if (isTyping) return;
+    if (isTyping || aiPaused) return;
     const convId = activeConv?.id || chat.createConversation();
     setIsTyping(true);
-    await chat.sendMessage(convId, text);
-    setIsTyping(false);
+    try {
+      await chat.sendMessage(convId, text);
+    } finally {
+      setIsTyping(false);
+    }
   }
 }

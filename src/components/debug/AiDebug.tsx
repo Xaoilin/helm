@@ -445,7 +445,7 @@ export default function AiDebug() {
               <button className="btn btn-secondary btn-sm" onClick={() => void runHostedCheck()} disabled={hostedResult.state === 'running'}>
                 {hostedResult.state === 'running' ? 'Testing...' : 'Test Hosted AI'}
               </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => void runHostedSmokeTest()} disabled={smokeResult.state === 'running'}>
+              <button className="btn btn-secondary btn-sm" onClick={() => void runHostedSmokeTest()} disabled={smokeResult.state === 'running' || runtimeStatus?.state === 'paused'}>
                 {smokeResult.state === 'running' ? 'Running...' : 'Run Hosted Smoke Test'}
               </button>
               <button className="btn btn-secondary btn-sm" onClick={resetHostedBreaker}>
@@ -971,6 +971,7 @@ function mapRuntimeState(state: AssistantRuntimeStatus['state']): DiagnosticStat
     case 'checking':
       return 'running';
     case 'sign_in_required':
+    case 'paused':
     case 'not_configured':
       return 'warning';
     case 'offline':
@@ -981,6 +982,8 @@ function mapRuntimeState(state: AssistantRuntimeStatus['state']): DiagnosticStat
 
 function mapHostedStatus(status: HostedAssistantConnectionStatus, checkedAt: string): DiagnosticResult {
   switch (status.status) {
+    case 'paused':
+      return { state: 'warning', headline: 'Hosted AI paused', detail: status.message || 'Use the app controls directly while hosted AI is paused.', checkedAt };
     case 'available':
       return {
         state: 'success',
@@ -1121,6 +1124,8 @@ function getRuntimeSuggestion(status: AssistantRuntimeStatus | null, runtimeErro
   }
 
   switch (status?.state) {
+    case 'paused':
+      return 'Use the app controls directly. Hosted chat, voice AI and paid checks are paused.';
     case 'ready':
       return 'Provider is ready. If Lina still falls back, run the hosted smoke test below.';
     case 'sign_in_required':

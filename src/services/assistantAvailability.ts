@@ -8,7 +8,7 @@ export type AssistantRuntimeProvider = 'hosted' | 'ollama';
 
 export interface AssistantRuntimeStatus {
   activeProvider: AssistantRuntimeProvider | null;
-  state: 'ready' | 'offline' | 'sign_in_required' | 'not_configured' | 'checking';
+  state: 'ready' | 'paused' | 'offline' | 'sign_in_required' | 'not_configured' | 'checking';
   headline: string;
   detail: string;
 }
@@ -62,6 +62,8 @@ async function getHostedStatus(settings: Pick<Settings, 'hostedModel'>): Promise
   const hostedModelLabel = getHostedAssistantModelLabel(hostedModel);
   const status = await testHostedAssistantConnection({ model: hostedModel });
   switch (status.status) {
+    case 'paused':
+      return { activeProvider: 'hosted', state: 'paused', headline: 'Hosted AI paused', detail: status.message || 'Use the app controls directly while hosted AI is paused.' };
     case 'available':
       return getHostedReadyStatus(getHostedAssistantModelLabel(status.model || hostedModel));
     case 'sign_in_required':
@@ -106,6 +108,8 @@ export async function getAssistantRuntimeStatus(
   }
 
   const hosted = await getHostedStatus(settings);
+  // An intentional pause must not silently select another inference provider.
+  if (hosted.state === 'paused') return hosted;
   if (hosted.state === 'ready') {
     return {
       ...hosted,

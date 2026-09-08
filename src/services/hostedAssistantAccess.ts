@@ -5,6 +5,13 @@ import { getAuthSessionSnapshot } from '../store/supabase';
 
 export type HostedAssistantAccessMode = 'user_session' | 'none';
 
+export class HostedAssistantPausedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HostedAssistantPausedError';
+  }
+}
+
 export class HostedAssistantSignInRequiredError extends Error {
   constructor() {
     super('Sign in to Sabah One again to use hosted AI.');
