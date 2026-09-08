@@ -25,6 +25,7 @@ import {
   resetDatabasePersistence,
   saveStoreCommitted,
   loadDeviceStore,
+  saveDeviceStore,
   DEVICE_SETTINGS_STORE_KEY,
 } from '../store/persistence';
 
@@ -156,6 +157,65 @@ describe('signed-in persistence boundaries', () => {
     expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toMatchObject({ elevenLabsApiKey: 'legacy-eleven', microphoneDeviceId: 'mic-legacy' });
     expect(JSON.parse(localStorage.getItem('helm:device:deviceSettings:v2')!)).toEqual({ microphoneDeviceId: 'mic-legacy' });
     expect(Object.keys(localStorage).filter(key => key.includes('legacy-quarantine'))).toEqual([]);
+  });
+
+  it('does not restore a cleared account preference from a retained Secrets migration source on rebootstrap', async () => {
+    configureSupabase({ authenticated: true });
+    const original = JSON.stringify({ appTimezone: 'America/New_York', elevenLabsApiKey: 'legacy-eleven' });
+    localStorage.setItem('helm:settings', original);
+    const migrated = { theme: 'dark', telemetry: false, appTimezone: 'America/New_York' };
+    supabaseMocks.applyHelmMutations.mockResolvedValue({ requestId: 'migration', accountVersion: 8, changes: [settingsRecord(migrated)] });
+    await bootstrapDatabasePersistence();
+    expect(await loadStore('settings')).toEqual(migrated);
+    expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(1);
+
+    const cleared = { theme: 'dark', telemetry: false };
+    supabaseMocks.applyHelmMutations.mockResolvedValue({ requestId: 'clear', accountVersion: 9, changes: [settingsRecord(cleared)] });
+    await saveStoreCommitted('settings', cleared);
+    expect(await loadStore('settings')).toEqual(cleared);
+    resetDatabasePersistence();
+    supabaseMocks.fetchHelmAccountSnapshot.mockResolvedValue(accountSnapshot(USER_ID, cleared));
+    await bootstrapDatabasePersistence();
+
+    expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(2);
+    expect(await loadStore('settings')).toEqual(cleared);
+    expect(localStorage.getItem('helm:settings')).toBe(original);
+    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toMatchObject({ elevenLabsApiKey: 'legacy-eleven' });
+  });
+
+  it('does not restore cleared device preferences from v1 or retained shared legacy settings on rebootstrap', async () => {
+    configureSupabase({ authenticated: true });
+    const original = JSON.stringify({ microphoneDeviceId: 'old-mic', ollamaEndpoint: 'http://old-host:11434', elevenLabsApiKey: 'legacy-eleven' });
+    localStorage.setItem('helm:device:deviceSettings', original);
+    localStorage.setItem('helm:settings', original);
+    await bootstrapDatabasePersistence();
+    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toMatchObject({ microphoneDeviceId: 'old-mic' });
+    await saveDeviceStore(DEVICE_SETTINGS_STORE_KEY, {});
+    resetDatabasePersistence();
+    await bootstrapDatabasePersistence();
+    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toEqual({ elevenLabsApiKey: 'legacy-eleven' });
+    expect(localStorage.getItem('helm:device:deviceSettings')).toBe(original);
+    expect(localStorage.getItem('helm:settings')).toBe(original);
+  });
+
+  it('keeps shared migration retryable when its database commit fails', async () => {
+    configureSupabase({ authenticated: true });
+    const original = JSON.stringify({ appTimezone: 'America/New_York', elevenLabsApiKey: 'legacy-eleven' });
+    localStorage.setItem('helm:settings', original);
+    supabaseMocks.applyHelmMutations.mockRejectedValueOnce(new Error('permission denied'));
+    await bootstrapDatabasePersistence();
+    expect(localStorage.getItem('helm:meta:settings')).toBeNull();
+    expect(localStorage.getItem('helm:settings')).toBe(original);
+    expect(getSyncSessionSnapshot().status).not.toBe('ready');
+
+    resetDatabasePersistence();
+    const migrated = { theme: 'dark', telemetry: false, appTimezone: 'America/New_York' };
+    supabaseMocks.applyHelmMutations.mockResolvedValue({ requestId: 'migration-retry', accountVersion: 8, changes: [settingsRecord(migrated)] });
+    await bootstrapDatabasePersistence();
+    expect(getSyncSessionSnapshot().status).toBe('ready');
+    expect(await loadStore('settings')).toEqual(migrated);
+    expect(localStorage.getItem('helm:meta:settings')).toMatch(/^shared-migrated:sha256:[0-9a-f]{64}$/u);
+    expect(localStorage.getItem('helm:settings')).toBe(original);
   });
 
   it('retries a transient write once with the same request id and operations', async () => {

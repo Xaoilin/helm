@@ -264,6 +264,7 @@ async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<
   assertCurrentPersistenceSession(epoch, userId);
   const desired = new Map<string, unknown>();
   const keysToClear: string[] = [];
+  let retainedSettings: { raw: string; marker: string } | null = null;
   let deviceSettings = await loadDeviceStore<DeviceSettings>(DEVICE_SETTINGS_STORE_KEY) ?? {};
   let deviceSettingsChanged = false;
 
@@ -277,13 +278,19 @@ async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<
       continue;
     }
     const inspectedLegacy = sanitizeLegacyStoreValue(item.key, legacy.value);
+    if (item.key === 'settings' && legacy.raw !== null && hasLegacyProviderSettings(inspectedLegacy.value)) {
+      const migration = await deviceStore.legacySettingsMigration(legacy.raw);
+      assertCurrentPersistenceSession(epoch, userId);
+      if (migration.consumed) continue;
+      retainedSettings = { raw: legacy.raw, marker: migration.marker };
+    }
     if (inspectedLegacy.ambiguous && legacy.raw !== null
       && !(item.key === 'settings' && hasLegacyProviderSettings(inspectedLegacy.value))) {
       deviceStore.quarantineLegacyValue(item.key, legacy.raw);
     }
     if (item.key === 'settings') {
       const split = splitSettings(inspectedLegacy.value);
-      if (Object.keys(split.device).length > 0) {
+      if (Object.keys(split.device).length > 0 && !deviceStore.hasCurrentDeviceSettings()) {
         deviceSettings = { ...split.device, ...deviceSettings };
         deviceSettingsChanged = true;
       }
@@ -309,6 +316,10 @@ async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<
   const changedCollections = desired.size > 0
     ? await commitStoreValues(desired, epoch, userId)
     : [];
+  if (retainedSettings) {
+    assertCurrentPersistenceSession(epoch, userId);
+    deviceStore.completeLegacySettingsMigration(retainedSettings.raw, retainedSettings.marker);
+  }
   for (const key of keysToClear) {
     assertCurrentPersistenceSession(epoch, userId);
     await clearLocalStoreCopy(key, false);

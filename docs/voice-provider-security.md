@@ -33,6 +33,10 @@ containing provider values remain unchanged and readable by the existing
 Secrets migration. This preserves migration access without copying plaintext
 into new browser records or silently deleting a user's source. Secret
 management remains intentionally excluded from external agent access.
+After a successful shared-data migration, existing device metadata records a
+SHA-256 fingerprint of that exact retained source so later boots cannot restore
+cleared account preferences. Once v2 exists, it owns all safe device preferences;
+only provider migration values are read from the original sources.
 
 Deepgram and Monzo have no secure replacement transport in this change. Their
 browser-key configuration and build-secret paths are removed, and their UI

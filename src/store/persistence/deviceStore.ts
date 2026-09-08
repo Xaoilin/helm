@@ -63,6 +63,22 @@ export class PersistenceDeviceStore {
     localStorage.removeItem(`${META_PREFIX}${key}`);
   }
 
+  async legacySettingsMigration(raw: string): Promise<{ marker: string; consumed: boolean }> {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    const marker = `shared-migrated:sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+    return { marker, consumed: localStorage.getItem(`${META_PREFIX}settings`) === marker };
+  }
+
+  completeLegacySettingsMigration(raw: string, marker: string): void {
+    if (localStorage.getItem(this.sharedDataKey('settings')) === raw) {
+      localStorage.setItem(`${META_PREFIX}settings`, marker);
+    }
+  }
+
+  hasCurrentDeviceSettings(): boolean {
+    return localStorage.getItem(`${this.deviceDataKey(DEVICE_SETTINGS_STORE_KEY)}:v2`) !== null;
+  }
+
   listLegacyCandidates(remoteExists: (key: string) => boolean | null): LocalImportCandidate[] {
     const candidates: LocalImportCandidate[] = [];
     for (const item of SHARED_STORE_KEYS) {
@@ -95,8 +111,7 @@ export class PersistenceDeviceStore {
     try {
       const oldSettings = legacy === null ? {} : JSON.parse(legacy);
       return {
-        ...splitSettings(oldSettings).device,
-        ...splitSettings(raw === null ? {} : JSON.parse(raw)).device,
+        ...splitSettings(raw === null ? oldSettings : JSON.parse(raw)).device,
         ...legacyProviderSettings(sharedLegacy === null ? {} : JSON.parse(sharedLegacy)),
         ...legacyProviderSettings(oldSettings),
       } as T;
