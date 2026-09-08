@@ -6,6 +6,10 @@ import { initSupabase } from './store/supabase';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
 import { AuthSessionProvider } from './store/AuthSessionContext';
 import OAuthConsentPage from './surfaces/OAuthConsentPage';
+import { clearRetiredDashboardCaches } from './store/persistence/deviceStore';
+
+// These retired, account-unscoped caches must also disappear before sign-in.
+clearRetiredDashboardCaches();
 
 // Initialize the account database only from build-managed configuration.
 if (SUPABASE_URL && SUPABASE_ANON_KEY) {

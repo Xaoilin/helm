@@ -776,51 +776,8 @@ export interface PrayerOutcomeStats extends PrayerOutcomeTally {
   perPrayer: Record<PrayerName, PrayerOutcomeTally>;
 }
 
-export type FocusCandidateKind = 'task' | 'habit' | 'prayer' | 'meeting_prep' | 'break' | 'clear';
+// Historical dashboardFocusFeedback records remain compatible; no active runtime owns them.
 export type FocusFeedbackAction = 'dismissed' | 'snoozed' | 'opened' | 'completed' | 'refreshed';
-export type FocusDurationSource = 'task_title' | 'task_description' | 'event_window' | 'system' | 'heuristic' | 'openai';
-
-export interface DashboardFocusStats {
-  overdueCount: number;
-  dueTodayCount: number;
-  routinesLeft: number;
-  prayersLeft: number;
-  activeTaskCount: number;
-}
-
-export interface FocusCandidate {
-  id: string;
-  kind: FocusCandidateKind;
-  title: string;
-  subtitle: string;
-  score: number;
-  localWhy: string;
-  reasoningTags: string[];
-  estimatedMinutes?: number;
-  estimatedMinutesSource?: FocusDurationSource;
-  taskId?: string;
-  eventId?: string;
-  projectId?: string;
-  dueDate?: string;
-  isUrgent?: boolean;
-}
-
-export interface FocusRecommendation {
-  selectedCandidateId: string;
-  why: string;
-  confidence: number;
-  reasoningTags: string[];
-  estimatedMinutes?: number;
-  estimatedMinutesSource?: FocusDurationSource;
-  alternativeIds: string[];
-  refreshAfterMinutes: number;
-  source: 'local' | 'openai';
-  model?: string;
-  generatedAt: string;
-  expiresAt: string;
-  inputHash: string;
-  fallbackReason?: string;
-}
 
 export interface FocusFeedback {
   id: string;
@@ -828,16 +785,6 @@ export interface FocusFeedback {
   action: FocusFeedbackAction;
   createdAt: string;
   snoozedUntil?: string;
-}
-
-export interface DashboardFocusState {
-  loaded: boolean;
-  status: 'idle' | 'refreshing' | 'ready';
-  recommendation: FocusRecommendation | null;
-  candidates: FocusCandidate[];
-  queueCandidateIds: string[];
-  stats: DashboardFocusStats;
-  lastError?: string;
 }
 
 // ── Lifestyle Tracker (Haram/Halal) ──

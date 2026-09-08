@@ -9,6 +9,17 @@ const META_PREFIX = `${NAMESPACE}:meta:`;
 export const DEVICE_SETTINGS_STORE_KEY = 'deviceSettings';
 export type DeviceStoreKey = typeof DEVICE_SETTINGS_STORE_KEY;
 
+/** Retire only the old recommendation caches; never read or migrate their contents. */
+export function clearRetiredDashboardCaches(): void {
+  for (const key of ['helm:dashboardFocusCache:v1', 'helm:dashboardFocusHostedReview:v1']) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      logWarn('Persistence', 'Retired dashboard cache cleanup is unavailable in this browser.');
+    }
+  }
+}
+
 export interface LegacyLocalValue {
   raw: string | null;
   value: unknown;

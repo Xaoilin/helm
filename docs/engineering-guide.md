@@ -122,7 +122,7 @@ Hosted AI defaults to paused unless the server's `HOSTED_AI_ENABLED` is exactly
 `true`. Authentication, benchmark scope and billing operator checks run before
 the pause response. Verified health returns the deployed SHA and mode without
 calling OpenAI; chat, voice planning and operator billing return HTTP 503 with
-`hosted_ai_paused`. Settings, Debug, Chat and system health show the pause. Use
+`hosted_ai_paused`. Settings, Debug and Chat show the pause. Use
 normal app controls directly. Codex remains an engineering tool, not an app
 backend; no alternate inference provider is selected automatically for a pause.
 
