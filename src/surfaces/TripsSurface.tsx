@@ -17,6 +17,7 @@ import type {
   TripStatus,
   TripTransportMode,
 } from '../types/domain';
+import { useDialog } from '../hooks/useDialog';
 
 type TripsTab = 'overview' | 'timeline' | 'bookings' | 'budget';
 type WizardStep = 'basics' | 'route' | 'bookings' | 'review';
@@ -69,6 +70,21 @@ interface StayBookingDraft {
 }
 
 type BookingDraft = TransportBookingDraft | StayBookingDraft;
+
+interface WizardDraftState {
+  tripName: string;
+  tripSummary: string;
+  tripNotes: string;
+  tripStatus: TripStatus;
+  tripBudgetCurrency: string;
+  tripBudgetTotal: string;
+  routeDrafts: LegDraft[];
+  wizardBookings: BookingDraft[];
+}
+
+function serializeWizardDraft(draft: WizardDraftState): string {
+  return JSON.stringify(draft, (key, value) => key === 'id' ? undefined : value);
+}
 
 interface BudgetEntryDraft {
   title: string;
@@ -1369,6 +1385,31 @@ export default function TripsSurface() {
   const [calendarTarget, setCalendarTarget] = useState<{ title: string; start: string; end: string; description: string; allDay: boolean; location?: string } | null>(null);
   const [calendarSourceId, setCalendarSourceId] = useState('');
   const [calendarNotice, setCalendarNotice] = useState<string | null>(null);
+  const [initialWizardDraft, setInitialWizardDraft] = useState<string | null>(null);
+
+  function closeWizard(): void {
+    setShowWizard(false);
+    setWizardFeedback(null);
+    setInitialWizardDraft(null);
+  }
+
+  const wizardDraft = {
+    tripName,
+    tripSummary,
+    tripNotes,
+    tripStatus,
+    tripBudgetCurrency,
+    tripBudgetTotal,
+    routeDrafts,
+    wizardBookings,
+  } satisfies WizardDraftState;
+
+  const { dialogRef: wizardDialogRef, requestClose: requestWizardClose } = useDialog({
+    open: showWizard,
+    onClose: closeWizard,
+    dirty: initialWizardDraft !== null
+      && serializeWizardDraft(wizardDraft) !== initialWizardDraft,
+  });
 
   const legsByTrip = useMemo(() => {
     const map = new Map<string, TripLeg[]>();
@@ -1607,6 +1648,16 @@ export default function TripsSurface() {
 
   function openCreateWizard(): void {
     resetWizard();
+    setInitialWizardDraft(serializeWizardDraft({
+      tripName: '',
+      tripSummary: '',
+      tripNotes: '',
+      tripStatus: 'planning',
+      tripBudgetCurrency: TRIP_BUDGET.DEFAULT_CURRENCY,
+      tripBudgetTotal: '',
+      routeDrafts: [{ id: '', country: '', city: '', startDate: '', endDate: '' }],
+      wizardBookings: [],
+    }));
     setShowWizard(true);
   }
 
@@ -1683,7 +1734,7 @@ export default function TripsSurface() {
 
     setSelectedTripIdState(tripId);
     setActiveTab('overview');
-    setShowWizard(false);
+    closeWizard();
   }
 
   function openTripEdit(trip: Trip): void {
@@ -2475,8 +2526,16 @@ export default function TripsSurface() {
       </div>
 
       {showWizard && (
-        <div className="modal-overlay" onClick={() => setShowWizard(false)}>
-          <div className="modal trip-wizard-modal" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="Plan trip">
+        <div className="modal-overlay" onClick={requestWizardClose}>
+          <div
+            ref={wizardDialogRef}
+            className="modal trip-wizard-modal"
+            onClick={event => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            tabIndex={-1}
+            aria-label="Plan trip"
+          >
             <h2>Plan Trip</h2>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
               {(['basics', 'route', 'bookings', 'review'] as WizardStep[]).map(step => (
@@ -2488,7 +2547,7 @@ export default function TripsSurface() {
               <div style={{ display: 'grid', gap: 12 }}>
                 <div className="form-group">
                   <label htmlFor="trip-name">Trip Name</label>
-                  <input id="trip-name" className="form-input" value={tripName} onChange={event => setTripName(event.target.value)} placeholder="Summer Europe route" autoFocus />
+                  <input id="trip-name" className="form-input" value={tripName} onChange={event => setTripName(event.target.value)} placeholder="Summer Europe route" />
                 </div>
                 <div className="form-group">
                   <label htmlFor="trip-summary">Short Summary</label>
@@ -2617,11 +2676,11 @@ export default function TripsSurface() {
 
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => {
-                setWizardFeedback(null);
                 if (wizardStep === 'basics') {
-                  setShowWizard(false);
+                  requestWizardClose();
                   return;
                 }
+                setWizardFeedback(null);
                 setWizardStep(wizardStep === 'route' ? 'basics' : wizardStep === 'bookings' ? 'route' : 'bookings');
               }}>
                 {wizardStep === 'basics' ? 'Cancel' : 'Back'}

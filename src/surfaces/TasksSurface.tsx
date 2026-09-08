@@ -28,6 +28,7 @@ import {
   PRAYER_TASK_ORDER,
 } from '../services/prayerTasks';
 import { usePrayerContext } from '../store/contexts/PrayerContext';
+import { useDialog } from '../hooks/useDialog';
 
 type Tab = 'today' | 'all' | 'goals';
 
@@ -46,6 +47,23 @@ interface AllTaskSection {
 }
 
 type AllTaskAccordionSectionId = AllTaskSection['id'] | 'completed';
+
+interface TaskFormState {
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  category: TaskCategory;
+  prayerName: PrayerName;
+  dueDate: string;
+  recurringFreq: 'daily' | 'weekdays' | 'weekly';
+  goalTag: string;
+  habitEmoji: string;
+  taskProjectId: string;
+}
+
+function areTaskFormsEqual(left: TaskFormState, right: TaskFormState): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
 
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -110,6 +128,7 @@ export default function TasksSurface() {
   const [goalTag, setGoalTag] = useState('');
   const [habitEmoji, setHabitEmoji] = useState('');
   const [taskProjectId, setTaskProjectId] = useState('');
+  const [initialForm, setInitialForm] = useState<TaskFormState | null>(null);
 
   // Filters
   const [filterGoalTag, setFilterGoalTag] = useState<string>('all');
@@ -125,6 +144,31 @@ export default function TasksSurface() {
   const assistantNavigationRequest = shell.assistantNavigationRequest;
   const dismissAssistantNavigationRequest = shell.dismissAssistantNavigationRequest;
   const tasks = taskContext.tasks;
+
+  function closeForm(): void {
+    setShowForm(false);
+    setEditing(null);
+    setInitialForm(null);
+  }
+
+  const taskForm = {
+    title,
+    description,
+    priority,
+    category,
+    prayerName,
+    dueDate,
+    recurringFreq,
+    goalTag,
+    habitEmoji,
+    taskProjectId,
+  } satisfies TaskFormState;
+
+  const { dialogRef: taskDialogRef, requestClose: requestTaskClose } = useDialog({
+    open: showForm,
+    onClose: closeForm,
+    dirty: Boolean(initialForm && !areTaskFormsEqual(taskForm, initialForm)),
+  });
 
   useEffect(() => {
     const request = assistantNavigationRequest;
@@ -402,26 +446,60 @@ export default function TasksSurface() {
 
   // ── Actions ──
   const openAdd = (defaultCategory?: TaskCategory) => {
-    setTitle(''); setDescription(''); setPriority('medium');
-    setCategory(defaultCategory || (tab === 'goals' ? 'goal' : 'task'));
-    setPrayerName('Fajr');
-    setDueDate(tab === 'today' ? todayStr : '');
-    setRecurringFreq('daily');
-    setGoalTag(filterGoalTag !== 'all' ? filterGoalTag : '');
-    setTaskProjectId(filterProjectId !== 'all' ? filterProjectId : '');
-    setHabitEmoji('');
+    const nextCategory = defaultCategory || (tab === 'goals' ? 'goal' : 'task');
+    const nextDueDate = tab === 'today' ? todayStr : '';
+    const nextGoalTag = filterGoalTag !== 'all' ? filterGoalTag : '';
+    const nextProjectId = filterProjectId !== 'all' ? filterProjectId : '';
+    const nextForm: TaskFormState = {
+      title: '',
+      description: '',
+      priority: 'medium',
+      category: nextCategory,
+      prayerName: 'Fajr',
+      dueDate: nextDueDate,
+      recurringFreq: 'daily',
+      goalTag: nextGoalTag,
+      habitEmoji: '',
+      taskProjectId: nextProjectId,
+    };
+    setTitle(nextForm.title);
+    setDescription(nextForm.description);
+    setPriority(nextForm.priority);
+    setCategory(nextForm.category);
+    setPrayerName(nextForm.prayerName);
+    setDueDate(nextForm.dueDate);
+    setRecurringFreq(nextForm.recurringFreq);
+    setGoalTag(nextForm.goalTag);
+    setTaskProjectId(nextForm.taskProjectId);
+    setHabitEmoji(nextForm.habitEmoji);
+    setInitialForm(nextForm);
     setEditing(null); setShowForm(true);
   };
 
   const openEdit = (task: Task) => {
-    setTitle(task.title); setDescription(task.description);
-    setPriority(task.priority); setCategory(task.category);
-    setPrayerName(task.prayerName || 'Fajr');
-    setDueDate(task.dueDate || '');
-    setRecurringFreq(task.recurring?.frequency || 'daily');
-    setGoalTag(task.goalTag || '');
-    setTaskProjectId(task.projectId || '');
-    setHabitEmoji(task.emoji || '');
+    const nextForm: TaskFormState = {
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      category: task.category,
+      prayerName: task.prayerName || 'Fajr',
+      dueDate: task.dueDate || '',
+      recurringFreq: task.recurring?.frequency || 'daily',
+      goalTag: task.goalTag || '',
+      habitEmoji: task.emoji || '',
+      taskProjectId: task.projectId || '',
+    };
+    setTitle(nextForm.title);
+    setDescription(nextForm.description);
+    setPriority(nextForm.priority);
+    setCategory(nextForm.category);
+    setPrayerName(nextForm.prayerName);
+    setDueDate(nextForm.dueDate);
+    setRecurringFreq(nextForm.recurringFreq);
+    setGoalTag(nextForm.goalTag);
+    setTaskProjectId(nextForm.taskProjectId);
+    setHabitEmoji(nextForm.habitEmoji);
+    setInitialForm(nextForm);
     setEditing(task); setShowForm(true);
   };
 
@@ -462,7 +540,7 @@ export default function TasksSurface() {
     } else {
       taskContext.addTask(data);
     }
-    setShowForm(false);
+    closeForm();
   };
 
   const toggleComplete = (task: Task) => {
@@ -552,7 +630,7 @@ export default function TasksSurface() {
   const handleDelete = (id: string) => {
     taskContext.removeTask(id);
     setDeletingId(null);
-    if (editing?.id === id) setShowForm(false);
+    if (editing?.id === id) closeForm();
   };
 
   const isAssistantHighlighted = useCallback((taskId: string) => highlightedTaskId === taskId, [highlightedTaskId]);
@@ -1155,8 +1233,16 @@ export default function TasksSurface() {
 
       {/* ── Add/Edit Modal ── */}
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={editing ? 'Edit Task' : 'Add Task'}>
+        <div className="modal-overlay" onClick={requestTaskClose}>
+          <div
+            ref={taskDialogRef}
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            tabIndex={-1}
+            aria-label={editing ? 'Edit Task' : 'Add Task'}
+          >
             <h2>{editing ? 'Edit Task' : 'Add Task'}</h2>
             <div className="form-group">
               <label htmlFor={category === 'prayer' ? 'task-prayer-name' : 'task-title'}>{category === 'prayer' ? 'Prayer' : 'Title'}</label>
@@ -1171,7 +1257,7 @@ export default function TasksSurface() {
                   {PRAYER_TASK_ORDER.map(name => <option key={name} value={name}>{name}</option>)}
                 </select>
               ) : (
-                <input id="task-title" className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="What needs to be done?" autoFocus />
+                <input id="task-title" className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="What needs to be done?" />
               )}
             </div>
             <div className="form-group">
@@ -1256,7 +1342,7 @@ export default function TasksSurface() {
               </div>
             )}
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
+              <button className="btn btn-secondary" onClick={requestTaskClose}>Cancel</button>
               <button className="btn btn-primary" onClick={save} disabled={category !== 'prayer' && !title.trim()}>
                 {editing ? 'Save' : 'Add'}
               </button>
