@@ -580,22 +580,31 @@ export default function CalendarSurface() {
                       <div
                         key={i}
                         className={`calendar-day ${isCurrentMonth ? '' : 'other-month'} ${isToday(date) ? 'today' : ''} ${toLocalDateStr(date) === selectedDateStr ? 'selected' : ''}`}
-                        onClick={() => setSelectedDateStr(toLocalDateStr(date))}
                       >
-                        <div className="day-num">{date.getUTCDate()}</div>
+                        <button
+                          type="button"
+                          className="day-num"
+                          aria-label={`Select ${formatCalendarDate(date)}`}
+                          onClick={() => setSelectedDateStr(toLocalDateStr(date))}
+                          style={{ appearance: 'none', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}
+                        >
+                          {date.getUTCDate()}
+                        </button>
                         {dayEvents.slice(0, 3).map(evt => {
                           const pal = getEventPalette(evt.sourceId);
                           return (
-                            <div
+                            <button
+                              type="button"
                               key={evt.id}
                               className="calendar-event-dot"
-                              style={{ background: pal.bg, borderLeft: `2px solid ${pal.border}`, position: 'relative' }}
+                              style={{ appearance: 'none', background: pal.bg, borderTop: 0, borderRight: 0, borderBottom: 0, borderLeft: `2px solid ${pal.border}`, color: 'inherit', cursor: 'pointer', display: 'block', fontFamily: 'inherit', position: 'relative', textAlign: 'left' }}
                               onClick={() => openEditEvent(evt)}
+                              aria-label={`Open ${evt.title}`}
                               title={evt.title}
                             >
                               {evt.pendingSync && <span className="event-pending-badge" />}
                               {evt.title}
-                            </div>
+                            </button>
                           );
                         })}
                         {dayEvents.length > 3 && <div style={{ fontSize: 10, color: '#9499b0' }}>+{dayEvents.length - 3} more</div>}
@@ -739,14 +748,24 @@ export default function CalendarSurface() {
                           (() => {
                             const pal = getEventPalette(evt.sourceId);
                             return (
-                              <div
+                              <button
+                                type="button"
                                 key={evt.id}
                                 className="week-col-event"
                                 style={{
+                                  appearance: 'none',
                                   borderLeftColor: pal.border,
                                   background: pal.bg,
+                                  borderTop: 0,
+                                  borderRight: 0,
+                                  borderBottom: 0,
+                                  color: 'inherit',
+                                  fontFamily: 'inherit',
+                                  textAlign: 'left',
+                                  width: '100%',
                                 }}
                                 onClick={() => openEditEvent(evt)}
+                                aria-label={`Open ${evt.title}`}
                               >
                                 <div className="week-col-event-time" style={{ color: pal.text }}>
                                   {evt.allDay ? 'All day' : formatAppTime(new Date(evt.start), appTimeZone)}
@@ -756,7 +775,7 @@ export default function CalendarSurface() {
                                 </div>
                                 <div className="week-col-event-title">{evt.title}</div>
                                 {evt.location && <div className="week-col-event-loc">{evt.location}</div>}
-                              </div>
+                              </button>
                             );
                           })()
                         ))}
@@ -787,7 +806,14 @@ export default function CalendarSurface() {
               </div>
             ) : (
               agendaEvents.map(evt => (
-                <div key={evt.id} className="agenda-item" onClick={() => openEditEvent(evt)} style={{ cursor: 'pointer' }}>
+                <button
+                  type="button"
+                  key={evt.id}
+                  className="agenda-item"
+                  onClick={() => openEditEvent(evt)}
+                  aria-label={`Open ${evt.title}`}
+                  style={{ appearance: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', width: '100%' }}
+                >
                   <div className="agenda-time">
                     {evt.allDay ? 'All day' : formatAppTime(new Date(evt.start), appTimeZone)}
                   </div>
@@ -804,7 +830,7 @@ export default function CalendarSurface() {
                       {evt.description && <> &middot; {evt.description.slice(0, 60)}</>}
                     </div>
                   </div>
-                </div>
+                </button>
               ))
             )}
           </>

@@ -382,10 +382,17 @@ export default function KnowledgeSurface() {
     const expanded = expandedEntryId === entry.id;
     return (
       <div key={entry.id} className={`kb-entry-card ${expanded ? 'expanded' : ''}`}>
-        <div className="kb-entry-header" onClick={() => setExpandedEntryId(expanded ? null : entry.id)}>
+        <button
+          type="button"
+          className="kb-entry-header"
+          aria-label={`${expanded ? 'Collapse' : 'Open'} ${entry.title}`}
+          aria-expanded={expanded}
+          onClick={() => setExpandedEntryId(expanded ? null : entry.id)}
+          style={{ appearance: 'none', background: 'transparent', border: 0, color: 'inherit', cursor: 'pointer', fontFamily: 'inherit', padding: 0, textAlign: 'left', width: '100%' }}
+        >
           <div className="kb-entry-title">{entry.title}</div>
           <div className="kb-entry-sources">{entry.sources.map((s, i) => renderSourceBadge(s, i))}</div>
-        </div>
+        </button>
         {!expanded && (
           <div className="kb-entry-preview">{entry.content.slice(0, 120)}{entry.content.length > 120 ? '...' : ''}</div>
         )}
@@ -484,27 +491,34 @@ export default function KnowledgeSurface() {
                     const count = getEntryCountForTopic(topic.id);
                     const comp = getSourceComposition(topic.id);
                     return (
-                      <div key={topic.id} className="kb-topic-card" onClick={() => setSelectedTopicId(topic.id)} style={{ borderLeftColor: topic.color }}>
-                        <div className="kb-topic-icon">{topic.icon}</div>
-                        <div className="kb-topic-info">
-                          <div className="kb-topic-name">{topic.name}</div>
-                          <div className="kb-topic-count">{count} entr{count !== 1 ? 'ies' : 'y'}</div>
-                        </div>
-                        <button className="btn-icon btn-sm" onClick={e => { e.stopPropagation(); openEditTopic(topic); }} aria-label={`Edit ${topic.name}`} style={{ fontSize: 11, opacity: 0.5 }}>Edit</button>
-                        {count > 0 && (
-                          <div className="kb-composition-bar">
-                            <div className="kb-comp-quran" style={{ width: `${comp.quran * 100}%` }} />
-                            <div className="kb-comp-hadith" style={{ width: `${comp.hadith * 100}%` }} />
-                            <div className="kb-comp-other" style={{ width: `${comp.other * 100}%` }} />
+                      <div key={topic.id} className="kb-topic-card" style={{ borderLeftColor: topic.color }}>
+                        <button
+                          type="button"
+                          aria-label={`Open ${topic.name}`}
+                          onClick={() => setSelectedTopicId(topic.id)}
+                          style={{ alignItems: 'center', appearance: 'none', background: 'transparent', border: 0, color: 'inherit', cursor: 'pointer', display: 'grid', fontFamily: 'inherit', gap: '4px 12px', gridColumn: '1 / 3', gridTemplateColumns: 'auto 1fr', gridTemplateRows: 'auto auto', padding: 0, textAlign: 'left', width: '100%' }}
+                        >
+                          <div className="kb-topic-icon">{topic.icon}</div>
+                          <div className="kb-topic-info">
+                            <div className="kb-topic-name">{topic.name}</div>
+                            <div className="kb-topic-count">{count} entr{count !== 1 ? 'ies' : 'y'}</div>
                           </div>
-                        )}
+                          {count > 0 && (
+                            <div className="kb-composition-bar">
+                              <div className="kb-comp-quran" style={{ width: `${comp.quran * 100}%` }} />
+                              <div className="kb-comp-hadith" style={{ width: `${comp.hadith * 100}%` }} />
+                              <div className="kb-comp-other" style={{ width: `${comp.other * 100}%` }} />
+                            </div>
+                          )}
+                        </button>
+                        <button className="btn-icon btn-sm" onClick={e => { e.stopPropagation(); openEditTopic(topic); }} aria-label={`Edit ${topic.name}`} style={{ fontSize: 11, opacity: 0.5 }}>Edit</button>
                       </div>
                     );
                   })}
-                  <div className="kb-topic-card kb-add-topic" onClick={openAddTopic}>
+                  <button type="button" className="kb-topic-card kb-add-topic" onClick={openAddTopic} style={{ appearance: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
                     <div className="kb-topic-icon" style={{ opacity: 0.4 }}>+</div>
                     <div className="kb-topic-info"><div className="kb-topic-name" style={{ color: '#6b6f85' }}>Add Topic</div></div>
-                  </div>
+                  </button>
                 </div>
 
                 {recentEntries.length > 0 && (

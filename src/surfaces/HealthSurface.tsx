@@ -422,6 +422,7 @@ export default function HealthSurface() {
                           Edit
                         </button>
                         <button className="btn btn-secondary btn-sm" onClick={() => {
+                          if (!window.confirm(`Remove "${entry.venue}"?`)) return;
                           health.removeFastFoodEntry(entry.id);
                           if (editingEntryId === entry.id) {
                             resetDraft(today);
