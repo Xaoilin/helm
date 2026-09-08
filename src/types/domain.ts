@@ -1380,6 +1380,8 @@ export interface Settings {
   lifeHeroEnabled?: boolean;
   assistantEnabled?: boolean;
   elevenLabsApiKey?: string;
+  /** Account-owned Secrets entry ID; never a provider key. */
+  elevenLabsSecretId?: string;
   elevenLabsVoiceId?: string;
   microphoneDeviceId?: string;
   wakeWordEnabled?: boolean;
