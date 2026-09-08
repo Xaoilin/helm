@@ -13,7 +13,7 @@ import { useAssistantActivityContext } from "../store/contexts/AssistantActivity
 import { useAssistantUndo } from "../store/contexts/AssistantUndoContext";
 import { usePrayerContext } from "../store/contexts/PrayerContext";
 import { useChatContext } from '../store/contexts/ChatContext';
-import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, DEEPGRAM_API_KEY, OLLAMA_ENDPOINT } from '../config';
+import { ELEVENLABS_VOICE_ID, OLLAMA_ENDPOINT } from '../config';
 import { TIMING, VOICE_SESSION } from '../config/constants';
 import { useVoiceOutput } from '../hooks/useVoiceOutput';
 import { useWakeWord } from '../hooks/useWakeWord';
@@ -85,8 +85,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
   const enabled = settings.settings.assistantEnabled !== false;
   const wakeWordEnabled = settings.settings.wakeWordEnabled === true;
-  const hasElevenLabs = !!(ELEVENLABS_API_KEY && ELEVENLABS_VOICE_ID);
-  const deepgramKey = DEEPGRAM_API_KEY || settings.settings.deepgramApiKey || '';
+  const elevenLabsSecretId = settings.settings.elevenLabsSecretId;
+  const elevenLabsVoiceId = settings.settings.elevenLabsVoiceId || ELEVENLABS_VOICE_ID;
+  const hasElevenLabs = Boolean(elevenLabsSecretId && elevenLabsVoiceId);
   const micDeviceId = settings.settings.microphoneDeviceId;
   const lang: AssistantLang = settings.settings.assistantLanguage || 'en';
   const isArabic = lang === 'ar';
@@ -115,11 +116,11 @@ export default function VoiceAssistant({ prayerData }: Props) {
     setError('');
   }, []);
 
-  const { speak: speakRaw, stopSpeaking } = useVoiceOutput({
+  const { speak: speakRaw, stopSpeaking, notice: voiceNotice } = useVoiceOutput({
     hasElevenLabs,
     lang,
-    elevenLabsApiKey: ELEVENLABS_API_KEY,
-    elevenLabsVoiceId: ELEVENLABS_VOICE_ID,
+    elevenLabsSecretId,
+    elevenLabsVoiceId,
   });
 
   const {
@@ -129,7 +130,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
     voiceBackend,
   } = useVoiceInput({
     enabled,
-    deepgramKey,
+    // Deepgram requires a secure server path. The browser recognition path is
+    // the only supported client-side input backend here.
+    deepgramKey: '',
     micDeviceId,
     sttLang,
     onTranscript: useCallback((text: string) => {
@@ -154,7 +157,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
       void playReadyTone();
     }, []),
     onError: useCallback((message: string) => {
-      setError(message);
+      setError(message.includes('Deepgram')
+        ? 'Voice input is unavailable in this browser. Deepgram is unavailable without a secure server path.'
+        : message);
       if (handsFreeSessionActiveRef.current) {
         handsFreeSessionActiveRef.current = false;
         voiceConversationIdRef.current = null;
@@ -235,7 +240,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
       setVoiceSessionMode('manual');
       setListeningMode('initial');
       setState('open');
-      setError('Voice input is unavailable. Add a Deepgram key in Settings → Voice Assistant to use hands-free mode.');
+      setError('Voice input is unavailable in this browser. Deepgram is unavailable without a secure server path.');
       return;
     }
 
@@ -284,7 +289,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
     if (voiceBackend === 'none') {
       openAssistantPanel();
-      setError('Voice input is unavailable. Add a Deepgram key in Settings → Voice Assistant to use hands-free mode.');
+      setError('Voice input is unavailable in this browser. Deepgram is unavailable without a secure server path.');
       return;
     }
 
@@ -676,6 +681,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
           {error && (
             <div style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 8, lineHeight: 1.4 }}>{error}</div>
           )}
+          {voiceNotice && !error && (
+            <div style={{ fontSize: 12, color: '#f59e0b', marginBottom: 8, lineHeight: 1.4 }}>{voiceNotice}</div>
+          )}
 
           {showLatestActivity && latestActivity && (
             <div className="va-activity" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
@@ -756,7 +764,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
                   onMouseEnter={event => { event.currentTarget.style.background = '#1a1d2e'; event.currentTarget.style.borderColor = '#4f5bff'; }}
                   onMouseLeave={event => { event.currentTarget.style.background = '#0f1117'; event.currentTarget.style.borderColor = '#2a2d40'; }}
                   aria-label="Use voice input"
-                  title={voiceBackend === 'deepgram' ? 'Start voice input (Deepgram)' : 'Speak your command'}
+                  title={voiceBackend === 'deepgram' ? 'Start voice input (secure service)' : 'Speak your command'}
                 >
                   {'\uD83C\uDF99\uFE0F'}
                 </button>
@@ -839,9 +847,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
           {state === 'open' && voiceSessionMode === 'manual' && !transcript && !response && (
             <div style={{ marginTop: 8, fontSize: 10, color: '#4a4e63' }}>
-              {voiceBackend === 'deepgram' ? '\uD83D\uDFE2 Voice: Deepgram' :
-               voiceBackend === 'chrome' ? '\uD83D\uDFE1 Voice: Chrome (may be unreliable)' :
-               '\uD83D\uDD34 Voice off \u2014 add Deepgram key in Settings'}
+              {voiceBackend === 'deepgram' ? '\uD83D\uDFE2 Voice: secure service' :
+               voiceBackend === 'chrome' ? '\uD83D\uDFE1 Voice: browser speech recognition' :
+               '\uD83D\uDD34 Voice off \u2014 browser speech recognition unavailable; Deepgram requires a secure server path'}
             </div>
           )}
         </div>

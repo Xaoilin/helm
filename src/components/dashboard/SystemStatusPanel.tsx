@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DEEPGRAM_API_KEY, OLLAMA_ENDPOINT } from '../../config';
+import { OLLAMA_ENDPOINT } from '../../config';
 import { useGoogleSync } from '../../hooks/useGoogleSync';
 import { getHostedAssistantModelSetting } from '../../services/assistantModels';
 import { testHostedAssistantConnection, type HostedAssistantConnectionStatus } from '../../services/hostedAssistantApi';
@@ -156,8 +156,11 @@ export default function SystemStatusPanel() {
       checkedAt: ollamaCheckedAt,
     },
     voice: {
-      settings: settings.settings,
-      deepgramKeyPresent: Boolean(DEEPGRAM_API_KEY || settings.settings.deepgramApiKey),
+      settings: {
+        assistantEnabled: settings.settings.assistantEnabled,
+        wakeWordEnabled: settings.settings.wakeWordEnabled,
+        microphoneDeviceId: settings.settings.microphoneDeviceId,
+      },
       browserSpeechAvailable: isBrowserSpeechAvailable(),
     },
   }), [

@@ -1,9 +1,88 @@
+import { SUPABASE_URL } from '../config';
 import { API_TIMEOUT, TIMING, VOICE_SESSION } from '../config/constants';
 import type { AssistantLang } from '../assistant/shared';
+import { getHostedAssistantAuthHeaders } from './hostedAssistantAccess';
+import { getClient } from '../store/supabase';
+
+interface SpeechServiceErrorPayload {
+  code?: unknown;
+  error?: unknown;
+  deploymentSha?: unknown;
+}
+
+export class SpeechServiceError extends Error {
+  readonly code?: string;
+  readonly deploymentSha?: string;
+
+  constructor(message: string, payload: SpeechServiceErrorPayload = {}) {
+    super(message);
+    this.name = 'SpeechServiceError';
+    this.code = typeof payload.code === 'string' ? payload.code : undefined;
+    this.deploymentSha = typeof payload.deploymentSha === 'string' ? payload.deploymentSha : undefined;
+  }
+}
+
+function createAbortError(): Error {
+  if (typeof DOMException !== 'undefined') {
+    return new DOMException('Voice playback cancelled.', 'AbortError');
+  }
+
+  const error = new Error('Voice playback cancelled.');
+  error.name = 'AbortError';
+  return error;
+}
+
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(createAbortError());
+
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener('abort', onAbort);
+      reject(createAbortError());
+    };
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      error => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+function getSpeechEndpoint(): string {
+  const baseUrl = SUPABASE_URL.trim().replace(/\/+$/u, '');
+  if (!baseUrl) {
+    throw new Error('Speech playback is unavailable because Supabase is not configured.');
+  }
+  return `${baseUrl}/functions/v1/assistant-speech`;
+}
+
+async function getSpeechServiceError(response: Response): Promise<SpeechServiceError> {
+  let payload: SpeechServiceErrorPayload = {};
+  try {
+    const value = await response.json() as unknown;
+    if (value && typeof value === 'object') {
+      payload = value as SpeechServiceErrorPayload;
+    }
+  } catch {
+    // Keep a safe status-only message when an upstream response is malformed.
+  }
+
+  const message = typeof payload.error === 'string' && payload.error.trim()
+    ? payload.error.trim()
+    : `Speech service error: ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+  return new SpeechServiceError(message, payload);
+}
 
 export async function speakWithElevenLabs(
   text: string,
-  apiKey: string,
+  secretId: string,
   voiceId: string,
   signal?: AbortSignal,
 ): Promise<HTMLAudioElement> {
@@ -11,39 +90,43 @@ export async function speakWithElevenLabs(
   const abortRequest = () => controller.abort();
   const timeout = globalThis.setTimeout(abortRequest, API_TIMEOUT.ELEVENLABS_TTS);
   signal?.addEventListener('abort', abortRequest, { once: true });
-  if (signal?.aborted) abortRequest();
 
-  let resp: Response;
   try {
-    resp = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    if (signal?.aborted) throw createAbortError();
+    const client = getClient();
+    if (!client) {
+      throw new Error('Speech playback is unavailable because Supabase is not configured.');
+    }
+
+    const headers = await abortable(getHostedAssistantAuthHeaders(client), controller.signal);
+    if (controller.signal.aborted) throw createAbortError();
+
+    const response = await abortable(fetch(getSpeechEndpoint(), {
       method: 'POST',
       signal: controller.signal,
       headers: {
-        'xi-api-key': apiKey,
+        ...headers,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_flash_v2_5',
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          style: 0.3,
-        },
-      }),
-    });
+      body: JSON.stringify({ text, secretId, voiceId }),
+    }), controller.signal);
+
+    if (!response.ok) throw await abortable(getSpeechServiceError(response), controller.signal);
+
+    const blob = await abortable(response.blob(), controller.signal);
+    if (controller.signal.aborted) throw createAbortError();
+
+    const url = URL.createObjectURL(blob);
+    try {
+      return new Audio(url);
+    } catch (error) {
+      URL.revokeObjectURL(url);
+      throw error;
+    }
   } finally {
     globalThis.clearTimeout(timeout);
     signal?.removeEventListener('abort', abortRequest);
   }
-
-  if (!resp.ok) {
-    throw new Error(`ElevenLabs API error: ${resp.status} ${resp.statusText}`);
-  }
-
-  const blob = await resp.blob();
-  const url = URL.createObjectURL(blob);
-  return new Audio(url);
 }
 
 export type BrowserSpeechResult = 'played' | 'unavailable' | 'cancelled' | 'failed';

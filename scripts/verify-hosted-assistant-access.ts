@@ -49,13 +49,14 @@ async function main() {
   const health = await probe('authorized machine health', 'assistant-openai', machine(), 'health', 200);
   const healthBody = await health.json();
   if (healthBody.deploymentSha !== sha || healthBody.mode !== mode || !healthBody.ok) throw new Error('Live function SHA or operating mode does not match the protected candidate.');
-  for (const functionName of ['assistant-openai', 'assistant-openai-billing']) {
+  for (const functionName of ['assistant-openai', 'assistant-openai-billing', 'assistant-speech']) {
     for (const [label, token] of [['missing', undefined], ['public key', `Bearer ${publicKey}`], ['invalid', 'Bearer invalid-acceptance-token']]) {
       await probe(`${functionName}: ${label} denied`, functionName, token, functionName.endsWith('billing') ? 'summary' : 'turn', 401);
     }
   }
   await probe('machine narration denied', 'assistant-openai', machine(), 'chat', 403);
   await probe('machine billing denied', 'assistant-openai-billing', machine(), 'summary', 401);
+  await probe('machine speech denied', 'assistant-speech', machine(), 'speech', 401);
 
   if (!enabled) await probePaused('machine planner paused', 'assistant-openai', machine(), 'turn');
 
@@ -92,6 +93,7 @@ async function main() {
     } else {
       await probePaused('verified user chat paused', 'assistant-openai', `Bearer ${accessToken}`, 'chat');
       await probePaused('verified user voice planner paused', 'assistant-openai', `Bearer ${accessToken}`, 'turn');
+      await probePaused('verified user synthesis paused before Vault', 'assistant-speech', `Bearer ${accessToken}`, 'speech');
     }
     await probe('non-operator billing denied', 'assistant-openai-billing', `Bearer ${accessToken}`, 'summary', 403);
     if (!enabled) {

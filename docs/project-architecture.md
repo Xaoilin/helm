@@ -11,7 +11,7 @@ The current stack is:
 - Supabase Auth, account records, private Realtime Broadcast, and Edge Functions
 - Hosted OpenAI through the `assistant-openai` Edge Function
 - Optional Ollama planning through the endpoint configured in Settings
-- Google Calendar, AlAdhan, Monzo, Deepgram, and ElevenLabs integrations
+- Google Calendar and AlAdhan integrations; paused Vault-backed ElevenLabs speech; Monzo and Deepgram awaiting secure server transports
 - Browser speech APIs, Web Notifications, and browser WASM where supported
 
 ## Runtime Map
@@ -92,20 +92,22 @@ Sabah One sign-in uses Supabase Auth. Separately connected Google Calendar accou
 
 Calendar sync is passive and account-bound. Opening Calendar or pressing `Sync` never opens an OAuth prompt. Reconnect is an explicit user action, and account-level states distinguish reconnect-required or revoked access from a generic service outage. Calendar groups, displays, and edits timed events in the effective app zone and supplies that zone explicitly to Google writes. Calendar writes go to Google first; a failed provider operation leaves the cached event unchanged rather than creating an offline pending mutation.
 
+The voice connection stores only `elevenLabsSecretId` in the device settings partition; `elevenLabsVoiceId` stays in the existing shared public settings. New device writes use `helm:device:deviceSettings:v2` and exclude provider values. The original device/legacy settings sources remain unchanged for the existing Secrets migration. `assistant-speech` verifies a real user and, only when hosted AI is enabled, calls the existing `list_helm_secrets` and `reveal_helm_secret` with that user JWT. It accepts one active API-key reference, text and a public voice ID, and returns MP3 audio or sanitized errors. There is no second Vault store or generic secret API. See [Voice provider security](voice-provider-security.md).
+
 ### Assistant and voice
 
 Chat and voice use the shared grounded assistant runtime in `src/assistant/`. Hosted GPT-5.4-family models provide planning and narration through `assistant-openai`, while Settings may select a configured Ollama endpoint; browser code supplies transcript normalization, capability and entity retrieval, effective-app-zone temporal resolution, validation, confirmation, deterministic execution, and debug tracing for both. Prayer-relative anchors receive the schedule zone separately.
 
 The selected planner returns `reply`, `clarify`, `confirm`, or `tool_calls`. Sabah One validates grounded IDs and temporal references, confirms risky actions, executes one semantic mutation path, verifies the result, and asks the same provider to narrate verified facts. If no live planner is available, Lina explains the unavailable capability in-app and does not guess or mutate state.
 
-Voice capabilities use Deepgram speech-to-text, ElevenLabs speech output, and browser speech fallbacks. Wake-word and speech features remain capability-dependent; Chat and the other surfaces remain available when a voice capability is unavailable.
+Voice input uses browser recognition where supported. Chat/Voice and Life Hero share the authenticated `assistant-speech` transport for ElevenLabs, with browser speech fallback. The shared hosted-AI pause applies before Vault access or provider requests. Wake-word and speech features remain capability-dependent; Chat and the other surfaces remain available when a voice capability is unavailable.
 
 ### Other external services
 
 The app also integrates with:
 
 - AlAdhan for validated Jafari prayer times, deadlines, and timezone metadata
-- Monzo for finance import when configured
+- Monzo import unavailable until a secure server connection is supplied
 - the authenticated `sabah-one-inventory-mcp` Supabase Edge Function for the narrow Inventory planning boundary
 
 Network failures use visible error states and the established retry, circuit-breaker, and logging utilities. Diagnostics redact tokens and preserve request IDs and normalized failure codes where available.

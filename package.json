@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "private": true,
-  "version": "0.2.144",
+  "version": "0.2.145",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
@@ -12,7 +12,7 @@
     "agent:policy": "npm run version:check && node ./scripts/verify-agent-policy.mjs && node ./scripts/verify-capability-composition.mjs",
     "benchmark:assistant": "tsx ./scripts/run-assistant-benchmark.ts",
     "build": "npm run build:web",
-    "build:web": "vite build && node ./scripts/copy-spa-fallback.mjs",
+    "build:web": "vite build && node ./scripts/copy-spa-fallback.mjs && node ./scripts/verify-public-assets.mjs",
     "check": "node ./scripts/run-check.mjs",
     "database:precutover": "node ./scripts/reconcile-helm-migration-history.mjs",
     "database:verify": "node ./scripts/verify-helm-database.mjs",

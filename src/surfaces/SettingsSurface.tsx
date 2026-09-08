@@ -10,7 +10,8 @@ import {
   type InventoryOAuthClientApproval,
 } from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
-import { DEFAULT_ASSISTANT_PROVIDER, ELEVENLABS_API_KEY, OLLAMA_ENDPOINT } from '../config';
+import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
+import { VoiceConnectionSettings } from '../components/VoiceConnectionSettings';
 import { DEFAULT_PROFILE } from '../services/gamification';
 import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
 import {
@@ -718,25 +719,7 @@ export default function SettingsSurface() {
               Lina will respond and listen in the selected language. Voice recognition also switches language.
             </div>
           </div>
-          {/* Deepgram API Key — for speech-to-text */}
-          <div className="form-group" style={{ marginTop: 12, marginBottom: 12 }}>
-            <label htmlFor="settings-deepgram">Deepgram API Key (for voice input)</label>
-            <input
-              id="settings-deepgram"
-              className="form-input"
-              type="password"
-              placeholder="Paste your Deepgram API key..."
-              value={settings.deepgramApiKey || ''}
-              onChange={e => settingsContext.updateSettings({ deepgramApiKey: e.target.value || undefined })}
-            />
-            <div style={{ fontSize: 10, color: '#4a4e62', marginTop: 4 }}>
-              Free at <a href="https://console.deepgram.com" target="_blank" rel="noreferrer" style={{ color: '#7c8aff' }}>console.deepgram.com</a> — comes with $200 credit.
-              Enables reliable voice commands (bypasses Chrome&apos;s broken speech service).
-            </div>
-          </div>
-          <div style={{ fontSize: 11, color: '#6b6f85', marginBottom: 10 }}>
-            {ELEVENLABS_API_KEY ? 'ElevenLabs voice output configured ✓' : 'Using browser voice output (configure ElevenLabs in .env for cloned voice)'}
-          </div>
+          <VoiceConnectionSettings />
           <div style={{ fontSize: 10, color: '#4a4e62', marginBottom: 10 }}>
             Tip: if Lina mishears you, say <strong>"No, I said ..."</strong>. Sabah One stores that correction locally and reuses it for future voice and chat commands.
           </div>

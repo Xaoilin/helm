@@ -1379,10 +1379,14 @@ export interface Settings {
   prayerReminderMinutes?: 5 | 10 | 15 | 30;
   lifeHeroEnabled?: boolean;
   assistantEnabled?: boolean;
+  /** Read-only legacy migration input. */
   elevenLabsApiKey?: string;
+  /** Device-only connection reference to an account-owned Secrets entry. */
+  elevenLabsSecretId?: string;
   elevenLabsVoiceId?: string;
   microphoneDeviceId?: string;
   wakeWordEnabled?: boolean;
+  /** Read-only legacy migration input. */
   deepgramApiKey?: string;
   assistantLanguage?: 'en' | 'ar';
   assistantProvider?: AssistantProvider;

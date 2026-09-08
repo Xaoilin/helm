@@ -56,8 +56,7 @@ export interface SystemHealthInput {
     checkedAt: string | null;
   };
   voice: {
-    settings: Pick<Settings, 'assistantEnabled' | 'wakeWordEnabled' | 'microphoneDeviceId' | 'deepgramApiKey'>;
-    deepgramKeyPresent: boolean;
+    settings: Pick<Settings, 'assistantEnabled' | 'wakeWordEnabled' | 'microphoneDeviceId'>;
     browserSpeechAvailable: boolean;
   };
 }
@@ -371,23 +370,14 @@ function buildVoiceItem(input: SystemHealthInput): HealthItem {
     };
   }
 
-  if (voice.deepgramKeyPresent) {
-    return {
-      id: 'voice',
-      label: 'Voice',
-      headline: 'Voice ready',
-      detail: voice.settings.microphoneDeviceId ? 'Deepgram speech-to-text and a microphone are configured.' : 'Deepgram speech-to-text is configured.',
-      tone: 'healthy',
-      meta: voice.settings.wakeWordEnabled ? 'Wake word on' : 'Wake word off',
-    };
-  }
-
   if (voice.browserSpeechAvailable) {
     return {
       id: 'voice',
       label: 'Voice',
       headline: 'Voice ready',
-      detail: 'Browser speech recognition is available without a Deepgram key.',
+      detail: voice.settings.microphoneDeviceId
+        ? 'Browser speech recognition is available with the selected microphone. Deepgram is unavailable without a secure server path.'
+        : 'Browser speech recognition is available. Deepgram is unavailable without a secure server path.',
       tone: 'local',
       meta: voice.settings.wakeWordEnabled ? 'Wake word on' : 'Wake word off',
     };
@@ -397,7 +387,7 @@ function buildVoiceItem(input: SystemHealthInput): HealthItem {
     id: 'voice',
     label: 'Voice',
     headline: 'Voice unavailable',
-    detail: 'Add a Deepgram key or use a browser with speech recognition support.',
+    detail: 'Browser speech recognition is unavailable. Deepgram is unavailable without a secure server path.',
     tone: 'attention',
     action: { kind: 'settings', label: 'Open Settings' },
   };

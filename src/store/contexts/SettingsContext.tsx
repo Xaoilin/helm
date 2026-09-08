@@ -135,7 +135,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const updateSettings = useCallback((updates: Partial<Settings>) => {
     setSettings(prev => {
-      const next = { ...prev, ...updates };
+      const safe = splitSettings(updates);
+      const next = { ...prev, ...safe.shared, ...safe.device };
+      if ('elevenLabsSecretId' in updates && !updates.elevenLabsSecretId) delete next.elevenLabsSecretId;
       if ('appTimezone' in updates) {
         const timeZone = validateIanaTimeZone(updates.appTimezone);
         if (timeZone) next.appTimezone = timeZone;

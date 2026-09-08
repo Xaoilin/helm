@@ -140,6 +140,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          VITE_ELEVENLABS_API_KEY: KAN305_SYNTHETIC_ELEVENLABS_MUST_NOT_BUNDLE
+          VITE_DEEPGRAM_API_KEY: KAN305_SYNTHETIC_DEEPGRAM_MUST_NOT_BUNDLE
+          VITE_MONZO_ACCESS_TOKEN: KAN305_SYNTHETIC_MONZO_MUST_NOT_BUNDLE
 
   database:
     name: database
