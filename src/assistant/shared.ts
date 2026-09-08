@@ -295,6 +295,7 @@ export interface AssistantCommandResult {
   degradedReason?:
     | 'ollama_offline'
     | 'ollama_error'
+    | 'hosted_paused'
     | 'hosted_sign_in_required'
     | 'hosted_not_configured'
     | 'hosted_error'

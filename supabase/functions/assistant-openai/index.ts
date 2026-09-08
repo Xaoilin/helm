@@ -1,6 +1,7 @@
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { authenticateAssistant } from '../_shared/assistantAuth.ts';
 import { ASSISTANT_DEPLOY_SHA } from '../_shared/assistantDeployment.ts';
+import { HOSTED_AI_ENABLED, HOSTED_AI_PAUSED_MESSAGE, hostedAIPausedResponse } from '../_shared/assistantMode.ts';
 import {
   buildOpenAIResponsesPayload,
   isAssistantMessage,
@@ -8,7 +9,7 @@ import {
 } from './openaiPayload.ts';
 import { extractFunctionCalls, extractOutputText } from './openaiResponse.ts';
 
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
+const OPENAI_API_KEY = HOSTED_AI_ENABLED ? Deno.env.get('OPENAI_API_KEY') || '' : '';
 const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') || 'gpt-5.4';
 const OPENAI_URL = 'https://api.openai.com/v1/responses';
 const ALLOWED_OPENAI_MODELS = new Set([
@@ -103,13 +104,6 @@ Deno.serve(async (request) => {
   const identity = await authenticateAssistant(request, true);
   if (identity instanceof Response) return identity;
 
-  if (!OPENAI_API_KEY) {
-    return jsonResponse(
-      { error: 'OPENAI_API_KEY is not configured for the hosted assistant.' },
-      { status: 503 },
-    );
-  }
-
   let body: unknown;
   try {
     body = await request.json();
@@ -133,7 +127,9 @@ Deno.serve(async (request) => {
 
   if (body.action === 'health') {
     return jsonResponse({
-      ok: true,
+      ok: !HOSTED_AI_ENABLED || Boolean(OPENAI_API_KEY),
+      mode: HOSTED_AI_ENABLED ? 'enabled' : 'paused',
+      ...(!HOSTED_AI_ENABLED ? { message: HOSTED_AI_PAUSED_MESSAGE } : {}),
       provider: 'openai',
       model: requestedModel,
       deploymentSha: ASSISTANT_DEPLOY_SHA,
@@ -142,6 +138,11 @@ Deno.serve(async (request) => {
 
   if (body.action !== 'chat' && body.action !== 'turn') {
     return jsonResponse({ error: `Unsupported action: ${body.action}` }, { status: 400 });
+  }
+
+  if (!HOSTED_AI_ENABLED) return hostedAIPausedResponse();
+  if (!OPENAI_API_KEY) {
+    return jsonResponse({ error: 'OPENAI_API_KEY is not configured for the hosted assistant.' }, { status: 503 });
   }
 
   const messages = Array.isArray(body.messages) ? body.messages : [];

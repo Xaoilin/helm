@@ -238,9 +238,13 @@ jobs:
       - name: Check Codex review availability
         id: codex_review_secret
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_API_REVIEW_ENABLED: ${{ vars.CODEX_API_REVIEW_ENABLED == 'true' && 'true' || 'false' }}
+          OPENAI_API_KEY: ${{ vars.CODEX_API_REVIEW_ENABLED == 'true' && secrets.OPENAI_API_KEY || '' }}
         run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
+          if [ "$CODEX_API_REVIEW_ENABLED" != "true" ]; then
+            echo "API-funded review is disabled. Source review is performed in Codex before promotion."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$OPENAI_API_KEY" ]; then
             echo "::warning::OPENAI_API_KEY is not configured; skipping advisory Codex review."
             echo "available=false" >> "$GITHUB_OUTPUT"
           else
@@ -328,7 +332,7 @@ jobs:
           const actionOutcome = process.env.CODEX_ACTION_OUTCOME || 'skipped'
 
           if (!secretAvailable) {
-            console.log('Codex review skipped because OPENAI_API_KEY is not configured.')
+            console.log('API-funded Codex review skipped: disabled by default or credential unavailable; no automated review result is claimed.')
             process.exit(0)
           }
 

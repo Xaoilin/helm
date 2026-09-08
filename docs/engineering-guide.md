@@ -50,7 +50,7 @@ Assistant-planning changes also keep the benchmark corpus, dialog seeds, grounde
 - Pull-request runs are tied to the exact branch tree. Draft and concurrency controls prevent stale evidence from being treated as current.
 - Same-repository `codex/*` pull requests can be promoted only after their required checks pass and the promoted tree is verified against the tested tree.
 - GitHub Pages deployment runs only for the protected `master` path. Supabase Edge Function deployment follows the same candidate identity where a function changed.
-- Automated review is advisory when the provider is unavailable; completed high-severity findings remain blocking.
+- API-funded automated review is off by default. Codex source review is completed before promotion; the stable `codex-review` check reports the API deferral truthfully. Explicit opt-in automated review remains advisory when unavailable; completed high-severity findings remain blocking.
 - Post-promotion verification fails closed for a source, tree, artifact, deployment, or live-version mismatch.
 
 ### Verified candidate route
@@ -115,3 +115,30 @@ Direct browser review is required for visible user flows and especially for OAut
 - `README.md`, `AGENTS.md`, `docs/project-architecture.md`, `docs/engineering-guide.md`, and `docs/feature-status.md` are active source-of-truth docs.
 - `docs/agentic-coding-workflow.md` records the current hosted web automation policy.
 - Status language distinguishes real behavior, degraded browser capability, and placeholder or simulated integrations.
+
+## Temporary hosted AI pause
+
+Hosted AI defaults to paused unless the server's `HOSTED_AI_ENABLED` is exactly
+`true`. Authentication, benchmark scope and billing operator checks run before
+the pause response. Verified health returns the deployed SHA and mode without
+calling OpenAI; chat, voice planning and operator billing return HTTP 503 with
+`hosted_ai_paused`. Settings, Debug, Chat and system health show the pause. Use
+normal app controls directly. Codex remains an engineering tool, not an app
+backend; no alternate inference provider is selected automatically for a pause.
+
+Protected deployment takes the repository variable `HOSTED_AI_ENABLED` (default
+false), configures that server flag and passes the exact mode to live acceptance.
+Paused delivery preserves provider secrets without reading or replacing them.
+Synthetic Auth acceptance verifies identity denials, scope, SHA, paused user and
+operator results, and fixture cleanup. The retained benchmark artifact explicitly
+marks paid chat/voice and model-quality acceptance `deferred`, never successful.
+All stable source, database, promotion and handoff checks remain required.
+
+Re-enable only after explicit user authorization: set the repository variable
+`HOSTED_AI_ENABLED=true` and deploy the verified current candidate through the
+protected route with its existing provider and benchmark credentials. Enabled
+acceptance must pass real chat, voice planner and enforced model benchmarks at
+the exact SHA. A failure remains non-acceptance. API-funded engineering review
+has a separate default-off opt-in, `CODEX_API_REVIEW_ENABLED=true`; Codex source
+review in the engineering task supplies the current review. Do not change either
+setting or request API funding while the user-selected pause remains in effect.

@@ -25,17 +25,48 @@ async function request(authorization?: string, action = 'turn') {
 beforeEach(() => {
   vi.resetModules();
   env = {
+    HOSTED_AI_ENABLED: 'true',
     OPENAI_API_KEY: 'synthetic-provider-key', OPENAI_ADMIN_KEY: 'synthetic-admin-key', OPENAI_PROJECT_ID: 'synthetic-project',
     SUPABASE_URL: 'https://example.test', SUPABASE_ANON_KEY: 'public-key', ASSISTANT_BENCHMARK_SECRET: machineSecret,
   };
   vi.stubGlobal('crypto', webcrypto);
   vi.stubGlobal('Deno', { env: { get: (name: string) => env[name] }, serve: (callback: typeof handler) => { handler = callback; } });
   vi.doMock('../../supabase/functions/_shared/assistantDeployment.ts', () => ({ ASSISTANT_DEPLOY_SHA: sha }));
-  auth.mockReset().mockResolvedValue(Response.json({ id: 'synthetic-user', role: 'authenticated', is_anonymous: false }));
+  auth.mockReset().mockImplementation(async () => Response.json({ id: 'synthetic-user', role: 'authenticated', is_anonymous: false }));
   upstream.mockReset().mockImplementation(async () => Response.json({ output_text: 'Hello', model: 'gpt-5.4', data: [] }));
   vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => url.endsWith('/auth/v1/user') ? auth(url, init) : upstream(url, init)));
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
+
+it.each([undefined, 'false', 'invalid'])('pauses AI by default (%s), after authentication and scope checks', async (enabled) => {
+  if (enabled === undefined) delete env.HOSTED_AI_ENABLED;
+  else env.HOSTED_AI_ENABLED = enabled;
+  delete env.OPENAI_API_KEY;
+  await loadHandler();
+  const machine = benchmarkAuthorization(machineSecret, sha);
+  expect((await request(undefined)).status).toBe(401);
+  expect((await request('Bearer public-key')).status).toBe(401);
+  expect((await request(machine, 'chat')).status).toBe(403);
+  expect(await (await request('Bearer user-token', 'health')).json()).toMatchObject({ ok: true, mode: 'paused', deploymentSha: sha });
+  for (const [token, action] of [['Bearer user-token', 'chat'], ['Bearer user-token', 'turn'], [machine, 'turn']]) {
+    const response = await request(token, action);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: 'hosted_ai_paused', mode: 'paused', deploymentSha: sha });
+  }
+  expect(upstream).not.toHaveBeenCalled();
+});
+
+it('retains billing privilege checks while paused, including for an authorized operator', async () => {
+  delete env.HOSTED_AI_ENABLED;
+  delete env.OPENAI_ADMIN_KEY;
+  await loadHandler('assistant-openai-billing');
+  expect((await request('Bearer user-token', 'summary')).status).toBe(403);
+  auth.mockImplementation(async () => Response.json({ id: 'operator', role: 'authenticated', app_metadata: { assistant_billing_operator: true } }));
+  const response = await request('Bearer operator-token', 'summary');
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({ code: 'hosted_ai_paused', deploymentSha: sha });
+  expect(upstream).not.toHaveBeenCalled();
+});
 
 describe.each(['assistant-openai', 'assistant-openai-billing'])('%s identity boundary', (name) => {
   it.each([undefined, 'Bearer public-key', 'Bearer invalid-token', 'Bearer expired-token'])('rejects %s before OpenAI work', async (authorization) => {

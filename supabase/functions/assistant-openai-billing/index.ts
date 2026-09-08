@@ -1,5 +1,6 @@
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { authenticateAssistant } from '../_shared/assistantAuth.ts';
+import { HOSTED_AI_ENABLED, hostedAIPausedResponse } from '../_shared/assistantMode.ts';
 import {
   buildLastSevenUtcDayRange,
   buildOpenAIOrganizationUrl,
@@ -7,7 +8,7 @@ import {
   extractUsageBuckets,
 } from './openaiBilling.ts';
 
-const OPENAI_ADMIN_KEY = Deno.env.get('OPENAI_ADMIN_KEY') || '';
+const OPENAI_ADMIN_KEY = HOSTED_AI_ENABLED ? Deno.env.get('OPENAI_ADMIN_KEY') || '' : '';
 const OPENAI_PROJECT_ID = Deno.env.get('OPENAI_PROJECT_ID') || '';
 
 function getOpenAIErrorMessage(data: unknown): string {
@@ -50,6 +51,8 @@ Deno.serve(async (request) => {
   if (identity.kind !== 'user' || !identity.billingOperator) {
     return jsonResponse({ code: 'operator_required', error: 'Project billing is available only to an authorized operator.' }, { status: 403 });
   }
+
+  if (!HOSTED_AI_ENABLED) return hostedAIPausedResponse();
 
   if (!OPENAI_ADMIN_KEY) {
     return jsonResponse(

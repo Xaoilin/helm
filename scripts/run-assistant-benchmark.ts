@@ -23,6 +23,7 @@ interface HostedAssistantHealthResponse {
   provider: 'openai';
   model: string;
   deploymentSha: string;
+  mode: 'enabled' | 'paused';
 }
 
 interface HostedAssistantTurnResponse {
@@ -204,6 +205,7 @@ async function fetchHostedHealth(modelOverride?: string): Promise<string> {
   if (data.deploymentSha !== config.deploymentSha) {
     throw new Error('Hosted benchmark deployment SHA does not match the verified candidate.');
   }
+  if (data.mode !== 'enabled') throw new Error('Hosted AI is paused; paid benchmark acceptance is deferred, not passed.');
   if (!data.ok || !data.model) {
     throw new Error('Hosted benchmark health check returned no model.');
   }

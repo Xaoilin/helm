@@ -1,3 +1,4 @@
+import { HostedAssistantPausedError } from '../services/hostedAssistantAccess';
 import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import { LIMITS } from '../config/constants';
 import {
@@ -339,7 +340,7 @@ function localNarrationFromResults(toolResults: AssistantToolResult[], fallback:
   return completed[completed.length - 1].summary;
 }
 
-function toPlannerStatus(status: 'available' | 'sign_in_required' | 'not_configured' | 'unavailable'): AssistantPlanningStatus {
+function toPlannerStatus(status: 'available' | 'paused' | 'sign_in_required' | 'not_configured' | 'unavailable'): AssistantPlanningStatus {
   return status === 'available' ? 'planned' : 'blocked_provider_unavailable';
 }
 
@@ -401,9 +402,9 @@ async function runHostedInitialTurn(
 
   if (availability.status !== 'available') {
     return {
-      assistantMessage: RESPONSES.hostedUnavailable[options.lang](availability.message || 'Hosted AI unavailable'),
+      assistantMessage: availability.status === 'paused' ? (availability.message || 'Hosted AI is paused. Use the app controls directly.') : RESPONSES.hostedUnavailable[options.lang](availability.message || 'Hosted AI unavailable'),
       source: 'degraded',
-      degradedReason: 'hosted_error',
+      degradedReason: availability.status === 'paused' ? 'hosted_paused' : 'hosted_error',
       planningSource: 'none',
       planningStatus: toPlannerStatus(availability.status),
       planningModel: availability.model || hostedModel,
@@ -567,7 +568,7 @@ async function runHostedInitialTurn(
     return {
       assistantMessage: RESPONSES.hostedUnavailable[options.lang](message),
       source: 'degraded',
-      degradedReason: 'hosted_error',
+      degradedReason: error instanceof HostedAssistantPausedError ? 'hosted_paused' : 'hosted_error',
       planningSource: 'none',
       planningStatus: 'blocked_provider_unavailable',
       planningModel: hostedModel,
@@ -741,6 +742,7 @@ export async function runAssistantInitialModelTurn(
   }
 
   const hosted = await runHostedInitialTurn(transcript, context, options);
+  if (hosted.degradedReason === 'hosted_paused') return hosted;
   if (hosted.source === 'openai' && hosted.planningStatus === 'planned') {
     return hosted;
   }

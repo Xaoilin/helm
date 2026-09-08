@@ -11,6 +11,8 @@ const publicKey = process.env.VITE_SUPABASE_ANON_KEY || '';
 const sha = process.env.ASSISTANT_DEPLOY_SHA || '';
 const managementToken = process.env.SUPABASE_ACCESS_TOKEN || '';
 const projectRef = process.env.SUPABASE_PROJECT_REF || '';
+const enabled = process.env.HOSTED_AI_ENABLED === 'true';
+const mode = enabled ? 'enabled' : 'paused';
 const observations: Array<{ scenario: string; status: number; passed: boolean }> = [];
 let fixtureRemoved = false;
 let passed = false;
@@ -29,13 +31,24 @@ async function probe(scenario: string, functionName: string, authorization: stri
   return response;
 }
 
+async function probePaused(scenario: string, functionName: string, authorization: string, action: string) {
+  const response = await probe(scenario, functionName, authorization, action, 503);
+  const body = await response.json();
+  if (body.code !== 'hosted_ai_paused' || body.mode !== 'paused' || body.deploymentSha !== sha) {
+    observations[observations.length - 1].passed = false;
+    throw new Error(`${scenario}: explicit paused result and exact SHA are required.`);
+  }
+}
+
 async function main() {
   if (!url || !publicKey || !managementToken || !projectRef || new URL(url).hostname !== `${projectRef}.supabase.co`) {
     throw new Error('Exact Supabase target and engineering acceptance credentials are required.');
   }
+  if (!['true', 'false'].includes(process.env.HOSTED_AI_ENABLED || '')) throw new Error('Explicit hosted AI acceptance mode is required.');
   const machine = () => benchmarkAuthorization(process.env.ASSISTANT_BENCHMARK_SECRET || '', sha);
   const health = await probe('authorized machine health', 'assistant-openai', machine(), 'health', 200);
-  if ((await health.json()).deploymentSha !== sha) throw new Error('Live function SHA does not match the protected candidate.');
+  const healthBody = await health.json();
+  if (healthBody.deploymentSha !== sha || healthBody.mode !== mode || !healthBody.ok) throw new Error('Live function SHA or operating mode does not match the protected candidate.');
   for (const functionName of ['assistant-openai', 'assistant-openai-billing']) {
     for (const [label, token] of [['missing', undefined], ['public key', `Bearer ${publicKey}`], ['invalid', 'Bearer invalid-acceptance-token']]) {
       await probe(`${functionName}: ${label} denied`, functionName, token, functionName.endsWith('billing') ? 'summary' : 'turn', 401);
@@ -43,6 +56,8 @@ async function main() {
   }
   await probe('machine narration denied', 'assistant-openai', machine(), 'chat', 403);
   await probe('machine billing denied', 'assistant-openai-billing', machine(), 'summary', 401);
+
+  if (!enabled) await probePaused('machine planner paused', 'assistant-openai', machine(), 'turn');
 
   const keysResponse = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/api-keys?reveal=true`, {
     headers: { Authorization: `Bearer ${managementToken}` }, signal: AbortSignal.timeout(15_000),
@@ -67,12 +82,24 @@ async function main() {
     if (login.error || login.data.user?.id !== fixtureId || !login.data.session?.access_token) throw new Error('Synthetic Auth session verification failed.');
     accessToken = login.data.session.access_token;
     const userHealth = await probe('verified user health', 'assistant-openai', `Bearer ${accessToken}`, 'health', 200);
-    if ((await userHealth.json()).deploymentSha !== sha) throw new Error('Verified user reached a different deployed SHA.');
-    const chat = await probe('verified user chat', 'assistant-openai', `Bearer ${accessToken}`, 'chat', 200);
-    if (!(await chat.json()).text?.trim()) throw new Error('Verified user chat returned no text.');
-    const turn = await probe('verified user voice planner turn', 'assistant-openai', `Bearer ${accessToken}`, 'turn', 200);
-    if ((await turn.json()).turn?.type !== 'text') throw new Error('Verified user planner returned no text turn.');
+    const userHealthBody = await userHealth.json();
+    if (userHealthBody.deploymentSha !== sha || userHealthBody.mode !== mode || !userHealthBody.ok) throw new Error('Verified user reached a different deployed SHA or mode.');
+    if (enabled) {
+      const chat = await probe('verified user chat', 'assistant-openai', `Bearer ${accessToken}`, 'chat', 200);
+      if (!(await chat.json()).text?.trim()) throw new Error('Verified user chat returned no text.');
+      const turn = await probe('verified user voice planner turn', 'assistant-openai', `Bearer ${accessToken}`, 'turn', 200);
+      if ((await turn.json()).turn?.type !== 'text') throw new Error('Verified user planner returned no text turn.');
+    } else {
+      await probePaused('verified user chat paused', 'assistant-openai', `Bearer ${accessToken}`, 'chat');
+      await probePaused('verified user voice planner paused', 'assistant-openai', `Bearer ${accessToken}`, 'turn');
+    }
     await probe('non-operator billing denied', 'assistant-openai-billing', `Bearer ${accessToken}`, 'summary', 403);
+    if (!enabled) {
+      // Only this synthetic identity is temporarily granted the operator role.
+      const operator = await admin.auth.admin.updateUserById(fixtureId, { app_metadata: { assistant_billing_operator: true } });
+      if (operator.error) throw new Error('Synthetic operator fixture configuration failed.');
+      await probePaused('operator billing paused', 'assistant-openai-billing', `Bearer ${accessToken}`, 'summary');
+    }
   } catch (error) {
     failure = error;
   }
@@ -102,5 +129,5 @@ main().catch(error => {
   process.exitCode = 1;
 }).finally(async () => {
   await mkdir('test-results', { recursive: true });
-  await writeFile('test-results/assistant-access-post-deploy.json', `${JSON.stringify({ deploymentSha: sha, passed, fixtureRemoved, observations }, null, 2)}\n`);
+  await writeFile('test-results/assistant-access-post-deploy.json', `${JSON.stringify({ deploymentSha: sha, mode, paidAcceptance: enabled ? 'required' : 'deferred', passed, fixtureRemoved, observations }, null, 2)}\n`);
 });

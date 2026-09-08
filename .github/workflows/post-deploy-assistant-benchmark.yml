@@ -7,6 +7,10 @@ on:
         description: Exact protected commit deployed by the calling workflow
         required: true
         type: string
+      hosted_ai_enabled:
+        description: Explicit operating mode configured by the protected deployment
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -23,11 +27,16 @@ jobs:
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
       ASSISTANT_BENCHMARK_SECRET: ${{ secrets.ASSISTANT_BENCHMARK_SECRET }}
       ASSISTANT_DEPLOY_SHA: ${{ inputs.deploy_sha }}
+      HOSTED_AI_ENABLED: ${{ inputs.hosted_ai_enabled }}
     steps:
       - name: Require benchmark identity and immutable candidate
         run: |
           if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ] || [ ${#ASSISTANT_BENCHMARK_SECRET} -lt 32 ]; then
             echo "Hosted benchmark credentials are missing; deployment is not accepted."
+            exit 1
+          fi
+          if [ "$HOSTED_AI_ENABLED" != "true" ] && [ "$HOSTED_AI_ENABLED" != "false" ]; then
+            echo "An explicit hosted AI acceptance mode is required."
             exit 1
           fi
           if ! [[ "$ASSISTANT_DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]]; then
@@ -56,12 +65,26 @@ jobs:
         run: npx tsx scripts/verify-hosted-assistant-access.ts
 
       - name: Run hosted assistant benchmark gate
+        if: env.HOSTED_AI_ENABLED == 'true'
         env:
           VITE_HOSTED_ASSISTANT_FUNCTION: assistant-openai
           VITE_HOSTED_ASSISTANT_MODEL: gpt-5.4
         run: npm run benchmark:assistant -- --provider hosted --enforce --output test-results/assistant-benchmark-post-deploy.json
 
-      - name: Retain enforced result, including failed thresholds
+      - name: Record paid acceptance deferred while paused
+        if: env.HOSTED_AI_ENABLED == 'false'
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync('test-results/assistant-benchmark-post-deploy.json', JSON.stringify({
+            deploymentSha: process.env.ASSISTANT_DEPLOY_SHA,
+            mode: 'paused', status: 'deferred', enforced: false,
+            reason: 'Hosted AI paused by user instruction; paid chat, voice and model-quality acceptance were not run.'
+          }, null, 2) + '\n');
+          NODE
+          echo 'Paid assistant acceptance is deferred in paused mode, not passed.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain enforced result or explicit deferral
         if: always()
         uses: actions/upload-artifact@v5
         with:

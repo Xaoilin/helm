@@ -1,3 +1,4 @@
+import { HostedAssistantPausedError } from '../services/hostedAssistantAccess';
 import type { AssistantProvider, CalendarSource, FinanceAccount, KnowledgeTopic, Task } from '../types/domain';
 import { DEFAULT_ASSISTANT_PROVIDER, HOSTED_ASSISTANT_MODEL, OLLAMA_ENDPOINT } from '../config';
 import { LIMITS, TIMING } from '../config/constants';
@@ -43,6 +44,7 @@ export interface PlannerResult {
   degradedReason?:
     | 'ollama_offline'
     | 'ollama_error'
+    | 'hosted_paused'
     | 'hosted_sign_in_required'
     | 'hosted_not_configured'
     | 'hosted_error'
@@ -159,7 +161,7 @@ const RESPONSES = {
 
 let cachedEndpoint: string | null = null;
 let ollamaAvailability: boolean | null = null;
-let hostedAvailability: 'available' | 'sign_in_required' | 'not_configured' | 'unavailable' | null = null;
+let hostedAvailability: 'available' | 'paused' | 'sign_in_required' | 'not_configured' | 'unavailable' | null = null;
 
 function normaliseText(value: string): string {
   return value
@@ -1203,7 +1205,7 @@ export function resetOllamaAvailability(): void {
   hostedAvailability = null;
 }
 
-async function getHostedAvailability(): Promise<'available' | 'sign_in_required' | 'not_configured' | 'unavailable'> {
+async function getHostedAvailability(): Promise<'available' | 'paused' | 'sign_in_required' | 'not_configured' | 'unavailable'> {
   if (hostedAvailability) {
     return hostedAvailability;
   }
@@ -1273,9 +1275,9 @@ async function planWithProvider(
 
     if (availability !== 'available') {
       return {
-        plan: buildAnswerPlan(RESPONSES.hostedError[options.lang]('Hosted AI unavailable')),
+        plan: buildAnswerPlan(availability === 'paused' ? 'Hosted AI is paused. Use the app controls directly.' : RESPONSES.hostedError[options.lang]('Hosted AI unavailable')),
         source: 'degraded',
-        degradedReason: 'hosted_error',
+        degradedReason: availability === 'paused' ? 'hosted_paused' : 'hosted_error',
         planningSource: 'none',
         planningStatus: 'blocked_provider_unavailable',
         planningModel: HOSTED_ASSISTANT_MODEL,
@@ -1334,7 +1336,7 @@ async function planWithProvider(
       return {
         plan: buildAnswerPlan(RESPONSES.hostedError[options.lang](message)),
         source: 'degraded',
-        degradedReason: 'hosted_error',
+        degradedReason: error instanceof HostedAssistantPausedError ? 'hosted_paused' : 'hosted_error',
         planningSource: 'none',
         planningStatus: 'blocked_provider_unavailable',
         planningModel: HOSTED_ASSISTANT_MODEL,
@@ -1446,6 +1448,7 @@ export async function planAssistantTurn(
   }
 
   const hosted = await planWithProvider('hosted', transcript, context, options);
+  if (hosted.degradedReason === 'hosted_paused') return hosted;
   if (hosted.source === 'openai' && hosted.planningStatus === 'planned') {
     return hosted;
   }
