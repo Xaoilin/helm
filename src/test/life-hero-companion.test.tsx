@@ -25,6 +25,15 @@ vi.mock('../store/contexts/useRemoteStoreRefresh', () => ({
   useRemoteStoreRefresh: vi.fn(),
 }));
 
+vi.mock('../store/contexts/SettingsContext', () => ({
+  useSettingsContext: () => ({
+    settings: {
+      elevenLabsSecretId: undefined,
+      elevenLabsVoiceId: undefined,
+    },
+  }),
+}));
+
 vi.mock('../store/persistence', () => ({
   loadStore: mocks.loadStore,
   saveStoreRecordFieldsCommitted: mocks.saveStoreRecordFieldsCommitted,

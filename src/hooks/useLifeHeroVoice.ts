@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AssistantLang } from '../assistant/shared';
-import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID } from '../config';
+import { ELEVENLABS_VOICE_ID } from '../config';
 import { logError } from '../services/logger';
+import { useSettingsContext } from '../store/contexts/SettingsContext';
 import {
   speakWithBrowserTTS,
   speakWithElevenLabs,
@@ -23,6 +24,7 @@ export interface LifeHeroVoiceControl {
 }
 
 export function useLifeHeroVoice(lang: AssistantLang = 'en'): LifeHeroVoiceControl {
+  const settings = useSettingsContext();
   const [status, setStatus] = useState<LifeHeroVoiceStatus>('idle');
   const [muted, setMuted] = useState(false);
   const [coolingDown, setCoolingDown] = useState(false);
@@ -32,11 +34,15 @@ export function useLifeHeroVoice(lang: AssistantLang = 'en'): LifeHeroVoiceContr
   const abortRef = useRef<AbortController | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const cooldownTimerRef = useRef<number | null>(null);
+  const elevenLabsSecretId = settings.settings.elevenLabsSecretId;
+  const elevenLabsVoiceId = settings.settings.elevenLabsVoiceId || ELEVENLABS_VOICE_ID;
 
   const clearAudio = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
     audio.pause();
+    audio.onended = null;
+    audio.onerror = null;
     if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
     audioRef.current = null;
   }, []);
@@ -79,12 +85,12 @@ export function useLifeHeroVoice(lang: AssistantLang = 'en'): LifeHeroVoiceContr
     beginCooldown();
 
     let elevenLabsFailed = false;
-    if (ELEVENLABS_API_KEY && ELEVENLABS_VOICE_ID) {
+    if (elevenLabsSecretId && elevenLabsVoiceId) {
       try {
         const audio = await speakWithElevenLabs(
           text,
-          ELEVENLABS_API_KEY,
-          ELEVENLABS_VOICE_ID,
+          elevenLabsSecretId,
+          elevenLabsVoiceId,
           controller.signal,
         );
         if (attemptRef.current !== attempt || controller.signal.aborted) {
@@ -144,7 +150,7 @@ export function useLifeHeroVoice(lang: AssistantLang = 'en'): LifeHeroVoiceContr
     } finally {
       if (attemptRef.current === attempt) abortRef.current = null;
     }
-  }, [beginCooldown, clearAudio, coolingDown, lang, muted, status]);
+  }, [beginCooldown, clearAudio, coolingDown, elevenLabsSecretId, elevenLabsVoiceId, lang, muted, status]);
 
   const toggleMuted = useCallback(() => {
     if (!muted) {
