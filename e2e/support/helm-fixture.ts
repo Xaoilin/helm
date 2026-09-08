@@ -342,6 +342,10 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
       body: '[]',
     });
   });
+
+  await page.route('**/rest/v1/rpc/list_helm_secrets*', route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ accountVersion, secrets: [] }),
+  }));
 }
 
 function defaultLifeHeroSnapshot(): Record<string, unknown> {

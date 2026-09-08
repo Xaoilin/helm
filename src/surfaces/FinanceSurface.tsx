@@ -1,8 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useFinanceContext } from "../store/contexts/FinanceContext";
 import type { TransactionType, TransactionCategory, ExpenseCategory, FinanceAccount, FinanceAccountType, Transaction } from '../types/domain';
-import { MONZO_ACCESS_TOKEN } from '../config';
-import { fetchMonzoAccounts, fetchMonzoTransactions, mapMonzoTransaction, isAlreadyImported, verifyToken } from '../services/monzoApi';
 import {
   formatGBP, parseToPence, toMonthStr, toLocalDateStr,
   calculateNetWorth, monthlyTotals, categorySpend,
@@ -49,8 +47,6 @@ export default function FinanceSurface() {
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'all' | TransactionType>('all');
-  const [monzoSyncing, setMonzoSyncing] = useState(false);
-  const [monzoStatus, setMonzoStatus] = useState<string | null>(null);
 
   // ── Derived data ──
   const netWorth = useMemo(() => calculateNetWorth(finance.financeAccounts), [finance.financeAccounts]);
@@ -120,75 +116,6 @@ export default function FinanceSurface() {
         </div>
       </div>
     );
-  };
-
-  // ── Monzo sync ──
-  const MONZO_COLORS = ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6'];
-  let monzoAccountIndex = 0;
-  const handleMonzoSync = async () => {
-    if (!MONZO_ACCESS_TOKEN) { setMonzoStatus('No Monzo token configured. Add VITE_MONZO_ACCESS_TOKEN to .env'); return; }
-    setMonzoSyncing(true); setMonzoStatus(null);
-    try {
-      const valid = await verifyToken(MONZO_ACCESS_TOKEN);
-      if (!valid) { setMonzoStatus('Monzo token expired. Get a new one from developers.monzo.com'); setMonzoSyncing(false); return; }
-
-      const monzoAccounts = await fetchMonzoAccounts(MONZO_ACCESS_TOKEN);
-      if (monzoAccounts.length === 0) { setMonzoStatus('No Monzo accounts found.'); setMonzoSyncing(false); return; }
-
-      let totalImported = 0;
-      let accountsSynced = 0;
-      const accountsSkipped: string[] = [];
-      for (const mAcc of monzoAccounts) {
-        // Find Sabah One account by Monzo account ID tag, or create one
-        const monzoTag = `monzo:${mAcc.id}`;
-        const helmAcc = finance.financeAccounts.find(a =>
-          finance.transactions.some(t => t.accountId === a.id && t.tags?.includes(monzoTag))
-        ) || finance.financeAccounts.find(a => a.name === `Monzo ${mAcc.description || 'Account'}`);
-        let helmAccId: string;
-        if (!helmAcc) {
-          helmAccId = finance.addFinanceAccount({
-            name: `Monzo ${mAcc.description || 'Account'}`,
-            type: mAcc.type?.includes('savings') ? 'savings' : 'current',
-            balance: 0, currency: 'GBP',
-            color: MONZO_COLORS[monzoAccountIndex++ % MONZO_COLORS.length],
-            icon: '\u{1F3E6}',
-            includeInNetWorth: true, sortOrder: finance.financeAccounts.length,
-          });
-        } else {
-          helmAccId = helmAcc.id;
-        }
-
-        // Fetch and import transactions — handle 403 (SCA required) per account
-        try {
-          const monzoTxs = await fetchMonzoTransactions(MONZO_ACCESS_TOKEN, mAcc.id);
-          for (const mTx of monzoTxs) {
-            if (!isAlreadyImported(mTx.id, finance.transactions)) {
-              const mapped = mapMonzoTransaction(mTx, helmAccId);
-              finance.addTransaction(mapped);
-              totalImported++;
-            }
-          }
-          accountsSynced++;
-        } catch (accErr) {
-          const msg = accErr instanceof Error ? accErr.message : '';
-          if (msg.includes('403')) {
-            accountsSkipped.push(mAcc.description || mAcc.id);
-          } else {
-            accountsSkipped.push(`${mAcc.description || mAcc.id} (${msg.slice(0, 50)})`);
-          }
-        }
-      }
-
-      let statusMsg = `Synced ${accountsSynced} account${accountsSynced !== 1 ? 's' : ''}, ${totalImported} new transaction${totalImported !== 1 ? 's' : ''}.`;
-      if (accountsSkipped.length > 0) {
-        statusMsg += ` Skipped ${accountsSkipped.length} (need approval in Monzo app): ${accountsSkipped.join(', ')}`;
-      }
-      setMonzoStatus(statusMsg);
-    } catch (err) {
-      setMonzoStatus(`Sync failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setMonzoSyncing(false);
-    }
   };
 
   const quickAddBar = (
@@ -358,18 +285,7 @@ export default function FinanceSurface() {
         {/* ══ Accounts ══ */}
         {tab === 'accounts' && (
           <>
-            {/* Monzo sync */}
-            {MONZO_ACCESS_TOKEN && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: '#181b27', border: '1px solid #242740', borderRadius: 8 }}>
-                <span style={{ fontSize: 18 }}>{'\u{1F3E6}'}</span>
-                <span style={{ fontSize: 13, fontWeight: 500, color: '#e1e4ea' }}>Monzo</span>
-                <button className="btn btn-primary btn-sm" onClick={handleMonzoSync} disabled={monzoSyncing}>
-                  {monzoSyncing ? 'Syncing...' : 'Sync Monzo'}
-                </button>
-                {monzoStatus && <span style={{ fontSize: 11, color: monzoStatus.includes('failed') || monzoStatus.includes('expired') ? '#ff6b6b' : '#22c55e' }}>{monzoStatus}</span>}
-                <a href="https://developers.monzo.com/" target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', fontSize: 10, color: '#4f5bff' }}>Get token</a>
-              </div>
-            )}
+            <p className="form-hint" role="status">Monzo sync is unavailable until a secure server connection is supplied. You can still manage accounts and transactions here.</p>
             {finance.financeAccounts.length === 0 ? (
               <div className="empty-state" role="status">
                 <div className="empty-icon" style={{ fontSize: 36 }}>{'\u{1F3E6}'}</div>

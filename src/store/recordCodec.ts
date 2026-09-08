@@ -19,6 +19,7 @@ const COMPLEX_STORE_KEYS = new Set(['clock', 'employment', 'gamification', 'pray
 export const DEVICE_SETTING_FIELDS = [
   'deepgramApiKey',
   'elevenLabsApiKey',
+  'elevenLabsSecretId',
   'googleOAuthClientId',
   'microphoneDeviceId',
   'ollamaEndpoint',
@@ -30,6 +31,19 @@ export const DEVICE_SETTING_FIELDS = [
 export type DeviceSettings = Pick<Settings, (typeof DEVICE_SETTING_FIELDS)[number]>;
 
 const DEVICE_SETTING_FIELD_SET = new Set<string>(DEVICE_SETTING_FIELDS);
+const LEGACY_PROVIDER_FIELDS = new Set(['deepgramApiKey', 'elevenLabsApiKey', 'monzoAccessToken']);
+
+/** Existing values are migration inputs only, never new settings writes. */
+export function hasLegacyProviderSettings(value: unknown): boolean {
+  return isRecord(value) && [...LEGACY_PROVIDER_FIELDS].some(key => typeof value[key] === 'string' && Boolean(value[key]));
+}
+
+export function legacyProviderSettings(value: unknown): Partial<Settings> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(['deepgramApiKey', 'elevenLabsApiKey']
+    .filter(key => typeof value[key] === 'string' && Boolean(value[key]))
+    .map(key => [key, value[key]]));
+}
 const SHARED_SETTING_FIELDS = new Set<string>([
   'theme',
   'dataRetentionDays',
@@ -83,7 +97,10 @@ export function splitSettings(value: unknown): {
   if (!isRecord(value)) return { shared, device };
 
   for (const [key, entry] of Object.entries(value)) {
-    if (DEVICE_SETTING_FIELD_SET.has(key)) {
+    if (LEGACY_PROVIDER_FIELDS.has(key)) continue;
+    if (key === 'elevenLabsSecretId') {
+      if (typeof entry === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(entry)) device.elevenLabsSecretId = entry;
+    } else if (DEVICE_SETTING_FIELD_SET.has(key)) {
       (device as Record<string, unknown>)[key] = entry;
     } else if (key === 'appTimezone') {
       const timeZone = validateIanaTimeZone(entry);
@@ -107,7 +124,7 @@ export function sanitizeLegacyStoreValue(collection: string, value: unknown): {
   assertKnownCollection(collection);
   if (collection === 'settings') {
     if (!isRecord(value)) return { value: {}, ambiguous: value != null };
-    const known = new Set([...SHARED_SETTING_FIELDS, ...DEVICE_SETTING_FIELD_SET]);
+    const known = new Set([...SHARED_SETTING_FIELDS, ...DEVICE_SETTING_FIELD_SET, ...LEGACY_PROVIDER_FIELDS]);
     return {
       value,
       ambiguous: Object.keys(value).some(key => !known.has(key)),

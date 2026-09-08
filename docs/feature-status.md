@@ -38,15 +38,15 @@ Use this matrix when updating documentation or UI copy. `real` means the hosted 
 | Dashboard focus ranking diagnostics | `real` | Grounded candidates and hosted review traces remain available for Debug; generic ranking does not control the Night Compass hierarchy. |
 | Voice assistant | `real` | Voice shares the assistant runtime with Chat; hosted AI planning is paused with the same explicit unavailable response. Browser microphone, transcript, wake-word, speech output, and in-app controls are capability-dependent; Chat remains available when a voice capability is unavailable. |
 | Wake word | `real` | OpenWakeWord runs in the browser through WASM where supported. |
-| Deepgram speech-to-text | `real` | Requires account configuration and browser microphone access. |
-| Browser speech fallback | `real` | Browser speech recognition is available where supported, with lower fidelity than Deepgram. |
-| ElevenLabs speech output | `real` | Requires hosted configuration and browser audio playback. |
+| Deepgram speech-to-text | `contract-only` | No secure server transport is supplied. Raw browser keys are no longer accepted or used. |
+| Browser speech fallback | `real` | Recognition and speech output work where supported. Browser speech is the usable output while hosted AI is paused or secure synthesis is unavailable. |
+| ElevenLabs speech output | `paused` | Chat/Voice and Life Hero share authenticated `assistant-speech`; the current hosted AI pause returns before Vault/provider work. When explicitly enabled, the server resolves the selected account-owned Secrets entry and returns audio only. Settings stores a device-only UUID reference; public voice IDs remain shared. Published-key revocation is a separate required security acceptance step; see `voice-provider-security.md`. |
 | Browser speech output | `real` | Browser speech synthesis is used where supported when hosted audio is unavailable. |
 | Prayer times, outcomes, deadlines, and reminders | `real` | `PrayerProvider` owns validated Jafari times, account-backed outcomes, page-open reminder planning, and diagnostics. Web Notifications are attempted only after explicit permission; the in-app banner is the fallback. Reminders are observed only while the page remains open. |
 | Clock surface | `real` | Timers and stopwatches persist as independently mutable account records with custom cards, laps, alarms, and acknowledgement-required alerts. |
 | Finance accounts, budgets, and savings goals | `real` | Account-backed records are isolated per signed-in user. |
 | Health reflection log | `real` | Account-backed quick-entry and recent-history views are implemented. |
-| Monzo import | `real` | The API path exists when configured. |
+| Monzo import | `contract-only` | Browser token configuration is removed. Sync is unavailable until a secure server connection is supplied; manual finance controls remain available. |
 | Knowledge base and lifestyle tracker | `real` | Account-backed CRUD converges across signed-in sessions, and Knowledge entries can move between topics without recreation. |
 | Projects reference hub | `real` | Searchable Pinned, Projects, and Archived sections expose links, repositories, documentation, display-only prerequisites, and portable guidance. Shared catalogue metadata is keyed by stable `catalogKey`. |
 | Trips planner | `real` | Account-backed multi-country trips, ordered legs, itinerary items, bookings, budgets, and explicit calendar import are implemented. |

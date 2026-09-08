@@ -177,7 +177,7 @@ export function useVoiceOutput({
           if (controller.signal.aborted || attemptRef.current !== attempt) return;
           return;
         } catch (error) {
-          if (controller.signal.aborted || attemptRef.current !== attempt || isAbortError(error)) return;
+          if (controller.signal.aborted || attemptRef.current !== attempt) return;
           providerFailed = true;
           clearAudio();
           logError('useVoiceOutput', error);
@@ -216,13 +216,16 @@ export function useVoiceOutput({
     }
   }, [clearAudio, elevenLabsSecretId, elevenLabsVoiceId, hasElevenLabs, lang, stopSpeaking]);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    attemptRef.current += 1;
-    abortRef.current?.abort();
-    abortRef.current = null;
-    clearAudio();
-    if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      attemptRef.current += 1;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      clearAudio();
+      if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
+    };
   }, [clearAudio]);
 
   return { speak, stopSpeaking, isSpeaking, notice, audioRef };

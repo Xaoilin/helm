@@ -111,7 +111,7 @@ export async function speakWithElevenLabs(
       body: JSON.stringify({ text, secretId, voiceId }),
     }), controller.signal);
 
-    if (!response.ok) throw await getSpeechServiceError(response);
+    if (!response.ok) throw await abortable(getSpeechServiceError(response), controller.signal);
 
     const blob = await abortable(response.blob(), controller.signal);
     if (controller.signal.aborted) throw createAbortError();

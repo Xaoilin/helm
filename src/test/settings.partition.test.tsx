@@ -25,7 +25,7 @@ function SettingsProbe() {
   return (
     <button
       type="button"
-      onClick={() => updateSettings({ theme: 'dark', deepgramApiKey: 'changed-device-token' })}
+      onClick={() => updateSettings({ theme: 'dark', deepgramApiKey: 'changed-device-token', elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001' })}
     >
       {loaded ? `${settings.theme}|${settings.prayerCity}|${settings.deepgramApiKey}` : 'loading'}
     </button>
@@ -63,7 +63,7 @@ describe('settings shared/device partition', () => {
     persistenceMocks.subscribeStoreKey.mockReturnValue(() => undefined);
   });
 
-  it('proves codec partition keeps shared fields and device credentials disjoint', () => {
+  it('proves codec partition discards provider values from new shared and device writes', () => {
     expect(splitSettings({
       theme: 'light',
       telemetry: true,
@@ -74,7 +74,6 @@ describe('settings shared/device partition', () => {
     })).toEqual({
       shared: { theme: 'light', telemetry: true, lifeHeroEnabled: true },
       device: {
-        deepgramApiKey: 'secret',
         supabaseUrl: 'https://device.example.test',
       },
     });
@@ -82,6 +81,13 @@ describe('settings shared/device partition', () => {
 
   it('keeps the character-based Life Hero explicitly off by default', () => {
     expect(defaultSettings.lifeHeroEnabled).toBe(false);
+  });
+
+  it('keeps a validated voice reference device-only and the public voice ID shared', () => {
+    expect(splitSettings({ elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001', elevenLabsVoiceId: 'voice123', monzoAccessToken: 'plaintext' })).toEqual({
+      shared: { elevenLabsVoiceId: 'voice123' }, device: { elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001' },
+    });
+    expect(splitSettings({ elevenLabsSecretId: 'accidentally-pasted-provider-key' })).toEqual({ shared: {}, device: {} });
   });
 
   it('allows only validated account-shared IANA app time zones', () => {
@@ -104,19 +110,19 @@ describe('settings shared/device partition', () => {
       fireEvent.click(button);
     });
 
-    expect(button.textContent).toBe('dark|Leeds|changed-device-token');
+    expect(button.textContent).toBe('dark|Leeds|device-token');
     const savedSettings = persistenceMocks.saveStore.mock.calls
       .filter(([key]) => key === 'settings')
       .at(-1)?.[1] as Settings;
     const savedDevice = persistenceMocks.saveDeviceStore.mock.calls.at(-1);
     expect(splitSettings(savedSettings).device).toEqual({
-      deepgramApiKey: 'changed-device-token',
+      elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001',
       supabaseUrl: 'https://device.example.test',
     });
     expect(savedDevice).toEqual([
       'deviceSettings',
       {
-        deepgramApiKey: 'changed-device-token',
+        elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001',
         supabaseUrl: 'https://device.example.test',
       },
     ]);

@@ -24,6 +24,8 @@ import {
   loadStore,
   resetDatabasePersistence,
   saveStoreCommitted,
+  loadDeviceStore,
+  DEVICE_SETTINGS_STORE_KEY,
 } from '../store/persistence';
 
 const USER_ID = 'user-kan-252';
@@ -142,6 +144,18 @@ describe('signed-in persistence boundaries', () => {
       },
     ]);
     expect(await loadStore('settings')).toEqual({ theme: 'light', telemetry: true });
+  });
+
+  it('keeps the original legacy settings migration source without copying provider values into new browser records', async () => {
+    configureSupabase({ authenticated: true });
+    const original = JSON.stringify({ theme: 'dark', telemetry: false, microphoneDeviceId: 'mic-legacy', elevenLabsApiKey: 'legacy-eleven', monzoAccessToken: 'legacy-monzo', unknownLegacyField: 'preserve' });
+    localStorage.setItem('helm:settings', original);
+    await bootstrapDatabasePersistence();
+    expect(getSyncSessionSnapshot().status).toBe('ready');
+    expect(localStorage.getItem('helm:settings')).toBe(original);
+    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toMatchObject({ elevenLabsApiKey: 'legacy-eleven', microphoneDeviceId: 'mic-legacy' });
+    expect(JSON.parse(localStorage.getItem('helm:device:deviceSettings:v2')!)).toEqual({ microphoneDeviceId: 'mic-legacy' });
+    expect(Object.keys(localStorage).filter(key => key.includes('legacy-quarantine'))).toEqual([]);
   });
 
   it('retries a transient write once with the same request id and operations', async () => {

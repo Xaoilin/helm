@@ -56,3 +56,7 @@ The Employment tracker requires semantic tools for:
 - `employment_remove_application` with explicit confirmation and an idempotency key.
 
 The endpoint must use its own consent text and approval scope. Reusing the Inventory approval would silently broaden existing authorization and is forbidden. Until that dedicated OAuth/RPC boundary is implemented, tested, deployed, and approved, agents must not mutate Employment through another route.
+
+## Voice connection boundary
+
+The ElevenLabs connection reference is a device preference, not new shared account data. Its selected Vault entry remains account-owned and is checked on every enabled synthesis request. The existing shared public voice ID behavior is unchanged. Secret management and plaintext remain intentionally outside agent tools; Inventory approval grants no voice or Settings access. External agents must not call Secrets RPCs or automate its UI. The narrow first-party speech endpoint returns audio only and respects the hosted AI pause.

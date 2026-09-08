@@ -57,7 +57,7 @@ Each turn follows this sequence:
 1. show `preparing` while the microphone is arming;
 2. play the ready tone once the microphone is live;
 3. show live transcript preview;
-4. use Deepgram `UtteranceEnd` as the primary end-of-turn signal;
+4. use the browser recognition final-result and silence signals;
 5. allow a short settle window for a thinking pause;
 6. use a longer safety stop only if no reliable boundary arrives;
 7. transcribe the final utterance;
@@ -84,9 +84,9 @@ Timeout-only completion is insufficient because it can reopen the microphone too
 
 ## Speech Input Contract
 
-Deepgram is the primary path because it provides live transcript updates and utterance-end events. Use `nova-3` for preview and final transcription, keep `speech_final` as a boundary hint rather than an immediate stop, allow a 2.5–3.0 second endpointing window, treat silent turns as `no speech`, and keep the 45-second cap as a failsafe rather than the normal end rule.
+Browser speech recognition is the supported input path where available. Deepgram is unavailable until a secure server transport is supplied; legacy raw keys are migration inputs only.
 
-Browser speech recognition remains available where supported as a degraded alternative to Deepgram.
+Chat/Voice and Life Hero use one authenticated Vault speech transport with browser output fallback. The hosted AI pause returns before Vault or ElevenLabs work. See [Voice provider security](voice-provider-security.md).
 
 ## UI Expectations
 
@@ -107,6 +107,6 @@ Wake-word sessions listen again after each spoken answer and remain open until s
 
 ## Verification
 
-Future changes should verify wake-word acknowledgement before microphone opening, shared microphone configuration, the `preparing` state, ready-tone timing, unclipped first words, pause tolerance, uninterrupted requests, Deepgram endpointing, microphone reopening, silence and stop-phrase endings, Chat conversation ordering, and manual microphone fallback.
+Future changes should verify wake-word acknowledgement before microphone opening, shared microphone configuration, the `preparing` state, ready-tone timing, unclipped first words, pause tolerance, uninterrupted requests, browser recognition boundaries, microphone reopening, silence and stop-phrase endings, Chat conversation ordering, and manual microphone fallback.
 
 Also verify browser permission denial and unavailable-provider states remain truthful and leave Chat available.

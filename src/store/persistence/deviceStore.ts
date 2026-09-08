@@ -1,6 +1,7 @@
 import { logWarn } from '../../services/logger';
 import { SHARED_STORE_KEYS } from '../storeKeys';
 import type { LocalImportCandidate } from './types';
+import { legacyProviderSettings, splitSettings } from '../recordCodec';
 
 const NAMESPACE = 'helm';
 const META_PREFIX = `${NAMESPACE}:meta:`;
@@ -87,10 +88,18 @@ export class PersistenceDeviceStore {
   }
 
   load<T>(key: DeviceStoreKey): T | null {
-    const raw = localStorage.getItem(this.deviceDataKey(key));
-    if (raw === null) return null;
+    const raw = localStorage.getItem(`${this.deviceDataKey(key)}:v2`);
+    const legacy = localStorage.getItem(this.deviceDataKey(key));
+    const sharedLegacy = localStorage.getItem(this.sharedDataKey('settings'));
+    if (raw === null && legacy === null && sharedLegacy === null) return null;
     try {
-      return JSON.parse(raw) as T;
+      const oldSettings = legacy === null ? {} : JSON.parse(legacy);
+      return {
+        ...splitSettings(oldSettings).device,
+        ...splitSettings(raw === null ? {} : JSON.parse(raw)).device,
+        ...legacyProviderSettings(sharedLegacy === null ? {} : JSON.parse(sharedLegacy)),
+        ...legacyProviderSettings(oldSettings),
+      } as T;
     } catch {
       logWarn('Persistence', `Device-only cache JSON parse failed for ${key}`);
       return null;
@@ -98,7 +107,9 @@ export class PersistenceDeviceStore {
   }
 
   save<T>(key: DeviceStoreKey, value: T): void {
-    localStorage.setItem(this.deviceDataKey(key), JSON.stringify(value));
+    // Preserve the original migration source byte-for-byte. New writes contain
+    // only connection references and other nonsecret device preferences.
+    localStorage.setItem(`${this.deviceDataKey(key)}:v2`, JSON.stringify(splitSettings(value).device));
   }
 
   private sharedDataKey(key: string): string {

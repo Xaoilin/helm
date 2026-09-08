@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { speakWithElevenLabs, SpeechServiceError } from '../services/voiceAssistant';
+import { API_TIMEOUT } from '../config/constants';
 
 const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
@@ -57,6 +58,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -124,5 +126,18 @@ describe('authenticated assistant speech transport', () => {
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
     expect(mocks.createObjectUrl).not.toHaveBeenCalled();
     resolveBlob(new Blob(['late audio']));
+  });
+
+  it('settles a stalled error body when the request deadline expires', async () => {
+    vi.useFakeTimers();
+    mocks.fetch.mockResolvedValue({
+      ok: false,
+      json: () => new Promise(() => {}),
+    });
+    const promise = speakWithElevenLabs('Hello', 'secret-uuid', 'voice123');
+    const assertion = expect(promise).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.advanceTimersByTimeAsync(API_TIMEOUT.ELEVENLABS_TTS);
+    await assertion;
+    expect(mocks.createObjectUrl).not.toHaveBeenCalled();
   });
 });

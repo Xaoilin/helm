@@ -20,6 +20,7 @@ import {
   decodeStoreValue,
   encodeStoreValue,
   mergeLegacyStoreValue,
+  hasLegacyProviderSettings,
   sanitizeLegacyStoreValue,
   splitSettings,
   type DeviceSettings,
@@ -276,7 +277,8 @@ async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<
       continue;
     }
     const inspectedLegacy = sanitizeLegacyStoreValue(item.key, legacy.value);
-    if (inspectedLegacy.ambiguous && legacy.raw !== null) {
+    if (inspectedLegacy.ambiguous && legacy.raw !== null
+      && !(item.key === 'settings' && hasLegacyProviderSettings(inspectedLegacy.value))) {
       deviceStore.quarantineLegacyValue(item.key, legacy.raw);
     }
     if (item.key === 'settings') {
@@ -293,7 +295,10 @@ async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<
     );
     assertCurrentPersistenceSession(epoch, userId);
     if (!valuesEqual(databaseValue, merged)) desired.set(item.key, merged);
-    keysToClear.push(item.key);
+    // Keep the original browser source readable by the existing Secrets
+    // migration until the user explicitly removes it. Never copy raw keys to
+    // the new device-settings store.
+    if (item.key !== 'settings' || !hasLegacyProviderSettings(inspectedLegacy.value)) keysToClear.push(item.key);
   }
 
   if (deviceSettingsChanged) {

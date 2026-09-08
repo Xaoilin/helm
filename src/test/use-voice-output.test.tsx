@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVoiceOutput } from '../hooks/useVoiceOutput';
 
@@ -44,14 +45,17 @@ beforeEach(() => {
 });
 
 describe('useVoiceOutput', () => {
-  it('falls back to browser speech after a transport failure and exposes a notice', async () => {
-    mocks.speakWithElevenLabs.mockRejectedValue(new Error('speech service unavailable'));
+  it.each([
+    new Error('speech service unavailable'),
+    new DOMException('request deadline exceeded', 'AbortError'),
+  ])('falls back after provider failure or timeout in Strict Mode: %s', async error => {
+    mocks.speakWithElevenLabs.mockRejectedValue(error);
     const { result } = renderHook(() => useVoiceOutput({
       hasElevenLabs: true,
       lang: 'en',
       elevenLabsSecretId: 'secret-uuid',
       elevenLabsVoiceId: 'voice123',
-    }));
+    }), { wrapper: StrictMode });
 
     await act(async () => { await result.current.speak('Hello'); });
 

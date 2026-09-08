@@ -180,6 +180,24 @@ describe('persistence write boundary', () => {
 describe('device and runtime ownership boundaries', () => {
   beforeEach(() => localStorage.clear());
 
+  it('preserves legacy provider values for migration while all new device writes contain references only', () => {
+    const store = new PersistenceDeviceStore();
+    const original = JSON.stringify({ elevenLabsApiKey: 'legacy-eleven-key', deepgramApiKey: 'legacy-deep-key' });
+    const sharedOriginal = JSON.stringify({ elevenLabsApiKey: 'older-shared-key', theme: 'dark' });
+    localStorage.setItem('helm:device:deviceSettings', original);
+    localStorage.setItem('helm:settings', sharedOriginal);
+    store.save(DEVICE_SETTINGS_STORE_KEY, {
+      elevenLabsApiKey: 'new-plaintext-must-not-persist', deepgramApiKey: 'new-deep-plaintext', monzoAccessToken: 'new-monzo-plaintext',
+      elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001', microphoneDeviceId: 'mic-1',
+    });
+    expect(JSON.parse(localStorage.getItem('helm:device:deviceSettings:v2')!)).toEqual({
+      elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001', microphoneDeviceId: 'mic-1',
+    });
+    expect(localStorage.getItem('helm:device:deviceSettings')).toBe(original);
+    expect(localStorage.getItem('helm:settings')).toBe(sharedOriginal);
+    expect(store.load(DEVICE_SETTINGS_STORE_KEY)).toMatchObject({ elevenLabsApiKey: 'legacy-eleven-key', deepgramApiKey: 'legacy-deep-key' });
+  });
+
   it('keeps device settings under the device-only key and shared legacy data separate', () => {
     const store = new PersistenceDeviceStore();
     store.save(DEVICE_SETTINGS_STORE_KEY, { microphoneDeviceId: 'mic-1' });
@@ -187,7 +205,7 @@ describe('device and runtime ownership boundaries', () => {
 
     expect(isDeviceStoreKey('deviceSettings')).toBe(true);
     expect(store.load(DEVICE_SETTINGS_STORE_KEY)).toEqual({ microphoneDeviceId: 'mic-1' });
-    expect(localStorage.getItem('helm:device:deviceSettings')).toContain('mic-1');
+    expect(localStorage.getItem('helm:device:deviceSettings:v2')).toContain('mic-1');
     expect(store.readLegacySharedValue('settings').value).toEqual({ theme: 'dark' });
     expect(store.listLegacyCandidates(() => false)).toEqual([
       expect.objectContaining({ key: 'settings', localStorage: true, remoteExists: false }),

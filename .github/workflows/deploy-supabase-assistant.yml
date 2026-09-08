@@ -213,6 +213,9 @@ jobs:
       - name: Deploy authenticated operator billing boundary
         run: npx supabase functions deploy assistant-openai-billing --project-ref "$SUPABASE_PROJECT_REF" --use-api --yes
 
+      - name: Deploy authenticated Vault speech boundary
+        run: npx supabase functions deploy assistant-speech --project-ref "$SUPABASE_PROJECT_REF" --use-api --yes
+
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_google_calendar_oauth == 'true' }}
         name: Sync Google Calendar OAuth function secrets
         run: |
