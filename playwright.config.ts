@@ -16,6 +16,8 @@ export default defineConfig({
   testDir: './e2e',
   outputDir: `test-results/playwright/${runId}`,
   timeout: 30_000,
+  // Match CI while the local full gate also builds and runs unit tests.
+  workers: 2,
   retries: 0,
   failOnFlakyTests: isCi,
   use: {
