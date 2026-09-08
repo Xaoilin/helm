@@ -16,6 +16,7 @@ import type {
   SecretKind,
 } from '../types/domain';
 import { useSyncAvailability } from '../store/SyncAvailabilityContext';
+import { useDialog } from '../hooks/useDialog';
 
 const SECRET_KIND_OPTIONS: Array<{ value: SecretKind; label: string }> = [
   { value: 'password', label: 'Password' },
@@ -77,6 +78,10 @@ function safeExternalUrl(value: string): string | null {
   }
 }
 
+function areSecretFormsEqual(left: SecretFormState, right: SecretFormState): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 export default function SecretsSurface() {
   const projects = useProjectContext();
   const settings = useSettingsContext();
@@ -95,6 +100,25 @@ export default function SecretsSurface() {
   const [showArchived, setShowArchived] = useState(false);
   const [form, setForm] = useState<SecretFormState | null>(null);
   const importedDeviceSecrets = useRef(false);
+  const [initialForm, setInitialForm] = useState<SecretFormState | null>(null);
+
+  function closeForm(): void {
+    setForm(null);
+    setInitialForm(null);
+  }
+
+  function openNewForm(): void {
+    const nextForm = { ...EMPTY_FORM, projectCatalogKeys: [...EMPTY_FORM.projectCatalogKeys] };
+    setForm(nextForm);
+    setInitialForm(nextForm);
+  }
+
+  const { dialogRef: secretDialogRef, requestClose: requestSecretClose } = useDialog({
+    open: form !== null,
+    onClose: closeForm,
+    dirty: Boolean(form && initialForm && !areSecretFormsEqual(form, initialForm)),
+    busy: saving,
+  });
 
   const clearRevealed = useCallback(() => {
     setRevealed({});
@@ -274,7 +298,7 @@ export default function SecretsSurface() {
     setError(null);
     try {
       const detail = await revealHelmSecret(secret.secretId);
-      setForm({
+      const nextForm: SecretFormState = {
         secretId: secret.secretId,
         label: secret.label,
         kind: secret.kind,
@@ -285,16 +309,14 @@ export default function SecretsSurface() {
         url: detail.url || '',
         notes: detail.notes || '',
         sourceRef: secret.sourceRef,
-      });
+      };
+      setForm(nextForm);
+      setInitialForm(nextForm);
     } catch (editError) {
       setError(editError instanceof Error ? editError.message : String(editError));
     } finally {
       setBusySecretId(null);
     }
-  };
-
-  const closeForm = () => {
-    setForm(null);
   };
 
   const submitForm = async () => {
@@ -321,7 +343,7 @@ export default function SecretsSurface() {
         delete next[saved.secretId];
         return next;
       });
-      setForm(null);
+      closeForm();
       setNotice(`${saved.label} saved securely.`);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : String(saveError));
@@ -369,7 +391,7 @@ export default function SecretsSurface() {
           <h1>Secrets</h1>
           <div className="subtitle">Encrypted, account-owned credentials with one-click access</div>
         </div>
-        <button className="btn btn-primary" type="button" onClick={() => setForm({ ...EMPTY_FORM })}>
+        <button className="btn btn-primary" type="button" onClick={openNewForm}>
           + Add Secret
         </button>
       </div>
@@ -426,7 +448,7 @@ export default function SecretsSurface() {
             <div className="empty-icon">🔐</div>
             <h3>{secrets.length === 0 ? 'Your vault is ready' : 'No secrets match these filters'}</h3>
             <p>{secrets.length === 0 ? 'Add a password, API key, token, or database credential.' : 'Change the filters to see more credentials.'}</p>
-            {secrets.length === 0 && <button className="btn btn-primary" type="button" onClick={() => setForm({ ...EMPTY_FORM })}>+ Add Secret</button>}
+            {secrets.length === 0 && <button className="btn btn-primary" type="button" onClick={openNewForm}>+ Add Secret</button>}
           </div>
         ) : (
           <div className="secrets-grid">
@@ -489,13 +511,21 @@ export default function SecretsSurface() {
       </div>
 
       {form && (
-        <div className="modal-overlay" onClick={closeForm}>
-          <div className="modal secret-modal" role="dialog" aria-modal="true" aria-label={form.secretId ? 'Edit secret' : 'Add secret'} onClick={event => event.stopPropagation()}>
+        <div className="modal-overlay" onClick={requestSecretClose}>
+          <div
+            ref={secretDialogRef}
+            className="modal secret-modal"
+            role="dialog"
+            aria-modal="true"
+            tabIndex={-1}
+            aria-label={form.secretId ? 'Edit secret' : 'Add secret'}
+            onClick={event => event.stopPropagation()}
+          >
             <h2>{form.secretId ? 'Edit Secret' : 'Add Secret'}</h2>
             <div className="secret-form-grid">
               <div className="form-group secret-form-wide">
                 <label htmlFor="secret-label">Label</label>
-                <input id="secret-label" className="form-input" autoFocus value={form.label} onChange={event => setForm({ ...form, label: event.target.value })} placeholder="Production database password" />
+                <input id="secret-label" className="form-input" value={form.label} onChange={event => setForm({ ...form, label: event.target.value })} placeholder="Production database password" />
               </div>
               <div className="form-group">
                 <label htmlFor="secret-kind">Type</label>
@@ -536,7 +566,7 @@ export default function SecretsSurface() {
             </fieldset>
 
             <div className="modal-actions">
-              <button className="btn btn-secondary" type="button" onClick={closeForm}>Cancel</button>
+              <button className="btn btn-secondary" type="button" onClick={requestSecretClose}>Cancel</button>
               <button className="btn btn-primary" type="button" onClick={() => void submitForm()} disabled={saving || !form.label.trim() || (!form.secretId && !form.value)}>
                 {saving ? 'Saving…' : 'Save Secret'}
               </button>
