@@ -293,6 +293,13 @@ export function ChatProvider({ children, crossDomain }: ChatProviderProps) {
           : undefined,
         recordAssistantActivity: crossDomain.recordAssistantActivity,
       },
+    }).catch(error => {
+      // Return this failed optimistic message to the composer. An explicit retry
+      // must not append a second copy to the conversation.
+      setConversations(previous => previous.map(conversation => conversation.id === conversationId
+        ? { ...conversation, messages: conversation.messages.filter(message => message.id !== userMessage.id) }
+        : conversation));
+      throw error;
     });
 
     dialogStatesRef.current[conversationId] = result.dialogState;

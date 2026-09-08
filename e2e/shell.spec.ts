@@ -41,6 +41,42 @@ for (const width of [1440, 390]) {
 }
 
 test.describe('assembled browser shell', () => {
+  test('More contains keyboard focus, scrolls and returns focus on dismissal', async ({ page, scenario }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 600 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await scenario();
+    await openApp(page);
+    const trigger = page.getByRole('button', { name: 'Open more navigation', exact: true });
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'More navigation' });
+    const close = dialog.getByRole('button', { name: 'Close more navigation' });
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(dialog.getByRole('button').last()).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(close).toBeFocused();
+    const size = await dialog.evaluate(element => ({ client: element.clientHeight, scroll: element.scrollHeight }));
+    expect(size.scroll).toBeGreaterThan(size.client);
+    await dialog.hover();
+    await page.mouse.wheel(0, 700);
+    await expect.poll(() => dialog.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(close).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath('more-390.png') });
+    await close.click();
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press('Enter');
+    const clock = dialog.getByRole('button', { name: 'Clock', exact: true });
+    await clock.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('main', { name: 'clock surface' })).toBeVisible();
+    await expect(trigger).toBeFocused();
+  });
+
   test('boots Night Compass with a current-day prayer schedule and next-prayer semantics', async ({ page, scenario }) => {
     await scenario({
       now: FIXED_NOW,
