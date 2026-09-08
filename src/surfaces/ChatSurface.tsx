@@ -75,6 +75,10 @@ export default function ChatSurface() {
   const [editTitle, setEditTitle] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const sendingRef = useRef(false);
+  const [failedSend, setFailedSend] = useState<{
+    text: string; conversationId?: string; clearInput: boolean; detail: string;
+  } | null>(null);
   const [assistantStatus, setAssistantStatus] = useState<AssistantRuntimeStatus>(defaultAssistantStatus);
   const [exportFeedback, setExportFeedback] = useState<ExportFeedback | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -118,21 +122,27 @@ export default function ChatSurface() {
     setExportFeedback(null);
   }, [activeConv?.id]);
 
-  const handleSend = async () => {
-    const text = input.trim();
-    if (!text || isTyping || aiPaused) return;
-    let convId = chat.activeConversationId;
-    if (!convId) {
-      convId = chat.createConversation();
-    }
-    setInput('');
+  const send = async (content: string, conversationId?: string, clearInput = false) => {
+    const text = content.trim();
+    if (!text || sendingRef.current || aiPaused) return;
+    sendingRef.current = true;
     setIsTyping(true);
+    setFailedSend(null);
+    let convId = conversationId;
     try {
+      convId ||= chat.activeConversationId || chat.createConversation();
       await chat.sendMessage(convId, text);
+      if (clearInput) setInput(current => current.trim() === text ? '' : current);
+    } catch (error) {
+      setFailedSend({ text, conversationId: convId, clearInput,
+        detail: error instanceof Error ? error.message : 'Unexpected send failure.' });
     } finally {
+      sendingRef.current = false;
       setIsTyping(false);
     }
   };
+
+  const handleSend = () => send(input, undefined, true);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -283,6 +293,17 @@ export default function ChatSurface() {
 
       {/* Chat main area */}
       <div className="chat-main">
+        {failedSend && (
+          <div className="chat-send-error" role="alert">
+            <p>Could not finish this message. {failedSend.detail}</p>
+            <p>Your message is kept: “{failedSend.text}”</p>
+            <p>Check any requested changes before trying again.</p>
+            <button className="btn btn-secondary btn-sm" disabled={isTyping || aiPaused}
+              onClick={() => void send(failedSend.text, failedSend.conversationId, failedSend.clearInput)}>
+              Try again
+            </button>
+          </div>
+        )}
         {activeConv ? (
           <>
             <div className="chat-main-header">
@@ -370,8 +391,8 @@ export default function ChatSurface() {
                       <button
                         key={p}
                         className="btn btn-secondary btn-sm"
-                        disabled={aiPaused}
-                        onClick={() => { handleSendQuick(p); }}
+                        disabled={isTyping || aiPaused}
+                        onClick={() => { void send(p); }}
                       >
                         {p}
                       </button>
@@ -422,11 +443,8 @@ export default function ChatSurface() {
                   <button
                     key={p}
                     className="btn btn-secondary btn-sm"
-                    disabled={aiPaused}
-                    onClick={() => {
-                      const id = chat.createConversation();
-                      chat.sendMessage(id, p);
-                    }}
+                    disabled={isTyping || aiPaused}
+                    onClick={() => { void send(p); }}
                   >
                     {p}
                   </button>
@@ -439,15 +457,4 @@ export default function ChatSurface() {
     </div>
   );
 
-  // Helper for quick prompts inside active conversation
-  async function handleSendQuick(text: string) {
-    if (isTyping || aiPaused) return;
-    const convId = activeConv?.id || chat.createConversation();
-    setIsTyping(true);
-    try {
-      await chat.sendMessage(convId, text);
-    } finally {
-      setIsTyping(false);
-    }
-  }
 }

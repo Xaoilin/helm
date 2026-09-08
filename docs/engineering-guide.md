@@ -108,6 +108,20 @@ Direct browser review is required for visible user flows and especially for OAut
 - Preserve labels, roles, keyboard access, focus behavior, responsive layout, and `prefers-reduced-motion` behavior.
 - Pair state colours with visible text. Browser-native behavior is an enhancement, not the sole route to an important outcome.
 
+The More sheet and Secret, Task and Trip wizard editors share `useDialog` for
+initial focus, containment, Escape and return focus. Draft editors compare the
+current fields with their opening values; dismissal asks for explicit discard
+only when changed, and pending saves cannot dismiss. Successful save closes
+directly. Avoid adding React `autoFocus` to these controls: it runs before the
+hook captures the opener and prevents reliable return focus.
+
+Chat typed and quick sends use one synchronous in-flight guard and `finally`
+recovery. A rejected optimistic transcript entry returns to the draft; explicit
+retry keeps its conversation and adds one completed turn. Rejection does not
+prove that a requested domain action failed, so the recovery message asks the
+user to check changes before retrying. Calendar and Knowledge card open actions
+use native buttons beside other controls; Health removal requires confirmation.
+
 ## Documentation Rules
 
 - Keep `AGENTS.md` short and operational; put long-form architecture and process material under `docs/`.

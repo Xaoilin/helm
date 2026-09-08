@@ -585,8 +585,8 @@ export default function CalendarSurface() {
                           type="button"
                           className="day-num"
                           aria-label={`Select ${formatCalendarDate(date)}`}
+                          aria-pressed={toLocalDateStr(date) === selectedDateStr}
                           onClick={() => setSelectedDateStr(toLocalDateStr(date))}
-                          style={{ appearance: 'none', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}
                         >
                           {date.getUTCDate()}
                         </button>
@@ -597,7 +597,7 @@ export default function CalendarSurface() {
                               type="button"
                               key={evt.id}
                               className="calendar-event-dot"
-                              style={{ appearance: 'none', background: pal.bg, borderTop: 0, borderRight: 0, borderBottom: 0, borderLeft: `2px solid ${pal.border}`, color: 'inherit', cursor: 'pointer', display: 'block', fontFamily: 'inherit', position: 'relative', textAlign: 'left' }}
+                              style={{ appearance: 'none', background: pal.bg, borderTop: 0, borderRight: 0, borderBottom: 0, borderLeft: `2px solid ${pal.border}`, color: 'inherit', cursor: 'pointer', display: 'block', fontFamily: 'inherit', textAlign: 'left' }}
                               onClick={() => openEditEvent(evt)}
                               aria-label={`Open ${evt.title}`}
                               title={evt.title}

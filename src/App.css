@@ -1816,6 +1816,21 @@ textarea.form-input {
   color: #c4c8db;
 }
 
+.chat-send-error {
+  padding: 12px 16px;
+  border-bottom: 1px solid #704b35;
+  background: #30251f;
+  color: #ffd5aa;
+  overflow-wrap: anywhere;
+  max-height: 40%;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.chat-send-error p {
+  margin: 0 0 6px;
+}
+
 .chat-input-bar {
   padding: 12px 24px 16px;
   border-top: 1px solid #1e2030;
@@ -1871,12 +1886,31 @@ textarea.form-input {
   min-height: 80px;
   padding: 6px;
   font-size: 12px;
+  position: relative;
+  min-width: 0;
 }
 
 .calendar-day .day-num {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
   font-weight: 600;
   color: #9499b0;
   margin-bottom: 4px;
+}
+
+.calendar-day .day-num::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.calendar-day .day-num:focus-visible::after {
+  outline: 2px solid #93c5fd;
+  outline-offset: -2px;
 }
 
 .calendar-day.today .day-num {
@@ -1895,6 +1929,10 @@ textarea.form-input {
 }
 
 .calendar-event-dot {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-width: 0;
   padding: 2px 4px;
   border-radius: 3px;
   font-size: 10px;
@@ -2010,6 +2048,7 @@ textarea.form-input {
 
 /* ── Agenda ── */
 .agenda-item {
+  border: 0;
   display: flex;
   gap: 12px;
   padding: 10px 0;

@@ -123,6 +123,7 @@ export default function SecretsSurface() {
   const clearRevealed = useCallback(() => {
     setRevealed({});
     setForm(current => current ? { ...current, value: '' } : current);
+    setInitialForm(current => current ? { ...current, value: '' } : current);
   }, []);
 
   useEffect(() => subscribeSyncSession(snapshot => {

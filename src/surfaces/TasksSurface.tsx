@@ -1252,7 +1252,6 @@ export default function TasksSurface() {
                   className="form-select"
                   value={prayerName}
                   onChange={e => setPrayerName(e.target.value as PrayerName)}
-                  autoFocus
                 >
                   {PRAYER_TASK_ORDER.map(name => <option key={name} value={name}>{name}</option>)}
                 </select>

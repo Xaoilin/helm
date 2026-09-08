@@ -20,6 +20,7 @@ import {
   isGoogleCalendarAccount,
 } from './services/googleCalendarAuthManager';
 import { useReleaseRefresh } from './hooks/useReleaseRefresh';
+import { useDialog } from './hooks/useDialog';
 import { useOptionalAuthSession } from './store/AuthSessionContext';
 import { useSyncAvailability } from './store/SyncAvailabilityContext';
 import {
@@ -79,6 +80,9 @@ function AppInner() {
   const signOut = authSession?.signOut ?? endSupabaseSession;
   const supabaseReady = authSession?.supabaseReady ?? isSupabaseReady();
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const { dialogRef: moreDialogRef, requestClose: closeMoreDialog } = useDialog({
+    open: mobileMoreOpen, onClose: () => setMobileMoreOpen(false),
+  });
   const previousSurface = useRef<{ surface: Surface; startedAt: number } | null>(null);
 
   useReleaseRefresh();
@@ -144,19 +148,6 @@ function AppInner() {
     });
     previousSurface.current = { surface: shell.surface, startedAt: now };
   }, [authUserId, shell.surface, supabaseReady]);
-
-  useEffect(() => {
-    if (!mobileMoreOpen) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setMobileMoreOpen(false);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mobileMoreOpen]);
 
   useEffect(() => {
     if (readOnly) return;
@@ -338,8 +329,10 @@ function AppInner() {
         {renderSurface()}
       </main>
       {mobileMoreOpen && (
-        <div className="mobile-more-backdrop" onClick={() => setMobileMoreOpen(false)}>
-          <section
+        <div className="mobile-more-backdrop" onClick={closeMoreDialog}>
+          <div
+            ref={moreDialogRef}
+            tabIndex={-1}
             className="mobile-more-sheet"
             aria-label="More navigation"
             aria-modal="true"
@@ -352,7 +345,7 @@ function AppInner() {
                 <div className="mobile-more-title">More</div>
                 <div className="mobile-more-subtitle">All Lina surfaces</div>
               </div>
-              <button className="btn-icon" onClick={() => setMobileMoreOpen(false)} aria-label="Close more navigation">
+              <button className="btn-icon" onClick={closeMoreDialog} aria-label="Close more navigation">
                 &times;
               </button>
             </div>
@@ -382,7 +375,7 @@ function AppInner() {
             <div className="mobile-auth-panel">
               {renderAuthContent('mobile')}
             </div>
-          </section>
+          </div>
         </div>
       )}
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
