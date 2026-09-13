@@ -2624,7 +2624,7 @@ textarea.form-input {
 
 .nc-quran-motivation {
   display: grid;
-  grid-template-columns: minmax(180px, 0.7fr) minmax(260px, 1.4fr) minmax(240px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px 22px;
   align-items: center;
   padding: 18px 22px;
@@ -2641,41 +2641,26 @@ textarea.form-input {
 .nc-quran-motivation blockquote {
   margin: 0;
   color: #f4e8c8;
-  font-family: "Noto Naskh Arabic", "Geeza Pro", serif;
-  font-size: 21px;
-  line-height: 1.85;
+  max-width: 80ch;
+  font-size: 17px;
+  line-height: 1.75;
   white-space: pre-line;
 }
 
-.nc-quran-motivation p {
-  margin: 0;
+.nc-quran-motivation-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
   color: #c8c3b8;
   font-size: 12px;
   line-height: 1.55;
 }
 
-.nc-quran-motivation-sources {
-  grid-column: 3;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-}
-
 .nc-quran-motivation a {
   justify-self: start;
   color: #e7c16e;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-}
-
-@media (max-width: 820px) {
-  .nc-quran-motivation {
-    grid-template-columns: 1fr;
-  }
-
-  .nc-quran-motivation-sources {
-    grid-column: 1;
-  }
 }
 
 .prayer-deadline-pulse {
