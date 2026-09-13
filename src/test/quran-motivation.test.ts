@@ -62,8 +62,19 @@ describe('daily Quran encouragement', () => {
       expect(new Set(cards).size).toBe(count);
       expect(new Set(cards)).toEqual(new Set(QURAN_MOTIVATION_CARDS.map(card => card.id)));
       expect(getQuranMotivationForDate(shiftIsoDate(start, count)!).id).toBe(cards[0]);
+      expect(cards.at(-1)).not.toBe(cards[0]);
     },
   );
+
+  it('uses a stable shuffled order instead of walking through the catalogue', () => {
+    const dates = QURAN_MOTIVATION_CARDS.map((_, day) => shiftIsoDate('1970-01-01', day)!);
+    const cycle = dates.map(date => getQuranMotivationForDate(date).id);
+
+    expect(cycle).not.toEqual(QURAN_MOTIVATION_CARDS.map(card => card.id));
+    // Visiting other dates cannot consume cards or change a day's selection.
+    expect(dates.toReversed().map(date => getQuranMotivationForDate(date).id))
+      .toEqual(cycle.toReversed());
+  });
 
   it.each(['', '2026-02-30', '2026-13-01', '2026-9-13', '2026-09-13T12:00:00Z'])(
     'rejects an invalid prayer date: %s',

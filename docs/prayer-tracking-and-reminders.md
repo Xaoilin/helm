@@ -82,11 +82,12 @@ steadfastness and good conduct. Complete Arabic ayahs come unchanged from Tanzil
 English titles and meanings are contextual paraphrases, with an exact Quran.com
 reference and visible source attribution.
 
-The prayer provider's local calendar date selects one card per day. Every card
-appears once in a 206-day cycle before repetition, including across month ends,
-year ends, leap days and daylight-saving changes. Refreshing the page preserves
-the day's card. This is a bundled collection with no AI-generation or account
-mutation path. See [the source review](quran-motivation-review.md) for corpus
+The prayer provider's local calendar date selects one card per day from a
+deterministically shuffled order shared across devices. Every card appears once
+in any 206 consecutive days before the shuffled order repeats, including across
+cycle boundaries, month ends, year ends, leap days and daylight-saving changes.
+Refreshing the page preserves the day's card. This is a bundled collection with
+no AI-generation or account mutation path. See [the source review](quran-motivation-review.md) for corpus
 coverage, selection decisions and the Arabic integrity receipt.
 
 ### Prayer outcomes
