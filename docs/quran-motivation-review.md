@@ -88,9 +88,11 @@ available on every card alongside the source link.
 ## Daily selection and verification
 
 The prayer provider supplies the prayer schedule's local calendar date. The
-selector counts calendar days, advancing through every card exactly once before
-repeating. UTC is used only as a uniform day counter, never to infer the user's
-date. Refreshing a page preserves that day's card; the provider's existing date
+selector counts calendar days, advancing through a fixed-seed Fisher-Yates
+shuffle of every card exactly once before repeating. Keeping the shuffled order
+stable prevents early repeats from any starting date, including across cycle
+boundaries, and keeps devices in agreement. UTC is used only as a uniform day
+counter, never to infer the user's date. Refreshing a page preserves that day's card; the provider's existing date
 rollover updates it. There is no network call or model generation to choose a
 card, and no account data or external agent API changes.
 
