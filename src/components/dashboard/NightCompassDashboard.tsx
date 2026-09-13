@@ -697,9 +697,13 @@ export default function NightCompassDashboard() {
         </div>
         <blockquote lang="ar" dir="rtl">{motivation.arabic}</blockquote>
         <p><strong>Reviewed meaning (paraphrase):</strong> {motivation.meaningSummary}</p>
-        <a href={motivation.sourceUrl} target="_blank" rel="noreferrer">
-          Quran {motivation.reference} · Source
-        </a>
+        <div className="nc-quran-motivation-sources">
+          <a href={motivation.sourceUrl} target="_blank" rel="noreferrer">
+            Quran {motivation.reference} · Source
+          </a>
+          <a href="https://tanzil.net" target="_blank" rel="noreferrer">Arabic: Tanzil Project</a>
+          <a href={`${import.meta.env.BASE_URL}licenses/tanzil-quran.txt`} target="_blank" rel="noreferrer">Text licence</a>
+        </div>
       </aside>
 
       <div className="nc-momentum-grid">

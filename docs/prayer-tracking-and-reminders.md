@@ -73,6 +73,24 @@ Browser notification delivery is deduplicated by local prayer date, canonical pr
 
 ## Reporting
 
+### Daily Quran encouragement
+
+Night Compass follows the prayer section with a curated Quran passage. The
+collection contains 206 distinct cards spanning 374 non-overlapping ayahs,
+including 133 prayer, remembrance and dua cards. The remaining selections cover
+steadfastness and good conduct. Complete Arabic ayahs come unchanged from Tanzil;
+English titles and meanings are contextual paraphrases, with an exact Quran.com
+reference and visible source attribution.
+
+The prayer provider's local calendar date selects one card per day. Every card
+appears once in a 206-day cycle before repetition, including across month ends,
+year ends, leap days and daylight-saving changes. Refreshing the page preserves
+the day's card. This is a bundled collection with no AI-generation or account
+mutation path. See [the source review](quran-motivation-review.md) for corpus
+coverage, selection decisions and the Arabic integrity receipt.
+
+### Prayer outcomes
+
 Dashboard and Profile render a stacked accessible bar:
 
 - green: On time;

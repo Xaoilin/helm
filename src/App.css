@@ -2654,8 +2654,14 @@ textarea.form-input {
   line-height: 1.55;
 }
 
-.nc-quran-motivation a {
+.nc-quran-motivation-sources {
   grid-column: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.nc-quran-motivation a {
   justify-self: start;
   color: #e7c16e;
   font-size: 11px;
@@ -2667,7 +2673,7 @@ textarea.form-input {
     grid-template-columns: 1fr;
   }
 
-  .nc-quran-motivation a {
+  .nc-quran-motivation-sources {
     grid-column: 1;
   }
 }
