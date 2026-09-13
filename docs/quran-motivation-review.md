@@ -1,107 +1,79 @@
-# Daily Quran encouragement review
+# Daily Quran reading source review
 
-## Scope and editorial policy
+## Display and collection
 
-The daily dashboard collection prioritizes salah, with related remembrance and
-supplication, then encouragement toward patience and a good life. Each card is a
-distinct, non-overlapping Quran passage, not a recombination of titles and text.
-The resulting collection contains **206 cards across 374 distinct ayahs**:
-57 prayer, 26 remembrance, 50 dua, 28 steadfastness, and 45 good-deeds cards.
-Prayer and related devotion account for 133 cards (about 65%). These theme
-labels describe the card's main focus; the prayer group also includes
-prostration and night devotion, rather than being a count of occurrences of the
-word salah.
+Night Compass displays the complete English translation of the selected Quran
+passage, its surah/ayah reference, translator credit and source links. It uses
+Marmaduke Pickthall's published translation, without editorial encouragement
+titles, meaning summaries, abridgment or generated wording. Multi-ayah passages
+include every complete verse, separated by a newline. The reading card is
+English-only.
 
-This is a curated collection, not a claim that every suitable passage has been
-exhausted or a scholarly tafsir certification.
+The existing curated collection remains **206 passages across 374 distinct
+ayahs**: 57 prayer, 26 remembrance, 50 dua, 28 steadfastness and 45 good-deeds
+cards. IDs, references, themes, catalogue order and the daily selector are
+unchanged by the switch to English. Prayer and related devotion account for
+133 cards. Passages do not overlap or count the same ayah twice.
 
-The 2026-09-13 review uses the complete 114-surah, 6,236-ayah corpus, divided into
-surahs 1–9 (1,364 ayahs), 10–32 (2,169), and 33–114 (2,703). Review includes the
-surrounding text, the speaker and addressee, and any conditions attached to an
-encouragement. The Arabic text is primary; Pickthall's English translation is a
-reading aid. Quran.com provides a linked source and further context for each
-selected passage.
+The original 2026-09-13 selection review covered all 114 surahs and 6,236 ayahs,
+checking surrounding context, speaker, addressee and attached conditions. It
+prioritized prayer, worship, remembrance and dua, followed by perseverance,
+mercy and good conduct. It excluded misleading fragments and preserved complete
+ayahs. The ledger below records selection rationale, not text displayed in the
+reading card. This remains a curated collection, not a scholarly tafsir
+certification or a claim that every suitable passage has been exhausted.
 
-Selection rules:
+## English source and integrity
 
-- Prefer explicit prayer passages, then worship, remembrance and dua.
-- Include hopeful perseverance, gratitude, mercy, honesty and good deeds where
-  the passage works as daily encouragement.
-- Use complete ayahs, joining adjacent ayahs when needed to preserve meaning.
-  Do not count a passage and its constituent ayahs as separate cards.
-- Preserve prophetic or historical attribution and relevant conditions in the
-  English summary. Do not turn a Prophet-specific command into a universal duty.
-- Exclude isolated threats, combat instructions, unrelated detailed legal rulings and
-  context-dependent fragments that would mislead on an encouragement card.
-- Titles and summaries are editorial paraphrases, never presented as Quranic
-  quotations, literal translations, new divine promises or guaranteed worldly
-  success. No generated hadith or unsourced sayings are included.
+- [Project Gutenberg ebook 16955](https://www.gutenberg.org/ebooks/16955)
+  identifies Marmaduke Pickthall as a translator and lists the ebook as public
+  domain in the USA. Only its Pickthall text is used, not the other translations.
+- [Downloaded plain text](https://www.gutenberg.org/cache/epub/16955/pg16955.txt)
+  labels Pickthall records `P:`. The source says it was re-proofed against paper
+  copies. Extract each complete `P:` record up to the following `S:` marker,
+  collapse source line wrapping to spaces, and join complete selected ayahs with
+  newlines. Preserve all source words, punctuation, capitalization and parentheses.
+- The source has one truncated reference marker, `039.04`, between `039.045` and
+  `039.047`. Map that marker to **39:46** during extraction. Its complete wording
+  independently matches the previously reviewed AlQuran Cloud `en.pickthall`
+  record. This corrects the reference marker only, not the translation text.
+- Comparison with that earlier online copy matched 365 of the 374 selected ayahs
+  after whitespace normalization. Nine records have wording or punctuation
+  variants (9:129, 14:31, 19:5, 21:87, 20:14, 22:34, 27:62, 40:65 and 114:3).
+  All displayed English consistently follows the Gutenberg source.
 
-## Sources and text integrity
+Downloaded Gutenberg text SHA-256:
+`3b96fa3ad318ab9d91db53b25100d5169fafe3a1ecb993e7c36ffff55bf9d8bc`.
 
-- [Tanzil Quran text download](https://tanzil.net/download/): Uthmani v1.1,
-  `txt-2`, pause marks, sajdah signs and tatweel enabled. Each selected Arabic
-  record is copied unchanged. Multi-ayah cards join complete records with a
-  newline. Chapter-opening basmala is retained as supplied by Tanzil.
-- [AlQuran Cloud API](https://alquran.cloud/api): the complete `en.pickthall`
-  edition supplied the sequential English review corpus. English translation
-  text is not distributed as the app's summaries.
-- [Quran Foundation Uthmani API documentation](https://api-docs.quran.com/docs/content_apis_versioned/4.0.0/quran-verses-uthmani/):
-  the complete Quran.com Arabic corpus supplied a second text cross-check.
-- [Tanzil text licence](https://tanzil.net/docs/Text_License): the original notice
-  is preserved with the catalogue and in `public/licenses/tanzil-quran.txt`;
-  the dashboard links to Tanzil and the distributed notice.
+Earlier AlQuran Cloud review input SHA-256:
+`e731d9bce22575faba22b1f3de21c18b647711c33de074b89fe8d6f8384b01c5`.
 
-All 6,236 Arabic records agree between the two sources after excluding only
-source-format differences for comparison: chapter-opening basmala outside 1:1,
-rub-el-hizb markers and outer whitespace. The 95:1 and 97:1 preambles carry
-Tanzil's shadda variant. These comparison operations are **not** applied to the
-published Arabic text.
+Selected English SHA-256:
+`66dcfbcfdb84cc955acb06d7b8a114fc6ebcd740826f6d181f9ce710cce17400`.
 
-Downloaded input SHA-256 receipts:
+The selected digest uses UTF-8 `reference|translation` records sorted lexically
+and joined with newlines, without a trailing newline. Within a passage, each
+complete ayah retains its separating newline. The regression test pins the
+independently extracted source digest and checks that every passage contains the
+exact number of verses in its reference. Translation changes require a new
+source extraction and review. There are 206 distinct English passage texts.
 
-| Input | SHA-256 |
-| --- | --- |
-| Tanzil Uthmani v1.1 text | `6933e133dd56db778c801bf738848454e43648105a151e8d84d86a7cae39ec5f` |
-| AlQuran Cloud Pickthall JSON | `e731d9bce22575faba22b1f3de21c18b647711c33de074b89fe8d6f8384b01c5` |
-| Quran.com Uthmani JSON | `3754c592dd15d7047d5b4339737ad3171c5c1d431a8c3e4c1eee7781c135d58c` |
+## Daily selection and browser verification
 
-The catalogue integrity test pins the selected reference-plus-Arabic digest
-against the independently downloaded Tanzil records. Changing Arabic requires a
-new source comparison and updated receipt; changing English requires context
-review. The full source corpora are research inputs, not runtime dependencies.
+The prayer provider supplies its local calendar date. The selector counts days
+through a fixed-seed Fisher-Yates shuffle: every passage appears once in any
+206 consecutive days before the same shuffled order repeats. Cycle boundaries,
+month/year ends, leap days and daylight-saving transitions cannot cause early
+repeats. Refreshing the page preserves the selected passage; the provider's
+existing date rollover updates it.
 
-Selected Arabic SHA-256: `2fbfdf6aa602f24fec44d6c23e04f87d06548afc87be2de44c9dfb9ad0f14d01`.
-The input is UTF-8 `reference|arabic` records sorted lexically and joined with
-newlines, without a trailing newline. Arabic within a range retains its own
-newlines. There are no duplicate full Arabic cards or overlapping ayah ranges.
+Tests cover full-cycle uniqueness and stability. Browser checks render the
+longest English passage at 390, 768 and 1440 pixels, verify its full text, left-
+to-right English semantics, translator credit and source links, check horizontal
+overflow, and exercise page reload and prayer-local midnight rollover.
 
-Final review corrected the righteous-offspring request in 37:100, shortened
-70:19–35, 23:1–11 and 49:9–10 to their relevant prayer or reconciliation passages,
-excluded Job's oath remedy and Noah's destruction request, and retained only one
-copy of the identical 56:74/69:52 glorification. Additional direct prayer passages
-were included without an arbitrary per-section cap. Prophet-specific commands
-retain their addressee in the displayed summary; English wording was simplified
-after source review. The full Arabic, including retained verse conditions, is
-available on every card alongside the source link.
-
-## Daily selection and verification
-
-The prayer provider supplies the prayer schedule's local calendar date. The
-selector counts calendar days, advancing through a fixed-seed Fisher-Yates
-shuffle of every card exactly once before repeating. Keeping the shuffled order
-stable prevents early repeats from any starting date, including across cycle
-boundaries, and keeps devices in agreement. UTC is used only as a uniform day
-counter, never to infer the user's date. Refreshing a page preserves that day's card; the provider's existing date
-rollover updates it. There is no network call or model generation to choose a
-card, and no account data or external agent API changes.
-
-The former `YYYYMMDD % count` selector revisited entries across month ends; a
-six-day run starting 2026-01-28 displayed only four distinct cards. Regression
-coverage exercises complete cycles across month and year ends, leap day,
-daylight-saving dates and dates before the Unix epoch. Browser coverage checks
-the longest passage at phone, tablet and desktop widths, source links, reload
-stability and an open page crossing a prayer-date boundary.
+The collection is bundled. No runtime network request, AI generation, account
+mutation, storage schema or external agent API is introduced.
 
 ## Passage review ledger
 

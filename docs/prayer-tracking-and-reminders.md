@@ -73,22 +73,22 @@ Browser notification delivery is deduplicated by local prayer date, canonical pr
 
 ## Reporting
 
-### Daily Quran encouragement
+### Daily Quran reading
 
-Night Compass follows the prayer section with a curated Quran passage. The
-collection contains 206 distinct cards spanning 374 non-overlapping ayahs,
-including 133 prayer, remembrance and dua cards. The remaining selections cover
-steadfastness and good conduct. Complete Arabic ayahs come unchanged from Tanzil;
-English titles and meanings are contextual paraphrases, with an exact Quran.com
-reference and visible source attribution.
+Night Compass follows the prayer section with the full English translation of a
+curated Quran passage. All 206 passages include their complete ayahs from
+Marmaduke Pickthall's published translation, with a surah/ayah reference,
+translator credit and source links. The card is English-only; editorial titles
+and meaning summaries are no longer displayed. The collection covers 374
+non-overlapping ayahs, including 133 prayer, remembrance and dua passages.
 
-The prayer provider's local calendar date selects one card per day from a
-deterministically shuffled order shared across devices. Every card appears once
-in any 206 consecutive days before the shuffled order repeats, including across
-cycle boundaries, month ends, year ends, leap days and daylight-saving changes.
-Refreshing the page preserves the day's card. This is a bundled collection with
-no AI-generation or account mutation path. See [the source review](quran-motivation-review.md) for corpus
-coverage, selection decisions and the Arabic integrity receipt.
+The prayer provider's local calendar date selects one passage per day from a
+stable shuffled order shared across devices. Every passage appears once in any
+206 consecutive days before the order repeats, including across cycle boundaries,
+month/year ends, leap days and daylight-saving changes. Refreshing preserves the
+day's passage. There is no AI generation or account mutation path. See
+[the source review](quran-motivation-review.md) for the complete-text integrity
+receipt and original selection rationale.
 
 ### Prayer outcomes
 

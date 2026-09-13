@@ -622,11 +622,9 @@ export type QuranMotivationTheme = 'prayer' | 'remembrance' | 'dua' | 'steadfast
 
 export interface QuranMotivationCard {
   id: string;
-  title: string;
-  arabic: string;
   reference: QuranMotivationReference;
-  /** Reviewed contextual paraphrase; never presented as a translation. */
-  meaningSummary: string;
+  /** Complete Pickthall translation; one newline-separated record per ayah. */
+  translation: string;
   theme: QuranMotivationTheme;
   sourceUrl: string;
 }
