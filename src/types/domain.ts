@@ -617,7 +617,8 @@ export interface DailyMomentumState {
   [key: string]: unknown;
 }
 
-export type QuranMotivationReference = '20:14' | '2:45' | '29:69' | '53:39' | '13:28' | '94:5-6';
+export type QuranMotivationReference = `${number}:${number}` | `${number}:${number}-${number}`;
+export type QuranMotivationTheme = 'prayer' | 'remembrance' | 'dua' | 'steadfastness' | 'good-deeds';
 
 export interface QuranMotivationCard {
   id: string;
@@ -626,6 +627,7 @@ export interface QuranMotivationCard {
   reference: QuranMotivationReference;
   /** Reviewed contextual paraphrase; never presented as a translation. */
   meaningSummary: string;
+  theme: QuranMotivationTheme;
   sourceUrl: string;
 }
 

@@ -1,6 +1,50 @@
 import { expect, openApp, test } from './support/helm-fixture';
+import { getQuranMotivationForDate, QURAN_MOTIVATION_CARDS } from '../src/services/quranMotivation';
+import { shiftIsoDate } from '../src/services/timeZone';
 
 const FIXED_NOW = '2026-07-28T11:45:00.000Z';
+
+for (const width of [390, 768, 1440]) {
+  test(`Quran encouragement preserves long Arabic, meaning and sources at ${width}px`, async ({ page, scenario }, testInfo) => {
+    const longest = QURAN_MOTIVATION_CARDS.reduce((left, right) => (
+      left.arabic.length > right.arabic.length ? left : right
+    ));
+    const date = Array.from({ length: QURAN_MOTIVATION_CARDS.length }, (_, day) => (
+      shiftIsoDate('2026-09-13', day)!
+    )).find(candidate => getQuranMotivationForDate(candidate).id === longest.id)!;
+    await page.setViewportSize({ width, height: 900 });
+    await scenario({ now: `${date}T12:00:00Z` });
+    await openApp(page);
+    const card = page.getByRole('complementary', { name: 'Quran-first encouragement' });
+    await card.scrollIntoViewIfNeeded();
+    await expect(card.getByRole('heading')).toHaveText(longest.title);
+    await expect(card.locator('blockquote')).toHaveText(longest.arabic);
+    await expect(card.locator('blockquote')).toHaveAttribute('dir', 'rtl');
+    await expect(card.getByText(longest.meaningSummary, { exact: false })).toBeVisible();
+    await expect(card.getByRole('link', { name: `Quran ${longest.reference} · Source`, exact: true }))
+      .toHaveAttribute('href', longest.sourceUrl);
+    await expect(card.getByRole('link', { name: 'Arabic: Tanzil Project' })).toHaveAttribute('href', 'https://tanzil.net');
+    expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await card.screenshot({ path: testInfo.outputPath(`quran-long-${width}.png`) });
+    const licence = card.getByRole('link', { name: 'Text licence', exact: true });
+    await licence.scrollIntoViewIfNeeded();
+    await expect(licence).toBeInViewport();
+    await licence.click({ trial: true });
+    await page.screenshot({ path: testInfo.outputPath(`quran-sources-${width}.png`) });
+  });
+}
+
+test('Quran encouragement stays stable on reload and changes with the prayer date', async ({ page, scenario }) => {
+  await scenario({ now: '2026-09-30T22:59:00Z', prayer: { timezone: 'Europe/London' }, settings: { prayerEnabled: true } });
+  await openApp(page);
+  const heading = page.getByRole('complementary', { name: 'Quran-first encouragement' }).getByRole('heading');
+  await expect(heading).toHaveText(getQuranMotivationForDate('2026-09-30').title);
+  await page.reload();
+  await expect(heading).toHaveText(getQuranMotivationForDate('2026-09-30').title);
+  await page.clock.fastForward(120_000);
+  await expect(heading).toHaveText(getQuranMotivationForDate('2026-10-01').title);
+});
 
 for (const width of [1440, 390]) {
   test(`paused hosted AI stays clear across Settings, Debug and Chat at ${width}px`, async ({ page, scenario }, testInfo) => {
