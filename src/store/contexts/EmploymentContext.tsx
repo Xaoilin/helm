@@ -10,6 +10,13 @@ import {
 } from 'react';
 import { v4 as uuid } from 'uuid';
 import {
+  appendEmploymentHistory,
+  createEmploymentApplication,
+  deleteEmploymentApplication,
+  updateEmploymentApplication,
+  type EmploymentApplicationPatch,
+} from '../../services/employmentAccount';
+import {
   createDefaultEmploymentTrackerState,
   normalizeEmploymentApplicationDraft,
   type EmploymentApplicationDraft,
@@ -22,6 +29,7 @@ import type {
 import {
   getSyncSessionSnapshot,
   loadStore,
+  refreshDatabasePersistence,
   saveStoreCommitted,
   subscribeSyncSession,
 } from '../persistence';
@@ -35,18 +43,28 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function requireWritableActor(userId: string | null): void {
+  const session = getSyncSessionSnapshot();
+  if (!userId || session.userId !== userId) {
+    throw new Error('The signed-in account changed. Reopen Employment before saving.');
+  }
+  if (session.status !== 'ready' || session.readOnly) {
+    throw new Error(session.error || 'Employment changes require a writable signed-in database session.');
+  }
+}
+
 export interface EmploymentContextValue {
   applications: EmploymentApplication[];
   loaded: boolean;
   saving: boolean;
   error: string | null;
   addApplication: (draft: EmploymentApplicationDraft) => Promise<string>;
-  updateApplication: (id: string, updates: Partial<EmploymentApplicationDraft>) => Promise<void>;
+  updateApplication: (id: string, updates: Partial<EmploymentApplicationDraft>, expectedUpdatedAt?: string) => Promise<void>;
   addHistoryEntry: (
     applicationId: string,
     entry: Omit<EmploymentHistoryEntry, 'id'>,
   ) => Promise<void>;
-  removeApplication: (id: string) => Promise<void>;
+  removeApplication: (id: string, expectedUpdatedAt?: string) => Promise<void>;
 }
 
 const EmploymentContext = createContext<EmploymentContextValue | null>(null);
@@ -146,25 +164,30 @@ export function EmploymentProvider({ children }: { children: ReactNode }) {
   });
 
   const mutate = useCallback(<T,>(
-    transform: (current: EmploymentTrackerState) => { next: EmploymentTrackerState; result: T },
+    commit: (current: EmploymentTrackerState) => Promise<T>,
   ): Promise<T> => {
+    const userId = getSyncSessionSnapshot().userId;
     let result!: T;
     const operation = mutationQueueRef.current.then(async () => {
       pendingMutationsRef.current += 1;
       setSaving(true);
       try {
+        requireWritableActor(userId);
         const latest = await loadStore<EmploymentTrackerState>('employment') ?? stateRef.current;
+        requireWritableActor(userId);
         if (latest.seedVersion === 0) {
           throw new Error('Employment tracker data is unavailable until the account seed is confirmed.');
         }
-        const transformed = transform(latest);
-        result = transformed.result;
-        await saveStoreCommitted('employment', transformed.next);
+        result = await commit(latest);
+        requireWritableActor(userId);
+        await refreshDatabasePersistence();
+        requireWritableActor(userId);
         const confirmed = await loadStore<EmploymentTrackerState>('employment');
+        requireWritableActor(userId);
         if (!confirmed) throw new Error('The database did not return the confirmed Employment tracker change.');
         publish(confirmed);
       } catch (mutationError) {
-        setError(getErrorMessage(mutationError));
+        if (getSyncSessionSnapshot().userId === userId) setError(getErrorMessage(mutationError));
         throw mutationError;
       } finally {
         pendingMutationsRef.current -= 1;
@@ -178,74 +201,49 @@ export function EmploymentProvider({ children }: { children: ReactNode }) {
   const addApplication = useCallback((draft: EmploymentApplicationDraft) => {
     const normalized = normalizeEmploymentApplicationDraft(draft);
     const id = uuid();
-    return mutate(current => {
-      const now = new Date().toISOString();
-      return {
-        next: {
-          ...current,
-          applications: [...current.applications, { ...normalized, id, createdAt: now, updatedAt: now }],
-        },
-        result: id,
-      };
+    const requestId = uuid();
+    return mutate(async () => {
+      const receipt = await createEmploymentApplication(requestId, { ...normalized, id });
+      return receipt.applicationId;
     });
   }, [mutate]);
 
-  const updateApplication = useCallback((id: string, updates: Partial<EmploymentApplicationDraft>) => (
-    mutate(current => {
+  const updateApplication = useCallback((id: string, updates: Partial<EmploymentApplicationDraft>, expectedUpdatedAt?: string) => {
+    const requestId = uuid();
+    return mutate(async current => {
       const existing = current.applications.find(application => application.id === id);
       if (!existing) throw new Error('Employment application not found.');
       const normalized = normalizeEmploymentApplicationDraft({ ...existing, ...updates });
-      return {
-        next: {
-          ...current,
-          applications: current.applications.map(application => (
-            application.id === id
-              ? { ...application, ...normalized, updatedAt: new Date().toISOString() }
-              : application
-          )),
-        },
-        result: undefined,
-      };
-    })
-  ), [mutate]);
+      const patch = Object.fromEntries(
+        (Object.keys(updates) as Array<keyof EmploymentApplicationDraft>)
+          .map(key => [key, normalized[key] ?? null]),
+      ) as EmploymentApplicationPatch;
+      await updateEmploymentApplication(requestId, id, patch, expectedUpdatedAt ?? existing.updatedAt);
+    });
+  }, [mutate]);
 
-  const addHistoryEntry = useCallback((applicationId: string, entry: Omit<EmploymentHistoryEntry, 'id'>) => (
-    mutate(current => {
+  const addHistoryEntry = useCallback((applicationId: string, entry: Omit<EmploymentHistoryEntry, 'id'>) => {
+    const requestId = uuid();
+    const nextEntry: EmploymentHistoryEntry = { ...entry, id: uuid() };
+    return mutate(async current => {
       const existing = current.applications.find(application => application.id === applicationId);
       if (!existing) throw new Error('Employment application not found.');
-      const nextEntry: EmploymentHistoryEntry = { ...entry, id: uuid() };
       const normalized = normalizeEmploymentApplicationDraft({
         ...existing,
-        history: [...existing.history, nextEntry],
+        history: [nextEntry],
       });
-      return {
-        next: {
-          ...current,
-          applications: current.applications.map(application => (
-            application.id === applicationId
-              ? { ...application, ...normalized, updatedAt: new Date().toISOString() }
-              : application
-          )),
-        },
-        result: undefined,
-      };
-    })
-  ), [mutate]);
+      await appendEmploymentHistory(requestId, applicationId, normalized.history[0]);
+    });
+  }, [mutate]);
 
-  const removeApplication = useCallback((id: string) => (
-    mutate(current => {
-      if (!current.applications.some(application => application.id === id)) {
-        throw new Error('Employment application not found.');
-      }
-      return {
-        next: {
-          ...current,
-          applications: current.applications.filter(application => application.id !== id),
-        },
-        result: undefined,
-      };
-    })
-  ), [mutate]);
+  const removeApplication = useCallback((id: string, expectedUpdatedAt?: string) => {
+    const requestId = uuid();
+    return mutate(async current => {
+      const existing = current.applications.find(application => application.id === id);
+      if (!existing) throw new Error('Employment application not found.');
+      await deleteEmploymentApplication(requestId, id, expectedUpdatedAt ?? existing.updatedAt);
+    });
+  }, [mutate]);
 
   const value = useMemo<EmploymentContextValue>(() => ({
     applications: state.applications,

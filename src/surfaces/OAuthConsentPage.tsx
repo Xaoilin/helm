@@ -1,8 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useAuthSession } from '../store/AuthSessionContext';
 import {
+  approveEmploymentOAuthClient,
   approveInventoryOAuthClient,
   getClient,
+  revokeEmploymentOAuthClient,
   revokeInventoryOAuthClientAllowlist,
   signInWithGoogle,
 } from '../store/supabase';
@@ -20,6 +22,7 @@ export default function OAuthConsentPage() {
   const [details, setDetails] = useState<AuthorizationDetails | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<'approve' | 'deny' | null>(null);
+  const [access, setAccess] = useState<'Inventory' | 'Employment' | null>(null);
   const authorizationId = new URLSearchParams(window.location.search).get('authorization_id') || '';
 
   useEffect(() => {
@@ -46,24 +49,32 @@ export default function OAuthConsentPage() {
   }, [auth.authUser, auth.bootstrapped, authorizationId]);
 
   const approve = async () => {
-    if (!details) return;
+    if (!details || !access) return;
     const database = getClient();
     if (!database) return;
     setBusy('approve');
     setError('');
+    const approveClient = access === 'Employment' ? approveEmploymentOAuthClient : approveInventoryOAuthClient;
+    const revokeClient = access === 'Employment' ? revokeEmploymentOAuthClient : revokeInventoryOAuthClientAllowlist;
     try {
-      await approveInventoryOAuthClient(details.client.id, details.client.name || 'Sabah One Inventory');
+      await approveClient(details.client.id, details.client.name || `Sabah One ${access}`);
       const { data, error: approvalError } = await database.auth.oauth.approveAuthorization(
         details.authorization_id,
         { skipBrowserRedirect: true },
       );
       if (approvalError || !data?.redirect_url) {
-        try { await revokeInventoryOAuthClientAllowlist(details.client.id); } catch { /* fail closed */ }
         throw approvalError || new Error('OAuth approval did not return a redirect.');
       }
       window.location.assign(data.redirect_url);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      let message = caught instanceof Error ? caught.message : String(caught);
+      try {
+        await revokeClient(details.client.id);
+      } catch (rollbackError) {
+        const detail = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+        message += ` ${access} approval could not be rolled back: ${detail}. Revoke this client's ${access} access in Settings.`;
+      }
+      setError(message);
       setBusy(null);
     }
   };
@@ -94,7 +105,7 @@ export default function OAuthConsentPage() {
     return (
       <ConsentShell>
         <h1>Sign in to review access</h1>
-        <p>Authentication must finish in Sabah One before a Codex client can request Inventory access.</p>
+        <p>Authentication must finish in Sabah One before a Codex client can request access.</p>
         <button className="btn btn-primary" type="button" onClick={() => void signInWithGoogle(window.location.href)}>Continue with Google</button>
       </ConsentShell>
     );
@@ -104,37 +115,55 @@ export default function OAuthConsentPage() {
 
   let redirectHost = details.redirect_uri;
   try { redirectHost = new URL(details.redirect_uri).host; } catch { /* show bounded Supabase value */ }
-  const requestedScope = details.scope.trim() || 'Inventory access';
+  const requestedScope = details.scope.trim() || 'Account identity';
   return (
     <ConsentShell>
-      <div className="oauth-consent-client"><div aria-hidden="true">S1</div><span>wants to connect</span><strong>{details.client.name || 'Codex Inventory client'}</strong></div>
-      <h1>Allow Inventory access?</h1>
+      <div className="oauth-consent-client"><div aria-hidden="true">S1</div><span>wants to connect</span><strong>{details.client.name || 'Codex client'}</strong></div>
+      <h1>Choose access for this client</h1>
       <p className="oauth-consent-account">Signed in as {details.user.email || auth.authUser.email}</p>
+      <fieldset className="oauth-consent-domains" disabled={busy !== null}>
+        <legend>Approve one area</legend>
+        {(['Inventory', 'Employment'] as const).map(domain => (
+          <label key={domain}>
+            <input type="radio" name="client-access" value={domain} checked={access === domain} onChange={() => setAccess(domain)} />
+            <span><strong>{domain}</strong><small>{domain === 'Employment' ? 'Jobs, applications, updates and next actions' : 'Owned items, materials and open needs'}</small></span>
+          </label>
+        ))}
+      </fieldset>
+      {access && (
       <div className="oauth-consent-boundary">
-        <h2>This client can</h2>
+        <h2>With {access} access, this client can</h2>
+        {access === 'Employment' ? (
+          <ul>
+            <li>Read job opportunities, applications, status history and next actions.</li>
+            <li>Add opportunities and update application status, evidence and follow-ups when you ask or through an automation you authorize.</li>
+          </ul>
+        ) : (
         <ul>
           <li>Search owned tools, equipment, materials, and open needs.</li>
           <li>Resolve project names and catalogue keys.</li>
           <li>Create or change Inventory records only when you explicitly ask.</li>
         </ul>
-        <h2>This client cannot</h2>
+        )}
+        <h2>This approval does not allow</h2>
         <ul>
-          <li>Read chats, calendars, finance, secrets, settings, or account snapshots.</li>
-          <li>Access another Sabah One account or use a service-role credential.</li>
-          <li>Purchase anything automatically.</li>
+          <li>Access to {access === 'Employment' ? 'Inventory' : 'Employment'}, chats, calendars, finance, secrets, settings, or account snapshots.</li>
+          <li>Access to another Sabah One account.</li>
+          <li>{access === 'Employment' ? 'Reading your email, sending messages or submitting job applications.' : 'Automatic purchases.'}</li>
         </ul>
       </div>
+      )}
       <div className="oauth-consent-meta"><span>Requested OAuth scope</span><strong>{requestedScope}</strong></div>
       <div className="oauth-consent-meta"><span>Return to</span><strong>{redirectHost}</strong></div>
       {error && <div className="oauth-consent-error" role="alert">{error}</div>}
-      <div className="oauth-consent-actions"><button className="btn btn-secondary" type="button" disabled={busy !== null} onClick={() => void deny()}>{busy === 'deny' ? 'Denying…' : 'Deny'}</button><button className="btn btn-primary" type="button" disabled={busy !== null} onClick={() => void approve()}>{busy === 'approve' ? 'Allowing…' : 'Allow Inventory'}</button></div>
+      <div className="oauth-consent-actions"><button className="btn btn-secondary" type="button" disabled={busy !== null} onClick={() => void deny()}>{busy === 'deny' ? 'Denying…' : 'Deny'}</button><button className="btn btn-primary" type="button" disabled={busy !== null || !access} onClick={() => void approve()}>{busy === 'approve' ? 'Allowing…' : access ? `Allow ${access}` : 'Choose an area'}</button></div>
     </ConsentShell>
   );
 }
 
 function ConsentShell({ children }: { children: ReactNode }) {
   return (
-    <main className="oauth-consent-page">
+    <main className="oauth-consent-page" tabIndex={0} aria-label="Client access approval">
       <section className="oauth-consent-card">
         <div className="oauth-consent-brand"><span aria-hidden="true">S1</span><strong>SABAH ONE</strong></div>
         {children}

@@ -350,7 +350,9 @@
 
 .oauth-consent-page {
   display: grid;
+  height: 100dvh;
   min-height: 100dvh;
+  overflow-y: auto;
   padding: 28px;
   place-items: center;
   background:
@@ -369,6 +371,14 @@
 .oauth-consent-client span { color: var(--mc-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
 .oauth-consent-client strong { color: var(--mc-strong); font-size: 14px; }
 .oauth-consent-account { margin-top: 0 !important; color: var(--mc-cyan) !important; font-size: 12px; }
+.oauth-consent-domains { display: grid; gap: 10px; margin: 22px 0; padding: 0; border: 0; }
+.oauth-consent-domains legend { margin-bottom: 10px; color: var(--mc-strong); font-size: 12px; }
+.oauth-consent-domains label { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 12px; border: 1px solid var(--mc-line); border-radius: 12px; cursor: pointer; }
+.oauth-consent-domains label:has(input:checked) { border-color: var(--mc-cyan); background: rgba(34, 211, 238, 0.06); }
+.oauth-consent-domains input { accent-color: var(--mc-cyan); }
+.oauth-consent-domains span { display: grid; gap: 4px; }
+.oauth-consent-domains strong { color: var(--mc-strong); font-size: 13px; }
+.oauth-consent-domains small { color: var(--mc-muted); font-size: 11px; }
 .oauth-consent-boundary { display: grid; gap: 8px; margin: 24px 0; padding: 18px; border: 1px solid var(--mc-line); border-radius: 16px; background: #0a0e18; }
 .oauth-consent-boundary h2 { margin: 4px 0 0; color: var(--mc-strong); font-size: 12px; }
 .oauth-consent-boundary ul { display: grid; gap: 8px; margin: 4px 0 12px; padding-left: 20px; color: #a8b4c8; font-size: 11px; line-height: 1.5; }
@@ -392,7 +402,7 @@
 .inventory-client-status { color: #a5f3fc; font-size: 11px; }
 
 @media (max-width: 520px) {
-  .oauth-consent-page { padding: 0; align-items: end; }
+  .oauth-consent-page { padding: 0; align-items: start; }
   .oauth-consent-card { min-height: calc(100dvh - 20px); padding: 24px var(--mobile-page-pad) calc(24px + var(--mobile-safe-bottom)); border-radius: 24px 24px 0 0; }
   .oauth-consent-actions .btn { flex: 1; }
 }

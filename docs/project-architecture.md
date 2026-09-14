@@ -135,6 +135,8 @@ Network failures use visible error states and the established retry, circuit-bre
 
 The `sabah-one-inventory-mcp` Edge Function exposes exactly seven narrow Inventory tools through a remote MCP endpoint. Supabase OAuth 2.1 with PKCE supplies user tokens; the function validates the token and uses the normal authenticated client. RLS and dedicated RPCs limit access to `inventoryItems`, `inventoryNeeds`, and minimal project name/catalogue-key resolution. Generic snapshots, Secrets, finance, calendars, chats, settings, and broad mutation RPCs reject OAuth-client sessions.
 
+The separate `sabah-one-employment-mcp` Edge Function exposes six application and history tools. Its own account/client approval table gates all reads and mutations; the consent screen explicitly selects the domain and Settings revokes Employment independently. Dedicated RPCs mutate the existing Employment singleton under the account lock, with payload-bound idempotency receipts and server-generated revisions. The browser uses these semantic mutations too, preserving concurrent jobs and history. Scheduled Codex agents own source reading and reconciliation; Gmail ingestion and scheduling are outside the hosted product.
+
 The private planning integration checks live Inventory records before recommendations, requires explicit approval for writes, and keeps bulk or ambiguous changes behind review.
 
 ### AI agent access

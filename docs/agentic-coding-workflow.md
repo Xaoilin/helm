@@ -38,6 +38,10 @@ Sabah One has one narrow MCP boundary for cross-project Inventory planning. Live
 
 Supabase OAuth 2.1 with PKCE and per-client Sabah One approval controls access. RLS and dedicated Inventory RPCs enforce the boundary. Production enablement remains fail-closed until the hosted OAuth handshake, consent, and revocation paths are evidenced.
 
+## Sabah One Employment MCP
+
+Employment follows the same remote MCP pattern with a separate approval and six semantic application/history tools. The existing scheduled jobs agent reads its connected recruiting sources, reconciles through Employment MCP, and verifies stored results. The protected function deployment runs a synthetic-account OAuth, mutation, idempotency and revocation acceptance check before the release is accepted. This fixture never uses a person's session or job records.
+
 ## Performance Evidence
 
 Measure GitHub Actions workflow duration and Pages deployment latency from timestamped receipts. Keep web build, unit, browser E2E, deployment, and user-perceived browser behavior as separate measures. Do not infer speed, reliability, or user value from job count or one successful run.

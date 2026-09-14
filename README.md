@@ -52,6 +52,8 @@ The browser can also call the Ollama HTTP endpoint configured in Settings. Ollam
 
 The Inventory MCP endpoint is separately account-authorized through Supabase OAuth 2.1 with PKCE and the production consent path `/helm/oauth/consent`. Its RLS policies and dedicated RPCs limit access to Inventory records and minimal project resolution.
 
+Employment has a separate `sabah-one-employment-mcp` endpoint and explicit Employment approval on that consent page. A scheduled Codex agent can reconcile recruiting emails with applications and history through its six semantic tools. Settings can revoke this access independently; Inventory approval grants no Employment access. See [agent access](docs/agent-access.md) for setup and reconciliation rules.
+
 ## Delivery Rules
 
 - GitHub Actions is the validation authority for the hosted website. Required checks cover policy, database contracts, lint, typecheck, unit tests, browser E2E, and the web build.

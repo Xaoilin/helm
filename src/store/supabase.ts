@@ -947,6 +947,40 @@ export async function revokeInventoryOAuthClient(clientId: string): Promise<void
   }
 }
 
+export type EmploymentOAuthClientApproval = InventoryOAuthClientApproval;
+
+export async function listEmploymentOAuthClients(): Promise<EmploymentOAuthClientApproval[]> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('list_employment_oauth_clients');
+  if (error) throw error;
+  return Array.isArray(data) ? data.map(mapInventoryOAuthClient) : [];
+}
+
+export async function approveEmploymentOAuthClient(
+  clientId: string,
+  clientName: string,
+): Promise<EmploymentOAuthClientApproval> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('approve_employment_oauth_client', {
+    p_client_id: clientId,
+    p_client_name: clientName,
+  });
+  if (error) throw error;
+  return mapInventoryOAuthClient(data);
+}
+
+export async function revokeEmploymentOAuthClient(
+  clientId: string,
+): Promise<EmploymentOAuthClientApproval> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('revoke_employment_oauth_client', {
+    p_client_id: clientId,
+  });
+  if (error) throw error;
+  // The database blocks Employment immediately without revoking a separate Inventory grant.
+  return mapInventoryOAuthClient(data);
+}
+
 export type SupabaseRealtimeState =
   | 'unavailable'
   | 'subscribing'

@@ -395,6 +395,10 @@ verify_jwt = true
 [functions.assistant-speech]
 verify_jwt = true
 
+# Public OAuth discovery; the handler verifies the OAuth identity and Employment approval.
+[functions.sabah-one-employment-mcp]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

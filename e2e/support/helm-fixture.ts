@@ -1,6 +1,7 @@
 import { expect, test as base, type Page, type Response } from '@playwright/test';
 import { encodeStoreValue } from '../../src/store/recordCodec';
 import type { HelmMutation } from '../../src/store/databaseTypes';
+import type { EmploymentApplication, EmploymentHistoryEntry } from '../../src/types/domain';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
 const TEST_EMAIL = 'e2e@example.test';
@@ -77,10 +78,11 @@ export async function openApp(page: Page): Promise<void> {
 
 export function waitForMutation(page: Page, collection: string): Promise<Response> {
   return page.waitForResponse(response => {
-    if (
-      response.request().method() !== 'POST'
-      || !response.url().includes('/rest/v1/rpc/apply_helm_mutations')
-    ) return false;
+    if (response.request().method() !== 'POST') return false;
+    if (collection === 'employment' && /\/rpc\/employment_(add_application|update_application|add_history|remove_application)/u.test(response.url())) {
+      return true;
+    }
+    if (!response.url().includes('/rest/v1/rpc/apply_helm_mutations')) return false;
 
     try {
       const body = response.request().postDataJSON() as { p_operations?: HelmMutation[] };
@@ -335,12 +337,74 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
     });
   });
 
+  await page.route(/\/rest\/v1\/rpc\/employment_(add_application|update_application|add_history|remove_application)(\?|$)/u, async route => {
+    const name = new URL(route.request().url()).pathname.split('/').at(-1);
+    const request = route.request().postDataJSON() as {
+      p_application?: EmploymentApplication;
+      p_application_id?: string;
+      p_patch?: Partial<EmploymentApplication>;
+      p_history?: EmploymentHistoryEntry;
+      p_expected_updated_at?: string;
+      p_confirm?: boolean;
+    };
+    const row = rows.get(rowKey('employment', 'singleton'));
+    if (!row || row.deletedAt) {
+      await route.fulfill({ status: 404, json: { message: 'Employment tracker not found.' } });
+      return;
+    }
+    let applications = [...row.payload.applications as EmploymentApplication[]];
+    let application = applications.find(item => item.id === request.p_application_id);
+    const now = new Date().toISOString();
+    if (name === 'employment_add_application' && request.p_application) {
+      application = { ...request.p_application, createdAt: now, updatedAt: now };
+      applications.push(application);
+    } else if (!application) {
+      await route.fulfill({ status: 404, json: { message: 'Employment application not found.' } });
+      return;
+    } else if (request.p_expected_updated_at && request.p_expected_updated_at !== application.updatedAt) {
+      await route.fulfill({ status: 409, json: { message: 'Employment application changed; reload before saving.' } });
+      return;
+    } else if (name === 'employment_remove_application') {
+      if (!request.p_confirm) {
+        await route.fulfill({ status: 400, json: { message: 'Employment removal requires explicit confirmation.' } });
+        return;
+      }
+      applications = applications.filter(item => item.id !== application.id);
+    } else {
+      const history = [...application.history];
+      const newHistory = name === 'employment_add_history'
+        ? (request.p_history ? [request.p_history] : [])
+        : (request.p_patch?.history ?? []);
+      for (const entry of newHistory) {
+        if (!history.some(existing => existing.id === entry.id || (entry.evidenceUrl && existing.evidenceUrl === entry.evidenceUrl))) {
+          history.push(entry);
+        }
+      }
+      const updated = { ...application, ...request.p_patch, history, updatedAt: now };
+      for (const key of Object.keys(updated) as Array<keyof EmploymentApplication>) {
+        if (updated[key] === null) delete updated[key];
+      }
+      application = updated;
+      applications = applications.map(item => item.id === application.id ? application : item);
+    }
+    accountVersion += 1;
+    row.payload = { ...row.payload, applications };
+    row.revision += 1;
+    row.accountVersion = accountVersion;
+    row.updatedAt = now;
+    await route.fulfill({ json: { applicationId: application.id, accountVersion, duplicate: false } });
+  });
+
   await page.route('**/rest/v1/rpc/list_inventory_oauth_clients*', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: '[]',
     });
+  });
+
+  await page.route('**/rest/v1/rpc/list_employment_oauth_clients*', async route => {
+    await route.fulfill({ json: [] });
   });
 
   await page.route('**/rest/v1/rpc/list_helm_secrets*', route => route.fulfill({

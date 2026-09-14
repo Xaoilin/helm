@@ -196,7 +196,7 @@ function EmploymentEditor({
       history,
     };
     try {
-      if (application) await employment.updateApplication(application.id, payload);
+      if (application) await employment.updateApplication(application.id, payload, application.updatedAt);
       else await employment.addApplication(payload);
       onClose();
     } catch (caught) {
@@ -208,7 +208,7 @@ function EmploymentEditor({
     if (!application) return;
     setError('');
     try {
-      await employment.removeApplication(application.id);
+      await employment.removeApplication(application.id, application.updatedAt);
       onClose();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));

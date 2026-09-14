@@ -194,6 +194,9 @@ jobs:
         name: Stamp verified assistant build identity
         run: node ./scripts/stamp-assistant-deployment.mjs
 
+      - name: Deploy Sabah One Employment MCP
+        run: npx supabase functions deploy sabah-one-employment-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
+
       - id: mode
         name: Configure explicit hosted AI operating mode
         run: |
