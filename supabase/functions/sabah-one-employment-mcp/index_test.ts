@@ -166,8 +166,9 @@ Deno.test('write retries send the exact caller payload without generated IDs, ti
     const application = { company: 'Example Company', role: 'Engineering project' };
     const patch = { status: 'interview', nextAction: 'Review the project invitation', nextActionDate: null };
     const history = { kind: 'contact', summary: 'Project invitation received', evidenceUrl: 'https://mail.google.com/mail/#all/example-message' };
+    const accessToken = token();
     for (let attempt = 0; attempt < 2; attempt++) {
-      await mcp('tools/call', { name: 'employment_add_application', arguments: { requestId, application } });
+      await mcp('tools/call', { name: 'employment_add_application', arguments: { requestId, application } }, accessToken);
     }
     await mcp('tools/call', { name: 'employment_update_application', arguments: { requestId, applicationId, patch } });
     await mcp('tools/call', { name: 'employment_add_history', arguments: { requestId, applicationId, history } });

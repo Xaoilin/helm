@@ -12097,7 +12097,7 @@ button {
 .employment-filter-options,
 .employment-overview,
 .employment-result-count,
-.employment-details {
+.employment-inline-details {
   width: min(100%, 1500px);
   margin-inline: auto;
 }
@@ -12131,11 +12131,11 @@ button {
 .employment-filter-options select { width: 100%; min-width: 0; }
 
 .employment-overview { table-layout: fixed; border-collapse: collapse; color: #e6eaf2; }
-.employment-company-column { width: 22%; }
-.employment-role-column { width: 31%; }
-.employment-stage-column { width: 13%; }
-.employment-next-column { width: 28%; }
-.employment-latest-column { width: 6%; }
+.employment-company-column { width: 20%; }
+.employment-role-column { width: 29%; }
+.employment-stage-column { width: 12%; }
+.employment-next-column { width: 25%; }
+.employment-updated-column { width: 14%; }
 .employment-overview thead th { height: 36px; padding: 8px 10px; color: #a4b4d0; font-size: 11px; font-weight: 600; text-align: left; text-transform: uppercase; letter-spacing: .04em; }
 .employment-application-row { height: 46px; }
 .employment-overview td { padding: 6px 10px; border-bottom: 1px solid #222e41; }
@@ -12152,7 +12152,8 @@ button {
 .employment-monogram.company-colour-4 { background: #394887; border-color: #5665a6; }
 .employment-role-button { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-height: 32px; padding: 0; border: 0; background: transparent; color: #edf1f9; font: inherit; font-size: 14px; line-height: 1.35; text-align: left; cursor: pointer; }
 .employment-role-button > span:first-child { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.employment-role-button > span:last-child { color: #a8b9d3; font-size: 20px; }
+.employment-role-arrow { color: #a8b9d3; font-size: 20px; transition: transform 140ms ease; }
+.employment-role-button[aria-expanded='true'] .employment-role-arrow { transform: rotate(90deg); }
 .employment-role-button:hover { color: #81ebdc; }
 .employment-application-row.is-selected td { background: rgba(41, 190, 163, .08); }
 .employment-compact .employment-status { border-radius: 6px; min-height: 25px; padding: 3px 8px; font-size: 12px; font-weight: 600; }
@@ -12165,12 +12166,14 @@ button {
 .employment-next-summary { display: flex; align-items: center; gap: 8px; }
 .employment-next-summary > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .employment-next-summary small { flex-shrink: 0; color: #a4b4d0; font-size: 11px; white-space: nowrap; }
-.employment-overview .employment-latest-cell { padding-inline: 2px; text-align: right; }
+.employment-updated-cell { font-size: 11px; font-variant-numeric: tabular-nums; }
+.employment-updated-summary { display: flex; align-items: center; justify-content: space-between; gap: 5px; color: #b9c6d8; }
+.employment-updated-summary time { white-space: nowrap; }
 .employment-latest { display: inline-block; border-radius: 6px; padding: 3px 6px; background: #57e1ca; color: #082922; font-size: 10px; font-weight: 750; }
 .employment-result-count { padding: 10px 0; margin-block: 0; color: #9cacc3; font-size: 12px; }
-.employment-details { padding-top: 17px; margin-top: 7px; border-top: 1px solid #29364c; scroll-margin-top: 16px; }
-.employment-details h2 { scroll-margin-top: 16px; }
-.employment-details h2:focus-visible { outline: 2px solid #5eead4; outline-offset: 4px; }
+.employment-application-details-row > td { padding: 0 10px 14px; background: rgba(41, 190, 163, .045); }
+.employment-inline-details { padding-top: 12px; border-top: 1px solid #314158; }
+.employment-inline-details .employment-section-heading { margin-bottom: 10px; }
 .employment-compact .employment-card { box-shadow: none; border-radius: 10px; }
 .employment-compact .employment-card h3 { font-size: 18px; }
 
@@ -12180,11 +12183,11 @@ button {
   .employment-overview td, .employment-overview thead th { padding-inline: 6px; }
   .employment-company-label { gap: 7px; }
   .employment-monogram { flex-basis: 28px; width: 28px; height: 28px; font-size: 16px; }
-  .employment-company-column { width: 23%; }
-  .employment-role-column { width: 29%; }
-  .employment-stage-column { width: 15%; }
-  .employment-next-column { width: 26%; }
-  .employment-latest-column { width: 7%; }
+  .employment-company-column { width: 21%; }
+  .employment-role-column { width: 28%; }
+  .employment-stage-column { width: 13%; }
+  .employment-next-column { width: 24%; }
+  .employment-updated-column { width: 14%; }
 }
 
 @media (max-width: 1024px) {
@@ -12215,8 +12218,10 @@ button {
   .employment-role-button > span:first-child { display: block; overflow: visible; }
   .employment-stage-cell { grid-column: 2; align-self: center; }
   .employment-next-cell { grid-column: 1 / -1; color: #acbdd2; }
-  .employment-overview .employment-latest-cell { grid-column: 2; padding: 0 6px 4px; }
-  .employment-latest-cell:empty { display: none; }
-  .employment-company-group .employment-application-row + .employment-application-row { border-top: 1px solid #222e41; }
-  .employment-details { margin-top: 0; }
+  .employment-updated-cell { grid-column: 2; padding: 0 6px 4px; }
+  .employment-updated-cell::before { display: block; margin-bottom: 2px; color: #8294ae; font-size: 9px; font-weight: 650; text-transform: uppercase; content: 'Last updated'; }
+  .employment-updated-summary { align-items: flex-end; flex-direction: column; }
+  .employment-application-details-row { display: block; }
+  .employment-application-details-row > td { display: block; width: 100%; padding: 4px 6px 14px; }
+  .employment-company-group :is(.employment-application-row, .employment-application-details-row) + .employment-application-row { border-top: 1px solid #222e41; }
 }

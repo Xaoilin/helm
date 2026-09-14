@@ -38,7 +38,7 @@ async function assertOverviewControlsContained(page: Page) {
   const violations = await page.locator('tr.employment-application-row').evaluateAll(rows => rows.flatMap((row, index) => {
     const rowBox = row.getBoundingClientRect();
     const roleBox = row.querySelector('.employment-role-button')?.getBoundingClientRect();
-    const controls = [...row.querySelectorAll('.employment-role-button, .employment-status, .employment-latest')];
+    const controls = [...row.querySelectorAll('.employment-role-button, .employment-status, .employment-updated-summary')];
     const outside = controls
       .filter(control => {
         const box = control.getBoundingClientRect();
@@ -56,7 +56,7 @@ async function assertOverviewControlsContained(page: Page) {
   expect(violations).toEqual([]);
 }
 
-test('groups the representative Employment pipeline and switches the selected details', async ({ page, scenario }) => {
+test('groups the representative Employment pipeline and expands details inline', async ({ page, scenario }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await scenario({
     now: NOW,
@@ -72,20 +72,28 @@ test('groups the representative Employment pipeline and switches the selected de
   await expect(page.getByRole('button', {
     name: 'Show details for MICRO1: Staff Platform Engineer — Cloud Evaluation Rubrics',
   })).toHaveCount(0);
-  await expect(page.locator('#employment-details').getByRole('heading', {
-    name: 'Senior Backend Engineer — AI Evaluation Platform',
-  })).toBeVisible();
+  await expect(table.getByRole('columnheader', { name: 'Last updated' })).toBeVisible();
+  await expect(table.getByTitle('Last recorded recruiting activity: 14 Sept 2026')).toHaveText('14 Sept 2026');
+  await expect(table.getByTitle('No recorded recruiting activity date')).toHaveText('—');
+  await expect(page.locator('.employment-inline-details')).toHaveCount(0);
 
   const mercorRole = 'Senior Backend Engineer — Distributed Payments Infrastructure';
-  const mercor = page.getByRole('button', { name: `Show details for Mercor: ${mercorRole}` });
+  const mercor = page.getByRole('button', { name: new RegExp(`details for Mercor: ${mercorRole}$`, 'u') });
+  const detailsId = await mercor.getAttribute('aria-controls');
   await mercor.focus();
   await mercor.press('Enter');
-  await expect(page.locator('#employment-details').getByRole('heading', { name: 'Details & history' })).toBeFocused();
-  await expect(page.locator('#employment-details').getByRole('heading', { name: mercorRole })).toBeVisible();
-  await expect(page.locator('#employment-details').getByRole('heading', {
-    name: 'Senior Backend Engineer — AI Evaluation Platform',
-  })).toHaveCount(0);
-  await expect(page.locator('#employment-details').getByRole('button', { name: 'Edit opportunity' })).toBeVisible();
+  await expect(mercor).toBeFocused();
+  await expect(mercor).toHaveAttribute('aria-expanded', 'true');
+  const details = page.locator(`#${detailsId}`);
+  await expect(details.getByRole('heading', { name: 'Details & history' })).toBeVisible();
+  await expect(details.getByRole('heading', { name: mercorRole })).toBeVisible();
+  await expect(details.getByText('Compensation', { exact: true })).toBeVisible();
+  await expect(details.getByRole('button', { name: 'Edit opportunity' })).toBeVisible();
+  expect(await details.locator('xpath=ancestor::tr/preceding-sibling::tr[1]').getAttribute('class')).toContain('employment-application-row');
+
+  await mercor.press('Enter');
+  await expect(page.locator('.employment-inline-details')).toHaveCount(0);
+  await expect(mercor).toHaveAttribute('aria-expanded', 'false');
 
   await page.getByRole('button', { name: 'All applications' }).click();
   await expect(table.locator('tr.employment-application-row')).toHaveCount(ALL_APPLICATION_COUNT);
@@ -129,13 +137,16 @@ test('adds, reloads, edits, and removes an Employment opportunity', async ({ pag
     name: 'Show details for Example Ltd: Remote Platform Engineer',
   });
   await expect(addedRole).toBeVisible();
+  const addedDetailsId = await addedRole.getAttribute('aria-controls');
   await addedRole.click();
-  await expect(page.locator('#employment-details').getByRole('heading', { name: 'Remote Platform Engineer' })).toBeVisible();
+  await expect(page.locator(`#${addedDetailsId}`).getByRole('heading', { name: 'Remote Platform Engineer' })).toBeVisible();
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Employment' })).toBeVisible();
-  await page.getByRole('button', { name: 'Show details for Example Ltd: Remote Platform Engineer' }).click();
-  await page.locator('#employment-details').getByRole('button', { name: 'Edit opportunity' }).click();
+  const reloadedRole = page.getByRole('button', { name: 'Show details for Example Ltd: Remote Platform Engineer' });
+  const reloadedDetailsId = await reloadedRole.getAttribute('aria-controls');
+  await reloadedRole.click();
+  await page.locator(`#${reloadedDetailsId}`).getByRole('button', { name: 'Edit opportunity' }).click();
   await expect(page.getByRole('textbox', { name: 'Company' })).toBeFocused();
   await page.getByRole('button', { name: 'Remove record' }).click();
   const removeWrite = waitForMutation(page, 'employment');
@@ -167,12 +178,13 @@ test('keeps Employment keyboard-accessible, scrollable, and overflow-free at nar
   }
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const role = page.getByRole('button', {
-    name: 'Show details for Mercor: Senior Backend Engineer — Distributed Payments Infrastructure',
-  });
+  const role = page.getByRole('button', { name: /details for Mercor: Senior Backend Engineer — Distributed Payments Infrastructure$/u });
+  const roleDetailsId = await role.getAttribute('aria-controls');
   await role.focus();
   await role.press('Enter');
-  await expect(page.locator('#employment-details').getByRole('heading', { name: 'Details & history' })).toBeFocused();
+  await expect(role).toBeFocused();
+  await expect(role).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator(`#${roleDetailsId}`).getByRole('heading', { name: 'Details & history' })).toBeVisible();
 
   const addTrigger = page.getByRole('button', { name: '+ Add opportunity' });
   await addTrigger.focus();
@@ -215,9 +227,15 @@ test('captures Employment overview and mobile details evidence @visual', async (
     await page.setViewportSize({ width, height });
     await expect(page.getByRole('table', { name: 'Employment applications' })).toBeVisible();
     await assertNoPageOverflow(page);
+    const mobileRole = page.getByRole('button', { name: /details for Mercor: Senior Backend Engineer — Distributed Payments Infrastructure$/u });
+    if (width <= 390) {
+      await mobileRole.click();
+      await expect(mobileRole).toHaveAttribute('aria-expanded', 'true');
+    }
     const path = process.env.HELM_CAPTURE_EMPLOYMENT_EVIDENCE === '1'
       ? resolve(evidenceDirectory, `employment-${viewport}.png`)
       : testInfo.outputPath(`employment-${viewport}.png`);
     await page.screenshot({ path });
+    if (width <= 390) await mobileRole.click();
   }
 });
