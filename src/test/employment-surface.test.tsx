@@ -54,6 +54,7 @@ describe('Employment surface', () => {
     expect(screen.getByRole('heading', { name: 'Employment' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '+ Add opportunity' })).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Employment applications' });
+    expect(within(table).getByRole('columnheader', { name: 'Last updated' })).toBeInTheDocument();
 
     expect(container.querySelectorAll('tbody.employment-company-group')).toHaveLength(6);
     expect(container.querySelectorAll('tr.employment-application-row')).toHaveLength(ACTIVE_APPLICATION_COUNT);
@@ -65,13 +66,10 @@ describe('Employment surface', () => {
     expect(roleButtons[0]).toHaveAccessibleName(
       'Show details for micro1: Senior Backend Engineer — AI Evaluation Platform',
     );
-
-    const details = container.querySelector<HTMLElement>('#employment-details');
-    expect(details).not.toBeNull();
-    expect(within(details!).getByRole('heading', { name: 'Details & history' })).toBeInTheDocument();
-    expect(within(details!).getByRole('heading', {
-      name: 'Senior Backend Engineer — AI Evaluation Platform',
-    })).toBeInTheDocument();
+    expect(roleButtons[0]).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('heading', { name: 'Details & history' })).not.toBeInTheDocument();
+    expect(within(table).getByTitle('Last recorded recruiting activity: 14 Sept 2026')).toHaveTextContent('14 Sept 2026');
+    expect(within(table).getByTitle('No recorded recruiting activity date')).toHaveTextContent('—');
 
     fireEvent.click(screen.getByRole('button', { name: 'All applications' }));
     expect(container.querySelectorAll('tr.employment-application-row')).toHaveLength(ALL_APPLICATION_COUNT);
@@ -81,18 +79,26 @@ describe('Employment surface', () => {
     expect(micro1Group?.querySelectorAll('tr.employment-application-row')).toHaveLength(4);
   });
 
-  it('selects one role at a time and keeps its existing Opportunity details and editor', () => {
+  it('expands one role inline and keeps its existing Opportunity details and editor', () => {
     const { container } = render(<EmploymentSurface />);
     const selectedRole = 'Senior Backend Engineer — Distributed Payments Infrastructure';
 
-    fireEvent.click(screen.getByRole('button', {
+    const roleButton = screen.getByRole('button', {
       name: `Show details for Mercor: ${selectedRole}`,
-    }));
+    });
+    roleButton.focus();
+    fireEvent.click(roleButton);
 
-    const details = container.querySelector<HTMLElement>('#employment-details');
+    expect(roleButton).toHaveAttribute('aria-expanded', 'true');
+    expect(roleButton).toHaveFocus();
+    const detailsId = roleButton.getAttribute('aria-controls')!;
+    const details = container.querySelector<HTMLElement>(`#${detailsId}`);
     expect(details).not.toBeNull();
-    expect(within(details!).getByRole('heading', { name: 'Details & history' })).toHaveFocus();
+    expect(details!.closest('tr')?.previousElementSibling).toBe(roleButton.closest('tr'));
+    expect(details!.closest('tbody')?.querySelector('th[scope="rowgroup"]')).toHaveAttribute('rowspan', '2');
+    expect(within(details!).getByRole('heading', { name: 'Details & history' })).toBeInTheDocument();
     expect(within(details!).getByRole('heading', { name: selectedRole })).toBeInTheDocument();
+    expect(within(details!).getByText('Compensation')).toBeInTheDocument();
     expect(within(details!).queryByRole('heading', {
       name: 'Senior Backend Engineer — AI Evaluation Platform',
     })).not.toBeInTheDocument();
@@ -106,6 +112,12 @@ describe('Employment surface', () => {
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Company' }), { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Edit opportunity' })).not.toBeInTheDocument();
     expect(edit).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', {
+      name: 'Show details for micro1: Senior Backend Engineer — AI Evaluation Platform',
+    }));
+    expect(container.querySelectorAll('.employment-inline-details')).toHaveLength(1);
+    expect(screen.queryByRole('heading', { name: selectedRole })).not.toBeInTheDocument();
   });
 
   it('keeps active-only as the default and exposes search plus the three existing filters', () => {

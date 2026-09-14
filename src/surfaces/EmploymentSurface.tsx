@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -319,36 +320,22 @@ export default function EmploymentSurface() {
   const [filters, setFilters] = useState<EmploymentFilters>({
     query: '', status: 'all', workType: 'all', remoteStatus: 'all',
   });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<EmploymentApplication | 'new' | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
-  const detailsHeadingRef = useRef<HTMLHeadingElement>(null);
-  const selectionRequestedRef = useRef(false);
 
   const filtered = useMemo(() => employment.applications.filter(application => (
     (!activeOnly || EMPLOYMENT_ACTIVE_STATUSES.includes(application.status))
     && matchesEmploymentFilters(application, filters)
   )), [employment.applications, activeOnly, filters]);
   const groups = useMemo(() => groupEmploymentApplications(filtered), [filtered]);
-  const selected = filtered.find(application => application.id === selectedId) ?? groups[0]?.applications[0];
   const latest = useMemo(() => getEmploymentActivity(filtered).find(entry => entry.date), [filtered]);
   const activeCount = employment.applications.filter(application => application.status !== 'closed').length;
   const filterCount = [filters.status, filters.workType, filters.remoteStatus].filter(value => value !== 'all').length;
 
-  useEffect(() => {
-    if (!selectionRequestedRef.current) return;
-    selectionRequestedRef.current = false;
-    detailsHeadingRef.current?.focus();
-  }, [selectedId]);
-
-  const selectApplication = (application: EmploymentApplication) => {
-    if (application.id === selectedId) {
-      detailsHeadingRef.current?.focus();
-    } else {
-      selectionRequestedRef.current = true;
-      setSelectedId(application.id);
-    }
+  const toggleApplication = (application: EmploymentApplication) => {
+    setExpandedId(current => current === application.id ? null : application.id);
   };
   const clearFilters = () => {
     setFilters({ query: '', status: 'all', workType: 'all', remoteStatus: 'all' });
@@ -399,19 +386,41 @@ export default function EmploymentSurface() {
 
       {!employment.loaded ? <p className="employment-loading" role="status">Loading your applications…</p> : filtered.length > 0 ? <>
         <table className="employment-overview" aria-label="Employment applications">
-          <caption className="sr-only">Applications grouped by company, most recent recruiting activity first. Select a role for details.</caption>
-          <colgroup><col className="employment-company-column" /><col className="employment-role-column" /><col className="employment-stage-column" /><col className="employment-next-column" /><col className="employment-latest-column" /></colgroup>
-          <thead><tr><th scope="col">Company</th><th scope="col">Role</th><th scope="col">Stage</th><th scope="col">Next step</th><th scope="col"><span className="sr-only">Latest activity</span></th></tr></thead>
+          <caption className="sr-only">Applications grouped by company, most recent recruiting activity first. Expand a role for details.</caption>
+          <colgroup><col className="employment-company-column" /><col className="employment-role-column" /><col className="employment-stage-column" /><col className="employment-next-column" /><col className="employment-updated-column" /></colgroup>
+          <thead><tr><th scope="col">Company</th><th scope="col">Role</th><th scope="col">Stage</th><th scope="col">Next step</th><th scope="col">Last updated</th></tr></thead>
           {groups.map((group, groupIndex) => <tbody key={group.key} className="employment-company-group">
-            {group.applications.map((application, index) => <tr key={application.id} className={`employment-application-row${selected?.id === application.id ? ' is-selected' : ''}`}>
-              {index === 0 && <th scope="rowgroup" rowSpan={group.applications.length} className="employment-company-cell">
-                <div className="employment-company-label"><span className={`employment-monogram company-colour-${groupIndex % 5}`} aria-hidden="true">{group.company.charAt(0).toLocaleUpperCase()}</span><span><strong>{group.company}</strong><small>{group.applications.length} {group.applications.length === 1 ? 'application' : 'applications'}</small></span></div>
-              </th>}
-              <td className="employment-role-cell"><button type="button" className="employment-role-button" aria-label={`Show details for ${application.company}: ${application.role}`} aria-controls="employment-details" onClick={() => selectApplication(application)}><span>{application.role}</span><span aria-hidden="true">›</span></button></td>
-              <td className="employment-stage-cell"><span className={`employment-status status-${application.status}`}>{labelFor(STATUS_OPTIONS, application.status)}</span></td>
-              <td className="employment-next-cell"><div className="employment-next-summary"><span title={application.nextAction}>{application.nextAction || 'No next step recorded'}</span>{application.nextActionDate && <small title={formatLocalDate(application.nextActionDate)}>{formatLocalDate(application.nextActionDate, false)}</small>}</div></td>
-              <td className="employment-latest-cell">{latest?.applicationId === application.id && <span className="employment-latest" title={`Latest recorded activity: ${formatLocalDate(getEmploymentActivityDate(application))}`}>Latest</span>}</td>
-            </tr>)}
+            {group.applications.map((application, index) => {
+              const expanded = expandedId === application.id;
+              const detailsId = `employment-details-${application.id}`;
+              const activityDate = getEmploymentActivityDate(application);
+              return <Fragment key={application.id}>
+                <tr className={`employment-application-row${expanded ? ' is-selected' : ''}`}>
+                  {index === 0 && <th scope="rowgroup" rowSpan={group.applications.length + (expandedId && group.applications.some(item => item.id === expandedId) ? 1 : 0)} className="employment-company-cell">
+                    <div className="employment-company-label"><span className={`employment-monogram company-colour-${groupIndex % 5}`} aria-hidden="true">{group.company.charAt(0).toLocaleUpperCase()}</span><span><strong>{group.company}</strong><small>{group.applications.length} {group.applications.length === 1 ? 'application' : 'applications'}</small></span></div>
+                  </th>}
+                  <td className="employment-role-cell"><button type="button" className="employment-role-button" aria-label={`${expanded ? 'Hide' : 'Show'} details for ${application.company}: ${application.role}`} aria-expanded={expanded} aria-controls={detailsId} onClick={() => toggleApplication(application)}><span>{application.role}</span><span className="employment-role-arrow" aria-hidden="true">›</span></button></td>
+                  <td className="employment-stage-cell"><span className={`employment-status status-${application.status}`}>{labelFor(STATUS_OPTIONS, application.status)}</span></td>
+                  <td className="employment-next-cell"><div className="employment-next-summary"><span title={application.nextAction}>{application.nextAction || 'No next step recorded'}</span>{application.nextActionDate && <small title={formatLocalDate(application.nextActionDate)}>{formatLocalDate(application.nextActionDate, false)}</small>}</div></td>
+                  <td className="employment-updated-cell">
+                    <div className="employment-updated-summary">
+                      {activityDate
+                        ? <time dateTime={activityDate} title={`Last recorded recruiting activity: ${formatLocalDate(activityDate)}`}>{formatLocalDate(activityDate)}</time>
+                        : <span title="No recorded recruiting activity date">—</span>}
+                      {latest?.applicationId === application.id && <span className="employment-latest" title="Most recently updated application">Latest</span>}
+                    </div>
+                  </td>
+                </tr>
+                {expanded && <tr className="employment-application-details-row">
+                  <td colSpan={4}>
+                    <section id={detailsId} className="employment-inline-details" aria-labelledby={`${detailsId}-heading`}>
+                      <div className="employment-section-heading"><h2 id={`${detailsId}-heading`}>Details &amp; history</h2><span>{application.company}</span></div>
+                      <OpportunityCard application={application} onEdit={() => openEditor(application, document.activeElement instanceof HTMLElement ? document.activeElement : addButtonRef.current!)} />
+                    </section>
+                  </td>
+                </tr>}
+              </Fragment>;
+            })}
           </tbody>)}
         </table>
         <p className="employment-result-count">{groups.length} {groups.length === 1 ? 'company' : 'companies'} · {filtered.length} of {employment.applications.length} applications shown</p>
@@ -420,10 +429,6 @@ export default function EmploymentSurface() {
         <button type="button" className="btn btn-secondary" onClick={clearFilters}>Clear filters</button>
       </div>}
 
-      {selected && <section id="employment-details" className="employment-details" aria-labelledby="employment-details-heading">
-        <div className="employment-section-heading"><h2 id="employment-details-heading" ref={detailsHeadingRef} tabIndex={-1}>Details &amp; history</h2><span>{selected.company}</span></div>
-        <OpportunityCard key={selected.id} application={selected} onEdit={() => openEditor(selected, document.activeElement instanceof HTMLElement ? document.activeElement : addButtonRef.current!)} />
-      </section>}
       {editing && <EmploymentEditor application={editing === 'new' ? undefined : editing} onClose={closeEditor} />}
     </div>
   );

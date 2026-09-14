@@ -153,8 +153,6 @@ export function createRepresentativeEmploymentState(): EmploymentTrackerState {
         company: 'OpenTrade',
         role: 'Backend Engineer — Fintech Credit Infrastructure',
         status: 'lead',
-        applicationDate: '2026-08-30',
-        historyDate: '2026-09-04',
         nextAction: 'Ask for the role brief and verify UK or EMEA remote eligibility before progressing.',
       }),
     ],
