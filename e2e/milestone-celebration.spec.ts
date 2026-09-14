@@ -17,6 +17,30 @@ async function addReadingPage(page: Page): Promise<void> {
   await mutation;
 }
 
+async function expectCornerReceipt(page: Page): Promise<void> {
+  const receipt = page.locator('.milestone-celebration');
+  const geometry = await receipt.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return {
+      top: rect.top,
+      rightGap: window.innerWidth - rect.right,
+      left: rect.left,
+      bottom: rect.bottom,
+      height: rect.height,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(geometry.top).toBeGreaterThanOrEqual(12);
+  expect(geometry.top).toBeLessThanOrEqual(24);
+  expect(geometry.rightGap).toBeGreaterThanOrEqual(12);
+  expect(geometry.rightGap).toBeLessThanOrEqual(24);
+  expect(geometry.left).toBeGreaterThanOrEqual(12);
+  expect(geometry.height).toBeLessThanOrEqual(180);
+  expect(geometry.bottom).toBeLessThan(geometry.viewportHeight / 2);
+  await expect(receipt).toHaveCSS('pointer-events', 'none');
+  await expect(page.locator('.milestone-celebration-glow')).toHaveCount(0);
+}
+
 for (const viewport of requestedViewports()) {
   test(`renders a restrained Reading L1 receipt at ${viewport} @visual`, async ({ page, scenario }, testInfo) => {
     test.skip(
@@ -43,6 +67,8 @@ for (const viewport of requestedViewports()) {
     await expect(celebration).toContainText("Today's target is complete.");
     await expect(celebration).toHaveCSS('pointer-events', 'none');
     await expect(celebration.getByLabel('Level 1 of 5')).toBeVisible();
+
+    await expectCornerReceipt(page);
 
     const geometry = await celebration.locator('.milestone-celebration-card').evaluate(element => {
       const rect = element.getBoundingClientRect();
@@ -85,6 +111,7 @@ test('renders a dignified prayer completion receipt @visual', async ({ page, sce
   await expect(celebration).toBeVisible();
   await expect(celebration).toContainText('Prayer kept on time');
   await expect(celebration).toHaveCSS('pointer-events', 'none');
+  await expectCornerReceipt(page);
   await page.waitForTimeout(450);
   await page.screenshot({ path: testInfo.outputPath('prayer-completion-1440x900.png') });
 });
