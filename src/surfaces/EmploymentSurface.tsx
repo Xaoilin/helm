@@ -7,17 +7,16 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { v4 as uuid } from 'uuid';
-import { getAppDate } from '../services/appTimeZone';
 import {
   EMPLOYMENT_ACTIVE_STATUSES,
   getEmploymentActivity,
-  getEmploymentSummary,
+  getEmploymentActivityDate,
+  groupEmploymentApplications,
   matchesEmploymentFilters,
   type EmploymentApplicationDraft,
   type EmploymentFilters,
 } from '../services/employmentTracker';
 import { useEmploymentContext } from '../store/contexts/EmploymentContext';
-import { useSettingsContext } from '../store/contexts/SettingsContext';
 import type {
   EmploymentApplication,
   EmploymentApplicationStatus,
@@ -80,15 +79,11 @@ interface EditorDraft {
   historyEvidenceUrl: string;
 }
 
-function toLocalDate(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function formatLocalDate(value?: string): string {
+function formatLocalDate(value?: string, includeYear = true): string {
   if (!value) return 'Not recorded';
   const [year, month, day] = value.split('-').map(Number);
   const parsed = new Date(year, (month || 1) - 1, day || 1);
-  return parsed.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return parsed.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(includeYear ? { year: 'numeric' as const } : {}) });
 }
 
 function labelFor<T extends string>(options: Array<{ value: T; label: string }>, value: T): string {
@@ -319,35 +314,46 @@ function OpportunityCard({ application, onEdit }: { application: EmploymentAppli
 
 export default function EmploymentSurface() {
   const employment = useEmploymentContext();
-  const settings = useSettingsContext();
-  const [now] = useState(() => new Date());
-  const today = getAppDate(now, settings.appTimeZone.effectiveTimeZone) ?? toLocalDate(now);
+  const [activeOnly, setActiveOnly] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<EmploymentFilters>({
-    query: '',
-    status: 'all',
-    workType: 'all',
-    remoteStatus: 'all',
+    query: '', status: 'all', workType: 'all', remoteStatus: 'all',
   });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<EmploymentApplication | 'new' | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
+  const detailsHeadingRef = useRef<HTMLHeadingElement>(null);
+  const selectionRequestedRef = useRef(false);
 
-  const summary = useMemo(() => getEmploymentSummary(employment.applications, today), [employment.applications, today]);
-  const activity = useMemo(() => getEmploymentActivity(employment.applications), [employment.applications]);
-  const filtered = useMemo(() => employment.applications
-    .filter(application => matchesEmploymentFilters(application, filters))
-    .sort((left, right) => {
-      const leftActive = EMPLOYMENT_ACTIVE_STATUSES.includes(left.status) ? 0 : 1;
-      const rightActive = EMPLOYMENT_ACTIVE_STATUSES.includes(right.status) ? 0 : 1;
-      return leftActive - rightActive
-        || (left.nextActionDate || '9999').localeCompare(right.nextActionDate || '9999')
-        || left.company.localeCompare(right.company);
-    }), [employment.applications, filters]);
-  const upcoming = useMemo(() => employment.applications
-    .filter(application => EMPLOYMENT_ACTIVE_STATUSES.includes(application.status))
-    .sort((left, right) => (left.nextActionDate || '9999').localeCompare(right.nextActionDate || '9999'))
-    .slice(0, 5), [employment.applications]);
+  const filtered = useMemo(() => employment.applications.filter(application => (
+    (!activeOnly || EMPLOYMENT_ACTIVE_STATUSES.includes(application.status))
+    && matchesEmploymentFilters(application, filters)
+  )), [employment.applications, activeOnly, filters]);
+  const groups = useMemo(() => groupEmploymentApplications(filtered), [filtered]);
+  const selected = filtered.find(application => application.id === selectedId) ?? groups[0]?.applications[0];
+  const latest = useMemo(() => getEmploymentActivity(filtered).find(entry => entry.date), [filtered]);
+  const activeCount = employment.applications.filter(application => application.status !== 'closed').length;
+  const filterCount = [filters.status, filters.workType, filters.remoteStatus].filter(value => value !== 'all').length;
 
+  useEffect(() => {
+    if (!selectionRequestedRef.current) return;
+    selectionRequestedRef.current = false;
+    detailsHeadingRef.current?.focus();
+  }, [selectedId]);
+
+  const selectApplication = (application: EmploymentApplication) => {
+    if (application.id === selectedId) {
+      detailsHeadingRef.current?.focus();
+    } else {
+      selectionRequestedRef.current = true;
+      setSelectedId(application.id);
+    }
+  };
+  const clearFilters = () => {
+    setFilters({ query: '', status: 'all', workType: 'all', remoteStatus: 'all' });
+    setActiveOnly(true);
+  };
   const openEditor = (application: EmploymentApplication | 'new', trigger: HTMLElement) => {
     returnFocusRef.current = trigger;
     setEditing(application);
@@ -361,79 +367,63 @@ export default function EmploymentSurface() {
   };
 
   return (
-    <div className="surface employment-surface">
+    <div className="surface employment-surface employment-compact">
       <header className="employment-hero">
-        <div>
-          <div className="employment-eyebrow">EMPLOYMENT · REMOTE-FIRST</div>
-          <h1>Keep every opportunity moving.</h1>
-          <p>Inspect the pipeline, verify remote eligibility, and leave every role with one clear next action.</p>
+        <div><h1>Employment</h1><p>Your applications, at a glance.</p></div>
+        <div className="employment-summary" aria-label="Employment pipeline summary">
+          <span><strong>{employment.applications.length}</strong> tracked</span>
+          {(['interview', 'applied', 'recruiter', 'lead', 'offer'] as const).map(status => {
+            const count = employment.applications.filter(application => application.status === status).length;
+            return (status !== 'offer' || count > 0) && <span key={status} className={`summary-${status}`}><strong>{count}</strong> {status === 'lead' ? 'leads' : status === 'offer' ? 'offers' : status}</span>;
+          })}
         </div>
         <button ref={addButtonRef} type="button" className="btn btn-primary" onClick={event => openEditor('new', event.currentTarget)}>+ Add opportunity</button>
       </header>
 
-      <section className="employment-guardrail" aria-label="Employment search requirements">
-        <div><strong>Non-negotiable</strong><span>Fully remote and UK, EMEA, or global eligible.</span></div>
-        <div><strong>Preference</strong><span>Contracts first; permanent roles remain acceptable.</span></div>
-        <p>Prayer, Learn, and Move remain Sabah One’s daily foundation. Employment tracks the search without replacing those pillars.</p>
-      </section>
-
-      <section className="employment-stats" aria-label="Employment pipeline summary">
-        <div><strong>{summary.active}</strong><span>Active</span></div>
-        <div><strong>{summary.recruiter}</strong><span>Recruiter stage</span></div>
-        <div><strong>{summary.applied}</strong><span>Applied</span></div>
-        <div><strong>{summary.needsRemoteVerification}</strong><span>Need remote proof</span></div>
-        <div><strong>{summary.activityToday}</strong><span>Updates today</span></div>
-      </section>
-
       {employment.error && <div className="employment-error employment-page-error" role="alert">Employment data needs attention: {employment.error}</div>}
-      <div className="employment-save-state" aria-live="polite">{employment.saving ? 'Saving Employment change to the account database…' : ''}</div>
-
-      <section className="employment-toolbar" aria-label="Employment pipeline filters">
+      <span className="sr-only" role="status">{employment.saving ? 'Saving Employment change…' : ''}</span>
+      <div className="employment-overview-toolbar">
+        <div className="employment-view-options" aria-label="Application view">
+          <button type="button" aria-label="Active applications" aria-pressed={activeOnly} onClick={() => setActiveOnly(true)}>Active <span>{activeCount}</span></button>
+          <button type="button" aria-label="All applications" aria-pressed={!activeOnly} onClick={() => setActiveOnly(false)}>All <span>{employment.applications.length}</span></button>
+        </div>
         <label className="employment-search"><span className="sr-only">Search Employment opportunities</span><input className="form-input" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} placeholder="Search company, role, note, compensation…" /></label>
-        <label><span className="sr-only">Filter Employment status</span><select aria-label="Filter Employment status" className="form-select" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value as EmploymentFilters['status'] }))}><option value="all">All pipeline stages</option>{STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-        <label><span className="sr-only">Filter Employment work type</span><select aria-label="Filter Employment work type" className="form-select" value={filters.workType} onChange={event => setFilters(current => ({ ...current, workType: event.target.value as EmploymentFilters['workType'] }))}><option value="all">All work types</option>{WORK_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-        <label><span className="sr-only">Filter Employment remote proof</span><select aria-label="Filter Employment remote proof" className="form-select" value={filters.remoteStatus} onChange={event => setFilters(current => ({ ...current, remoteStatus: event.target.value as EmploymentFilters['remoteStatus'] }))}><option value="all">All remote proof</option>{REMOTE_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-      </section>
-
-      <div className="employment-main-grid">
-        <section className="employment-opportunities" aria-labelledby="employment-opportunities-title">
-          <div className="employment-section-heading"><div><span className="employment-eyebrow">PIPELINE</span><h2 id="employment-opportunities-title">Current opportunities</h2></div><span>{filtered.length} shown</span></div>
-          <div className="employment-card-list">
-            {filtered.map(application => <OpportunityCard key={application.id} application={application} onEdit={() => openEditor(application, document.activeElement instanceof HTMLElement ? document.activeElement : addButtonRef.current!)} />)}
-          </div>
-          {filtered.length === 0 && (
-            <div className="employment-empty" role="status">
-              <div aria-hidden="true">0</div>
-              <h3>No opportunities match</h3>
-              <p>Clear a filter or search for another company, role, or note.</p>
-              <button type="button" className="btn btn-secondary" onClick={() => setFilters({ query: '', status: 'all', workType: 'all', remoteStatus: 'all' })}>Clear filters</button>
-            </div>
-          )}
-        </section>
-
-        <aside className="employment-progress" aria-label="Employment daily progress">
-          <section className="employment-progress-panel">
-            <div className="employment-section-heading"><div><span className="employment-eyebrow">NEXT</span><h2>Action queue</h2></div></div>
-            <ol className="employment-action-list">
-              {upcoming.map(application => <li key={application.id}><span>{application.nextActionDate ? formatLocalDate(application.nextActionDate) : 'No date'}</span><strong>{application.company}</strong><p>{application.nextAction}</p></li>)}
-              {upcoming.length === 0 && <li className="employment-side-empty">No active next actions.</li>}
-            </ol>
-          </section>
-          <section className="employment-progress-panel">
-            <div className="employment-section-heading"><div><span className="employment-eyebrow">DAILY PROGRESS</span><h2>Activity</h2></div><span>{activity.length}</span></div>
-            <ol className="employment-activity-list">
-              {activity.slice(0, 8).map(entry => <li key={`${entry.applicationId}:${entry.id}`}><span>{formatLocalDate(entry.date)}</span><strong>{entry.company}</strong><p>{entry.summary}</p></li>)}
-              {activity.length === 0 && <li className="employment-side-empty">No activity recorded yet.</li>}
-            </ol>
-          </section>
-          <section className="employment-agent-panel">
-            <span className="employment-eyebrow">AGENT ACCESS</span>
-            <h2>Use semantic tools, not direct data edits.</h2>
-            <p>External agents must use a published Sabah One MCP capability. Direct database writes and UI automation are not supported.</p>
-          </section>
-        </aside>
+        <button type="button" className="btn btn-secondary" aria-expanded={showFilters} aria-controls="employment-filters" onClick={() => setShowFilters(value => !value)}>Filters{filterCount > 0 ? ` (${filterCount})` : ''}</button>
       </div>
+      {showFilters && <section id="employment-filters" className="employment-filter-options" aria-label="Employment pipeline filters">
+        <label><span>Stage</span><select aria-label="Filter Employment status" className="form-select" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value as EmploymentFilters['status'] }))}><option value="all">All pipeline stages</option>{STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label><span>Work type</span><select aria-label="Filter Employment work type" className="form-select" value={filters.workType} onChange={event => setFilters(current => ({ ...current, workType: event.target.value as EmploymentFilters['workType'] }))}><option value="all">All work types</option>{WORK_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label><span>Remote eligibility</span><select aria-label="Filter Employment remote proof" className="form-select" value={filters.remoteStatus} onChange={event => setFilters(current => ({ ...current, remoteStatus: event.target.value as EmploymentFilters['remoteStatus'] }))}><option value="all">All remote proof</option>{REMOTE_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <button type="button" className="btn btn-ghost" onClick={clearFilters}>Clear filters</button>
+      </section>}
 
+      {!employment.loaded ? <p className="employment-loading" role="status">Loading your applications…</p> : filtered.length > 0 ? <>
+        <table className="employment-overview" aria-label="Employment applications">
+          <caption className="sr-only">Applications grouped by company, most recent recruiting activity first. Select a role for details.</caption>
+          <colgroup><col className="employment-company-column" /><col className="employment-role-column" /><col className="employment-stage-column" /><col className="employment-next-column" /><col className="employment-latest-column" /></colgroup>
+          <thead><tr><th scope="col">Company</th><th scope="col">Role</th><th scope="col">Stage</th><th scope="col">Next step</th><th scope="col"><span className="sr-only">Latest activity</span></th></tr></thead>
+          {groups.map((group, groupIndex) => <tbody key={group.key} className="employment-company-group">
+            {group.applications.map((application, index) => <tr key={application.id} className={`employment-application-row${selected?.id === application.id ? ' is-selected' : ''}`}>
+              {index === 0 && <th scope="rowgroup" rowSpan={group.applications.length} className="employment-company-cell">
+                <div className="employment-company-label"><span className={`employment-monogram company-colour-${groupIndex % 5}`} aria-hidden="true">{group.company.charAt(0).toLocaleUpperCase()}</span><span><strong>{group.company}</strong><small>{group.applications.length} {group.applications.length === 1 ? 'application' : 'applications'}</small></span></div>
+              </th>}
+              <td className="employment-role-cell"><button type="button" className="employment-role-button" aria-label={`Show details for ${application.company}: ${application.role}`} aria-controls="employment-details" onClick={() => selectApplication(application)}><span>{application.role}</span><span aria-hidden="true">›</span></button></td>
+              <td className="employment-stage-cell"><span className={`employment-status status-${application.status}`}>{labelFor(STATUS_OPTIONS, application.status)}</span></td>
+              <td className="employment-next-cell"><div className="employment-next-summary"><span title={application.nextAction}>{application.nextAction || 'No next step recorded'}</span>{application.nextActionDate && <small title={formatLocalDate(application.nextActionDate)}>{formatLocalDate(application.nextActionDate, false)}</small>}</div></td>
+              <td className="employment-latest-cell">{latest?.applicationId === application.id && <span className="employment-latest" title={`Latest recorded activity: ${formatLocalDate(getEmploymentActivityDate(application))}`}>Latest</span>}</td>
+            </tr>)}
+          </tbody>)}
+        </table>
+        <p className="employment-result-count">{groups.length} {groups.length === 1 ? 'company' : 'companies'} · {filtered.length} of {employment.applications.length} applications shown</p>
+      </> : <div className="employment-empty" role="status">
+        <h2>No opportunities match</h2><p>{employment.applications.length === 0 ? 'Add an opportunity to start your application list.' : 'Clear a filter or search for another company or role.'}</p>
+        <button type="button" className="btn btn-secondary" onClick={clearFilters}>Clear filters</button>
+      </div>}
+
+      {selected && <section id="employment-details" className="employment-details" aria-labelledby="employment-details-heading">
+        <div className="employment-section-heading"><h2 id="employment-details-heading" ref={detailsHeadingRef} tabIndex={-1}>Details &amp; history</h2><span>{selected.company}</span></div>
+        <OpportunityCard key={selected.id} application={selected} onEdit={() => openEditor(selected, document.activeElement instanceof HTMLElement ? document.activeElement : addButtonRef.current!)} />
+      </section>}
       {editing && <EmploymentEditor application={editing === 'new' ? undefined : editing} onClose={closeEditor} />}
     </div>
   );

@@ -224,6 +224,38 @@ export function matchesEmploymentFilters(
   return haystack.includes(query);
 }
 
+// Recruiting activity dates, not import/update timestamps, determine recency.
+export function getEmploymentActivityDate(application: EmploymentApplication): string | undefined {
+  return [application.applicationDate, ...application.history.map(entry => entry.date)]
+    .filter((date): date is string => Boolean(date))
+    .sort()
+    .at(-1);
+}
+
+export function groupEmploymentApplications(applications: EmploymentApplication[]) {
+  const groups = new Map<string, { key: string; company: string; applications: EmploymentApplication[] }>();
+  const compare = (left: EmploymentApplication, right: EmploymentApplication) => (
+    Number(left.status === 'closed') - Number(right.status === 'closed')
+    || (getEmploymentActivityDate(right) ?? '').localeCompare(getEmploymentActivityDate(left) ?? '')
+    || left.role.localeCompare(right.role)
+    || left.id.localeCompare(right.id)
+  );
+  for (const application of applications) {
+    const key = application.company.trim().toLocaleLowerCase();
+    const group = groups.get(key) ?? { key, company: application.company.trim(), applications: [] };
+    group.applications.push(application);
+    groups.set(key, group);
+  }
+  return [...groups.values()]
+    .map(group => ({ ...group, applications: group.applications.sort(compare) }))
+    .sort((left, right) => (
+      Number(left.applications.every(application => application.status === 'closed'))
+      - Number(right.applications.every(application => application.status === 'closed'))
+      || (getEmploymentActivityDate(right.applications[0]) ?? '').localeCompare(getEmploymentActivityDate(left.applications[0]) ?? '')
+      || left.company.localeCompare(right.company)
+    ));
+}
+
 export function getEmploymentActivity(
   applications: EmploymentApplication[],
 ): EmploymentActivityEntry[] {

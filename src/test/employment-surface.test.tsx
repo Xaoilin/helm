@@ -1,5 +1,6 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRepresentativeEmploymentState } from '../../e2e/support/employment-scenario';
 import { createDefaultEmploymentTrackerState } from '../services/employmentTracker';
 import EmploymentSurface from '../surfaces/EmploymentSurface';
 
@@ -26,9 +27,12 @@ vi.mock('../store/contexts/SettingsContext', () => ({
   useSettingsContext: () => mocks.settings,
 }));
 
+const ACTIVE_APPLICATION_COUNT = 9;
+const ALL_APPLICATION_COUNT = 11;
+
 describe('Employment surface', () => {
   beforeEach(() => {
-    mocks.employment.applications = createDefaultEmploymentTrackerState().applications;
+    mocks.employment.applications = createRepresentativeEmploymentState().applications;
     mocks.employment.error = null;
     mocks.employment.saving = false;
     mocks.employment.addApplication.mockClear();
@@ -44,24 +48,100 @@ describe('Employment surface', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows the confirmed pipeline and a useful filter-empty state', () => {
-    render(<EmploymentSurface />);
+  it('groups applications without losing roles and orders them by confirmed activity dates', () => {
+    const { container } = render(<EmploymentSurface />);
 
-    expect(screen.getByRole('heading', { name: 'Keep every opportunity moving.' })).toBeInTheDocument();
-    expect(screen.getByText(/Prayer, Learn, and Move remain Sabah One’s daily foundation\./)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Staff AI Engineer, 2nd Horizon, UK Remote' })).toBeInTheDocument();
-    expect(screen.getByText('The advert also mentions in-person onboarding. Confirm the onboarding expectation before progressing.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Employment' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Add opportunity' })).toBeInTheDocument();
+    const table = screen.getByRole('table', { name: 'Employment applications' });
+
+    expect(container.querySelectorAll('tbody.employment-company-group')).toHaveLength(6);
+    expect(container.querySelectorAll('tr.employment-application-row')).toHaveLength(ACTIVE_APPLICATION_COUNT);
+    expect(within(table).queryByRole('button', {
+      name: 'Show details for MICRO1: Staff Platform Engineer — Cloud Evaluation Rubrics',
+    })).not.toBeInTheDocument();
+
+    const roleButtons = within(table).getAllByRole('button', { name: /^Show details for / });
+    expect(roleButtons[0]).toHaveAccessibleName(
+      'Show details for micro1: Senior Backend Engineer — AI Evaluation Platform',
+    );
+
+    const details = container.querySelector<HTMLElement>('#employment-details');
+    expect(details).not.toBeNull();
+    expect(within(details!).getByRole('heading', { name: 'Details & history' })).toBeInTheDocument();
+    expect(within(details!).getByRole('heading', {
+      name: 'Senior Backend Engineer — AI Evaluation Platform',
+    })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'All applications' }));
+    expect(container.querySelectorAll('tr.employment-application-row')).toHaveLength(ALL_APPLICATION_COUNT);
+    expect(container.querySelectorAll('tbody.employment-company-group')).toHaveLength(6);
+    const micro1Group = [...container.querySelectorAll('tbody.employment-company-group')]
+      .find(group => /micro1/iu.test(group.textContent ?? ''));
+    expect(micro1Group?.querySelectorAll('tr.employment-application-row')).toHaveLength(4);
+  });
+
+  it('selects one role at a time and keeps its existing Opportunity details and editor', () => {
+    const { container } = render(<EmploymentSurface />);
+    const selectedRole = 'Senior Backend Engineer — Distributed Payments Infrastructure';
+
+    fireEvent.click(screen.getByRole('button', {
+      name: `Show details for Mercor: ${selectedRole}`,
+    }));
+
+    const details = container.querySelector<HTMLElement>('#employment-details');
+    expect(details).not.toBeNull();
+    expect(within(details!).getByRole('heading', { name: 'Details & history' })).toHaveFocus();
+    expect(within(details!).getByRole('heading', { name: selectedRole })).toBeInTheDocument();
+    expect(within(details!).queryByRole('heading', {
+      name: 'Senior Backend Engineer — AI Evaluation Platform',
+    })).not.toBeInTheDocument();
+
+    const edit = within(details!).getByRole('button', { name: 'Edit opportunity' });
+    edit.focus();
+    fireEvent.click(edit);
+    expect(screen.getByRole('dialog', { name: 'Edit opportunity' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Company' })).toHaveFocus();
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Company' }), { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Edit opportunity' })).not.toBeInTheDocument();
+    expect(edit).toHaveFocus();
+  });
+
+  it('keeps active-only as the default and exposes search plus the three existing filters', () => {
+    const { container } = render(<EmploymentSurface />);
+
+    expect(container.querySelectorAll('tr.employment-application-row')).toHaveLength(ACTIVE_APPLICATION_COUNT);
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    expect(screen.getByLabelText('Filter Employment status')).toBeInTheDocument();
+    expect(screen.getByLabelText('Filter Employment work type')).toBeInTheDocument();
+    expect(screen.getByLabelText('Filter Employment remote proof')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'All applications' }));
+    fireEvent.change(screen.getByLabelText('Filter Employment status'), { target: { value: 'closed' } });
+    expect(container.querySelectorAll('tr.employment-application-row')).toHaveLength(2);
 
     fireEvent.change(screen.getByPlaceholderText('Search company, role, note, compensation…'), {
       target: { value: 'no matching role' },
     });
-    expect(screen.getByRole('heading', { name: 'No opportunities match' })).toBeInTheDocument();
+    const empty = container.querySelector<HTMLElement>('.employment-empty')!;
+    expect(within(empty).getByRole('heading', { name: 'No opportunities match' })).toBeInTheDocument();
+    fireEvent.click(within(empty).getByRole('button', { name: 'Clear filters' }));
+    expect(container.querySelectorAll('tr.employment-application-row')).toHaveLength(ACTIVE_APPLICATION_COUNT);
+    expect(screen.queryByRole('button', {
+      name: 'Show details for MICRO1: Staff Platform Engineer — Cloud Evaluation Rubrics',
+    })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-    expect(screen.getByRole('heading', { name: 'Senior Software Engineer, Protocols' })).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('Search company, role, note, compensation…'), {
+      target: { value: 'observability' },
+    });
+    expect(container.querySelectorAll('tr.employment-application-row')).toHaveLength(1);
+    expect(screen.getByRole('button', {
+      name: 'Show details for Grafana Labs: Staff AI Engineer — Observability Platform',
+    })).toBeInTheDocument();
   });
 
-  it('focuses the editor, closes with Escape, and restores the trigger', () => {
+  it('focuses the add editor, closes with Escape, and restores the trigger', () => {
     render(<EmploymentSurface />);
     const trigger = screen.getByRole('button', { name: '+ Add opportunity' });
 

@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   createDefaultEmploymentTrackerState,
   getEmploymentActivity,
+  getEmploymentActivityDate,
   getEmploymentSummary,
+  groupEmploymentApplications,
   matchesEmploymentFilters,
   normalizeEmploymentApplicationDraft,
   type EmploymentApplicationDraft,
   type EmploymentFilters,
 } from '../services/employmentTracker';
+import { createRepresentativeEmploymentState } from '../../e2e/support/employment-scenario';
 import { decodeStoreValue, encodeStoreValue } from '../store/recordCodec';
 import { resolveSurfaceReference } from '../assistant/entityResolver';
 
@@ -134,6 +137,25 @@ describe('Employment tracker rules', () => {
       needsRemoteVerification: 3,
       activityToday: 1,
     });
+  });
+
+  it('groups company names case-insensitively and preserves distinct roles in source-date order', () => {
+    const applications = createRepresentativeEmploymentState().applications;
+    const groups = groupEmploymentApplications(applications);
+    const micro1 = groups.find(group => group.key === 'micro1');
+
+    expect(groups).toHaveLength(6);
+    expect(groups.flatMap(group => group.applications)).toHaveLength(11);
+    expect(new Set(groups.flatMap(group => group.applications.map(application => application.id))).size).toBe(11);
+    expect(micro1?.applications.map(application => application.id)).toEqual([
+      'micro1-backend-ai-evaluation',
+      'micro1-java-distributed-systems',
+      'micro1-incident-analysis',
+      'micro1-platform-rubrics',
+    ]);
+    expect(getEmploymentActivityDate(micro1!.applications[0])).toBe('2026-09-14');
+    expect(micro1!.applications[2].createdAt).toBe('2027-01-01T09:00:00.000Z');
+    expect(micro1!.applications.at(-1)?.createdAt).toBe('2026-12-30T09:00:00.000Z');
   });
 
   it('grounds Employment as an assistant navigation surface', () => {
