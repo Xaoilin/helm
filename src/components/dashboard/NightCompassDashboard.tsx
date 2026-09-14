@@ -695,12 +695,17 @@ export default function NightCompassDashboard() {
           <span className="nc-eyebrow">Daily Quran</span>
           <h2 id="nc-quran-motivation-title">Quran {motivation.reference}</h2>
         </div>
-        <blockquote lang="en" dir="ltr">{motivation.translation}</blockquote>
+        <div className="nc-quran-motivation-passages" dir="rtl">
+          <blockquote lang="ar" dir="rtl">{motivation.arabic}</blockquote>
+          <blockquote lang="en" dir="ltr">{motivation.translation}</blockquote>
+        </div>
         <div className="nc-quran-motivation-sources">
           <span>English translation: Marmaduke Pickthall</span>
           <a href={motivation.sourceUrl} target="_blank" rel="noreferrer">
             Quran {motivation.reference} · Source
           </a>
+          <a href="https://tanzil.net" target="_blank" rel="noreferrer">Arabic: Tanzil Project</a>
+          <a href={`${import.meta.env.BASE_URL}licenses/tanzil-quran.txt`} target="_blank" rel="noreferrer">Text licence</a>
           <a href="https://www.gutenberg.org/ebooks/16955" target="_blank" rel="noreferrer">Translation source</a>
         </div>
       </aside>

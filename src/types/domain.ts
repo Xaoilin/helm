@@ -623,6 +623,8 @@ export type QuranMotivationTheme = 'prayer' | 'remembrance' | 'dua' | 'steadfast
 export interface QuranMotivationCard {
   id: string;
   reference: QuranMotivationReference;
+  /** Verbatim Tanzil Uthmani Arabic; one newline-separated record per ayah. */
+  arabic: string;
   /** Complete Pickthall translation; one newline-separated record per ayah. */
   translation: string;
   theme: QuranMotivationTheme;

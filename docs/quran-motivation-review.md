@@ -2,17 +2,19 @@
 
 ## Display and collection
 
-Night Compass displays the complete English translation of the selected Quran
-passage, its surah/ayah reference, translator credit and source links. It uses
-Marmaduke Pickthall's published translation, without editorial encouragement
-titles, meaning summaries, abridgment or generated wording. Multi-ayah passages
-include every complete verse, separated by a newline. The reading card is
-English-only.
+Night Compass displays the complete Arabic text and complete English translation
+of the selected Quran passage side by side, with its surah/ayah reference,
+translator credit and source links. Arabic is the verbatim Tanzil Uthmani text;
+English uses Marmaduke Pickthall's published translation, without editorial
+encouragement titles, meaning summaries, abridgment or generated wording.
+Multi-ayah passages include every complete verse in each language, separated by
+a newline. The Arabic presentation is right-to-left and the English presentation
+is left-to-right.
 
 The existing curated collection remains **206 passages across 374 distinct
 ayahs**: 57 prayer, 26 remembrance, 50 dua, 28 steadfastness and 45 good-deeds
 cards. IDs, references, themes, catalogue order and the daily selector are
-unchanged by the switch to English. Prayer and related devotion account for
+unchanged by the restoration of side-by-side Arabic and English. Prayer and related devotion account for
 133 cards. Passages do not overlap or count the same ayah twice.
 
 The original 2026-09-13 selection review covered all 114 surahs and 6,236 ayahs,
@@ -58,6 +60,41 @@ independently extracted source digest and checks that every passage contains the
 exact number of verses in its reference. Translation changes require a new
 source extraction and review. There are 206 distinct English passage texts.
 
+## Arabic source and integrity
+
+- [Tanzil Quran text download](https://tanzil.net/download/): Uthmani v1.1,
+  `txt-2`, pause marks, sajdah signs and tatweel enabled. Each selected Arabic
+  record is copied unchanged. Multi-ayah cards join complete records with a
+  newline. Chapter-opening basmala is retained as supplied by Tanzil.
+- [Quran Foundation Uthmani API documentation](https://api-docs.quran.com/docs/content_apis_versioned/4.0.0/quran-verses-uthmani/):
+  the complete Quran.com Arabic corpus supplied a second text cross-check.
+- [Tanzil text licence](https://tanzil.net/docs/Text_License): the original
+  notice is preserved with the catalogue and in `public/licenses/tanzil-quran.txt`;
+  the dashboard links to Tanzil and the distributed notice.
+
+All 6,236 Arabic records agree between the two sources after excluding only
+source-format differences for comparison: chapter-opening basmala outside 1:1,
+rub-el-hizb markers and outer whitespace. The 95:1 and 97:1 preambles carry
+Tanzil's shadda variant. These comparison operations are **not** applied to the
+published Arabic text.
+
+Downloaded input SHA-256 receipts:
+
+| Input | SHA-256 |
+| --- | --- |
+| Tanzil Uthmani v1.1 text | `6933e133dd56db778c801bf738848454e43648105a151e8d84d86a7cae39ec5f` |
+| Quran.com Uthmani JSON | `3754c592dd15d7047d5b4339737ad3171c5c1d431a8c3e4c1eee7781c135d58c` |
+
+Selected Arabic SHA-256:
+`2fbfdf6aa602f24fec44d6c23e04f87d06548afc87be2de44c9dfb9ad0f14d01`.
+
+The selected digest uses UTF-8 `reference|arabic` records sorted lexically and
+joined with newlines, without a trailing newline. Arabic within a range retains
+its own newlines. The regression test checks this independent receipt and that
+each Arabic passage contains the exact number of verses in its reference.
+Changing Arabic requires a new source comparison and updated receipt; the full
+source corpora are research inputs, not runtime dependencies.
+
 ## Daily selection and browser verification
 
 The prayer provider supplies its local calendar date. The selector counts days
@@ -67,10 +104,12 @@ month/year ends, leap days and daylight-saving transitions cannot cause early
 repeats. Refreshing the page preserves the selected passage; the provider's
 existing date rollover updates it.
 
-Tests cover full-cycle uniqueness and stability. Browser checks render the
-longest English passage at 390, 768 and 1440 pixels, verify its full text, left-
-to-right English semantics, translator credit and source links, check horizontal
-overflow, and exercise page reload and prayer-local midnight rollover.
+Tests cover full-cycle uniqueness and stability, Arabic and English source
+receipts, and the exact ayah count in both languages. Browser checks render the
+longest side-by-side passage at 390, 768 and 1440 pixels, verify its full Arabic
+and English text, right-to-left Arabic and left-to-right English semantics,
+translator credit and source links, check horizontal overflow, and exercise page
+reload and prayer-local midnight rollover.
 
 The collection is bundled. No runtime network request, AI generation, account
 mutation, storage schema or external agent API is introduced.
