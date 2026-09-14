@@ -50,7 +50,6 @@ function MilestoneCelebration({ celebration }: { celebration: ActiveMilestoneCel
       aria-atomic="true"
       data-celebration-tone={celebration.tone}
     >
-      <div className="milestone-celebration-glow" aria-hidden="true" />
       <div className="milestone-celebration-card">
         <div className="milestone-celebration-mark" aria-hidden="true">
           <span>{level ? `L${level}` : '✓'}</span>
