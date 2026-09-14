@@ -75,11 +75,12 @@ Browser notification delivery is deduplicated by local prayer date, canonical pr
 
 ### Daily Quran reading
 
-Night Compass follows the prayer section with the full English translation of a
-curated Quran passage. All 206 passages include their complete ayahs from
-Marmaduke Pickthall's published translation, with a surah/ayah reference,
-translator credit and source links. The card is English-only; editorial titles
-and meaning summaries are no longer displayed. The collection covers 374
+Night Compass follows the prayer section with the full Arabic text and English
+translation of a curated Quran passage, side by side at every screen width.
+All 206 passages include their complete Tanzil Arabic ayahs and Marmaduke
+Pickthall translation, with a surah/ayah reference, translator credit and source
+links. Arabic reads right to left in the right column; English reads left to
+right in the left column. The collection covers 374
 non-overlapping ayahs, including 133 prayer, remembrance and dua passages.
 
 The prayer provider's local calendar date selects one passage per day from a

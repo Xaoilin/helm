@@ -5,7 +5,7 @@ import { shiftIsoDate } from '../src/services/timeZone';
 const FIXED_NOW = '2026-07-28T11:45:00.000Z';
 
 for (const width of [390, 768, 1440]) {
-  test(`Quran reading shows the complete English passage and sources at ${width}px`, async ({ page, scenario }, testInfo) => {
+  test(`Quran reading shows complete Arabic and English side by side at ${width}px`, async ({ page, scenario }, testInfo) => {
     const longest = QURAN_MOTIVATION_CARDS.reduce((left, right) => (
       left.translation.length > right.translation.length ? left : right
     ));
@@ -18,12 +18,20 @@ for (const width of [390, 768, 1440]) {
     const card = page.getByRole('complementary', { name: 'Daily Quran reading' });
     await card.scrollIntoViewIfNeeded();
     await expect(card.getByRole('heading')).toHaveText(`Quran ${longest.reference}`);
-    await expect(card.locator('blockquote')).toHaveText(longest.translation);
-    await expect(card.locator('blockquote')).toHaveAttribute('lang', 'en');
-    await expect(card.locator('blockquote')).toHaveAttribute('dir', 'ltr');
+    const arabic = card.locator('blockquote[lang="ar"]');
+    const english = card.locator('blockquote[lang="en"]');
+    await expect(arabic).toHaveText(longest.arabic);
+    await expect(arabic).toHaveAttribute('dir', 'rtl');
+    await expect(english).toHaveText(longest.translation);
+    await expect(english).toHaveAttribute('dir', 'ltr');
+    const arabicBounds = await arabic.boundingBox();
+    const englishBounds = await english.boundingBox();
+    expect(arabicBounds!.x).toBeGreaterThanOrEqual(englishBounds!.x + englishBounds!.width);
+    expect(Math.abs(arabicBounds!.y - englishBounds!.y)).toBeLessThan(1);
     await expect(card.getByText('English translation: Marmaduke Pickthall', { exact: true })).toBeVisible();
     await expect(card.getByText('Reviewed meaning (paraphrase):', { exact: false })).toHaveCount(0);
-    await expect(card.locator('[lang="ar"]')).toHaveCount(0);
+    await expect(card.getByRole('link', { name: 'Arabic: Tanzil Project', exact: true }))
+      .toHaveAttribute('href', 'https://tanzil.net');
     await expect(card.getByRole('link', { name: `Quran ${longest.reference} · Source`, exact: true }))
       .toHaveAttribute('href', longest.sourceUrl);
     expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -41,12 +49,17 @@ for (const width of [390, 768, 1440]) {
 test('Quran reading stays stable on reload and changes with the prayer date', async ({ page, scenario }) => {
   await scenario({ now: '2026-09-30T22:59:00Z', prayer: { timezone: 'Europe/London' }, settings: { prayerEnabled: true } });
   await openApp(page);
-  const passage = page.getByRole('complementary', { name: 'Daily Quran reading' }).locator('blockquote');
+  const card = page.getByRole('complementary', { name: 'Daily Quran reading' });
+  const passage = card.locator('blockquote[lang="en"]');
+  const arabic = card.locator('blockquote[lang="ar"]');
   await expect(passage).toHaveText(getQuranMotivationForDate('2026-09-30').translation);
+  await expect(arabic).toHaveText(getQuranMotivationForDate('2026-09-30').arabic);
   await page.reload();
   await expect(passage).toHaveText(getQuranMotivationForDate('2026-09-30').translation);
+  await expect(arabic).toHaveText(getQuranMotivationForDate('2026-09-30').arabic);
   await page.clock.fastForward(120_000);
   await expect(passage).toHaveText(getQuranMotivationForDate('2026-10-01').translation);
+  await expect(arabic).toHaveText(getQuranMotivationForDate('2026-10-01').arabic);
 });
 
 for (const width of [1440, 390]) {

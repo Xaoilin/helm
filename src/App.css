@@ -2638,13 +2638,28 @@ textarea.form-input {
   font-size: 15px;
 }
 
+.nc-quran-motivation-passages {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: clamp(14px, 3vw, 32px);
+}
+
 .nc-quran-motivation blockquote {
+  min-width: 0;
   margin: 0;
   color: #f4e8c8;
   max-width: 80ch;
-  font-size: 17px;
+  font-size: clamp(14px, 1.6vw, 17px);
   line-height: 1.75;
   white-space: pre-line;
+  overflow-wrap: break-word;
+}
+
+.nc-quran-motivation blockquote[lang="ar"] {
+  font-family: 'Noto Naskh Arabic', 'Geeza Pro', serif;
+  font-size: clamp(20px, 2.3vw, 26px);
+  line-height: 1.9;
 }
 
 .nc-quran-motivation-sources {
