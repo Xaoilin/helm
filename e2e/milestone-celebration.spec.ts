@@ -10,7 +10,7 @@ function requestedViewports(): string[] {
 
 async function addReadingPage(page: Page): Promise<void> {
   const reading = page.locator('[data-template-id="learn-reading"]');
-  const addPage = reading.getByRole('button', { name: 'Add 1 pages' });
+  const addPage = reading.getByRole('button', { name: 'Add 1 page' });
   await expect(addPage).toBeEnabled();
   const mutation = waitForMutation(page, 'gamification');
   await addPage.click();
@@ -56,6 +56,9 @@ for (const viewport of requestedViewports()) {
       settings: { prayerEnabled: true, lifeHeroEnabled: false },
     });
     await openApp(page);
+
+    await page.getByRole('region', { name: 'Learn', exact: true })
+      .getByRole('switch', { name: 'Add individual steps' }).click();
 
     await addReadingPage(page);
     await expect(page.locator('[data-template-id="learn-reading"]')).toContainText('1 / 2 pages');

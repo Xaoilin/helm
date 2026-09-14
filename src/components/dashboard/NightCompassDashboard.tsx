@@ -139,7 +139,7 @@ interface MomentumCardProps {
   busy: boolean;
   contextError: string | null;
   actionError: string | null;
-  onRecord: (templateId: string, stepId: string) => void;
+  onRecord: (templateId: string, stepId: string, amount: number) => void;
   onReset: () => void;
 }
 
@@ -147,7 +147,8 @@ interface MomentumActivityProps {
   pillar: DailyPillar;
   activity: DailyMomentumActivityDay;
   busy: boolean;
-  onRecord: (templateId: string, stepId: string) => void;
+  individualSteps: boolean;
+  onRecord: (templateId: string, stepId: string, amount: number) => void;
 }
 
 const ACTIVITY_HELP_TEXT: Record<string, string> = {
@@ -203,7 +204,7 @@ function ActivityTitleHelp({ pillar, activity }: Pick<MomentumActivityProps, 'pi
   );
 }
 
-function MomentumActivity({ pillar, activity, busy, onRecord }: MomentumActivityProps) {
+function MomentumActivity({ pillar, activity, busy, individualSteps, onRecord }: MomentumActivityProps) {
   const nextLevel = activity.template.levels[Math.min(activity.achievedLevel, 4)];
   const status = activity.complete
     ? `Level ${activity.achievedLevel} reached`
@@ -233,6 +234,8 @@ function MomentumActivity({ pillar, activity, busy, onRecord }: MomentumActivity
       <div className="nc-progress-controls">
         {nextLevel.steps.map(step => {
           const current = activity.log?.progress[step.id] ?? 0;
+          const amount = individualSteps ? 1 : Math.max(0, step.amount - current);
+          const unit = amount === 1 ? step.metric.slice(0, -1) : step.metric;
           return (
             <div className="nc-progress-row" key={step.id}>
               <div>
@@ -243,9 +246,9 @@ function MomentumActivity({ pillar, activity, busy, onRecord }: MomentumActivity
                 type="button"
                 className="nc-compact-action"
                 disabled={busy || current >= step.amount}
-                onClick={() => onRecord(activity.template.id, step.id)}
+                onClick={() => onRecord(activity.template.id, step.id, amount)}
               >
-                {current >= step.amount ? 'Reached' : `Add 1 ${step.metric}`}
+                {current >= step.amount ? 'Reached' : `Add ${amount} ${unit}`}
               </button>
             </div>
           );
@@ -265,6 +268,7 @@ function MomentumCard({
   onReset,
 }: MomentumCardProps) {
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [individualSteps, setIndividualSteps] = useState(false);
   const accentIcon = pillar === 'learn' ? '◇' : '△';
   const title = pillar === 'learn' ? 'Learn' : 'Move';
   const completedActivities = day.activities.filter(activity => activity.complete).length;
@@ -282,6 +286,21 @@ function MomentumCard({
           {day.complete ? `${completedActivities} ready` : 'Start any activity'}
         </span>
       </div>
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={individualSteps}
+        aria-label="Add individual steps"
+        className="nc-step-mode"
+        onClick={() => setIndividualSteps(current => !current)}
+      >
+        <span>Add individual steps</span>
+        <span className="nc-step-mode-state" aria-hidden="true">
+          <span className="nc-step-mode-track"><span /></span>
+          <span>{individualSteps ? 'On' : 'Off'}</span>
+        </span>
+      </button>
 
       <div className="nc-level-track" aria-label={`${title} daily levels`}>
         {[1, 2, 3, 4, 5].map(level => (
@@ -301,6 +320,7 @@ function MomentumCard({
             pillar={pillar}
             activity={activity}
             busy={busy}
+            individualSteps={individualSteps}
             onRecord={onRecord}
           />
         ))}
@@ -449,11 +469,11 @@ export default function NightCompassDashboard() {
         busy={!momentum.loaded || busyPillar === pillar}
         contextError={momentum.error}
         actionError={actionErrors[pillar] ?? null}
-        onRecord={(templateId, stepId) => {
+        onRecord={(templateId, stepId, amount) => {
           const previousActivity = pillarDay.activities.find(activity => activity.template.id === templateId);
           const previousLevel = previousActivity?.achievedLevel ?? 0;
           void runMomentumAction(pillar, async () => {
-            const nextState = await momentum.recordProgress(pillar, templateId, stepId, 1);
+            const nextState = await momentum.recordProgress(pillar, templateId, stepId, amount);
             const nextActivity = getDailyMomentumDay(nextState, pillarDay.date)[pillar].activities
               .find(activity => activity.template.id === templateId);
             const reachedLevel = nextActivity?.achievedLevel ?? 0;

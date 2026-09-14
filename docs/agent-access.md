@@ -66,3 +66,7 @@ Connect the remote MCP URL `<Supabase project URL>/functions/v1/sabah-one-employ
 ## Voice connection boundary
 
 The ElevenLabs connection reference is a device preference, not new shared account data. Its selected Vault entry remains account-owned and is checked on every enabled synthesis request. The existing shared public voice ID behavior is unchanged. Secret management and plaintext remain intentionally outside agent tools; Inventory approval grants no voice or Settings access. External agents must not call Secrets RPCs or automate its UI. The narrow first-party speech endpoint returns audio only and respects the hosted AI pause.
+
+## Daily goal progress controls
+
+The Learn and Move switches only choose the amount passed to the existing first-party progress operation: the gap to the displayed level target by default, or one unit when “Add individual steps” is on. They are independent view-local controls, reset when the dashboard remounts, and add no shared data, schema, or new account operation. Progress continues through the established signed-in mutation path. This UI convenience does not change external agent access: Daily Learn and Move still have no published domain MCP, so external account reads and progress writes remain unavailable.
