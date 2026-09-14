@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import NightCompassDashboard from '../components/dashboard/NightCompassDashboard';
 import {
@@ -56,9 +56,10 @@ vi.mock('../components/dashboard/LifeHeroCompanion', () => ({
   default: () => <aside aria-label="Life Hero companion" />,
 }));
 
-describe('Night Compass activity title help', () => {
+describe('Night Compass activities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.momentum.loaded = true;
     mocks.settings.settings.lifeHeroEnabled = false;
     mocks.momentum.getDay.mockReturnValue(
       getDailyMomentumDay(createDefaultDailyMomentumState(), '2026-08-29'),
@@ -144,7 +145,7 @@ describe('Night Compass activity title help', () => {
     mocks.momentum.recordProgress.mockResolvedValue(levelOne);
 
     render(<NightCompassDashboard />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add 1 pages' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 page' }));
 
     await waitFor(() => {
       expect(mocks.celebration.celebrate).toHaveBeenCalledWith({
@@ -182,7 +183,7 @@ describe('Night Compass activity title help', () => {
     mocks.momentum.recordProgress.mockResolvedValue(levelTwo);
 
     render(<NightCompassDashboard />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add 1 pages' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 page' }));
 
     await waitFor(() => {
       expect(mocks.celebration.celebrate).toHaveBeenCalledWith(expect.objectContaining({
@@ -206,9 +207,98 @@ describe('Night Compass activity title help', () => {
     mocks.momentum.recordProgress.mockResolvedValue(nextState);
 
     render(<NightCompassDashboard />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add 1 pages' }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Learn', exact: true }))
+      .getByRole('switch', { name: 'Add individual steps' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 page' }));
 
     await waitFor(() => expect(mocks.momentum.recordProgress).toHaveBeenCalledOnce());
     expect(mocks.celebration.celebrate).not.toHaveBeenCalled();
+  });
+
+  it('completes the remaining goal in one write and keeps section modes independent', async () => {
+    const date = '2026-08-29';
+    const partial = recordDailyMomentumProgress(createDefaultDailyMomentumState(), {
+      date, pillar: 'learn', templateId: 'learn-course', stepId: 'course-minutes', amount: 2,
+    });
+    mocks.momentum.getDay.mockReturnValue(getDailyMomentumDay(partial, date));
+    mocks.momentum.recordProgress.mockResolvedValue(recordDailyMomentumProgress(partial, {
+      date, pillar: 'learn', templateId: 'learn-course', stepId: 'course-minutes', amount: 3,
+    }));
+    render(<NightCompassDashboard />);
+    const learn = within(screen.getByRole('region', { name: 'Learn', exact: true }));
+    const move = within(screen.getByRole('region', { name: 'Move', exact: true }));
+    const learnMode = learn.getByRole('switch', { name: 'Add individual steps' });
+    const moveMode = move.getByRole('switch', { name: 'Add individual steps' });
+    expect(learnMode).not.toBeChecked();
+    expect(moveMode).not.toBeChecked();
+    expect(learn.getByRole('button', { name: 'Add 2 pages' })).toBeEnabled();
+    expect(learn.getByRole('button', { name: 'Add 3 minutes' })).toBeEnabled();
+    expect(move.getAllByRole('button', { name: 'Add 5 minutes' })).toHaveLength(3);
+
+    fireEvent.click(learnMode);
+    expect(learnMode).toBeChecked();
+    expect(learn.getByRole('button', { name: 'Add 1 page' })).toBeEnabled();
+    expect(learn.getByRole('button', { name: 'Add 1 minute' })).toBeEnabled();
+    expect(moveMode).not.toBeChecked();
+    expect(move.getAllByRole('button', { name: 'Add 5 minutes' })).toHaveLength(3);
+    fireEvent.click(moveMode);
+    expect(move.getAllByRole('button', { name: 'Add 1 minute' })).toHaveLength(3);
+    expect(mocks.momentum.recordProgress).not.toHaveBeenCalled();
+
+    fireEvent.click(learnMode);
+    fireEvent.click(learn.getByRole('button', { name: 'Add 3 minutes' }));
+    await waitFor(() => expect(mocks.momentum.recordProgress)
+      .toHaveBeenCalledWith('learn', 'learn-course', 'course-minutes', 3));
+    expect(mocks.momentum.recordProgress).toHaveBeenCalledOnce();
+    expect(mocks.celebration.celebrate).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Course · Level 1',
+    }));
+  });
+
+  it('adds only the gap to the next optional level', async () => {
+    const date = '2026-08-29';
+    const levelOne = recordDailyMomentumProgress(createDefaultDailyMomentumState(), {
+      date, pillar: 'learn', templateId: 'learn-reading', stepId: 'pages', amount: 2,
+    });
+    mocks.momentum.getDay.mockReturnValue(getDailyMomentumDay(levelOne, date));
+    mocks.momentum.recordProgress.mockResolvedValue(recordDailyMomentumProgress(levelOne, {
+      date, pillar: 'learn', templateId: 'learn-reading', stepId: 'pages', amount: 3,
+    }));
+    render(<NightCompassDashboard />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add 3 pages' }));
+    await waitFor(() => expect(mocks.momentum.recordProgress)
+      .toHaveBeenCalledWith('learn', 'learn-reading', 'pages', 3));
+    expect(mocks.celebration.celebrate).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Reading · Level 2',
+    }));
+  });
+
+  it('blocks duplicate writes while saving and recovers after an error', async () => {
+    let rejectWrite!: (reason: Error) => void;
+    mocks.momentum.recordProgress.mockReturnValue(new Promise((_, reject) => { rejectWrite = reject; }));
+    render(<NightCompassDashboard />);
+    const add = screen.getByRole('button', { name: 'Add 2 pages' });
+    fireEvent.click(add);
+    expect(add).toBeDisabled();
+    fireEvent.click(add);
+    expect(mocks.momentum.recordProgress).toHaveBeenCalledOnce();
+    await act(async () => rejectWrite(new Error('Progress could not be saved.')));
+    expect(screen.getByRole('alert')).toHaveTextContent('Progress could not be saved.');
+    expect(add).toBeEnabled();
+    expect(mocks.celebration.celebrate).not.toHaveBeenCalled();
+  });
+
+  it('keeps fully reached goals and unloaded progress disabled', () => {
+    const date = '2026-08-29';
+    const complete = recordDailyMomentumProgress(createDefaultDailyMomentumState(), {
+      date, pillar: 'learn', templateId: 'learn-reading', stepId: 'pages', amount: 40,
+    });
+    mocks.momentum.getDay.mockReturnValue(getDailyMomentumDay(complete, date));
+    mocks.momentum.loaded = false;
+    render(<NightCompassDashboard />);
+    expect(screen.getByRole('button', { name: 'Reached' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: 'Add 5 minutes' }).every(button => button.hasAttribute('disabled'))).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Reached' }));
+    expect(mocks.momentum.recordProgress).not.toHaveBeenCalled();
   });
 });
