@@ -6,6 +6,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createClient } from '@supabase/supabase-js';
+import { parseMcpResponse } from './lib/mcp-response';
 
 const url = (process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
 const publicKey = process.env.VITE_SUPABASE_ANON_KEY || '';
@@ -89,7 +90,12 @@ function mcpInit(token: string | undefined, method: string, params: unknown, id?
 async function mcp(scenario: string, token: string, method: string, params: unknown = {}) {
   const id = ++messageId;
   const response = await request(scenario, resource, mcpInit(token, method, params, id));
-  const body = await readJson(response);
+  let body: Record<string, unknown>;
+  try {
+    body = parseMcpResponse(await response.text(), response.headers.get('content-type'), id);
+  } catch {
+    throw new AcceptanceFailure('Employment MCP response was not valid JSON or SSE for the requested message.');
+  }
   expect(`${scenario}: valid JSON-RPC response`, body.jsonrpc === '2.0' && body.id === id
     && !body.error && body.result !== undefined);
   sessionId = response.headers.get('mcp-session-id') || sessionId;
