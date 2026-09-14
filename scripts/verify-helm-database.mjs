@@ -59,6 +59,32 @@ const [migrationRows, verificationRows] = await Promise.all([
           ])
       ),
       'authenticatedRecordsRead', has_table_privilege('authenticated', 'public.helm_records', 'select'),
+      'employmentTablesPrivate', (
+        select count(*) = 2 and bool_and(
+          c.relrowsecurity
+          and not has_table_privilege('authenticated', c.oid, 'select,insert,update,delete')
+          and not has_table_privilege('anon', c.oid, 'select,insert,update,delete')
+        )
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r'
+          and c.relname = any(array['helm_employment_oauth_clients', 'helm_employment_mutation_receipts'])
+      ),
+      'employmentRpcsRestricted', (
+        select count(*) = 9 and bool_and(
+          p.prosecdef
+          and has_function_privilege('authenticated', p.oid, 'execute')
+          and not has_function_privilege('anon', p.oid, 'execute')
+          and array_to_string(p.proconfig, ',') like '%search_path=""%'
+        )
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = any(array[
+          'employment_list_applications', 'employment_get_application',
+          'employment_add_application', 'employment_update_application',
+          'employment_add_history', 'employment_remove_application',
+          'approve_employment_oauth_client', 'list_employment_oauth_clients',
+          'revoke_employment_oauth_client'
+        ])
+      ),
       'authenticatedRecordsWrite',
         has_table_privilege('authenticated', 'public.helm_records', 'insert')
         or has_table_privilege('authenticated', 'public.helm_records', 'update')
@@ -500,6 +526,8 @@ const expected = {
   helmTableCount: 19,
   allHelmTablesUseRls: true,
   authenticatedRecordsRead: true,
+  employmentTablesPrivate: true,
+  employmentRpcsRestricted: true,
   authenticatedRecordsWrite: false,
   anonymousRecordsRead: false,
   anonymousRecordsWrite: false,

@@ -5,8 +5,11 @@ import {
   isSupabaseReady,
   isAuthenticated,
   getCurrentUserId,
+  listEmploymentOAuthClients,
   listInventoryOAuthClients,
+  revokeEmploymentOAuthClient,
   revokeInventoryOAuthClient,
+  type EmploymentOAuthClientApproval,
   type InventoryOAuthClientApproval,
 } from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
@@ -47,6 +50,9 @@ export default function SettingsSurface() {
   const [syncSession, setSyncSession] = useState(() => getSyncSessionSnapshot());
   const [inventoryClients, setInventoryClients] = useState<InventoryOAuthClientApproval[]>([]);
   const [inventoryClientStatus, setInventoryClientStatus] = useState('');
+  const [employmentClients, setEmploymentClients] = useState<EmploymentOAuthClientApproval[]>([]);
+  const [employmentClientStatus, setEmploymentClientStatus] = useState('');
+  const [revokingEmploymentClientId, setRevokingEmploymentClientId] = useState<string | null>(null);
   const [appTimeZoneInput, setAppTimeZoneInput] = useState(settings.appTimezone || '');
   const [appTimeZoneStatus, setAppTimeZoneStatus] = useState<{
     tone: 'saving' | 'saved' | 'error';
@@ -104,6 +110,9 @@ export default function SettingsSurface() {
     void listInventoryOAuthClients()
       .then(clients => { if (!cancelled) setInventoryClients(clients); })
       .catch(error => { if (!cancelled) setInventoryClientStatus(error instanceof Error ? error.message : String(error)); });
+    void listEmploymentOAuthClients()
+      .then(clients => { if (!cancelled) setEmploymentClients(clients); })
+      .catch(error => { if (!cancelled) setEmploymentClientStatus(error instanceof Error ? error.message : String(error)); });
     return () => { cancelled = true; };
   }, [authSyncKey]);
 
@@ -120,6 +129,20 @@ export default function SettingsSurface() {
         .then(setInventoryClients)
         .catch(() => { /* the original revocation result remains authoritative */ });
       setInventoryClientStatus(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const revokeEmploymentClient = async (client: EmploymentOAuthClientApproval) => {
+    setRevokingEmploymentClientId(client.clientId);
+    setEmploymentClientStatus(`Revoking ${client.clientName}…`);
+    try {
+      const revoked = await revokeEmploymentOAuthClient(client.clientId);
+      setEmploymentClients(current => current.map(entry => entry.clientId === client.clientId ? revoked : entry));
+      setEmploymentClientStatus(`${client.clientName} can no longer access Employment. Other approvals are unchanged.`);
+    } catch (error) {
+      setEmploymentClientStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRevokingEmploymentClientId(null);
     }
   };
 
@@ -190,6 +213,28 @@ export default function SettingsSurface() {
           </div>
           {inventoryClientStatus && <div className="inventory-client-status" role="status">{inventoryClientStatus}</div>}
         </div>
+
+        <h3 id="employment-client-heading" style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Codex Employment Access</h3>
+        <section className="card inventory-client-settings" aria-labelledby="employment-client-heading">
+          <div className="inventory-client-settings-intro">
+            <div>
+              <strong>Approved Employment clients</strong>
+              <p>These clients can read and update your jobs, application history and next actions. Employment access is approved separately from Inventory.</p>
+            </div>
+            <span className="tag tag-primary">OAuth 2.1 beta</span>
+          </div>
+          <div className="inventory-client-boundary">This connection does not grant email access or permission to send messages or submit applications.</div>
+          <div className="inventory-client-list">
+            {employmentClients.length === 0 && <div className="inventory-empty-inline">No Codex Employment client has been approved.</div>}
+            {employmentClients.map(client => (
+              <div key={client.clientId} className="inventory-client-row">
+                <div><strong>{client.clientName}</strong><span>{client.clientId}</span><small>{client.revokedAt ? `Revoked ${new Date(client.revokedAt).toLocaleString()}` : `Approved ${new Date(client.approvedAt).toLocaleString()}`}</small></div>
+                <button className="btn btn-danger btn-sm" type="button" aria-label={`Revoke Employment access for ${client.clientName}`} disabled={Boolean(client.revokedAt) || revokingEmploymentClientId !== null} onClick={() => void revokeEmploymentClient(client)}>{client.revokedAt ? 'Revoked' : revokingEmploymentClientId === client.clientId ? 'Revoking…' : 'Revoke'}</button>
+              </div>
+            ))}
+          </div>
+          {employmentClientStatus && <div className="inventory-client-status" role="status">{employmentClientStatus}</div>}
+        </section>
 
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>App time zone</h3>
         <div className="card app-time-zone-settings">
