@@ -1,6 +1,12 @@
 import { v4 as uuid } from 'uuid';
 import { APP_VERSION } from '../../config/release';
 import {
+  classifyOperationalFailure,
+  observeOperationalOperation,
+  recordOperationalEvent,
+} from '../../services/operationalTelemetry';
+import type { OperationalReason } from '../../types/domain';
+import {
   normalizeProjectRecords,
   serializeSharedProjects,
 } from '../projectPersistence';
@@ -169,6 +175,13 @@ function hasUsableSnapshotFor(userId: string): boolean {
 
 function publishReady(userId: string): void {
   realtimeBoundary.markReady();
+  recordOperationalEvent({
+    domain: 'database',
+    operation: 'recovery',
+    outcome: 'ok',
+    reason: 'ok',
+    freshness: 'fresh',
+  });
   publishSyncSession({
     status: 'ready',
     userId,
@@ -185,9 +198,21 @@ function publishDegraded(
   userId: string,
   reason: Exclude<SyncSessionReason, 'signed_out' | 'configuration' | 'switching_account' | null>,
   error: string,
+  operationalReason?: OperationalReason,
 ): void {
   const usable = hasUsableSnapshotFor(userId);
   const fatal = reason === 'incompatible_schema' || reason === 'client_update_required';
+  recordOperationalEvent({
+    domain: 'database',
+    operation: 'recovery',
+    outcome: 'failed',
+    reason: operationalReason ?? (reason === 'offline'
+      ? 'offline'
+      : reason === 'client_update_required'
+        ? 'client_update_required'
+        : reason === 'incompatible_schema' ? 'invalid_response' : 'unknown'),
+    freshness: usable && !fatal ? 'stale' : 'unknown',
+  });
   if (fatal) recordCache.reset();
   publishSyncSession({
     status: usable && !fatal ? 'reconnecting' : 'blocked',
@@ -347,7 +372,12 @@ function versionAtLeast(actual: string, minimum: string): boolean {
 }
 
 async function hydrateDatabaseSnapshot(epoch: number, userId: string): Promise<string[]> {
-  const snapshot = await fetchHelmAccountSnapshot();
+  const snapshot = await observeOperationalOperation(
+    'database',
+    'read',
+    fetchHelmAccountSnapshot,
+    { freshness: 'fresh' },
+  );
   assertCurrentPersistenceSession(epoch, userId);
   if (snapshot.state.schemaVersion !== HELM_DATABASE_SCHEMA_VERSION) {
     throw new SyncCompatibilityError(
@@ -356,6 +386,13 @@ async function hydrateDatabaseSnapshot(epoch: number, userId: string): Promise<s
     );
   }
   if (!versionAtLeast(APP_VERSION, snapshot.state.minimumClientVersion)) {
+    recordOperationalEvent({
+      domain: 'release',
+      operation: 'version',
+      outcome: 'failed',
+      reason: 'client_update_required',
+      freshness: 'fresh',
+    });
     throw new SyncCompatibilityError(
       'client_update_required',
       `Update Sabah One to ${snapshot.state.minimumClientVersion} or later.`,
@@ -389,7 +426,12 @@ async function refreshCollectionsFromBroadcast(
   if (nextVersion > runtime.accountVersion + 1 || collections.length === 0) {
     changedCollections = await hydrateDatabaseSnapshot(epoch, userId);
   } else {
-    const records = await fetchHelmCollections(collections);
+    const records = await observeOperationalOperation(
+      'database',
+      'read',
+      () => fetchHelmCollections(collections),
+      { freshness: 'fresh' },
+    );
     assertCurrentPersistenceSession(epoch, userId);
     for (const collection of collections) {
       recordCache.replaceCollection(collection, records.filter(record => record.collection === collection));
@@ -423,7 +465,7 @@ function handleDatabaseFailure(error: unknown, userId: string): void {
   const message = error instanceof Error ? error.message : String(error);
   healthPublisher.recordRemoteReadFailure(error);
   const reason = reasonForDatabaseError(error);
-  publishDegraded(userId, reason, message);
+  publishDegraded(userId, reason, message, classifyOperationalFailure(error));
   if (reason !== 'incompatible_schema' && reason !== 'client_update_required') {
     realtimeBoundary.scheduleRecovery({ snapshot: true, realtime: true });
   }
@@ -476,7 +518,12 @@ export async function bootstrapDatabasePersistence(): Promise<void> {
     });
     publishStoreChanges(await migrateLegacyLocalCopies(epoch, userId));
     realtimeBoundary.connect(epoch, userId);
-    const latestVersion = await probeHelmAccountVersion();
+    const latestVersion = await observeOperationalOperation(
+      'database',
+      'version',
+      probeHelmAccountVersion,
+      { freshness: 'fresh' },
+    );
     assertCurrentPersistenceSession(epoch, userId);
     publishSyncSession({ lastProbeAt: new Date().toISOString() });
     if (latestVersion > runtime.accountVersion) {
@@ -583,7 +630,12 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
       }
 
       realtimeBoundary.connect(epoch, userId);
-      const latestVersion = await probeHelmAccountVersion();
+      const latestVersion = await observeOperationalOperation(
+        'database',
+        'version',
+        probeHelmAccountVersion,
+        { freshness: 'fresh' },
+      );
       assertCurrentPersistenceSession(epoch, userId);
       publishSyncSession({ lastProbeAt: new Date().toISOString() });
       if (latestVersion > runtime.accountVersion) {
@@ -702,7 +754,7 @@ export async function saveStore<T>(key: string, value: T): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     healthPublisher.recordRemoteWriteFailure(error);
     const userId = getCurrentUserId();
-    if (userId) publishDegraded(userId, 'database_unavailable', message);
+    if (userId) publishDegraded(userId, 'database_unavailable', message, classifyOperationalFailure(error));
   }
 }
 

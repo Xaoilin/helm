@@ -1,9 +1,15 @@
 import { APP_VERSION } from '../config/release';
 import { logError, logInfo, logWarn } from './logger';
+import {
+  classifyOperationalFailure,
+  flushOperationalEventsForReload,
+  recordOperationalEvent,
+} from './operationalTelemetry';
 
 const RELEASE_REFRESH_SOURCE = 'ReleaseRefresh';
 const RELEASE_MANIFEST_NAME = 'release.json';
 const RELEASE_REFRESH_SESSION_KEY_PREFIX = 'helm:release-refresh:';
+const RELEASE_MANIFEST_TIMEOUT_MS = 5_000;
 
 export type ReleaseManifest = {
   version: string;
@@ -25,6 +31,8 @@ export type CheckForPublishedReleaseOptions = {
   protocol?: string;
   reload?: () => void;
   sessionStore?: ReleaseSessionStore;
+  signal?: AbortSignal;
+  canReload?: () => boolean;
 };
 
 export function parseSemver(version: string): [number, number, number] | null {
@@ -84,42 +92,78 @@ export async function checkForPublishedRelease({
   protocol = window.location.protocol,
   reload = () => window.location.reload(),
   sessionStore = window.sessionStorage,
+  signal,
+  canReload,
 }: CheckForPublishedReleaseOptions = {}): Promise<boolean> {
   if (!/^https?:$/u.test(protocol)) {
     return false;
   }
 
   const manifestUrl = buildReleaseManifestUrl(origin, basePath);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (signal?.aborted) abort();
+  else signal?.addEventListener('abort', abort, { once: true });
+  const timeoutId = globalThis.setTimeout(abort, RELEASE_MANIFEST_TIMEOUT_MS);
+  const startedAt = performance.now();
 
   try {
-    const response = await fetcher(`${manifestUrl}?t=${now()}`, { cache: 'no-store' });
+    const response = await fetcher(`${manifestUrl}?t=${now()}`, { cache: 'no-store', signal: controller.signal });
     if (!response.ok) {
+      recordOperationalEvent({
+        domain: 'release',
+        operation: 'manifest',
+        outcome: 'failed',
+        reason: classifyOperationalFailure({ status: response.status }),
+        durationMs: performance.now() - startedAt,
+      });
       logWarn(RELEASE_REFRESH_SOURCE, `Release manifest request failed with status ${response.status}.`);
       return false;
     }
 
     const manifest = await response.json() as Partial<ReleaseManifest>;
     if (typeof manifest.version !== 'string' || manifest.version.trim().length === 0) {
+      recordOperationalEvent({ domain: 'release', operation: 'manifest', outcome: 'failed', reason: 'invalid_response', durationMs: performance.now() - startedAt });
       logWarn(RELEASE_REFRESH_SOURCE, 'Release manifest is missing a valid version string.');
       return false;
     }
 
     const publishedVersion = manifest.version.trim();
     if (!shouldForceRefreshForRelease(currentVersion, publishedVersion)) {
+      recordOperationalEvent({ domain: 'release', operation: 'manifest', outcome: 'ok', reason: 'ok', durationMs: performance.now() - startedAt, freshness: 'fresh' });
       return false;
     }
+    recordOperationalEvent({ domain: 'release', operation: 'manifest', outcome: 'changed', reason: 'release_available', durationMs: performance.now() - startedAt, freshness: 'fresh' });
 
     const sessionKey = `${RELEASE_REFRESH_SESSION_KEY_PREFIX}${publishedVersion}`;
     if (sessionStore.getItem(sessionKey) === 'done') {
+      recordOperationalEvent({ domain: 'release', operation: 'reload', outcome: 'changed', reason: 'reload_suppressed' });
+      return false;
+    }
+
+    if (canReload && !canReload()) {
+      recordOperationalEvent({ domain: 'release', operation: 'reload', outcome: 'pending', reason: 'reload_suppressed' });
       return false;
     }
 
     sessionStore.setItem(sessionKey, 'done');
+    recordOperationalEvent({ domain: 'release', operation: 'reload', outcome: 'changed', reason: 'release_available' });
+    flushOperationalEventsForReload();
     logInfo(RELEASE_REFRESH_SOURCE, `Refreshing the page for deployed release v${publishedVersion}.`);
     reload();
     return true;
   } catch (error) {
+    recordOperationalEvent({
+      domain: 'release',
+      operation: 'manifest',
+      outcome: 'failed',
+      reason: classifyOperationalFailure(error),
+      durationMs: performance.now() - startedAt,
+    });
     logError(RELEASE_REFRESH_SOURCE, error);
     return false;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+    signal?.removeEventListener('abort', abort);
   }
 }

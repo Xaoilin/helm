@@ -1,0 +1,67 @@
+name: Availability Monitor
+
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch' &&
+      format('Availability monitor ({0})', inputs.synthetic_fault) ||
+      'Scheduled availability monitor' }}
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      synthetic_fault:
+        description: Exercise the real release-version assertion
+        required: true
+        default: none
+        type: choice
+        options:
+          - none
+          - expected_version_mismatch
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: availability-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: master
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - id: source
+        name: Resolve protected source identity
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Probe public availability
+        env:
+          PAGES_BASE_URL: https://xaoilin.github.io/helm/
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_PUBLIC_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+          EXPECTED_SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          SYNTHETIC_FAULT: ${{ github.event_name == 'workflow_dispatch' && inputs.synthetic_fault || 'none' }}
+          MONITOR_OUTPUT_PATH: test-results/availability-monitor.json
+        run: node ./scripts/monitor-availability.mjs
+
+      - name: Retain bounded monitor result
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: availability-monitor-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/availability-monitor.json
+          if-no-files-found: error
+          retention-days: 7

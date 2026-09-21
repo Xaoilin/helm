@@ -6,6 +6,7 @@ import { getAllDayCalendarDateRange } from './calendarEventDates';
 import { shiftIsoDate, validateIanaTimeZone } from './timeZone';
 import { googleCalendarBreaker } from './serviceBreakers';
 import { withRetry } from './retry';
+import { observeOperationalOperation } from './operationalTelemetry';
 
 const BASE_URL = 'https://www.googleapis.com/calendar/v3';
 
@@ -51,7 +52,7 @@ export function shouldGoogleCalendarBreakerRecordFailure(error: unknown): boolea
 }
 
 async function apiCall<T>(accessToken: string, url: string, options: RequestInit = {}): Promise<T> {
-  return googleCalendarBreaker.call(() => withRetry(async () => {
+  return observeOperationalOperation('calendar', 'request', () => googleCalendarBreaker.call(() => withRetry(async () => {
     const response = await fetch(url, {
       ...options,
       signal: AbortSignal.timeout(API_TIMEOUT.GOOGLE_CALENDAR),
@@ -75,7 +76,7 @@ async function apiCall<T>(accessToken: string, url: string, options: RequestInit
     return response.json();
   }, { name: 'GoogleCalendar', maxRetries: 2, initialDelayMs: 1000 }), {
     shouldRecordFailure: shouldGoogleCalendarBreakerRecordFailure,
-  });
+  }));
 }
 
 // ── Calendar List ──

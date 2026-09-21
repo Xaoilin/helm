@@ -2,6 +2,7 @@ import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@s
 import { GITHUB_LIFE_HERO_FUNCTION } from '../config';
 import { API_TIMEOUT } from '../config/constants';
 import { getClient, getCurrentAccessToken, isSupabaseReady } from '../store/supabase';
+import { observeOperationalOperation } from './operationalTelemetry';
 
 export type GithubLifeHeroFailureCode =
   | 'invalid_request'
@@ -143,7 +144,7 @@ export function parseGithubLifeHeroResponse<T>(value: unknown): T {
   return response.result;
 }
 
-async function invoke<T>(body: Record<string, unknown>): Promise<T> {
+async function invokeUnobserved<T>(body: Record<string, unknown>): Promise<T> {
   if (!isSupabaseReady()) throw new GithubLifeHeroError('sign_in_required', 'Supabase sign-in is required for GitHub evidence.');
   const client = getClient();
   const accessToken = getCurrentAccessToken();
@@ -156,6 +157,10 @@ async function invoke<T>(body: Record<string, unknown>): Promise<T> {
   });
   if (error) throw await functionError(error);
   return parseGithubLifeHeroResponse<T>(data);
+}
+
+function invoke<T>(body: Record<string, unknown>): Promise<T> {
+  return observeOperationalOperation('github', 'request', () => invokeUnobserved<T>(body));
 }
 
 export async function beginGithubLifeHeroAuthorization(redirectUri: string): Promise<{

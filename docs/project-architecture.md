@@ -20,7 +20,7 @@ The current stack is:
 
 The React shell renders navigation, the active surface, the global Lina panel, and Supabase sign-in controls. The supported surfaces are Dashboard, Chat, Calendar, Clock, Trips, Tasks, Employment, Projects, Inventory, Secrets, Finance, Health, Knowledge, Profile, Integrations, Activity, Settings, and Debug.
 
-The visible version comes from the web build and the deployed `public/release.json` manifest. Open pages check the manifest and perform one browser reload when a newer deployed semver is available. The active surface is kept in browser session state so a legitimate reload can return the user to the same section.
+The visible version comes from the web build and the deployed `public/release.json` manifest. Open pages check the manifest with a five-second deadline and perform one browser reload when a newer deployed semver is available. Reload waits until the page is visible and mounted, with no queued writes, open modal, or visible editable text; a deferred check does not consume the reload marker. The active surface is kept in browser session state so a legitimate reload can return the user to the same section.
 
 ### State composition
 

@@ -19,6 +19,7 @@ import { logError } from './logger';
 import { hostedAssistantBreaker } from './serviceBreakers';
 import type { OllamaMessage } from './ollamaApi';
 import type { AssistantToolDefinition } from '../assistant/toolSchemas';
+import { observeOperationalOperation } from './operationalTelemetry';
 
 interface HostedAssistantHealthResponse {
   ok: boolean;
@@ -190,9 +191,11 @@ function decorateCircuitOpenError(error: CircuitOpenError): Error {
     return error;
   }
 
-  return new Error(
+  const decorated = new Error(
     `Hosted ${formatHostedAssistantFailureSource(lastFailure.source)} last failed: ${lastFailure.message}. ${error.message}`,
   );
+  decorated.name = error.name;
+  return decorated;
 }
 
 export function getHostedAssistantDiagnostics(): HostedAssistantDiagnostics {
@@ -216,7 +219,7 @@ export function resetHostedAssistantDiagnostics(): void {
   lastHostedAssistantModel = null;
 }
 
-async function invokeHostedAssistant<T>(
+async function invokeHostedAssistantUnobserved<T>(
   source: HostedAssistantFailureSource,
   body: Record<string, unknown>,
 ): Promise<T> {
@@ -241,7 +244,7 @@ async function invokeHostedAssistant<T>(
         }
         const message = await extractFunctionErrorMessage(error);
         rememberHostedAssistantFailure(source, message);
-        throw new Error(message);
+        throw Object.assign(new Error(message), isHttpError(error) ? { status: error.context.status } : {});
       }
 
       if (!data) {
@@ -268,6 +271,17 @@ async function invokeHostedAssistant<T>(
     }
     throw error;
   }
+}
+
+function invokeHostedAssistant<T>(
+  source: HostedAssistantFailureSource,
+  body: Record<string, unknown>,
+): Promise<T> {
+  return observeOperationalOperation(
+    'assistant',
+    'request',
+    () => invokeHostedAssistantUnobserved<T>(source, body),
+  );
 }
 
 export async function testHostedAssistantConnection(

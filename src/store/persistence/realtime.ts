@@ -5,6 +5,7 @@ import {
 } from '../supabase';
 import type { HelmSecretRealtimeEvent } from '../databaseTypes';
 import type { DatabaseRefreshRequest, SyncSessionReason } from './types';
+import { recordOperationalEvent } from '../../services/operationalTelemetry';
 
 interface RealtimeSessionContext {
   epoch: number;
@@ -89,6 +90,14 @@ export class PersistenceRealtimeBoundary {
     ) return;
     const delay = Math.min(1_000 * (2 ** this.recoveryAttempt), 30_000);
     this.recoveryAttempt = Math.min(this.recoveryAttempt + 1, 5);
+    recordOperationalEvent({
+      domain: 'database',
+      operation: 'recovery',
+      outcome: 'pending',
+      reason: 'network',
+      attempt: this.recoveryAttempt,
+      freshness: 'stale',
+    });
     this.recoveryTimer = globalThis.setTimeout(() => {
       this.recoveryTimer = null;
       void this.owner.refresh(request);
@@ -111,6 +120,14 @@ export class PersistenceRealtimeBoundary {
     const { epoch, userId } = session;
     const delay = Math.min(1_000 * (2 ** this.channelAttempt), 30_000);
     this.channelAttempt = Math.min(this.channelAttempt + 1, 5);
+    recordOperationalEvent({
+      domain: 'realtime',
+      operation: 'recovery',
+      outcome: 'pending',
+      reason: 'channel_error',
+      attempt: this.channelAttempt,
+      freshness: 'stale',
+    });
     this.channelTimer = globalThis.setTimeout(() => {
       this.channelTimer = null;
       if (this.owner.getSession().isCurrent(epoch, userId)) this.connect(epoch, userId);
@@ -205,18 +222,28 @@ export class PersistenceRealtimeBoundary {
     if (this.lifecycleRegistered || typeof window === 'undefined') return;
     this.lifecycleRegistered = true;
     window.addEventListener('offline', () => {
+      recordOperationalEvent({ domain: 'browser', operation: 'connectivity', outcome: 'changed', reason: 'offline' });
       const session = this.owner.getSession();
       if (session.userId) this.owner.publishDegraded(session.userId, 'offline', 'The browser is offline.');
     });
     window.addEventListener('online', () => {
+      recordOperationalEvent({ domain: 'browser', operation: 'connectivity', outcome: 'changed', reason: 'online' });
       const session = this.owner.getSession();
       if (!session.authenticated) return;
       this.clearRecoveryTimer();
+      recordOperationalEvent({ domain: 'browser', operation: 'recovery', outcome: 'pending', reason: 'online' });
       void this.owner.refresh({ realtime: true });
     });
     document.addEventListener('visibilitychange', () => {
+      recordOperationalEvent({
+        domain: 'browser',
+        operation: 'visibility',
+        outcome: 'changed',
+        reason: document.visibilityState === 'visible' ? 'visible' : 'hidden',
+      });
       const session = this.owner.getSession();
       if (document.visibilityState === 'visible' && session.authenticated) {
+        recordOperationalEvent({ domain: 'browser', operation: 'recovery', outcome: 'pending', reason: 'visible' });
         void this.owner.refresh({ realtime: true });
       }
     });

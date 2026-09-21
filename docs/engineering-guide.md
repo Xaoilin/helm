@@ -41,7 +41,7 @@ Assistant-planning changes also keep the benchmark corpus, dialog seeds, grounde
 
 - Sabah One versions use semver across `package.json`, `package-lock.json`, and `public/release.json`.
 - The web shell exposes the build version and checks the deployed manifest after load and when a hidden page becomes visible.
-- A newer deployed semver causes one browser reload, so an open page can move onto the current website without a second product runtime.
+- A newer deployed semver causes one browser reload when the page is visible, mounted, and has no queued writes, open modal, or visible editable text. Unsafe checks defer without consuming the one-reload marker; the next regular or foreground check can retry. Manifest requests have a five-second abort deadline.
 - Deployment evidence identifies the source revision, web artifact, Supabase function state, Pages URL, and observed version.
 
 ## CI And Branch Protection
