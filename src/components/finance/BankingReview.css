@@ -7,10 +7,11 @@
 .banking-review p, .banking-review li { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .banking-muted, .banking-coverage { color: #b7bfd3; margin: 5px 0; }
 .banking-coverage { font-size: 12px !important; margin-bottom: 18px; }
-.banking-budget { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.banking-budget { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 16px; }
 .banking-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 16px; }
 .banking-card { min-width: 0; border: 1px solid #30364b; border-radius: 12px; padding: 18px; background: #151a2a; }
 .banking-available { background: #1b203b; border-color: #424c7b; }
+.banking-target { background: #142b29; border-color: #37645b; }
 .banking-amount { font-size: 30px; font-weight: 700; margin: 10px 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .banking-amount span { font-size: 13px; font-weight: 400; color: #bec6da; }
 .banking-amount-small { font-size: 24px; }

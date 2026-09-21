@@ -33,6 +33,21 @@ describe('banking review', () => {
     expect(balances).toHaveTextContent('-£1,200.00');
     expect(screen.getByRole('region', { name: 'High-value spending' })).toHaveTextContent('Illustrative cap: £500.00 / month');
   });
+  it('shows a separate conditional target without adding the planned increase or optional spending cuts twice', () => {
+    render(<BankingReview />);
+    const current = screen.getByRole('region', { name: 'Monthly available amount' });
+    expect(current).toHaveTextContent('£1,750.00 / month');
+    expect(current).not.toHaveTextContent('Renovation loans fully repaid');
+    const target = screen.getByRole('region', { name: 'Target monthly budget calculation' });
+    expect(target).toHaveTextContent('Conditional target');
+    expect(target).toHaveTextContent('Current essentials & work costs£3,250.00');
+    expect(target).toHaveTextContent('Net monthly cost reduction£900.00');
+    expect(target).toHaveTextContent('Target essentials & work costs£2,350.00');
+    expect(target).toHaveTextContent('Available before discretionary spending£2,650.00');
+    expect(target).toHaveTextContent('Cutting optional spending helps you keep more of this amount.');
+    fireEvent.click(within(target).getByText('What needs to change'));
+    expect(within(target).getByText(/Requires full repayment/)).toBeVisible();
+  });
   it('keeps settlement quotes separate from dated balances and unknown balances distinct from zero', () => {
     render(<BankingReview view="loans" />);
     const active = screen.getByRole('region', { name: 'Active loans' });

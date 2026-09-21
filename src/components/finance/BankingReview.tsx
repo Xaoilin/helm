@@ -26,6 +26,7 @@ function Budget({ review }: { review: FinanceReview }) {
   const { budget } = review;
   const essentials = budget.essentials.reduce((sum, item) => sum + item.amountPence, 0);
   const available = budget.incomePence - essentials - budget.workCostsPence;
+  const targets = budget.scenarios.filter(scenario => scenario.monthlyAdjustmentPence < 0);
   return <>
     <div className="banking-budget">
       <section className="banking-card banking-available" aria-label="Monthly available amount">
@@ -33,7 +34,7 @@ function Budget({ review }: { review: FinanceReview }) {
         <div className={`banking-amount ${available < 0 ? 'banking-negative' : ''}`}>{formatGBP(available)}<span> / month</span></div>
         <p>Before discretionary spending and irregular costs.</p>
         <p className="banking-muted">{budget.incomeBasis}</p>
-        {budget.scenarios.map((scenario, index) => <div className="banking-scenario" key={`${scenario.label}-${index}`}>
+        {budget.scenarios.filter(scenario => scenario.monthlyAdjustmentPence >= 0).map((scenario, index) => <div className="banking-scenario" key={`${scenario.label}-${index}`}>
           <span className="banking-badge">{scenario.status === 'planned' ? 'Planned scenario' : 'Confirmed scenario'}</span>
           <strong>{scenario.label}: {formatGBP(available - scenario.monthlyAdjustmentPence)} / month</strong>
           <p>{scenario.note}</p>
@@ -54,6 +55,20 @@ function Budget({ review }: { review: FinanceReview }) {
           <p>{budget.workCostsNote}</p>
         </details>
       </section>
+      {targets.map((target, index) => <section className="banking-card banking-target" aria-label="Target monthly budget calculation" key={`${target.label}-${index}`}>
+        <h3>Target monthly calculation</h3>
+        <span className="banking-badge">{target.status === 'planned' ? 'Conditional target' : 'Confirmed cost reduction'}</span>
+        <p>{target.label}</p>
+        <dl className="banking-figures">
+          <div><dt>Usual salary</dt><dd>{formatGBP(budget.incomePence)}</dd></div>
+          <div><dt>Current essentials & work costs</dt><dd>{formatGBP(essentials + budget.workCostsPence)}</dd></div>
+          <div><dt>Net monthly cost reduction</dt><dd>{formatGBP(-target.monthlyAdjustmentPence)}</dd></div>
+          <div><dt>Target essentials & work costs</dt><dd>{formatGBP(essentials + budget.workCostsPence + target.monthlyAdjustmentPence)}</dd></div>
+          <div className="banking-total"><dt>Available before discretionary spending</dt><dd>{formatGBP(available - target.monthlyAdjustmentPence)}</dd></div>
+        </dl>
+        <p className="banking-muted">Before discretionary spending and irregular costs. Cutting optional spending helps you keep more of this amount.</p>
+        <details><summary>What needs to change</summary><p className="banking-prose">{target.note}</p></details>
+      </section>)}
     </div>
     {review.notes.length > 0 && <details className="banking-notes"><summary>Budget notes & items to confirm</summary>
       <ul>{review.notes.map((note, index) => <li key={index}>{note}</li>)}</ul>

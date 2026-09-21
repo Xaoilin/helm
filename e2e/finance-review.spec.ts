@@ -39,6 +39,9 @@ test('shows the private banking budget, twelve month review and separate dated l
     await page.getByRole('button', { name: 'Overview', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Monthly available amount' })).toContainText('Planned scenario');
     await expect(page.getByRole('region', { name: 'Monthly available amount' })).toContainText('£1,350.00 / month');
+    const target = page.getByRole('region', { name: 'Target monthly budget calculation' });
+    await expect(target).toContainText('Conditional target');
+    await expect(target).toContainText('Available before discretionary spending£2,650.00');
     evidence.push({ view: 'overview', width, ...await assertNoOverflow(page) });
     await page.locator('.main-content').evaluate(element => element.scrollTo(0, 0));
     await page.screenshot({ path: testInfo.outputPath(`banking-overview-${width}.png`) });
