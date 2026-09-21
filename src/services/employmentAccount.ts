@@ -1,6 +1,7 @@
 import { getClient } from '../store/supabase';
 import type { EmploymentHistoryEntry } from '../types/domain';
 import type { EmploymentApplicationDraft } from './employmentTracker';
+import { observeOperationalOperation } from './operationalTelemetry';
 
 export type EmploymentApplicationPatch = {
   [Key in keyof EmploymentApplicationDraft]?: EmploymentApplicationDraft[Key] | null;
@@ -14,14 +15,16 @@ async function callEmploymentMutation(
   name: 'employment_add_application' | 'employment_update_application' | 'employment_add_history' | 'employment_remove_application',
   args: Record<string, unknown>,
 ): Promise<EmploymentMutationReceipt> {
-  const client = getClient();
-  if (!client) throw new Error('Employment requires a configured signed-in database connection.');
-  const { data, error } = await client.rpc(name, args);
-  if (error) throw error;
-  if (!data || typeof data.applicationId !== 'string') {
-    throw new Error('The database did not confirm the Employment change.');
-  }
-  return data as EmploymentMutationReceipt;
+  return observeOperationalOperation('employment', 'write', async () => {
+    const client = getClient();
+    if (!client) throw new Error('Employment requires a configured signed-in database connection.');
+    const { data, error } = await client.rpc(name, args);
+    if (error) throw error;
+    if (!data || typeof data.applicationId !== 'string') {
+      throw new Error('The database did not confirm the Employment change.');
+    }
+    return data as EmploymentMutationReceipt;
+  });
 }
 
 export function createEmploymentApplication(

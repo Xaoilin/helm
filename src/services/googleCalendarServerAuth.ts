@@ -16,6 +16,7 @@ import {
   isSupabaseReady,
 } from '../store/supabase';
 import type { GoogleCalendarListEntry } from './googleCalendarApi';
+import { observeOperationalOperation } from './operationalTelemetry';
 
 export type GoogleCalendarCredentialHealth = 'refreshable' | 'needs_reconnect' | 'revoked';
 export type GoogleCalendarCredentialOrigin = 'oauth_code' | 'profile_session';
@@ -236,7 +237,7 @@ export class GoogleCalendarOAuthFunctionError extends Error {
   }
 }
 
-async function invokeGoogleCalendarOAuthFunction<T>(
+async function invokeGoogleCalendarOAuthFunctionUnobserved<T>(
   body: Record<string, unknown>,
 ): Promise<{ result: T; meta: GoogleCalendarFunctionMeta }> {
   const action = typeof body.action === 'string' ? body.action : undefined;
@@ -421,6 +422,16 @@ async function invokeGoogleCalendarOAuthFunction<T>(
   });
 
   return { result: data.result, meta };
+}
+
+function invokeGoogleCalendarOAuthFunction<T>(
+  body: Record<string, unknown>,
+): Promise<{ result: T; meta: GoogleCalendarFunctionMeta }> {
+  return observeOperationalOperation(
+    'calendar',
+    'request',
+    () => invokeGoogleCalendarOAuthFunctionUnobserved<T>(body),
+  );
 }
 
 export async function exchangeGoogleCalendarAuthorizationCode(options: {

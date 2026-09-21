@@ -1,5 +1,6 @@
 import type { HelmMutation } from '../databaseTypes';
 import { applyHelmInventoryMutations, applyHelmMutations } from '../supabase';
+import { observeOperationalOperation } from '../../services/operationalTelemetry';
 import type { SupabaseWriteQueueSnapshot } from './types';
 
 function shouldRetryMutation(error: unknown): boolean {
@@ -16,10 +17,20 @@ export async function applySharedMutationsWithIdempotentRetry(
   operations: HelmMutation[],
 ) {
   try {
-    return await applyHelmMutations(requestId, operations);
+    return await observeOperationalOperation(
+      'database',
+      'write',
+      () => applyHelmMutations(requestId, operations),
+      { attempt: 1, freshness: 'fresh' },
+    );
   } catch (firstError) {
     if (!shouldRetryMutation(firstError)) throw firstError;
-    return applyHelmMutations(requestId, operations);
+    return observeOperationalOperation(
+      'database',
+      'write',
+      () => applyHelmMutations(requestId, operations),
+      { attempt: 2, freshness: 'fresh' },
+    );
   }
 }
 
@@ -28,10 +39,20 @@ export async function applyInventoryMutationsWithIdempotentRetry(
   operations: HelmMutation[],
 ) {
   try {
-    return await applyHelmInventoryMutations(requestId, operations);
+    return await observeOperationalOperation(
+      'database',
+      'write',
+      () => applyHelmInventoryMutations(requestId, operations),
+      { attempt: 1, freshness: 'fresh' },
+    );
   } catch (firstError) {
     if (!shouldRetryMutation(firstError)) throw firstError;
-    return applyHelmInventoryMutations(requestId, operations);
+    return observeOperationalOperation(
+      'database',
+      'write',
+      () => applyHelmInventoryMutations(requestId, operations),
+      { attempt: 2, freshness: 'fresh' },
+    );
   }
 }
 

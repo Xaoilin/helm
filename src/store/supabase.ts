@@ -5,6 +5,13 @@
 import { createClient, type AuthChangeEvent, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { logError, logWarn } from '../services/logger';
 import {
+  classifyOperationalFailure,
+  configureOperationalTransport,
+  observeOperationalOperation,
+  recordOperationalEvent,
+  setOperationalAccount,
+} from '../services/operationalTelemetry';
+import {
   isLifeHeroEvidenceKind,
   LIFE_HERO_RULESET_VERSION,
   LIFE_HERO_STATS,
@@ -52,6 +59,7 @@ const GOOGLE_SIGN_IN_SCOPES = [
   'profile',
   'https://www.googleapis.com/auth/calendar',
 ].join(' ');
+const CORE_DATABASE_READ_TIMEOUT_MS = 10_000;
 
 export interface AuthSessionSnapshot {
   userId: string;
@@ -74,9 +82,67 @@ export function initSupabase(url: string, publishableKey: string): void {
     currentUserId = null;
     currentSession = null;
     authSessionBootstrapped = false;
+    configureOperationalTransport(null);
+    setOperationalAccount(null);
     return;
   }
-  client = createClient(url, publishableKey);
+  configureOperationalTransport(async (events, signal) => {
+    const accessToken = currentSession?.access_token;
+    if (!accessToken) {
+      const error = new Error('Operational telemetry requires a current signed-in session.') as Error & { status?: number };
+      error.status = 401;
+      throw error;
+    }
+    const response = await fetch(`${url}/functions/v1/operational-events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: publishableKey,
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ events }),
+      signal,
+      keepalive: true,
+    });
+    if (!response.ok) {
+      const code = response.status === 400
+        ? 'invalid_response'
+        : response.status === 401
+          ? 'unauthorized'
+          : response.status === 403 ? 'forbidden' : undefined;
+      throw Object.assign(new Error('Operational collection unavailable.'), { status: response.status, code });
+    }
+    const receipt = await response.json().catch(() => null) as {
+      ok?: unknown;
+      accepted?: unknown;
+      schemaVersion?: unknown;
+    } | null;
+    if (
+      receipt?.ok !== true
+      || receipt.accepted !== events.length
+      || receipt.schemaVersion !== 1
+    ) {
+      throw Object.assign(new Error('Operational collection returned an invalid receipt.'), { code: 'invalid_response' });
+    }
+  });
+  client = createClient(url, publishableKey, {
+    realtime: {
+      heartbeatCallback: (status, latency) => {
+        if (status === 'sent') {
+          recordOperationalEvent({ domain: 'realtime', operation: 'heartbeat', outcome: 'pending', reason: 'heartbeat_sent' });
+        } else if (status === 'ok') {
+          recordOperationalEvent({ domain: 'realtime', operation: 'heartbeat', outcome: 'ok', reason: 'heartbeat_ok', durationMs: latency });
+        } else {
+          recordOperationalEvent({
+            domain: 'realtime',
+            operation: 'heartbeat',
+            outcome: 'failed',
+            reason: status === 'timeout' ? 'heartbeat_timeout' : 'heartbeat_error',
+          });
+        }
+      },
+    },
+  });
   authSessionBootstrapped = false;
 }
 
@@ -94,6 +160,7 @@ export function getCurrentUserId(): string | null {
 
 export function setCurrentUserId(userId: string | null): void {
   currentUserId = userId;
+  setOperationalAccount(userId);
 }
 
 export function getAuthSessionSnapshot(): AuthSessionSnapshot | null {
@@ -151,10 +218,13 @@ export async function signOut(): Promise<void> {
   currentUserId = null;
   currentSession = null;
   authSessionBootstrapped = true;
+  setOperationalAccount(null);
+  recordOperationalEvent({ domain: 'auth', operation: 'session', outcome: 'changed', reason: 'signed_out' });
 }
 
 export async function getSessionUser(): Promise<User | null> {
   if (!client) return null;
+  const startedAt = performance.now();
   try {
     const { data: { session }, error } = await client.auth.getSession();
     if (error) throw error;
@@ -162,14 +232,42 @@ export async function getSessionUser(): Promise<User | null> {
       currentUserId = session.user.id;
       currentSession = session;
       authSessionBootstrapped = true;
+      setOperationalAccount(session.user.id);
+      recordOperationalEvent({
+        domain: 'auth',
+        operation: 'session',
+        outcome: 'ok',
+        reason: 'initial_session',
+        durationMs: performance.now() - startedAt,
+      });
       return session.user;
     }
   } catch (error) {
     logWarn('Supabase', `Session bootstrap failed: ${error instanceof Error ? error.message : String(error)}`);
+    currentUserId = null;
+    currentSession = null;
+    authSessionBootstrapped = true;
+    setOperationalAccount(null);
+    recordOperationalEvent({
+      domain: 'auth',
+      operation: 'session',
+      outcome: 'failed',
+      reason: classifyOperationalFailure(error),
+      durationMs: performance.now() - startedAt,
+    });
+    return null;
   }
   currentUserId = null;
   currentSession = null;
   authSessionBootstrapped = true;
+  setOperationalAccount(null);
+  recordOperationalEvent({
+    domain: 'auth',
+    operation: 'session',
+    outcome: 'changed',
+    reason: 'signed_out',
+    durationMs: performance.now() - startedAt,
+  });
   return null;
 }
 
@@ -180,6 +278,17 @@ export function onAuthStateChange(callback: (change: AuthStateChange) => void): 
     currentUserId = user?.id || null;
     currentSession = session ?? null;
     authSessionBootstrapped = true;
+    setOperationalAccount(user?.id ?? null);
+    recordOperationalEvent({
+      domain: 'auth',
+      operation: event === 'TOKEN_REFRESHED' ? 'refresh' : 'session',
+      outcome: event === 'INITIAL_SESSION' ? 'ok' : 'changed',
+      reason: event === 'INITIAL_SESSION'
+        ? 'initial_session'
+        : event === 'TOKEN_REFRESHED'
+          ? 'token_refreshed'
+          : user ? 'signed_in' : 'signed_out',
+    });
     callback({ event, user });
   });
   return () => subscription.unsubscribe();
@@ -614,7 +723,8 @@ async function fetchAllHelmRecordRows(
     const { data, error, count } = await query
       .order('collection', { ascending: true })
       .order('record_id', { ascending: true })
-      .range(offset, offset + HELM_RECORD_PAGE_SIZE - 1);
+      .range(offset, offset + HELM_RECORD_PAGE_SIZE - 1)
+      .abortSignal(AbortSignal.timeout(CORE_DATABASE_READ_TIMEOUT_MS));
     if (error) throw error;
 
     const page = (data || []) as unknown as HelmRecordRow[];
@@ -745,7 +855,9 @@ export async function fetchHelmAccountSnapshot(): Promise<{
 }> {
   const database = requireClient();
   const userId = currentUserId!;
-  const { data, error } = await database.rpc('get_helm_account_snapshot');
+  const { data, error } = await database
+    .rpc('get_helm_account_snapshot')
+    .abortSignal(AbortSignal.timeout(CORE_DATABASE_READ_TIMEOUT_MS));
   if (error) throw error;
 
   const snapshot = asRecord(data);
@@ -807,6 +919,7 @@ export async function probeHelmAccountVersion(): Promise<number> {
     .from('helm_account_state')
     .select('account_version')
     .eq('user_id', currentUserId!)
+    .abortSignal(AbortSignal.timeout(CORE_DATABASE_READ_TIMEOUT_MS))
     .maybeSingle();
   if (error) throw error;
   const row = asRecord(data);
@@ -1018,35 +1131,41 @@ export async function revokeEquityOAuthClient(
 export type FinanceOAuthClientApproval = InventoryOAuthClientApproval;
 
 export async function listFinanceOAuthClients(): Promise<FinanceOAuthClientApproval[]> {
-  const database = requireClient();
-  const { data, error } = await database.rpc('list_finance_oauth_clients');
-  if (error) throw error;
-  return Array.isArray(data) ? data.map(mapInventoryOAuthClient) : [];
+  return observeOperationalOperation('finance', 'read', async () => {
+    const database = requireClient();
+    const { data, error } = await database.rpc('list_finance_oauth_clients');
+    if (error) throw error;
+    return Array.isArray(data) ? data.map(mapInventoryOAuthClient) : [];
+  }, { freshness: 'fresh' });
 }
 
 export async function approveFinanceOAuthClient(
   clientId: string,
   clientName: string,
 ): Promise<FinanceOAuthClientApproval> {
-  const database = requireClient();
-  const { data, error } = await database.rpc('approve_finance_oauth_client', {
-    p_client_id: clientId,
-    p_client_name: clientName,
-  });
-  if (error) throw error;
-  return mapInventoryOAuthClient(data);
+  return observeOperationalOperation('finance', 'write', async () => {
+    const database = requireClient();
+    const { data, error } = await database.rpc('approve_finance_oauth_client', {
+      p_client_id: clientId,
+      p_client_name: clientName,
+    });
+    if (error) throw error;
+    return mapInventoryOAuthClient(data);
+  }, { freshness: 'fresh' });
 }
 
 export async function revokeFinanceOAuthClient(
   clientId: string,
 ): Promise<FinanceOAuthClientApproval> {
-  const database = requireClient();
-  const { data, error } = await database.rpc('revoke_finance_oauth_client', {
-    p_client_id: clientId,
-  });
-  if (error) throw error;
-  // Revoke Finance alone so separate Inventory, Employment and Equity approvals remain intact.
-  return mapInventoryOAuthClient(data);
+  return observeOperationalOperation('finance', 'write', async () => {
+    const database = requireClient();
+    const { data, error } = await database.rpc('revoke_finance_oauth_client', {
+      p_client_id: clientId,
+    });
+    if (error) throw error;
+    // Revoke Finance alone so separate Inventory, Employment and Equity approvals remain intact.
+    return mapInventoryOAuthClient(data);
+  }, { freshness: 'fresh' });
 }
 
 export type SupabaseRealtimeState =
@@ -1078,6 +1197,23 @@ function publishRealtimeSnapshot(patch: Partial<SupabaseRealtimeSnapshot>): void
     ...patch,
     lastStatusAt: patch.state ? new Date().toISOString() : realtimeSnapshot.lastStatusAt,
   };
+  if (patch.state) {
+    const failed = patch.state === 'error' || patch.state === 'timed_out' || patch.state === 'closed' || patch.state === 'unavailable';
+    recordOperationalEvent({
+      domain: 'realtime',
+      operation: 'subscription',
+      outcome: patch.state === 'subscribing' ? 'pending' : failed ? 'failed' : 'ok',
+      reason: patch.state === 'subscribing'
+        ? 'subscribing'
+        : patch.state === 'subscribed'
+          ? 'subscribed'
+          : patch.state === 'closed'
+            ? 'closed'
+            : patch.state === 'timed_out'
+              ? 'timeout'
+              : patch.state === 'error' ? 'channel_error' : 'unknown',
+    });
+  }
   const snapshot = { ...realtimeSnapshot };
   realtimeSubscribers.forEach(listener => listener(snapshot));
 }

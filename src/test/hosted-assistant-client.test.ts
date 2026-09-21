@@ -2,6 +2,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { chatWithHostedAssistantDetailed, runHostedAssistantTurn, resetHostedAssistantDiagnostics, testHostedAssistantConnection } from '../services/hostedAssistantApi';
 import { fetchHostedAssistantProjectBilling } from '../services/hostedAssistantBillingApi';
+import {
+  configureOperationalTransport,
+  getOperationalSnapshot,
+  setOperationalAccount,
+} from '../services/operationalTelemetry';
 
 const { invoke, getSession } = vi.hoisted(() => ({ invoke: vi.fn(), getSession: vi.fn() }));
 vi.mock('../config', () => ({ SUPABASE_ANON_KEY: 'public-key', HOSTED_ASSISTANT_FUNCTION: 'assistant-openai', HOSTED_ASSISTANT_BILLING_FUNCTION: 'assistant-openai-billing' }));
@@ -14,11 +19,18 @@ const session = (token = 'current-user-token') => ({ access_token: token, user: 
 const messages = [{ role: 'user' as const, content: 'Hello' }];
 
 beforeEach(() => {
+  configureOperationalTransport(null);
+  setOperationalAccount(null);
+  setOperationalAccount('synthetic-user');
   resetHostedAssistantDiagnostics();
   getSession.mockReset().mockImplementation(async () => ({ data: { session: session() }, error: null }));
   invoke.mockReset().mockResolvedValue({ data: { ok: true, model: 'gpt-5.4', text: 'Hello', turn: { type: 'text', text: 'Hello' } }, error: null });
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  setOperationalAccount(null);
+  configureOperationalTransport(null);
+  vi.restoreAllMocks();
+});
 
 it('uses the current session for health, chat, voice planner turns and billing', async () => {
   expect(await testHostedAssistantConnection()).toMatchObject({ status: 'available', accessMode: 'user_session' });
@@ -54,4 +66,17 @@ it('reports paused health and preserves an actionable paused error without openi
   for (let attempt = 0; attempt < 6; attempt++) await expect(runHostedAssistantTurn(messages)).rejects.toThrow('Hosted AI is paused');
   invoke.mockResolvedValue({ data: { ok: true, mode: 'enabled', model: 'gpt-5.4' }, error: null });
   expect(await testHostedAssistantConnection()).toMatchObject({ status: 'available' });
+});
+
+it('preserves hosted HTTP status for normalized operational diagnostics', async () => {
+  invoke.mockResolvedValue({ data: null, error: new FunctionsHttpError(new Response('{}', { status: 503 })) });
+
+  await expect(runHostedAssistantTurn(messages)).rejects.toThrow('HTTP 503');
+
+  expect(getOperationalSnapshot().events.at(-1)).toMatchObject({
+    domain: 'assistant',
+    operation: 'request',
+    outcome: 'failed',
+    reason: 'server_error',
+  });
 });

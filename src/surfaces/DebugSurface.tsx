@@ -4,8 +4,9 @@ import GoogleCalendarDebug from '../components/debug/GoogleCalendarDebug';
 import PersistenceDebug from '../components/debug/PersistenceDebug';
 import WakeWordDebug from '../components/debug/WakeWordDebug';
 import PrayerDebug from '../components/debug/PrayerDebug';
+import OperationalDebug from '../components/debug/OperationalDebug';
 
-type DebugTab = 'wakeword' | 'ai' | 'audio' | 'network' | 'prayer' | 'persistence';
+type DebugTab = 'wakeword' | 'ai' | 'audio' | 'network' | 'prayer' | 'persistence' | 'operations';
 
 export default function DebugSurface() {
   const [tab, setTab] = useState<DebugTab>('wakeword');
@@ -17,6 +18,7 @@ export default function DebugSurface() {
     { id: 'network', label: 'Network / APIs', icon: '🌐' },
     { id: 'prayer', label: 'Prayer', icon: '🕌' },
     { id: 'persistence', label: 'Persistence', icon: '💾' },
+    { id: 'operations', label: 'Operations', icon: '📊' },
   ];
 
   return (
@@ -52,6 +54,7 @@ export default function DebugSurface() {
         )}
         {tab === 'prayer' && <PrayerDebug />}
         {tab === 'persistence' && <PersistenceDebug />}
+        {tab === 'operations' && <OperationalDebug />}
       </div>
     </>
   );
