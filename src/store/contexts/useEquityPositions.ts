@@ -12,9 +12,9 @@ export function useEquityPositions() {
   // Persistence returns a fresh snapshot object; expose a stable primitive to React.
   const sessionKey = useSyncExternalStore(subscribeSyncSession, () => {
     const current = getSyncSessionSnapshot();
-    return JSON.stringify([current.userId, current.status, current.readOnly]);
+    return JSON.stringify([current.userId, current.status, current.readOnly, current.hasUsableSnapshot]);
   });
-  const [userId, status, readOnly] = JSON.parse(sessionKey) as [string | null, string, boolean];
+  const [userId, status, readOnly, hasUsableSnapshot] = JSON.parse(sessionKey) as [string | null, string, boolean, boolean];
   const session = { userId, status, readOnly };
   const [state, setState] = useState<{ owner: string | null; positions: EquityPosition[] }>({ owner: null, positions: [] });
   const [loaded, setLoaded] = useState(false);
@@ -23,30 +23,56 @@ export function useEquityPositions() {
   const inFlight = useRef(false);
   const generation = useRef(0);
   const retry = useRef<{ key: string; requestId: string; positionId: string } | null>(null);
+  const readable = Boolean(userId) && (status === 'ready' || (status === 'reconnecting' && hasUsableSnapshot));
   const writable = session.status === 'ready' && !session.readOnly && Boolean(session.userId);
 
   const refresh = useCallback(async (throwOnError = false) => {
-    const userId = getSyncSessionSnapshot().userId;
+    const requestedSession = getSyncSessionSnapshot();
+    const userId = requestedSession.userId;
     const request = ++generation.current;
+    const canRead = requestedSession.status === 'ready'
+      || (requestedSession.status === 'reconnecting' && requestedSession.hasUsableSnapshot);
+    if (!userId || !canRead || (throwOnError && requestedSession.status !== 'ready')) {
+      if (throwOnError) throw new Error('Reconnect your signed-in account to confirm the equity change.');
+      return;
+    }
+    const isCurrent = () => {
+      const current = getSyncSessionSnapshot();
+      return current.userId === userId && current.status === requestedSession.status
+        && current.hasUsableSnapshot === requestedSession.hasUsableSnapshot && request === generation.current;
+    };
     try {
       const positions = await loadStore<EquityPosition[]>('equityPositions');
-      if (getSyncSessionSnapshot().userId !== userId || request !== generation.current) return;
+      if (!isCurrent()) {
+        if (throwOnError) throw new Error('The account changed while confirming the equity change. Retry after reconnecting.');
+        return;
+      }
       setState({ owner: userId, positions: positions ?? [] });
       setError(null);
     } catch (failure) {
-      if (getSyncSessionSnapshot().userId !== userId || request !== generation.current) return;
-      setState({ owner: userId, positions: [] });
+      if (!isCurrent()) {
+        if (throwOnError) throw failure;
+        return;
+      }
+      setState(previous => ({ owner: userId, positions: previous.owner === userId ? previous.positions : [] }));
       setError(errorMessage(failure));
       if (throwOnError) throw failure;
     } finally {
-      if (getSyncSessionSnapshot().userId === userId && request === generation.current) setLoaded(true);
+      if (isCurrent()) setLoaded(true);
     }
   }, []);
 
+  useEffect(() => { retry.current = null; }, [userId]);
+
   useEffect(() => {
+    setState(previous => readable && previous.owner === session.userId ? previous : { owner: null, positions: [] });
+    if (!readable) {
+      setError(null);
+      retry.current = null;
+    }
     void refresh();
     return () => { generation.current += 1; };
-  }, [session.userId, session.status, refresh]);
+  }, [session.userId, session.status, readable, refresh]);
   useRemoteStoreRefresh(['equityPositions'], refresh);
 
   const mutate = async (operation: () => Promise<unknown>) => {
@@ -67,6 +93,7 @@ export function useEquityPositions() {
       await refreshDatabasePersistence();
       requireAccount();
       await refresh(true);
+      requireAccount();
     } catch (failure) {
       if (getSyncSessionSnapshot().userId === userId) setError(errorMessage(failure));
       throw failure;
@@ -88,6 +115,8 @@ export function useEquityPositions() {
     await mutate(() => deleteEquityPosition(retry.current!.requestId, position.id, position.updatedAt));
     retry.current = null;
   };
-  return { positions: state.owner === session.userId && session.userId && session.status === 'ready' ? state.positions : [],
-    loaded, error, saving, writable, save, remove, refresh };
+  return { positions: state.owner === session.userId && readable ? state.positions : [],
+    loaded: !readable || (state.owner === userId && loaded),
+    error: readable && state.owner === userId ? error : null, saving, writable,
+    stale: readable && (status !== 'ready' || Boolean(error)), save, remove, refresh };
 }

@@ -20,7 +20,6 @@ import { useAssistantContext } from './contexts/AssistantContext';
 import { useCalendar } from './contexts/CalendarContext';
 import { useChatContext } from './contexts/ChatContext';
 import { useClockContext } from './contexts/ClockContext';
-import { useEmploymentContext } from './contexts/EmploymentContext';
 import { useFinanceContext } from './contexts/FinanceContext';
 import { useGamificationContext } from './contexts/GamificationContext';
 import { useHealthContext } from './contexts/HealthContext';
@@ -84,6 +83,8 @@ function getInitialShellSurface(): Surface {
 }
 
 function AppReadinessGate({ children }: { children: ReactNode }) {
+  // Employment may await its first server-confirmed seed. Its surface owns that
+  // loading state so an unavailable domain cannot prevent unrelated navigation.
   const calendarLoaded = useCalendar().loaded;
   const tripsLoaded = useTripContext().loaded;
   const projectsLoaded = useProjectContext().loaded;
@@ -91,7 +92,6 @@ function AppReadinessGate({ children }: { children: ReactNode }) {
   const chatLoaded = useChatContext().loaded;
   const knowledgeLoaded = useKnowledgeContext().loaded;
   const inventoryLoaded = useInventoryContext().loaded;
-  const employmentLoaded = useEmploymentContext().loaded;
   const healthLoaded = useHealthContext().loaded;
   const financeLoaded = useFinanceContext().loaded;
   const gamificationLoaded = useGamificationContext().loaded;
@@ -107,7 +107,6 @@ function AppReadinessGate({ children }: { children: ReactNode }) {
     && chatLoaded
     && knowledgeLoaded
     && inventoryLoaded
-    && employmentLoaded
     && healthLoaded
     && financeLoaded
     && gamificationLoaded

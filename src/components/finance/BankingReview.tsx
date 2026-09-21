@@ -159,13 +159,14 @@ function Loans({ review }: { review: FinanceReview }) {
 }
 
 export function BankingReview({ view = 'overview' }: { view?: View }) {
-  const { review, loaded, error, refresh } = useFinanceReview();
+  const { review, loaded, error, stale, refresh } = useFinanceReview();
   return <section className="banking-review" aria-label="Banking review">
     <h2>{view === 'loans' ? 'Loans' : view === 'spending' ? 'Spending review' : 'Your monthly budget'}</h2>
     {error && <div className="banking-error" role="alert">{error} <button className="btn btn-sm" onClick={() => void refresh()}>Retry loading</button></div>}
     {!loaded ? <p role="status">Loading banking review…</p> : !review && !error ? <p>No banking review recorded yet.</p> : null}
+    {stale && review && <p role="status">Showing your last confirmed banking review. Updates are temporarily unavailable.</p>}
     {review && <>
-      <p className="banking-muted">Snapshot as of {date(review.asOf)} · Read-only bank connection · No automatic refresh</p>
+      <p className="banking-muted">Snapshot as of {date(review.asOf)} · Imported bank snapshot · No automatic refresh</p>
       <p className="banking-coverage">{date(review.coverage.from)} – {date(review.coverage.to)} · {review.coverage.transactionCount.toLocaleString('en-GB')} transactions · {review.coverage.accountCount} accounts<br />{review.coverage.note}</p>
       {view === 'overview' ? <Budget review={review} /> : view === 'spending' ? <Spending review={review} /> : <Loans review={review} />}
     </>}

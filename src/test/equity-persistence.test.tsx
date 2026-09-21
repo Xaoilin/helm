@@ -12,7 +12,7 @@ vi.mock('../services/equityAccount', () => mocks);
 const position = { id: 'example-equity', company: 'Example Co', updatedAt: '2026-01-01T00:00:00Z' } as EquityPosition;
 const draft = { company: 'Example Co' } as EquityPositionDraft;
 let listener: () => void;
-const ready = { userId: 'a', status: 'ready', readOnly: false };
+const ready = { userId: 'a', status: 'ready', readOnly: false, hasUsableSnapshot: true };
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -25,6 +25,15 @@ beforeEach(() => {
 });
 
 describe('private equity persistence', () => {
+  it('reads retained holdings when first mounted during recovery without allowing writes', async () => {
+    mocks.getSyncSessionSnapshot.mockReturnValue({ ...ready, status: 'reconnecting', readOnly: true });
+    const { result } = renderHook(useEquityPositions);
+    await waitFor(() => expect(result.current.positions).toEqual([position]));
+    expect(result.current.loaded).toBe(true);
+    expect(result.current.stale).toBe(true);
+    expect(result.current.writable).toBe(false);
+    await expect(result.current.refresh(true)).rejects.toThrow('Reconnect');
+  });
   it('removes prior holdings on an account change and rejects delayed prior reads', async () => {
     const { result } = renderHook(useEquityPositions);
     await waitFor(() => expect(result.current.positions).toHaveLength(1));
@@ -44,6 +53,23 @@ describe('private equity persistence', () => {
     });
     await expect(result.current.save(draft)).rejects.toThrow('signed-in account');
     expect(mocks.createEquityPosition).not.toHaveBeenCalled();
+  });
+  it('retains confirmed holdings through failed reads and recovery while blocking writes', async () => {
+    const { result } = renderHook(useEquityPositions);
+    await waitFor(() => expect(result.current.positions).toEqual([position]));
+    mocks.loadStore.mockRejectedValueOnce(new Error('Read temporarily unavailable'));
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.positions).toEqual([position]);
+    expect(result.current.error).toBe('Read temporarily unavailable');
+    await act(async () => {
+      mocks.getSyncSessionSnapshot.mockReturnValue({ ...ready, status: 'reconnecting', readOnly: true }); listener();
+    });
+    expect(result.current.positions).toEqual([position]);
+    expect(result.current.writable).toBe(false);
+    await act(async () => {
+      mocks.getSyncSessionSnapshot.mockReturnValue({ ...ready, status: 'blocked', hasUsableSnapshot: false }); listener();
+    });
+    expect(result.current.positions).toEqual([]);
   });
   it('preserves request and position identity after an unknown write result and waits for reload', async () => {
     const { result } = renderHook(useEquityPositions);

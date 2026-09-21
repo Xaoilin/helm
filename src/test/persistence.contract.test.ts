@@ -21,6 +21,8 @@ vi.mock('../store/supabase', () => supabaseMocks);
 import {
   bootstrapDatabasePersistence,
   getSyncSessionSnapshot,
+  refreshDatabasePersistence,
+  subscribeSyncSession,
   loadStore,
   resetDatabasePersistence,
   saveStoreCommitted,
@@ -88,6 +90,79 @@ describe('signed-in persistence boundaries', () => {
     vi.setSystemTime(new Date(SNAPSHOT_TIME));
     configureSupabase();
     resetDatabasePersistence();
+  });
+
+  it('keeps HTTPS reads and confirmed writes usable without Realtime, then reconciles missed changes', async () => {
+    configureSupabase({ authenticated: true });
+    supabaseMocks.getSupabaseRealtimeSnapshot.mockReturnValue({ state: 'error', lastError: 'WebSocket unavailable' });
+    const boot = bootstrapDatabasePersistence();
+    await vi.advanceTimersByTimeAsync(10_000);
+    await boot;
+    expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false });
+    expect(await loadStore('settings')).toMatchObject({ theme: 'dark' });
+    supabaseMocks.applyHelmMutations.mockResolvedValue({
+      requestId: 'confirmed', accountVersion: 8,
+      changes: [{ ...settingsRecord({ theme: 'light', telemetry: false }), accountVersion: 8, revision: 2 }],
+    });
+    await saveStoreCommitted('settings', { theme: 'light', telemetry: false });
+    expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(1);
+    expect(await loadStore('settings')).toMatchObject({ theme: 'light' });
+
+    const missed = accountSnapshot(USER_ID, { theme: 'dark', telemetry: true });
+    missed.state.accountVersion = 9;
+    supabaseMocks.fetchHelmAccountSnapshot.mockResolvedValue(missed);
+    supabaseMocks.probeHelmAccountVersion.mockResolvedValue(9);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(await loadStore('settings')).toMatchObject({ telemetry: true });
+    expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false, accountVersion: 9 });
+  });
+
+  it('retains same-account data on transient HTTPS failure but clears it on invalid authorization', async () => {
+    configureSupabase({ authenticated: true });
+    await bootstrapDatabasePersistence();
+    supabaseMocks.fetchHelmAccountSnapshot.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await refreshDatabasePersistence();
+    expect(getSyncSessionSnapshot()).toMatchObject({ status: 'reconnecting', readOnly: true, hasUsableSnapshot: true });
+    expect(await loadStore('settings')).toMatchObject({ theme: 'dark' });
+    await refreshDatabasePersistence();
+    expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false });
+    supabaseMocks.fetchHelmAccountSnapshot.mockRejectedValueOnce({ code: 'PGRST301', message: 'JWT expired' });
+    await refreshDatabasePersistence();
+    expect(getSyncSessionSnapshot()).toMatchObject({ status: 'blocked', hasUsableSnapshot: false, readOnly: true });
+    expect(await loadStore('settings')).toBeNull();
+  });
+
+  it('ignores late failures from an old account and fails closed on incompatible schemas', async () => {
+    configureSupabase({ authenticated: true });
+    let rejectFirst!: (error: Error) => void;
+    supabaseMocks.fetchHelmAccountSnapshot.mockImplementationOnce(() => new Promise((_, reject) => { rejectFirst = reject; }));
+    const firstBoot = bootstrapDatabasePersistence();
+    supabaseMocks.getCurrentUserId.mockReturnValue(SECOND_USER_ID);
+    supabaseMocks.fetchHelmAccountSnapshot.mockResolvedValue(accountSnapshot(SECOND_USER_ID));
+    await bootstrapDatabasePersistence();
+    rejectFirst(new Error('Old account fetch failed'));
+    await firstBoot;
+    expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', userId: SECOND_USER_ID });
+    const incompatible = accountSnapshot(SECOND_USER_ID);
+    incompatible.state.schemaVersion = 999;
+    supabaseMocks.fetchHelmAccountSnapshot.mockResolvedValue(incompatible);
+    await refreshDatabasePersistence();
+    expect(getSyncSessionSnapshot()).toMatchObject({ status: 'blocked', reason: 'incompatible_schema', hasUsableSnapshot: false });
+    expect(await loadStore('settings')).toBeNull();
+  });
+
+  it('keeps a denied domain write local when authenticated account reads still succeed', async () => {
+    configureSupabase({ authenticated: true });
+    await bootstrapDatabasePersistence();
+    const statuses: string[] = [];
+    const unsubscribe = subscribeSyncSession(snapshot => statuses.push(snapshot.status));
+    supabaseMocks.applyHelmMutations.mockRejectedValueOnce({ code: '42501', status: 403, message: 'Domain permission denied' });
+    await expect(saveStoreCommitted('settings', { theme: 'light', telemetry: false })).rejects.toThrow();
+    unsubscribe();
+    expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(1);
+    expect(statuses.every(status => status === 'ready')).toBe(true);
+    expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', userId: USER_ID, readOnly: false });
+    expect(await loadStore('settings')).toMatchObject({ theme: 'dark' });
   });
 
   it('proves boot and shared reads fail closed without an authenticated account', async () => {

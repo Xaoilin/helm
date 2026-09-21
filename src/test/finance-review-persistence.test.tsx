@@ -7,7 +7,7 @@ import { FINANCE_REVIEW } from './finance-review-fixture';
 const mocks = vi.hoisted(() => ({ getSyncSessionSnapshot: vi.fn(), loadStore: vi.fn(), subscribeSyncSession: vi.fn(), subscribeStoreKey: vi.fn() }));
 vi.mock('../store/persistence', () => mocks);
 let listener: () => void;
-const ready = { userId: 'account-a', status: 'ready', readOnly: false };
+const ready = { userId: 'account-a', status: 'ready', readOnly: false, hasUsableSnapshot: true };
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -18,6 +18,13 @@ beforeEach(() => {
 });
 
 describe('private banking review persistence', () => {
+  it('reads the retained snapshot when first mounted during recovery', async () => {
+    mocks.getSyncSessionSnapshot.mockReturnValue({ ...ready, status: 'reconnecting', readOnly: true });
+    const { result } = renderHook(useFinanceReview);
+    await waitFor(() => expect(result.current.review).toBe(FINANCE_REVIEW));
+    expect(result.current.loaded).toBe(true);
+    expect(result.current.stale).toBe(true);
+  });
   it('hides prior account data immediately and rejects delayed prior reads', async () => {
     const { result } = renderHook(useFinanceReview);
     await waitFor(() => expect(result.current.review?.id).toBe('current'));
@@ -48,12 +55,24 @@ describe('private banking review persistence', () => {
     await act(async () => { rejectRead(new Error('Private previous-account error')); await refresh; });
     expect(result.current.error).toBe('Reconnect your signed-in account to view the banking review.');
   });
-  it('surfaces a failed refresh and clears stale data, then recovers on retry', async () => {
+  it('keeps the same-account review during database recovery but clears invalid sessions', async () => {
+    const { result } = renderHook(useFinanceReview);
+    await waitFor(() => expect(result.current.review).toBe(FINANCE_REVIEW));
+    await act(async () => {
+      mocks.getSyncSessionSnapshot.mockReturnValue({ ...ready, status: 'reconnecting', readOnly: true }); listener();
+    });
+    expect(result.current.review).toBe(FINANCE_REVIEW);
+    await act(async () => {
+      mocks.getSyncSessionSnapshot.mockReturnValue({ ...ready, status: 'blocked', hasUsableSnapshot: false }); listener();
+    });
+    expect(result.current.review).toBeNull();
+  });
+  it('retains the last confirmed review on a failed refresh, then recovers on retry', async () => {
     const { result } = renderHook(useFinanceReview);
     await waitFor(() => expect(result.current.review).toBe(FINANCE_REVIEW));
     mocks.loadStore.mockRejectedValueOnce(new Error('Database read failed'));
     await act(async () => { await result.current.refresh(); });
-    expect(result.current.review).toBeNull();
+    expect(result.current.review).toBe(FINANCE_REVIEW);
     expect(result.current.error).toBe('Database read failed');
     await act(async () => { await result.current.refresh(); });
     expect(result.current.review).toBe(FINANCE_REVIEW);

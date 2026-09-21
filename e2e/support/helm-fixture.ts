@@ -57,7 +57,12 @@ export interface HelmScenarioOptions {
   userId?: string;
 }
 
-export type ScenarioLoader = (options?: HelmScenarioOptions) => Promise<void>;
+export interface HelmScenarioControl {
+  setRealtimeAvailable: (available: boolean) => void;
+  applyRemoteMutations: (operations: HelmMutation[]) => void;
+}
+
+export type ScenarioLoader = (options?: HelmScenarioOptions) => Promise<HelmScenarioControl>;
 
 export const test = base.extend<{ scenario: ScenarioLoader }>({
   scenario: async ({ page }, provide) => {
@@ -96,7 +101,7 @@ export function waitForMutation(page: Page, collection: string): Promise<Respons
   });
 }
 
-async function installScenario(page: Page, options: HelmScenarioOptions = {}): Promise<void> {
+async function installScenario(page: Page, options: HelmScenarioOptions = {}): Promise<HelmScenarioControl> {
   if (options.now) {
     await page.clock.install({ time: new Date(options.now) });
   }
@@ -136,7 +141,7 @@ async function installScenario(page: Page, options: HelmScenarioOptions = {}): P
   });
 
   await installPrayerRoute(page, options.prayer);
-  await installDatabaseRoutes(page, {
+  const control = await installDatabaseRoutes(page, {
     email: options.email || TEST_EMAIL,
     analytics: options.analytics,
     lifeHero: options.lifeHero,
@@ -145,6 +150,7 @@ async function installScenario(page: Page, options: HelmScenarioOptions = {}): P
     userId,
   });
   await installAssistantRoute(page);
+  return control;
 }
 
 function buildStores(options: HelmScenarioOptions): Record<string, unknown> {
@@ -185,7 +191,7 @@ interface MockRow {
   deletedAt: string | null;
 }
 
-async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions): Promise<void> {
+async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions): Promise<HelmScenarioControl> {
   const rows = new Map<string, MockRow>();
   let accountVersion = 1;
 
@@ -207,7 +213,7 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
     }
   }
 
-  await mockRealtime(page);
+  const setRealtimeAvailable = await mockRealtime(page);
 
   await page.route('**/rest/v1/rpc/sync_life_hero_evidence*', async route => {
     if (options.lifeHero?.failureStatus) {
@@ -467,6 +473,15 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
   await page.route('**/rest/v1/rpc/list_helm_secrets*', route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ accountVersion, secrets: [] }),
   }));
+
+  return {
+    setRealtimeAvailable,
+    applyRemoteMutations(operations) {
+      // Simulate a separate client's confirmed write without delivering Broadcast.
+      accountVersion += 1;
+      applyMutations(rows, options.userId, accountVersion, operations);
+    },
+  };
 }
 
 function defaultLifeHeroSnapshot(): Record<string, unknown> {
@@ -566,8 +581,12 @@ async function installPrayerRoute(page: Page, options?: PrayerRouteOptions): Pro
   });
 }
 
-async function mockRealtime(page: Page): Promise<void> {
+async function mockRealtime(page: Page): Promise<(available: boolean) => void> {
+  let available = true;
+  const interruptChannels = new Set<() => void>();
   await page.routeWebSocket('wss://helm.test.supabase.co/realtime/v1/websocket**', socket => {
+    let interrupt = () => {};
+    socket.onClose(() => interruptChannels.delete(interrupt));
     socket.onMessage(message => {
       let frame: unknown;
       try {
@@ -578,19 +597,33 @@ async function mockRealtime(page: Page): Promise<void> {
 
       if (Array.isArray(frame)) {
         const [joinRef, ref, topic, event] = frame;
-        if (event === 'phx_join' || event === 'heartbeat' || event === 'access_token') {
-          socket.send(JSON.stringify([joinRef, ref, topic, 'phx_reply', { status: 'ok', response: {} }]));
+        if (event === 'phx_join') {
+          interruptChannels.delete(interrupt);
+          interrupt = () => socket.send(JSON.stringify([joinRef, null, topic, 'phx_error', {}]));
+          interruptChannels.add(interrupt);
+        }
+        if (event === 'phx_join' || event === 'phx_leave' || event === 'heartbeat' || event === 'access_token') {
+          socket.send(JSON.stringify([joinRef, ref, topic, 'phx_reply', {
+            status: event === 'phx_join' && !available ? 'error' : 'ok', response: {},
+          }]));
         }
         return;
       }
 
       if (frame && typeof frame === 'object') {
         const envelope = frame as Record<string, unknown>;
-        if (envelope.event === 'phx_join' || envelope.event === 'heartbeat' || envelope.event === 'access_token') {
+        if (envelope.event === 'phx_join') {
+          interruptChannels.delete(interrupt);
+          interrupt = () => socket.send(JSON.stringify({
+            topic: envelope.topic, event: 'phx_error', payload: {}, ref: null, join_ref: envelope.join_ref,
+          }));
+          interruptChannels.add(interrupt);
+        }
+        if (envelope.event === 'phx_join' || envelope.event === 'phx_leave' || envelope.event === 'heartbeat' || envelope.event === 'access_token') {
           socket.send(JSON.stringify({
             topic: envelope.topic,
             event: 'phx_reply',
-            payload: { status: 'ok', response: {} },
+            payload: { status: envelope.event === 'phx_join' && !available ? 'error' : 'ok', response: {} },
             ref: envelope.ref,
             join_ref: envelope.join_ref,
           }));
@@ -598,6 +631,10 @@ async function mockRealtime(page: Page): Promise<void> {
       }
     });
   });
+  return nextAvailable => {
+    available = nextAvailable;
+    if (!available) interruptChannels.forEach(interrupt => interrupt());
+  };
 }
 
 function applyMutations(
