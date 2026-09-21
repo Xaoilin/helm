@@ -1,0 +1,61 @@
+.finance-tabs { min-width: 0; overflow-x: auto; }
+.finance-tabs .tab { flex: 0 0 auto; white-space: nowrap; }
+.banking-review { min-width: 0; margin: 18px 0 24px; color: #e1e4ee; }
+.banking-review h2 { margin: 0 0 6px; font-size: 19px; }
+.banking-review h3 { margin: 0 0 12px; font-size: 15px; }
+.banking-review h4 { margin: 0 0 9px; font-size: 15px; }
+.banking-review p, .banking-review li { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.banking-muted, .banking-coverage { color: #b7bfd3; margin: 5px 0; }
+.banking-coverage { font-size: 12px !important; margin-bottom: 18px; }
+.banking-budget { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.banking-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 16px; }
+.banking-card { min-width: 0; border: 1px solid #30364b; border-radius: 12px; padding: 18px; background: #151a2a; }
+.banking-available { background: #1b203b; border-color: #424c7b; }
+.banking-amount { font-size: 30px; font-weight: 700; margin: 10px 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.banking-amount span { font-size: 13px; font-weight: 400; color: #bec6da; }
+.banking-amount-small { font-size: 24px; }
+.banking-negative { color: #ffafaf; }
+.banking-figures { margin: 0; font-size: 13px; }
+.banking-figures > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 8px 0; }
+.banking-figures dt { color: #c3cadd; overflow-wrap: anywhere; }
+.banking-figures dd { margin: 0; flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.banking-figures small { display: block; color: #abb6cf; font-size: 12px; line-height: 1.5; margin-top: 5px; }
+.banking-total { border-top: 1px solid #39415d; margin-top: 8px; }
+.banking-total dd, .banking-total dt { color: #e1e4ee; font-weight: 600; }
+.banking-essential-list { margin-top: 10px; }
+.banking-scenario { margin-top: 18px; border-top: 1px solid #424c7b; padding-top: 12px; }
+.banking-scenario strong { display: block; margin-top: 7px; font-size: 14px; line-height: 1.5; }
+.banking-scenario p { margin: 5px 0 0; }
+.banking-badge { display: inline-block; padding: 3px 8px; background: #2c344f; border-radius: 5px; font-size: 11px; color: #d4dcf7; }
+.banking-review details { margin-top: 14px; }
+.banking-review summary { cursor: pointer; font-size: 13px; color: #c9d2ff; font-weight: 600; }
+.banking-review summary:focus-visible, .banking-table-wrap:focus-visible { outline: 2px solid #a8b6ff; outline-offset: 4px; }
+.banking-notes { border-top: 1px solid #30364b; padding-top: 14px; }
+.banking-notes li + li { margin-top: 8px; }
+.banking-block { margin-top: 26px; }
+.banking-cap { color: #c6d1ff; }
+.banking-table-wrap { overflow-x: auto; margin: 14px 0; }
+.banking-review table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.banking-review th, .banking-review td { text-align: left; padding: 12px; border-bottom: 1px solid #30364b; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.banking-review th { color: #c8d0e3; }
+.banking-review th small { display: block; font-size: 11px; font-weight: 400; padding-top: 5px; }
+.banking-review td details { margin-top: 8px; }
+.banking-categories { min-width: 220px; max-width: 300px; margin: 10px 0 0; }
+.banking-categories > div { display: flex; justify-content: space-between; gap: 18px; padding: 6px 0; }
+.banking-categories dt { white-space: normal; }
+.banking-categories dd { margin: 0; }
+.banking-loan-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.banking-loan-heading h4 { overflow-wrap: anywhere; }
+.banking-loan-heading .banking-badge { flex-shrink: 0; }
+.banking-sources { padding: 0; list-style: none; margin: 16px 0 0; display: grid; gap: 10px; }
+.banking-sources li { display: grid; gap: 3px; }
+.banking-sources a { color: #b6c4ff; }
+.banking-sources span { color: #abb6cf; font-size: 12px; }
+.banking-prose { white-space: pre-line; }
+.banking-error { padding: 12px; color: #ffb6b6; background: #35212b; border-radius: 8px; margin: 12px 0; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .banking-budget { grid-template-columns: 1fr; }
+  .banking-card { padding: 14px; }
+  .banking-figures > div { gap: 10px; flex-wrap: wrap; }
+  .banking-figures dd { margin-left: auto; }
+}

@@ -1434,3 +1434,33 @@ export type Surface =
   | 'activity'
   | 'settings'
   | 'debug';
+
+/** Dated banking analysis. Amounts are integer pence, never live bank credentials. */
+export interface FinanceReview {
+  id: string;
+  asOf: string;
+  currency: 'GBP';
+  coverage: { from: string; to: string; completeThrough: string; transactionCount: number; accountCount: number; note: string };
+  accounts: { id: string; label: string; ownership: 'personal' | 'household'; balancePence: number; asOf: string }[];
+  months: { month: string; incomePence: number; outflowPence: number; netPence: number; salaryPence: number; categories: { label: string; amountPence: number }[] }[];
+  budget: {
+    incomePence: number; incomeBasis: string;
+    essentials: { label: string; amountPence: number; note: string }[];
+    workCostsPence: number; workCostsNote: string;
+    scenarios: { label: string; status: 'planned' | 'confirmed'; monthlyAdjustmentPence: number; note: string }[];
+  };
+  opportunities: { label: string; monthlyPence: number; note: string; suggestedCapPence?: number }[];
+  loans: {
+    id: string; lender: string; purpose: string; status: 'active' | 'repaid' | 'closed';
+    monthlyPaymentPence?: number; userSharePence?: number; balancePence?: number; balanceAsOf?: string;
+    balanceKind: 'statement' | 'settlement' | 'estimate' | 'unknown';
+    settlementPence?: number; settlementAsOf?: string; nextPaymentDate?: string;
+    paymentsRemaining?: number; originalPrincipalPence?: number;
+    startDate?: string; endDate?: string; aprPercent?: number; rateNote: string; notes: string; sourceIds: string[];
+  }[];
+  notes: string[];
+  sources: { id: string; label: string; url: string; asOf: string }[];
+  createdAt: string;
+  updatedAt: string;
+}
+export type FinanceReviewDraft = Omit<FinanceReview, 'id' | 'createdAt' | 'updatedAt'>;

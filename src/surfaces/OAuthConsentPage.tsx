@@ -3,10 +3,12 @@ import { useAuthSession } from '../store/AuthSessionContext';
 import {
   approveEmploymentOAuthClient,
   approveEquityOAuthClient,
+  approveFinanceOAuthClient,
   approveInventoryOAuthClient,
   getClient,
   revokeEmploymentOAuthClient,
   revokeEquityOAuthClient,
+  revokeFinanceOAuthClient,
   revokeInventoryOAuthClientAllowlist,
   signInWithGoogle,
 } from '../store/supabase';
@@ -24,7 +26,7 @@ export default function OAuthConsentPage() {
   const [details, setDetails] = useState<AuthorizationDetails | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<'approve' | 'deny' | null>(null);
-  const [access, setAccess] = useState<'Inventory' | 'Employment' | 'Equity' | null>(null);
+  const [access, setAccess] = useState<'Inventory' | 'Employment' | 'Equity' | 'Finance' | null>(null);
   const authorizationId = new URLSearchParams(window.location.search).get('authorization_id') || '';
 
   useEffect(() => {
@@ -60,11 +62,13 @@ export default function OAuthConsentPage() {
       Inventory: approveInventoryOAuthClient,
       Employment: approveEmploymentOAuthClient,
       Equity: approveEquityOAuthClient,
+      Finance: approveFinanceOAuthClient,
     }[access];
     const revokeClient = {
       Inventory: revokeInventoryOAuthClientAllowlist,
       Employment: revokeEmploymentOAuthClient,
       Equity: revokeEquityOAuthClient,
+      Finance: revokeFinanceOAuthClient,
     }[access];
     try {
       await approveClient(details.client.id, details.client.name || `Sabah One ${access}`);
@@ -133,17 +137,22 @@ export default function OAuthConsentPage() {
       <p className="oauth-consent-account">Signed in as {details.user.email || auth.authUser.email}</p>
       <fieldset className="oauth-consent-domains" disabled={busy !== null}>
         <legend>Approve one area</legend>
-        {(['Inventory', 'Employment', 'Equity'] as const).map(domain => (
+        {(['Inventory', 'Employment', 'Equity', 'Finance'] as const).map(domain => (
           <label key={domain}>
             <input type="radio" name="client-access" value={domain} checked={access === domain} onChange={() => setAccess(domain)} />
-            <span><strong>{domain}</strong><small>{{ Inventory: 'Owned items, materials and open needs', Employment: 'Jobs, applications, updates and next actions', Equity: 'Stocks, options, plans and next actions' }[domain]}</small></span>
+            <span><strong>{domain}</strong><small>{{ Inventory: 'Owned items, materials and open needs', Employment: 'Jobs, applications, updates and next actions', Equity: 'Stocks, options, plans and next actions', Finance: 'Banking reviews, spending and loans' }[domain]}</small></span>
           </label>
         ))}
       </fieldset>
       {access && (
       <div className="oauth-consent-boundary">
         <h2>With {access} access, this client can</h2>
-        {access === 'Equity' ? (
+        {access === 'Finance' ? (
+          <ul>
+            <li>Read your dated banking review, monthly spending, budget assumptions and loan records.</li>
+            <li>Maintain that review and its sources when you ask or through an automation you authorize.</li>
+          </ul>
+        ) : access === 'Equity' ? (
           <ul>
             <li>Read your stock holdings, option grants, plans, scenarios and supporting sources.</li>
             <li>Maintain equity records and next actions when you ask or through an automation you authorize.</li>
@@ -162,9 +171,9 @@ export default function OAuthConsentPage() {
         )}
         <h2>This approval does not allow</h2>
         <ul>
-          <li>Access to {access === 'Equity' ? 'Inventory, Employment, banking and other finance data' : `${access === 'Employment' ? 'Inventory' : 'Employment'}, Equity and other finance data`}, chats, calendars, secrets, settings, or account snapshots.</li>
+          <li>Access to {access === 'Finance' ? 'Inventory, Employment, Equity and other finance records' : access === 'Equity' ? 'Inventory, Employment, banking and other finance data' : `${access === 'Employment' ? 'Inventory' : 'Employment'}, Equity and other finance data`}, chats, calendars, secrets, settings, or account snapshots.</li>
           <li>Access to another Sabah One account.</li>
-          <li>{access === 'Equity' ? 'Trading shares, exercising options, moving money or contacting your employer.' : access === 'Employment' ? 'Reading your email, sending messages or submitting job applications.' : 'Automatic purchases.'}</li>
+          <li>{access === 'Finance' ? 'Accessing banks directly, moving money, taking loans or making repayments.' : access === 'Equity' ? 'Trading shares, exercising options, moving money or contacting your employer.' : access === 'Employment' ? 'Reading your email, sending messages or submitting job applications.' : 'Automatic purchases.'}</li>
         </ul>
       </div>
       )}

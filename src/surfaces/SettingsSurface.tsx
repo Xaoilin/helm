@@ -7,12 +7,15 @@ import {
   getCurrentUserId,
   listEmploymentOAuthClients,
   listEquityOAuthClients,
+  listFinanceOAuthClients,
   listInventoryOAuthClients,
   revokeEmploymentOAuthClient,
   revokeEquityOAuthClient,
+  revokeFinanceOAuthClient,
   revokeInventoryOAuthClient,
   type EmploymentOAuthClientApproval,
   type EquityOAuthClientApproval,
+  type FinanceOAuthClientApproval,
   type InventoryOAuthClientApproval,
 } from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
@@ -59,6 +62,9 @@ export default function SettingsSurface() {
   const [equityClients, setEquityClients] = useState<EquityOAuthClientApproval[]>([]);
   const [equityClientStatus, setEquityClientStatus] = useState('');
   const [revokingEquityClientId, setRevokingEquityClientId] = useState<string | null>(null);
+  const [financeClients, setFinanceClients] = useState<FinanceOAuthClientApproval[]>([]);
+  const [financeClientStatus, setFinanceClientStatus] = useState('');
+  const [revokingFinanceClientId, setRevokingFinanceClientId] = useState<string | null>(null);
   const [appTimeZoneInput, setAppTimeZoneInput] = useState(settings.appTimezone || '');
   const [appTimeZoneStatus, setAppTimeZoneStatus] = useState<{
     tone: 'saving' | 'saved' | 'error';
@@ -122,6 +128,9 @@ export default function SettingsSurface() {
     void listEquityOAuthClients()
       .then(clients => { if (!cancelled) setEquityClients(clients); })
       .catch(error => { if (!cancelled) setEquityClientStatus(error instanceof Error ? error.message : String(error)); });
+    void listFinanceOAuthClients()
+      .then(clients => { if (!cancelled) setFinanceClients(clients); })
+      .catch(error => { if (!cancelled) setFinanceClientStatus(error instanceof Error ? error.message : String(error)); });
     return () => { cancelled = true; };
   }, [authSyncKey]);
 
@@ -166,6 +175,19 @@ export default function SettingsSurface() {
       setEquityClientStatus(error instanceof Error ? error.message : String(error));
     } finally {
       setRevokingEquityClientId(null);
+    }
+  };
+  const revokeFinanceClient = async (client: FinanceOAuthClientApproval) => {
+    setRevokingFinanceClientId(client.clientId);
+    setFinanceClientStatus(`Revoking ${client.clientName}…`);
+    try {
+      const revoked = await revokeFinanceOAuthClient(client.clientId);
+      setFinanceClients(current => current.map(entry => entry.clientId === client.clientId ? revoked : entry));
+      setFinanceClientStatus(`${client.clientName} can no longer access Finance. Other approvals are unchanged.`);
+    } catch (error) {
+      setFinanceClientStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRevokingFinanceClientId(null);
     }
   };
 
@@ -279,6 +301,28 @@ export default function SettingsSurface() {
             ))}
           </div>
           {equityClientStatus && <div className="inventory-client-status" role="status">{equityClientStatus}</div>}
+        </section>
+
+        <h3 id="finance-client-heading" style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Codex Finance Access</h3>
+        <section className="card inventory-client-settings" aria-labelledby="finance-client-heading">
+          <div className="inventory-client-settings-intro">
+            <div>
+              <strong>Approved Finance clients</strong>
+              <p>These clients can read and maintain your dated banking review, monthly spending, budget assumptions and loans. Finance access is approved separately from Inventory, Employment and Equity.</p>
+            </div>
+            <span className="tag tag-primary">OAuth 2.1 beta</span>
+          </div>
+          <div className="inventory-client-boundary">This connection cannot access banks directly, move money, take loans or make repayments.</div>
+          <div className="inventory-client-list">
+            {financeClients.length === 0 && <div className="inventory-empty-inline">No Codex Finance client has been approved.</div>}
+            {financeClients.map(client => (
+              <div key={client.clientId} className="inventory-client-row">
+                <div><strong>{client.clientName}</strong><span>{client.clientId}</span><small>{client.revokedAt ? `Revoked ${new Date(client.revokedAt).toLocaleString()}` : `Approved ${new Date(client.approvedAt).toLocaleString()}`}</small></div>
+                <button className="btn btn-danger btn-sm" type="button" aria-label={`Revoke Finance access for ${client.clientName}`} disabled={Boolean(client.revokedAt) || revokingFinanceClientId !== null} onClick={() => void revokeFinanceClient(client)}>{client.revokedAt ? 'Revoked' : revokingFinanceClientId === client.clientId ? 'Revoking…' : 'Revoke'}</button>
+              </div>
+            ))}
+          </div>
+          {financeClientStatus && <div className="inventory-client-status" role="status">{financeClientStatus}</div>}
         </section>
 
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>App time zone</h3>
