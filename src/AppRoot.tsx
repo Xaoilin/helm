@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import App from './App';
+import { getSupabaseRealtimeSnapshot, subscribeSupabaseRealtimeSnapshot } from './store/supabase';
 import { AppProviders } from './store/AppProviders';
 import { AuthSessionProvider, useAuthSession } from './store/AuthSessionContext';
 import { SyncAvailabilityProvider } from './store/SyncAvailabilityContext';
@@ -89,7 +90,7 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
     return (
       <OnlineGate
         eyebrow={offline ? 'Connection required' : 'Database source of truth'}
-        title={switchingAccount ? 'Loading Sabah One' : fatalSyncReason ? 'Sabah One needs an update' : 'Connecting to Sabah One'}
+        title={syncSession.reason === 'signed_out' ? 'Sign in again to continue' : switchingAccount ? 'Loading Sabah One' : fatalSyncReason ? 'Sabah One needs an update' : 'Connecting to Sabah One'}
         detail={blockingSyncDetail(syncSession, switchingAccount, offline)}
         secondaryActionLabel="Sign out"
         onSecondaryAction={() => auth.signOut()}
@@ -101,8 +102,10 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
   return (
     <SyncAvailabilityProvider readOnly={syncSession.readOnly} reason={syncSession.reason}>
       <AppProviders key={auth.authUser.id}>
-        <SyncStatusBanner syncSession={syncSession} />
-        {children ?? <App />}
+        <div className="account-workspace">
+          <SyncStatusBanner syncSession={syncSession} />
+          {children ?? <App />}
+        </div>
       </AppProviders>
     </SyncAvailabilityProvider>
   );
@@ -113,6 +116,7 @@ function blockingSyncDetail(
   switchingAccount: boolean,
   offline: boolean,
 ): string {
+  if (syncSession.reason === 'signed_out') return syncSession.error || 'Your account authorization is no longer valid. Sign out and sign in again.';
   if (switchingAccount) return 'Clearing the previous account and securely loading this account...';
   if (syncSession.reason === 'incompatible_schema') {
     return 'This build cannot safely open the current Sabah One database schema.';
@@ -125,10 +129,14 @@ function blockingSyncDetail(
 }
 
 function SyncStatusBanner({ syncSession }: { syncSession: SyncSessionSnapshot }) {
-  if (!syncSession.readOnly || !syncSession.hasUsableSnapshot) return null;
+  const realtimeState = useSyncExternalStore(subscribeSupabaseRealtimeSnapshot, () => getSupabaseRealtimeSnapshot().state);
+  const liveUpdatesDelayed = realtimeState !== 'subscribed';
+  if (!syncSession.hasUsableSnapshot || (!syncSession.readOnly && !liveUpdatesDelayed)) return null;
   const offline = syncSession.reason === 'offline';
-  const label = offline ? 'Offline' : 'Read-only';
-  const detail = offline
+  const label = !syncSession.readOnly ? 'Live updates delayed' : offline ? 'Offline' : 'Read-only';
+  const detail = !syncSession.readOnly
+    ? 'Your saved data remains available. Checking for changes automatically.'
+    : offline
     ? 'Showing your last confirmed data. Sabah One will reconnect automatically.'
     : 'Showing your last confirmed data while Sabah One reconnects.';
   return (

@@ -87,13 +87,15 @@ Direct browser review is required for visible user flows and especially for OAut
 
 - Do not swallow errors. Surface a user-actionable message and preserve structured diagnostics.
 - Remote integrations should use the established retry, circuit-breaker, timeout, and logging utilities where appropriate.
+- Realtime channel failures leave healthy database HTTPS operations available. Polling/version reconciliation and channel retry have independent recovery; never treat a dropped WebSocket as invalid authentication.
+- Transient read failures preserve confirmed same-account data and drafts with visible freshness; invalid authorization, account changes and schema incompatibility fail closed. Domain operation errors do not invalidate unrelated capabilities.
 - Degraded states must say what is unavailable and what the user can do in the page; the in-app reminder banner is the fallback for unavailable browser notifications.
 - Diagnostics redact tokens and secrets while retaining request IDs and normalized failure codes where available.
 
 ## Data And Security Invariants
 
 - Keep domain types in `src/types/domain.ts` and the account -> source -> event Calendar hierarchy.
-- Shared records are signed-in, account-owned, online-only, and database-authoritative through Supabase RLS and semantic mutation RPCs.
+- Shared records are signed-in, account-owned and database-authoritative through Supabase RLS and semantic mutation RPCs. Online server confirmation is required for writes; transient network failures may retain only the current account's confirmed in-memory data.
 - Passive Google Calendar sync stays non-interactive; explicit reconnect or consent is user initiated.
 - Hosted Calendar refresh credentials and Vault secret values never enter browser storage, shared payloads, logs, exports, Broadcast, or assistant context.
 - The assistant keeps one shared path for chat and voice, validates grounded entities, confirms risky actions, and claims success only after verified execution.

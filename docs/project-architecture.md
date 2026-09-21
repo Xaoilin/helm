@@ -2,7 +2,7 @@
 
 ## Overview
 
-Sabah One is a hosted web product for a solo operator, with Lina as its in-app assistant. GitHub Pages serves the web bundle and the browser is the only supported product runtime. Shared state is online-only and database-authoritative through Supabase. Generic app time uses one optional account-shared IANA preference with `Automatic` browser fallback; prayer schedules keep their own authoritative zone.
+Sabah One is a hosted web product for a solo operator, with Lina as its in-app assistant. GitHub Pages serves the web bundle and the browser is the only supported product runtime. Shared state is database-authoritative through Supabase; writes require an online server confirmation. Generic app time uses one optional account-shared IANA preference with `Automatic` browser fallback; prayer schedules keep their own authoritative zone.
 
 The current stack is:
 
@@ -61,9 +61,9 @@ The supported browser wake-word consumers are `useWakeWord` and `WakeWordDebug`.
 
 ### Database-authoritative shared state
 
-Authenticated Supabase reads bootstrap the shared provider tree. Signed-out, expired, or offline sessions cannot view or change shared records, and Sabah One keeps no durable offline mutation queue.
+Authenticated Supabase reads bootstrap the shared provider tree. Sign-out, invalid account authorization, account changes and incompatible schemas clear or block private data. Transient network failures retain the same account's last confirmed in-memory snapshot with a read-only freshness notice. There is no persistent account-data browser cache or offline mutation queue.
 
-Shared arrays are account-owned records with explicit positions. Semantic create, patch, increment, delete, restore, and reorder operations go through the transactional mutation RPC. Tombstones prevent stale resurrection, commit order resolves unavoidable same-field concurrency, and private per-account Broadcast messages carry identifiers and versions rather than secret values. Version gaps and reconnects trigger an authoritative refresh.
+Shared arrays are account-owned records with explicit positions. Semantic create, patch, increment, delete, restore, and reorder operations go through the transactional mutation RPC. Tombstones prevent stale resurrection, commit order resolves unavoidable same-field concurrency, and private per-account Broadcast messages carry identifiers and versions rather than secret values. Version gaps and reconnects trigger an authoritative refresh. Realtime is an optional invalidation channel: its failure never blocks healthy HTTPS reads or confirmed writes. Channel retries back off independently from database recovery, capped at 30 seconds; visible online pages probe the account version every 15 seconds and reconcile immediately on foreground/online recovery.
 
 Account changes clear the previous in-memory state before the next account can render. Calendar data keeps the account -> source -> event hierarchy, including intentional multi-account support.
 
@@ -80,7 +80,7 @@ Each stateful boundary has an explicit reset path. Add a new boundary only when 
 
 ### Supabase
 
-`src/store/supabase.ts` provides Supabase Auth, session bootstrap, account-isolated reads, semantic mutation calls, private Broadcast subscriptions, version probes, and account-owned secret operations. `src/AppRoot.tsx` blocks the provider tree until the authenticated database session is ready.
+`src/store/supabase.ts` provides Supabase Auth, session bootstrap, account-isolated reads, semantic mutation calls, private Broadcast subscriptions, version probes, and account-owned secret operations. `src/AppRoot.tsx` requires a usable snapshot for the current authenticated account and keeps its providers mounted during transient failure. Finance, Equity and Employment retain successful reads and drafts while surfacing freshness or operation errors. Employment owns its server-dependent initial seed state; it does not gate unrelated shell navigation. Failed domain writes are surfaced and reconciled without revoking a healthy account session. Existing domain MCP interfaces remain unchanged.
 
 ### Secrets vault
 

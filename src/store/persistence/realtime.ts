@@ -45,6 +45,8 @@ export class PersistenceRealtimeBoundary {
   private healthRegistered = false;
   private recoveryTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
   private recoveryAttempt = 0;
+  private channelTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  private channelAttempt = 0;
 
   constructor(owner: PersistenceRealtimeOwner) {
     this.owner = owner;
@@ -57,6 +59,9 @@ export class PersistenceRealtimeBoundary {
 
   reset(): void {
     this.clearRecoveryTimer();
+    if (this.channelTimer !== null) globalThis.clearTimeout(this.channelTimer);
+    this.channelTimer = null;
+    this.channelAttempt = 0;
     this.readyWaitCancel?.();
     this.readyWaitCancel = null;
     this.broadcastUnsubscribe?.();
@@ -83,10 +88,32 @@ export class PersistenceRealtimeBoundary {
       || (typeof navigator !== 'undefined' && navigator.onLine === false)
     ) return;
     const delay = Math.min(1_000 * (2 ** this.recoveryAttempt), 30_000);
-    this.recoveryAttempt += 1;
+    this.recoveryAttempt = Math.min(this.recoveryAttempt + 1, 5);
     this.recoveryTimer = globalThis.setTimeout(() => {
       this.recoveryTimer = null;
       void this.owner.refresh(request);
+    }, delay);
+  }
+
+  /** Channel recovery never gates authoritative HTTPS reads or writes. */
+  connect(epoch: number, userId: string): void {
+    if (this.channelTimer !== null) return;
+    void this.ensureSubscription(epoch, userId).catch(() => {
+      if (this.owner.getSession().isCurrent(epoch, userId)) this.scheduleChannelRecovery();
+    });
+  }
+
+  private scheduleChannelRecovery(): void {
+    const session = this.owner.getSession();
+    if (this.channelTimer !== null || !session.authenticated || !session.userId
+      || session.reason === 'incompatible_schema' || session.reason === 'client_update_required'
+      || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+    const { epoch, userId } = session;
+    const delay = Math.min(1_000 * (2 ** this.channelAttempt), 30_000);
+    this.channelAttempt = Math.min(this.channelAttempt + 1, 5);
+    this.channelTimer = globalThis.setTimeout(() => {
+      this.channelTimer = null;
+      if (this.owner.getSession().isCurrent(epoch, userId)) this.connect(epoch, userId);
     }, delay);
   }
 
@@ -190,12 +217,13 @@ export class PersistenceRealtimeBoundary {
     document.addEventListener('visibilitychange', () => {
       const session = this.owner.getSession();
       if (document.visibilityState === 'visible' && session.authenticated) {
-        void this.owner.refresh();
+        void this.owner.refresh({ realtime: true });
       }
     });
     window.setInterval(() => {
       const session = this.owner.getSession();
-      if (!session.userId || !session.hasUsableSnapshot || session.readOnly) return;
+      if (!session.authenticated || !session.userId || !session.hasUsableSnapshot
+        || document.visibilityState === 'hidden' || navigator.onLine === false) return;
       void this.owner.refresh();
     }, 15_000);
   }
@@ -206,17 +234,15 @@ export class PersistenceRealtimeBoundary {
     subscribeSupabaseRealtimeSnapshot(snapshot => {
       this.owner.notifyHealth();
       const session = this.owner.getSession();
-      if (
-        session.hasUsableSnapshot
-        && (snapshot.state === 'closed' || snapshot.state === 'error' || snapshot.state === 'timed_out')
-        && session.userId
-      ) {
-        this.owner.publishDegraded(
-          session.userId,
-          'realtime_unavailable',
-          snapshot.lastError || `The private database update channel is ${snapshot.state}.`,
-        );
-        this.scheduleRecovery({ realtime: true });
+      if (!session.userId || !session.isCurrent(this.subscriptionEpoch ?? -1, this.subscriptionUserId ?? '')) return;
+      if (snapshot.state === 'subscribed') {
+        if (this.channelTimer !== null) globalThis.clearTimeout(this.channelTimer);
+        this.channelTimer = null;
+        this.channelAttempt = 0;
+        // Reconcile changes missed during subscription setup or interruption.
+        void this.owner.refresh();
+      } else if (snapshot.state === 'closed' || snapshot.state === 'error' || snapshot.state === 'timed_out') {
+        this.scheduleChannelRecovery();
       }
     });
   }

@@ -128,6 +128,7 @@ function EmploymentEditor({
   const [confirmRemove, setConfirmRemove] = useState(false);
   const companyRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
+  const pendingHistoryId = useRef<string | null>(null);
 
   useEffect(() => {
     companyRef.current?.focus();
@@ -166,7 +167,7 @@ function EmploymentEditor({
     const history = [...(application?.history ?? [])];
     if (draft.historySummary.trim()) {
       history.push({
-        id: uuid(),
+        id: pendingHistoryId.current ??= uuid(),
         kind: draft.historyKind,
         date: draft.historyDate || undefined,
         summary: draft.historySummary,
@@ -367,7 +368,10 @@ export default function EmploymentSurface() {
         <button ref={addButtonRef} type="button" className="btn btn-primary" onClick={event => openEditor('new', event.currentTarget)}>+ Add opportunity</button>
       </header>
 
-      {employment.error && <div className="employment-error employment-page-error" role="alert">Employment data needs attention: {employment.error}</div>}
+      {employment.error && <div className="employment-error employment-page-error" role="alert">
+        Employment data needs attention: {employment.error}{' '}
+        <button className="btn btn-sm" type="button" disabled={employment.saving} onClick={() => void employment.retryLoad()}>Retry loading</button>
+      </div>}
       <span className="sr-only" role="status">{employment.saving ? 'Saving Employment change…' : ''}</span>
       <div className="employment-overview-toolbar">
         <div className="employment-view-options" aria-label="Application view">

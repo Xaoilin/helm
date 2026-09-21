@@ -338,16 +338,15 @@ describe('persistence health and realtime boundaries', () => {
     expect(refresh).toHaveBeenCalledWith({ targetVersion: 9 });
 
     realtimeMocks.healthListener?.({ state: 'error', lastError: 'channel unavailable' });
-    expect(publishDegraded).toHaveBeenCalledWith(
-      currentUserId,
-      'realtime_unavailable',
-      'channel unavailable',
-    );
+    expect(publishDegraded).not.toHaveBeenCalled();
+    realtimeMocks.getSnapshot.mockReturnValue({ state: 'error', lastError: 'channel unavailable' });
+    const subscriptionsBeforeRetry = realtimeMocks.subscribeBroadcast.mock.calls.length;
     refresh.mockClear();
     await vi.advanceTimersByTimeAsync(999);
     expect(refresh).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
-    expect(refresh).toHaveBeenCalledWith({ realtime: true });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(realtimeMocks.subscribeBroadcast).toHaveBeenCalledTimes(subscriptionsBeforeRetry + 1);
 
     currentUserId = 'user-b';
     refresh.mockClear();

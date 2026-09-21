@@ -13,7 +13,7 @@ HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the lin
 ## Product Invariants
 
 - `src/types/domain.ts` owns app data shapes.
-- Shared app data is signed-in, database-authoritative, and online-only; invalid or unavailable sessions fail closed.
+- Shared app data is signed-in and database-authoritative. Writes require server confirmation; transient failures may retain only the same account's confirmed in-memory data. Invalid authorization and account changes fail closed.
 - Calendar data remains account -> source -> event, with intentional multi-account support.
 - Voice and chat share one assistant runtime and one mutation path.
 - Secret values belong in the account-owned Supabase Vault path. Never place plaintext in shared records, browser storage, Broadcast payloads, logs, exports, assistant context, or durable memory.

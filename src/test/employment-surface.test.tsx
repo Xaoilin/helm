@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     loaded: true,
     saving: false,
     error: null as string | null,
+    retryLoad: vi.fn().mockResolvedValue(undefined),
     addApplication: vi.fn().mockResolvedValue('new-id'),
     updateApplication: vi.fn().mockResolvedValue(undefined),
     addHistoryEntry: vi.fn().mockResolvedValue(undefined),
@@ -35,6 +36,7 @@ describe('Employment surface', () => {
     mocks.employment.applications = createRepresentativeEmploymentState().applications;
     mocks.employment.error = null;
     mocks.employment.saving = false;
+    mocks.employment.retryLoad.mockClear();
     mocks.employment.addApplication.mockClear();
     mocks.employment.updateApplication.mockClear();
     mocks.employment.removeApplication.mockClear();
@@ -46,6 +48,14 @@ describe('Employment surface', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('offers an explicit load retry alongside the backend error', () => {
+    mocks.employment.error = 'Employment seed unavailable';
+    render(<EmploymentSurface />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Employment seed unavailable');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
+    expect(mocks.employment.retryLoad).toHaveBeenCalledOnce();
   });
 
   it('groups applications without losing roles and orders them by confirmed activity dates', () => {
@@ -164,6 +174,23 @@ describe('Employment surface', () => {
     fireEvent.keyDown(company, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Add opportunity' })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+
+  it('retains the history identity and editor draft after an uncertain save', async () => {
+    render(<EmploymentSurface />);
+    fireEvent.click(screen.getByRole('button', { name: '+ Add opportunity' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Company' }), { target: { value: 'Example Ltd' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Role' }), { target: { value: 'Platform Engineer' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Next action' }), { target: { value: 'Apply' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Fully remote evidence' }), { target: { value: 'Advert confirms remote work.' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Summary' }), { target: { value: 'Initial contact' } });
+    mocks.employment.addApplication.mockRejectedValueOnce(new Error('Connection lost'));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save opportunity' })); });
+    expect(screen.getByRole('alert')).toHaveTextContent('Connection lost');
+    expect(screen.getByRole('textbox', { name: 'Company' })).toHaveValue('Example Ltd');
+    const originalPayload = mocks.employment.addApplication.mock.calls[0][0];
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save opportunity' })); });
+    expect(mocks.employment.addApplication.mock.calls[1][0]).toEqual(originalPayload);
   });
 
   it('submits a validated opportunity through the Employment domain owner', async () => {

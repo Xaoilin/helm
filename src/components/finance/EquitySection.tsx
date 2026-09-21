@@ -95,6 +95,7 @@ export function EquitySection({ view = 'overview' }: { view?: View }) {
       <button className="btn btn-sm" disabled={!equity.writable || equity.saving} onClick={() => setEditing('new')}>+ Equity holding</button></div>
     {equity.error && <div className="equity-error" role="alert">{equity.error} <button className="btn btn-sm" onClick={() => void equity.refresh()}>Retry loading</button></div>}
     {!equity.loaded ? <p role="status">Loading equity…</p> : equity.positions.length === 0 && !equity.error ? <p>No equity holdings recorded. Add owned shares and option grants with a dated plan.</p> : null}
+    {equity.stale && equity.positions.length > 0 && <p role="status">Showing your last confirmed equity holdings. Updates are temporarily unavailable.</p>}
     {equity.positions.map(position => <article className="equity-position" key={position.id}>
       <div className="equity-heading"><div><h3>{position.company}</h3><span className="equity-secondary">As of {equityDate(position.asOf)}</span></div>
         <button className="btn btn-sm" disabled={!equity.writable || equity.saving} onClick={() => setEditing(position)}>Edit {position.company}</button></div>

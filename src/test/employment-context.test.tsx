@@ -9,7 +9,8 @@ import {
 } from '../store/contexts/EmploymentContext';
 
 type SessionSnapshot = {
-  status: 'blocked' | 'ready';
+  status: 'blocked' | 'ready' | 'reconnecting';
+  hasUsableSnapshot?: boolean;
   readOnly: boolean;
   userId: string | null;
 };
@@ -38,11 +39,11 @@ function EmploymentProbe() {
 
 describe('EmploymentContext', () => {
   const blockedSession: SessionSnapshot = { status: 'blocked', readOnly: false, userId: null };
-  const readySession: SessionSnapshot = { status: 'ready', readOnly: false, userId: 'account-a' };
+  const readySession: SessionSnapshot = { status: 'ready', readOnly: false, userId: 'account-a', hasUsableSnapshot: true };
   let syncListener: ((snapshot: SessionSnapshot) => void) | undefined;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     syncListener = undefined;
     persistenceMocks.getSyncSessionSnapshot.mockReturnValue(blockedSession);
     persistenceMocks.loadStore.mockResolvedValue(null);
@@ -57,10 +58,40 @@ describe('EmploymentContext', () => {
     });
   });
 
+  it('reads the retained Employment snapshot on first mount during recovery without seeding', async () => {
+    const seeded = createDefaultEmploymentTrackerState();
+    persistenceMocks.getSyncSessionSnapshot.mockReturnValue({ ...readySession, status: 'reconnecting', readOnly: true });
+    persistenceMocks.loadStore.mockResolvedValue(seeded);
+    render(<EmploymentProvider><EmploymentProbe /></EmploymentProvider>);
+    await screen.findByText('loaded|3|');
+    expect(context.applications).toEqual(seeded.applications);
+    expect(persistenceMocks.saveStoreCommitted).not.toHaveBeenCalled();
+    await act(async () => {
+      await expect(context.addApplication(seeded.applications[0])).rejects.toThrow('writable signed-in');
+    });
+    expect(databaseMocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed initial seed explicitly while the account stays ready', async () => {
+    const seeded = createDefaultEmploymentTrackerState();
+    persistenceMocks.getSyncSessionSnapshot.mockReturnValue(readySession);
+    persistenceMocks.loadStore.mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValueOnce(seeded);
+    persistenceMocks.saveStoreCommitted.mockRejectedValueOnce(new Error('Employment seed unavailable'));
+    render(<EmploymentProvider><EmploymentProbe /></EmploymentProvider>);
+    await screen.findByText('loaded|0|Employment seed unavailable');
+    expect(persistenceMocks.saveStoreCommitted).toHaveBeenCalledTimes(1);
+    await act(async () => { await context.retryLoad(); });
+    expect(context.applications).toEqual(seeded.applications);
+    expect(context.error).toBeNull();
+    expect(persistenceMocks.saveStoreCommitted).toHaveBeenCalledTimes(2);
+  });
+
   it('exposes plain persistence error messages and retries after readiness', async () => {
     const seededState = createDefaultEmploymentTrackerState();
+    persistenceMocks.getSyncSessionSnapshot.mockReturnValue(readySession);
     persistenceMocks.loadStore
       .mockRejectedValueOnce({ message: 'Employment backend temporarily unavailable.' })
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(seededState);
 
@@ -75,6 +106,11 @@ describe('EmploymentContext', () => {
     ).toBeInTheDocument();
 
     await act(async () => {
+      const reconnecting = { ...readySession, status: 'reconnecting' as const };
+      persistenceMocks.getSyncSessionSnapshot.mockReturnValue(reconnecting);
+      syncListener?.(reconnecting);
+    });
+    await act(async () => {
       persistenceMocks.getSyncSessionSnapshot.mockReturnValue(readySession);
       syncListener?.(readySession);
     });
@@ -86,35 +122,48 @@ describe('EmploymentContext', () => {
     );
   });
 
-  it('retries when readiness arrives while the first write is in flight', async () => {
-    const seededState = createDefaultEmploymentTrackerState();
-    let releaseInitialLoad: ((value: unknown) => void) | undefined;
-    const pendingInitialLoad = new Promise(resolve => {
-      releaseInitialLoad = resolve;
-    });
-    persistenceMocks.loadStore
-      .mockImplementationOnce(() => pendingInitialLoad)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(seededState);
-    persistenceMocks.saveStoreCommitted
-      .mockRejectedValueOnce({ message: 'Employment first write temporarily unavailable.' })
-      .mockResolvedValueOnce(undefined);
-
-    render(
-      <EmploymentProvider>
-        <EmploymentProbe />
-      </EmploymentProvider>,
-    );
+  it('discards a delayed prior-account initialization without seeding the new account', async () => {
+    const seeded = createDefaultEmploymentTrackerState();
+    let releaseInitialLoad!: (value: unknown) => void;
+    persistenceMocks.getSyncSessionSnapshot.mockReturnValue(readySession);
+    persistenceMocks.loadStore.mockReturnValueOnce(new Promise(resolve => { releaseInitialLoad = resolve; }))
+      .mockResolvedValue({ seedVersion: 1, applications: [] });
+    render(<EmploymentProvider><EmploymentProbe /></EmploymentProvider>);
     await waitFor(() => expect(releaseInitialLoad).toBeTypeOf('function'));
-
     await act(async () => {
-      persistenceMocks.getSyncSessionSnapshot.mockReturnValue(readySession);
-      syncListener?.(readySession);
-      releaseInitialLoad?.(null);
+      const next = { ...readySession, userId: 'account-b' };
+      persistenceMocks.getSyncSessionSnapshot.mockReturnValue(next);
+      syncListener?.(next);
     });
+    await act(async () => { releaseInitialLoad(seeded); });
+    expect(context.applications).toEqual([]);
+    expect(persistenceMocks.saveStoreCommitted).not.toHaveBeenCalled();
+  });
 
-    expect(await screen.findByText('loaded|3|')).toBeInTheDocument();
-    expect(persistenceMocks.saveStoreCommitted).toHaveBeenCalledTimes(2);
+  it('retains confirmed applications after transient refresh failures and clears on invalid authentication', async () => {
+    const seeded = createDefaultEmploymentTrackerState();
+    let refresh!: () => void;
+    persistenceMocks.subscribeStoreKey.mockImplementation((_key, listener) => { refresh = listener; return () => {}; });
+    persistenceMocks.getSyncSessionSnapshot.mockReturnValue(readySession);
+    persistenceMocks.loadStore.mockResolvedValue(seeded);
+    render(<EmploymentProvider><EmploymentProbe /></EmploymentProvider>);
+    await screen.findByText('loaded|3|');
+    persistenceMocks.loadStore.mockRejectedValueOnce(new Error('Employment unavailable'));
+    await act(async () => { refresh(); });
+    expect(context.applications).toEqual(seeded.applications);
+    expect(context.error).toBe('Employment unavailable');
+    await act(async () => {
+      const next = { ...readySession, status: 'reconnecting' as const, readOnly: true };
+      persistenceMocks.getSyncSessionSnapshot.mockReturnValue(next);
+      syncListener?.(next);
+    });
+    expect(context.applications).toEqual(seeded.applications);
+    await act(async () => {
+      const next = { ...readySession, status: 'blocked' as const, hasUsableSnapshot: false };
+      persistenceMocks.getSyncSessionSnapshot.mockReturnValue(next);
+      syncListener?.(next);
+    });
+    expect(context.applications).toEqual([]);
   });
 
   it('updates only the intended job fields and retains a concurrently agent-added job on database readback', async () => {
@@ -196,6 +245,26 @@ describe('EmploymentContext', () => {
     expect(persistenceMocks.refreshDatabasePersistence).not.toHaveBeenCalled();
   });
 
+  it('reuses create and history request identities after uncertain acknowledgements', async () => {
+    const seeded = createDefaultEmploymentTrackerState();
+    persistenceMocks.getSyncSessionSnapshot.mockReturnValue(readySession);
+    persistenceMocks.loadStore.mockResolvedValue(seeded);
+    render(<EmploymentProvider><EmploymentProbe /></EmploymentProvider>);
+    await screen.findByText('loaded|3|');
+    databaseMocks.rpc.mockRejectedValueOnce(new Error('Connection lost'));
+    const draft = seeded.applications[0];
+    await act(async () => { await expect(context.addApplication(draft)).rejects.toThrow('Connection lost'); });
+    const createArgs = databaseMocks.rpc.mock.calls[0];
+    await act(async () => { await context.addApplication(draft); });
+    expect(databaseMocks.rpc.mock.calls[1]).toEqual(createArgs);
+    const entry = { date: '2026-09-21', kind: 'note', summary: 'Follow up', details: '' } as const;
+    persistenceMocks.refreshDatabasePersistence.mockRejectedValueOnce(new Error('Readback unavailable'));
+    await act(async () => { await expect(context.addHistoryEntry(draft.id, entry)).rejects.toThrow('Readback unavailable'); });
+    const historyArgs = databaseMocks.rpc.mock.calls[2];
+    await act(async () => { await context.addHistoryEntry(draft.id, entry); });
+    expect(databaseMocks.rpc.mock.calls[3]).toEqual(historyArgs);
+  });
+
   it('does not publish a completed mutation after the signed-in account changes', async () => {
     const seeded = createDefaultEmploymentTrackerState();
     persistenceMocks.getSyncSessionSnapshot.mockReturnValue(readySession);
@@ -213,7 +282,7 @@ describe('EmploymentContext', () => {
     });
 
     expect(databaseMocks.rpc).toHaveBeenCalledOnce();
-    expect(context.applications).toEqual(seeded.applications);
+    expect(context.applications).toEqual([]);
     expect(context.error).toBeNull();
   });
 });

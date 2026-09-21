@@ -70,14 +70,12 @@ const writeQueue = new PersistenceWriteQueue({
       completedAt,
     );
   },
-  onFailure: async (error, keys, userId) => {
-    const message = error instanceof Error ? error.message : String(error);
+  onFailure: async (error, keys) => {
     healthPublisher.recordRemoteWriteFailure(error);
-    publishDegraded(
-      userId,
-      typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'database_unavailable',
-      `Database write failed: ${message}`,
-    );
+    if (isAuthorizationFailure(error)) {
+      resetDatabasePersistence('Your account authorization is no longer valid. Sign in again.', 'signed_out');
+      return;
+    }
     publishStoreChanges(keys, 'RECONNECT');
     if (typeof navigator === 'undefined' || navigator.onLine !== false) {
       await refreshDatabasePersistence();
@@ -190,11 +188,12 @@ function publishDegraded(
 ): void {
   const usable = hasUsableSnapshotFor(userId);
   const fatal = reason === 'incompatible_schema' || reason === 'client_update_required';
+  if (fatal) recordCache.reset();
   publishSyncSession({
     status: usable && !fatal ? 'reconnecting' : 'blocked',
     userId,
     accountVersion: runtime.accountVersion,
-    hasUsableSnapshot: usable,
+    hasUsableSnapshot: usable && !fatal,
     readOnly: true,
     reason,
     error,
@@ -407,8 +406,20 @@ function reasonForDatabaseError(error: unknown): Exclude<SyncSessionReason, 'sig
   return 'database_unavailable';
 }
 
+function isAuthorizationFailure(error: unknown): boolean {
+  const failure = error as { status?: number; code?: string } | null;
+  return failure?.status === 401
+    || ['PGRST301', 'PGRST302', 'PGRST303'].includes(failure?.code ?? '');
+}
+
 function handleDatabaseFailure(error: unknown, userId: string): void {
   if (error instanceof StalePersistenceSessionError) return;
+  const failure = error as { status?: number; code?: string } | null;
+  // This boundary is an account-wide read. A denied domain write is handled separately.
+  if (isAuthorizationFailure(error) || failure?.status === 403 || failure?.code === '42501') {
+    resetDatabasePersistence('Your account authorization is no longer valid. Sign in again.', 'signed_out');
+    return;
+  }
   const message = error instanceof Error ? error.message : String(error);
   healthPublisher.recordRemoteReadFailure(error);
   const reason = reasonForDatabaseError(error);
@@ -464,7 +475,7 @@ export async function bootstrapDatabasePersistence(): Promise<void> {
       error: null,
     });
     publishStoreChanges(await migrateLegacyLocalCopies(epoch, userId));
-    await realtimeBoundary.ensureSubscription(epoch, userId);
+    realtimeBoundary.connect(epoch, userId);
     const latestVersion = await probeHelmAccountVersion();
     assertCurrentPersistenceSession(epoch, userId);
     publishSyncSession({ lastProbeAt: new Date().toISOString() });
@@ -475,7 +486,7 @@ export async function bootstrapDatabasePersistence(): Promise<void> {
     publishReady(userId);
     publishStoreChanges(changedCollections);
   })().catch(error => {
-    handleDatabaseFailure(error, userId);
+    if (isCurrentPersistenceSession(epoch, userId)) handleDatabaseFailure(error, userId);
   }).finally(() => {
     if (runtime.bootstrapPromise === operation) runtime.bootstrapPromise = null;
   });
@@ -571,7 +582,7 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
         }
       }
 
-      await realtimeBoundary.ensureSubscription(epoch, userId);
+      realtimeBoundary.connect(epoch, userId);
       const latestVersion = await probeHelmAccountVersion();
       assertCurrentPersistenceSession(epoch, userId);
       publishSyncSession({ lastProbeAt: new Date().toISOString() });
@@ -586,7 +597,7 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
       runtime.refreshActiveTargetVersion = 0;
     }
   })().catch(error => {
-    handleDatabaseFailure(error, userId);
+    if (isCurrentPersistenceSession(epoch, userId)) handleDatabaseFailure(error, userId);
   }).finally(() => {
     if (runtime.refreshPromise === operation) {
       runtime.refreshPromise = null;
@@ -669,10 +680,9 @@ export async function loadStore<T>(key: string): Promise<T | null> {
     healthPublisher.recordRemoteRead(key);
     return value;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     healthPublisher.recordRemoteReadFailure(error);
-    publishDegraded(userId, 'database_unavailable', message);
-    return null;
+    // A collection decoding failure is local to that consumer, not a lost session.
+    throw error;
   }
 }
 
@@ -791,15 +801,13 @@ export function saveStoreRecordFieldsCommitted<T>(
       writeQueue.completeDirectCommit(completedAt);
       publishStoreChanges(keys);
     } catch (error) {
-      if (error instanceof StalePersistenceSessionError) throw error;
-      const message = error instanceof Error ? error.message : String(error);
+      if (!isCurrentPersistenceSession(epoch, userId)) throw new StalePersistenceSessionError();
+      if (isAuthorizationFailure(error)) {
+        resetDatabasePersistence('Your account authorization is no longer valid. Sign in again.', 'signed_out');
+        throw error;
+      }
       healthPublisher.recordRemoteWriteFailure(error);
       writeQueue.failDirectCommit(keys, error);
-      publishDegraded(
-        userId,
-        typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'database_unavailable',
-        `Database write failed: ${message}`,
-      );
       publishStoreChanges(keys, 'RECONNECT');
       if (typeof navigator === 'undefined' || navigator.onLine !== false) {
         await refreshDatabasePersistence();
