@@ -57,7 +57,8 @@ An unavailable Finance MCP is an explicit import blocker, not a saved review.
 ## Acceptance
 
 Synthetic tests cover report arithmetic, missing loan values, account changes,
-authorization, idempotency, revision conflicts and responsive rendering. These
-tests do not establish that a user's data was imported. Protected CI, Sol-owned
-deployment, Finance OAuth consent, semantic save and exact authenticated readback
-are separate required evidence before claiming the personal review is live.
+authorization, idempotency, revision conflicts and responsive rendering. At
+v0.2.161, protected CI and Sol-owned deployment passed, separate Finance OAuth
+consent completed, and the personal review was semantically saved, read back
+exactly and preserved through a browser reload. No personal values are stored in
+the repository or its acceptance fixtures.
