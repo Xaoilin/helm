@@ -126,6 +126,8 @@ export function EmploymentProvider({ children }: { children: ReactNode }) {
       if (!isCurrent()) return;
       if (!stored && allowSeed) {
         requireWritableActor(owner);
+        setError(null);
+        setLoaded(false);
         await saveStoreCommitted('employment', createDefaultEmploymentTrackerState());
         if (!isCurrent()) return;
         stored = await loadStore<EmploymentTrackerState>('employment');
