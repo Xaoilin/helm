@@ -21,6 +21,7 @@ try {
     'supabase/tests/sabah_one_inventory_oauth.sql',
     'supabase/tests/sabah_one_employment_oauth.sql',
     'supabase/tests/sabah_one_equity_oauth.sql',
+    'supabase/tests/sabah_one_finance_oauth.sql',
     'supabase/tests/helm_legacy_migration.sql',
     'supabase/tests/life_hero_progression.sql',
     'supabase/tests/life_hero_evidence_sync.sql',

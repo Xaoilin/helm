@@ -1015,6 +1015,40 @@ export async function revokeEquityOAuthClient(
   return mapInventoryOAuthClient(data);
 }
 
+export type FinanceOAuthClientApproval = InventoryOAuthClientApproval;
+
+export async function listFinanceOAuthClients(): Promise<FinanceOAuthClientApproval[]> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('list_finance_oauth_clients');
+  if (error) throw error;
+  return Array.isArray(data) ? data.map(mapInventoryOAuthClient) : [];
+}
+
+export async function approveFinanceOAuthClient(
+  clientId: string,
+  clientName: string,
+): Promise<FinanceOAuthClientApproval> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('approve_finance_oauth_client', {
+    p_client_id: clientId,
+    p_client_name: clientName,
+  });
+  if (error) throw error;
+  return mapInventoryOAuthClient(data);
+}
+
+export async function revokeFinanceOAuthClient(
+  clientId: string,
+): Promise<FinanceOAuthClientApproval> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('revoke_finance_oauth_client', {
+    p_client_id: clientId,
+  });
+  if (error) throw error;
+  // Revoke Finance alone so separate Inventory, Employment and Equity approvals remain intact.
+  return mapInventoryOAuthClient(data);
+}
+
 export type SupabaseRealtimeState =
   | 'unavailable'
   | 'subscribing'

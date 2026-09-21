@@ -9,8 +9,9 @@ import {
 } from '../services/financeHelpers';
 
 import { EquitySection } from '../components/finance/EquitySection';
+import { BankingReview } from '../components/finance/BankingReview';
 
-type Tab = 'overview' | 'transactions' | 'accounts' | 'budgets' | 'stocks' | 'options';
+type Tab = 'overview' | 'spending' | 'loans' | 'transactions' | 'accounts' | 'budgets' | 'stocks' | 'options';
 
 export default function FinanceSurface() {
   const finance = useFinanceContext();
@@ -168,8 +169,10 @@ export default function FinanceSurface() {
         <button className="btn btn-primary" onClick={openAddAcc}>+ Account</button>
       </div>
       <div className="surface-body">
-        <div className="tabs">
+        <div className="tabs finance-tabs">
           <button className={`tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
+          <button className={`tab ${tab === 'spending' ? 'active' : ''}`} onClick={() => setTab('spending')}>Spending</button>
+          <button className={`tab ${tab === 'loans' ? 'active' : ''}`} onClick={() => setTab('loans')}>Loans</button>
           <button className={`tab ${tab === 'transactions' ? 'active' : ''}`} onClick={() => setTab('transactions')}>Transactions{finance.transactions.length > 0 && <span style={{ marginLeft: 4, fontSize: 10, color: '#6b6f85' }}>{finance.transactions.length}</span>}</button>
           <button className={`tab ${tab === 'accounts' ? 'active' : ''}`} onClick={() => setTab('accounts')}>Accounts{finance.financeAccounts.length > 0 && <span style={{ marginLeft: 4, fontSize: 10, color: '#6b6f85' }}>{finance.financeAccounts.length}</span>}</button>
           <button className={`tab ${tab === 'budgets' ? 'active' : ''}`} onClick={() => setTab('budgets')}>Budgets & Goals</button>
@@ -179,10 +182,13 @@ export default function FinanceSurface() {
 
         {tab === 'stocks' && <EquitySection view="stocks" />}
         {tab === 'options' && <EquitySection view="options" />}
+        {tab === 'spending' && <BankingReview view="spending" />}
+        {tab === 'loans' && <BankingReview view="loans" />}
 
         {/* ══ Overview ══ */}
         {tab === 'overview' && (
           <>
+            <BankingReview />
             <EquitySection />
             {finance.financeAccounts.length === 0 ? (
               <div className="empty-state" role="status">

@@ -111,6 +111,30 @@ const [migrationRows, verificationRows] = await Promise.all([
           'revoke_equity_oauth_client'
         ])
       ),
+      'financeTablesPrivate', (
+        select count(*) = 2 and bool_and(
+          c.relrowsecurity
+          and not has_table_privilege('authenticated', c.oid, 'select,insert,update,delete')
+          and not has_table_privilege('anon', c.oid, 'select,insert,update,delete')
+        )
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r'
+          and c.relname = any(array['helm_finance_oauth_clients', 'helm_finance_mutation_receipts'])
+      ),
+      'financeRpcsRestricted', (
+        select count(*) = 5 and bool_and(
+          p.prosecdef
+          and has_function_privilege('authenticated', p.oid, 'execute')
+          and not has_function_privilege('anon', p.oid, 'execute')
+          and array_to_string(p.proconfig, ',') like '%search_path=""%'
+        )
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = any(array[
+          'finance_get_review', 'finance_save_review',
+          'approve_finance_oauth_client', 'list_finance_oauth_clients',
+          'revoke_finance_oauth_client'
+        ])
+      ),
       'authenticatedRecordsWrite',
         has_table_privilege('authenticated', 'public.helm_records', 'insert')
         or has_table_privilege('authenticated', 'public.helm_records', 'update')
@@ -556,6 +580,8 @@ const expected = {
   employmentRpcsRestricted: true,
   equityTablesPrivate: true,
   equityRpcsRestricted: true,
+  financeTablesPrivate: true,
+  financeRpcsRestricted: true,
   authenticatedRecordsWrite: false,
   anonymousRecordsRead: false,
   anonymousRecordsWrite: false,
