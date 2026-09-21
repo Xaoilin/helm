@@ -8,7 +8,9 @@ import {
   ACCOUNT_TYPES, ACCOUNT_COLORS,
 } from '../services/financeHelpers';
 
-type Tab = 'overview' | 'transactions' | 'accounts' | 'budgets';
+import { EquitySection } from '../components/finance/EquitySection';
+
+type Tab = 'overview' | 'transactions' | 'accounts' | 'budgets' | 'stocks' | 'options';
 
 export default function FinanceSurface() {
   const finance = useFinanceContext();
@@ -171,11 +173,17 @@ export default function FinanceSurface() {
           <button className={`tab ${tab === 'transactions' ? 'active' : ''}`} onClick={() => setTab('transactions')}>Transactions{finance.transactions.length > 0 && <span style={{ marginLeft: 4, fontSize: 10, color: '#6b6f85' }}>{finance.transactions.length}</span>}</button>
           <button className={`tab ${tab === 'accounts' ? 'active' : ''}`} onClick={() => setTab('accounts')}>Accounts{finance.financeAccounts.length > 0 && <span style={{ marginLeft: 4, fontSize: 10, color: '#6b6f85' }}>{finance.financeAccounts.length}</span>}</button>
           <button className={`tab ${tab === 'budgets' ? 'active' : ''}`} onClick={() => setTab('budgets')}>Budgets & Goals</button>
+          <button className={`tab ${tab === 'stocks' ? 'active' : ''}`} onClick={() => setTab('stocks')}>Stocks</button>
+          <button className={`tab ${tab === 'options' ? 'active' : ''}`} onClick={() => setTab('options')}>Options</button>
         </div>
+
+        {tab === 'stocks' && <EquitySection view="stocks" />}
+        {tab === 'options' && <EquitySection view="options" />}
 
         {/* ══ Overview ══ */}
         {tab === 'overview' && (
           <>
+            <EquitySection />
             {finance.financeAccounts.length === 0 ? (
               <div className="empty-state" role="status">
                 <div className="empty-icon" style={{ fontSize: 36 }}>{'\u{1F4B7}'}</div>

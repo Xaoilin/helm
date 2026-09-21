@@ -1,0 +1,36 @@
+.equity-section { margin: 18px 0 24px; min-width: 0; }
+.equity-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.equity-heading h2, .equity-heading h3 { margin: 0 0 4px; }
+.equity-heading h2 { font-size: 19px; }
+.equity-heading h3 { font-size: 16px; }
+.equity-heading .btn { flex-shrink: 0; }
+.equity-position { padding: 18px; background: #121522; border: 1px solid #292e43; border-radius: 14px; margin-bottom: 18px; }
+.equity-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 18px; }
+.equity-card { min-width: 0; padding: 16px; background: #191d2e; border-radius: 10px; }
+.equity-card h3 { color: #bec7ff; font-size: 14px; margin: 0 0 8px; }
+.equity-number { font-size: 28px; font-weight: 700; line-height: 1.25; }
+.equity-number span { font-size: 13px; font-weight: 400; color: #bcc2d3; }
+.equity-secondary { font-size: 13px; color: #bcc2d3; margin: 4px 0; }
+.equity-plan { margin-top: 17px; }
+.equity-label { color: #a8b3ff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.equity-plan p { line-height: 1.6; margin: 5px 0 9px; font-size: 14px; }
+.equity-plan .equity-secondary { font-size: 13px; }
+.equity-plan strong { color: #e2e6f1; }
+.equity-review { color: #c4ceff; font-size: 12px !important; }
+.equity-details details, .equity-overview-details { border-top: 1px solid #30354b; padding: 13px 0 0; margin-top: 13px; }
+.equity-section summary { cursor: pointer; font-size: 13px; font-weight: 600; color: #d1d7ec; }
+.equity-section summary:focus-visible { outline: 2px solid #a7b0ff; outline-offset: 5px; }
+.equity-details p { color: #bfc6d8; font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.equity-prose { white-space: pre-line; }
+.equity-table-wrap { overflow-x: auto; margin: 14px 0; }
+.equity-section table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.equity-section th, .equity-section td { padding: 10px; text-align: left; border-bottom: 1px solid #30354b; white-space: nowrap; }
+.equity-section th { color: #cbd2e7; }
+.equity-section small { display: block; margin-top: 5px; font-weight: normal; color: #aeb7cf; }
+.equity-actions { list-style: none; padding: 0; display: grid; gap: 13px; font-size: 13px; }
+.equity-actions li { display: grid; gap: 4px; overflow-wrap: anywhere; }
+.equity-actions span { color: #bfc6d8; line-height: 1.5; }
+.equity-actions a { color: #aebcff; }
+.equity-remove { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; font-size: 12px; }
+.equity-error { padding: 12px; color: #ffb6b6; background: #35212b; border-radius: 8px; margin: 12px 0; }
+@media (max-width: 600px) { .equity-position { padding: 12px; } .equity-heading { flex-wrap: wrap; gap: 10px; } .equity-card { padding: 14px; } }

@@ -41,7 +41,8 @@ An internal Lina capability may share the same domain service, but it does not r
 | Inventory | Grounded read/write capabilities | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. |
 | Employment | Navigation | `sabah-one-employment-mcp` | Use its six narrow application/history tools with a separate Employment OAuth approval. Inventory approval does not grant Employment access. |
 | Life Hero | Dashboard reads, account-evidence reconciliation, and hosted GitHub evidence sync | Not yet published | KAN-264 keeps GitHub credentials and provider sync first-party/server-only; external agents cannot read snapshots or submit evidence until a dedicated Life Hero OAuth/MCP contract is published. This missing MCP surface is an explicit acceptance gap, not permission to use the GitHub function or database RPC directly. |
-| Tasks, Calendar, Finance, Knowledge, Prayer | Grounded capabilities vary by operation | Not yet published | Use Lina in the app; external agents stop at the missing MCP boundary. |
+| Finance equity | `Navigation and editor` | `sabah-one-equity-mcp` (requires deployment and Equity OAuth approval) | Five semantic position tools; isolated from cash/banking and other MCP domains. See `finance-equity.md`. |
+| Tasks, Calendar, Finance banking, Knowledge, Prayer | Grounded capabilities vary by operation | Not yet published | Use Lina in the app; external agents stop at the missing MCP boundary. |
 | Other Sabah One features | Surface-dependent | Not yet published | Treat external access as unavailable until a domain MCP contract is delivered and listed here. |
 | Secrets | Intentionally unavailable | Intentionally unavailable | Secret plaintext remains outside assistant context and agent tools. |
 
@@ -70,3 +71,14 @@ The ElevenLabs connection reference is a device preference, not new shared accou
 ## Daily goal progress controls
 
 The Learn and Move switches only choose the amount passed to the existing first-party progress operation: the gap to the displayed level target by default, or one unit when “Add individual steps” is on. They are independent view-local controls, reset when the dashboard remounts, and add no shared data, schema, or new account operation. Progress continues through the established signed-in mutation path. This UI convenience does not change external agent access: Daily Learn and Move still have no published domain MCP, so external account reads and progress writes remain unavailable.
+
+## Equity MCP requirement
+
+The independent Equity domain exposes bounded list/get/add/update/remove position
+tools at `sabah-one-equity-mcp/mcp`. Updates require the current `updatedAt`;
+removal requires explicit confirmation; retryable writes carry stable UUID request
+IDs. The browser uses the same semantic mutation RPCs. Complete separate Equity
+OAuth approval before importing any private holdings. Inventory or Employment
+consent never grants equity or banking access. Personal data is not seeded from
+source code. Deployment, consent and private record readback are required for
+acceptance; see [`finance-equity.md`](finance-equity.md).

@@ -880,6 +880,45 @@ export type IncomeCategory =
 
 export type TransactionCategory = ExpenseCategory | IncomeCategory | 'transfer';
 
+/** Private, dated planning records. Equity never contributes to liquid account balances. */
+export interface EquityPlan {
+  summary: string;
+  status: 'agreed' | 'tentative' | 'undecided';
+  waitingFor: string;
+  nextAction: string;
+  reviewMonth?: string;
+}
+
+export interface EquityGrant {
+  id: string;
+  grantDate: string;
+  vested: number;
+  unvested: number;
+  strikeUsd: number;
+  originalExpiry: string;
+  postEmploymentExpiry?: string;
+  nextVest?: { date: string; alternateDate?: string; quantity: number; condition: string };
+}
+
+export interface EquityPosition {
+  id: string;
+  company: string;
+  asOf: string;
+  ownedShares: number;
+  stockPlan: EquityPlan;
+  optionPlan: EquityPlan;
+  employmentNote: string;
+  grants: EquityGrant[];
+  actions: Array<{ id: string; title: string; timing: string; dueDate?: string; done: boolean }>;
+  details: Array<{ id: string; title: string; body: string }>;
+  sources: Array<{ id: string; label: string; url: string; asOf: string }>;
+  scenario: { pricesUsd: number[]; withholdingRate: number; usdToGbp: number; asOf: string; notes: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type EquityPositionDraft = Omit<EquityPosition, 'id' | 'createdAt' | 'updatedAt'>;
+
 export type FinanceAccountType =
   | 'current' | 'savings' | 'credit-card' | 'isa' | 'pension' | 'loan-mortgage';
 

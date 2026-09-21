@@ -981,6 +981,40 @@ export async function revokeEmploymentOAuthClient(
   return mapInventoryOAuthClient(data);
 }
 
+export type EquityOAuthClientApproval = InventoryOAuthClientApproval;
+
+export async function listEquityOAuthClients(): Promise<EquityOAuthClientApproval[]> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('list_equity_oauth_clients');
+  if (error) throw error;
+  return Array.isArray(data) ? data.map(mapInventoryOAuthClient) : [];
+}
+
+export async function approveEquityOAuthClient(
+  clientId: string,
+  clientName: string,
+): Promise<EquityOAuthClientApproval> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('approve_equity_oauth_client', {
+    p_client_id: clientId,
+    p_client_name: clientName,
+  });
+  if (error) throw error;
+  return mapInventoryOAuthClient(data);
+}
+
+export async function revokeEquityOAuthClient(
+  clientId: string,
+): Promise<EquityOAuthClientApproval> {
+  const database = requireClient();
+  const { data, error } = await database.rpc('revoke_equity_oauth_client', {
+    p_client_id: clientId,
+  });
+  if (error) throw error;
+  // Revoke Equity alone so separate Inventory and Employment approvals remain intact.
+  return mapInventoryOAuthClient(data);
+}
+
 export type SupabaseRealtimeState =
   | 'unavailable'
   | 'subscribing'
