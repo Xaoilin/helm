@@ -31,6 +31,17 @@ remain visible. A positive scenario adjustment adds an expense and reduces the
 remainder. Shopping or software totals are review candidates, not automatically
 unnecessary costs or verified recurring subscriptions.
 
+Cost-reduction scenarios (negative monthly adjustments) appear in a third target
+calculation card. It shows salary, current costs, the net reduction, target costs
+and the amount left before discretionary spending. Each scenario is relative to
+the current budget, not added to other scenarios. Its explanation must include
+any planned increases already netted into the reduction, retained commitments
+and conditions such as full loan repayment. A refinance must allow for its
+replacement payments; it does not remove the debt's cost. Optional spending is
+already outside this calculation and must not be credited a second time.
+Targets use the existing private Finance MCP scenario fields and do not change
+current payments, balances or the underlying budget.
+
 A loan's original advance, current account balance and settlement amount are
 different quantities. Unknown balances stay unknown, never zero. Historical
 figures retain their dates. Repayment and consolidation intentions do not imply

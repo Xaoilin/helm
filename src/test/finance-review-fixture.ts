@@ -17,7 +17,10 @@ export const FINANCE_REVIEW: FinanceReview = {
     incomePence: 500_000, incomeBasis: 'Average of the latest three complete months; excludes one-off receipts.',
     essentials: [{ label: 'Household contribution', amountPence: 200_000, note: 'Includes both mortgages and household bills.' }, { label: 'Other essentials', amountPence: 100_000, note: 'Includes the renovation loan payment.' }],
     workCostsPence: 25_000, workCostsNote: 'Tools used for work, including occasional annual payments.',
-    scenarios: [{ label: 'Higher household contribution', status: 'planned', monthlyAdjustmentPence: 40_000, note: 'Amount is not confirmed; includes the shared loan.' }],
+    scenarios: [
+      { label: 'Higher household contribution', status: 'planned', monthlyAdjustmentPence: 40_000, note: 'Amount is not confirmed; includes the shared loan.' },
+      { label: 'Renovation loans fully repaid', status: 'planned', monthlyAdjustmentPence: -90_000, note: 'Net reduction includes the higher household contribution.\nRequires full repayment; refinancing still has replacement payments.' },
+    ],
   },
   opportunities: [{ label: 'Retail shopping', monthlyPence: 80_000, note: 'Some purchases may be essential; review larger orders.', suggestedCapPence: 50_000 }, { label: 'Dining and delivery', monthlyPence: 40_000, note: 'Average of the latest three complete months.' }],
   loans: [
