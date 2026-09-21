@@ -28,6 +28,7 @@ export const SHARED_STORE_KEYS = [
   { key: 'knowledgeEntries', label: 'Knowledge entries', description: 'Knowledge base notes.' },
   { key: 'lifestyleItems', label: 'Lifestyle tracker', description: 'Lifestyle tracker items.' },
   { key: 'healthFastFoodEntries', label: 'Fast food log', description: 'Health fast-food journal entries.' },
+  { key: 'equityPositions', label: 'Stocks and options', description: 'Private holdings, grants, plans, and dated equity scenarios.' },
   { key: 'financeAccounts', label: 'Finance accounts', description: 'Finance account records.' },
   { key: 'transactions', label: 'Transactions', description: 'Finance transaction ledger.' },
   { key: 'financeBudgets', label: 'Finance budgets', description: 'Budget records.' },

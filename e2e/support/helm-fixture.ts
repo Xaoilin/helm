@@ -1,7 +1,7 @@
 import { expect, test as base, type Page, type Response } from '@playwright/test';
 import { encodeStoreValue } from '../../src/store/recordCodec';
 import type { HelmMutation } from '../../src/store/databaseTypes';
-import type { EmploymentApplication, EmploymentHistoryEntry } from '../../src/types/domain';
+import type { EmploymentApplication, EmploymentHistoryEntry, EquityPosition, EquityPositionDraft } from '../../src/types/domain';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
 const TEST_EMAIL = 'e2e@example.test';
@@ -80,6 +80,9 @@ export function waitForMutation(page: Page, collection: string): Promise<Respons
   return page.waitForResponse(response => {
     if (response.request().method() !== 'POST') return false;
     if (collection === 'employment' && /\/rpc\/employment_(add_application|update_application|add_history|remove_application)/u.test(response.url())) {
+      return true;
+    }
+    if (collection === 'equityPositions' && /\/rpc\/equity_(add_position|update_position|remove_position)/u.test(response.url())) {
       return true;
     }
     if (!response.url().includes('/rest/v1/rpc/apply_helm_mutations')) return false;
@@ -393,6 +396,60 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
     row.accountVersion = accountVersion;
     row.updatedAt = now;
     await route.fulfill({ json: { applicationId: application.id, accountVersion, duplicate: false } });
+  });
+
+  await page.route(/\/rest\/v1\/rpc\/equity_(add_position|update_position|remove_position)(\?|$)/u, async route => {
+    const name = new URL(route.request().url()).pathname.split('/').at(-1);
+    const request = route.request().postDataJSON() as {
+      p_position?: EquityPositionDraft & { id?: string };
+      p_position_id?: string;
+      p_expected_updated_at?: string;
+      p_confirm?: boolean;
+    };
+    const positionId = request.p_position_id ?? request.p_position?.id;
+    if (!positionId) {
+      await route.fulfill({ status: 400, json: { message: 'Equity position ID is required.' } });
+      return;
+    }
+    const key = rowKey('equityPositions', positionId);
+    let row = rows.get(key);
+    const now = new Date().toISOString();
+    if (name === 'equity_add_position' && request.p_position) {
+      if (row && !row.deletedAt) {
+        await route.fulfill({ status: 409, json: { message: 'Equity position already exists.' } });
+        return;
+      }
+      const position: EquityPosition = { ...request.p_position, id: positionId, createdAt: now, updatedAt: now };
+      row = {
+        userId: options.userId, collection: 'equityPositions', recordId: positionId,
+        payload: { ...position }, position: null, revision: 1, accountVersion: accountVersion + 1,
+        createdAt: now, updatedAt: now, deletedAt: null,
+      };
+      rows.set(key, row);
+    } else if (!row || row.deletedAt) {
+      await route.fulfill({ status: 404, json: { message: 'Equity position not found.' } });
+      return;
+    } else if (request.p_expected_updated_at !== row.payload.updatedAt) {
+      await route.fulfill({ status: 409, json: { message: 'Equity position changed; reload before saving.' } });
+      return;
+    } else if (name === 'equity_remove_position') {
+      if (!request.p_confirm) {
+        await route.fulfill({ status: 400, json: { message: 'Equity removal requires explicit confirmation.' } });
+        return;
+      }
+      row.deletedAt = now;
+    } else if (request.p_position) {
+      row.payload = { ...request.p_position, id: positionId, createdAt: row.payload.createdAt, updatedAt: now };
+    }
+    accountVersion += 1;
+    row.revision += 1;
+    row.accountVersion = accountVersion;
+    row.updatedAt = now;
+    await route.fulfill({ json: { positionId, position: row.deletedAt ? null : row.payload, accountVersion } });
+  });
+
+  await page.route('**/rest/v1/rpc/list_equity_oauth_clients*', async route => {
+    await route.fulfill({ json: [] });
   });
 
   await page.route('**/rest/v1/rpc/list_inventory_oauth_clients*', async route => {

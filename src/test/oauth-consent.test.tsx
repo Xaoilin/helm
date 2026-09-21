@@ -5,8 +5,10 @@ import OAuthConsentPage from '../surfaces/OAuthConsentPage';
 const mocks = vi.hoisted(() => ({
   approveInventoryOAuthClient: vi.fn(),
   approveEmploymentOAuthClient: vi.fn(),
+  approveEquityOAuthClient: vi.fn(),
   revokeInventoryOAuthClientAllowlist: vi.fn(),
   revokeEmploymentOAuthClient: vi.fn(),
+  revokeEquityOAuthClient: vi.fn(),
   signInWithGoogle: vi.fn(),
   getAuthorizationDetails: vi.fn(),
   approveAuthorization: vi.fn(),
@@ -30,7 +32,7 @@ const details = {
   user: mocks.authUser,
 };
 
-describe('separate Employment OAuth consent', () => {
+describe('separate domain OAuth consent', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     window.history.replaceState({}, '', '/oauth/consent?authorization_id=authorization-id');
@@ -44,49 +46,65 @@ describe('separate Employment OAuth consent', () => {
     expect(await screen.findByRole('button', { name: 'Choose an area' })).toBeDisabled();
     expect(screen.getByRole('radio', { name: /Employment/ })).not.toBeChecked();
     expect(screen.getByRole('radio', { name: /Inventory/ })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: /Equity/ })).not.toBeChecked();
     expect(mocks.approveEmploymentOAuthClient).not.toHaveBeenCalled();
     expect(mocks.approveInventoryOAuthClient).not.toHaveBeenCalled();
+    expect(mocks.approveEquityOAuthClient).not.toHaveBeenCalled();
   });
 
-  it.each(['Employment', 'Inventory'] as const)('approves only the selected %s area', async area => {
+  it.each(['Employment', 'Inventory', 'Equity'] as const)('approves only the selected %s area', async area => {
     render(<OAuthConsentPage />);
     fireEvent.click(await screen.findByRole('radio', { name: new RegExp(area) }));
     fireEvent.click(screen.getByRole('button', { name: `Allow ${area}` }));
     await waitFor(() => expect(mocks.approveAuthorization).toHaveBeenCalledWith('authorization-id', { skipBrowserRedirect: true }));
-    const selected = area === 'Employment' ? mocks.approveEmploymentOAuthClient : mocks.approveInventoryOAuthClient;
-    const other = area === 'Employment' ? mocks.approveInventoryOAuthClient : mocks.approveEmploymentOAuthClient;
-    expect(selected).toHaveBeenCalledWith('client-id', 'Employment client');
-    expect(other).not.toHaveBeenCalled();
+    const approvals = { Employment: mocks.approveEmploymentOAuthClient, Inventory: mocks.approveInventoryOAuthClient, Equity: mocks.approveEquityOAuthClient };
+    expect(approvals[area]).toHaveBeenCalledWith('client-id', 'Employment client');
+    for (const [domain, approve] of Object.entries(approvals)) {
+      if (domain !== area) expect(approve).not.toHaveBeenCalled();
+    }
     expect(mocks.revokeEmploymentOAuthClient).not.toHaveBeenCalled();
     expect(mocks.revokeInventoryOAuthClientAllowlist).not.toHaveBeenCalled();
+    expect(mocks.revokeEquityOAuthClient).not.toHaveBeenCalled();
   });
 
-  it('rolls back Employment alone when OAuth approval fails', async () => {
+  it.each(['Employment', 'Equity'] as const)('rolls back %s alone when OAuth approval fails', async area => {
     mocks.approveAuthorization.mockResolvedValue({ data: null, error: new Error('Authorization expired') });
     render(<OAuthConsentPage />);
-    fireEvent.click(await screen.findByRole('radio', { name: /Employment/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Allow Employment' }));
+    fireEvent.click(await screen.findByRole('radio', { name: new RegExp(area) }));
+    fireEvent.click(screen.getByRole('button', { name: `Allow ${area}` }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Authorization expired');
-    expect(mocks.revokeEmploymentOAuthClient).toHaveBeenCalledWith('client-id');
+    const revocations = { Employment: mocks.revokeEmploymentOAuthClient, Equity: mocks.revokeEquityOAuthClient };
+    expect(revocations[area]).toHaveBeenCalledWith('client-id');
+    expect(revocations[area === 'Employment' ? 'Equity' : 'Employment']).not.toHaveBeenCalled();
     expect(mocks.revokeInventoryOAuthClientAllowlist).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Allow Employment' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: `Allow ${area}` })).toBeEnabled();
   });
 
-  it('surfaces rollback failures with a concrete Settings recovery path', async () => {
+  it.each(['Employment', 'Equity'] as const)('surfaces %s rollback failures with a concrete Settings recovery path', async area => {
     mocks.approveAuthorization.mockRejectedValue(new Error('Network unavailable'));
-    mocks.revokeEmploymentOAuthClient.mockRejectedValue(new Error('Database unavailable'));
+    const revoke = area === 'Employment' ? mocks.revokeEmploymentOAuthClient : mocks.revokeEquityOAuthClient;
+    revoke.mockRejectedValue(new Error('Database unavailable'));
     render(<OAuthConsentPage />);
-    fireEvent.click(await screen.findByRole('radio', { name: /Employment/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Allow Employment' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent("Revoke this client's Employment access in Settings");
+    fireEvent.click(await screen.findByRole('radio', { name: new RegExp(area) }));
+    fireEvent.click(screen.getByRole('button', { name: `Allow ${area}` }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(`Revoke this client's ${area} access in Settings`);
     expect(screen.getByRole('alert')).toHaveTextContent('Database unavailable');
   });
 
-  it('denies without approving either area', async () => {
+  it('shows Equity permissions without granting trading or banking access', async () => {
+    render(<OAuthConsentPage />);
+    fireEvent.click(await screen.findByRole('radio', { name: /Equity/ }));
+    expect(screen.getByText('Read your stock holdings, option grants, plans, scenarios and supporting sources.')).toBeInTheDocument();
+    expect(screen.getByText(/Trading shares, exercising options, moving money/)).toBeInTheDocument();
+    expect(screen.getByText(/Access to Inventory, Employment, banking and other finance data/)).toBeInTheDocument();
+  });
+
+  it('denies without approving any area', async () => {
     render(<OAuthConsentPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Deny' }));
     await waitFor(() => expect(mocks.denyAuthorization).toHaveBeenCalled());
     expect(mocks.approveEmploymentOAuthClient).not.toHaveBeenCalled();
     expect(mocks.approveInventoryOAuthClient).not.toHaveBeenCalled();
+    expect(mocks.approveEquityOAuthClient).not.toHaveBeenCalled();
   });
 });

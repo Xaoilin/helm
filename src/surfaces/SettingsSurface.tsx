@@ -6,10 +6,13 @@ import {
   isAuthenticated,
   getCurrentUserId,
   listEmploymentOAuthClients,
+  listEquityOAuthClients,
   listInventoryOAuthClients,
   revokeEmploymentOAuthClient,
+  revokeEquityOAuthClient,
   revokeInventoryOAuthClient,
   type EmploymentOAuthClientApproval,
+  type EquityOAuthClientApproval,
   type InventoryOAuthClientApproval,
 } from '../store/supabase';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
@@ -53,6 +56,9 @@ export default function SettingsSurface() {
   const [employmentClients, setEmploymentClients] = useState<EmploymentOAuthClientApproval[]>([]);
   const [employmentClientStatus, setEmploymentClientStatus] = useState('');
   const [revokingEmploymentClientId, setRevokingEmploymentClientId] = useState<string | null>(null);
+  const [equityClients, setEquityClients] = useState<EquityOAuthClientApproval[]>([]);
+  const [equityClientStatus, setEquityClientStatus] = useState('');
+  const [revokingEquityClientId, setRevokingEquityClientId] = useState<string | null>(null);
   const [appTimeZoneInput, setAppTimeZoneInput] = useState(settings.appTimezone || '');
   const [appTimeZoneStatus, setAppTimeZoneStatus] = useState<{
     tone: 'saving' | 'saved' | 'error';
@@ -113,6 +119,9 @@ export default function SettingsSurface() {
     void listEmploymentOAuthClients()
       .then(clients => { if (!cancelled) setEmploymentClients(clients); })
       .catch(error => { if (!cancelled) setEmploymentClientStatus(error instanceof Error ? error.message : String(error)); });
+    void listEquityOAuthClients()
+      .then(clients => { if (!cancelled) setEquityClients(clients); })
+      .catch(error => { if (!cancelled) setEquityClientStatus(error instanceof Error ? error.message : String(error)); });
     return () => { cancelled = true; };
   }, [authSyncKey]);
 
@@ -143,6 +152,20 @@ export default function SettingsSurface() {
       setEmploymentClientStatus(error instanceof Error ? error.message : String(error));
     } finally {
       setRevokingEmploymentClientId(null);
+    }
+  };
+
+  const revokeEquityClient = async (client: EquityOAuthClientApproval) => {
+    setRevokingEquityClientId(client.clientId);
+    setEquityClientStatus(`Revoking ${client.clientName}…`);
+    try {
+      const revoked = await revokeEquityOAuthClient(client.clientId);
+      setEquityClients(current => current.map(entry => entry.clientId === client.clientId ? revoked : entry));
+      setEquityClientStatus(`${client.clientName} can no longer access Equity. Other approvals are unchanged.`);
+    } catch (error) {
+      setEquityClientStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRevokingEquityClientId(null);
     }
   };
 
@@ -234,6 +257,28 @@ export default function SettingsSurface() {
             ))}
           </div>
           {employmentClientStatus && <div className="inventory-client-status" role="status">{employmentClientStatus}</div>}
+        </section>
+
+        <h3 id="equity-client-heading" style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Codex Equity Access</h3>
+        <section className="card inventory-client-settings" aria-labelledby="equity-client-heading">
+          <div className="inventory-client-settings-intro">
+            <div>
+              <strong>Approved Equity clients</strong>
+              <p>These clients can read and maintain your stock holdings, option grants, plans and next actions. Equity access is approved separately from Inventory and Employment.</p>
+            </div>
+            <span className="tag tag-primary">OAuth 2.1 beta</span>
+          </div>
+          <div className="inventory-client-boundary">This connection does not grant banking access or permission to trade shares, exercise options, move money or contact your employer.</div>
+          <div className="inventory-client-list">
+            {equityClients.length === 0 && <div className="inventory-empty-inline">No Codex Equity client has been approved.</div>}
+            {equityClients.map(client => (
+              <div key={client.clientId} className="inventory-client-row">
+                <div><strong>{client.clientName}</strong><span>{client.clientId}</span><small>{client.revokedAt ? `Revoked ${new Date(client.revokedAt).toLocaleString()}` : `Approved ${new Date(client.approvedAt).toLocaleString()}`}</small></div>
+                <button className="btn btn-danger btn-sm" type="button" aria-label={`Revoke Equity access for ${client.clientName}`} disabled={Boolean(client.revokedAt) || revokingEquityClientId !== null} onClick={() => void revokeEquityClient(client)}>{client.revokedAt ? 'Revoked' : revokingEquityClientId === client.clientId ? 'Revoking…' : 'Revoke'}</button>
+              </div>
+            ))}
+          </div>
+          {equityClientStatus && <div className="inventory-client-status" role="status">{equityClientStatus}</div>}
         </section>
 
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>App time zone</h3>

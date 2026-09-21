@@ -58,6 +58,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Prove live Equity OAuth and agent mutations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: npx tsx scripts/verify-hosted-equity-access.ts
+
       - name: Prove live Employment OAuth and agent mutations
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -98,6 +104,7 @@ jobs:
           path: |
             test-results/assistant-benchmark-post-deploy.json
             test-results/assistant-access-post-deploy.json
+            test-results/equity-access-post-deploy.json
             test-results/employment-access-post-deploy.json
           if-no-files-found: warn
           retention-days: 14

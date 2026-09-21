@@ -1,0 +1,19 @@
+.equity-editor-overlay { padding: 16px; }
+.modal.equity-editor { min-width: 0; width: 100%; max-width: 720px; max-height: calc(100dvh - 32px); }
+.equity-editor-help { color: #a2a7ba; font-size: 12px; line-height: 1.6; margin: 0 0 16px; }
+.equity-editor-fields { padding: 0; margin: 0; border: 0; min-width: 0; }
+.equity-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+.equity-editor-section { border-top: 1px solid #2a2d42; padding: 12px 0; }
+.equity-editor-section > summary { cursor: pointer; color: #d6daea; font-size: 13px; font-weight: 600; }
+.equity-editor-section[open] > summary { margin-bottom: 16px; }
+.equity-editor-section > summary:focus-visible { outline: 2px solid #7b83ff; outline-offset: 4px; }
+.equity-editor-entry { border: 1px solid #2a2d42; border-radius: 8px; padding: 16px; margin: 0 0 16px; min-width: 0; }
+.equity-editor-entry legend { color: #a2a7ba; font-size: 12px; padding: 0 6px; }
+.equity-editor-check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 0 0 14px; color: #d6daea; }
+.equity-editor-vesting { padding: 12px; margin-bottom: 14px; background: #11141d; border-radius: 6px; }
+.equity-editor-error { color: #ff9b9b; font-size: 13px; line-height: 1.5; }
+.equity-editor :disabled { cursor: wait; }
+@media (max-width: 560px) {
+  .modal.equity-editor { padding: 20px 16px; }
+  .equity-editor-grid { grid-template-columns: minmax(0, 1fr); }
+}
