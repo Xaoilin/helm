@@ -115,7 +115,7 @@ test('keeps saved Finance data, drafts and confirmed writes usable without Realt
   expect(taskMutationCount).toBe(1);
 
   control.applyRemoteMutations([{ op: 'patch', collection: 'tasks', recordId: TASK.id, set: { title: 'Remote update without Broadcast' } }]);
-  await page.clock.fastForward(15_000);
+  await page.clock.fastForward(10 * 60_000);
   await expect(page.getByRole('checkbox', { name: 'Mark "Remote update without Broadcast" as incomplete' })).toBeChecked();
   await expect(banner).toContainText('Live updates delayed');
   expect(taskMutationCount).toBe(1);
@@ -127,7 +127,7 @@ test('keeps saved Finance data, drafts and confirmed writes usable without Realt
   const evidencePath = testInfo.outputPath('synthetic-availability-evidence.json');
   await writeFile(evidencePath, JSON.stringify({
     environment: 'Synthetic Playwright account and mocked HTTPS/WebSocket services; not live-account acceptance.',
-    taskMutationCount, missedChangesReconciledBy: ['15-second version polling', 'foreground visibility event'], dimensions: evidence,
+    taskMutationCount, missedChangesReconciledBy: ['ten-minute version safety check', 'foreground visibility event'], dimensions: evidence,
   }, null, 2));
   await testInfo.attach('synthetic-availability-evidence', { path: evidencePath, contentType: 'application/json' });
 });
