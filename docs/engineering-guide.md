@@ -96,6 +96,7 @@ Direct browser review is required for visible user flows and especially for OAut
 
 ## Data And Security Invariants
 
+- Every new or changed SQL query must follow [SQL query review](sql-query-review.md): inspect existing indexes and representative plans, and add a missing index only when measured benefit justifies its write and storage cost.
 - Keep domain types in `src/types/domain.ts` and the account -> source -> event Calendar hierarchy.
 - Shared records are signed-in, account-owned and database-authoritative through Supabase RLS and semantic mutation RPCs. Online server confirmation is required for writes; transient network failures may retain only the current account's confirmed in-memory data.
 - Passive Google Calendar sync stays non-interactive; explicit reconnect or consent is user initiated.
