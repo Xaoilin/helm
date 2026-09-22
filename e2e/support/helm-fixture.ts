@@ -1,7 +1,8 @@
 import { expect, test as base, type Page, type Response } from '@playwright/test';
 import { encodeStoreValue } from '../../src/store/recordCodec';
+import { STORAGE_KEYS } from '../../src/config/constants';
 import type { HelmMutation } from '../../src/store/databaseTypes';
-import type { EmploymentApplication, EmploymentHistoryEntry, EquityPosition, EquityPositionDraft } from '../../src/types/domain';
+import type { EmploymentApplication, EmploymentHistoryEntry, EquityPosition, EquityPositionDraft, Surface } from '../../src/types/domain';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
 const TEST_EMAIL = 'e2e@example.test';
@@ -41,6 +42,7 @@ export interface HelmScenarioOptions {
     failureStatus?: number;
   };
   email?: string;
+  initialSurface?: Surface;
   lifeHero?: {
     failureStatus?: number;
     snapshot?: Record<string, unknown>;
@@ -59,7 +61,7 @@ export interface HelmScenarioOptions {
 
 export interface HelmScenarioControl {
   setRealtimeAvailable: (available: boolean) => void;
-  applyRemoteMutations: (operations: HelmMutation[]) => void;
+  applyRemoteMutations: (operations: HelmMutation[], confirmedAt?: string) => void;
 }
 
 export type ScenarioLoader = (options?: HelmScenarioOptions) => Promise<HelmScenarioControl>;
@@ -110,11 +112,12 @@ async function installScenario(page: Page, options: HelmScenarioOptions = {}): P
   const stores = buildStores(options);
   const authenticated = options.authenticated !== false;
 
-  await page.addInitScript(({ authenticated: shouldAuthenticate, email, marker, user }) => {
+  await page.addInitScript(({ authenticated: shouldAuthenticate, email, marker, user, initialSurface, surfaceKey }) => {
     if (sessionStorage.getItem(marker) === 'ready') return;
 
     localStorage.clear();
     sessionStorage.clear();
+    if (initialSurface) sessionStorage.setItem(surfaceKey, initialSurface);
     if (shouldAuthenticate) {
       localStorage.setItem('sb-helm-auth-token', JSON.stringify({
         access_token: 'e2e-access-token',
@@ -138,6 +141,8 @@ async function installScenario(page: Page, options: HelmScenarioOptions = {}): P
     email: options.email || TEST_EMAIL,
     marker: 'helm-kan252-e2e-scenario-ready',
     user: userId,
+    initialSurface: options.initialSurface,
+    surfaceKey: STORAGE_KEYS.SHELL_SURFACE,
   });
 
   await installPrayerRoute(page, options.prayer);
@@ -287,6 +292,10 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
       return;
     }
 
+    const scoped = new URL(route.request().url()).pathname.endsWith('/get_helm_account_snapshot_for_collections');
+    const collections = scoped
+      ? (route.request().postDataJSON() as { p_collections?: string[] }).p_collections ?? []
+      : undefined;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -299,7 +308,9 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
           migratedAt: SNAPSHOT_TIME,
           updatedAt: SNAPSHOT_TIME,
         },
-        records: [...rows.values()].map(toSnapshotRow),
+        records: [...rows.values()]
+          .filter(row => collections === undefined || collections.includes(row.collection))
+          .map(toSnapshotRow),
       }),
     });
   });
@@ -320,10 +331,38 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
   });
 
   await page.route('**/rest/v1/helm_records*', async route => {
+    const query = new URL(route.request().url()).searchParams;
+    let selected = [...rows.values()].map(toDatabaseRow);
+    for (const [field, filter] of query) {
+      if (filter.startsWith('eq.')) {
+        selected = selected.filter(row => String(row[field as keyof typeof row]) === filter.slice(3));
+      } else if (filter === 'is.null') {
+        selected = selected.filter(row => row[field as keyof typeof row] === null);
+      }
+    }
+    const order = (query.get('order') ?? '').split(',').filter(Boolean);
+    selected.sort((left, right) => {
+      for (const term of order) {
+        const [field, direction, nulls] = term.split('.');
+        const a = left[field as keyof typeof left];
+        const b = right[field as keyof typeof right];
+        if (a === b) continue;
+        if (a === null) return nulls === 'nullsfirst' ? -1 : 1;
+        if (b === null) return nulls === 'nullsfirst' ? 1 : -1;
+        const comparison = typeof a === 'number' && typeof b === 'number'
+          ? a - b : String(a).localeCompare(String(b));
+        if (comparison) return direction === 'desc' ? -comparison : comparison;
+      }
+      return 0;
+    });
+    const range = route.request().headers().range?.match(/^(\d+)-(\d+)$/u);
+    const offset = Number(query.get('offset') ?? range?.[1] ?? 0);
+    const limit = query.has('limit') ? Number(query.get('limit'))
+      : range ? Number(range[2]) - offset + 1 : selected.length;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify([...rows.values()].map(toDatabaseRow)),
+      body: JSON.stringify(selected.slice(offset, offset + limit)),
     });
   });
 
@@ -476,10 +515,10 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
 
   return {
     setRealtimeAvailable,
-    applyRemoteMutations(operations) {
+    applyRemoteMutations(operations, confirmedAt) {
       // Simulate a separate client's confirmed write without delivering Broadcast.
       accountVersion += 1;
-      applyMutations(rows, options.userId, accountVersion, operations);
+      applyMutations(rows, options.userId, accountVersion, operations, confirmedAt);
     },
   };
 }
@@ -642,9 +681,10 @@ function applyMutations(
   userId: string,
   accountVersion: number,
   operations: HelmMutation[],
+  confirmedAt?: string,
 ): MockRow[] {
   const changed = new Map<string, MockRow>();
-  const now = new Date().toISOString();
+  const now = confirmedAt ?? new Date().toISOString();
   const mark = (row: MockRow) => {
     row.revision += 1;
     row.accountVersion = accountVersion;

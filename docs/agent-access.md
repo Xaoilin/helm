@@ -89,3 +89,12 @@ OAuth approval before importing any private holdings. Inventory or Employment
 consent never grants equity or banking access. Personal data is not seeded from
 source code. Deployment, consent and private record readback are required for
 acceptance; see [`finance-equity.md`](finance-equity.md).
+
+## Page-scoped browser loading
+
+`get_helm_account_snapshot_for_collections` is a first-party browser hydration
+operation, with the same account, anonymous-session and OAuth-client denials as
+the existing snapshot. It does not grant external agents a generic read API.
+Activity pagination reads through the same first-party RLS boundary and changes
+no business mutation or external MCP contract. Existing narrow domain MCPs and
+listed missing-capability boundaries remain unchanged.

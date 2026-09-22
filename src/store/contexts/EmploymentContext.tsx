@@ -105,6 +105,7 @@ export function EmploymentProvider({ children }: { children: ReactNode }) {
   const retries = useRef(new Map<string, EmploymentRetryAttempt>());
   const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingMutationsRef = useRef(0);
+  const initialLoadRef = useRef<Promise<void> | null>(null);
 
   const publish = useCallback((next: EmploymentTrackerState, owner: string) => {
     stateRef.current = next;
@@ -152,12 +153,19 @@ export function EmploymentProvider({ children }: { children: ReactNode }) {
       retries.current.clear();
       setLoaded(false);
     }
-    void refresh(true);
+    const initialLoad = refresh(true);
+    initialLoadRef.current = initialLoad;
+    void initialLoad.finally(() => {
+      if (initialLoadRef.current === initialLoad) initialLoadRef.current = null;
+    });
     return () => { generation.current += 1; };
   }, [sessionKey, userId, readable, refresh]);
 
   useRemoteStoreRefresh(['employment'], async () => {
     const requestedSession = sessionIdentity();
+    // First scoped delivery also notifies subscribers. It must not supersede
+    // the initial reader while that reader awaits its server-confirmed seed.
+    await initialLoadRef.current;
     await mutationQueueRef.current;
     if (sessionIdentity() === requestedSession) await refresh();
   });

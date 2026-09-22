@@ -46,8 +46,10 @@ describe('capability-shaped application composition', () => {
   it('keeps provider order, readiness, Chat, Google Sync, and undo ownership explicit', () => {
     const providers = readFileSync(resolve(root, 'src/store/AppProviders.tsx'), 'utf8');
     const shell = readFileSync(resolve(root, 'src/store/ShellContext.tsx'), 'utf8');
+    const pageGate = readFileSync(resolve(root, 'src/store/PageReadinessGate.tsx'), 'utf8');
     const sources = readCapabilityCompositionSources(root);
     const providerOrder = [
+      '<ShellProvider>',
       '<SettingsProvider>',
       '<GamificationProvider>',
       '<CalendarProvider>',
@@ -58,14 +60,14 @@ describe('capability-shaped application composition', () => {
       '<AssistantProvider>',
       '<AssistantActivityProvider>',
       '<ChatBridge>',
-      '<ShellProvider>',
       '<AssistantUndoProvider>',
       '<GoogleSyncBridge>',
     ].map(marker => providers.indexOf(marker));
 
     expect(providerOrder.every(index => index >= 0)).toBe(true);
     expect(providerOrder).toEqual([...providerOrder].sort((left, right) => left - right));
-    expect(shell).toContain('function AppReadinessGate');
+    expect(pageGate).toContain('function PageReadinessGate');
+    expect(shell).not.toContain('ReadinessGate');
     expect(providers).not.toContain('DashboardFocus');
     expect(shell).not.toContain('DashboardFocus');
     expect(providers).toContain('<ChatProvider crossDomain={crossDomain}>');

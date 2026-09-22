@@ -265,6 +265,7 @@ function AssistantActivitySection() {
   const assistantUndo = useAssistantUndo();
   const [notice, setNotice] = useState<string>('');
   const [undoingId, setUndoingId] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const entries = activity.assistantActivityLog;
   const undoableCount = entries.filter(entry => entry.undoOperation && entry.status === 'applied').length;
   const voiceCount = entries.filter(entry => entry.actor === 'voice').length;
@@ -280,12 +281,19 @@ function AssistantActivitySection() {
   return (
     <section className="activity-audit" aria-labelledby="activity-audit-title">
       <div className="activity-section-heading"><div><span className="activity-eyebrow">Lina audit trail</span><h2 id="activity-audit-title">Assistant actions</h2><p>Account-backed actions with undo when Sabah One has a grounded inverse operation.</p></div></div>
-      <div className="activity-stats" aria-label="Lina activity summary"><MetricCard label="Total actions" value={formatCount(entries.length)} hint="account-backed actions" /><MetricCard label="Undoable now" value={formatCount(undoableCount)} hint="grounded inverse available" /><MetricCard label="Voice actions" value={formatCount(voiceCount)} hint="recorded from voice" /></div>
+      <div className="activity-stats" aria-label="Lina activity summary"><MetricCard label="Loaded actions" value={formatCount(entries.length)} hint="account-backed actions in this view" /><MetricCard label="Undoable now" value={formatCount(undoableCount)} hint="grounded inverse available" /><MetricCard label="Voice actions" value={formatCount(voiceCount)} hint="recorded from voice" /></div>
       {notice && <div className="activity-notice" role="status">{notice}</div>}
       {entries.length === 0 ? <div className="activity-panel activity-state"><strong>No Lina actions logged yet.</strong><span>Assistant actions will appear here when an account-backed action is recorded.</span></div> : <div className="activity-list" aria-label="Lina action log">{entries.map(entry => {
         const canUndo = Boolean(entry.undoOperation && entry.status === 'applied');
         return <article className="activity-entry" key={entry.id}><div className="activity-entry-main"><div className="activity-entry-topline"><span className={`activity-status ${statusTone(entry)}`}>{statusLabel(entry)}</span><span>{domainLabel(entry)}</span><span>{actorLabel(entry)}</span><time dateTime={entry.createdAt}>{formatActivityTime(entry.createdAt)}</time></div><h3>{entry.summary}</h3>{entry.sourceTranscript && <div className="activity-transcript"><span>Request</span><p>{entry.sourceTranscript}</p></div>}{entry.details.length > 0 && <ul className="activity-details">{entry.details.slice(0, 5).map(detail => <li key={detail}>{detail}</li>)}</ul>}{entry.undoError && <div className="activity-error">{entry.undoError}</div>}</div><div className="activity-entry-actions">{canUndo ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleUndo(entry)} disabled={undoingId === entry.id}>{undoingId === entry.id ? 'Undoing…' : 'Undo'}</button> : <span className="activity-no-undo">{entry.status === 'undone' ? 'Action undone' : 'No undo'}</span>}</div></article>;
       })}</div>}
+      {activity.hasMore && <button type="button" className="btn btn-secondary" disabled={loadingMore} onClick={async () => {
+        setLoadingMore(true);
+        setNotice('');
+        try { await activity.loadMore(); }
+        catch (error) { setNotice(error instanceof Error ? error.message : 'More activity could not be loaded.'); }
+        finally { setLoadingMore(false); }
+      }}>{loadingMore ? 'Loading activity…' : 'Load more activity'}</button>}
     </section>
   );
 }

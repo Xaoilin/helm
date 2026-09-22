@@ -1,13 +1,14 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
-import { LIMITS } from '../../config/constants';
 import type { AssistantActivityDraft, AssistantActivityEntry } from '../../types/domain';
-import { loadStore, saveStore } from '../persistence';
+import { getStoreLoadState, loadMoreStoreRecords, loadStore, saveStore, subscribeStoreChanges } from '../persistence';
 import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
 export interface AssistantActivityContextValue {
   assistantActivityLog: AssistantActivityEntry[];
   loaded: boolean;
+  hasMore: boolean;
+  loadMore: () => Promise<void>;
   recordAssistantActivity: (activity: AssistantActivityDraft) => string;
   markAssistantActivityUndone: (id: string) => void;
   markAssistantActivityUndoFailed: (id: string, message: string) => void;
@@ -40,18 +41,23 @@ export function useAssistantActivityContext(): AssistantActivityContextValue {
 export function AssistantActivityProvider({ children }: { children: ReactNode }) {
   const [assistantActivityLog, setAssistantActivityLog] = useState<AssistantActivityEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const hasMore = useSyncExternalStore(subscribeStoreChanges, () => {
+    const state = getStoreLoadState('assistantActivityLog');
+    return state.loaded && !state.complete;
+  });
+  const loadMore = useCallback(() => loadMoreStoreRecords('assistantActivityLog'), []);
 
   useEffect(() => {
     (async () => {
       const data = await loadStore<AssistantActivityEntry[]>('assistantActivityLog');
-      setAssistantActivityLog((data ?? []).map(normalizeAssistantActivityEntry).slice(0, LIMITS.ASSISTANT_ACTIVITY_LOG));
+      setAssistantActivityLog((data ?? []).map(normalizeAssistantActivityEntry));
       setLoaded(true);
     })();
   }, []);
 
   useRemoteStoreRefresh(['assistantActivityLog'], async () => {
     const data = await loadStore<AssistantActivityEntry[]>('assistantActivityLog');
-    setAssistantActivityLog((data ?? []).map(normalizeAssistantActivityEntry).slice(0, LIMITS.ASSISTANT_ACTIVITY_LOG));
+    setAssistantActivityLog((data ?? []).map(normalizeAssistantActivityEntry));
   });
 
   useEffect(() => {
@@ -70,7 +76,7 @@ export function AssistantActivityProvider({ children }: { children: ReactNode })
       status: activity.status || 'applied',
     });
 
-    setAssistantActivityLog(prev => [entry, ...prev].slice(0, LIMITS.ASSISTANT_ACTIVITY_LOG));
+    setAssistantActivityLog(prev => [entry, ...prev]);
     return id;
   }, []);
 
@@ -95,6 +101,8 @@ export function AssistantActivityProvider({ children }: { children: ReactNode })
     <AssistantActivityCtx.Provider value={{
       assistantActivityLog,
       loaded,
+      hasMore,
+      loadMore,
       recordAssistantActivity,
       markAssistantActivityUndone,
       markAssistantActivityUndoFailed,

@@ -118,46 +118,46 @@ function ChatBridge({ children }: { children: ReactNode }) {
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
-    <SettingsProvider>
-      <GamificationProvider>
-        <DailyMomentumProvider>
-          <CalendarProvider>
-            <TripProvider>
-              <ProjectProvider>
-                <TaskProvider>
-                  <KnowledgeProvider>
-                    <InventoryProvider>
-                      <EmploymentProvider>
-                        <HealthProvider>
-                          <FinanceProvider>
-                            <PrayerProvider>
-                              <ClockProvider>
-                                <AssistantProvider>
-                                  <AssistantActivityProvider>
-                                    <ChatBridge>
-                                      <ShellProvider>
+    <ShellProvider>
+      <SettingsProvider>
+        <GamificationProvider>
+          <DailyMomentumProvider>
+            <CalendarProvider>
+              <TripProvider>
+                <ProjectProvider>
+                  <TaskProvider>
+                    <KnowledgeProvider>
+                      <InventoryProvider>
+                        <EmploymentProvider>
+                          <HealthProvider>
+                            <FinanceProvider>
+                              <PrayerProvider>
+                                <ClockProvider>
+                                  <AssistantProvider>
+                                    <AssistantActivityProvider>
+                                      <ChatBridge>
                                         <AssistantUndoProvider>
                                           <MilestoneCelebrationProvider>
                                             <GoogleSyncBridge>{children}</GoogleSyncBridge>
                                           </MilestoneCelebrationProvider>
                                         </AssistantUndoProvider>
-                                      </ShellProvider>
-                                    </ChatBridge>
-                                  </AssistantActivityProvider>
-                                </AssistantProvider>
-                              </ClockProvider>
-                            </PrayerProvider>
-                          </FinanceProvider>
-                        </HealthProvider>
-                      </EmploymentProvider>
-                    </InventoryProvider>
-                  </KnowledgeProvider>
-                </TaskProvider>
-              </ProjectProvider>
-            </TripProvider>
-          </CalendarProvider>
-        </DailyMomentumProvider>
-      </GamificationProvider>
-    </SettingsProvider>
+                                      </ChatBridge>
+                                    </AssistantActivityProvider>
+                                  </AssistantProvider>
+                                </ClockProvider>
+                              </PrayerProvider>
+                            </FinanceProvider>
+                          </HealthProvider>
+                        </EmploymentProvider>
+                      </InventoryProvider>
+                    </KnowledgeProvider>
+                  </TaskProvider>
+                </ProjectProvider>
+              </TripProvider>
+            </CalendarProvider>
+          </DailyMomentumProvider>
+        </GamificationProvider>
+      </SettingsProvider>
+    </ShellProvider>
   );
 }
