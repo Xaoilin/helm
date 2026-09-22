@@ -52,6 +52,7 @@ let client: SupabaseClient | null = null;
 let currentUserId: string | null = null;
 let currentSession: Session | null = null;
 let authSessionBootstrapped = false;
+let authSessionRevision = 0;
 
 const GOOGLE_SIGN_IN_SCOPES = [
   'openid',
@@ -77,6 +78,7 @@ export interface AuthStateChange {
 }
 
 export function initSupabase(url: string, publishableKey: string): void {
+  authSessionRevision += 1;
   if (!url || !publishableKey) {
     client = null;
     currentUserId = null;
@@ -127,6 +129,9 @@ export function initSupabase(url: string, publishableKey: string): void {
   });
   client = createClient(url, publishableKey, {
     realtime: {
+      // Removing an exhausted subscription must also stop socket retries when
+      // no other channel owns the connection (the SDK otherwise waits 50s).
+      disconnectOnEmptyChannelsAfterMs: 0,
       heartbeatCallback: (status, latency) => {
         if (status === 'sent') {
           recordOperationalEvent({ domain: 'realtime', operation: 'heartbeat', outcome: 'pending', reason: 'heartbeat_sent' });
@@ -159,6 +164,7 @@ export function getCurrentUserId(): string | null {
 }
 
 export function setCurrentUserId(userId: string | null): void {
+  if (currentUserId !== userId) authSessionRevision += 1;
   currentUserId = userId;
   setOperationalAccount(userId);
 }
@@ -215,6 +221,7 @@ export async function signOut(): Promise<void> {
   if (!client) return;
   const { error } = await client.auth.signOut();
   if (error) throw error;
+  authSessionRevision += 1;
   currentUserId = null;
   currentSession = null;
   authSessionBootstrapped = true;
@@ -224,9 +231,13 @@ export async function signOut(): Promise<void> {
 
 export async function getSessionUser(): Promise<User | null> {
   if (!client) return null;
+  const activeClient = client;
+  const revision = authSessionRevision;
   const startedAt = performance.now();
   try {
-    const { data: { session }, error } = await client.auth.getSession();
+    const { data: { session }, error } = await activeClient.auth.getSession();
+    // An auth event may supersede this read while the SDK recovers its session.
+    if (client !== activeClient || revision !== authSessionRevision) return currentSession?.user ?? null;
     if (error) throw error;
     if (session?.user) {
       currentUserId = session.user.id;
@@ -243,6 +254,7 @@ export async function getSessionUser(): Promise<User | null> {
       return session.user;
     }
   } catch (error) {
+    if (client !== activeClient || revision !== authSessionRevision) return currentSession?.user ?? null;
     logWarn('Supabase', `Session bootstrap failed: ${error instanceof Error ? error.message : String(error)}`);
     currentUserId = null;
     currentSession = null;
@@ -274,6 +286,7 @@ export async function getSessionUser(): Promise<User | null> {
 export function onAuthStateChange(callback: (change: AuthStateChange) => void): () => void {
   if (!client) return () => {};
   const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
+    authSessionRevision += 1;
     const user = session?.user || null;
     currentUserId = user?.id || null;
     currentSession = session ?? null;

@@ -467,7 +467,7 @@ function handleDatabaseFailure(error: unknown, userId: string): void {
   const reason = reasonForDatabaseError(error);
   publishDegraded(userId, reason, message, classifyOperationalFailure(error));
   if (reason !== 'incompatible_schema' && reason !== 'client_update_required') {
-    realtimeBoundary.scheduleRecovery({ snapshot: true, realtime: true });
+    realtimeBoundary.scheduleRecovery();
   }
 }
 
@@ -481,6 +481,7 @@ export async function bootstrapDatabasePersistence(): Promise<void> {
     return;
   }
   if (runtime.bootstrapPromise && runtime.bootstrappedUserId === userId) return runtime.bootstrapPromise;
+  if (runtime.bootstrappedUserId === userId && realtimeBoundary.isRecovering()) return;
 
   if (runtime.bootstrappedUserId !== userId || (runtime.syncSession.userId && runtime.syncSession.userId !== userId)) {
     resetDatabasePersistence('Switching Sabah One accounts.', 'switching_account');
@@ -554,6 +555,14 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
   if (runtime.bootstrappedUserId !== userId) {
     return bootstrapDatabasePersistence();
   }
+  if (runtime.bootstrapPromise) {
+    const epoch = runtime.persistenceEpoch;
+    return runtime.bootstrapPromise.then(() => {
+      if (isCurrentPersistenceSession(epoch, userId) && (request.targetVersion ?? 0) > runtime.accountVersion) {
+        return requestDatabaseRefresh(request);
+      }
+    });
+  }
   if (runtime.refreshPromise) {
     const needsFollowUpSnapshot = request.snapshot === true && !runtime.refreshActiveSnapshot;
     const needsFollowUpRealtime = request.realtime === true && !runtime.refreshActiveRealtime;
@@ -574,6 +583,7 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
     }
     return runtime.refreshPromise;
   }
+  if (realtimeBoundary.isRecovering() && !request.recovery) return Promise.resolve();
   runtime.refreshQueued = true;
   runtime.refreshNeedsSnapshot = request.snapshot === true;
   runtime.refreshNeedsRealtime = request.realtime === true;
@@ -585,7 +595,7 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
   const operation = (async () => {
     while (runtime.refreshQueued) {
       runtime.refreshQueued = false;
-      const needsSnapshot = runtime.refreshNeedsSnapshot || !hasUsableSnapshotFor(userId);
+      let needsSnapshot = runtime.refreshNeedsSnapshot || !hasUsableSnapshotFor(userId);
       const requestedCollections = [...runtime.refreshNeedsCollections];
       const requestedVersion = runtime.refreshTargetVersion;
       runtime.refreshActiveSnapshot = needsSnapshot;
@@ -596,6 +606,28 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
       runtime.refreshNeedsCollections.clear();
       runtime.refreshTargetVersion = 0;
       assertCurrentPersistenceSession(epoch, userId);
+
+      // A failed lightweight probe must never escalate into a full account
+      // download. Probe first, including while recovering an initial load.
+      realtimeBoundary.connect(epoch, userId);
+      const latestVersion = await observeOperationalOperation(
+        'database',
+        'version',
+        probeHelmAccountVersion,
+        { freshness: 'fresh' },
+      );
+      assertCurrentPersistenceSession(epoch, userId);
+      publishSyncSession({ lastProbeAt: new Date().toISOString() });
+
+      // Fold an explicit retry arriving during the probe into this pass.
+      if (runtime.refreshNeedsSnapshot) {
+        needsSnapshot = true;
+        runtime.refreshNeedsSnapshot = false;
+        runtime.refreshActiveSnapshot = true;
+        if (!runtime.refreshNeedsRealtime && runtime.refreshTargetVersion <= requestedVersion) {
+          runtime.refreshQueued = false;
+        }
+      }
 
       const hadUsableSnapshot = hasUsableSnapshotFor(userId);
       const changedCollections: string[] = [];
@@ -629,15 +661,6 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
         }
       }
 
-      realtimeBoundary.connect(epoch, userId);
-      const latestVersion = await observeOperationalOperation(
-        'database',
-        'version',
-        probeHelmAccountVersion,
-        { freshness: 'fresh' },
-      );
-      assertCurrentPersistenceSession(epoch, userId);
-      publishSyncSession({ lastProbeAt: new Date().toISOString() });
       if (latestVersion > runtime.accountVersion) {
         changedCollections.push(...await hydrateDatabaseSnapshot(epoch, userId));
       }
@@ -668,6 +691,7 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
 }
 
 export async function refreshDatabasePersistence(): Promise<void> {
+  realtimeBoundary.resumeRecovery();
   await requestDatabaseRefresh({ snapshot: true, realtime: true });
 }
 

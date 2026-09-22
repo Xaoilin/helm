@@ -79,6 +79,8 @@ export interface LocalImportCandidate {
 }
 
 export interface DatabaseRefreshRequest {
+  /** Only the bounded recovery timer may bypass the automatic-refresh pause. */
+  recovery?: boolean;
   collections?: string[];
   snapshot?: boolean;
   realtime?: boolean;
