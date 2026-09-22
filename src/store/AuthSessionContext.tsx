@@ -53,7 +53,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     let initialEventPending = true;
 
     getSessionUser().then(user => {
-      if (cancelled) return;
+      if (cancelled || !initialEventPending) return;
       setAuthUser(user);
       authUserRef.current = user;
       setBootstrapped(true);
@@ -73,6 +73,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       setLoading(false);
 
       if (initialEventPending) {
+        initialEventPending = false;
         return;
       }
 

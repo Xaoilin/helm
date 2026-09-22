@@ -298,6 +298,7 @@ describe('persistence health and realtime boundaries', () => {
   });
 
   it('uses Broadcast only as invalidation and schedules bounded realtime recovery', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
     const refresh = vi.fn().mockResolvedValue(undefined);
     const publishDegraded = vi.fn();
     const publishSecretChange = vi.fn();
@@ -364,5 +365,43 @@ describe('persistence health and realtime boundaries', () => {
     const staleRejection = expect(pendingReady).rejects.toThrow('stale account epoch');
     boundary.reset();
     await staleRejection;
+    vi.restoreAllMocks();
+  });
+
+  it('exhausts channel retries and removes failed SDK subscriptions until explicit recovery', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    const unsubscribe = vi.fn();
+    realtimeMocks.subscribeBroadcast.mockReturnValue(unsubscribe);
+    realtimeMocks.getSnapshot.mockReturnValue({ state: 'error', lastError: 'socket timeout' });
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const boundary = new PersistenceRealtimeBoundary({
+      getSession: () => ({
+        epoch: 4, userId: 'user-kan-253', authenticated: true,
+        hasUsableSnapshot: true, readOnly: false, reason: null,
+        isCurrent: (epoch, userId) => epoch === 4 && userId === 'user-kan-253',
+      }),
+      refresh, publishDegraded: vi.fn(), publishSecretChange: vi.fn(),
+      notifyHealth: vi.fn(), staleError: () => new Error('stale account epoch'),
+    });
+    boundary.register();
+    boundary.connect(4, 'user-kan-253');
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(realtimeMocks.subscribeBroadcast).toHaveBeenCalledTimes(6);
+    expect(unsubscribe).toHaveBeenCalledTimes(6);
+    boundary.connect(4, 'user-kan-253');
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(realtimeMocks.subscribeBroadcast).toHaveBeenCalledTimes(6);
+    expect(refresh).not.toHaveBeenCalled();
+    boundary.resumeRecovery();
+    boundary.connect(4, 'user-kan-253');
+    expect(realtimeMocks.subscribeBroadcast).toHaveBeenCalledTimes(7);
+    visible.mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(realtimeMocks.subscribeBroadcast).toHaveBeenCalledTimes(7);
+    expect(unsubscribe).toHaveBeenCalledTimes(7);
+    boundary.reset();
+    vi.restoreAllMocks();
   });
 });
