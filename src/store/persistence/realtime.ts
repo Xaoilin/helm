@@ -252,7 +252,7 @@ export class PersistenceRealtimeBoundary {
       if (!session.authenticated || !session.userId || !session.hasUsableSnapshot
         || document.visibilityState === 'hidden' || navigator.onLine === false) return;
       void this.owner.refresh();
-    }, 15_000);
+    }, 10 * 60_000);
   }
 
   private registerRealtimeHealth(): void {

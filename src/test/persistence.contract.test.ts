@@ -112,7 +112,7 @@ describe('signed-in persistence boundaries', () => {
     missed.state.accountVersion = 9;
     supabaseMocks.fetchHelmAccountSnapshot.mockResolvedValue(missed);
     supabaseMocks.probeHelmAccountVersion.mockResolvedValue(9);
-    await vi.advanceTimersByTimeAsync(15_000);
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
     expect(await loadStore('settings')).toMatchObject({ telemetry: true });
     expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false, accountVersion: 9 });
   });

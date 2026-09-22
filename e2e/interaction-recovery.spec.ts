@@ -115,11 +115,19 @@ for (const width of [390, 1440]) {
         expect(after!.y).toBeLessThan(before!.y);
         await dialog.evaluate(element => { element.scrollTop = 0; });
         await dialog.focus();
+        // PageDown animates: scrollTop > 0 alone does not mean it has finished.
+        await dialog.evaluate(element => {
+          element.addEventListener('scrollend', () => {
+            if (element.scrollTop > 0) element.setAttribute('data-keyboard-scroll-finished', 'true');
+          });
+        });
         await page.keyboard.press('PageDown');
         await expect.poll(() => dialog.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+        await expect(dialog).toHaveAttribute('data-keyboard-scroll-finished', 'true');
         scrollEvidence.push({ surface: editor.surface, ...size, beforeY: before!.y, afterY: after!.y, keyboardScrollTop: await dialog.evaluate(element => element.scrollTop) });
       }
       await field.focus();
+      await expect(field).toBeFocused();
       await expect(field).toBeInViewport();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`${editor.surface.toLowerCase()}-draft-${width}.png`) });
