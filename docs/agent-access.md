@@ -98,3 +98,9 @@ the existing snapshot. It does not grant external agents a generic read API.
 Activity pagination reads through the same first-party RLS boundary and changes
 no business mutation or external MCP contract. Existing narrow domain MCPs and
 listed missing-capability boundaries remain unchanged.
+
+The first-party `get_helm_changed_collections` RPC returns only changed collection
+names, the atomic account version, and a secret invalidation flag. It denies
+anonymous and external OAuth-client sessions; the guarded definer read is needed
+for protected Vault metadata and grants no secret-table access. This transport
+optimization changes no business operation or external domain MCP contract.

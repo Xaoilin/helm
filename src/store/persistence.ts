@@ -3,6 +3,7 @@ export {
   DEVICE_SETTINGS_STORE_KEY,
   bootstrapDatabasePersistence,
   activateStoreCollections,
+  releaseStoreCollections,
   getStoreLoadState,
   loadMoreStoreRecords,
   clearLocalStoreCopy,

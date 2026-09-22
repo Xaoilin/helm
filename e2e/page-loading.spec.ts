@@ -1,6 +1,6 @@
 import type { Page, Request, Route } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
-import { expect, test } from './support/helm-fixture';
+import { expect, test, waitForMutation } from './support/helm-fixture';
 import type { HelmMutation } from '../src/store/databaseTypes';
 import type { AssistantActivityEntry, Surface, Trip } from '../src/types/domain';
 
@@ -33,17 +33,20 @@ function observeDataReads(page: Page) {
   const snapshots: Array<{ url: string; collections: string[] | undefined }> = [];
   const pages: URL[] = [];
   const mutations: HelmMutation[] = [];
+  const deltas: number[] = [];
   page.on('request', request => {
     const url = new URL(request.url());
     if (url.pathname.includes('/get_helm_account_snapshot')) {
       snapshots.push({ url: url.pathname, collections: requestedCollections(request) });
+    } else if (url.pathname.endsWith('/get_helm_changed_collections')) {
+      deltas.push((request.postDataJSON() as { p_since_version: number }).p_since_version);
     } else if (url.pathname.endsWith('/helm_records')) {
       pages.push(url);
     } else if (url.pathname.endsWith('/apply_helm_mutations')) {
       mutations.push(...((request.postDataJSON() as { p_operations?: HelmMutation[] }).p_operations ?? []));
     }
   });
-  return { snapshots, pages, mutations };
+  return { snapshots, pages, mutations, deltas };
 }
 
 async function navigate(page: Page, surface: Surface) {
@@ -229,4 +232,97 @@ test('Activity fetches only one bounded page until more is requested', async ({ 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   await testInfo.attach('activity-page-requests', { body: JSON.stringify(reads.pages.map(url => url.pathname + url.search)), contentType: 'application/json' });
+});
+
+
+test('two clients selectively refresh active data, defer inactive data, and catch up after missed Broadcast', async ({ page, browser, scenario }, testInfo) => {
+  const clientA = await scenario({ now: timestamp, initialSurface: 'health', stores });
+  const clientBPage = await browser.newPage({ baseURL: testInfo.project.use.baseURL, viewport: { width: 1440, height: 900 } });
+  try {
+    const clientB = await clientA.addClient(clientBPage);
+    const reads = observeDataReads(clientBPage);
+    await page.goto('/');
+    await clientBPage.goto('/');
+    await expectSurfaceData(page, 'health');
+    await expectSurfaceData(clientBPage, 'health');
+    const editHealth = async (oldName: string, newName: string) => {
+      await page.getByRole('article').filter({ has: page.getByRole('heading', { name: oldName, exact: true }) })
+        .getByRole('button', { name: 'Edit', exact: true }).click();
+      await page.getByRole('textbox', { name: 'Where did you eat?' }).fill(newName);
+      const confirmed = waitForMutation(page, 'healthFastFoodEntries');
+      await page.getByRole('button', { name: 'Update log', exact: true }).click();
+      expect((await confirmed).ok()).toBe(true);
+      await expect(page.getByRole('heading', { name: newName, exact: true })).toBeVisible();
+    };
+    const expectOnlyHealthReads = (start: number) => {
+      const added = reads.snapshots.slice(start);
+      expect(added).toHaveLength(1);
+      expect(added[0].collections).toEqual(['healthFastFoodEntries']);
+      expect(reads.pages).toHaveLength(0);
+    };
+
+    // Hold B's authoritative response to prove a Broadcast payload cannot publish data.
+    const activeStart = reads.snapshots.length;
+    let releaseSnapshot!: () => void;
+    const snapshotHeld = new Promise<void>(resolve => { releaseSnapshot = resolve; });
+    const holdHealth = async (route: Route) => {
+      if (requestedCollections(route.request())?.includes('healthFastFoodEntries')) await snapshotHeld;
+      await route.fallback();
+    };
+    await clientBPage.route(SNAPSHOT_ROUTE, holdHealth);
+    await editHealth('Synthetic scoped cafe', 'Confirmed active client change');
+    await expect.poll(() => reads.snapshots.length).toBe(activeStart + 1);
+    await expect(clientBPage.getByRole('heading', { name: 'Synthetic scoped cafe', exact: true })).toBeVisible();
+    await expect(clientBPage.getByRole('heading', { name: 'Confirmed active client change', exact: true })).toHaveCount(0);
+    releaseSnapshot();
+    await expect(clientBPage.getByRole('heading', { name: 'Confirmed active client change', exact: true })).toBeVisible();
+    await clientBPage.unroute(SNAPSHOT_ROUTE, holdHealth);
+    expectOnlyHealthReads(activeStart);
+    await clientBPage.screenshot({ path: testInfo.outputPath('two-client-active-confirmed.png') });
+
+    // The Health cache remains visited but stops requiring network reads while Trips is active.
+    await navigate(clientBPage, 'trips');
+    await expectSurfaceData(clientBPage, 'trips');
+    const inactiveStart = reads.snapshots.length;
+    const broadcastsBeforeInactive = clientB.getDeliveredBroadcastCount();
+    await editHealth('Confirmed active client change', 'Confirmed inactive client change');
+    await expect.poll(() => clientB.getDeliveredBroadcastCount()).toBeGreaterThan(broadcastsBeforeInactive);
+    await clientBPage.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(reads.snapshots).toHaveLength(inactiveStart);
+    await expectSurfaceData(clientBPage, 'trips');
+    await navigate(clientBPage, 'health');
+    await expect(clientBPage.getByRole('heading', { name: 'Confirmed inactive client change', exact: true })).toBeVisible();
+    expectOnlyHealthReads(inactiveStart);
+
+    // A missing event including a tombstone must be recovered by metadata on reconnect.
+    const reconnectStart = reads.snapshots.length;
+    const deltasBeforeReconnect = reads.deltas.length;
+    clientB.setBroadcastDelivery(false);
+    clientB.setRealtimeAvailable(false);
+    await expect(clientBPage.getByTestId('sync-status-banner')).toContainText('Live updates delayed');
+    page.once('dialog', dialog => dialog.accept());
+    const removed = waitForMutation(page, 'healthFastFoodEntries');
+    await page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Confirmed inactive client change', exact: true }) })
+      .getByRole('button', { name: 'Remove', exact: true }).click();
+    expect((await removed).ok()).toBe(true);
+    await expect(page.getByRole('heading', { name: 'Confirmed inactive client change', exact: true })).toHaveCount(0);
+    await expect(clientBPage.getByRole('heading', { name: 'Confirmed inactive client change', exact: true })).toBeVisible();
+    clientB.setRealtimeAvailable(true);
+    await clientBPage.clock.fastForward(31_000);
+    await expect(clientBPage.getByTestId('sync-status-banner')).toHaveCount(0);
+    await expect(clientBPage.getByRole('heading', { name: 'Confirmed inactive client change', exact: true })).toHaveCount(0);
+    expect(reads.deltas.length).toBeGreaterThan(deltasBeforeReconnect);
+    expectOnlyHealthReads(reconnectStart);
+    expect(reads.snapshots.every(read => read.collections !== undefined)).toBe(true);
+    expect(reads.snapshots.flatMap(read => read.collections ?? []).filter(key => UNRELATED.includes(key))).toEqual([]);
+    await clientBPage.screenshot({ path: testInfo.outputPath('two-client-reconnect-confirmed.png') });
+    const evidencePath = testInfo.outputPath('two-client-selective-requests.json');
+    await writeFile(evidencePath, JSON.stringify({
+      environment: 'Two separate browser contexts with shared synthetic HTTPS state and private mocked WebSocket Broadcast; not live-account acceptance.',
+      snapshots: reads.snapshots, deltaSinceVersions: reads.deltas, deliveredBroadcasts: clientB.getDeliveredBroadcastCount(),
+    }, null, 2));
+    await testInfo.attach('two-client-selective-requests', { path: evidencePath, contentType: 'application/json' });
+  } finally {
+    await clientBPage.close();
+  }
 });

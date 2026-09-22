@@ -30,10 +30,12 @@ reconciled.
 | Dashboard, Calendar, Clock, Knowledge, Profile, Integrations, Settings, Debug | shared collections only |
 
 Lina's button, keyboard shortcut, and configured wake-word listener remain
-available after shared data loads. Opening Lina activates the Chat collections;
-hands-free conversation creation and command execution wait for both the
-confirmed load and the providers' updated render. Closing Lina invalidates a
-pending activation. Voice and Chat keep their existing shared assistant runtime.
+available after shared data loads. Opening or waking Lina activates the Chat
+collections; hands-free conversation creation and command execution wait for both
+the confirmed load and the providers' updated render. Closing Lina releases its
+collection demand and invalidates a pending activation. Its demand stays active
+across page navigation while open. Voice and Chat keep their existing shared
+assistant runtime.
 Page-specific semantic requests, including secret metadata and Life Hero's
 optional dashboard snapshot, retain their existing access boundaries.
 
@@ -41,8 +43,20 @@ Each confirmed dataset has a ten-minute freshness window. A revisit within that
 window reuses memory; an expired page requests a new scoped snapshot. If that
 read discovers a newer account version, already-loaded collections are reconciled
 before the global checkpoint advances, so a missed or delayed Broadcast cannot
-hide their changes. Existing reconciliation still refreshes requested collections;
-selective event invalidation remains separate work.
+hide their changes. KAN-319 reconciles metadata for every changed collection from
+the last fully invalidated checkpoint. Only changed collections needed by the current page or
+open Lina panel are fetched; previously visited inactive collections are marked
+stale and refreshed on their next activation. A contiguous local mutation receipt
+updates its confirmed cache directly without downloading it again. Delayed,
+duplicate and missed notifications cannot acknowledge omitted changed scopes.
+
+`get_helm_changed_collections` returns an atomic account version, changed
+collection names (including deletion tombstones), and a secret-change boolean.
+It returns no record bodies or secret values. A missed secret notification clears
+revealed values and refreshes summaries when Secrets is mounted. This first-party
+metadata RPC denies anonymous and external OAuth-client sessions, matching the
+existing browser read boundary. The ten-minute check and reconnect use the same
+selective catch-up. HTTPS readiness and finite recovery budgets are unchanged.
 
 Assistant actions load 50 live records at a time, newest first. “Load more
 activity” requests the next page; the loaded count describes the visible window.

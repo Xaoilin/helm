@@ -13,6 +13,7 @@ import {
 import {
   fetchHelmAccountSnapshot,
   fetchHelmCollections,
+  fetchHelmChangedCollections,
   fetchHelmCollectionPage,
   getCurrentUserId,
   getSupabaseRealtimeSnapshot,
@@ -21,7 +22,7 @@ import {
   probeHelmAccountVersion,
 } from '../supabase';
 import { LEGACY_SHARED_STORE_KEY_SET, SHARED_STORE_KEYS } from '../storeKeys';
-import type { HelmMutation, HelmRecord, HelmSecretRealtimeEvent } from '../databaseTypes';
+import type { HelmMutation, HelmRecord, HelmSecretChangeEvent } from '../databaseTypes';
 import { HELM_DATABASE_SCHEMA_VERSION } from '../databaseTypes';
 import {
   decodeStoreValue,
@@ -113,9 +114,7 @@ const realtimeBoundary = new PersistenceRealtimeBoundary({
   }),
   refresh: requestDatabaseRefresh,
   publishDegraded,
-  publishSecretChange: event => {
-    runtime.secretChangeSubscribers.forEach(listener => listener(event));
-  },
+  publishSecretChange,
   notifyHealth: () => notifyPersistenceHealthSubscribers(),
   staleError: () => new StalePersistenceSessionError(),
 });
@@ -125,6 +124,12 @@ class StalePersistenceSessionError extends Error {
     super('The Sabah One account changed while database work was in flight.');
     this.name = 'StalePersistenceSessionError';
   }
+}
+
+function publishSecretChange(event: HelmSecretChangeEvent): void {
+  if (event.accountVersion <= runtime.secretNotificationVersion) return;
+  runtime.secretNotificationVersion = event.accountVersion;
+  runtime.secretChangeSubscribers.forEach(listener => listener(event));
 }
 
 class SyncCompatibilityError extends Error {
@@ -248,6 +253,14 @@ function publishStoreChanges(
 
 function applyMutationResult(records: HelmRecord[], version: number): void {
   recordCache.applyChanges(records);
+  // Only a contiguous confirmed receipt can acknowledge every intervening write.
+  if (runtime.scoped && version === runtime.reconciledVersion + 1) {
+    runtime.reconciledVersion = version;
+    for (const collection of new Set(records.map(record => record.collection))) {
+      const status = recordCache.status(collection);
+      if (status && !status.stale) recordCache.confirm(collection, status.complete, status.limit, version);
+    }
+  }
   runtime.accountVersion = Math.max(runtime.accountVersion, version);
   publishSyncSession({ accountVersion: runtime.accountVersion });
 }
@@ -413,12 +426,6 @@ async function hydrateDatabaseSnapshot(
     if (runtime.scoped) throw new Error('Account data changed while loading this page.');
     return [];
   }
-  if (requested && snapshot.state.accountVersion > runtime.accountVersion
-    && [...runtime.requestedCollections].some(key => recordCache.status(key) && !requested.includes(key))) {
-    // A page's newer global version also acknowledges changes outside that
-    // page. Reconcile the confirmed scopes before advancing the checkpoint.
-    return hydrateDatabaseSnapshot(epoch, userId, [...runtime.requestedCollections]);
-  }
   const collectionKeys = new Set(requested ?? [
     ...SHARED_STORE_KEYS.map(item => item.key),
     ...recordCache.collectionKeys(),
@@ -459,13 +466,48 @@ async function hydrateDatabaseSnapshot(
   const wasLoaded = new Set([...collectionKeys].filter(key => recordCache.status(key)));
   for (const [collection, value] of staged) {
     recordCache.replaceCollection(collection, value.records);
-    recordCache.confirm(collection, value.complete, value.limit);
+    recordCache.confirm(collection, value.complete, value.limit, snapshot.state.accountVersion);
   }
   runtime.accountVersion = Math.max(runtime.accountVersion, snapshot.state.accountVersion);
   healthPublisher.recordRemoteRead(requested ? 'page' : 'account');
   return [...collectionKeys].filter(collection => (
     !wasLoaded.has(collection) || !valuesEqual(previousValues.get(collection), recordCache.decoded(collection))
   ));
+}
+
+/** Reconcile a global checkpoint only after every changed scope is read or invalidated. */
+async function reconcileScopedCollections(epoch: number, userId: string): Promise<string[]> {
+  const changed: string[] = [];
+  try {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const delta = await fetchHelmChangedCollections(runtime.reconciledVersion);
+      assertCurrentPersistenceSession(epoch, userId);
+      const needed = delta.collections.filter(key => {
+        const status = recordCache.status(key);
+        return runtime.requestedCollections.has(key)
+          && (!status || status.stale || status.version < delta.accountVersion);
+      });
+      // Invalidation survives a failed read, so a revisit cannot reuse stale data.
+      for (const key of delta.collections) {
+        const status = recordCache.status(key);
+        if (status && status.version < delta.accountVersion) recordCache.invalidate(key);
+      }
+      if (needed.length > 0) changed.push(...await hydrateDatabaseSnapshot(epoch, userId, needed));
+      assertCurrentPersistenceSession(epoch, userId);
+      if (delta.secretsChanged) publishSecretChange({ accountVersion: delta.accountVersion, reconciliation: true });
+      runtime.reconciledVersion = Math.max(runtime.reconciledVersion, delta.accountVersion);
+      runtime.accountVersion = Math.max(runtime.accountVersion, delta.accountVersion);
+      if (runtime.reconciledVersion >= runtime.accountVersion) return changed;
+      // A snapshot or local confirmation raced the metadata read. Catch up from
+      // the last fully invalidated checkpoint, never from the newer local write.
+    }
+    throw new Error('Account data kept changing while refreshing. Retry connection.');
+  } catch (error) {
+    // A later catch-up read can fail after an earlier scope was confirmed.
+    // Publish that confirmed cache so recovery cannot strand its providers.
+    if (isCurrentPersistenceSession(epoch, userId)) publishStoreChanges(recordCache.confirmedCollectionKeys());
+    throw error;
+  }
 }
 
 async function refreshCollectionsFromBroadcast(
@@ -475,9 +517,7 @@ async function refreshCollectionsFromBroadcast(
   userId: string,
 ): Promise<string[]> {
   assertCurrentPersistenceSession(epoch, userId);
-  if (runtime.scoped) {
-    return hydrateDatabaseSnapshot(epoch, userId);
-  }
+  if (runtime.scoped) return reconcileScopedCollections(epoch, userId);
   let changedCollections = collections;
   if (nextVersion > runtime.accountVersion + 1 || collections.length === 0) {
     changedCollections = await hydrateDatabaseSnapshot(epoch, userId);
@@ -549,7 +589,7 @@ export async function bootstrapDatabasePersistence(collections?: readonly string
   }
   if (collections) {
     runtime.scoped = true;
-    collections.forEach(key => runtime.requestedCollections.add(key));
+    setCollectionDemand(collections, 'page');
   }
   runtime.bootstrappedUserId = userId;
   const epoch = ++runtime.persistenceEpoch;
@@ -570,6 +610,7 @@ export async function bootstrapDatabasePersistence(collections?: readonly string
       return;
     }
     const changedCollections = await hydrateDatabaseSnapshot(epoch, userId);
+    runtime.reconciledVersion = runtime.accountVersion;
     publishSyncSession({
       status: 'reconnecting',
       userId,
@@ -589,8 +630,9 @@ export async function bootstrapDatabasePersistence(collections?: readonly string
     );
     assertCurrentPersistenceSession(epoch, userId);
     publishSyncSession({ lastProbeAt: new Date().toISOString() });
-    if (latestVersion > runtime.accountVersion) {
-      changedCollections.push(...await hydrateDatabaseSnapshot(epoch, userId));
+    if (latestVersion > (runtime.scoped ? runtime.reconciledVersion : runtime.accountVersion)) {
+      changedCollections.push(...await (runtime.scoped
+        ? reconcileScopedCollections(epoch, userId) : hydrateDatabaseSnapshot(epoch, userId)));
     }
     assertCurrentPersistenceSession(epoch, userId);
     publishReady(userId);
@@ -620,7 +662,7 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
   if (runtime.bootstrapPromise) {
     const epoch = runtime.persistenceEpoch;
     return runtime.bootstrapPromise.then(() => {
-      if (isCurrentPersistenceSession(epoch, userId) && (request.targetVersion ?? 0) > runtime.accountVersion) {
+      if (isCurrentPersistenceSession(epoch, userId) && (request.targetVersion ?? 0) > (runtime.scoped ? runtime.reconciledVersion : runtime.accountVersion)) {
         return requestDatabaseRefresh(request);
       }
     });
@@ -633,7 +675,7 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
     const needsFollowUpRealtime = request.realtime === true && !runtime.refreshActiveRealtime;
     const requestedVersion = request.targetVersion ?? 0;
     const needsFollowUpVersion = requestedVersion > Math.max(
-      runtime.accountVersion,
+      runtime.scoped ? runtime.reconciledVersion : runtime.accountVersion,
       runtime.refreshActiveTargetVersion,
       runtime.refreshTargetVersion,
     );
@@ -711,7 +753,7 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
           });
           publishStoreChanges(await migrateLegacyLocalCopies(epoch, userId));
         }
-      } else if (requestedVersion > runtime.accountVersion) {
+      } else if (!runtime.scoped && requestedVersion > runtime.accountVersion) {
         if (requestedCollections.length > 0) {
           changedCollections.push(...await refreshCollectionsFromBroadcast(
             requestedCollections,
@@ -727,7 +769,11 @@ function requestDatabaseRefresh(request: DatabaseRefreshRequest = {}): Promise<v
         }
       }
 
-      if (latestVersion > runtime.accountVersion) {
+      if (runtime.scoped) {
+        if (Math.max(latestVersion, runtime.accountVersion, requestedVersion) > runtime.reconciledVersion) {
+          changedCollections.push(...await reconcileScopedCollections(epoch, userId));
+        }
+      } else if (latestVersion > runtime.accountVersion) {
         changedCollections.push(...await hydrateDatabaseSnapshot(epoch, userId));
       }
       assertCurrentPersistenceSession(epoch, userId);
@@ -801,7 +847,7 @@ export function subscribeStoreChanges(listener: (change: RemoteStoreChange) => v
 }
 
 export function subscribeHelmSecretChanges(
-  listener: (event: HelmSecretRealtimeEvent) => void,
+  listener: (event: HelmSecretChangeEvent) => void,
 ): () => void {
   runtime.secretChangeSubscribers.add(listener);
   return () => runtime.secretChangeSubscribers.delete(listener);
@@ -818,25 +864,45 @@ export function getStoreLoadState(key: string): { loaded: boolean; complete: boo
   return { loaded: Boolean(status), complete: status?.complete ?? false, confirmedAt: status?.confirmedAt ?? null };
 }
 
+function setCollectionDemand(keys: readonly string[], owner: string): void {
+  runtime.collectionOwners.set(owner, keys);
+  runtime.requestedCollections.clear();
+  for (const collections of runtime.collectionOwners.values()) {
+    collections.forEach(key => runtime.requestedCollections.add(key));
+  }
+}
+
+export function releaseStoreCollections(owner: string): void {
+  setCollectionDemand([], owner);
+}
+
+/** Each route/overlay owns current demand; cached inactive collections stay in memory. */
+export async function activateStoreCollections(keys: readonly string[], owner = 'page'): Promise<void> {
+  setCollectionDemand(keys, owner);
+  return ensureStoreCollections(keys);
+}
+
 /** Route demand is coalesced and never resets a failed session's recovery budget. */
-export async function activateStoreCollections(keys: readonly string[]): Promise<void> {
+async function ensureStoreCollections(keys: readonly string[]): Promise<void> {
   const userId = getCurrentUserId();
   if (!userId || !isAuthenticated() || !runtime.scoped) return;
-  keys.forEach(key => runtime.requestedCollections.add(key));
-  if (runtime.bootstrapPromise) return runtime.bootstrapPromise.then(() => activateStoreCollections(keys));
-  if (runtime.collectionLoadPromise) return runtime.collectionLoadPromise.then(() => activateStoreCollections(keys));
-  if (runtime.refreshPromise) return runtime.refreshPromise.then(() => activateStoreCollections(keys));
+  if (runtime.bootstrapPromise) return runtime.bootstrapPromise.then(() => ensureStoreCollections(keys));
+  if (runtime.collectionLoadPromise) return runtime.collectionLoadPromise.then(() => ensureStoreCollections(keys));
+  if (runtime.refreshPromise) return runtime.refreshPromise.then(() => ensureStoreCollections(keys));
   if (realtimeBoundary.isRecovering() || runtime.syncSession.readOnly) {
     throw new Error(runtime.syncSession.error || 'Reconnect to load this page.');
   }
   const needed = keys.filter(key => {
     const status = recordCache.status(key);
-    return !status || Date.now() - status.confirmedAt >= STORE_FRESHNESS_MS;
+    return !status || status.stale || Date.now() - status.confirmedAt >= STORE_FRESHNESS_MS;
   });
   if (needed.length === 0) return;
   const epoch = runtime.persistenceEpoch;
   const operation = (async () => {
     const changes = await hydrateDatabaseSnapshot(epoch, userId, needed);
+    if (runtime.accountVersion > runtime.reconciledVersion) {
+      changes.push(...await reconcileScopedCollections(epoch, userId));
+    }
     assertCurrentPersistenceSession(epoch, userId);
     publishSyncSession({ accountVersion: runtime.accountVersion });
     publishStoreChanges([...changes, ...await migrateLegacyLocalCopies(epoch, userId)]);
@@ -872,7 +938,7 @@ export async function loadMoreStoreRecords(key: string): Promise<void> {
     assertCurrentPersistenceSession(epoch, userId);
     if (afterVersion !== version || runtime.accountVersion > version) throw new Error('Activity changed while loading. Refresh before loading more.');
     recordCache.applyChanges(page.records);
-    recordCache.confirm(key, !page.hasMore, status.limit + STORE_PAGE_SIZE);
+    recordCache.confirm(key, !page.hasMore, status.limit + STORE_PAGE_SIZE, version);
     publishStoreChanges([key]);
   })().catch(error => {
     if (isCurrentPersistenceSession(epoch, userId)) handleDatabaseFailure(error, userId);

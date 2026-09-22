@@ -61,6 +61,7 @@ export class PersistenceRealtimeBoundary {
   private recovering = false;
   private channelTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
   private channelAttempt = 0;
+  private lastChannelState: string | null = null;
 
   constructor(owner: PersistenceRealtimeOwner) {
     this.owner = owner;
@@ -319,10 +320,12 @@ export class PersistenceRealtimeBoundary {
     if (this.healthRegistered) return;
     this.healthRegistered = true;
     subscribeSupabaseRealtimeSnapshot(snapshot => {
+      const previousState = this.lastChannelState;
+      this.lastChannelState = snapshot.state;
       this.owner.notifyHealth();
       const session = this.owner.getSession();
       if (!session.userId || !session.isCurrent(this.subscriptionEpoch ?? -1, this.subscriptionUserId ?? '')) return;
-      if (snapshot.state === 'subscribed') {
+      if (snapshot.state === 'subscribed' && previousState !== 'subscribed') {
         if (this.channelTimer !== null) globalThis.clearTimeout(this.channelTimer);
         this.channelTimer = null;
         this.channelAttempt = 0;
