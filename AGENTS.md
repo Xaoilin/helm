@@ -34,6 +34,10 @@ HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the lin
 
 ## Deeper References
 
+| When you need context on | Read this file |
+| --- | --- |
+| New or changed SQL: existing indexes, measured plans, and justified index additions | [SQL query review](docs/sql-query-review.md) |
+
 - `docs/engineering-guide.md`
 - `docs/project-architecture.md`
 - `docs/feature-status.md`
