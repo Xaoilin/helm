@@ -20,6 +20,9 @@ export class PersistenceRuntimeState {
   refreshActiveSnapshot = false;
   refreshActiveRealtime = false;
   refreshActiveTargetVersion = 0;
+  scoped = false;
+  readonly requestedCollections = new Set<string>();
+  collectionLoadPromise: Promise<void> | null = null;
   readonly syncSessionSubscribers = new Set<(snapshot: SyncSessionSnapshot) => void>();
   readonly storeChangeSubscribers = new Set<(change: RemoteStoreChange) => void>();
   readonly secretChangeSubscribers = new Set<(event: HelmSecretRealtimeEvent) => void>();
@@ -48,5 +51,8 @@ export class PersistenceRuntimeState {
     this.refreshActiveTargetVersion = 0;
     this.accountVersion = 0;
     this.bootstrappedUserId = null;
+    this.scoped = false;
+    this.requestedCollections.clear();
+    this.collectionLoadPromise = null;
   }
 }

@@ -862,14 +862,17 @@ export async function setHelmSecretArchived(
   return result;
 }
 
-export async function fetchHelmAccountSnapshot(): Promise<{
+export async function fetchHelmAccountSnapshot(collections?: string[]): Promise<{
   state: HelmAccountState;
   records: HelmRecord[];
 }> {
   const database = requireClient();
   const userId = currentUserId!;
-  const { data, error } = await database
-    .rpc('get_helm_account_snapshot')
+  const requestedCollections = collections === undefined ? undefined : [...new Set(collections)];
+  const query = requestedCollections === undefined
+    ? database.rpc('get_helm_account_snapshot')
+    : database.rpc('get_helm_account_snapshot_for_collections', { p_collections: requestedCollections });
+  const { data, error } = await query
     .abortSignal(AbortSignal.timeout(CORE_DATABASE_READ_TIMEOUT_MS));
   if (error) throw error;
 
@@ -891,6 +894,7 @@ export async function fetchHelmAccountSnapshot(): Promise<{
     if (
       record.userId !== userId
       || typeof record.collection !== 'string'
+      || (requestedCollections !== undefined && !requestedCollections.includes(record.collection))
       || typeof record.recordId !== 'string'
       || typeof record.revision !== 'number'
       || typeof record.accountVersion !== 'number'
@@ -948,6 +952,40 @@ export async function fetchHelmCollections(collections: string[]): Promise<HelmR
     [...new Set(collections)],
   );
   return rows.map(mapRecord);
+}
+
+export async function fetchHelmCollectionPage(
+  collection: string,
+  offset: number,
+  limit: number,
+): Promise<{ records: HelmRecord[]; hasMore: boolean }> {
+  // Leave room for the lookahead row under the Data API's 1,000-row cap.
+  if (!collection || !Number.isSafeInteger(offset) || offset < 0
+    || !Number.isInteger(limit) || limit < 1 || limit >= HELM_RECORD_PAGE_SIZE
+    || !Number.isSafeInteger(offset + limit)) {
+    throw new Error('Sabah One collection pages require a collection, a non-negative offset, and a limit between 1 and 999.');
+  }
+  const database = requireClient();
+  const userId = currentUserId!;
+  let query = database
+    .from('helm_records')
+    .select(HELM_RECORD_COLUMNS)
+    .eq('user_id', userId)
+    .eq('collection', collection)
+    .is('deleted_at', null);
+  query = collection === 'assistantActivityLog'
+    ? query.order('created_at', { ascending: false })
+    : query.order('position', { ascending: true, nullsFirst: false });
+  const { data, error } = await query
+    .order('record_id', { ascending: true })
+    .range(offset, offset + limit)
+    .abortSignal(AbortSignal.timeout(CORE_DATABASE_READ_TIMEOUT_MS));
+  if (error) throw error;
+  const rows = (data || []) as unknown as HelmRecordRow[];
+  if (rows.some(row => row.user_id !== userId || row.collection !== collection || row.deleted_at !== null)) {
+    throw new Error('The Sabah One collection page contained an invalid record.');
+  }
+  return { records: rows.slice(0, limit).map(mapRecord), hasMore: rows.length > limit };
 }
 
 function mapMutationResult(value: unknown, requestId: string): HelmMutationResult {

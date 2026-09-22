@@ -2,6 +2,8 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react
 import App from './App';
 import { getSupabaseRealtimeSnapshot, subscribeSupabaseRealtimeSnapshot } from './store/supabase';
 import { AppProviders } from './store/AppProviders';
+import { getInitialShellSurface } from './store/ShellContext';
+import { getPageCollections } from './store/pageCollections';
 import { AuthSessionProvider, useAuthSession } from './store/AuthSessionContext';
 import { SyncAvailabilityProvider } from './store/SyncAvailabilityContext';
 import {
@@ -27,7 +29,7 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
         : 'Sabah One database configuration is unavailable.', auth.supabaseReady ? 'signed_out' : 'configuration');
       return;
     }
-    void bootstrapDatabasePersistence().catch(() => {
+    void bootstrapDatabasePersistence(getPageCollections(getInitialShellSurface())).catch(() => {
       // The persistence session exposes the actionable failure state.
     });
   }, [auth.authUser, auth.sessionKey, auth.supabaseReady]);
@@ -130,6 +132,8 @@ function blockingSyncDetail(
 
 function SyncStatusBanner({ syncSession }: { syncSession: SyncSessionSnapshot }) {
   const realtimeState = useSyncExternalStore(subscribeSupabaseRealtimeSnapshot, () => getSupabaseRealtimeSnapshot().state);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const liveUpdatesDelayed = realtimeState !== 'subscribed';
   if (!syncSession.hasUsableSnapshot || (!syncSession.readOnly && !liveUpdatesDelayed)) return null;
   const offline = syncSession.reason === 'offline';
@@ -148,6 +152,16 @@ function SyncStatusBanner({ syncSession }: { syncSession: SyncSessionSnapshot })
     >
       <strong>{label}</strong>
       <span>{detail}</span>
+      {syncSession.readOnly && (
+        <button type="button" className="btn btn-secondary btn-sm" disabled={retrying} onClick={() => {
+          setRetrying(true);
+          setRetryError(null);
+          void refreshDatabasePersistence().catch(error => {
+            setRetryError(error instanceof Error ? error.message : String(error));
+          }).finally(() => setRetrying(false));
+        }}>{retrying ? 'Retrying...' : 'Retry connection'}</button>
+      )}
+      {retryError && <span role="alert">{retryError}</span>}
     </div>
   );
 }

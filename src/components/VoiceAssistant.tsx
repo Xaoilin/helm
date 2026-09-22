@@ -13,6 +13,9 @@ import { useAssistantActivityContext } from "../store/contexts/AssistantActivity
 import { useAssistantUndo } from "../store/contexts/AssistantUndoContext";
 import { usePrayerContext } from "../store/contexts/PrayerContext";
 import { useChatContext } from '../store/contexts/ChatContext';
+import { useAssistantPageReady } from '../store/PageReadinessGate';
+import { ASSISTANT_PAGE_COLLECTIONS } from '../store/pageCollections';
+import { activateStoreCollections } from '../store/persistence';
 import { ELEVENLABS_VOICE_ID, OLLAMA_ENDPOINT } from '../config';
 import { TIMING, VOICE_SESSION } from '../config/constants';
 import { useVoiceOutput } from '../hooks/useVoiceOutput';
@@ -61,6 +64,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const assistantUndo = useAssistantUndo();
   const prayer = usePrayerContext();
   const chat = useChatContext();
+  const assistantDataReady = useAssistantPageReady();
   const [state, setState] = useState<AssistantState>('idle');
   const [transcript, setTranscript] = useState('');
   const [response, setResponse] = useState('');
@@ -82,6 +86,35 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const nextListeningTimerRef = useRef<number | null>(null);
   const processTranscriptRef = useRef<(text: string, inputMode: InputMode) => Promise<void>>(async () => {});
   const voiceConversationIdRef = useRef<string | null>(null);
+  const beginHandsFreeSessionRef = useRef<() => void>(() => {});
+  const assistantReadyRef = useRef(false);
+  const readinessWaitersRef = useRef(new Set<{ resolve: () => void; reject: (error: Error) => void }>());
+
+  useEffect(() => {
+    assistantReadyRef.current = assistantDataReady;
+    if (assistantDataReady) {
+      for (const waiter of readinessWaitersRef.current) waiter.resolve();
+      readinessWaitersRef.current.clear();
+    }
+  }, [assistantDataReady]);
+
+  useEffect(() => {
+    const waiters = readinessWaitersRef.current;
+    return () => {
+      sessionIdRef.current += 1;
+      for (const waiter of waiters) waiter.reject(new Error('Lina was closed while account data loaded.'));
+      waiters.clear();
+    };
+  }, []);
+
+  const ensureAssistantData = useCallback(async () => {
+    const sessionId = sessionIdRef.current;
+    await activateStoreCollections(ASSISTANT_PAGE_COLLECTIONS);
+    if (sessionId !== sessionIdRef.current) throw new Error('Lina was closed while account data loaded.');
+    if (!assistantReadyRef.current) {
+      await new Promise<void>((resolve, reject) => readinessWaitersRef.current.add({ resolve, reject }));
+    }
+  }, []);
 
   const enabled = settings.settings.assistantEnabled !== false;
   const wakeWordEnabled = settings.settings.wakeWordEnabled === true;
@@ -267,7 +300,11 @@ export default function VoiceAssistant({ prayerData }: Props) {
     clearScheduledListening();
     setState('open');
     clearAssistantUi();
-  }, [clearAssistantUi, clearScheduledListening, enabled, setVoiceSessionMode]);
+    const sessionId = sessionIdRef.current;
+    void ensureAssistantData().catch(failure => {
+      if (sessionId === sessionIdRef.current) setError(failure instanceof Error ? failure.message : String(failure));
+    });
+  }, [clearAssistantUi, clearScheduledListening, enabled, ensureAssistantData, setVoiceSessionMode]);
 
   const closeAssistant = useCallback(() => {
     sessionIdRef.current += 1;
@@ -286,6 +323,17 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
   const beginHandsFreeSession = useCallback(() => {
     if (!enabled) return;
+    if (!assistantDataReady) {
+      const sessionId = ++sessionIdRef.current;
+      setState('open');
+      clearAssistantUi();
+      void ensureAssistantData().then(() => {
+        if (sessionId === sessionIdRef.current) beginHandsFreeSessionRef.current();
+      }).catch(failure => {
+        if (sessionId === sessionIdRef.current) setError(failure instanceof Error ? failure.message : String(failure));
+      });
+      return;
+    }
 
     if (voiceBackend === 'none') {
       openAssistantPanel();
@@ -331,12 +379,26 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
       scheduleHandsFreeListening('initial', sessionId);
     })();
-  }, [shell.surface, cancelListening, chat, clearScheduledListening, enabled, lang, openAssistantPanel, scheduleHandsFreeListening, setVoiceSessionMode, speakMessage, stopSpeaking, voiceBackend]);
+  }, [shell.surface, assistantDataReady, cancelListening, chat, clearAssistantUi, clearScheduledListening, enabled, ensureAssistantData, lang, openAssistantPanel, scheduleHandsFreeListening, setVoiceSessionMode, speakMessage, stopSpeaking, voiceBackend]);
+
+  useEffect(() => {
+    beginHandsFreeSessionRef.current = beginHandsFreeSession;
+  }, [beginHandsFreeSession]);
 
   const processTranscript = useCallback(async (text: string, inputMode: InputMode) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     const requestSessionId = sessionIdRef.current;
+    if (!assistantDataReady) {
+      setState('open');
+      try {
+        await ensureAssistantData();
+        if (requestSessionId === sessionIdRef.current) await processTranscriptRef.current(text, inputMode);
+      } catch (failure) {
+        if (requestSessionId === sessionIdRef.current) setError(failure instanceof Error ? failure.message : String(failure));
+      }
+      return;
+    }
 
     if (inputMode === 'voice' && handsFreeSessionActiveRef.current && isVoiceStopPhrase(trimmed, lang)) {
       setTranscript(trimmed);
@@ -488,6 +550,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
     setVoiceSessionMode,
     settings.settings,
     settings.appTimeZone.effectiveTimeZone,
+    assistantDataReady,
+    ensureAssistantData,
     shell,
     speakMessage,
     tasks,
@@ -516,7 +580,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
     };
   }, [shell.surface]);
 
-  const wakeWordArmed = state === 'idle' || (state === 'open' && voiceSessionMode === 'manual');
+  const wakeWordArmed = state === 'idle' || (assistantDataReady && state === 'open' && voiceSessionMode === 'manual');
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -617,7 +681,7 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
   const isOpen = state !== 'idle';
   const canVoice = voiceBackend !== 'none';
-  const showPromptSuggestions = state === 'open' && !transcript && !response && voiceSessionMode === 'manual';
+  const showPromptSuggestions = assistantDataReady && state === 'open' && !transcript && !response && voiceSessionMode === 'manual';
   const headerStatus = state === 'preparing'
     ? isArabic ? '\u23F3 \u0623\u062C\u0647\u0632 \u0627\u0644\u0645\u064A\u0643\u0631\u0648\u0641\u0648\u0646... \u0627\u0646\u062A\u0638\u0631 \u0627\u0644\u0646\u063A\u0645\u0629' : 'Getting the microphone ready... wait for the beep'
     : state === 'listening'
@@ -637,11 +701,11 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const listeningPrompt = listeningMode === 'followup'
     ? isArabic ? '\u0623\u0633\u062A\u0645\u0639 \u0644\u0644\u0645\u062A\u0627\u0628\u0639\u0629... \u062A\u0643\u0644\u0645 \u0627\u0644\u0622\u0646' : 'Listening for follow-up... speak now'
     : isArabic ? '\u0623\u0633\u062A\u0645\u0639... \u062A\u0643\u0644\u0645 \u0627\u0644\u0622\u0646' : 'Listening... speak now';
-  const showLatestActivity = Boolean(latestActivity);
+  const showLatestActivity = assistantDataReady && Boolean(latestActivity);
   const canUndoLatestActivity = Boolean(latestActivity?.undoOperation && latestActivity.status === 'applied');
 
   const handleUndoLatestActivity = () => {
-    if (!latestActivity) return;
+    if (!assistantDataReady || !latestActivity) return;
     const result = assistantUndo.undoAssistantActivity(latestActivity.id);
     if (result.ok) {
       setResponse(result.message);
@@ -712,7 +776,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
             </div>
           )}
 
-          {state !== 'processing' && state !== 'speaking' && (
+          {!assistantDataReady && <div role="status">Loading Lina account data...</div>}
+          {assistantDataReady && state !== 'processing' && state !== 'speaking' && (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {state !== 'listening' && state !== 'preparing' && (
                 <input

@@ -17,6 +17,7 @@ try {
   run([
     'test', 'db', '--local',
     'supabase/tests/helm_database_authoritative.sql',
+    'supabase/tests/helm_scoped_account_snapshot.sql',
     'supabase/tests/helm_secret_vault.sql',
     'supabase/tests/sabah_one_inventory_oauth.sql',
     'supabase/tests/sabah_one_employment_oauth.sql',
@@ -148,7 +149,10 @@ async function runConcurrencyScenario() {
     $$;
   `)
 
-  const beforeSnapshot = await runAuthenticatedSnapshot(claims)
+  const [beforeSnapshot, beforeScopedSnapshot] = await Promise.all([
+    runAuthenticatedSnapshot(claims),
+    runAuthenticatedSnapshot(claims, true),
+  ])
   const snapshotWriterGate = await openAdvisoryGate(snapshotWriterLockKey)
   const snapshotWriter = startMarkedSql(`
     begin;
@@ -164,10 +168,14 @@ async function runConcurrencyScenario() {
   `, 'helm_snapshot_writer_ready')
 
   let duringSnapshot
+  let duringScopedSnapshot
   let samplingFailure = null
   try {
     await snapshotWriter.ready
-    duringSnapshot = await runAuthenticatedSnapshot(claims)
+    ;[duringSnapshot, duringScopedSnapshot] = await Promise.all([
+      runAuthenticatedSnapshot(claims),
+      runAuthenticatedSnapshot(claims, true),
+    ])
   } catch (error) {
     samplingFailure = error
   } finally {
@@ -175,7 +183,10 @@ async function runConcurrencyScenario() {
   }
   await snapshotWriter.done
   if (samplingFailure) throw samplingFailure
-  const afterSnapshot = await runAuthenticatedSnapshot(claims)
+  const [afterSnapshot, afterScopedSnapshot] = await Promise.all([
+    runAuthenticatedSnapshot(claims),
+    runAuthenticatedSnapshot(claims, true),
+  ])
 
   const beforeVersion = beforeSnapshot.state?.accountVersion
   const duringVersion = duringSnapshot.state?.accountVersion
@@ -191,8 +202,19 @@ async function runConcurrencyScenario() {
   if (afterSnapshot.records.length !== beforeSnapshot.records.length + 1) {
     throw new Error('The committed atomic snapshot was incomplete.')
   }
+  if (duringScopedSnapshot.state.accountVersion !== beforeScopedSnapshot.state.accountVersion
+    || duringScopedSnapshot.records.some(record => record.recordId === 'snapshot-atomic')) {
+    throw new Error('The scoped snapshot exposed part of an uncommitted write.')
+  }
+  if (afterScopedSnapshot.state.accountVersion !== beforeScopedSnapshot.state.accountVersion + 1
+    || !afterScopedSnapshot.records.some(record => record.recordId === 'snapshot-atomic')) {
+    throw new Error('The scoped snapshot did not expose the complete committed write.')
+  }
+  if (afterScopedSnapshot.records.length !== beforeScopedSnapshot.records.length + 1) {
+    throw new Error('The committed scoped snapshot was incomplete.')
+  }
 
-  console.log('Concurrent database sessions: 6 assertions passed')
+  console.log('Concurrent database sessions: 9 assertions passed')
 }
 
 async function runLifeHeroRollbackScenario() {
@@ -309,12 +331,12 @@ async function runGatedPair(claims, statements) {
   if (readinessFailure) throw readinessFailure
 }
 
-async function runAuthenticatedSnapshot(claims) {
+async function runAuthenticatedSnapshot(claims, scoped = false) {
   const output = await runSqlOutput(`
     begin;
     set local role authenticated;
     select set_config('request.jwt.claims', '${claims}', true);
-    select public.get_helm_account_snapshot()::text;
+    select ${scoped ? "public.get_helm_account_snapshot_for_collections(array['tasks'])" : 'public.get_helm_account_snapshot()'}::text;
     commit;
   `)
   const snapshot = output

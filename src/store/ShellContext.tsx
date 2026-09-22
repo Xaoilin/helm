@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -15,24 +16,13 @@ import {
   type AssistantNavigationRequest,
 } from '../services/assistantNavigation';
 import type { Surface } from '../types/domain';
-import { useAssistantActivityContext } from './contexts/AssistantActivityContext';
-import { useAssistantContext } from './contexts/AssistantContext';
-import { useCalendar } from './contexts/CalendarContext';
-import { useChatContext } from './contexts/ChatContext';
-import { useClockContext } from './contexts/ClockContext';
-import { useFinanceContext } from './contexts/FinanceContext';
-import { useGamificationContext } from './contexts/GamificationContext';
-import { useHealthContext } from './contexts/HealthContext';
-import { useInventoryContext } from './contexts/InventoryContext';
-import { useKnowledgeContext } from './contexts/KnowledgeContext';
-import { usePrayerContext } from './contexts/PrayerContext';
-import { useProjectContext } from './contexts/ProjectContext';
-import { useSettingsContext } from './contexts/SettingsContext';
-import { useTaskContext } from './contexts/TaskContext';
-import { useTripContext } from './contexts/TripContext';
+import { activateStoreCollections, refreshDatabasePersistence } from './persistence';
+import { getPageCollections } from './pageCollections';
 
 interface ShellContextValue {
   surface: Surface;
+  pageLoadError: string | null;
+  retryPageLoad: () => void;
   assistantNavigationRequest: AssistantNavigationRequest | null;
   navigate: (surface: Surface) => void;
   requestAssistantNavigation: AssistantNavigationHandler;
@@ -73,7 +63,7 @@ function isShellSurface(value: string | null): value is Surface {
   }
 }
 
-function getInitialShellSurface(): Surface {
+export function getInitialShellSurface(): Surface {
   try {
     const storedSurface = window.sessionStorage.getItem(STORAGE_KEYS.SHELL_SURFACE);
     return isShellSurface(storedSurface) ? storedSurface : 'dashboard';
@@ -82,62 +72,24 @@ function getInitialShellSurface(): Surface {
   }
 }
 
-function AppReadinessGate({ children }: { children: ReactNode }) {
-  // Employment may await its first server-confirmed seed. Its surface owns that
-  // loading state so an unavailable domain cannot prevent unrelated navigation.
-  const calendarLoaded = useCalendar().loaded;
-  const tripsLoaded = useTripContext().loaded;
-  const projectsLoaded = useProjectContext().loaded;
-  const tasksLoaded = useTaskContext().loaded;
-  const chatLoaded = useChatContext().loaded;
-  const knowledgeLoaded = useKnowledgeContext().loaded;
-  const inventoryLoaded = useInventoryContext().loaded;
-  const healthLoaded = useHealthContext().loaded;
-  const financeLoaded = useFinanceContext().loaded;
-  const gamificationLoaded = useGamificationContext().loaded;
-  const settingsLoaded = useSettingsContext().loaded;
-  const assistantLoaded = useAssistantContext().loaded;
-  const activityLoaded = useAssistantActivityContext().loaded;
-  const clockLoaded = useClockContext().loaded;
-  const prayerLoaded = usePrayerContext().loaded;
-  const loaded = calendarLoaded
-    && tripsLoaded
-    && projectsLoaded
-    && tasksLoaded
-    && chatLoaded
-    && knowledgeLoaded
-    && inventoryLoaded
-    && healthLoaded
-    && financeLoaded
-    && gamificationLoaded
-    && settingsLoaded
-    && assistantLoaded
-    && activityLoaded
-    && clockLoaded
-    && prayerLoaded;
-
-  if (!loaded) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#8b8fa3' }}>
-        Loading Sabah One...
-      </div>
-    );
-  }
-
-  return children;
-}
-
 export function ShellProvider({ children }: { children: ReactNode }) {
   const [surface, setSurface] = useState<Surface>(getInitialShellSurface);
+  const [pageLoadError, setPageLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const loadGeneration = useRef(0);
   const [assistantNavigationRequest, setAssistantNavigationRequest] = useState<AssistantNavigationRequest | null>(null);
 
   const navigate = useCallback((nextSurface: Surface) => {
+    loadGeneration.current += 1;
     setSurface(nextSurface);
+    setPageLoadError(null);
     setAssistantNavigationRequest(null);
   }, []);
 
   const requestAssistantNavigation = useCallback<AssistantNavigationHandler>((target) => {
     const request = normalizeAssistantNavigationRequest(target);
+    loadGeneration.current += 1;
+    setPageLoadError(null);
     if (!isShellSurface(request.surface)) {
       setSurface('dashboard');
       setAssistantNavigationRequest(null);
@@ -154,6 +106,24 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const retryPageLoad = useCallback(() => {
+    const generation = ++loadGeneration.current;
+    setPageLoadError(null);
+    void refreshDatabasePersistence().then(() => {
+      if (generation === loadGeneration.current) setLoadAttempt(attempt => attempt + 1);
+    }).catch(error => {
+      if (generation === loadGeneration.current) setPageLoadError(error instanceof Error ? error.message : String(error));
+    });
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void activateStoreCollections(getPageCollections(surface)).catch(error => {
+      if (active) setPageLoadError(error instanceof Error ? error.message : String(error));
+    });
+    return () => { active = false; };
+  }, [surface, loadAttempt]);
+
   useEffect(() => subscribeAssistantNavigation(requestAssistantNavigation), [requestAssistantNavigation]);
 
   useEffect(() => {
@@ -166,12 +136,16 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ShellContextValue>(() => ({
     surface,
+    pageLoadError,
+    retryPageLoad,
     assistantNavigationRequest,
     navigate,
     requestAssistantNavigation,
     dismissAssistantNavigationRequest,
   }), [
     assistantNavigationRequest,
+    pageLoadError,
+    retryPageLoad,
     dismissAssistantNavigationRequest,
     navigate,
     requestAssistantNavigation,
@@ -180,7 +154,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
   return (
     <ShellContext.Provider value={value}>
-      <AppReadinessGate>{children}</AppReadinessGate>
+      {children}
     </ShellContext.Provider>
   );
 }

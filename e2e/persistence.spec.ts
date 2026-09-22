@@ -149,6 +149,7 @@ test('keeps navigation usable during a stalled Employment seed and isolates its 
   const seedRequest = page.waitForRequest(request => request.url().includes('/rpc/apply_helm_mutations')
     && request.postDataJSON().p_operations?.some((operation: { collection: string }) => operation.collection === 'employment'));
   await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Employment' }).click();
   await seedRequest;
   await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
   await expect(page.getByRole('checkbox', { name: 'Mark "Review notes" as complete' })).toBeVisible();
