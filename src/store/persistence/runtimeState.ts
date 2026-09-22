@@ -1,4 +1,4 @@
-import type { HelmSecretRealtimeEvent } from '../databaseTypes';
+import type { HelmSecretChangeEvent } from '../databaseTypes';
 import type { RemoteStoreChange, SyncSessionSnapshot } from './types';
 
 /**
@@ -8,6 +8,8 @@ import type { RemoteStoreChange, SyncSessionSnapshot } from './types';
  */
 export class PersistenceRuntimeState {
   accountVersion = 0;
+  reconciledVersion = 0;
+  secretNotificationVersion = 0;
   bootstrappedUserId: string | null = null;
   bootstrapPromise: Promise<void> | null = null;
   persistenceEpoch = 0;
@@ -22,10 +24,11 @@ export class PersistenceRuntimeState {
   refreshActiveTargetVersion = 0;
   scoped = false;
   readonly requestedCollections = new Set<string>();
+  readonly collectionOwners = new Map<string, readonly string[]>();
   collectionLoadPromise: Promise<void> | null = null;
   readonly syncSessionSubscribers = new Set<(snapshot: SyncSessionSnapshot) => void>();
   readonly storeChangeSubscribers = new Set<(change: RemoteStoreChange) => void>();
-  readonly secretChangeSubscribers = new Set<(event: HelmSecretRealtimeEvent) => void>();
+  readonly secretChangeSubscribers = new Set<(event: HelmSecretChangeEvent) => void>();
   syncSession: SyncSessionSnapshot = {
     status: 'blocked',
     userId: null,
@@ -50,9 +53,12 @@ export class PersistenceRuntimeState {
     this.refreshActiveRealtime = false;
     this.refreshActiveTargetVersion = 0;
     this.accountVersion = 0;
+    this.reconciledVersion = 0;
+    this.secretNotificationVersion = 0;
     this.bootstrappedUserId = null;
     this.scoped = false;
     this.requestedCollections.clear();
+    this.collectionOwners.clear();
     this.collectionLoadPromise = null;
   }
 }

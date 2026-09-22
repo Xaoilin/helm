@@ -943,6 +943,25 @@ export async function probeHelmAccountVersion(): Promise<number> {
   return typeof row.account_version === 'number' ? row.account_version : 0;
 }
 
+/** First-party invalidation metadata, including retained deletion tombstones. */
+export async function fetchHelmChangedCollections(sinceVersion: number): Promise<{
+  accountVersion: number;
+  collections: string[];
+  secretsChanged: boolean;
+}> {
+  const { data, error } = await requireClient().rpc('get_helm_changed_collections', {
+    p_since_version: sinceVersion,
+  }).abortSignal(AbortSignal.timeout(CORE_DATABASE_READ_TIMEOUT_MS));
+  if (error) throw error;
+  const result = asRecord(data);
+  if (!Number.isSafeInteger(result.accountVersion) || (result.accountVersion as number) < sinceVersion
+    || typeof result.secretsChanged !== 'boolean'
+    || !Array.isArray(result.collections) || result.collections.some(key => typeof key !== 'string')) {
+    throw new Error('The Sabah One changed collections response was invalid.');
+  }
+  return { accountVersion: result.accountVersion as number, collections: [...new Set(result.collections as string[])], secretsChanged: result.secretsChanged };
+}
+
 export async function fetchHelmCollections(collections: string[]): Promise<HelmRecord[]> {
   if (collections.length === 0) return [];
   const database = requireClient();

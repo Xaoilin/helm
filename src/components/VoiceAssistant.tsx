@@ -15,7 +15,7 @@ import { usePrayerContext } from "../store/contexts/PrayerContext";
 import { useChatContext } from '../store/contexts/ChatContext';
 import { useAssistantPageReady } from '../store/PageReadinessGate';
 import { ASSISTANT_PAGE_COLLECTIONS } from '../store/pageCollections';
-import { activateStoreCollections } from '../store/persistence';
+import { activateStoreCollections, releaseStoreCollections } from '../store/persistence';
 import { ELEVENLABS_VOICE_ID, OLLAMA_ENDPOINT } from '../config';
 import { TIMING, VOICE_SESSION } from '../config/constants';
 import { useVoiceOutput } from '../hooks/useVoiceOutput';
@@ -64,7 +64,9 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const assistantUndo = useAssistantUndo();
   const prayer = usePrayerContext();
   const chat = useChatContext();
-  const assistantDataReady = useAssistantPageReady();
+  const providersReady = useAssistantPageReady();
+  const [assistantActivated, setAssistantActivated] = useState(false);
+  const assistantDataReady = providersReady && assistantActivated;
   const [state, setState] = useState<AssistantState>('idle');
   const [transcript, setTranscript] = useState('');
   const [response, setResponse] = useState('');
@@ -87,21 +89,21 @@ export default function VoiceAssistant({ prayerData }: Props) {
   const processTranscriptRef = useRef<(text: string, inputMode: InputMode) => Promise<void>>(async () => {});
   const voiceConversationIdRef = useRef<string | null>(null);
   const beginHandsFreeSessionRef = useRef<() => void>(() => {});
-  const assistantReadyRef = useRef(false);
   const readinessWaitersRef = useRef(new Set<{ resolve: () => void; reject: (error: Error) => void }>());
+  const [dataActivation, setDataActivation] = useState(0);
 
   useEffect(() => {
-    assistantReadyRef.current = assistantDataReady;
-    if (assistantDataReady) {
+    if (providersReady) {
       for (const waiter of readinessWaitersRef.current) waiter.resolve();
       readinessWaitersRef.current.clear();
     }
-  }, [assistantDataReady]);
+  }, [providersReady, dataActivation]);
 
   useEffect(() => {
     const waiters = readinessWaitersRef.current;
     return () => {
       sessionIdRef.current += 1;
+      releaseStoreCollections('assistant');
       for (const waiter of waiters) waiter.reject(new Error('Lina was closed while account data loaded.'));
       waiters.clear();
     };
@@ -109,11 +111,16 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
   const ensureAssistantData = useCallback(async () => {
     const sessionId = sessionIdRef.current;
-    await activateStoreCollections(ASSISTANT_PAGE_COLLECTIONS);
+    setAssistantActivated(false);
+    await activateStoreCollections(ASSISTANT_PAGE_COLLECTIONS, 'assistant');
     if (sessionId !== sessionIdRef.current) throw new Error('Lina was closed while account data loaded.');
-    if (!assistantReadyRef.current) {
-      await new Promise<void>((resolve, reject) => readinessWaitersRef.current.add({ resolve, reject }));
-    }
+    // Loaded providers can contain a stale cached page. Wait for the render
+    // after confirmed reactivation even when their loaded flags were already true.
+    await new Promise<void>((resolve, reject) => {
+      readinessWaitersRef.current.add({ resolve, reject });
+      setAssistantActivated(true);
+      setDataActivation(generation => generation + 1);
+    });
   }, []);
 
   const enabled = settings.settings.assistantEnabled !== false;
@@ -213,6 +220,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
         setVoiceSessionMode('manual');
         setListeningMode('initial');
         clearScheduledListening();
+        releaseStoreCollections('assistant');
+        setAssistantActivated(false);
         setState('idle');
         setTranscript('');
         setResponse('');
@@ -261,6 +270,8 @@ export default function VoiceAssistant({ prayerData }: Props) {
       }
     }
 
+    releaseStoreCollections('assistant');
+    setAssistantActivated(false);
     setState('idle');
     setTranscript('');
     setResponse('');
@@ -315,26 +326,15 @@ export default function VoiceAssistant({ prayerData }: Props) {
     clearScheduledListening();
     cancelListening();
     stopSpeaking();
+    releaseStoreCollections('assistant');
+    setAssistantActivated(false);
     setState('idle');
     setTranscript('');
     setResponse('');
     setError('');
   }, [cancelListening, clearScheduledListening, setVoiceSessionMode, stopSpeaking]);
 
-  const beginHandsFreeSession = useCallback(() => {
-    if (!enabled) return;
-    if (!assistantDataReady) {
-      const sessionId = ++sessionIdRef.current;
-      setState('open');
-      clearAssistantUi();
-      void ensureAssistantData().then(() => {
-        if (sessionId === sessionIdRef.current) beginHandsFreeSessionRef.current();
-      }).catch(failure => {
-        if (sessionId === sessionIdRef.current) setError(failure instanceof Error ? failure.message : String(failure));
-      });
-      return;
-    }
-
+  const startReadyHandsFreeSession = useCallback(() => {
     if (voiceBackend === 'none') {
       openAssistantPanel();
       setError('Voice input is unavailable in this browser. Deepgram is unavailable without a secure server path.');
@@ -379,11 +379,23 @@ export default function VoiceAssistant({ prayerData }: Props) {
 
       scheduleHandsFreeListening('initial', sessionId);
     })();
-  }, [shell.surface, assistantDataReady, cancelListening, chat, clearAssistantUi, clearScheduledListening, enabled, ensureAssistantData, lang, openAssistantPanel, scheduleHandsFreeListening, setVoiceSessionMode, speakMessage, stopSpeaking, voiceBackend]);
+  }, [shell.surface, cancelListening, chat, clearScheduledListening, lang, openAssistantPanel, scheduleHandsFreeListening, setVoiceSessionMode, speakMessage, stopSpeaking, voiceBackend]);
 
   useEffect(() => {
-    beginHandsFreeSessionRef.current = beginHandsFreeSession;
-  }, [beginHandsFreeSession]);
+    beginHandsFreeSessionRef.current = startReadyHandsFreeSession;
+  }, [startReadyHandsFreeSession]);
+
+  const beginHandsFreeSession = useCallback(() => {
+    if (!enabled) return;
+    const sessionId = ++sessionIdRef.current;
+    setState('open');
+    clearAssistantUi();
+    void ensureAssistantData().then(() => {
+      if (sessionId === sessionIdRef.current) beginHandsFreeSessionRef.current();
+    }).catch(failure => {
+      if (sessionId === sessionIdRef.current) setError(failure instanceof Error ? failure.message : String(failure));
+    });
+  }, [clearAssistantUi, enabled, ensureAssistantData]);
 
   const processTranscript = useCallback(async (text: string, inputMode: InputMode) => {
     const trimmed = text.trim();

@@ -96,7 +96,7 @@ function patchForPayload(
 export class PersistenceRecordCache {
   private readonly recordsByCollection = new Map<string, Map<string, HelmRecord>>();
   private readonly deliveredRecordsByCollection = new Map<string, Map<string, EncodedStoreRecord>>();
-  private readonly confirmedCollections = new Map<string, { confirmedAt: number; complete: boolean; limit: number }>();
+  private readonly confirmedCollections = new Map<string, { confirmedAt: number; complete: boolean; limit: number; version: number; stale: boolean }>();
 
   reset(): void {
     this.recordsByCollection.clear();
@@ -108,12 +108,21 @@ export class PersistenceRecordCache {
     return this.confirmedCollections.get(collection);
   }
 
-  confirm(collection: string, complete = true, limit = 0): void {
-    this.confirmedCollections.set(collection, { confirmedAt: Date.now(), complete, limit });
+  confirm(collection: string, complete = true, limit = 0, version = 0): void {
+    this.confirmedCollections.set(collection, { confirmedAt: Date.now(), complete, limit, version, stale: false });
+  }
+
+  invalidate(collection: string): void {
+    const status = this.status(collection);
+    if (status) status.stale = true;
   }
 
   collectionKeys(): IterableIterator<string> {
     return this.recordsByCollection.keys();
+  }
+
+  confirmedCollectionKeys(): IterableIterator<string> {
+    return this.confirmedCollections.keys();
   }
 
   getRecord(collection: string, recordId: string): HelmRecord | undefined {
@@ -231,6 +240,7 @@ export class PersistenceRecordCache {
       collection = new Map();
       this.recordsByCollection.set(record.collection, collection);
     }
-    collection.set(record.recordId, record);
+    const previous = collection.get(record.recordId);
+    if (!previous || previous.revision <= record.revision) collection.set(record.recordId, record);
   }
 }

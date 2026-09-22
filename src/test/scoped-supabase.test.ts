@@ -9,7 +9,7 @@ vi.mock('@supabase/supabase-js', () => ({
   }),
 }));
 
-import { fetchHelmAccountSnapshot, fetchHelmCollectionPage, getSessionUser, initSupabase } from '../store/supabase';
+import { fetchHelmChangedCollections, fetchHelmAccountSnapshot, fetchHelmCollectionPage, getSessionUser, initSupabase } from '../store/supabase';
 import { PersistenceRecordCache } from '../store/persistence/cache';
 
 const userId = 'synthetic-scoped-account';
@@ -40,6 +40,24 @@ describe('scoped Supabase account reads', () => {
     expect(await fetchHelmAccountSnapshot([])).toEqual({ state, records: [] });
     expect(mocks.rpc).toHaveBeenLastCalledWith('get_helm_account_snapshot_for_collections', { p_collections: [] });
     expect(abortSignal).toHaveBeenCalledWith(expect.any(AbortSignal));
+  });
+
+  it('reads bounded invalidation metadata and rejects a regressed or malformed checkpoint', async () => {
+    const abortSignal = vi.fn().mockResolvedValue({ data: { accountVersion: 8, collections: ['tasks'], secretsChanged: true }, error: null });
+    mocks.rpc.mockReturnValue({ abortSignal });
+    expect(await fetchHelmChangedCollections(7)).toEqual({ accountVersion: 8, collections: ['tasks'], secretsChanged: true });
+    expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('get_helm_changed_collections', { p_since_version: 7 });
+    expect(abortSignal).toHaveBeenCalledWith(expect.any(AbortSignal));
+    for (const data of [
+      { accountVersion: 6, collections: [], secretsChanged: false },
+      { accountVersion: 8, collections: [{ payload: 'invalid' }], secretsChanged: false },
+      { accountVersion: 8, collections: [] },
+    ]) {
+      abortSignal.mockResolvedValue({ data, error: null });
+      await expect(fetchHelmChangedCollections(7)).rejects.toThrow('invalid');
+    }
+    abortSignal.mockResolvedValue({ data: null, error: new Error('Unavailable') });
+    await expect(fetchHelmChangedCollections(7)).rejects.toThrow('Unavailable');
   });
 
   it('rejects unrelated collections and account records from a scoped response', async () => {

@@ -88,3 +88,8 @@ export interface HelmSecretRealtimeEvent {
   revision: number;
   archivedAt: string | null;
 }
+
+export type HelmSecretChangeEvent = HelmSecretRealtimeEvent | {
+  accountVersion: number;
+  reconciliation: true;
+};

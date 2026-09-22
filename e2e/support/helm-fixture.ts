@@ -1,7 +1,7 @@
 import { expect, test as base, type Page, type Response } from '@playwright/test';
 import { encodeStoreValue } from '../../src/store/recordCodec';
 import { STORAGE_KEYS } from '../../src/config/constants';
-import type { HelmMutation } from '../../src/store/databaseTypes';
+import type { HelmMutation, HelmRealtimeEvent } from '../../src/store/databaseTypes';
 import type { EmploymentApplication, EmploymentHistoryEntry, EquityPosition, EquityPositionDraft, Surface } from '../../src/types/domain';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -61,6 +61,9 @@ export interface HelmScenarioOptions {
 
 export interface HelmScenarioControl {
   setRealtimeAvailable: (available: boolean) => void;
+  setBroadcastDelivery: (enabled: boolean) => void;
+  getDeliveredBroadcastCount: () => number;
+  addClient: (page: Page, options?: Pick<HelmScenarioOptions, 'initialSurface'>) => Promise<HelmScenarioControl>;
   applyRemoteMutations: (operations: HelmMutation[], confirmedAt?: string) => void;
 }
 
@@ -103,13 +106,18 @@ export function waitForMutation(page: Page, collection: string): Promise<Respons
   });
 }
 
-async function installScenario(page: Page, options: HelmScenarioOptions = {}): Promise<HelmScenarioControl> {
+async function installScenario(
+  page: Page,
+  options: HelmScenarioOptions = {},
+  sharedDatabase?: MockDatabase,
+): Promise<HelmScenarioControl> {
   if (options.now) {
     await page.clock.install({ time: new Date(options.now) });
   }
 
   const userId = options.userId || TEST_USER_ID;
   const stores = buildStores(options);
+  const database = sharedDatabase ?? createMockDatabase(stores, userId);
   const authenticated = options.authenticated !== false;
 
   await page.addInitScript(({ authenticated: shouldAuthenticate, email, marker, user, initialSurface, surfaceKey }) => {
@@ -151,11 +159,13 @@ async function installScenario(page: Page, options: HelmScenarioOptions = {}): P
     analytics: options.analytics,
     lifeHero: options.lifeHero,
     snapshotStatus: options.snapshotStatus,
-    stores,
     userId,
-  });
+  }, database);
   await installAssistantRoute(page);
-  return control;
+  return {
+    ...control,
+    addClient: (clientPage, clientOptions) => installScenario(clientPage, { ...options, ...clientOptions }, database),
+  };
 }
 
 function buildStores(options: HelmScenarioOptions): Record<string, unknown> {
@@ -179,7 +189,6 @@ interface DatabaseRouteOptions {
   email: string;
   lifeHero?: HelmScenarioOptions['lifeHero'];
   snapshotStatus?: number;
-  stores: Record<string, unknown>;
   userId: string;
 }
 
@@ -196,29 +205,40 @@ interface MockRow {
   deletedAt: string | null;
 }
 
-async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions): Promise<HelmScenarioControl> {
-  const rows = new Map<string, MockRow>();
-  let accountVersion = 1;
+interface MockDatabase {
+  rows: Map<string, MockRow>;
+  accountVersion: number;
+  listeners: Set<(event: HelmRealtimeEvent) => void>;
+}
 
-  for (const [collection, value] of Object.entries(options.stores)) {
+function createMockDatabase(stores: Record<string, unknown>, userId: string): MockDatabase {
+  const database: MockDatabase = { rows: new Map(), accountVersion: 1, listeners: new Set() };
+  for (const [collection, value] of Object.entries(stores)) {
     for (const record of encodeStoreValue(collection, value)) {
-      const row: MockRow = {
-        userId: options.userId,
-        collection,
-        recordId: record.recordId,
-        payload: record.payload,
-        position: record.position,
-        revision: 1,
-        accountVersion,
-        createdAt: SNAPSHOT_TIME,
-        updatedAt: SNAPSHOT_TIME,
-        deletedAt: null,
-      };
-      rows.set(rowKey(row.collection, row.recordId), row);
+      database.rows.set(rowKey(collection, record.recordId), {
+        userId, collection, recordId: record.recordId, payload: record.payload,
+        position: record.position, revision: 1, accountVersion: 1,
+        createdAt: SNAPSHOT_TIME, updatedAt: SNAPSHOT_TIME, deletedAt: null,
+      });
     }
   }
+  return database;
+}
 
-  const setRealtimeAvailable = await mockRealtime(page);
+async function installDatabaseRoutes(
+  page: Page,
+  options: DatabaseRouteOptions,
+  database: MockDatabase,
+): Promise<Omit<HelmScenarioControl, 'addClient'>> {
+  const { rows } = database;
+  const realtime = await mockRealtime(page, database, options.userId);
+  const publishChanges = (changes: MockRow[], requestId = 'e2e-request') => {
+    const event: HelmRealtimeEvent = {
+      requestId, accountVersion: database.accountVersion,
+      changes: changes.map(({ collection, recordId, revision, deletedAt }) => ({ collection, recordId, revision, deletedAt })),
+    };
+    database.listeners.forEach(listener => listener(event));
+  };
 
   await page.route('**/rest/v1/rpc/sync_life_hero_evidence*', async route => {
     if (options.lifeHero?.failureStatus) {
@@ -303,7 +323,7 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
         state: {
           userId: options.userId,
           schemaVersion: 1,
-          accountVersion,
+          accountVersion: database.accountVersion,
           minimumClientVersion: '0.2.83',
           migratedAt: SNAPSHOT_TIME,
           updatedAt: SNAPSHOT_TIME,
@@ -315,6 +335,15 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
     });
   });
 
+  await page.route('**/rest/v1/rpc/get_helm_changed_collections*', async route => {
+    const { p_since_version: sinceVersion } = route.request().postDataJSON() as { p_since_version: number };
+    await route.fulfill({ json: {
+      accountVersion: database.accountVersion,
+      collections: [...new Set([...rows.values()].filter(row => row.accountVersion > sinceVersion).map(row => row.collection))].sort(),
+      secretsChanged: false,
+    } });
+  });
+
   await page.route('**/rest/v1/helm_account_state*', async route => {
     await route.fulfill({
       status: 200,
@@ -322,7 +351,7 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
       body: JSON.stringify({
         user_id: options.userId,
         schema_version: 1,
-        account_version: accountVersion,
+        account_version: database.accountVersion,
         minimum_client_version: '0.2.83',
         migrated_at: SNAPSHOT_TIME,
         updated_at: SNAPSHOT_TIME,
@@ -371,18 +400,19 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
       p_operations?: HelmMutation[];
       p_request_id?: string;
     };
-    accountVersion += 1;
-    const changes = applyMutations(rows, options.userId, accountVersion, request.p_operations || []);
+    database.accountVersion += 1;
+    const changes = applyMutations(rows, options.userId, database.accountVersion, request.p_operations || []);
 
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         requestId: request.p_request_id || 'e2e-request',
-        accountVersion,
+        accountVersion: database.accountVersion,
         changes: changes.map(toSnapshotRow),
       }),
     });
+    publishChanges(changes, request.p_request_id);
   });
 
   await page.route(/\/rest\/v1\/rpc\/employment_(add_application|update_application|add_history|remove_application)(\?|$)/u, async route => {
@@ -435,12 +465,13 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
       application = updated;
       applications = applications.map(item => item.id === application.id ? application : item);
     }
-    accountVersion += 1;
+    database.accountVersion += 1;
     row.payload = { ...row.payload, applications };
     row.revision += 1;
-    row.accountVersion = accountVersion;
+    row.accountVersion = database.accountVersion;
     row.updatedAt = now;
-    await route.fulfill({ json: { applicationId: application.id, accountVersion, duplicate: false } });
+    await route.fulfill({ json: { applicationId: application.id, accountVersion: database.accountVersion, duplicate: false } });
+    publishChanges([row]);
   });
 
   await page.route(/\/rest\/v1\/rpc\/equity_(add_position|update_position|remove_position)(\?|$)/u, async route => {
@@ -467,7 +498,7 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
       const position: EquityPosition = { ...request.p_position, id: positionId, createdAt: now, updatedAt: now };
       row = {
         userId: options.userId, collection: 'equityPositions', recordId: positionId,
-        payload: { ...position }, position: null, revision: 1, accountVersion: accountVersion + 1,
+        payload: { ...position }, position: null, revision: 1, accountVersion: database.accountVersion + 1,
         createdAt: now, updatedAt: now, deletedAt: null,
       };
       rows.set(key, row);
@@ -486,11 +517,12 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
     } else if (request.p_position) {
       row.payload = { ...request.p_position, id: positionId, createdAt: row.payload.createdAt, updatedAt: now };
     }
-    accountVersion += 1;
+    database.accountVersion += 1;
     row.revision += 1;
-    row.accountVersion = accountVersion;
+    row.accountVersion = database.accountVersion;
     row.updatedAt = now;
-    await route.fulfill({ json: { positionId, position: row.deletedAt ? null : row.payload, accountVersion } });
+    await route.fulfill({ json: { positionId, position: row.deletedAt ? null : row.payload, accountVersion: database.accountVersion } });
+    publishChanges([row]);
   });
 
   await page.route('**/rest/v1/rpc/list_equity_oauth_clients*', async route => {
@@ -510,15 +542,15 @@ async function installDatabaseRoutes(page: Page, options: DatabaseRouteOptions):
   });
 
   await page.route('**/rest/v1/rpc/list_helm_secrets*', route => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ accountVersion, secrets: [] }),
+    status: 200, contentType: 'application/json', body: JSON.stringify({ accountVersion: database.accountVersion, secrets: [] }),
   }));
 
   return {
-    setRealtimeAvailable,
+    ...realtime,
     applyRemoteMutations(operations, confirmedAt) {
       // Simulate a separate client's confirmed write without delivering Broadcast.
-      accountVersion += 1;
-      applyMutations(rows, options.userId, accountVersion, operations, confirmedAt);
+      database.accountVersion += 1;
+      applyMutations(rows, options.userId, database.accountVersion, operations, confirmedAt);
     },
   };
 }
@@ -620,12 +652,38 @@ async function installPrayerRoute(page: Page, options?: PrayerRouteOptions): Pro
   });
 }
 
-async function mockRealtime(page: Page): Promise<(available: boolean) => void> {
+async function mockRealtime(
+  page: Page,
+  database: MockDatabase,
+  userId: string,
+): Promise<Pick<HelmScenarioControl, 'setRealtimeAvailable' | 'setBroadcastDelivery' | 'getDeliveredBroadcastCount'>> {
   let available = true;
+  let deliverBroadcast = true;
+  let deliveredBroadcasts = 0;
   const interruptChannels = new Set<() => void>();
   await page.routeWebSocket('wss://helm.test.supabase.co/realtime/v1/websocket**', socket => {
+    let joined = false;
     let interrupt = () => {};
-    socket.onClose(() => interruptChannels.delete(interrupt));
+    let sendBroadcast: (event: HelmRealtimeEvent) => void = () => {};
+    const deliver = (event: HelmRealtimeEvent) => {
+      if (available && deliverBroadcast && joined) {
+        sendBroadcast(event);
+        deliveredBroadcasts += 1;
+      }
+    };
+    database.listeners.add(deliver);
+    const cleanup = () => {
+      joined = false;
+      interruptChannels.delete(interrupt);
+      database.listeners.delete(deliver);
+    };
+    socket.onClose(async (code, reason) => {
+      cleanup();
+      // onClose disables Playwright's default closure forwarding. Complete
+      // the handshake so the SDK can leave its disconnecting state.
+      await socket.close({ code, reason });
+    });
+    page.once('close', cleanup);
     socket.onMessage(message => {
       let frame: unknown;
       try {
@@ -633,46 +691,43 @@ async function mockRealtime(page: Page): Promise<(available: boolean) => void> {
       } catch {
         return;
       }
-
-      if (Array.isArray(frame)) {
-        const [joinRef, ref, topic, event] = frame;
-        if (event === 'phx_join') {
-          interruptChannels.delete(interrupt);
-          interrupt = () => socket.send(JSON.stringify([joinRef, null, topic, 'phx_error', {}]));
-          interruptChannels.add(interrupt);
-        }
-        if (event === 'phx_join' || event === 'phx_leave' || event === 'heartbeat' || event === 'access_token') {
-          socket.send(JSON.stringify([joinRef, ref, topic, 'phx_reply', {
-            status: event === 'phx_join' && !available ? 'error' : 'ok', response: {},
-          }]));
-        }
-        return;
+      if (!frame || typeof frame !== 'object') return;
+      const envelope = Array.isArray(frame)
+        ? { join_ref: frame[0], ref: frame[1], topic: frame[2], event: frame[3], payload: frame[4] }
+        : frame as Record<string, unknown>;
+      const send = (event: string, payload: unknown, ref: unknown = null) => socket.send(JSON.stringify(
+        Array.isArray(frame)
+          ? [envelope.join_ref, ref, envelope.topic, event, payload]
+          : { topic: envelope.topic, event, payload, ref, join_ref: envelope.join_ref },
+      ));
+      if (envelope.event === 'phx_join') {
+        const payload = envelope.payload as { config?: { private?: boolean } };
+        joined = available && envelope.topic === `realtime:helm:account:${userId}` && payload.config?.private === true;
+        interruptChannels.delete(interrupt);
+        interrupt = () => {
+          joined = false;
+          send('phx_error', {});
+        };
+        interruptChannels.add(interrupt);
+        sendBroadcast = event => send('broadcast', { type: 'broadcast', event: 'helm_records_changed', payload: event });
+      } else if (envelope.event === 'phx_leave') {
+        joined = false;
+        interruptChannels.delete(interrupt);
       }
-
-      if (frame && typeof frame === 'object') {
-        const envelope = frame as Record<string, unknown>;
-        if (envelope.event === 'phx_join') {
-          interruptChannels.delete(interrupt);
-          interrupt = () => socket.send(JSON.stringify({
-            topic: envelope.topic, event: 'phx_error', payload: {}, ref: null, join_ref: envelope.join_ref,
-          }));
-          interruptChannels.add(interrupt);
-        }
-        if (envelope.event === 'phx_join' || envelope.event === 'phx_leave' || envelope.event === 'heartbeat' || envelope.event === 'access_token') {
-          socket.send(JSON.stringify({
-            topic: envelope.topic,
-            event: 'phx_reply',
-            payload: { status: envelope.event === 'phx_join' && !available ? 'error' : 'ok', response: {} },
-            ref: envelope.ref,
-            join_ref: envelope.join_ref,
-          }));
-        }
+      if (['phx_join', 'phx_leave', 'heartbeat', 'access_token'].includes(String(envelope.event))) {
+        send('phx_reply', {
+          status: envelope.event === 'phx_join' && !available ? 'error' : 'ok', response: {},
+        }, envelope.ref);
       }
     });
   });
-  return nextAvailable => {
-    available = nextAvailable;
-    if (!available) interruptChannels.forEach(interrupt => interrupt());
+  return {
+    setRealtimeAvailable(nextAvailable) {
+      available = nextAvailable;
+      if (!available) interruptChannels.forEach(interrupt => interrupt());
+    },
+    setBroadcastDelivery(enabled) { deliverBroadcast = enabled; },
+    getDeliveredBroadcastCount: () => deliveredBroadcasts,
   };
 }
 

@@ -158,6 +158,7 @@ export default function SecretsSurface() {
 
   useEffect(() => subscribeHelmSecretChanges(event => {
     setRevealed(current => {
+      if ('reconciliation' in event) return {};
       if (!current[event.secretId]) return current;
       const next = { ...current };
       delete next[event.secretId];
