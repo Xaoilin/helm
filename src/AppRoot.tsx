@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import App from './App';
+import { useReleaseRefresh } from './hooks/useReleaseRefresh';
 import { getSupabaseRealtimeSnapshot, subscribeSupabaseRealtimeSnapshot } from './store/supabase';
 import { AppProviders } from './store/AppProviders';
 import { getInitialShellSurface } from './store/ShellContext';
@@ -19,6 +20,11 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
   const auth = useAuthSession();
   const [syncSession, setSyncSession] = useState(() => getSyncSessionSnapshot());
   const [actionError, setActionError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+
+  // A failed account bootstrap must not prevent an available release updating.
+  // The hook keeps the same pending-write, editor, and visibility guards.
+  useReleaseRefresh();
 
   useEffect(() => subscribeSyncSession(setSyncSession), []);
 
@@ -89,14 +95,29 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
   if (!currentAccountUsable) {
     const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
     const switchingAccount = syncSession.userId !== auth.authUser.id;
+    const canRetry = !switchingAccount && !fatalSyncReason
+      && (syncSession.reason === 'database_unavailable' || syncSession.reason === 'offline');
     return (
       <OnlineGate
         eyebrow={offline ? 'Connection required' : 'Database source of truth'}
         title={syncSession.reason === 'signed_out' ? 'Sign in again to continue' : switchingAccount ? 'Loading Sabah One' : fatalSyncReason ? 'Sabah One needs an update' : 'Connecting to Sabah One'}
         detail={blockingSyncDetail(syncSession, switchingAccount, offline)}
+        actionLabel={canRetry ? retrying ? 'Retrying...' : 'Retry connection' : undefined}
+        actionDisabled={retrying}
+        onAction={async () => {
+          setRetrying(true);
+          setActionError(null);
+          try {
+            await refreshDatabasePersistence();
+          } catch (error) {
+            setActionError(error instanceof Error ? error.message : String(error));
+          } finally {
+            setRetrying(false);
+          }
+        }}
         secondaryActionLabel="Sign out"
         onSecondaryAction={() => auth.signOut()}
-        error={actionError}
+        error={actionError || (canRetry ? syncSession.error : null)}
       />
     );
   }
@@ -126,8 +147,11 @@ function blockingSyncDetail(
   if (syncSession.reason === 'client_update_required') {
     return 'Install the latest Sabah One release to open this account safely.';
   }
-  if (offline) return 'Connect once to load this account. Sabah One will retry automatically.';
-  return 'Loading your account from the database. Sabah One will retry automatically.';
+  if (offline) return 'Reconnect to the internet, then use Retry connection to load your account.';
+  if (syncSession.reason === 'database_unavailable') {
+    return 'Your account could not be loaded. Automatic retries are limited. Use Retry connection to try again.';
+  }
+  return 'Loading your account from the database.';
 }
 
 function SyncStatusBanner({ syncSession }: { syncSession: SyncSessionSnapshot }) {
@@ -171,6 +195,7 @@ interface OnlineGateProps {
   title: string;
   detail: string;
   actionLabel?: string;
+  actionDisabled?: boolean;
   onAction?: () => Promise<void> | void;
   secondaryActionLabel?: string;
   onSecondaryAction?: () => Promise<void> | void;
@@ -182,6 +207,7 @@ function OnlineGate({
   title,
   detail,
   actionLabel,
+  actionDisabled,
   onAction,
   secondaryActionLabel,
   onSecondaryAction,
@@ -198,7 +224,7 @@ function OnlineGate({
         {(actionLabel || secondaryActionLabel) && (
           <div className="online-gate-actions">
             {actionLabel && onAction && (
-              <button className="btn btn-primary" type="button" onClick={() => void onAction()}>{actionLabel}</button>
+              <button className="btn btn-primary" type="button" disabled={actionDisabled} onClick={() => void onAction()}>{actionLabel}</button>
             )}
             {secondaryActionLabel && onSecondaryAction && (
               <button className="btn btn-secondary" type="button" onClick={() => void onSecondaryAction()}>{secondaryActionLabel}</button>
