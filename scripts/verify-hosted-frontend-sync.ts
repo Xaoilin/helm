@@ -4,7 +4,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
-import { chromium, expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { chromium, expect, type Browser, type BrowserContext, type Page, type Response as BrowserResponse } from '@playwright/test';
 
 const pagesUrl = 'https://xaoilin.github.io/helm/';
 const supabaseUrl = (process.env.VITE_SUPABASE_URL || '').replace(/\/$/u, '');
@@ -16,10 +16,12 @@ const observations: Array<{ scenario: string; passed: boolean; durationMs: numbe
 type NetworkCounts = { recordGets: number; rpcPosts: number; mutationPosts: number; http4xx: number; http5xx: number; requestFailures: number };
 const network: Record<string, NetworkCounts> = {};
 const fixtures: Array<{ id: string; token?: string; removed: boolean }> = [];
+const browserBindings: Array<{ client: string; navigation: string; entryPath: string; sha256: string }> = [];
 let browser: Browser | undefined;
 let browserContexts = 0;
 let passed = false;
 let assetSha256: string | undefined;
+let expectedEntryPath: string | undefined;
 let phase = 'bootstrap';
 
 class AcceptanceFailure extends Error {}
@@ -63,6 +65,7 @@ async function waitForExactPagesBuild(version: string): Promise<void> {
   const expectedPath = appAsset(localHtml);
   const expectedBytes = await readFile(`dist${expectedPath.slice('/helm'.length)}`);
   const expectedHash = createHash('sha256').update(expectedBytes).digest('hex');
+  expectedEntryPath = expectedPath;
   const deadline = Date.now() + 10 * 60_000;
   while (Date.now() < deadline) {
     try {
@@ -90,6 +93,32 @@ async function waitForExactPagesBuild(version: string): Promise<void> {
   throw new AcceptanceFailure('Exact protected Pages JavaScript was not served before the deadline.');
 }
 
+async function navigateBound(
+  page: Page,
+  client: string,
+  navigation: string,
+  navigate: () => Promise<BrowserResponse | null>,
+): Promise<void> {
+  check(expectedEntryPath && assetSha256, 'Protected frontend candidate was not established.');
+  const expectedPath = expectedEntryPath;
+  const entryResponse = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.origin === new URL(pagesUrl).origin && url.pathname === expectedPath
+      && response.request().resourceType() === 'script'
+      && response.request().frame() === page.mainFrame();
+  }, { timeout: 30_000 }).catch(() => null);
+  const document = await navigate();
+  check(document?.ok() && new URL(document.url()).origin === new URL(pagesUrl).origin
+    && new URL(document.url()).pathname === new URL(pagesUrl).pathname
+    && appAsset(await document.text()) === expectedPath,
+    'Browser navigation did not receive the protected Pages document.');
+  const script = await entryResponse;
+  check(script && script.ok(), 'Browser did not load the protected Pages entry script.');
+  const hash = createHash('sha256').update(await script.body()).digest('hex');
+  check(hash === assetSha256, 'Browser loaded different Pages JavaScript bytes.');
+  browserBindings.push({ client, navigation, entryPath: expectedPath, sha256: hash });
+}
+
 async function createFixture(admin: SupabaseClient): Promise<Session> {
   const email = `helm-frontend-acceptance-${randomUUID()}@example.invalid`;
   const created = await admin.auth.admin.createUser({ email, email_confirm: true });
@@ -110,7 +139,7 @@ async function createFixture(admin: SupabaseClient): Promise<Session> {
   return login.data.session;
 }
 
-async function openClient(session: Session): Promise<{ context: BrowserContext; page: Page }> {
+async function openClient(session: Session, client: string): Promise<{ context: BrowserContext; page: Page }> {
   check(browser, 'Browser unavailable.');
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
   browserContexts += 1;
@@ -131,7 +160,9 @@ async function openClient(session: Session): Promise<{ context: BrowserContext; 
   page.on('requestfailed', request => {
     if (request.url().startsWith(supabaseUrl)) phaseCounts().requestFailures += 1;
   });
-  await page.goto(pagesUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await navigateBound(page, client, 'initial', () => page.goto(pagesUrl, {
+    waitUntil: 'domcontentloaded', timeout: 30_000,
+  }));
   await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
   await expect(page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
@@ -179,9 +210,9 @@ async function main(): Promise<void> {
     const otherSession = await createFixture(admin);
     browser = await chromium.launch({ headless: true });
     phase = 'browser bootstrap';
-    const first = await openClient(firstSession);
-    const second = await openClient(firstSession);
-    const other = await openClient(otherSession);
+    const first = await openClient(firstSession, 'first');
+    const second = await openClient(firstSession, 'second');
+    const other = await openClient(otherSession, 'other-account');
     const firstTitle = `Synthetic live sync ${randomUUID()}`;
     const offlineTitle = `Synthetic reconnect ${randomUUID()}`;
 
@@ -192,7 +223,7 @@ async function main(): Promise<void> {
     });
     await step('Separate-account isolation', async () => {
       await expect(task(other.page, firstTitle)).toHaveCount(0);
-      await other.page.reload();
+      await navigateBound(other.page, 'other-account', 'isolation-reload', () => other.page.reload());
       await expect(other.page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
       await other.page.getByRole('button', { name: 'All Tasks', exact: true }).click();
       await expect(task(other.page, firstTitle)).toHaveCount(0);
@@ -213,7 +244,7 @@ async function main(): Promise<void> {
       await second.page.getByRole('button', { name: 'All Tasks', exact: true }).click();
       await expect(task(second.page, firstTitle)).toBeVisible();
       await expect(task(second.page, offlineTitle)).toBeVisible();
-      await second.page.reload();
+      await navigateBound(second.page, 'second', 'revisit-reload', () => second.page.reload());
       await expect(second.page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
       await second.page.getByRole('button', { name: 'All Tasks', exact: true }).click();
       await expect(task(second.page, firstTitle)).toBeVisible();
@@ -245,6 +276,6 @@ main().catch(error => {
     deploymentSha, pagesUrl, assetSha256, passed,
     fixtureCount: fixtures.length, fixturesRemoved: fixtures.length > 0 && fixtures.every(fixture => fixture.removed),
     browserContexts, sameAccountSession: 'shared synthetic Auth session in separate isolated browser contexts',
-    network, observations,
+    browserBindings, network, observations,
   }, null, 2)}\n`);
 });
