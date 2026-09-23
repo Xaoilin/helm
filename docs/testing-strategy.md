@@ -11,6 +11,11 @@ Sabah One uses a small portfolio selected by consequence and boundary fidelity, 
 
 The focused and complete gates are intentionally different claims. A green focused gate does not prove the complete web candidate, and a green mocked/unit check does not prove Postgres, browser, deployment, or live behavior.
 
+KAN-321's [workload verification](sync-workload-verification.md) keeps the identical
+mocked before/after scenario separate from the protected deployed-frontend proof.
+The latter requires matching Pages JavaScript and disposable fixture cleanup in
+the existing post-deploy acceptance workflow.
+
 ## Risk To Check Map
 
 | Consequence protected | Cheapest faithful check | What it proves | What it does not prove |
