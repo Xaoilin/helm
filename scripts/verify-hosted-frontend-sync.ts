@@ -55,7 +55,7 @@ async function get(url: string): Promise<Response> {
 }
 
 function appAsset(html: string): string {
-  const path = html.match(/<script[^>]+src="([^"]+\/assets\/[^\"]+\.js)"/u)?.[1];
+  const path = html.match(/<script[^>]+src="([^"]+\/assets\/[^"]+\.js)"/u)?.[1];
   check(path && path.startsWith('/helm/assets/'), 'Pages app asset missing.');
   return path;
 }
