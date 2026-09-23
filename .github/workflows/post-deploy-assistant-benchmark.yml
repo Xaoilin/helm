@@ -58,6 +58,25 @@ jobs:
 
       - run: npm ci
 
+      - name: Build the immutable frontend candidate for byte comparison
+        run: npm run build:web
+        env:
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.VITE_GOOGLE_OAUTH_CLIENT_ID }}
+          VITE_ELEVENLABS_VOICE_ID: ${{ secrets.VITE_ELEVENLABS_VOICE_ID }}
+          VITE_DEFAULT_ASSISTANT_PROVIDER: hosted
+          VITE_HOSTED_ASSISTANT_FUNCTION: assistant-openai
+          VITE_HOSTED_ASSISTANT_MODEL: gpt-5.4
+
+      - name: Install browser for deployed frontend acceptance
+        run: npx playwright install --with-deps chromium
+
+      - name: Prove live frontend sync in independent browser contexts
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: npx tsx scripts/verify-hosted-frontend-sync.ts
+
       - name: Prove live Finance OAuth and review persistence
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -120,5 +139,7 @@ jobs:
             test-results/finance-access-post-deploy.json
             test-results/employment-access-post-deploy.json
             test-results/operational-events-post-deploy.json
+            test-results/frontend-sync-post-deploy.json
+            test-results/frontend-sync-same-account.png
           if-no-files-found: warn
           retention-days: 14
