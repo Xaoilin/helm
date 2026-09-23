@@ -69,3 +69,10 @@ Page activation never resets recovery attempts. An explicit Retry connection
 uses the existing recovery action; unrelated navigation stays available while a
 failed page remains unloaded. No account contents are persisted in browser
 storage, and no backend cache or new external-agent capability is introduced.
+
+The initial account gate also offers Retry connection after a failed load and
+states that automatic retries are limited. It keeps account data closed until
+the signed-in account has a confirmed snapshot. Release checks run before the
+sign-in/account gate, so a failed initial load cannot prevent detecting a new
+build. Pending writes, open editors, visible drafts, and hidden tabs retain the
+existing automatic-reload protections.

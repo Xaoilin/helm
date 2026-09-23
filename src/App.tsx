@@ -20,7 +20,6 @@ import {
   getGoogleCalendarAuthPatch,
   isGoogleCalendarAccount,
 } from './services/googleCalendarAuthManager';
-import { useReleaseRefresh } from './hooks/useReleaseRefresh';
 import { useDialog } from './hooks/useDialog';
 import { useOptionalAuthSession } from './store/AuthSessionContext';
 import { useSyncAvailability } from './store/SyncAvailabilityContext';
@@ -86,8 +85,6 @@ function AppInner() {
     open: mobileMoreOpen, onClose: () => setMobileMoreOpen(false),
   });
   const previousSurface = useRef<{ surface: Surface; startedAt: number } | null>(null);
-
-  useReleaseRefresh();
 
   useEffect(() => {
     configureProductUsageAnalytics({
