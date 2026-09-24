@@ -202,6 +202,8 @@ export const API_TIMEOUT = {
   ELEVENLABS_TTS: 10_000,
   /** AlAdhan prayer times API */
   PRAYER_TIMES: 10_000,
+  /** Spring Boot prayer-service health check */
+  PRAYER_BACKEND_HEALTH: 5_000,
 } as const;
 
 // ── Limits ──
