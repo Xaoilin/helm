@@ -7,6 +7,9 @@ export type PrayerBackendHealthCheck =
   | { status: 'unavailable'; detail: string };
 
 type HealthPayload = { status?: unknown };
+type DatabaseHealthPayload = { status?: unknown; database?: unknown };
+
+let prayerDatabaseHealthRequest: Promise<PrayerBackendHealthCheck> | undefined;
 
 /** Checks only the public Spring Boot health endpoint; it sends no user data or credentials. */
 export async function checkPrayerBackendHealth(): Promise<PrayerBackendHealthCheck> {
@@ -39,6 +42,47 @@ export async function checkPrayerBackendHealth(): Promise<PrayerBackendHealthChe
 
   if (payload?.status !== 'UP') {
     return { status: 'unavailable', detail: 'The health endpoint did not report UP.' };
+  }
+
+  return { status: 'connected' };
+}
+
+/** Performs at most one database probe during this page load, including React StrictMode remounts. */
+export function checkPrayerDatabaseHealth(): Promise<PrayerBackendHealthCheck> {
+  prayerDatabaseHealthRequest ??= requestPrayerDatabaseHealth();
+  return prayerDatabaseHealthRequest;
+}
+
+async function requestPrayerDatabaseHealth(): Promise<PrayerBackendHealthCheck> {
+  const baseUrl = PRAYER_BACKEND_URL.trim().replace(/\/+$/, '');
+  if (!baseUrl) return { status: 'not_configured' };
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/api/prayer/health/database`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(API_TIMEOUT.PRAYER_BACKEND_HEALTH),
+    });
+  } catch (error) {
+    const timedOut = error instanceof DOMException && error.name === 'TimeoutError';
+    return {
+      status: 'unavailable',
+      detail: timedOut ? 'Request timed out.' : 'Request failed; check service availability and browser access.',
+    };
+  }
+
+  if (!response.ok) return { status: 'unavailable', detail: `HTTP ${response.status}.` };
+
+  let payload: DatabaseHealthPayload;
+  try {
+    payload = await response.json() as DatabaseHealthPayload;
+  } catch {
+    return { status: 'unavailable', detail: 'The database health endpoint returned invalid JSON.' };
+  }
+
+  if (payload?.status !== 'UP' || payload?.database !== 'UP') {
+    return { status: 'unavailable', detail: 'The database health endpoint did not report UP.' };
   }
 
   return { status: 'connected' };
