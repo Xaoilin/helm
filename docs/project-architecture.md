@@ -120,6 +120,7 @@ Network failures use visible error states and the established retry, circuit-bre
 
 - Dashboard is the Night Compass daily operating view. Prayer is the structural first tier, a deterministic Quran motivation card follows it, Learn and Move are the mandatory daily pillars, and one compact due-task route is second-order. Source-reviewed Arabic, references, paraphrase labels, and Quran.com links are preserved; runtime model output does not write religious content.
 - Prayer tracking and reminders are specified in `docs/prayer-tracking-and-reminders.md`. `PrayerProvider` orchestrates schedule freshness and side effects while pure schedule, reminder, and completion policies own the domain transitions. UI, chat, and voice use the same completion mutation.
+- The Spring Prayer service migration starts with an optional Dashboard-only `GET /api/prayer/health` probe. It sends no user data or credentials and does not replace `PrayerProvider`, AlAdhan, or Supabase; the service currently has no prayer rules or database adapter.
 - Generic time-zone resolution and its strict separation from prayer schedule authority are specified in `docs/app-time-zone.md`.
 - Chat is persistent and conversation-based. Activity records provide the account-backed audit trail for assistant mutations and supported undo operations.
 - Calendar depends on account/source/event integrity and keeps provider cache changes account-bound.

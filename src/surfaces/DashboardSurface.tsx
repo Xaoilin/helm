@@ -1,4 +1,5 @@
 import NightCompassDashboard from '../components/dashboard/NightCompassDashboard';
+import PrayerBackendStatus from '../components/dashboard/PrayerBackendStatus';
 
 export default function DashboardSurface() {
   return (
@@ -10,6 +11,7 @@ export default function DashboardSurface() {
         </div>
       </div>
       <div className="surface-body nc-dashboard-body">
+        <PrayerBackendStatus />
         <NightCompassDashboard />
       </div>
     </>
