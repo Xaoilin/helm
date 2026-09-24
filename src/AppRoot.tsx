@@ -7,6 +7,7 @@ import { getInitialShellSurface } from './store/ShellContext';
 import { getPageCollections } from './store/pageCollections';
 import { AuthSessionProvider, useAuthSession } from './store/AuthSessionContext';
 import { SyncAvailabilityProvider } from './store/SyncAvailabilityContext';
+import { checkPrayerDatabaseHealth } from './services/prayerApi';
 import {
   bootstrapDatabasePersistence,
   getSyncSessionSnapshot,
@@ -237,6 +238,10 @@ function OnlineGate({
 }
 
 export default function AppRoot() {
+  useEffect(() => {
+    void checkPrayerDatabaseHealth();
+  }, []);
+
   return (
     <AuthSessionProvider>
       <BootstrappedApp />

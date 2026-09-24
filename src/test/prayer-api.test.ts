@@ -39,3 +39,30 @@ it('returns a useful diagnostic when the request fails', async () => {
     detail: 'Request failed; check service availability and browser access.',
   });
 });
+
+it('pings the database health endpoint only once per page load', async () => {
+  vi.resetModules();
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    Response.json({ status: 'UP', service: 'prayer-service', database: 'UP' }),
+  );
+  const { checkPrayerDatabaseHealth } = await import('../services/prayerApi');
+
+  const results = await Promise.all([checkPrayerDatabaseHealth(), checkPrayerDatabaseHealth()]);
+
+  expect(results).toEqual([{ status: 'connected' }, { status: 'connected' }]);
+  expect(fetchMock).toHaveBeenCalledOnce();
+  expect(fetchMock.mock.calls[0][0]).toBe('https://prayer.example.test/api/prayer/health/database');
+  expect(fetchMock.mock.calls[0][1]).toMatchObject({
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  });
+  expect(fetchMock.mock.calls[0][1]).not.toHaveProperty('credentials');
+});
+
+it('reports a failed Spring database health response as unavailable', async () => {
+  vi.resetModules();
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 503 }));
+  const { checkPrayerDatabaseHealth } = await import('../services/prayerApi');
+
+  expect(await checkPrayerDatabaseHealth()).toEqual({ status: 'unavailable', detail: 'HTTP 503.' });
+});
