@@ -67,6 +67,7 @@ jobs:
           VITE_DEFAULT_ASSISTANT_PROVIDER: hosted
           VITE_HOSTED_ASSISTANT_FUNCTION: assistant-openai
           VITE_HOSTED_ASSISTANT_MODEL: gpt-5.4
+          VITE_PRAYER_API_BASE_URL: ${{ vars.PRAYER_BACKEND_URL }}
 
       - name: Install browser for deployed frontend acceptance
         run: npx playwright install --with-deps chromium
