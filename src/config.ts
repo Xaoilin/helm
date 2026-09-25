@@ -32,6 +32,9 @@ export const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY 
 /** Optional Spring Boot prayer-service base URL. */
 export const PRAYER_BACKEND_URL = import.meta.env.VITE_PRAYER_API_BASE_URL || '';
 
+/** Optional Spring Boot calendar-service base URL. */
+export const CALENDAR_BACKEND_URL = import.meta.env.VITE_CALENDAR_API_BASE_URL || '';
+
 /** Google OAuth Client ID for Calendar integration. */
 export const GOOGLE_OAUTH_CLIENT_ID = (import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || '') || getSettingsValue('googleOAuthClientId');
 
