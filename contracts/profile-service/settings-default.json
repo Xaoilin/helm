@@ -1,0 +1,13 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/profile/v1/settings"
+  },
+  "status" : 200,
+  "body" : {
+    "city" : "Bedford",
+    "country" : "United Kingdom",
+    "timeZone" : null,
+    "updatedAt" : null
+  }
+}

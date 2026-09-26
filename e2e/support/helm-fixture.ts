@@ -2,6 +2,7 @@ import { expect, test as base, type Page, type Response } from '@playwright/test
 import { encodeStoreValue } from '../../src/store/recordCodec';
 import { STORAGE_KEYS } from '../../src/config/constants';
 import type { HelmMutation, HelmRealtimeEvent } from '../../src/store/databaseTypes';
+import { createFakeServices, installFakeServices, type FakeServices, type FakeServicesOptions } from './fake-services';
 import type { EmploymentApplication, EmploymentHistoryEntry, EquityPosition, EquityPositionDraft, Surface } from '../../src/types/domain';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -53,6 +54,8 @@ export interface HelmScenarioOptions {
     timezone?: string;
     timings?: Partial<Record<PrayerTimingName, string>>;
   };
+  /** The Spring Boot prayer and profile services (always installed, stateful per scenario). */
+  services?: FakeServicesOptions;
   settings?: Record<string, unknown>;
   stores?: Record<string, unknown>;
   snapshotStatus?: number;
@@ -65,6 +68,7 @@ export interface HelmScenarioControl {
   getDeliveredBroadcastCount: () => number;
   addClient: (page: Page, options?: Pick<HelmScenarioOptions, 'initialSurface'>) => Promise<HelmScenarioControl>;
   applyRemoteMutations: (operations: HelmMutation[], confirmedAt?: string) => void;
+  services: FakeServices;
 }
 
 export type ScenarioLoader = (options?: HelmScenarioOptions) => Promise<HelmScenarioControl>;
@@ -154,6 +158,8 @@ async function installScenario(
   });
 
   await installPrayerRoute(page, options.prayer);
+  database.services ??= createFakeServices(options.services);
+  await installFakeServices(page, database.services);
   const control = await installDatabaseRoutes(page, {
     email: options.email || TEST_EMAIL,
     analytics: options.analytics,
@@ -164,6 +170,7 @@ async function installScenario(
   await installAssistantRoute(page);
   return {
     ...control,
+    services: database.services,
     addClient: (clientPage, clientOptions) => installScenario(clientPage, { ...options, ...clientOptions }, database),
   };
 }
@@ -206,6 +213,7 @@ interface MockRow {
 }
 
 interface MockDatabase {
+  services?: FakeServices;
   rows: Map<string, MockRow>;
   accountVersion: number;
   listeners: Set<(event: HelmRealtimeEvent) => void>;

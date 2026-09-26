@@ -26,6 +26,7 @@ import {
 } from '../persistence';
 import { splitSettings, type DeviceSettings } from '../recordCodec';
 import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
+import { settingsFromLocation, useProfileSettingsSync } from './useProfileSettingsSync';
 
 // ── Defaults ──
 const defaultSettings: Settings = {
@@ -138,6 +139,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [settings, loaded]);
   useEffect(() => { if (loaded) saveStore('integrations', integrations); }, [integrations, loaded]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+
+  const applyServiceLocation = useCallback((location: Parameters<typeof settingsFromLocation>[0]) => {
+    setSettings(prev => {
+      const next = { ...prev, ...settingsFromLocation(location) };
+      if (!location.timeZone) delete next.appTimezone;
+      settingsRef.current = next;
+      return next;
+    });
+  }, []);
+  useProfileSettingsSync(loaded, settings, applyServiceLocation);
 
   const updateSettings = useCallback((updates: Partial<Settings>) => {
     setSettings(prev => {

@@ -204,6 +204,8 @@ export const API_TIMEOUT = {
   PRAYER_TIMES: 10_000,
   /** Spring Boot prayer-service health check */
   PRAYER_BACKEND_HEALTH: 5_000,
+  /** Signed-in data calls to the Spring Boot prayer and profile services */
+  SERVICE_API: 10_000,
 } as const;
 
 // ── Limits ──

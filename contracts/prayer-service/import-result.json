@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/prayer/v1/import"
+  },
+  "status" : 200,
+  "body" : {
+    "imported" : 1,
+    "skipped" : 0
+  }
+}

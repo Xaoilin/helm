@@ -6,6 +6,8 @@ const { checkPrayerBackendHealth, checkPrayerDatabaseHealth } = vi.hoisted(() =>
   checkPrayerDatabaseHealth: vi.fn(),
 }));
 vi.mock('../services/prayerApi', () => ({ checkPrayerBackendHealth, checkPrayerDatabaseHealth }));
+const prayer = vi.hoisted(() => ({ serviceSync: { status: 'disabled', error: null } as { status: string; error: string | null } }));
+vi.mock('../store/contexts/PrayerContext', () => ({ usePrayerContext: () => prayer }));
 
 import PrayerBackendStatus from '../components/dashboard/PrayerBackendStatus';
 
@@ -44,4 +46,16 @@ it('shows why the health request failed and clarifies the current prayer fallbac
 
   expect(await screen.findByText(/Spring Boot prayer backend: Unavailable \(HTTP 503\.\)/)).toHaveTextContent('Prayer features still use the current app path.');
   expect(await screen.findByText('Spring Boot prayer database: Unavailable (HTTP 503.)')).toBeInTheDocument();
+});
+
+it('shows whether prayer data is synced with the prayer service', async () => {
+  checkPrayerBackendHealth.mockResolvedValue({ status: 'connected' });
+  checkPrayerDatabaseHealth.mockResolvedValue({ status: 'connected' });
+  prayer.serviceSync = { status: 'error', error: 'The service could not be reached.' };
+
+  render(<PrayerBackendStatus />);
+
+  expect(await screen.findByRole('status', { name: 'Prayer data sync' })).toHaveTextContent(
+    'Prayer data: Not synced (The service could not be reached.). Retrying automatically; changes are kept on this device.');
+  prayer.serviceSync = { status: 'disabled', error: null };
 });

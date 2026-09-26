@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/profile/v1/settings"
+  },
+  "status" : 400,
+  "body" : {
+    "code" : "invalid_time_zone",
+    "message" : "timeZone must be an IANA time zone such as Europe/London."
+  }
+}

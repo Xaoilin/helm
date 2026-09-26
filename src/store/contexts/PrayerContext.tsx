@@ -83,6 +83,8 @@ import {
 } from '../../services/boundedReminders';
 import { logError } from '../../services/logger';
 import { loadStore, saveStore, saveStoreCommitted } from '../persistence';
+import { isPrayerServiceEnabled, savePrayerPreferences } from '../../services/backend/prayerServiceApi';
+import { usePrayerServiceSync, type PrayerServiceSyncState } from './usePrayerServiceSync';
 import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 import { useGamificationContext } from './GamificationContext';
 import { useDailyMomentumContext } from './DailyMomentumContext';
@@ -155,6 +157,8 @@ interface PrayerContextValue {
   canSnoozeActiveBoundedReminder: boolean;
   adhanPrayer: PrayerTime | null;
   diagnostics: PrayerDiagnostics;
+  /** Sync with the Spring Boot prayer service; `disabled` when it is not configured. */
+  serviceSync: PrayerServiceSyncState;
   requestPrayerCompletion: (
     prayerName: PrayerName,
     options?: Omit<PrayerCompletionRequest, 'prayerName' | 'suggestedStatus'>,
@@ -268,11 +272,15 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
+  const getTracking = useCallback(() => trackingRef.current, []);
+  const replaceTracking = useCallback((next: PrayerTrackingState) => { commitTracking(next); }, [commitTracking]);
+  const serviceSync = usePrayerServiceSync(getTracking, replaceTracking);
+
   useEffect(() => {
-    if (!taskCtx.loaded || !gamificationCtx.loaded) return;
+    if (!taskCtx.loaded || !gamificationCtx.loaded || !settingsCtx.loaded) return;
     let cancelled = false;
 
-    void loadStore<unknown>('prayerTracking').then(value => {
+    void loadStore<unknown>('prayerTracking').then(async value => {
       if (cancelled) return;
       const normalized = normalizePrayerTrackingState(value, {
         now: new Date(),
@@ -283,6 +291,10 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
       trackingRef.current = normalized;
       setTracking(normalized);
       setLoaded(true);
+      // The prayer service is the source of truth for outcomes when configured; its data is
+      // merged in when it arrives, so the page never waits for it.
+      const hydrated = await serviceSync.hydrate(normalized, { city, country });
+      if (!cancelled && hydrated !== trackingRef.current) commitTracking(hydrated);
     });
 
     return () => {
@@ -290,7 +302,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     };
     // Initial migration intentionally uses the first fully loaded task/profile snapshots.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gamificationCtx.loaded, taskCtx.loaded]);
+  }, [gamificationCtx.loaded, settingsCtx.loaded, taskCtx.loaded]);
 
   useRemoteStoreRefresh(['prayerTracking'], async () => {
     const value = await loadStore<unknown>('prayerTracking');
@@ -302,11 +314,24 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     });
     trackingRef.current = normalized;
     setTracking(normalized);
+    const hydrated = await serviceSync.hydrate(normalized, { city, country });
+    if (hydrated !== trackingRef.current) commitTracking(hydrated);
   });
 
   useEffect(() => {
-    if (loaded) void saveStore('prayerTracking', tracking);
+    if (!loaded) return;
+    void saveStore('prayerTracking', tracking);
+    serviceSync.push(tracking);
+    // serviceSync.push is stable; the service mirrors every tracking change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, tracking]);
+
+  // Prayer preferences are edited in Settings; mirror them to the prayer service.
+  useEffect(() => {
+    if (!loaded || !isPrayerServiceEnabled()) return;
+    void savePrayerPreferences({ enabled: prayerEnabled, reminderEnabled, reminderMinutes })
+      .catch(error => console.error('Prayer preferences could not be saved to the prayer service', error));
+  }, [loaded, prayerEnabled, reminderEnabled, reminderMinutes]);
 
   const refreshSchedule = useCallback(async (forceRefresh: boolean) => {
     if (!prayerEnabled) {
@@ -1090,6 +1115,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     canSnoozeActiveBoundedReminder,
     adhanPrayer,
     diagnostics,
+    serviceSync: serviceSync.state,
     requestPrayerCompletion,
     cancelPrayerCompletion,
     confirmPrayerCompletion,
@@ -1136,6 +1162,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     testReminder,
     timezoneMatches,
     scheduleTimezoneValid,
+    serviceSync.state,
     today,
     tracking,
     undoPrayerCompletion,

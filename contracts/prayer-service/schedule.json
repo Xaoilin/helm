@@ -1,0 +1,82 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/prayer/v1/schedule"
+  },
+  "status" : 200,
+  "body" : {
+    "date" : "2026-09-25",
+    "hijriDate" : "14 Rabīʿ al-thānī 1448",
+    "city" : "London",
+    "country" : "United Kingdom",
+    "timezone" : "Europe/London",
+    "method" : "Shia Ithna-Ashari, Leva Institute, Qum",
+    "times" : [ {
+      "name" : "Fajr",
+      "nameArabic" : "الفجر",
+      "time" : "05:12",
+      "type" : "prayer"
+    }, {
+      "name" : "Sunrise",
+      "nameArabic" : "الشروق",
+      "time" : "06:51",
+      "type" : "event"
+    }, {
+      "name" : "Dhuhr",
+      "nameArabic" : "الظهر",
+      "time" : "12:52",
+      "type" : "prayer"
+    }, {
+      "name" : "Asr",
+      "nameArabic" : "العصر",
+      "time" : "16:08",
+      "type" : "prayer"
+    }, {
+      "name" : "Sunset",
+      "nameArabic" : "غروب",
+      "time" : "18:52",
+      "type" : "event"
+    }, {
+      "name" : "Maghrib",
+      "nameArabic" : "المغرب",
+      "time" : "19:12",
+      "type" : "prayer"
+    }, {
+      "name" : "Isha",
+      "nameArabic" : "العشاء",
+      "time" : "20:18",
+      "type" : "prayer"
+    }, {
+      "name" : "Midnight",
+      "nameArabic" : "نصف الليل",
+      "time" : "00:52",
+      "type" : "event"
+    } ],
+    "windows" : [ {
+      "prayer" : "Fajr",
+      "startsAt" : "2026-09-25T04:12:00Z",
+      "deadlineName" : "Sunrise",
+      "deadlineAt" : "2026-09-25T05:51:00Z"
+    }, {
+      "prayer" : "Dhuhr",
+      "startsAt" : "2026-09-25T11:52:00Z",
+      "deadlineName" : "Asr",
+      "deadlineAt" : "2026-09-25T15:08:00Z"
+    }, {
+      "prayer" : "Asr",
+      "startsAt" : "2026-09-25T15:08:00Z",
+      "deadlineName" : "Maghrib",
+      "deadlineAt" : "2026-09-25T18:12:00Z"
+    }, {
+      "prayer" : "Maghrib",
+      "startsAt" : "2026-09-25T18:12:00Z",
+      "deadlineName" : "Isha",
+      "deadlineAt" : "2026-09-25T19:18:00Z"
+    }, {
+      "prayer" : "Isha",
+      "startsAt" : "2026-09-25T19:18:00Z",
+      "deadlineName" : "Midnight",
+      "deadlineAt" : "2026-09-25T23:52:00Z"
+    } ]
+  }
+}
