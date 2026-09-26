@@ -36,13 +36,14 @@ const USER_ID = 'user-kan-252';
 const SECOND_USER_ID = 'user-kan-253-switch';
 const SNAPSHOT_TIME = '2026-08-29T10:00:00.000Z';
 
-function settingsRecord(
-  payload: Record<string, unknown> = { theme: 'dark', telemetry: false },
+// Employment is a real singleton account collection; settings moved to the profile service.
+function employmentRecord(
+  payload: Record<string, unknown> = { stage: 'searching', remote: false },
   userId = USER_ID,
 ) {
   return {
     userId,
-    collection: 'settings',
+    collection: 'employment',
     recordId: 'singleton',
     payload,
     position: null,
@@ -64,7 +65,7 @@ function accountSnapshot(userId = USER_ID, payload?: Record<string, unknown>) {
       migratedAt: SNAPSHOT_TIME,
       updatedAt: SNAPSHOT_TIME,
     },
-    records: [settingsRecord(payload, userId)],
+    records: [employmentRecord(payload, userId)],
   };
 }
 
@@ -101,21 +102,21 @@ describe('signed-in persistence boundaries', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     await boot;
     expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false });
-    expect(await loadStore('settings')).toMatchObject({ theme: 'dark' });
+    expect(await loadStore('employment')).toMatchObject({ stage: 'searching' });
     supabaseMocks.applyHelmMutations.mockResolvedValue({
       requestId: 'confirmed', accountVersion: 8,
-      changes: [{ ...settingsRecord({ theme: 'light', telemetry: false }), accountVersion: 8, revision: 2 }],
+      changes: [{ ...employmentRecord({ stage: 'interviewing', remote: false }), accountVersion: 8, revision: 2 }],
     });
-    await saveStoreCommitted('settings', { theme: 'light', telemetry: false });
+    await saveStoreCommitted('employment', { stage: 'interviewing', remote: false });
     expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(1);
-    expect(await loadStore('settings')).toMatchObject({ theme: 'light' });
+    expect(await loadStore('employment')).toMatchObject({ stage: 'interviewing' });
 
-    const missed = accountSnapshot(USER_ID, { theme: 'dark', telemetry: true });
+    const missed = accountSnapshot(USER_ID, { stage: 'searching', remote: true });
     missed.state.accountVersion = 9;
     supabaseMocks.fetchHelmAccountSnapshot.mockResolvedValue(missed);
     supabaseMocks.probeHelmAccountVersion.mockResolvedValue(9);
     await vi.advanceTimersByTimeAsync(10 * 60_000);
-    expect(await loadStore('settings')).toMatchObject({ telemetry: true });
+    expect(await loadStore('employment')).toMatchObject({ remote: true });
     expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false, accountVersion: 9 });
   });
 
@@ -125,7 +126,7 @@ describe('signed-in persistence boundaries', () => {
     supabaseMocks.fetchHelmAccountSnapshot.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     await refreshDatabasePersistence();
     expect(getSyncSessionSnapshot()).toMatchObject({ status: 'reconnecting', readOnly: true, hasUsableSnapshot: true });
-    expect(await loadStore('settings')).toMatchObject({ theme: 'dark' });
+    expect(await loadStore('employment')).toMatchObject({ stage: 'searching' });
     await refreshDatabasePersistence();
     expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false });
 
@@ -136,7 +137,7 @@ describe('signed-in persistence boundaries', () => {
       status: 'reconnecting', userId: USER_ID, hasUsableSnapshot: true,
     }));
     expect(supabaseMocks.getFreshAccessToken).toHaveBeenCalledWith({ forceRefresh: true });
-    expect(await loadStore('settings')).toMatchObject({ theme: 'dark' });
+    expect(await loadStore('employment')).toMatchObject({ stage: 'searching' });
     await refreshDatabasePersistence();
     expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false });
   });
@@ -150,7 +151,7 @@ describe('signed-in persistence boundaries', () => {
     await vi.waitFor(() => expect(getSyncSessionSnapshot()).toMatchObject({
       status: 'blocked', hasUsableSnapshot: false, reason: 'signed_out',
     }));
-    expect(await loadStore('settings')).toBeNull();
+    expect(await loadStore('employment')).toBeNull();
   });
 
   it('ignores late failures from an old account and fails closed on incompatible schemas', async () => {
@@ -169,7 +170,7 @@ describe('signed-in persistence boundaries', () => {
     supabaseMocks.fetchHelmAccountSnapshot.mockResolvedValue(incompatible);
     await refreshDatabasePersistence();
     expect(getSyncSessionSnapshot()).toMatchObject({ status: 'blocked', reason: 'incompatible_schema', hasUsableSnapshot: false });
-    expect(await loadStore('settings')).toBeNull();
+    expect(await loadStore('employment')).toBeNull();
   });
 
   it('keeps a denied domain write local when authenticated account reads still succeed', async () => {
@@ -178,12 +179,12 @@ describe('signed-in persistence boundaries', () => {
     const statuses: string[] = [];
     const unsubscribe = subscribeSyncSession(snapshot => statuses.push(snapshot.status));
     supabaseMocks.applyHelmMutations.mockRejectedValueOnce({ code: '42501', status: 403, message: 'Domain permission denied' });
-    await expect(saveStoreCommitted('settings', { theme: 'light', telemetry: false })).rejects.toThrow();
+    await expect(saveStoreCommitted('employment', { stage: 'interviewing', remote: false })).rejects.toThrow();
     unsubscribe();
     expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(1);
     expect(statuses.every(status => status === 'ready')).toBe(true);
     expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', userId: USER_ID, readOnly: false });
-    expect(await loadStore('settings')).toMatchObject({ theme: 'dark' });
+    expect(await loadStore('employment')).toMatchObject({ stage: 'searching' });
   });
 
   it('proves boot and shared reads fail closed without an authenticated account', async () => {
@@ -197,13 +198,13 @@ describe('signed-in persistence boundaries', () => {
       reason: 'signed_out',
     });
     expect(supabaseMocks.fetchHelmAccountSnapshot).not.toHaveBeenCalled();
-    expect(await loadStore('settings')).toBeNull();
-    await expect(saveStoreCommitted('settings', { theme: 'light' })).rejects.toThrow(
+    expect(await loadStore('employment')).toBeNull();
+    await expect(saveStoreCommitted('employment', { stage: 'interviewing' })).rejects.toThrow(
       'signed-in database session is ready',
     );
   });
 
-  it('proves signed-in boot reads the account snapshot and commits only shared settings fields', async () => {
+  it('proves signed-in boot reads the account snapshot and commits a singleton collection as one patch', async () => {
     configureSupabase({ authenticated: true });
     await bootstrapDatabasePersistence();
 
@@ -215,32 +216,38 @@ describe('signed-in persistence boundaries', () => {
       readOnly: false,
       reason: null,
     });
-    expect(await loadStore('settings')).toEqual({ theme: 'dark', telemetry: false });
+    expect(await loadStore('employment')).toEqual({ stage: 'searching', remote: false });
 
     supabaseMocks.applyHelmMutations.mockResolvedValue({
-      requestId: 'request-settings-1',
+      requestId: 'request-employment-1',
       accountVersion: 8,
-      changes: [settingsRecord({ theme: 'light', telemetry: true })],
+      changes: [employmentRecord({ stage: 'interviewing', remote: true })],
     });
 
-    await saveStoreCommitted('settings', {
-      theme: 'light',
-      telemetry: true,
-      deepgramApiKey: 'device-secret-must-not-cross-boundary',
-      supabaseUrl: 'https://device.example.test',
-    });
+    await saveStoreCommitted('employment', { stage: 'interviewing', remote: true });
 
     expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(1);
     expect(supabaseMocks.applyHelmMutations.mock.calls[0][1]).toEqual([
       {
         op: 'patch',
-        collection: 'settings',
+        collection: 'employment',
         recordId: 'singleton',
-        set: { theme: 'light', telemetry: true },
+        set: { stage: 'interviewing', remote: true },
         unset: [],
       },
     ]);
-    expect(await loadStore('settings')).toEqual({ theme: 'light', telemetry: true });
+    expect(await loadStore('employment')).toEqual({ stage: 'interviewing', remote: true });
+  });
+
+  it('never reads or writes settings or integrations in the account record: the profile service owns them', async () => {
+    configureSupabase({ authenticated: true });
+    await bootstrapDatabasePersistence();
+
+    for (const retired of ['settings', 'integrations']) {
+      await expect(loadStore(retired)).rejects.toThrow(`${retired} is retired`);
+      await expect(saveStoreCommitted(retired, { theme: 'light' })).rejects.toThrow(`${retired} is retired`);
+    }
+    expect(supabaseMocks.applyHelmMutations).not.toHaveBeenCalled();
   });
 
   it('keeps the original legacy settings migration source without copying provider values into new browser records', async () => {
@@ -255,27 +262,18 @@ describe('signed-in persistence boundaries', () => {
     expect(Object.keys(localStorage).filter(key => key.includes('legacy-quarantine'))).toEqual([]);
   });
 
-  it('does not restore a cleared account preference from a retained Secrets migration source on rebootstrap', async () => {
+  it('never migrates legacy browser settings into the account record and keeps the Secrets migration source', async () => {
     configureSupabase({ authenticated: true });
     const original = JSON.stringify({ dataRetentionDays: 30, elevenLabsApiKey: 'legacy-eleven' });
     localStorage.setItem('helm:settings', original);
-    const migrated = { theme: 'dark', telemetry: false, dataRetentionDays: 30 };
-    supabaseMocks.applyHelmMutations.mockResolvedValue({ requestId: 'migration', accountVersion: 8, changes: [settingsRecord(migrated)] });
     await bootstrapDatabasePersistence();
-    expect(await loadStore('settings')).toEqual(migrated);
-    expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(1);
-
-    const cleared = { theme: 'dark', telemetry: false };
-    supabaseMocks.applyHelmMutations.mockResolvedValue({ requestId: 'clear', accountVersion: 9, changes: [settingsRecord(cleared)] });
-    await saveStoreCommitted('settings', cleared);
-    expect(await loadStore('settings')).toEqual(cleared);
     resetDatabasePersistence();
-    supabaseMocks.fetchHelmAccountSnapshot.mockResolvedValue(accountSnapshot(USER_ID, cleared));
     await bootstrapDatabasePersistence();
 
-    expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(2);
-    expect(await loadStore('settings')).toEqual(cleared);
+    expect(getSyncSessionSnapshot().status).toBe('ready');
+    expect(supabaseMocks.applyHelmMutations).not.toHaveBeenCalled();
     expect(localStorage.getItem('helm:settings')).toBe(original);
+    expect(localStorage.getItem('helm:meta:settings')).toBeNull();
     expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toMatchObject({ elevenLabsApiKey: 'legacy-eleven' });
   });
 
@@ -296,22 +294,24 @@ describe('signed-in persistence boundaries', () => {
 
   it('keeps shared migration retryable when its database commit fails', async () => {
     configureSupabase({ authenticated: true });
-    const original = JSON.stringify({ dataRetentionDays: 30, elevenLabsApiKey: 'legacy-eleven' });
-    localStorage.setItem('helm:settings', original);
+    const original = JSON.stringify({ stage: 'applying', remote: true });
+    localStorage.setItem('helm:employment', original);
+    supabaseMocks.fetchHelmAccountSnapshot.mockResolvedValue({ ...accountSnapshot(), records: [] });
     supabaseMocks.applyHelmMutations.mockRejectedValueOnce(new Error('permission denied'));
     await bootstrapDatabasePersistence();
-    expect(localStorage.getItem('helm:meta:settings')).toBeNull();
-    expect(localStorage.getItem('helm:settings')).toBe(original);
+    expect(localStorage.getItem('helm:meta:employment')).toBeNull();
+    expect(localStorage.getItem('helm:employment')).toBe(original);
     expect(getSyncSessionSnapshot().status).not.toBe('ready');
 
     resetDatabasePersistence();
-    const migrated = { theme: 'dark', telemetry: false, dataRetentionDays: 30 };
-    supabaseMocks.applyHelmMutations.mockResolvedValue({ requestId: 'migration-retry', accountVersion: 8, changes: [settingsRecord(migrated)] });
+    const migrated = { stage: 'applying', remote: true };
+    supabaseMocks.applyHelmMutations.mockResolvedValue({ requestId: 'migration-retry', accountVersion: 8, changes: [employmentRecord(migrated)] });
     await bootstrapDatabasePersistence();
     expect(getSyncSessionSnapshot().status).toBe('ready');
-    expect(await loadStore('settings')).toEqual(migrated);
-    expect(localStorage.getItem('helm:meta:settings')).toMatch(/^shared-migrated:sha256:[0-9a-f]{64}$/u);
-    expect(localStorage.getItem('helm:settings')).toBe(original);
+    expect(await loadStore('employment')).toEqual(migrated);
+    expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(2);
+    expect(supabaseMocks.applyHelmMutations.mock.calls[1][1]).toEqual(supabaseMocks.applyHelmMutations.mock.calls[0][1]);
+    expect(localStorage.getItem('helm:employment')).toBeNull();
   });
 
   it('retries a transient write once with the same request id and operations', async () => {
@@ -320,12 +320,12 @@ describe('signed-in persistence boundaries', () => {
     supabaseMocks.applyHelmMutations
       .mockRejectedValueOnce(new TypeError('network fetch failed'))
       .mockResolvedValueOnce({
-        requestId: 'request-settings-retry',
+        requestId: 'request-employment-retry',
         accountVersion: 8,
-        changes: [settingsRecord({ theme: 'light', telemetry: false })],
+        changes: [employmentRecord({ stage: 'interviewing', remote: false })],
       });
 
-    await saveStoreCommitted('settings', { theme: 'light', telemetry: false });
+    await saveStoreCommitted('employment', { stage: 'interviewing', remote: false });
 
     expect(supabaseMocks.applyHelmMutations).toHaveBeenCalledTimes(2);
     expect(supabaseMocks.applyHelmMutations.mock.calls[1]).toEqual(
@@ -340,7 +340,7 @@ describe('signed-in persistence boundaries', () => {
       .mockImplementationOnce(() => new Promise(resolve => { resolveFirstSnapshot = resolve; }))
       .mockResolvedValueOnce(accountSnapshot(
         SECOND_USER_ID,
-        { theme: 'light', telemetry: true },
+        { stage: 'interviewing', remote: true },
       ));
 
     const firstBoot = bootstrapDatabasePersistence();
@@ -349,7 +349,7 @@ describe('signed-in persistence boundaries', () => {
     resetDatabasePersistence('Switching Sabah One accounts.', 'switching_account');
     const secondBoot = bootstrapDatabasePersistence();
     await secondBoot;
-    resolveFirstSnapshot(accountSnapshot(USER_ID, { theme: 'dark', telemetry: false }));
+    resolveFirstSnapshot(accountSnapshot(USER_ID, { stage: 'searching', remote: false }));
     await firstBoot;
 
     expect(getSyncSessionSnapshot()).toMatchObject({
@@ -357,7 +357,7 @@ describe('signed-in persistence boundaries', () => {
       userId: SECOND_USER_ID,
       accountVersion: 7,
     });
-    expect(await loadStore('settings')).toEqual({ theme: 'light', telemetry: true });
+    expect(await loadStore('employment')).toEqual({ stage: 'interviewing', remote: true });
   });
 
   it('proves the app and database contracts keep shared data account-owned', () => {

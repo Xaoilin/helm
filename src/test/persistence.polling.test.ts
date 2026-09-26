@@ -33,8 +33,8 @@ it('checks idle visible accounts every ten minutes while preserving prompt coale
   const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
   const record = {
-    userId: 'polling-account', collection: 'settings', recordId: 'singleton',
-    payload: { theme: 'dark' }, position: null, revision: 1, accountVersion: 7,
+    userId: 'polling-account', collection: 'employment', recordId: 'singleton',
+    payload: { stage: 'searching' }, position: null, revision: 1, accountVersion: 7,
     createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z', deletedAt: null,
   };
   database.fetchHelmAccountSnapshot.mockResolvedValue({
@@ -66,7 +66,7 @@ it('checks idle visible accounts every ten minutes while preserving prompt coale
   await vi.advanceTimersByTimeAsync(600_000);
   expect(database.probeHelmAccountVersion).toHaveBeenCalledTimes(2);
   expect(database.fetchHelmAccountSnapshot).not.toHaveBeenCalled();
-  expect(await loadStore('settings')).toEqual({ theme: 'dark' });
+  expect(await loadStore('employment')).toEqual({ stage: 'searching' });
 
   database.probeHelmAccountVersion.mockClear();
   visible.mockReturnValue('hidden');
@@ -86,16 +86,16 @@ it('checks idle visible accounts every ten minutes while preserving prompt coale
 
   database.probeHelmAccountVersion.mockClear();
   database.probeHelmAccountVersion.mockResolvedValue(8);
-  database.fetchHelmCollections.mockResolvedValue([{ ...record, payload: { theme: 'light' }, accountVersion: 8 }]);
-  broadcast({ accountVersion: 8, changes: [{ collection: 'settings' }] });
-  broadcast({ accountVersion: 8, changes: [{ collection: 'settings' }] });
+  database.fetchHelmCollections.mockResolvedValue([{ ...record, payload: { stage: 'interviewing' }, accountVersion: 8 }]);
+  broadcast({ accountVersion: 8, changes: [{ collection: 'employment' }] });
+  broadcast({ accountVersion: 8, changes: [{ collection: 'employment' }] });
   document.dispatchEvent(new Event('visibilitychange'));
   window.dispatchEvent(new Event('online'));
   await vi.advanceTimersByTimeAsync(0);
-  expect(database.fetchHelmCollections).toHaveBeenCalledExactlyOnceWith(['settings']);
+  expect(database.fetchHelmCollections).toHaveBeenCalledExactlyOnceWith(['employment']);
   expect(database.probeHelmAccountVersion).toHaveBeenCalledTimes(1);
   expect(database.fetchHelmAccountSnapshot).not.toHaveBeenCalled();
-  expect(await loadStore('settings')).toEqual({ theme: 'light' });
+  expect(await loadStore('employment')).toEqual({ stage: 'interviewing' });
   expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', accountVersion: 8 });
 
   database.probeHelmAccountVersion.mockClear();
@@ -104,5 +104,5 @@ it('checks idle visible accounts every ten minutes while preserving prompt coale
   resetDatabasePersistence();
   await vi.advanceTimersByTimeAsync(600_000);
   expect(database.probeHelmAccountVersion).not.toHaveBeenCalled();
-  expect(await loadStore('settings')).toBeNull();
+  expect(await loadStore('employment')).toBeNull();
 });

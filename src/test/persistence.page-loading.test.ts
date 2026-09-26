@@ -41,8 +41,8 @@ beforeEach(() => {
 afterEach(() => { resetDatabasePersistence(); vi.useRealTimers(); });
 
 it('loads only requested collections, coalesces page demand, and reuses fresh revisits', async () => {
-  await bootstrapDatabasePersistence(['settings']);
-  expect(database.fetchHelmAccountSnapshot).toHaveBeenCalledExactlyOnceWith(['settings']);
+  await bootstrapDatabasePersistence(['employment']);
+  expect(database.fetchHelmAccountSnapshot).toHaveBeenCalledExactlyOnceWith(['employment']);
   let delivered = false;
   const pending = loadStore('projects').then(value => { delivered = true; return value; });
   await Promise.resolve();
@@ -54,10 +54,10 @@ it('loads only requested collections, coalesces page demand, and reuses fresh re
   await Promise.all([activateStoreCollections(['projects']), activateStoreCollections(['projects'])]);
   expect(await pending).toEqual([{ id: 'project-1', title: 'project-1' }]);
   expect(database.fetchHelmAccountSnapshot).toHaveBeenCalledTimes(2);
-  await activateStoreCollections(['settings']);
+  await activateStoreCollections(['employment']);
   await activateStoreCollections(['projects']);
   expect(database.fetchHelmAccountSnapshot).toHaveBeenCalledTimes(2);
-  expect(getStoreLoadState('settings')).toMatchObject({ loaded: true, complete: true });
+  expect(getStoreLoadState('employment')).toMatchObject({ loaded: true, complete: true });
   vi.setSystemTime(new Date('2026-09-22T10:11:00Z'));
   await activateStoreCollections(['projects']);
   expect(database.fetchHelmAccountSnapshot).toHaveBeenCalledTimes(3);
@@ -78,7 +78,7 @@ it('retains confirmed same-account data on a failed page and never reopens recov
 });
 
 it('discards a page read completing after account reset and releases unloaded readers', async () => {
-  await bootstrapDatabasePersistence(['settings']);
+  await bootstrapDatabasePersistence(['employment']);
   const waiting = loadStore('trips');
   let finish!: (value: unknown) => void;
   database.fetchHelmAccountSnapshot.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
@@ -96,7 +96,7 @@ it('loads subsequent activity pages only on demand and preserves unseen records 
   database.fetchHelmCollectionPage.mockImplementation(async (_key: string, offset: number, limit: number) => ({
     records: all.slice(offset, offset + limit), hasMore: offset + limit < all.length,
   }));
-  await bootstrapDatabasePersistence(['settings']);
+  await bootstrapDatabasePersistence(['employment']);
   expect(database.fetchHelmCollectionPage).not.toHaveBeenCalled();
   await activateStoreCollections(['assistantActivityLog']);
   expect(database.fetchHelmAccountSnapshot).toHaveBeenLastCalledWith([]);
@@ -133,29 +133,29 @@ it('reconciles a missed change in loaded data before a new page advances the glo
   database.fetchHelmAccountSnapshot.mockImplementation(async (keys: string[]) => ({
     state: { userId: 'page-user', schemaVersion: 1, accountVersion: version, minimumClientVersion: '0.2.0' },
     records: [
-      { ...record('settings', 'singleton'), payload: { theme: version === 7 ? 'dark' : 'light' }, accountVersion: version },
+      { ...record('employment', 'singleton'), payload: { stage: version === 7 ? 'searching' : 'interviewing' }, accountVersion: version },
       ...records,
     ].filter(item => keys.includes(item.collection)),
   }));
-  await bootstrapDatabasePersistence(['settings']);
-  expect(await loadStore('settings')).toEqual({ theme: 'dark' });
+  await bootstrapDatabasePersistence(['employment']);
+  expect(await loadStore('employment')).toEqual({ stage: 'searching' });
   version = 8;
   database.probeHelmAccountVersion.mockResolvedValue(8);
-  database.fetchHelmChangedCollections.mockResolvedValue({ accountVersion: 8, collections: ['settings'], secretsChanged: false });
-  await activateStoreCollections(['settings', 'trips']);
-  expect(database.fetchHelmAccountSnapshot).toHaveBeenLastCalledWith(['settings']);
-  expect(await loadStore('settings')).toEqual({ theme: 'light' });
+  database.fetchHelmChangedCollections.mockResolvedValue({ accountVersion: 8, collections: ['employment'], secretsChanged: false });
+  await activateStoreCollections(['employment', 'trips']);
+  expect(database.fetchHelmAccountSnapshot).toHaveBeenLastCalledWith(['employment']);
+  expect(await loadStore('employment')).toEqual({ stage: 'interviewing' });
   expect(getSyncSessionSnapshot().accountVersion).toBe(8);
-  broadcast({ accountVersion: 8, changes: [{ collection: 'settings' }] });
+  broadcast({ accountVersion: 8, changes: [{ collection: 'employment' }] });
   await vi.advanceTimersByTimeAsync(600_000);
-  expect(await loadStore('settings')).toEqual({ theme: 'light' });
+  expect(await loadStore('employment')).toEqual({ stage: 'interviewing' });
   expect(database.fetchHelmAccountSnapshot).toHaveBeenCalledTimes(3);
 });
 
 it('rejects an older staged paged response after a newer confirmed write', async () => {
   const old = record('assistantActivityLog', 'action-1');
   database.fetchHelmCollectionPage.mockResolvedValue({ records: [old], hasMore: false });
-  await bootstrapDatabasePersistence(['settings', 'assistantActivityLog']);
+  await bootstrapDatabasePersistence(['employment', 'assistantActivityLog']);
   await loadStore('assistantActivityLog');
   let finishPage!: (value: unknown) => void;
   database.fetchHelmCollectionPage.mockImplementationOnce(() => new Promise(resolve => { finishPage = resolve; }));
@@ -205,15 +205,15 @@ function eventServer() {
 
 it('refreshes only affected active collections and invalidates inactive cached data until a revisit', async () => {
   const server = eventServer();
-  await bootstrapDatabasePersistence(['settings', 'projects']);
-  await activateStoreCollections(['settings', 'trips']);
+  await bootstrapDatabasePersistence(['employment', 'projects']);
+  await activateStoreCollections(['employment', 'trips']);
   database.fetchHelmAccountSnapshot.mockClear();
   server.change('projects', 'Changed while inactive');
   server.emit('projects');
   await vi.waitFor(() => expect(getSyncSessionSnapshot().accountVersion).toBe(8));
   expect(database.fetchHelmAccountSnapshot).not.toHaveBeenCalled();
   expect(await loadStore('projects')).toEqual([{ id: 'project-1', title: 'project-1' }]);
-  await activateStoreCollections(['settings', 'projects']);
+  await activateStoreCollections(['employment', 'projects']);
   expect(database.fetchHelmAccountSnapshot).toHaveBeenCalledExactlyOnceWith(['projects']);
   expect(await loadStore('projects')).toEqual([{ id: 'project-1', title: 'Changed while inactive' }]);
   database.fetchHelmAccountSnapshot.mockClear();
@@ -229,7 +229,7 @@ it('refreshes only affected active collections and invalidates inactive cached d
 
 it('a newer local confirmation cannot hide a missed write in another active scope', async () => {
   const server = eventServer();
-  await bootstrapDatabasePersistence(['settings', 'projects', 'trips']);
+  await bootstrapDatabasePersistence(['employment', 'projects', 'trips']);
   await loadStore('trips');
   server.change('projects', 'Missed remote change');
   const local = server.change('trips', 'Confirmed here');
@@ -249,7 +249,7 @@ it('a newer local confirmation cannot hide a missed write in another active scop
 
 it('retains both scopes when a newer event arrives during metadata reconciliation', async () => {
   const server = eventServer();
-  await bootstrapDatabasePersistence(['settings', 'projects', 'trips']);
+  await bootstrapDatabasePersistence(['employment', 'projects', 'trips']);
   let finish!: (value: unknown) => void;
   database.fetchHelmChangedCollections.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
   server.change('trips', 'First');
@@ -267,9 +267,9 @@ it('retains both scopes when a newer event arrives during metadata reconciliatio
 
 it('keeps assistant demand active across navigation and refreshes stale data when reopened', async () => {
   const server = eventServer();
-  await bootstrapDatabasePersistence(['settings']);
-  await activateStoreCollections(['settings', 'projects'], 'assistant');
-  await activateStoreCollections(['settings', 'trips']);
+  await bootstrapDatabasePersistence(['employment']);
+  await activateStoreCollections(['employment', 'projects'], 'assistant');
+  await activateStoreCollections(['employment', 'trips']);
   database.fetchHelmAccountSnapshot.mockClear();
   server.change('projects', 'Assistant still needs this');
   server.emit('projects');
@@ -281,13 +281,13 @@ it('keeps assistant demand active across navigation and refreshes stale data whe
   server.emit('projects');
   await vi.waitFor(() => expect(getSyncSessionSnapshot().accountVersion).toBe(9));
   expect(database.fetchHelmAccountSnapshot).not.toHaveBeenCalled();
-  await activateStoreCollections(['settings', 'projects'], 'assistant');
+  await activateStoreCollections(['employment', 'projects'], 'assistant');
   expect(database.fetchHelmAccountSnapshot).toHaveBeenCalledExactlyOnceWith(['projects']);
   expect(await loadStore('projects')).toEqual([{ id: 'project-1', title: 'Changed after close' }]);
 });
 
 it('invalidates secret summaries after a missed secret event without reading unrelated collections', async () => {
-  await bootstrapDatabasePersistence(['settings']);
+  await bootstrapDatabasePersistence(['employment']);
   const listener = vi.fn();
   const remove = subscribeHelmSecretChanges(listener);
   database.probeHelmAccountVersion.mockResolvedValue(8);
@@ -313,14 +313,14 @@ it('does not let an older mutation receipt replace a newer record revision', () 
 
 it('publishes a confirmed page after navigation away and a subsequent metadata failure', async () => {
   const server = eventServer();
-  await bootstrapDatabasePersistence(['settings']);
+  await bootstrapDatabasePersistence(['employment']);
   const waiting = loadStore('trips');
   server.change('trips', 'Confirmed page');
   let fail!: (error: Error) => void;
   database.fetchHelmChangedCollections.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
-  const activation = activateStoreCollections(['settings', 'trips']);
+  const activation = activateStoreCollections(['employment', 'trips']);
   await vi.waitFor(() => expect(fail).toBeTypeOf('function'));
-  const navigation = activateStoreCollections(['settings']).catch(error => error);
+  const navigation = activateStoreCollections(['employment']).catch(error => error);
   fail(new Error('Metadata unavailable'));
   await expect(activation).rejects.toThrow('Metadata unavailable');
   expect(await navigation).toBeInstanceOf(Error);

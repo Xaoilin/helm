@@ -11,6 +11,8 @@ import {
   recordOperationalEvent,
   setOperationalAccount,
 } from '../../services/operationalTelemetry';
+import { operationalEventsUrl } from '../../services/backend/profileServiceApi';
+import { operationalReceiptSchema } from '../../services/backend/contracts';
 
 let client: SupabaseClient | null = null;
 let currentUserId: string | null = null;
@@ -39,18 +41,20 @@ export function initSupabase(url: string, publishableKey: string): void {
     setOperationalAccount(null);
     return;
   }
-  configureOperationalTransport(async (events, signal) => {
+  // Operational events become metrics in the profile service (and from there Grafana). Without a
+  // profile service there is nowhere to send them, so they stay in the local diagnostics buffer.
+  const collectorUrl = operationalEventsUrl();
+  configureOperationalTransport(collectorUrl ? async (events, signal) => {
     const accessToken = currentSession?.access_token;
     if (!accessToken) {
       const error = new Error('Operational telemetry requires a current signed-in session.') as Error & { status?: number };
       error.status = 401;
       throw error;
     }
-    const response = await fetch(`${url}/functions/v1/operational-events`, {
+    const response = await fetch(collectorUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        apikey: publishableKey,
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({ events }),
@@ -62,22 +66,14 @@ export function initSupabase(url: string, publishableKey: string): void {
         ? 'invalid_response'
         : response.status === 401
           ? 'unauthorized'
-          : response.status === 403 ? 'forbidden' : undefined;
+          : response.status === 403 ? 'forbidden' : response.status === 429 ? 'rate_limited' : undefined;
       throw Object.assign(new Error('Operational collection unavailable.'), { status: response.status, code });
     }
-    const receipt = await response.json().catch(() => null) as {
-      ok?: unknown;
-      accepted?: unknown;
-      schemaVersion?: unknown;
-    } | null;
-    if (
-      receipt?.ok !== true
-      || receipt.accepted !== events.length
-      || receipt.schemaVersion !== 1
-    ) {
+    const receipt = operationalReceiptSchema.safeParse(await response.json().catch(() => null));
+    if (!receipt.success || receipt.data.accepted !== events.length) {
       throw Object.assign(new Error('Operational collection returned an invalid receipt.'), { code: 'invalid_response' });
     }
-  });
+  } : null);
   client = createClient(url, publishableKey, {
     realtime: {
       // Removing an exhausted subscription must also stop socket retries when

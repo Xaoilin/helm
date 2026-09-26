@@ -29,7 +29,6 @@ import {
   decodeStoreValue,
   encodeStoreValue,
   mergeLegacyStoreValue,
-  hasLegacyProviderSettings,
   sanitizeLegacyStoreValue,
   splitSettings,
   type DeviceSettings,
@@ -306,9 +305,19 @@ async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<
   assertCurrentPersistenceSession(epoch, userId);
   const desired = new Map<string, unknown>();
   const keysToClear: string[] = [];
-  let retainedSettings: { raw: string; marker: string } | null = null;
   let deviceSettings = await loadDeviceStore<DeviceSettings>(DEVICE_SETTINGS_STORE_KEY) ?? {};
   let deviceSettingsChanged = false;
+
+  // Settings are no longer an account collection (the services own them): only device-only fields
+  // are taken from a legacy browser copy. The copy stays readable for the Secrets migration.
+  const legacySettings = deviceStore.readLegacySharedValue('settings');
+  if (legacySettings.source && !legacySettings.parseError && !deviceStore.hasCurrentDeviceSettings()) {
+    const legacyDevice = splitSettings(legacySettings.value).device;
+    if (Object.keys(legacyDevice).length > 0) {
+      deviceSettings = { ...legacyDevice, ...deviceSettings };
+      deviceSettingsChanged = true;
+    }
+  }
 
   for (const item of SHARED_STORE_KEYS) {
     const legacy = deviceStore.readLegacySharedValue(item.key);
@@ -320,22 +329,8 @@ async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<
       continue;
     }
     const inspectedLegacy = sanitizeLegacyStoreValue(item.key, legacy.value);
-    if (item.key === 'settings' && legacy.raw !== null && hasLegacyProviderSettings(inspectedLegacy.value)) {
-      const migration = await deviceStore.legacySettingsMigration(legacy.raw);
-      assertCurrentPersistenceSession(epoch, userId);
-      if (migration.consumed) continue;
-      retainedSettings = { raw: legacy.raw, marker: migration.marker };
-    }
-    if (inspectedLegacy.ambiguous && legacy.raw !== null
-      && !(item.key === 'settings' && hasLegacyProviderSettings(inspectedLegacy.value))) {
+    if (inspectedLegacy.ambiguous && legacy.raw !== null) {
       deviceStore.quarantineLegacyValue(item.key, legacy.raw);
-    }
-    if (item.key === 'settings') {
-      const split = splitSettings(inspectedLegacy.value);
-      if (Object.keys(split.device).length > 0 && !deviceStore.hasCurrentDeviceSettings()) {
-        deviceSettings = { ...split.device, ...deviceSettings };
-        deviceSettingsChanged = true;
-      }
     }
     const databaseValue = recordCache.decoded(item.key);
     const merged = await prepareSharedStoreValue(
@@ -344,10 +339,7 @@ async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<
     );
     assertCurrentPersistenceSession(epoch, userId);
     if (!valuesEqual(databaseValue, merged)) desired.set(item.key, merged);
-    // Keep the original browser source readable by the existing Secrets
-    // migration until the user explicitly removes it. Never copy raw keys to
-    // the new device-settings store.
-    if (item.key !== 'settings' || !hasLegacyProviderSettings(inspectedLegacy.value)) keysToClear.push(item.key);
+    keysToClear.push(item.key);
   }
 
   if (deviceSettingsChanged) {
@@ -358,10 +350,6 @@ async function migrateLegacyLocalCopies(epoch: number, userId: string): Promise<
   const changedCollections = desired.size > 0
     ? await commitStoreValues(desired, epoch, userId)
     : [];
-  if (retainedSettings) {
-    assertCurrentPersistenceSession(epoch, userId);
-    deviceStore.completeLegacySettingsMigration(retainedSettings.raw, retainedSettings.marker);
-  }
   for (const key of keysToClear) {
     assertCurrentPersistenceSession(epoch, userId);
     await clearLocalStoreCopy(key, false);

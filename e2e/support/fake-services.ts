@@ -10,6 +10,10 @@ import type { z } from 'zod';
 import type { CalendarAccount, CalendarEvent, CalendarSource } from '../../src/types/domain';
 import {
   apiErrorSchema,
+  appPreferencesSchema,
+  integrationSchema,
+  integrationsSchema,
+  operationalReceiptSchema,
   calendarAccountSchema,
   calendarEventListSchema,
   calendarEventSchema,
@@ -24,7 +28,9 @@ import {
   type ServiceCalendarAccount,
   type ServiceCalendarEvent,
   type ServiceCalendarSource,
+  type ServiceAppPreferences,
   type ServiceGlobalSettings,
+  type ServiceIntegration,
   type ServiceOutcome,
   type ServicePreferences,
   type ServiceTracking,
@@ -41,6 +47,10 @@ export interface FakeServicesOptions {
   profile?: Pick<ServiceGlobalSettings, 'city' | 'country' | 'timeZone'>;
   /** Saved prayer preferences; omitted means the service defaults. */
   preferences?: ServicePreferences;
+  /** Saved app preferences (profile service); omitted means the service defaults. */
+  appPreferences?: Omit<ServiceAppPreferences, 'updatedAt'>;
+  /** Saved integration connection records (profile service); omitted means none. */
+  integrations?: ServiceIntegration[];
   /** The next write is applied but its response is lost (a 503), like a reply that timed out. */
   loseNextWriteResponse?: boolean;
   /** The calendar the service holds, in the app's shapes (as scenarios describe it). */
@@ -65,6 +75,10 @@ export interface FakeServices {
   tracking: ServiceTracking | null;
   preferences: ServicePreferences;
   profile: ServiceGlobalSettings;
+  appPreferences: ServiceAppPreferences;
+  integrations: ServiceIntegration[];
+  /** Operational events the app reported to the profile service. */
+  operationalEvents: unknown[];
   calls: string[];
   /** Creates refused because the outcome already existed (the app re-sent known data). */
   conflicts: number;
@@ -123,6 +137,11 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
     profile: options.profile
       ? { ...options.profile, updatedAt: '2026-08-01T12:00:00Z' }
       : { city: 'Bedford', country: 'United Kingdom', timeZone: null, updatedAt: null },
+    appPreferences: options.appPreferences
+      ? { ...options.appPreferences, updatedAt: '2026-08-01T12:00:00Z' }
+      : { theme: 'dark', dataRetentionDays: 90, telemetry: false, defaultCalendarTab: null, goalTags: [], updatedAt: null },
+    integrations: options.integrations ?? [],
+    operationalEvents: [],
     calls: [],
     conflicts: 0,
     replays: 0,
@@ -161,6 +180,12 @@ export async function installFakeServices(page: Page, services: FakeServices): P
     }
     const now = new Date(await page.evaluate(() => Date.now()).catch(() => Date.now()));
     const body = request.postDataJSON?.() ?? null;
+    // Telemetry is not a data write: no Idempotency-Key, and nothing is stored.
+    if (call === 'POST /api/profile/v1/operational-events') {
+      const events = Array.isArray(body?.events) ? body.events : [];
+      services.operationalEvents.push(...events);
+      return reply(route, 200, { ok: true, accepted: events.length, schemaVersion: 1 }, operationalReceiptSchema);
+    }
     if (request.method() === 'GET') return handle(route, services, call, url, body, now);
     return handleWrite(route, services, call, url, body, now, request.headers()['idempotency-key']);
   });
@@ -231,6 +256,23 @@ async function handle(
       const next = body as Pick<ServiceGlobalSettings, 'city' | 'country' | 'timeZone'>;
       services.profile = { city: next.city, country: next.country, timeZone: next.timeZone ?? null, updatedAt: now.toISOString() };
       return reply(route, 200, services.profile, globalSettingsSchema);
+    }
+    case call === 'GET /api/profile/v1/preferences':
+      return reply(route, 200, services.appPreferences, appPreferencesSchema);
+    case call === 'PUT /api/profile/v1/preferences':
+      services.appPreferences = appPreferencesSchema.parse({ ...body, updatedAt: now.toISOString() });
+      return reply(route, 200, services.appPreferences, appPreferencesSchema);
+    case call === 'GET /api/profile/v1/integrations':
+      return reply(route, 200, { integrations: services.integrations }, integrationsSchema);
+    case /^PUT \/api\/profile\/v1\/integrations\/[^/]+$/u.test(call): {
+      const provider = decodeURIComponent(call.split('/').at(-1) ?? '');
+      if (provider !== 'google') {
+        return reply(route, 404, { code: 'unknown_integration', message: 'No integration is offered for this provider.' },
+          apiErrorSchema);
+      }
+      const saved = integrationSchema.parse({ ...body, provider, updatedAt: now.toISOString() });
+      services.integrations = [...services.integrations.filter(record => record.provider !== provider), saved];
+      return reply(route, 200, saved, integrationSchema);
     }
     default:
       if (call.startsWith('GET /api/calendar/') || /^\w+ \/api\/calendar\//u.test(call)) {

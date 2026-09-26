@@ -67,7 +67,7 @@ Connect the remote MCP URL `<Supabase project URL>/functions/v1/sabah-one-employ
 
 ## Operational diagnostics boundary
 
-Operational diagnostics add no account-owned database records or business-data API. The browser keeps a redacted memory-only timeline, cleared on account change, and sends fixed metadata envelopes to the first-party `operational-events` collector. The collector verifies a nonanonymous first-party session; OAuth client tokens cannot use it as a new domain capability. It never logs account identifiers, record contents, credentials, arbitrary messages or URLs. Its public health response contains release identity and collection mode only.
+Operational diagnostics add no account-owned database records or business-data API. The browser keeps a redacted memory-only timeline, cleared on account change, and sends fixed metadata envelopes to the profile service's `/api/profile/v1/operational-events` collector with the user's bearer token; OAuth client tokens cannot use it as a new domain capability. Envelopes carry no account identifiers, record contents, credentials, arbitrary messages or URLs.
 
 Operators inspect retained events through the existing authenticated Supabase operational Logs interface. External agents must use that governed operator interface for operational logs; this does not authorize account SQL, copied user tokens, or business-data UI access. Debug export is a local diagnostic convenience, not an external account-data interface. The existing domain MCP approvals and missing capabilities remain unchanged.
 

@@ -12,7 +12,7 @@ Sabah One has one optional account-shared app time-zone preference. It controls 
 
 Settings commits a preferred zone before publishing it to React state. Clearing the value restores `Automatic`. Invalid values are rejected in the UI and discarded by the settings codec when reading untrusted records.
 
-The optional field remains inside the existing account-owned `settings` JSON payload in `public.helm_records.payload`. The payload is already `jsonb`, and the field needs neither relational filtering nor indexing, so this change requires no database migration.
+The optional field is owned by the profile service (`/api/profile/v1/settings`, `timeZone`), not the retired `settings` account collection.
 
 ## Prayer Boundary
 

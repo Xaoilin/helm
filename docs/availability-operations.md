@@ -2,7 +2,7 @@
 
 ## Objective and evidence boundary
 
-Sabah One targets at least 99.5% successful completed public probe runs over a rolling 30-day window. A run succeeds only when the protected `master` version matches the public Pages release, the current app entry asset responds, Supabase Auth health responds, and the public operational collector is enabled at schema 1 with the exact protected source SHA.
+Sabah One targets at least 99.5% successful completed public probe runs over a rolling 30-day window. A run succeeds only when the protected `master` version matches the public Pages release, the current app entry asset responds, Supabase Auth health responds, and the profile service (which collects operational events) reports `UP`.
 
 The workflow runs every 15 minutes. The operational detection objective is therefore 15 minutes plus any GitHub scheduler or queue delay; it is an objective, not an SLA. Track scheduler gaps separately from failed probes. The practical active-page recovery objective is at most 45 seconds once the backend is healthy. Current assembled-browser evidence does not isolate that production wall-clock interval: its retained `recoveryMs` is 42,663 ms from incident to recovery and includes an intentional 10-second outage plus a 31-second fake-clock advance after restore. It proves the recovery state and timing instrumentation under synthetic services, not attainment of a live recovery objective.
 
@@ -17,9 +17,9 @@ The monitor uses public endpoints and a Supabase public key only. It has no user
 | Pages release | `release.json` has a valid version equal to the checked-out `package.json` version. |
 | Pages app | The served HTML names a same-origin JavaScript asset and that exact asset answers the bounded `HEAD` request. |
 | Supabase Auth | `/auth/v1/health` responds successfully with the configured public key and no user bearer token. |
-| Operational collector | Public `GET /functions/v1/operational-events` returns `ok: true`, `enabled: true`, schema 1, and a release SHA equal to the checked-out protected commit. |
+| Operational collector | Public `GET /api/profile/health` on `PROFILE_BACKEND_URL` returns `status: UP` for `profile-service`. |
 
-Pages currently exposes exact version but not commit SHA, so the workflow does not claim commit identity for the web bundle. The collector exposes its exact deployed SHA. A version or SHA mismatch is actionable and fails the run, including during a legitimate rollout; the artifact records expected and observed identities rather than claiming web/function parity prematurely.
+Pages currently exposes exact version but not commit SHA, so the workflow does not claim commit identity for the web bundle. A version mismatch is actionable and fails the run, including during a legitimate rollout.
 
 ## Failed and recovered runs
 
@@ -37,7 +37,7 @@ The controlled fault exercise uses `synthetic_fault=expected_version_mismatch`. 
 - **Provider:** Filter by the affected domain and `rate_limited`, `server_error`, or `timeout`. Confirm the provider's current status and one bounded direct request. Paid assistant availability is outside this public monitor and must not be inferred from it.
 - **Reload/version:** Compare the artifact's expected and observed version first. For app reports, inspect `release` events for `release_available`, `reload_suppressed`, or `client_update_required`. Avoid repeated forced reloads; verify the public manifest and its named asset once after deployment settles.
 
-For the collector-health synthetic, take the artifact correlation UUID and filter Supabase request logs (`function_edge_logs`) by the exact path fragment `operational-events/availability-<uuid>`. For retained product telemetry, select custom function console logs (`function_logs`) in Supabase Dashboard Logs and use the exact quoted JSON fragment `"correlationId":"<uuid>"`; then add `"domain":"<domain>"` if needed. Request rows do not prove custom console-event retention. Because the workflow has no user session, its UUID is not POSTed as a product event.
+The collector-health synthetic only checks the profile service's health endpoint; product telemetry becomes profile-service metrics (see Grafana). Because the workflow has no user session, its UUID is not POSTed as a product event.
 
 Telemetry delivery is independent of product success. The real browser client kept confirmed task writes usable while the synthetic collector returned 503, then reported recovery; its diagnostics export contained the bounded event schema without business payloads. The same assembled check covered 390, 768, and 1440 pixel widths with keyboard and scroll interaction.
 
@@ -55,7 +55,7 @@ The predecessor's synthetic anonymous assistant request was read back as retaine
 
 ## Rollback and limits
 
-Sol owns protected rollback and live acceptance. Preserve the failed run, exact source SHA, and deployment identity; Sol can promote the last known-good candidate or a reviewed revert through the existing protected receipt path. Re-run the healthy monitor and verify the exact Pages version and collector SHA before calling rollback complete.
+Sol owns protected rollback and live acceptance. Preserve the failed run, exact source SHA, and deployment identity; Sol can promote the last known-good candidate or a reviewed revert through the existing protected receipt path. Re-run the healthy monitor and verify the exact Pages version and a healthy profile service before calling rollback complete.
 
 These synthetics do not prove signed-in reads or writes, private account isolation, database correctness, Realtime delivery, paid providers, browser recovery timing, or automatic failover. They also do not establish infrastructure redundancy.
 
@@ -71,4 +71,4 @@ Provider bounds relevant to the collector are 10,000 characters per log event an
 
 Confirmed early platform evidence: an unauthenticated `OPTIONS` request to the existing Employment MCP returned 204, and Supabase Dashboard Unified Logs retained/read back the exact correlation path as Edge Function event `42075eab-4064-4e71-a7cc-f12ea83a2e23`. This proves the existing route-to-log observation path only. The Management API `logs.all` removal notice is effective 2026-09-23; this runbook uses Dashboard Unified Logs and does not script that removed API.
 
-Each release requires Sol to retain custom `sabah-one/operational-event/v1` readback from the deployed `operational-events` function and verify final Pages/collector source identity. Keep those exact event IDs and deployment receipts with the release evidence. No redundancy, failover, backup restore, RPO, or RTO evidence is currently available; do not claim it.
+The Supabase `operational-events` function is retired; operational events now reach the profile service and appear as its metrics. No redundancy, failover, backup restore, RPO, or RTO evidence is currently available; do not claim it.

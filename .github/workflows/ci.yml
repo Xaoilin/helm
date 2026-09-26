@@ -105,8 +105,6 @@ jobs:
       - run: npm run test -- --config vite.config.ts
       - name: Exercise bounded availability monitor
         run: node --test scripts/test-availability-monitor.mjs
-      - name: Check operational collector runtime
-        run: DENO_NO_PACKAGE_JSON=1 npx --yes deno@2.9.6 check --no-config --no-lock --node-modules-dir=none supabase/functions/operational-events/index.ts
       - name: Exercise Finance MCP runtime contract
         run: DENO_NO_PACKAGE_JSON=1 npx --yes deno@2.9.6 test --no-config --no-lock --node-modules-dir=none --allow-env supabase/functions/sabah-one-finance-mcp/index_test.ts
       - name: Exercise Equity MCP runtime contract

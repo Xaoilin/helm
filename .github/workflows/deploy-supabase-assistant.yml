@@ -224,9 +224,6 @@ jobs:
       - name: Deploy authenticated Vault speech boundary
         run: npx supabase functions deploy assistant-speech --project-ref "$SUPABASE_PROJECT_REF" --use-api --yes
 
-      - name: Deploy bounded operational event collector
-        run: npx supabase functions deploy operational-events --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
-
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_google_calendar_oauth == 'true' }}
         name: Sync Google Calendar OAuth function secrets
         run: |

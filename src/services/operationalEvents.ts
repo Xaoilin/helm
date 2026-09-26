@@ -1,4 +1,5 @@
-import type { OperationalEvent } from '../../../src/types/domain.ts';
+/** The operational-event envelope the app sends: allowlisted values only, rebuilt field by field. */
+import type { OperationalEvent } from '../types/domain';
 
 export const OPERATIONAL_MAX_BATCH = 10;
 export const OPERATIONAL_MAX_BYTES = 12_000;

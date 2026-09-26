@@ -2,7 +2,6 @@ import type { Page } from '@playwright/test';
 import { expect, openApp, test } from './support/helm-fixture';
 import { makeCalendarAccount } from '../src/test/fixtures';
 import type { Integration } from '../src/types/domain';
-import type { HelmMutation } from '../src/store/databaseTypes';
 
 const configuredAt = '2026-07-01T12:00:00.000Z';
 const google: Integration = {
@@ -73,7 +72,9 @@ for (const width of [390, 1440]) {
       id: `account-${name}`, email: `${name}@example.test`, name, provider: 'google',
       isPrimary: index === 0, authProvider: 'google-oauth', authStatus: 'needs_reconnect',
     }));
-    await scenario({ stores: { integrations: [google, github, ...historical], calendarAccounts: accounts } });
+    // Integrations are saved in the profile service, which keeps one connection record per provider.
+    const control = await scenario({ stores: { integrations: [google, github, ...historical], calendarAccounts: accounts } });
+    const integrationWrites = () => control.services.calls.filter(call => call.startsWith('PUT /api/profile/v1/integrations'));
     const googleActions: string[] = [];
     await page.route('**/functions/v1/google-calendar-oauth*', async route => {
       const { action } = route.request().postDataJSON();
@@ -94,12 +95,6 @@ for (const width of [390, 1440]) {
         authorizedAt: configuredAt, lastSyncStatus: 'revoked',
       } } } });
     });
-    const integrationWrites: HelmMutation[] = [];
-    page.on('request', request => {
-      if (request.url().includes('/rpc/apply_helm_mutations')) {
-        integrationWrites.push(...request.postDataJSON().p_operations.filter((op: { collection: string }) => op.collection === 'integrations'));
-      }
-    });
     await openIntegrations(page, width);
     const surface = page.getByRole('main', { name: 'integrations surface' });
     await expect(surface.locator('.card')).toHaveCount(1);
@@ -111,7 +106,7 @@ for (const width of [390, 1440]) {
     // The browser never calls the Google credential function: the calendar service does.
     expect(googleActions).toEqual([]);
     expect(githubActions).toEqual([]);
-    expect(integrationWrites.every(write => write.op !== 'delete' && (!('recordId' in write) || !['int-google', 'int-github'].includes(write.recordId)))).toBe(true);
+    expect(integrationWrites()).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`integrations-reconnect-${width}.png`) });
     if (width === 390) {
@@ -142,11 +137,10 @@ for (const width of [390, 1440]) {
     // Google's status is derived from the calendar service, never saved: open tabs holding different
     // copies of the calendar used to overwrite each other's saved status in an endless write loop.
     await expect(surface.locator('.card').first().getByRole('status').first()).toHaveText('disconnected');
-    expect(integrationWrites).toEqual([]);
-    await testInfo.attach('integration-writes', { contentType: 'application/json', body: JSON.stringify(integrationWrites) });
+    expect(integrationWrites()).toEqual([]);
+    await testInfo.attach('integration-writes', { contentType: 'application/json', body: JSON.stringify(integrationWrites()) });
     // Each disconnect asks the calendar service, which revokes the stored Google credential.
     expect(calendarDeletes).toHaveLength(2);
     expect(googleActions).toEqual([]);
-    expect(integrationWrites.some(write => write.op === 'delete')).toBe(false);
   });
 }

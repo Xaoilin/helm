@@ -19,15 +19,14 @@ import { validateIanaTimeZone } from '../../services/timeZone';
 import {
   DEVICE_SETTINGS_STORE_KEY,
   loadDeviceStore,
-  loadStore,
   saveDeviceStore,
-  saveStore,
 } from '../persistence';
 import { splitSettings, type DeviceSettings } from '../recordCodec';
-import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 import { locationFromSettings, settingsFromLocation, useProfileSettingsSync } from './useProfileSettingsSync';
 import { settingsFromPrayerPreferences, usePrayerPreferencesSync } from './usePrayerPreferencesSync';
-import type { ServicePreferences } from '../../services/backend/contracts';
+import { settingsFromAppPreferences, useAppPreferencesSync } from './useAppPreferencesSync';
+import type { ServiceAppPreferences, ServiceIntegration, ServicePreferences } from '../../services/backend/contracts';
+import { getIntegrations, isProfileServiceEnabled, saveIntegration } from '../../services/backend/profileServiceApi';
 
 // ── Defaults ──
 const defaultSettings: Settings = {
@@ -50,12 +49,22 @@ const defaultIntegrations: Integration[] = [
 
 export { defaultSettings, defaultIntegrations };
 
-function hydrateIntegrations(stored: Integration[] | null): Integration[] {
-  const records = stored ?? [];
-  // Autosave owns the full collection: keep every stored ID and historical row.
-  return [...records, ...defaultIntegrations
-    .filter(provider => !records.some(record => record.provider === provider.provider))
-    .map(provider => ({ ...provider }))];
+/** Providers whose connection record the profile service keeps (`app.profile.integrations.providers`). */
+const SERVICE_INTEGRATION_PROVIDERS = new Set(['google']);
+
+/** The offered integrations, with each one's saved connection record from the profile service. */
+function hydrateIntegrations(records: ServiceIntegration[]): Integration[] {
+  return defaultIntegrations.map(integration => {
+    const record = records.find(candidate => candidate.provider === integration.provider);
+    return record
+      ? {
+          ...integration,
+          status: record.status,
+          configuredAt: record.configuredAt ?? undefined,
+          lastError: record.lastError ?? undefined,
+        }
+      : { ...integration };
+  });
 }
 
 export interface SettingsContextValue {
@@ -91,60 +100,31 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [browserTimeZone, settings.appTimezone],
   );
 
-  const hydrateSettings = useCallback((
-    shared: Settings | null,
-    device: DeviceSettings | null,
-  ): Settings => {
-    const rawTimeZone = shared && typeof shared.appTimezone === 'string'
-      ? shared.appTimezone.trim()
-      : '';
-    const validTimeZone = validateIanaTimeZone(rawTimeZone);
-    setAppTimeZoneLoadWarning(rawTimeZone && !validTimeZone
-      ? `The saved time zone “${rawTimeZone}” is invalid. Automatic is active.`
-      : null);
-    // Service-owned settings (prayer preferences, location) are not in the account record: keep
-    // the values already loaded from the services.
-    return {
-      ...defaultSettings,
-      ...splitSettings(shared).shared,
-      ...(device ?? {}),
-      ...splitSettings(settingsRef.current).service,
-    };
+  // Settings shared across devices are owned by the services (profile and prayer); only
+  // device-only settings are stored here, in the browser.
+  useEffect(() => {
+    (async () => {
+      const device = await loadDeviceStore<DeviceSettings>(DEVICE_SETTINGS_STORE_KEY);
+      setSettings(prev => {
+        const next = { ...prev, ...splitSettings(device).device };
+        settingsRef.current = next;
+        return next;
+      });
+      setLoaded(true);
+    })();
   }, []);
 
   useEffect(() => {
-    (async () => {
-      const [s, i, device] = await Promise.all([
-        loadStore<Settings>('settings'),
-        loadStore<Integration[]>('integrations'),
-        loadDeviceStore<DeviceSettings>(DEVICE_SETTINGS_STORE_KEY),
-      ]);
-      const nextSettings = hydrateSettings(s, device);
-      settingsRef.current = nextSettings;
-      setSettings(nextSettings);
-      setIntegrations(hydrateIntegrations(i));
-      setLoaded(true);
-    })();
-  }, [hydrateSettings]);
-
-  useRemoteStoreRefresh(['settings', 'integrations'], async () => {
-    const [sharedSettings, remoteIntegrations, deviceSettings] = await Promise.all([
-      loadStore<Settings>('settings'),
-      loadStore<Integration[]>('integrations'),
-      loadDeviceStore<DeviceSettings>(DEVICE_SETTINGS_STORE_KEY),
-    ]);
-    const nextSettings = hydrateSettings(sharedSettings, deviceSettings);
-    settingsRef.current = nextSettings;
-    setSettings(nextSettings);
-    setIntegrations(hydrateIntegrations(remoteIntegrations));
-  });
-
-  useEffect(() => { if (loaded) saveStore('settings', settings); }, [settings, loaded]);
-  useEffect(() => {
     if (loaded) void saveDeviceStore(DEVICE_SETTINGS_STORE_KEY, splitSettings(settings).device);
   }, [settings, loaded]);
-  useEffect(() => { if (loaded) saveStore('integrations', integrations); }, [integrations, loaded]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+
+  useEffect(() => {
+    if (!loaded || !isProfileServiceEnabled()) return;
+    getIntegrations()
+      .then(records => setIntegrations(hydrateIntegrations(records)))
+      .catch(error => console.error('Integrations could not be loaded from the profile service', error));
+  }, [loaded]);
 
   const applyServiceLocation = useCallback((location: Parameters<typeof settingsFromLocation>[0]) => {
     setSettings(prev => {
@@ -164,7 +144,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
   const prayerPreferencesReady = usePrayerPreferencesSync(loaded, settings, applyServicePrayerPreferences);
-  const serviceSettingsReady = loaded && locationReady && prayerPreferencesReady;
+
+  const applyServiceAppPreferences = useCallback((preferences: ServiceAppPreferences) => {
+    setSettings(prev => {
+      const next = { ...prev, ...settingsFromAppPreferences(preferences) };
+      if (!next.defaultCalendarTab) delete next.defaultCalendarTab;
+      settingsRef.current = next;
+      return next;
+    });
+  }, []);
+  const appPreferencesReady = useAppPreferencesSync(loaded, settings, applyServiceAppPreferences);
+  const serviceSettingsReady = loaded && locationReady && prayerPreferencesReady && appPreferencesReady;
 
   const updateSettings = useCallback((updates: Partial<Settings>) => {
     setSettings(prev => {
@@ -198,8 +188,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setAppTimeZoneLoadWarning(null);
   }, [saveLocation]);
 
+  const integrationsRef = useRef(integrations);
+  useEffect(() => { integrationsRef.current = integrations; }, [integrations]);
+
   const updateIntegration = useCallback((id: string, updates: Partial<Integration>) => {
-    setIntegrations(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+    const current = integrationsRef.current.find(integration => integration.id === id);
+    if (!current) return;
+    const next = { ...current, ...updates };
+    setIntegrations(prev => prev.map(integration => integration.id === id ? next : integration));
+    if (!isProfileServiceEnabled() || !SERVICE_INTEGRATION_PROVIDERS.has(next.provider)) return;
+    void saveIntegration(next.provider, {
+      status: next.status === 'mocked' ? 'disconnected' : next.status,
+      configuredAt: next.configuredAt ?? null,
+      lastError: next.lastError ?? null,
+    }).catch(error => console.error('Integration could not be saved to the profile service', error));
   }, []);
 
   return (

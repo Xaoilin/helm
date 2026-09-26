@@ -24,6 +24,11 @@ vi.mock('@supabase/supabase-js', () => ({
   },
 }));
 
+vi.mock('../config', async importOriginal => ({
+  ...await importOriginal<typeof import('../config')>(),
+  PROFILE_BACKEND_URL: 'https://profile.test/',
+}));
+
 import {
   fetchHelmAccountSnapshot,
   getSessionUser,
@@ -72,9 +77,9 @@ describe('Supabase operational boundaries', () => {
 
     expect(fetcher).toHaveBeenCalledOnce();
     const [url, init] = fetcher.mock.calls[0];
-    expect(url).toBe('https://project.supabase.test/functions/v1/operational-events');
+    expect(url).toBe('https://profile.test/api/profile/v1/operational-events');
     expect(init).toMatchObject({ method: 'POST', keepalive: true, signal: expect.any(AbortSignal) });
-    expect(init.headers).toMatchObject({ apikey: 'public-key', Authorization: 'Bearer synthetic-current-token' });
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Authorization: 'Bearer synthetic-current-token' });
     const body = JSON.parse(String(init.body));
     expect(body.events.length).toBeGreaterThan(0);
     expect(JSON.stringify(body)).not.toMatch(/synthetic-account|synthetic-current-token/);
