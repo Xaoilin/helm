@@ -18,6 +18,7 @@ import { GamificationCtx, type GamificationContextValue } from '../store/context
 import { PrayerCtx } from '../store/contexts/PrayerContext';
 import { SettingsCtx, defaultSettings, type SettingsContextValue } from '../store/contexts/SettingsContext';
 import SettingsSurface from '../surfaces/SettingsSurface';
+import { AuthSessionCtx } from '../store/AuthSessionContext';
 import type { Surface } from '../types/domain';
 import { provide, renderWithContexts } from './renderWithContexts';
 
@@ -102,6 +103,15 @@ function settingsSurfaceBindings() {
     testReminder: vi.fn(),
   } as unknown as PrayerContextValue;
   return [
+    provide(AuthSessionCtx, {
+      authUser: null,
+      bootstrapped: true,
+      loading: false,
+      supabaseReady: true,
+      sessionKey: 'signed-out',
+      signInWithGoogle: vi.fn(),
+      signOut: vi.fn(),
+    }),
     provide(SettingsCtx, fakeSettings()),
     provide(GamificationCtx, gamification),
     provide(DailyMomentumCtx, momentum),
