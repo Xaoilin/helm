@@ -214,6 +214,27 @@ export const API_TIMEOUT = {
   CALENDAR_SYNC: 60_000,
 } as const;
 
+// ── Service resilience ──
+
+/**
+ * How calls to the Sabah One services back off when a service is briefly unavailable (network
+ * failure, timeout, 429, 502, 503, 504). Reads always retry; writes retry only with an
+ * Idempotency-Key, which the services apply once.
+ */
+export const SERVICE_RETRY = {
+  /** Retries after the first attempt. */
+  MAX_RETRIES: 3,
+  /** Ceiling of the first wait; it doubles per retry (full jitter below it). */
+  BASE_DELAY_MS: 500,
+  MAX_DELAY_MS: 8_000,
+  /** No retry starts after this long since the call began. */
+  BUDGET_MS: 20_000,
+  /** Consecutive failed attempts that make every call to that service fail fast... */
+  BREAKER_FAILURES: 5,
+  /** ...for this long, after which one attempt is let through to test it. */
+  BREAKER_COOLDOWN_MS: 30_000,
+} as const;
+
 // ── Limits ──
 
 export const LIMITS = {

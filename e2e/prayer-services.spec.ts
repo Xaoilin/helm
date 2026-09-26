@@ -122,9 +122,13 @@ test.describe('prayer and profile services', () => {
       services: { failureStatus: 503 },
     });
     await openApp(page);
+    // Let the client's backoff run out; it then stops calling the service for a while.
+    await page.clock.fastForward(20_000);
 
-    await expect(page.getByRole('status', { name: 'Prayer data sync' }))
-      .toContainText('Prayer data: Not synced (Service unavailable.). Retrying automatically');
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toContainText('Prayer data: Not synced');
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toContainText('Retrying automatically');
+    // Backoff bounds the load: one read is tried at most four times, then the circuit fails fast.
+    expect(control.services.calls.filter(call => call === 'GET /api/prayer/v1/dashboard').length).toBeLessThanOrEqual(4);
     await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
     await page.getByRole('button', { name: /On time/u }).click();
     await expect(page.getByRole('button', { name: /Dhuhr Prayer — confirmed/u })).toBeVisible();
@@ -166,7 +170,7 @@ test.describe('prayer and profile services', () => {
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
   });
 
-  test('a completion whose confirmation was lost is saved once when it is retried', async ({ page, scenario }) => {
+  test('a completion whose confirmation was lost is retried by the client and saved once', async ({ page, scenario }) => {
     const control = await scenario({ now: NOON, settings: { prayerEnabled: true, lifeHeroEnabled: false } });
     await openApp(page);
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
@@ -175,10 +179,10 @@ test.describe('prayer and profile services', () => {
     control.services.loseNextWriteResponse = true;
     await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
     await page.getByRole('button', { name: /On time/u }).click();
-    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toContainText('Not synced');
-    expect(control.services.outcomes.get('2026-08-29::Dhuhr')?.status).toBe('on_time');
+    await expect.poll(() => control.services.outcomes.get('2026-08-29::Dhuhr')?.status).toBe('on_time');
 
-    await page.clock.fastForward(31_000);
+    // The client retries the write after a short backoff with the same Idempotency-Key.
+    await page.clock.fastForward(5_000);
 
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
     const creates = control.services.calls.filter(call => call === 'POST /api/prayer/v1/outcomes');

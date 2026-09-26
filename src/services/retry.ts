@@ -5,6 +5,7 @@
  * Does NOT retry on: 400, 401, 403, 404, 422 (client errors).
  */
 
+import { backoffDelayMs } from './backoff';
 import { logWarn } from './logger';
 
 export interface RetryOptions {
@@ -65,7 +66,8 @@ export async function withRetry<T>(
         break;
       }
 
-      const delay = initialDelayMs * Math.pow(2, attempt);
+      // Jittered, so concurrent callers do not retry in lockstep.
+      const delay = backoffDelayMs(attempt, { baseDelayMs: initialDelayMs, maxDelayMs: initialDelayMs * 2 ** maxRetries });
       logWarn('Retry', `${name}: attempt ${attempt + 1}/${maxRetries} failed, retrying in ${delay}ms`);
       await sleep(delay);
     }
