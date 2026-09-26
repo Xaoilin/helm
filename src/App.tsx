@@ -2,8 +2,6 @@ import './App.css';
 import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import type { ComponentType } from 'react';
 import { useShell } from "./store/ShellContext";
-import { useCalendar } from "./store/contexts/CalendarContext";
-import { useSettingsContext } from "./store/contexts/SettingsContext";
 import DashboardSurface from './surfaces/DashboardSurface';
 import PrayerGlobalOverlays from './components/prayer/PrayerGlobalOverlays';
 import { PageReadinessGate, useSharedPageReady } from './store/PageReadinessGate';
@@ -68,8 +66,6 @@ const LINA_PANEL_ENABLED = ASSISTANT_ENABLED && VOICE_ENABLED;
 
 function AppInner() {
   const shell = useShell();
-  const { calendarAccounts, loaded: calendarLoaded } = useCalendar();
-  const { integrations, updateIntegration, loaded: settingsLoaded } = useSettingsContext();
   const sharedPageReady = useSharedPageReady();
   const { readOnly } = useSyncAvailability();
   const authSession = useOptionalAuthSession();
@@ -146,34 +142,6 @@ function AppInner() {
     });
     previousSurface.current = { surface: shell.surface, startedAt: now };
   }, [authUserId, shell.surface, supabaseReady]);
-
-  useEffect(() => {
-    if (readOnly || !calendarLoaded || !settingsLoaded) return;
-    const googleIntegration = integrations.find(integration => integration.provider === 'google');
-    if (!googleIntegration) return;
-
-    const googleAccounts = calendarAccounts.filter(account => account.provider === 'google');
-    const problemAccount = googleAccounts.find(account =>
-      account.authStatus === 'needs_reconnect'
-      || account.authStatus === 'revoked'
-      || account.authStatus === 'error',
-    );
-
-    const nextStatus = googleAccounts.length === 0
-      ? 'disconnected'
-      : problemAccount ? 'error' : 'connected';
-    const nextError = problemAccount?.lastAuthError || problemAccount?.syncError;
-
-    if (googleIntegration.status !== nextStatus || googleIntegration.lastError !== nextError) {
-      updateIntegration(googleIntegration.id, {
-        status: nextStatus,
-        lastError: nextError,
-        configuredAt: nextStatus === 'connected'
-          ? (googleIntegration.configuredAt || new Date().toISOString())
-          : googleIntegration.configuredAt,
-      });
-    }
-  }, [calendarAccounts, calendarLoaded, settingsLoaded, integrations, readOnly, updateIntegration]);
 
   const handleSignIn = async () => {
     try {

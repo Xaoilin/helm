@@ -36,6 +36,8 @@ const FUTURE_DAYS = 400;
 /** Google accounts not synced for this long are synced when the calendar loads or regains focus. */
 export const CALENDAR_SYNC_STALE_MS = 15 * 60_000;
 const SYNC_CHECK_INTERVAL_MS = 5 * 60_000;
+/** A failed load is retried after these delays, then when the page is shown again. */
+const LOAD_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 60_000];
 
 export type NewCalendarEvent = Omit<CalendarEvent, 'id'>;
 
@@ -170,6 +172,8 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncProblem, setSyncProblem] = useState<string | null>(null);
+  /** Consecutive failed loads; each one schedules the next retry. */
+  const [loadFailures, setLoadFailures] = useState(0);
   const sourcesRef = useRef<CalendarSource[]>([]);
   const eventsRef = useRef<CalendarEvent[]>([]);
   const accountsRef = useRef<CalendarAccount[]>([]);
@@ -195,10 +199,12 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       setCalendarSources(sources);
       setCalendarEvents(calendar.events.map(event => toEvent(event, sources)));
       setLoadError(null);
+      setLoadFailures(0);
     } catch (error) {
       // The last confirmed calendar stays on screen; the page shows why it may be out of date.
       logWarn('Calendar', `Calendar load failed: ${calendarErrorMessage(error)}`);
       setLoadError(calendarErrorMessage(error));
+      setLoadFailures(failures => failures + 1);
     } finally {
       setLoaded(true);
     }
@@ -221,6 +227,19 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     })().finally(() => { syncInFlight.current = null; });
     return syncInFlight.current;
   }, [reload]);
+
+  // A failed load retries by itself a few times, then whenever the page is shown again.
+  useEffect(() => {
+    if (loadFailures === 0 || !isCalendarServiceEnabled()) return undefined;
+    const delay = LOAD_RETRY_DELAYS_MS[loadFailures - 1];
+    const retryWhenShown = () => { if (document.visibilityState === 'visible') void reload(); };
+    document.addEventListener('visibilitychange', retryWhenShown);
+    const timer = delay === undefined ? undefined : window.setTimeout(() => { void reload(); }, delay);
+    return () => {
+      document.removeEventListener('visibilitychange', retryWhenShown);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [loadFailures, reload]);
 
   // Load, then bring stale Google accounts up to date; repeat while the page is open and visible.
   useEffect(() => {
