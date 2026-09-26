@@ -27,12 +27,17 @@ const mocks = vi.hoisted(() => ({
     tripItineraryItems: [],
     tripBookings: [],
     tripBudgetEntries: [],
+    tripBudgets: {},
     loaded: true,
+    error: null,
+    reload: vi.fn(),
     addTrip: vi.fn().mockReturnValue('trip-1'),
+    createTripPlan: vi.fn().mockReturnValue('trip-1'),
     updateTrip: vi.fn(),
     removeTrip: vi.fn(),
     addTripLeg: vi.fn().mockReturnValue('leg-1'),
     updateTripLeg: vi.fn(),
+    moveTripLeg: vi.fn(),
     removeTripLeg: vi.fn(),
     addTripItineraryItem: vi.fn().mockReturnValue('item-1'),
     updateTripItineraryItem: vi.fn(),
@@ -126,6 +131,7 @@ describe('editor draft recovery', () => {
     mocks.secrets.reveal.mockReset();
     mocks.secrets.save.mockReset();
     mocks.trips.addTrip.mockClear();
+    mocks.trips.createTripPlan.mockClear();
     mocks.tasks.tasks = [];
     mocks.tasks.addTask.mockClear();
     mocks.gamification.updateGamification.mockClear();
@@ -230,7 +236,11 @@ describe('editor draft recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     fireEvent.click(screen.getByRole('button', { name: 'Create Trip' }));
 
-    expect(mocks.trips.addTrip).toHaveBeenCalledWith(expect.objectContaining({ name: 'Summer route' }));
+    expect(mocks.trips.createTripPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Summer route' }),
+      [expect.objectContaining({ country: 'Spain', city: 'Madrid' })],
+      [],
+    );
     expect(screen.queryByRole('dialog', { name: 'Plan trip' })).not.toBeInTheDocument();
   });
 

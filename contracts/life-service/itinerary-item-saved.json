@@ -1,0 +1,96 @@
+{
+  "request": {
+    "method": "PUT",
+    "path": "/api/life/v1/trips/itinerary-items/souq"
+  },
+  "status": 200,
+  "body": {
+    "trip": {
+      "id": "saudi",
+      "name": "Trip to Saudi",
+      "summary": "Family",
+      "notes": "Visa",
+      "status": "booked",
+      "startDate": "2026-07-02",
+      "endDate": "2026-07-02",
+      "budgetCurrency": "GBP",
+      "budgetTotal": 600000,
+      "budget": {
+        "forecastTotal": 100000,
+        "paidTotal": 100000,
+        "remaining": 500000,
+        "uncostedBookingCount": 0,
+        "byCategory": [
+          {
+            "category": "transport",
+            "forecast": 100000,
+            "paid": 100000,
+            "count": 1,
+            "uncostedCount": 0
+          }
+        ]
+      },
+      "createdAt": "2026-09-26T22:08:06.724Z",
+      "updatedAt": "2026-09-26T22:08:06.923Z"
+    },
+    "legs": [
+      {
+        "id": "bahrain",
+        "tripId": "saudi",
+        "country": "Bahrain",
+        "city": "Manama",
+        "startDate": null,
+        "endDate": null,
+        "sortOrder": 0,
+        "createdAt": "2026-09-26T22:08:06.870Z",
+        "updatedAt": "2026-09-26T22:08:06.919Z"
+      }
+    ],
+    "itineraryItems": [
+      {
+        "id": "souq",
+        "tripId": "saudi",
+        "legId": "riyadh",
+        "date": null,
+        "title": "Souq",
+        "startTime": null,
+        "endTime": null,
+        "location": null,
+        "notes": "",
+        "sortOrder": 0,
+        "createdAt": "2026-09-26T22:08:06.971Z",
+        "updatedAt": "2026-09-26T22:08:06.971Z"
+      }
+    ],
+    "bookings": [
+      {
+        "id": "flight",
+        "tripId": "saudi",
+        "legId": null,
+        "kind": "transport",
+        "title": "Flight to Saudi",
+        "mode": null,
+        "fromLabel": null,
+        "toLabel": null,
+        "departAt": null,
+        "arriveAt": null,
+        "propertyName": null,
+        "address": null,
+        "city": null,
+        "country": null,
+        "checkInDate": null,
+        "checkOutDate": null,
+        "budgetAmount": null,
+        "budgetStatus": null,
+        "budgetDate": null,
+        "provider": null,
+        "confirmationCode": null,
+        "link": null,
+        "notes": "",
+        "createdAt": "2026-09-26T22:08:06.750Z",
+        "updatedAt": "2026-09-26T22:08:06.750Z"
+      }
+    ],
+    "budgetEntries": []
+  }
+}

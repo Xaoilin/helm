@@ -1,0 +1,42 @@
+{
+  "request": {
+    "method": "PUT",
+    "path": "/api/life/v1/inventory/items/rail"
+  },
+  "status": 200,
+  "body": {
+    "id": "rail",
+    "name": "Rail slides",
+    "category": "component",
+    "subcategory": "mechanical_hardware",
+    "imageUrl": "https://m.media-amazon.com/images/I/rail.jpg",
+    "trackingMode": "counted",
+    "quantity": 2,
+    "unit": "pcs",
+    "lowStockThreshold": 1,
+    "brand": "Acme",
+    "model": "R-550",
+    "dimensions": {
+      "length": 550,
+      "width": 45,
+      "height": 12.7,
+      "unit": "mm"
+    },
+    "specifications": {
+      "mount": "Side"
+    },
+    "condition": "new",
+    "location": "Garage",
+    "tags": [
+      "desk"
+    ],
+    "notes": "",
+    "projectCatalogKeys": [
+      "magnus-desk"
+    ],
+    "lastVerifiedAt": "2026-09-26T22:08:08.058Z",
+    "archivedAt": null,
+    "createdAt": "2026-09-26T22:08:08.058Z",
+    "updatedAt": "2026-09-26T22:08:08.058Z"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/api/life/v1/trips/saudi"
+  },
+  "status": 204,
+  "body": null
+}

@@ -1,0 +1,43 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/life/v1/inventory/check"
+  },
+  "status": 200,
+  "body": {
+    "query": "rail",
+    "requiredQuantity": 1,
+    "unit": null,
+    "sufficient": true,
+    "matches": [
+      {
+        "id": "rail",
+        "name": "Rail slides",
+        "category": "component",
+        "subcategory": null,
+        "imageUrl": null,
+        "trackingMode": "counted",
+        "quantity": 2,
+        "unit": "pcs",
+        "lowStockThreshold": null,
+        "brand": null,
+        "model": null,
+        "dimensions": null,
+        "specifications": {},
+        "condition": "new",
+        "location": null,
+        "tags": [
+          "desk"
+        ],
+        "notes": "Checked",
+        "projectCatalogKeys": [
+          "magnus-desk"
+        ],
+        "lastVerifiedAt": "2026-09-26T22:08:08.058Z",
+        "archivedAt": null,
+        "createdAt": "2026-09-26T22:08:08.058Z",
+        "updatedAt": "2026-09-26T22:08:08.097Z"
+      }
+    ]
+  }
+}

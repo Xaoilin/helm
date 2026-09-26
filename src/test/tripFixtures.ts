@@ -1,6 +1,15 @@
 import { vi } from 'vitest';
+import type { ServiceTripBudget, ServiceTripBundle, ServiceTrips } from '../services/backend/lifeContracts';
 import type { TripContextValue } from '../store/contexts/TripContext';
-import type { Trip, TripBudgetEntry, TripItineraryItem, TripLeg, TripStayBooking, TripTransportBooking } from '../types/domain';
+import type {
+  Trip,
+  TripBooking,
+  TripBudgetEntry,
+  TripItineraryItem,
+  TripLeg,
+  TripStayBooking,
+  TripTransportBooking,
+} from '../types/domain';
 
 const STAMP = '2026-09-01T00:00:00.000Z';
 
@@ -103,7 +112,41 @@ export function makeBudgetEntry(overrides: Partial<TripBudgetEntry> = {}): TripB
   };
 }
 
-/** A Trip store value whose mutators are spies; `add*` return predictable ids. */
+/** A trip budget as the life admin service reports it. */
+export function makeTripBudget(overrides: Partial<ServiceTripBudget> = {}): ServiceTripBudget {
+  return { forecastTotal: 0, paidTotal: 0, remaining: 0, uncostedBookingCount: 0, byCategory: [], ...overrides };
+}
+
+interface TripParts {
+  legs?: TripLeg[];
+  itineraryItems?: TripItineraryItem[];
+  bookings?: TripBooking[];
+  budgetEntries?: TripBudgetEntry[];
+}
+
+/** One trip and its parts as the life admin service answers a write. */
+export function makeTripBundle(trip: Trip, parts: TripParts = {}, budget = makeTripBudget()): ServiceTripBundle {
+  return {
+    trip: { trip, budget },
+    legs: parts.legs ?? [],
+    itineraryItems: parts.itineraryItems ?? [],
+    bookings: parts.bookings ?? [],
+    budgetEntries: parts.budgetEntries ?? [],
+  };
+}
+
+/** Every trip and part as the life admin service answers a load. */
+export function makeServiceTrips(trips: Trip[], parts: TripParts = {}): ServiceTrips {
+  return {
+    trips: trips.map(trip => ({ trip, budget: makeTripBudget() })),
+    legs: parts.legs ?? [],
+    itineraryItems: parts.itineraryItems ?? [],
+    bookings: parts.bookings ?? [],
+    budgetEntries: parts.budgetEntries ?? [],
+  };
+}
+
+/** A Trip store value whose mutators are spies; `add*` and `createTripPlan` return predictable ids. */
 export function fakeTripContext(overrides: Partial<TripContextValue> = {}) {
   let legCount = 0;
   let bookingCount = 0;
@@ -113,12 +156,17 @@ export function fakeTripContext(overrides: Partial<TripContextValue> = {}) {
     tripItineraryItems: [],
     tripBookings: [],
     tripBudgetEntries: [],
+    tripBudgets: {},
     loaded: true,
+    error: null,
+    reload: vi.fn(async () => undefined),
     addTrip: vi.fn(() => 'trip-new'),
+    createTripPlan: vi.fn(() => 'trip-new'),
     updateTrip: vi.fn(),
     removeTrip: vi.fn(),
     addTripLeg: vi.fn(() => `leg-created-${++legCount}`),
     updateTripLeg: vi.fn(),
+    moveTripLeg: vi.fn(),
     removeTripLeg: vi.fn(),
     addTripItineraryItem: vi.fn(() => 'item-new'),
     updateTripItineraryItem: vi.fn(),

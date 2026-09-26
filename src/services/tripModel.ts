@@ -246,33 +246,6 @@ export function deriveTripRange(legs: Array<Pick<TripLeg, 'startDate' | 'endDate
   };
 }
 
-/** Range after saving the leg editor, before the store has applied the leg write. */
-export function deriveRangeAfterLegSave(legs: TripLeg[], editingLegId: string | null, form: LegFormDraft): TripRange {
-  if (editingLegId) {
-    return deriveTripRange(legs.map(leg => leg.id === editingLegId ? { ...leg, startDate: form.startDate, endDate: form.endDate } : leg));
-  }
-  return deriveTripRange([...legs, { startDate: form.startDate, endDate: form.endDate, sortOrder: legs.length }]);
-}
-
-/** The two sortOrder writes that move a leg one place earlier (-1) or later (1), or null at either end. */
-export function planLegSwap(orderedLegs: TripLeg[], legId: string, direction: -1 | 1): Array<{ id: string; sortOrder: number }> | null {
-  const index = orderedLegs.findIndex(item => item.id === legId);
-  const nextIndex = index + direction;
-  if (index < 0 || nextIndex < 0 || nextIndex >= orderedLegs.length) return null;
-  const leg = orderedLegs[index];
-  const swap = orderedLegs[nextIndex];
-  return [
-    { id: leg.id, sortOrder: swap.sortOrder },
-    { id: swap.id, sortOrder: leg.sortOrder },
-  ];
-}
-
-/** The remaining legs renumbered 0..n-1 in route order, and the trip range they leave. */
-export function planLegRemoval(orderedLegs: TripLeg[], legId: string): { reindexed: TripLeg[]; range: TripRange } {
-  const reindexed = orderedLegs.filter(item => item.id !== legId).map((item, index) => ({ ...item, sortOrder: index }));
-  return { reindexed, range: deriveTripRange(reindexed) };
-}
-
 /** Wizard route drafts as leg inputs in route order, with a missing end date defaulting to the start. */
 export function buildRouteLegInputs(routeDrafts: LegDraft[]): Array<{ draftId: string; country: string; city: string; startDate: string; endDate: string; sortOrder: number }> {
   return routeDrafts.map((draft, index) => ({

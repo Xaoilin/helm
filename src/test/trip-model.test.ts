@@ -12,7 +12,6 @@ import {
   buildTripBookingSeed,
   canAdvanceWizardStep,
   createEmptyWizardDraft,
-  deriveRangeAfterLegSave,
   deriveTripRange,
   expandDateRange,
   filterTrips,
@@ -24,8 +23,6 @@ import {
   materializeBookingDraft,
   nextItinerarySortOrder,
   nextWizardStep,
-  planLegRemoval,
-  planLegSwap,
   previousWizardStep,
   resolveSelectedTripId,
   serializeWizardDraft,
@@ -85,48 +82,9 @@ describe('trip range derivation', () => {
     ]);
     expect(range).toEqual({ startDate: '2026-10-01', endDate: '2026-10-03' });
   });
-
-  it('recomputes the range for an edited leg before the store applies it', () => {
-    const legs = [makeTripLeg(), makeTripLeg({ id: 'leg-2', startDate: '2026-10-04', endDate: '2026-10-06', sortOrder: 1 })];
-    expect(deriveRangeAfterLegSave(legs, 'leg-2', { country: 'Portugal', city: 'Lisbon', startDate: '2026-10-04', endDate: '2026-10-12' }))
-      .toEqual({ startDate: '2026-10-01', endDate: '2026-10-12' });
-  });
-
-  it('appends a new leg at the end of the route when computing the range', () => {
-    const legs = [makeTripLeg()];
-    expect(deriveRangeAfterLegSave(legs, null, { country: 'Portugal', city: 'Porto', startDate: '2026-09-20', endDate: '2026-09-22' }))
-      .toEqual({ startDate: '2026-10-01', endDate: '2026-09-22' });
-  });
 });
 
-describe('leg ordering plans', () => {
-  const legs = [
-    makeTripLeg({ id: 'a', sortOrder: 0 }),
-    makeTripLeg({ id: 'b', sortOrder: 1, startDate: '2026-10-04', endDate: '2026-10-05' }),
-    makeTripLeg({ id: 'c', sortOrder: 2, startDate: '2026-10-06', endDate: '2026-10-09' }),
-  ];
-
-  it('swaps sort orders with the neighbour', () => {
-    expect(planLegSwap(legs, 'b', -1)).toEqual([{ id: 'b', sortOrder: 0 }, { id: 'a', sortOrder: 1 }]);
-    expect(planLegSwap(legs, 'b', 1)).toEqual([{ id: 'b', sortOrder: 2 }, { id: 'c', sortOrder: 1 }]);
-  });
-
-  it('does nothing past either end or for an unknown leg', () => {
-    expect(planLegSwap(legs, 'a', -1)).toBeNull();
-    expect(planLegSwap(legs, 'c', 1)).toBeNull();
-    expect(planLegSwap(legs, 'missing', 1)).toBeNull();
-  });
-
-  it('renumbers the remaining legs and refits the range on removal', () => {
-    const { reindexed, range } = planLegRemoval(legs, 'a');
-    expect(reindexed.map(leg => [leg.id, leg.sortOrder])).toEqual([['b', 0], ['c', 1]]);
-    expect(range).toEqual({ startDate: '2026-10-04', endDate: '2026-10-09' });
-  });
-
-  it('leaves an empty range when the last leg is removed', () => {
-    expect(planLegRemoval([legs[0]], 'a')).toEqual({ reindexed: [], range: { startDate: '', endDate: '' } });
-  });
-
+describe('route drafts', () => {
   it('turns wizard route drafts into ordered, trimmed leg inputs', () => {
     expect(buildRouteLegInputs([legDraft({ id: 'x', country: ' Spain ', city: ' Madrid ', endDate: '' })])).toEqual([
       { draftId: 'x', country: 'Spain', city: 'Madrid', startDate: '2026-10-01', endDate: '2026-10-01', sortOrder: 0 },

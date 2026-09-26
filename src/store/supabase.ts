@@ -46,7 +46,7 @@ export {
   saveHelmSecret,
   setHelmSecretArchived,
 } from './supabase/secrets';
-export { applyHelmInventoryMutations, applyHelmMutations } from './supabase/mutations';
+export { applyHelmMutations } from './supabase/mutations';
 export {
   getSupabaseRealtimeSnapshot,
   subscribeHelmBroadcast,

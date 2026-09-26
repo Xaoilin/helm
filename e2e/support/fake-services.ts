@@ -1,5 +1,5 @@
 /**
- * Stateful stand-ins for the Spring Boot prayer, profile and calendar services. Every response is parsed
+ * Stateful stand-ins for the Spring Boot prayer, profile, calendar and life admin services. Every response is parsed
  * through the app's contract schemas first, so this fake cannot drift from the contract the real
  * services are verified against (contracts/<service>/*.json).
  */
@@ -35,6 +35,7 @@ import {
   type ServicePreferences,
   type ServiceTracking,
 } from '../../src/services/backend/contracts';
+import { createFakeLife, handleLife, type FakeLife, type FakeLifeSeed } from './fake-life-service';
 
 export const SERVICES_BASE_URL = 'https://services.helm.test';
 
@@ -55,6 +56,8 @@ export interface FakeServicesOptions {
   loseNextWriteResponse?: boolean;
   /** The calendar the service holds, in the app's shapes (as scenarios describe it). */
   calendar?: { accounts?: CalendarAccount[]; sources?: CalendarSource[]; events?: CalendarEvent[] };
+  /** What the life admin service holds (inventory, trips, health, jobs), in the app's shapes. */
+  life?: FakeLifeSeed;
 }
 
 export interface FakeCalendar {
@@ -89,6 +92,7 @@ export interface FakeServices {
   rejectCreates?: { code: string; message: string };
   loseNextWriteResponse?: boolean;
   calendar: FakeCalendar;
+  life: FakeLife;
 }
 
 function toServiceCalendar(calendar: FakeServicesOptions['calendar'] = {}): FakeCalendar {
@@ -150,6 +154,7 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
     rejectCreates: options.rejectCreates,
     loseNextWriteResponse: options.loseNextWriteResponse,
     calendar: toServiceCalendar(options.calendar),
+    life: createFakeLife(options.life),
   };
 }
 
@@ -168,6 +173,7 @@ export async function installFakeServices(page: Page, services: FakeServices): P
       return reply(route, 200, { status: 'UP', service: 'prayer-service', database: 'UP' });
     }
     if (url.pathname === '/api/calendar/health') return reply(route, 200, { status: 'UP', service: 'calendar-service' });
+    if (url.pathname === '/api/life/health') return reply(route, 200, { status: 'UP', service: 'life-service' });
     if (url.pathname === '/api/calendar/health/database') {
       return reply(route, 200, { status: 'UP', service: 'calendar-service', database: 'UP' });
     }
@@ -277,6 +283,10 @@ async function handle(
     default:
       if (call.startsWith('GET /api/calendar/') || /^\w+ \/api\/calendar\//u.test(call)) {
         return handleCalendar(route, services.calendar, call, url, body, now);
+      }
+      if (/^\w+ \/api\/life\/v1\//u.test(call)) {
+        const [method, path] = call.split(' ');
+        return handleLife(route, services.life, method, path, body, now);
       }
       return reply(route, 404, { code: 'not_found', message: `No fake for ${call}.` }, apiErrorSchema);
   }

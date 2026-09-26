@@ -60,7 +60,7 @@ describe('page demand and readiness', () => {
   });
 
   it('reports a page load error and reserves recovery reset for explicit retry', async () => {
-    mocks.activate.mockImplementation((keys: readonly string[]) => keys.includes('inventoryItems')
+    mocks.activate.mockImplementation((keys: readonly string[]) => keys.includes('projects')
       ? Promise.reject(new Error('Database temporarily unavailable')) : Promise.resolve());
     render(<ShellProvider><PageProbe /></ShellProvider>);
     fireEvent.click(screen.getByText('Inventory navigation'));

@@ -31,6 +31,9 @@ export const PROFILE_BACKEND_URL = import.meta.env.VITE_PROFILE_API_BASE_URL || 
 /** Optional Spring Boot calendar-service base URL. */
 export const CALENDAR_BACKEND_URL = import.meta.env.VITE_CALENDAR_API_BASE_URL || '';
 
+/** Optional Spring Boot life admin service base URL (inventory, trips, health and jobs). */
+export const LIFE_BACKEND_URL = import.meta.env.VITE_LIFE_API_BASE_URL || '';
+
 /** Google OAuth Client ID for Calendar integration. */
 export const GOOGLE_OAUTH_CLIENT_ID = (import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || '') || getSettingsValue('googleOAuthClientId');
 

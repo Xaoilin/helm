@@ -1,8 +1,11 @@
-import type { Page } from '@playwright/test';
+import type { Page, Request } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import type { EquityPosition } from '../src/types/domain';
 import { FINANCE_REVIEW } from '../src/test/finance-review-fixture';
+import { SERVICES_BASE_URL } from './support/fake-services';
 import { expect, openApp, test, waitForMutation } from './support/helm-fixture';
+
+const JOBS_PATH = '/api/life/v1/jobs';
 
 const TASK = {
   id: 'task-review-notes',
@@ -133,33 +136,35 @@ test('keeps saved Finance data, drafts and confirmed writes usable without Realt
   await testInfo.attach('synthetic-availability-evidence', { path: evidencePath, contentType: 'application/json' });
 });
 
-test('keeps navigation usable during a stalled Employment seed and isolates its rejection from task writes', async ({ page, scenario }) => {
+test('keeps navigation usable during a stalled Employment load and isolates its failure from task writes', async ({ page, scenario }) => {
   await scenario({ now: FINANCE_REVIEW.updatedAt, stores: { tasks: [TASK] } });
-  let rejectSeed = true;
-  let releaseSeed = () => {};
-  const seedReleased = new Promise<void>(resolve => { releaseSeed = resolve; });
-  await page.route('**/rest/v1/rpc/apply_helm_mutations*', async route => {
-    const operations = route.request().postDataJSON().p_operations as Array<{ collection: string }>;
-    if (!rejectSeed || !operations.some(operation => operation.collection === 'employment')) {
+  let failLoad = true;
+  let releaseLoad = () => {};
+  const loadReleased = new Promise<void>(resolve => { releaseLoad = resolve; });
+  const isJobsLoad = (request: Request) => request.method() === 'GET' && new URL(request.url()).pathname === JOBS_PATH;
+  // Registered after the scenario's fake services, so it answers first and falls back to them.
+  await page.route(`${SERVICES_BASE_URL}${JOBS_PATH}`, async route => {
+    if (!failLoad || !isJobsLoad(route.request())) {
       await route.fallback();
       return;
     }
-    await seedReleased;
-    await route.fulfill({ status: 400, json: { message: 'Employment seed fixture rejected.' } });
+    await loadReleased;
+    // A refusal, not an outage: one response, so the circuit breaker stays closed for the manual retry.
+    await route.fulfill({ status: 400, json: { code: 'bad_request', message: 'Employment load fixture rejected.' } });
   });
-  const seedRequest = page.waitForRequest(request => request.url().includes('/rpc/apply_helm_mutations')
-    && request.postDataJSON().p_operations?.some((operation: { collection: string }) => operation.collection === 'employment'));
+  const loadRequest = page.waitForRequest(isJobsLoad);
   await openApp(page);
+  await loadRequest;
   await page.getByRole('button', { name: 'Navigate to Employment' }).click();
-  await seedRequest;
+  await expect(page.getByText('Loading your applications…')).toBeVisible();
   await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
   await expect(page.getByRole('checkbox', { name: 'Mark "Review notes" as complete' })).toBeVisible();
   await page.getByRole('button', { name: 'Navigate to Employment' }).click();
   await expect(page.getByText('Loading your applications…')).toBeVisible();
-  const seedResponse = waitForMutation(page, 'employment');
-  releaseSeed();
-  expect((await seedResponse).status()).toBe(400);
-  await expect(page.getByRole('alert')).toContainText('Employment data needs attention:');
+  const loadResponse = page.waitForResponse(response => isJobsLoad(response.request()));
+  releaseLoad();
+  expect((await loadResponse).status()).toBe(400);
+  await expect(page.getByRole('alert')).toContainText('Employment data needs attention: Employment load fixture rejected.');
   await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
   const taskWrite = waitForMutation(page, 'tasks');
   await page.getByRole('checkbox', { name: 'Mark "Review notes" as complete' }).click();
@@ -167,11 +172,11 @@ test('keeps navigation usable during a stalled Employment seed and isolates its 
   await expect(page.getByRole('checkbox', { name: 'Mark "Review notes" as incomplete' })).toBeChecked();
   await expect(page.getByTestId('sync-status-banner')).toHaveCount(0);
 
-  rejectSeed = false;
+  failLoad = false;
   await page.getByRole('button', { name: 'Navigate to Employment' }).click();
-  const seedRetry = waitForMutation(page, 'employment');
+  const loadRetry = page.waitForResponse(response => isJobsLoad(response.request()) && response.ok());
   await page.getByRole('button', { name: 'Retry loading', exact: true }).click();
-  expect((await seedRetry).ok()).toBe(true);
+  await loadRetry;
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.getByText('Loading your applications…')).toHaveCount(0);
 });

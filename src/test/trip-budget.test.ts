@@ -8,7 +8,7 @@ import {
   normalizeCurrencyCode,
   parseBudgetAmountInput,
   parseTripBudgetSettings,
-  summarizeBudget,
+  budgetTotalsFromService,
 } from '../services/tripBudget';
 import { makeBudgetEntry, makeStayBooking, makeTransportBooking, makeTrip } from './tripFixtures';
 
@@ -84,10 +84,27 @@ describe('budget ledger', () => {
     expect(ledger[2]).toMatchObject({ title: 'Hotel Sol', category: 'rent', amount: null });
   });
 
-  it('totals forecast, paid, remaining, and uncosted bookings', () => {
-    const totals = summarizeBudget(ledger, [priced, unpriced], trip.budgetTotal || 0);
+  it('reads the totals the service worked out and labels every category', () => {
+    const totals = budgetTotalsFromService({
+      forecastTotal: 32500,
+      paidTotal: 30000,
+      remaining: 67500,
+      uncostedBookingCount: 1,
+      byCategory: [
+        { category: 'rent', forecast: 0, paid: 0, count: 1, uncostedCount: 1 },
+        { category: 'events', forecast: 2500, paid: 0, count: 1, uncostedCount: 0 },
+      ],
+    }, trip.budgetTotal || 0);
     expect(totals).toMatchObject({ forecastTotal: 32500, paidTotal: 30000, remaining: 67500, uncostedBookingCount: 1 });
     expect(totals.byCategory.find(category => category.value === 'rent')).toMatchObject({ forecast: 0, count: 1, uncostedCount: 1 });
     expect(totals.byCategory.find(category => category.value === 'events')).toMatchObject({ forecast: 2500, paid: 0, count: 1 });
+    expect(totals.byCategory.find(category => category.value === 'transport')).toMatchObject({ forecast: 0, count: 0 });
+    expect(totals.byCategory.every(category => Boolean(category.label))).toBe(true);
+  });
+
+  it('shows zeros and the whole budget as remaining before the service answers', () => {
+    const totals = budgetTotalsFromService(undefined, 100000);
+    expect(totals).toMatchObject({ forecastTotal: 0, paidTotal: 0, remaining: 100000, uncostedBookingCount: 0 });
+    expect(totals.byCategory.every(category => category.count === 0 && category.forecast === 0)).toBe(true);
   });
 });

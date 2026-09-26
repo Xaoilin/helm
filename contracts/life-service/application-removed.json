@@ -1,0 +1,12 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/api/life/v1/jobs/applications/acme-engineer"
+  },
+  "status": 200,
+  "body": {
+    "applicationId": "acme-engineer",
+    "application": null,
+    "duplicate": false
+  }
+}

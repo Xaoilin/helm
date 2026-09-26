@@ -1,0 +1,35 @@
+{
+  "request": {
+    "method": "PUT",
+    "path": "/api/life/v1/inventory/needs/screws"
+  },
+  "status": 200,
+  "body": {
+    "id": "screws",
+    "name": "M4 screws",
+    "category": "component",
+    "subcategory": "mechanical_hardware",
+    "imageUrl": "https://m.media-amazon.com/images/I/screws.jpg",
+    "linkedItemId": "rail",
+    "projectCatalogKey": "magnus-desk",
+    "requiredQuantity": 20,
+    "unit": "pcs",
+    "dimensions": {
+      "length": 10,
+      "width": null,
+      "height": null,
+      "unit": "mm"
+    },
+    "specifications": {
+      "thread": "M4"
+    },
+    "priority": "high",
+    "status": "ordered",
+    "notes": "",
+    "orderedAt": "2026-09-26T22:08:08.133Z",
+    "acquiredAt": null,
+    "dismissedAt": null,
+    "createdAt": "2026-09-26T22:08:08.133Z",
+    "updatedAt": "2026-09-26T22:08:08.133Z"
+  }
+}

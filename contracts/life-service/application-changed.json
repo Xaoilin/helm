@@ -1,0 +1,11 @@
+{
+  "request": {
+    "method": "PATCH",
+    "path": "/api/life/v1/jobs/applications/acme-engineer"
+  },
+  "status": 409,
+  "body": {
+    "code": "application_changed",
+    "message": "This application changed; reload before saving."
+  }
+}

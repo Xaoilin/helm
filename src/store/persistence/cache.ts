@@ -45,11 +45,7 @@ function patchForPayload(
 ): HelmMutation[] {
   // Older clients omit these reserved fields. Preserve the server-known value
   // so a partial edit cannot silently turn it into an unset operation.
-  let effectiveAfter = (
-    (collection === 'inventoryItems' || collection === 'inventoryNeeds')
-    && before.dimensions !== undefined
-    && !('dimensions' in after)
-  ) ? { ...after, dimensions: before.dimensions } : after;
+  let effectiveAfter = after;
   if (collection === 'gamification' && recordId === 'profile') {
     effectiveAfter = { ...effectiveAfter };
     for (const field of ['dailyMomentumLearn', 'dailyMomentumMove']) {

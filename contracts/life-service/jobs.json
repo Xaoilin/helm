@@ -1,0 +1,40 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/life/v1/jobs"
+  },
+  "status": 200,
+  "body": {
+    "applications": [
+      {
+        "id": "acme-engineer",
+        "company": "Acme",
+        "role": "Engineer",
+        "url": null,
+        "workType": "unknown",
+        "remoteRegion": "uk",
+        "remoteStatus": "confirmed",
+        "remoteEvidence": "UK remote in the listing",
+        "remoteCaveat": null,
+        "compensation": null,
+        "status": "interview",
+        "applicationDate": null,
+        "nextAction": "Prepare",
+        "nextActionDate": null,
+        "notes": "",
+        "history": [
+          {
+            "id": "h1",
+            "kind": "application",
+            "date": null,
+            "summary": "Applied",
+            "details": "Via site",
+            "evidenceUrl": null
+          }
+        ],
+        "createdAt": "2026-09-26T22:08:07.361Z",
+        "updatedAt": "2026-09-26T22:08:07.453Z"
+      }
+    ]
+  }
+}

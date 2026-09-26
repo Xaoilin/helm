@@ -1,0 +1,11 @@
+{
+  "request": {
+    "method": "PUT",
+    "path": "/api/life/v1/health/fast-food/entry-2"
+  },
+  "status": 400,
+  "body": {
+    "code": "invalid_rating",
+    "message": "rating must be one of [good, mixed, bad, awful]."
+  }
+}

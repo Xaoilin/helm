@@ -1,0 +1,72 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/life/v1/inventory/needs/screws/acquire"
+  },
+  "status": 200,
+  "body": {
+    "need": {
+      "id": "screws",
+      "name": "M4 screws",
+      "category": "component",
+      "subcategory": "mechanical_hardware",
+      "imageUrl": "https://m.media-amazon.com/images/I/screws.jpg",
+      "linkedItemId": "rail",
+      "projectCatalogKey": "magnus-desk",
+      "requiredQuantity": 20,
+      "unit": "pcs",
+      "dimensions": {
+        "length": 10,
+        "width": null,
+        "height": null,
+        "unit": "mm"
+      },
+      "specifications": {
+        "thread": "M4"
+      },
+      "priority": "high",
+      "status": "acquired",
+      "notes": "",
+      "orderedAt": "2026-09-26T22:08:08.133Z",
+      "acquiredAt": "2026-09-26T22:08:08.232Z",
+      "dismissedAt": null,
+      "createdAt": "2026-09-26T22:08:08.133Z",
+      "updatedAt": "2026-09-26T22:08:08.232Z"
+    },
+    "item": {
+      "id": "rail",
+      "name": "Rail slides",
+      "category": "component",
+      "subcategory": "mechanical_hardware",
+      "imageUrl": "https://m.media-amazon.com/images/I/rail.jpg",
+      "trackingMode": "counted",
+      "quantity": 22,
+      "unit": "pcs",
+      "lowStockThreshold": 1,
+      "brand": "Acme",
+      "model": "R-550",
+      "dimensions": {
+        "length": 550,
+        "width": 45,
+        "height": 12.7,
+        "unit": "mm"
+      },
+      "specifications": {
+        "mount": "Side"
+      },
+      "condition": "new",
+      "location": "Garage",
+      "tags": [
+        "desk"
+      ],
+      "notes": "Checked",
+      "projectCatalogKeys": [
+        "magnus-desk"
+      ],
+      "lastVerifiedAt": "2026-09-26T22:08:08.232Z",
+      "archivedAt": null,
+      "createdAt": "2026-09-26T22:08:08.058Z",
+      "updatedAt": "2026-09-26T22:08:08.235Z"
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { buildBudgetLedger, summarizeBudget } from '../../services/tripBudget';
+import { budgetTotalsFromService, buildBudgetLedger } from '../../services/tripBudget';
 import {
   buildTripBookingSeed,
   compareLegs,
@@ -28,7 +28,7 @@ export function useTripPlannerView({ requestedTripId, searchQuery, today, nowMs 
   today: string;
   nowMs: number;
 }) {
-  const { trips, tripLegs, tripItineraryItems, tripBookings, tripBudgetEntries } = useTripContext();
+  const { trips, tripLegs, tripItineraryItems, tripBookings, tripBudgetEntries, tripBudgets } = useTripContext();
 
   const legsByTrip = useMemo(() => groupLegsByTrip(tripLegs), [tripLegs]);
   const filteredTrips = useMemo(() => filterTrips(trips, legsByTrip, searchQuery), [trips, legsByTrip, searchQuery]);
@@ -72,8 +72,8 @@ export function useTripPlannerView({ requestedTripId, searchQuery, today, nowMs 
     [bookings, manualBudgetEntries, selectedTrip, seedFor, today],
   );
   const budgetTotals = useMemo(
-    () => summarizeBudget(budgetLedger, bookings, selectedTrip?.budgetTotal || 0),
-    [budgetLedger, bookings, selectedTrip?.budgetTotal],
+    () => budgetTotalsFromService(selectedTripId ? tripBudgets[selectedTripId] : undefined, selectedTrip?.budgetTotal || 0),
+    [tripBudgets, selectedTripId, selectedTrip?.budgetTotal],
   );
 
   return {

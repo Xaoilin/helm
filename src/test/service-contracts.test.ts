@@ -6,7 +6,10 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CONTRACT_SCHEMAS } from '../services/backend/contracts';
+import { CONTRACT_SCHEMAS as SERVICE_SCHEMAS } from '../services/backend/contracts';
+import { LIFE_CONTRACT_SCHEMAS } from '../services/backend/lifeContracts';
+
+const CONTRACT_SCHEMAS = { ...SERVICE_SCHEMAS, ...LIFE_CONTRACT_SCHEMAS };
 
 const CONTRACTS = join(process.cwd(), 'contracts');
 
