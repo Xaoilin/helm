@@ -1,0 +1,11 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/life/v1/jobs/applications"
+  },
+  "status": 403,
+  "body": {
+    "code": "agent_not_approved",
+    "message": "This agent is not approved for this part of Sabah One."
+  }
+}

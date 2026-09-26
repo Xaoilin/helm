@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   CalendarAccount,
   CalendarEvent,
@@ -152,7 +152,14 @@ function resetFixtures() {
 
 describe('core card controls', () => {
   beforeEach(() => {
+    // Midday mid-month, so the event an hour from now stays on today in every calendar view.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-16T12:00:00.000Z'));
     resetFixtures();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('exposes Calendar month, week, and agenda events as focusable open buttons', () => {

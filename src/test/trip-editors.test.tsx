@@ -66,9 +66,14 @@ describe('TripPlanWizard', () => {
     expect(screen.getByText('1 booking ready to save.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Create Trip' }));
 
-    expect(trips.addTrip).toHaveBeenCalledWith(expect.objectContaining({ name: 'Summer route', startDate: '2026-10-01', endDate: '2026-10-05' }));
-    expect(trips.addTripLeg).toHaveBeenCalledWith(expect.objectContaining({ tripId: 'trip-new', city: 'Madrid', sortOrder: 0 }));
-    expect(trips.addTripBooking).toHaveBeenCalledWith(expect.objectContaining({ kind: 'stay', legId: 'leg-created-1', checkInDate: '2026-10-01', checkOutDate: '2026-10-05' }));
+    expect(trips.createTripPlan).toHaveBeenCalledTimes(1);
+    const [trip, legs, bookings] = vi.mocked(trips.createTripPlan).mock.calls[0];
+    expect(trip).toMatchObject({ name: 'Summer route', startDate: '', endDate: '' });
+    expect(legs).toEqual([expect.objectContaining({ country: 'Spain', city: 'Madrid', startDate: '2026-10-01', endDate: '2026-10-05' })]);
+    expect(bookings).toEqual([expect.objectContaining({ kind: 'stay', legId: legs[0].id, checkInDate: '2026-10-01', checkOutDate: '2026-10-05' })]);
+    expect(trips.addTrip).not.toHaveBeenCalled();
+    expect(trips.addTripLeg).not.toHaveBeenCalled();
+    expect(trips.addTripBooking).not.toHaveBeenCalled();
     expect(onCreated).toHaveBeenCalledWith('trip-new');
   });
 });

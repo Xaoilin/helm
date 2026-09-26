@@ -1,0 +1,28 @@
+{
+  "request": {
+    "method": "PUT",
+    "path": "/api/life/v1/inventory/needs/glue"
+  },
+  "status": 200,
+  "body": {
+    "id": "glue",
+    "name": "Wood glue",
+    "category": null,
+    "subcategory": null,
+    "imageUrl": null,
+    "linkedItemId": null,
+    "projectCatalogKey": null,
+    "requiredQuantity": 1,
+    "unit": "bottle",
+    "dimensions": null,
+    "specifications": {},
+    "priority": "low",
+    "status": "needed",
+    "notes": "",
+    "orderedAt": null,
+    "acquiredAt": null,
+    "dismissedAt": null,
+    "createdAt": "2026-09-26T22:08:08.159Z",
+    "updatedAt": "2026-09-26T22:08:08.159Z"
+  }
+}

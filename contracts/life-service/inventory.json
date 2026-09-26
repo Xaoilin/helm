@@ -1,0 +1,58 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/life/v1/inventory"
+  },
+  "status": 200,
+  "body": {
+    "items": [
+      {
+        "id": "pla",
+        "name": "PLA",
+        "category": "other",
+        "subcategory": null,
+        "imageUrl": null,
+        "trackingMode": "counted",
+        "quantity": 3,
+        "unit": "spools",
+        "lowStockThreshold": null,
+        "brand": null,
+        "model": null,
+        "dimensions": null,
+        "specifications": {},
+        "condition": "unknown",
+        "location": null,
+        "tags": [],
+        "notes": "",
+        "projectCatalogKeys": [],
+        "lastVerifiedAt": "2026-09-26T22:08:08.097Z",
+        "archivedAt": null,
+        "createdAt": "2026-09-26T22:08:08.097Z",
+        "updatedAt": "2026-09-26T22:08:08.097Z"
+      }
+    ],
+    "needs": [
+      {
+        "id": "screws",
+        "name": "M4 screws",
+        "category": null,
+        "subcategory": null,
+        "imageUrl": null,
+        "linkedItemId": null,
+        "projectCatalogKey": null,
+        "requiredQuantity": 20,
+        "unit": "pcs",
+        "dimensions": null,
+        "specifications": {},
+        "priority": "high",
+        "status": "ordered",
+        "notes": "",
+        "orderedAt": null,
+        "acquiredAt": null,
+        "dismissedAt": null,
+        "createdAt": "2026-09-26T22:08:08.133Z",
+        "updatedAt": "2026-09-26T22:08:08.133Z"
+      }
+    ]
+  }
+}

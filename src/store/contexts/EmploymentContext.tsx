@@ -1,58 +1,26 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react';
+/**
+ * The job tracker, owned by the life admin service. Every change is confirmed by the service before it
+ * shows: the page waits for the saved application. A retried add reuses its ID, so the service reports
+ * the first save instead of adding the application twice.
+ */
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
 import {
-  appendEmploymentHistory,
-  createEmploymentApplication,
-  deleteEmploymentApplication,
-  updateEmploymentApplication,
-  type EmploymentApplicationPatch,
-} from '../../services/employmentAccount';
+  addJobApplication,
+  addJobHistory,
+  getJobApplications,
+  isLifeServiceEnabled,
+  removeJobApplication,
+  updateJobApplication,
+  type ApplicationFields,
+} from '../../services/backend/lifeServiceApi';
 import {
-  createDefaultEmploymentTrackerState,
   normalizeEmploymentApplicationDraft,
   type EmploymentApplicationDraft,
 } from '../../services/employmentTracker';
-import type {
-  EmploymentApplication,
-  EmploymentHistoryEntry,
-  EmploymentTrackerState,
-} from '../../types/domain';
-import {
-  getSyncSessionSnapshot,
-  loadStore,
-  refreshDatabasePersistence,
-  saveStoreCommitted,
-  subscribeSyncSession,
-} from '../persistence';
-import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
-    return error.message;
-  }
-  return String(error);
-}
-
-function requireWritableActor(userId: string | null): void {
-  const session = getSyncSessionSnapshot();
-  if (!userId || session.userId !== userId) {
-    throw new Error('The signed-in account changed. Reopen Employment before saving.');
-  }
-  if (session.status !== 'ready' || session.readOnly) {
-    throw new Error(session.error || 'Employment changes require a writable signed-in database session.');
-  }
-}
+import { observeOperationalOperation } from '../../services/operationalTelemetry';
+import type { EmploymentApplication, EmploymentHistoryEntry } from '../../types/domain';
+import { errorMessage, useServiceLoad } from './useServiceLoad';
 
 export interface EmploymentContextValue {
   applications: EmploymentApplication[];
@@ -62,24 +30,12 @@ export interface EmploymentContextValue {
   retryLoad: () => Promise<void>;
   addApplication: (draft: EmploymentApplicationDraft) => Promise<string>;
   updateApplication: (id: string, updates: Partial<EmploymentApplicationDraft>, expectedUpdatedAt?: string) => Promise<void>;
-  addHistoryEntry: (
-    applicationId: string,
-    entry: Omit<EmploymentHistoryEntry, 'id'>,
-  ) => Promise<void>;
+  addHistoryEntry: (applicationId: string, entry: Omit<EmploymentHistoryEntry, 'id'>) => Promise<void>;
   removeApplication: (id: string, expectedUpdatedAt?: string) => Promise<void>;
 }
 
-interface EmploymentRetryAttempt {
-  requestId: string;
-  id: string;
-  expectedUpdatedAt?: string;
-  patch?: EmploymentApplicationPatch;
-}
-
-const sessionIdentity = () => {
-  const session = getSyncSessionSnapshot();
-  return JSON.stringify([session.userId, session.status, session.readOnly, session.hasUsableSnapshot]);
-};
+/** Optional fields the service clears when an edit empties them. */
+const CLEARABLE_FIELDS = ['url', 'remoteCaveat', 'compensation', 'applicationDate', 'nextActionDate'] as const;
 
 export const EmploymentContext = createContext<EmploymentContextValue | null>(null);
 
@@ -89,214 +45,112 @@ export function useEmploymentContext(): EmploymentContextValue {
   return context;
 }
 
+/** The fields an edit sets, and the optional ones it empties. */
+export function applicationPatch(updates: Partial<EmploymentApplicationDraft>, normalized: EmploymentApplicationDraft) {
+  const fields: Partial<ApplicationFields> = {};
+  const clear: string[] = [];
+  for (const key of Object.keys(updates) as Array<keyof EmploymentApplicationDraft>) {
+    if (key === 'history') continue;
+    const value = normalized[key];
+    if (value === undefined || value === '') {
+      if ((CLEARABLE_FIELDS as readonly string[]).includes(key)) clear.push(key);
+    } else {
+      Object.assign(fields, { [key]: value });
+    }
+  }
+  return { fields, clear };
+}
+
 export function EmploymentProvider({ children }: { children: ReactNode }) {
-  const sessionKey = useSyncExternalStore(subscribeSyncSession, sessionIdentity);
-  const [userId, status, , hasUsableSnapshot] = JSON.parse(sessionKey) as [string | null, string, boolean, boolean];
-  const readable = Boolean(userId) && (status === 'ready' || (status === 'reconnecting' && hasUsableSnapshot));
-  const [state, setState] = useState<{ owner: string | null; tracker: EmploymentTrackerState }>(() => ({
-    owner: null, tracker: { seedVersion: 0, applications: [] },
-  }));
-  const [loaded, setLoaded] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const stateRef = useRef(state.tracker);
-  const ownerRef = useRef<string | null>(null);
-  const generation = useRef(0);
-  const retries = useRef(new Map<string, EmploymentRetryAttempt>());
-  const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const pendingMutationsRef = useRef(0);
-  const initialLoadRef = useRef<Promise<void> | null>(null);
+  const [applications, setApplications] = useState<EmploymentApplication[]>([]);
+  const applicationsRef = useRef<EmploymentApplication[]>([]);
+  const [pending, setPending] = useState(0);
+  const [writeError, setWriteError] = useState<string | null>(null);
+  const addAttempts = useRef(new Map<string, string>());
 
-  const publish = useCallback((next: EmploymentTrackerState, owner: string) => {
-    stateRef.current = next;
-    ownerRef.current = owner;
-    setState({ owner, tracker: next });
-    setError(null);
+  const publish = useCallback((next: EmploymentApplication[]) => {
+    applicationsRef.current = next;
+    setApplications(next);
   }, []);
+  const load = useCallback(async () => publish(await getJobApplications()), [publish]);
+  const { loaded, error: loadError, reload } = useServiceLoad('Employment', isLifeServiceEnabled(), load);
 
-  const refresh = useCallback(async (allowSeed = false) => {
-    const requestedSession = sessionIdentity();
-    const session = getSyncSessionSnapshot();
-    const request = ++generation.current;
-    if (!session.userId || (session.status !== 'ready'
-      && !(session.status === 'reconnecting' && session.hasUsableSnapshot))) return;
-    const owner = session.userId;
-    const isCurrent = () => request === generation.current && sessionIdentity() === requestedSession;
+  const confirm = useCallback((saved: EmploymentApplication | null, id: string) => {
+    const current = applicationsRef.current;
+    if (!saved) publish(current.filter(application => application.id !== id));
+    else if (current.some(application => application.id === id)) {
+      publish(current.map(application => (application.id === id ? saved : application)));
+    } else publish([...current, saved]);
+  }, [publish]);
+
+  /** Runs one write, counting it as saving and keeping its error for the page. */
+  const run = useCallback(async <T,>(write: () => Promise<T>): Promise<T> => {
+    setPending(count => count + 1);
+    setWriteError(null);
     try {
-      let stored = await loadStore<EmploymentTrackerState>('employment');
-      if (!isCurrent()) return;
-      if (!stored && allowSeed) {
-        requireWritableActor(owner);
-        setError(null);
-        setLoaded(false);
-        await saveStoreCommitted('employment', createDefaultEmploymentTrackerState());
-        if (!isCurrent()) return;
-        stored = await loadStore<EmploymentTrackerState>('employment');
-        if (!isCurrent()) return;
-      }
-      if (!stored) throw new Error('Employment tracker data is unavailable from the signed-in account.');
-      publish(stored, owner);
-    } catch (loadError) {
-      if (isCurrent()) setError(getErrorMessage(loadError));
+      return await observeOperationalOperation('employment', 'write', write);
+    } catch (failure) {
+      setWriteError(errorMessage(failure));
+      throw failure;
     } finally {
-      if (isCurrent()) setLoaded(true);
+      setPending(count => count - 1);
     }
-  }, [publish]);
-
-  useEffect(() => {
-    if (!readable || ownerRef.current !== userId) {
-      const owner = readable ? userId : null;
-      ownerRef.current = owner;
-      stateRef.current = { seedVersion: 0, applications: [] };
-      setState({ owner, tracker: stateRef.current });
-      setError(null);
-      retries.current.clear();
-      setLoaded(false);
-    }
-    const initialLoad = refresh(true);
-    initialLoadRef.current = initialLoad;
-    void initialLoad.finally(() => {
-      if (initialLoadRef.current === initialLoad) initialLoadRef.current = null;
-    });
-    return () => { generation.current += 1; };
-  }, [sessionKey, userId, readable, refresh]);
-
-  useRemoteStoreRefresh(['employment'], async () => {
-    const requestedSession = sessionIdentity();
-    // First scoped delivery also notifies subscribers. It must not supersede
-    // the initial reader while that reader awaits its server-confirmed seed.
-    await initialLoadRef.current;
-    await mutationQueueRef.current;
-    if (sessionIdentity() === requestedSession) await refresh();
-  });
-
-  const mutate = useCallback(<T,>(
-    commit: (current: EmploymentTrackerState) => Promise<T>,
-  ): Promise<T> => {
-    const userId = getSyncSessionSnapshot().userId;
-    let result!: T;
-    const operation = mutationQueueRef.current.then(async () => {
-      pendingMutationsRef.current += 1;
-      setSaving(true);
-      try {
-        requireWritableActor(userId);
-        const latest = await loadStore<EmploymentTrackerState>('employment')
-          ?? (ownerRef.current === userId ? stateRef.current : { seedVersion: 0, applications: [] });
-        requireWritableActor(userId);
-        if (latest.seedVersion === 0) {
-          throw new Error('Employment tracker data is unavailable until the account seed is confirmed.');
-        }
-        result = await commit(latest);
-        requireWritableActor(userId);
-        await refreshDatabasePersistence();
-        requireWritableActor(userId);
-        const confirmed = await loadStore<EmploymentTrackerState>('employment');
-        requireWritableActor(userId);
-        if (!confirmed) throw new Error('The database did not return the confirmed Employment tracker change.');
-        publish(confirmed, userId!);
-      } catch (mutationError) {
-        if (getSyncSessionSnapshot().userId === userId) setError(getErrorMessage(mutationError));
-        throw mutationError;
-      } finally {
-        pendingMutationsRef.current -= 1;
-        if (pendingMutationsRef.current === 0) setSaving(false);
-      }
-    });
-    mutationQueueRef.current = operation.then(() => undefined, () => undefined);
-    return operation.then(() => result);
-  }, [publish]);
-
-  const retryAttempt = useCallback((key: string) => {
-    const existing = retries.current.get(key);
-    if (existing) return existing;
-    const attempt: EmploymentRetryAttempt = { requestId: uuid(), id: uuid() };
-    retries.current.set(key, attempt);
-    return attempt;
   }, []);
 
   const addApplication = useCallback(async (draft: EmploymentApplicationDraft) => {
     const normalized = normalizeEmploymentApplicationDraft(draft);
-    const key = JSON.stringify([getSyncSessionSnapshot().userId, 'add', normalized]);
-    const attempt = retryAttempt(key);
-    const result = await mutate(async () => {
-      const receipt = await createEmploymentApplication(attempt.requestId, { ...normalized, id: attempt.id });
-      return receipt.applicationId;
-    });
-    retries.current.delete(key);
-    return result;
-  }, [mutate, retryAttempt]);
+    const attemptKey = JSON.stringify(normalized);
+    const id = addAttempts.current.get(attemptKey) ?? uuid();
+    addAttempts.current.set(attemptKey, id);
+    const change = await run(() => addJobApplication({ ...normalized, id }));
+    addAttempts.current.delete(attemptKey);
+    confirm(change.application, change.applicationId);
+    return change.applicationId;
+  }, [confirm, run]);
 
-  const updateApplication = useCallback(async (id: string, updates: Partial<EmploymentApplicationDraft>, expectedUpdatedAt?: string) => {
-    const key = JSON.stringify([getSyncSessionSnapshot().userId, 'update', id, updates, expectedUpdatedAt]);
-    const attempt = retryAttempt(key);
-    await mutate(async current => {
-      if (!attempt.patch) {
-        const existing = current.applications.find(application => application.id === id);
-        if (!existing) throw new Error('Employment application not found.');
-        const normalized = normalizeEmploymentApplicationDraft({ ...existing, ...updates });
-        attempt.patch = Object.fromEntries(
-          (Object.keys(updates) as Array<keyof EmploymentApplicationDraft>)
-            .map(key => [key, normalized[key] ?? null]),
-        ) as EmploymentApplicationPatch;
-        attempt.expectedUpdatedAt = expectedUpdatedAt ?? existing.updatedAt;
-      }
-      await updateEmploymentApplication(attempt.requestId, id, attempt.patch, attempt.expectedUpdatedAt!);
+  const updateApplication = useCallback(async (id: string, updates: Partial<EmploymentApplicationDraft>,
+    expectedUpdatedAt?: string) => {
+    const existing = applicationsRef.current.find(application => application.id === id);
+    if (!existing) throw new Error('Employment application not found.');
+    const normalized = normalizeEmploymentApplicationDraft({ ...existing, ...updates });
+    const { fields, clear } = applicationPatch(updates, normalized);
+    const known = new Set(existing.history.map(entry => entry.id));
+    const newHistory = normalized.history.filter(entry => !known.has(entry.id));
+    await run(async () => {
+      let change = await updateJobApplication(id, fields, clear, expectedUpdatedAt ?? existing.updatedAt);
+      for (const entry of newHistory) change = await addJobHistory(id, entry);
+      confirm(change.application, id);
     });
-    retries.current.delete(key);
-  }, [mutate, retryAttempt]);
+  }, [confirm, run]);
 
   const addHistoryEntry = useCallback(async (applicationId: string, entry: Omit<EmploymentHistoryEntry, 'id'>) => {
-    const key = JSON.stringify([getSyncSessionSnapshot().userId, 'history', applicationId, entry]);
-    const attempt = retryAttempt(key);
-    const nextEntry: EmploymentHistoryEntry = { ...entry, id: attempt.id };
-    await mutate(async current => {
-      const existing = current.applications.find(application => application.id === applicationId);
-      if (!existing) throw new Error('Employment application not found.');
-      const normalized = normalizeEmploymentApplicationDraft({ ...existing, history: [nextEntry] });
-      await appendEmploymentHistory(attempt.requestId, applicationId, normalized.history[0]);
-    });
-    retries.current.delete(key);
-  }, [mutate, retryAttempt]);
+    const existing = applicationsRef.current.find(application => application.id === applicationId);
+    if (!existing) throw new Error('Employment application not found.');
+    const withId = { ...entry, id: uuid() };
+    const normalized = normalizeEmploymentApplicationDraft({ ...existing, history: [withId] }).history[0];
+    const change = await run(() => addJobHistory(applicationId, normalized));
+    confirm(change.application, applicationId);
+  }, [confirm, run]);
 
   const removeApplication = useCallback(async (id: string, expectedUpdatedAt?: string) => {
-    const key = JSON.stringify([getSyncSessionSnapshot().userId, 'remove', id, expectedUpdatedAt]);
-    const attempt = retryAttempt(key);
-    await mutate(async current => {
-      if (!attempt.expectedUpdatedAt) {
-        const existing = current.applications.find(application => application.id === id);
-        if (!existing) throw new Error('Employment application not found.');
-        attempt.expectedUpdatedAt = expectedUpdatedAt ?? existing.updatedAt;
-      }
-      await deleteEmploymentApplication(attempt.requestId, id, attempt.expectedUpdatedAt);
-    });
-    retries.current.delete(key);
-  }, [mutate, retryAttempt]);
-
-  const retryLoad = useCallback(() => refresh(true), [refresh]);
+    const existing = applicationsRef.current.find(application => application.id === id);
+    if (!existing) throw new Error('Employment application not found.');
+    await run(() => removeJobApplication(id, expectedUpdatedAt ?? existing.updatedAt));
+    confirm(null, id);
+  }, [confirm, run]);
 
   const value = useMemo<EmploymentContextValue>(() => ({
-    applications: readable && state.owner === userId ? state.tracker.applications : [],
-    loaded: !readable || (state.owner === userId && loaded),
-    saving,
-    error: state.owner === userId && readable ? error : null,
-    retryLoad,
-    addApplication,
-    updateApplication,
-    addHistoryEntry,
-    removeApplication,
-  }), [
-    state,
-    readable,
-    userId,
+    applications,
     loaded,
-    saving,
-    error,
-    retryLoad,
+    saving: pending > 0,
+    error: writeError ?? loadError,
+    retryLoad: reload,
     addApplication,
     updateApplication,
     addHistoryEntry,
     removeApplication,
-  ]);
+  }), [applications, loaded, pending, writeError, loadError, reload, addApplication, updateApplication,
+    addHistoryEntry, removeApplication]);
 
   return <EmploymentContext.Provider value={value}>{children}</EmploymentContext.Provider>;
 }

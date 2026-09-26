@@ -2,7 +2,8 @@ import type { Surface } from '../types/domain';
 
 // Background reminders, rewards and running timers remain available on every page. Custom
 // providers hydrate each listed group together. Calendar data comes from the calendar service;
-// settings and integrations from the profile service.
+// settings and integrations from the profile service; trips, inventory, jobs and health from the
+// life admin service.
 export const SHARED_PAGE_COLLECTIONS = [
   'gamification', 'tasks', 'prayerTracking',
   'knowledgeTopics', 'knowledgeEntries', 'lifestyleItems', 'clock',
@@ -10,20 +11,19 @@ export const SHARED_PAGE_COLLECTIONS = [
 
 const PROJECT_COLLECTIONS = ['projects', 'projectPages', 'workspaces'];
 const FINANCE_COLLECTIONS = ['financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals'];
-const INVENTORY_COLLECTIONS = ['inventoryItems', 'inventoryNeeds'];
 
 const PAGE_COLLECTIONS: Record<Surface, readonly string[]> = {
   dashboard: [],
   calendar: [],
   clock: [],
-  trips: ['trips', 'tripLegs', 'tripItineraryItems', 'tripBookings', 'tripBudgetEntries'],
+  trips: [],
   projects: PROJECT_COLLECTIONS,
   tasks: PROJECT_COLLECTIONS,
-  inventory: [...PROJECT_COLLECTIONS, ...INVENTORY_COLLECTIONS],
+  inventory: PROJECT_COLLECTIONS,
   secrets: PROJECT_COLLECTIONS,
-  employment: ['employment'],
+  employment: [],
   finance: [...FINANCE_COLLECTIONS, 'financeReviews', 'equityPositions'],
-  health: ['healthFastFoodEntries'],
+  health: [],
   knowledge: [],
   profile: [],
   integrations: [],

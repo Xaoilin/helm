@@ -1,5 +1,5 @@
 import type { HelmMutation } from '../databaseTypes';
-import { applyHelmInventoryMutations, applyHelmMutations } from '../supabase';
+import { applyHelmMutations } from '../supabase';
 import { observeOperationalOperation } from '../../services/operationalTelemetry';
 import type { SupabaseWriteQueueSnapshot } from './types';
 
@@ -29,28 +29,6 @@ export async function applySharedMutationsWithIdempotentRetry(
       'database',
       'write',
       () => applyHelmMutations(requestId, operations),
-      { attempt: 2, freshness: 'fresh' },
-    );
-  }
-}
-
-export async function applyInventoryMutationsWithIdempotentRetry(
-  requestId: string,
-  operations: HelmMutation[],
-) {
-  try {
-    return await observeOperationalOperation(
-      'database',
-      'write',
-      () => applyHelmInventoryMutations(requestId, operations),
-      { attempt: 1, freshness: 'fresh' },
-    );
-  } catch (firstError) {
-    if (!shouldRetryMutation(firstError)) throw firstError;
-    return observeOperationalOperation(
-      'database',
-      'write',
-      () => applyHelmInventoryMutations(requestId, operations),
       { attempt: 2, freshness: 'fresh' },
     );
   }

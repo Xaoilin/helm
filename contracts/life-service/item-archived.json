@@ -1,0 +1,31 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/life/v1/inventory/items/pla/archive"
+  },
+  "status": 200,
+  "body": {
+    "id": "pla",
+    "name": "PLA",
+    "category": "other",
+    "subcategory": null,
+    "imageUrl": null,
+    "trackingMode": "counted",
+    "quantity": 3,
+    "unit": "spools",
+    "lowStockThreshold": null,
+    "brand": null,
+    "model": null,
+    "dimensions": null,
+    "specifications": {},
+    "condition": "unknown",
+    "location": null,
+    "tags": [],
+    "notes": "",
+    "projectCatalogKeys": [],
+    "lastVerifiedAt": "2026-09-26T22:08:08.097Z",
+    "archivedAt": "2026-09-26T22:08:08.257Z",
+    "createdAt": "2026-09-26T22:08:08.097Z",
+    "updatedAt": "2026-09-26T22:08:08.257Z"
+  }
+}

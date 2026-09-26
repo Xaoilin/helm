@@ -18,6 +18,7 @@ import { toLocalDateStr } from '../services/localDate';
 import type { BookingKind } from '../services/tripModel';
 import { useShell } from '../store/ShellContext';
 import { useTripContext } from '../store/contexts/TripContext';
+import { ServiceStatusBanner } from '../components/common/ServiceStatusBanner';
 import type { TripBooking, TripItineraryItem, TripLeg } from '../types/domain';
 
 /** The one editor dialog open over the planner, if any. */
@@ -30,7 +31,7 @@ type OpenEditor =
 
 export default function TripsSurface() {
   const shell = useShell();
-  const { trips, removeTrip } = useTripContext();
+  const { trips, removeTrip, error: tripsError, reload: reloadTrips } = useTripContext();
   // Trip dates are device-local date-input values, so "today" is the device-local date.
   const now = new Date();
   const todayStr = toLocalDateStr(now);
@@ -149,13 +150,14 @@ export default function TripsSurface() {
           <div className="subtitle">
             {trips.length === 0
               ? 'Plan multi-country travel without leaving Sabah One'
-              : `${trips.length} trip${trips.length === 1 ? '' : 's'} tracked locally`}
+              : `${trips.length} trip${trips.length === 1 ? '' : 's'} tracked`}
           </div>
         </div>
         <button className="btn btn-primary" onClick={() => setEditor({ type: 'wizard' })}>+ Plan Trip</button>
       </div>
 
       <div className="surface-body">
+        <ServiceStatusBanner label="Trips could not be refreshed" error={tripsError} onRetry={() => { void reloadTrips(); }} />
         {trips.length === 0 ? (
           <div className="empty-state" role="status">
             <div className="empty-icon">&#9992;&#65039;</div>

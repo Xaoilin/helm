@@ -135,19 +135,19 @@ describe('persistence cache boundary', () => {
 
   it('resets both authoritative and delivered cache state', () => {
     const cache = new PersistenceRecordCache();
-    cache.replaceAll([record('employment', 'singleton', { stage: 'searching' }, null)]);
-    cache.markDeliveredFromCache('employment');
+    cache.replaceAll([record('lifestyleItems', 'item-1', { id: 'item-1', stage: 'searching' }, 0)]);
+    cache.markDeliveredFromCache('lifestyleItems');
 
     cache.reset();
 
-    expect(cache.decoded('employment')).toBeNull();
-    expect(cache.buildMutations('employment', { stage: 'interviewing' })).toEqual([{
+    expect(cache.decoded('lifestyleItems')).toEqual([]);
+    expect(cache.buildMutations('lifestyleItems', [{ id: 'item-1', stage: 'interviewing' }])).toEqual([{
       op: 'create',
-      collection: 'employment',
-      recordId: 'singleton',
-      payload: { stage: 'interviewing' },
-      position: null,
-    }]);
+      collection: 'lifestyleItems',
+      recordId: 'item-1',
+      payload: { id: 'item-1', stage: 'interviewing' },
+      position: 0,
+    }, { op: 'reorder', collection: 'lifestyleItems', orderedRecordIds: ['item-1'] }]);
   });
 });
 

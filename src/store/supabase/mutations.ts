@@ -50,21 +50,3 @@ export async function applyHelmMutations(
   return mapMutationResult(data, requestId);
 }
 
-export async function applyHelmInventoryMutations(
-  requestId: string,
-  operations: HelmMutation[],
-): Promise<HelmMutationResult> {
-  if (operations.length === 0) {
-    throw new Error('At least one Sabah One Inventory mutation is required.');
-  }
-  const database = requireClient();
-  const { data, error } = await database.rpc('apply_helm_inventory_mutations', {
-    p_request_id: requestId,
-    p_operations: operations,
-  });
-  if (error) {
-    logError('Supabase', error);
-    throw error;
-  }
-  return mapMutationResult(data, requestId);
-}

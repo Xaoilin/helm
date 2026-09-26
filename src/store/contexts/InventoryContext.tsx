@@ -1,4 +1,10 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
+/**
+ * Inventory, owned by the life admin service (the authoritative stock). Each change is shown at once
+ * and saved as one record; acquiring a need is done by the service in one step so the stock and the
+ * shopping list never disagree. A refused save shows why and reloads what the service holds.
+ */
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { v4 as uuid } from 'uuid';
 import type { InventoryItem, InventoryNeed } from '../../types/domain';
 import {
   INVENTORY_LIMITS,
@@ -8,15 +14,26 @@ import {
   type InventoryItemDraft,
   type InventoryNeedDraft,
 } from '../../inventory/inventoryModel';
-import { createCollectionContext } from './createDomainContext';
-
-const itemCollection = createCollectionContext<InventoryItem>('inventoryItems');
-const needCollection = createCollectionContext<InventoryNeed>('inventoryNeeds');
+import {
+  acquireInventoryNeed,
+  archiveInventoryItem as archiveItemInService,
+  getInventory,
+  isLifeServiceEnabled,
+  saveInventoryItem,
+  saveInventoryItems,
+  saveInventoryNeed,
+  withoutKeys,
+  type NeedInput,
+} from '../../services/backend/lifeServiceApi';
+import { useServiceLoad } from './useServiceLoad';
 
 export interface InventoryContextValue {
   inventoryItems: InventoryItem[];
   inventoryNeeds: InventoryNeed[];
   loaded: boolean;
+  /** Why Inventory may be out of date; null while it is current. */
+  error: string | null;
+  reload: () => Promise<void>;
   addInventoryItem: (item: InventoryItemDraft) => string;
   addInventoryItems: (items: InventoryItemDraft[]) => string[];
   updateInventoryItem: (id: string, updates: Partial<InventoryItemDraft>) => void;
@@ -29,102 +46,131 @@ export interface InventoryContextValue {
 
 export const InventoryContext = createContext<InventoryContextValue | null>(null);
 
-function InventoryBridge({ children }: { children: ReactNode }) {
-  const items = itemCollection.useContext();
-  const needs = needCollection.useContext();
+function needInput(need: InventoryNeedDraft): NeedInput {
+  return withoutKeys(need, 'orderedAt', 'acquiredAt', 'dismissedAt');
+}
 
-  const addInventoryItem = useCallback((draft: InventoryItemDraft) => (
-    items.add(normalizeInventoryItemDraft(draft))
-  ), [items]);
+function replaceById<T extends { id: string }>(records: T[], saved: T): T[] {
+  return records.some(record => record.id === saved.id)
+    ? records.map(record => (record.id === saved.id ? saved : record))
+    : [...records, saved];
+}
+
+export function InventoryProvider({ children }: { children: ReactNode }) {
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [needs, setNeeds] = useState<InventoryNeed[]>([]);
+  const itemsRef = useRef<InventoryItem[]>([]);
+  const needsRef = useRef<InventoryNeed[]>([]);
+  const publishItems = useCallback((next: InventoryItem[]) => { itemsRef.current = next; setItems(next); }, []);
+  const publishNeeds = useCallback((next: InventoryNeed[]) => { needsRef.current = next; setNeeds(next); }, []);
+  const load = useCallback(async () => {
+    const inventory = await getInventory();
+    publishItems(inventory.items);
+    publishNeeds(inventory.needs);
+  }, [publishItems, publishNeeds]);
+  const { loaded, error, reload, reportFailure } = useServiceLoad('Inventory', isLifeServiceEnabled(), load);
+
+  const confirmItem = useCallback((saved: InventoryItem) => publishItems(replaceById(itemsRef.current, saved)),
+    [publishItems]);
+  const confirmNeed = useCallback((saved: InventoryNeed) => publishNeeds(replaceById(needsRef.current, saved)),
+    [publishNeeds]);
+
+  const showItem = useCallback((id: string, draft: InventoryItemDraft) => {
+    const existing = itemsRef.current.find(item => item.id === id);
+    const now = new Date().toISOString();
+    publishItems(replaceById(itemsRef.current, { ...draft, id, createdAt: existing?.createdAt ?? now, updatedAt: now }));
+  }, [publishItems]);
+
+  const addInventoryItem = useCallback((draft: InventoryItemDraft) => {
+    const id = uuid();
+    const normalized = normalizeInventoryItemDraft(draft);
+    showItem(id, normalized);
+    saveInventoryItem(id, normalized).then(confirmItem, reportFailure);
+    return id;
+  }, [confirmItem, reportFailure, showItem]);
 
   const addInventoryItems = useCallback((drafts: InventoryItemDraft[]) => {
     if (drafts.length === 0) return [];
     if (drafts.length > INVENTORY_LIMITS.bulkItems) {
       throw new Error(`A paste review can save at most ${INVENTORY_LIMITS.bulkItems} items.`);
     }
-    const normalized = drafts.map(draft => normalizeInventoryItemDraft(draft));
-    const ids: string[] = [];
-    for (const draft of normalized) ids.push(items.add(draft));
-    return ids;
-  }, [items]);
+    const batch = drafts.map(draft => ({ ...normalizeInventoryItemDraft(draft), id: uuid() }));
+    batch.forEach(({ id, ...draft }) => showItem(id, draft));
+    saveInventoryItems(batch).then(saved => saved.forEach(confirmItem), reportFailure);
+    return batch.map(item => item.id);
+  }, [confirmItem, reportFailure, showItem]);
 
   const updateInventoryItem = useCallback((id: string, updates: Partial<InventoryItemDraft>) => {
-    const current = items.items.find(item => item.id === id);
+    const current = itemsRef.current.find(item => item.id === id);
     if (!current) throw new Error('Inventory item not found.');
-    items.update(id, normalizeInventoryItemDraft({ ...current, ...updates }));
-  }, [items]);
+    const normalized = normalizeInventoryItemDraft({ ...current, ...updates });
+    showItem(id, normalized);
+    saveInventoryItem(id, normalized).then(confirmItem, reportFailure);
+  }, [confirmItem, reportFailure, showItem]);
 
   const adjustInventoryQuantity = useCallback((id: string, delta: number) => {
     if (!Number.isFinite(delta)) throw new Error('Quantity adjustment must be finite.');
-    const current = items.items.find(item => item.id === id);
+    const current = itemsRef.current.find(item => item.id === id);
     if (!current) throw new Error('Inventory item not found.');
     updateInventoryItem(id, {
       quantity: normalizeInventoryQuantity(current.quantity + delta),
       lastVerifiedAt: new Date().toISOString(),
     });
-  }, [items.items, updateInventoryItem]);
-
-  const archiveInventoryItem = useCallback((id: string) => {
-    updateInventoryItem(id, { archivedAt: new Date().toISOString() });
   }, [updateInventoryItem]);
 
-  const addInventoryNeed = useCallback((draft: InventoryNeedDraft) => (
-    needs.add(normalizeInventoryNeedDraft(draft))
-  ), [needs]);
+  const archiveInventoryItem = useCallback((id: string) => {
+    const current = itemsRef.current.find(item => item.id === id);
+    if (!current) throw new Error('Inventory item not found.');
+    publishItems(replaceById(itemsRef.current, { ...current, archivedAt: new Date().toISOString() }));
+    archiveItemInService(id).then(confirmItem, reportFailure);
+  }, [confirmItem, publishItems, reportFailure]);
+
+  const showNeed = useCallback((id: string, draft: InventoryNeedDraft) => {
+    const existing = needsRef.current.find(need => need.id === id);
+    const now = new Date().toISOString();
+    publishNeeds(replaceById(needsRef.current, { ...draft, id, createdAt: existing?.createdAt ?? now, updatedAt: now }));
+  }, [publishNeeds]);
+
+  const addInventoryNeed = useCallback((draft: InventoryNeedDraft) => {
+    const id = uuid();
+    const normalized = normalizeInventoryNeedDraft(draft);
+    showNeed(id, normalized);
+    saveInventoryNeed(id, needInput(normalized)).then(confirmNeed, reportFailure);
+    return id;
+  }, [confirmNeed, reportFailure, showNeed]);
 
   const updateInventoryNeed = useCallback((id: string, updates: Partial<InventoryNeedDraft>) => {
-    const current = needs.items.find(need => need.id === id);
+    const current = needsRef.current.find(need => need.id === id);
     if (!current) throw new Error('Inventory need not found.');
-    needs.update(id, normalizeInventoryNeedDraft({ ...current, ...updates }));
-  }, [needs]);
+    const normalized = normalizeInventoryNeedDraft({ ...current, ...updates });
+    showNeed(id, normalized);
+    saveInventoryNeed(id, needInput(normalized)).then(confirmNeed, reportFailure);
+  }, [confirmNeed, reportFailure, showNeed]);
 
+  /** The service closes the need and adds its quantity to the linked item (or a new one) together. */
   const completeInventoryNeed = useCallback((needId: string) => {
-    const need = needs.items.find(entry => entry.id === needId);
+    const need = needsRef.current.find(entry => entry.id === needId);
     if (!need) throw new Error('Inventory need not found.');
     if (need.status === 'acquired') return;
-    const acquiredAt = new Date().toISOString();
     const linked = need.linkedItemId
-      ? items.items.find(item => item.id === need.linkedItemId && !item.archivedAt)
+      ? itemsRef.current.find(item => item.id === need.linkedItemId && !item.archivedAt)
       : undefined;
-
-    if (linked) {
-      if (linked.unit.trim().toLocaleLowerCase() !== need.unit.trim().toLocaleLowerCase()) {
-        throw new Error('The linked item and need must use the same unit before acquisition.');
-      }
-      const nextQuantity = normalizeInventoryQuantity(linked.quantity + need.requiredQuantity);
-      items.update(linked.id, {
-        quantity: nextQuantity,
-        lastVerifiedAt: acquiredAt,
-      });
-    } else {
-      const newItemId = items.add(normalizeInventoryItemDraft({
-        name: need.name,
-        category: need.category || 'other',
-        subcategory: need.subcategory,
-        imageUrl: need.imageUrl,
-        trackingMode: 'counted',
-        quantity: need.requiredQuantity,
-        unit: need.unit,
-        dimensions: need.dimensions,
-        specifications: need.specifications,
-        condition: 'new',
-        tags: [],
-        notes: need.notes,
-        projectCatalogKeys: need.projectCatalogKey ? [need.projectCatalogKey] : [],
-        lastVerifiedAt: acquiredAt,
-      }, acquiredAt));
-      needs.update(need.id, { linkedItemId: newItemId });
+    if (linked && linked.unit.trim().toLocaleLowerCase() !== need.unit.trim().toLocaleLowerCase()) {
+      throw new Error('The linked item and need must use the same unit before acquisition.');
     }
-    needs.update(need.id, {
-      status: 'acquired',
-      acquiredAt,
-    });
-  }, [items, needs]);
+    publishNeeds(replaceById(needsRef.current, { ...need, status: 'acquired', acquiredAt: new Date().toISOString() }));
+    acquireInventoryNeed(needId, uuid()).then(({ need: acquired, item }) => {
+      confirmNeed(acquired);
+      if (item) confirmItem(item);
+    }, reportFailure);
+  }, [confirmItem, confirmNeed, publishNeeds, reportFailure]);
 
   const value = useMemo<InventoryContextValue>(() => ({
-    inventoryItems: items.items,
-    inventoryNeeds: needs.items,
-    loaded: items.loaded && needs.loaded,
+    inventoryItems: items,
+    inventoryNeeds: needs,
+    loaded,
+    error,
+    reload,
     addInventoryItem,
     addInventoryItems,
     updateInventoryItem,
@@ -134,31 +180,11 @@ function InventoryBridge({ children }: { children: ReactNode }) {
     updateInventoryNeed,
     completeInventoryNeed,
   }), [
-    items.items,
-    items.loaded,
-    needs.items,
-    needs.loaded,
-    addInventoryItem,
-    addInventoryItems,
-    updateInventoryItem,
-    adjustInventoryQuantity,
-    archiveInventoryItem,
-    addInventoryNeed,
-    updateInventoryNeed,
-    completeInventoryNeed,
+    items, needs, loaded, error, reload, addInventoryItem, addInventoryItems, updateInventoryItem,
+    adjustInventoryQuantity, archiveInventoryItem, addInventoryNeed, updateInventoryNeed, completeInventoryNeed,
   ]);
 
   return <InventoryContext.Provider value={value}>{children}</InventoryContext.Provider>;
-}
-
-export function InventoryProvider({ children }: { children: ReactNode }) {
-  return (
-    <itemCollection.Provider>
-      <needCollection.Provider>
-        <InventoryBridge>{children}</InventoryBridge>
-      </needCollection.Provider>
-    </itemCollection.Provider>
-  );
 }
 
 export function useInventoryContext(): InventoryContextValue {

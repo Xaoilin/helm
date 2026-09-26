@@ -50,7 +50,6 @@ import type {
 import { PersistenceHealthPublisher } from './health';
 import {
   PersistenceWriteQueue,
-  applyInventoryMutationsWithIdempotentRetry,
   applySharedMutationsWithIdempotentRetry,
 } from './writes';
 import { PersistenceRealtimeBoundary } from './realtime';
@@ -273,21 +272,9 @@ async function commitStoreValues(
     recordCache.buildMutations(collection, value)
   ));
   if (operations.length === 0) return [];
-  const inventoryOperations = operations.filter(operation => (
-    operation.collection === 'inventoryItems' || operation.collection === 'inventoryNeeds'
-  ));
-  const sharedOperations = operations.filter(operation => (
-    operation.collection !== 'inventoryItems' && operation.collection !== 'inventoryNeeds'
-  ));
-  const results = [];
-  if (sharedOperations.length > 0) {
-    results.push(await applySharedMutationsWithIdempotentRetry(uuid(), sharedOperations));
-  }
-  if (inventoryOperations.length > 0) {
-    results.push(await applyInventoryMutationsWithIdempotentRetry(uuid(), inventoryOperations));
-  }
+  const result = await applySharedMutationsWithIdempotentRetry(uuid(), operations);
   assertCurrentPersistenceSession(epoch, userId);
-  for (const result of results) applyMutationResult(result.changes, result.accountVersion);
+  applyMutationResult(result.changes, result.accountVersion);
   for (const [collection, value] of values) {
     recordCache.markDeliveredValue(collection, value);
   }

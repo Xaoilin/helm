@@ -12,6 +12,9 @@ const FUNCTION_BASE_URL = `${SUPABASE_URL}/functions/v1/sabah-one-inventory-mcp`
 const RESOURCE_URL = `${FUNCTION_BASE_URL}/mcp`;
 const RESOURCE_METADATA_URL = `${FUNCTION_BASE_URL}/.well-known/oauth-protected-resource`;
 const AUTHORIZATION_SERVER_URL = `${SUPABASE_URL}/auth/v1`;
+const LIFE_API_URL = (Deno.env.get('SABAH_ONE_LIFE_API_URL') || 'https://51.38.83.48').replace(/\/+$/, '');
+const LIFE_INVENTORY_URL = `${LIFE_API_URL}/api/life/v1/inventory`;
+const LIFE_TIMEOUT_MS = 15_000;
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://xaoilin.github.io',
   'http://localhost:5173',
@@ -284,6 +287,59 @@ async function callRpc(
   return data;
 }
 
+type QueryValue = string | number | undefined;
+
+interface LifeCall {
+  method: 'GET' | 'POST' | 'PUT';
+  path: string;
+  query?: Record<string, QueryValue>;
+  body?: unknown;
+  requestId?: string;
+}
+
+function lifeUrl(path: string, query: Record<string, QueryValue> = {}): URL {
+  const url = new URL(`${LIFE_INVENTORY_URL}${path}`);
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) url.searchParams.set(key, String(value));
+  }
+  return url;
+}
+
+async function readErrorMessage(response: Response): Promise<string | undefined> {
+  try {
+    const body = await response.json();
+    return typeof body?.message === 'string' && body.message ? body.message : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Forwards the agent's own OAuth token; the Life admin service rechecks the
+// Inventory approval itself, and writes carry the caller's idempotency key.
+async function callLife(token: string, tool: string, call: LifeCall): Promise<unknown> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+  if (call.requestId) {
+    headers['Idempotency-Key'] = call.requestId;
+    headers['Content-Type'] = 'application/json';
+  }
+  const rejected = `Sabah One Inventory rejected ${tool}.`;
+  let response: Response;
+  try {
+    response = await fetch(lifeUrl(call.path, call.query), {
+      method: call.method,
+      headers,
+      body: call.body === undefined ? undefined : JSON.stringify(call.body),
+      signal: AbortSignal.timeout(LIFE_TIMEOUT_MS),
+    });
+  } catch {
+    throw new Error(rejected);
+  }
+  if (!response.ok) throw new Error((await readErrorMessage(response)) ?? rejected);
+  return response.status === 204 ? null : await response.json();
+}
+
+const segment = (value: string) => encodeURIComponent(value);
+
 function result(value: unknown) {
   const wrapped = { result: value };
   return {
@@ -300,7 +356,7 @@ function failure(error: unknown) {
   };
 }
 
-function registerInventoryTools(server: McpServer, client: SupabaseClient): void {
+function registerInventoryTools(server: McpServer, client: SupabaseClient, token: string): void {
   server.registerTool(
     'inventory_search',
     {
@@ -317,12 +373,16 @@ function registerInventoryTools(server: McpServer, client: SupabaseClient): void
     },
     async input => {
       try {
-        return result(await callRpc(client, 'inventory_search', {
-          p_query: input.query,
-          p_project_catalog_key: input.projectCatalogKey ?? null,
-          p_category: input.category ?? null,
-          p_location: input.location ?? null,
-          p_limit: input.limit,
+        return result(await callLife(token, 'inventory_search', {
+          method: 'GET',
+          path: '/search',
+          query: {
+            query: input.query,
+            projectCatalogKey: input.projectCatalogKey,
+            category: input.category,
+            location: input.location,
+            limit: input.limit,
+          },
         }));
       } catch (error) {
         return failure(error);
@@ -344,10 +404,10 @@ function registerInventoryTools(server: McpServer, client: SupabaseClient): void
     },
     async input => {
       try {
-        return result(await callRpc(client, 'inventory_check', {
-          p_name: input.name,
-          p_required_quantity: input.requiredQuantity,
-          p_unit: input.unit ?? null,
+        return result(await callLife(token, 'inventory_check', {
+          method: 'GET',
+          path: '/check',
+          query: { name: input.name, requiredQuantity: input.requiredQuantity, unit: input.unit },
         }));
       } catch (error) {
         return failure(error);
@@ -388,32 +448,13 @@ function registerInventoryTools(server: McpServer, client: SupabaseClient): void
       if (input.items.length > 1 && !input.reviewed) {
         return failure(new Error('Review the multi-item candidates with the user before saving them.'));
       }
-      const timestamp = new Date().toISOString();
-      const items = input.items.map(item => {
-        const existingId = Boolean(item.id);
-        return {
-          ...(!existingId ? {
-            category: item.category ?? 'other',
-            trackingMode: item.trackingMode ?? 'counted',
-            quantity: item.quantity ?? 0,
-            unit: item.unit ?? 'units',
-            specifications: item.specifications ?? {},
-            condition: item.condition ?? 'unknown',
-            tags: item.tags ?? [],
-            notes: item.notes ?? '',
-            projectCatalogKeys: item.projectCatalogKeys ?? [],
-          } : {}),
-          ...item,
-          id: item.id ?? crypto.randomUUID(),
-          ...(existingId
-            ? { updatedAt: timestamp }
-            : { lastVerifiedAt: timestamp, createdAt: timestamp, updatedAt: timestamp }),
-        };
-      });
+      // The service fills defaults and timestamps; send each candidate as given.
       try {
-        return result(await callRpc(client, 'inventory_save_items', {
-          p_request_id: input.requestId ?? crypto.randomUUID(),
-          p_items: items,
+        return result(await callLife(token, 'inventory_save_items', {
+          method: 'POST',
+          path: '/items',
+          body: { items: input.items },
+          requestId: input.requestId ?? crypto.randomUUID(),
         }));
       } catch (error) {
         return failure(error);
@@ -430,18 +471,14 @@ function registerInventoryTools(server: McpServer, client: SupabaseClient): void
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async input => {
-      const timestamp = new Date().toISOString();
-      const need = {
-        ...input.need,
-        id: input.need.id ?? crypto.randomUUID(),
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        ...(input.need.status === 'ordered' ? { orderedAt: timestamp } : {}),
-      };
+      // The ID travels in the path; the service stamps timestamps and orderedAt.
+      const { id, ...need } = input.need;
       try {
-        return result(await callRpc(client, 'inventory_save_need', {
-          p_request_id: input.requestId ?? crypto.randomUUID(),
-          p_need: need,
+        return result(await callLife(token, 'inventory_save_need', {
+          method: 'PUT',
+          path: `/needs/${segment(id ?? crypto.randomUUID())}`,
+          body: need,
+          requestId: input.requestId ?? crypto.randomUUID(),
         }));
       } catch (error) {
         return failure(error);
@@ -463,10 +500,12 @@ function registerInventoryTools(server: McpServer, client: SupabaseClient): void
     },
     async input => {
       try {
-        return result(await callRpc(client, 'inventory_complete_need', {
-          p_request_id: input.requestId ?? crypto.randomUUID(),
-          p_need_id: input.needId,
-          p_new_item_id: input.newItemId ?? crypto.randomUUID(),
+        return result(await callLife(token, 'inventory_complete_need', {
+          method: 'POST',
+          path: `/needs/${segment(input.needId)}/acquire`,
+          // The service chooses the new item ID when absent, so exact retries stay identical.
+          body: { newItemId: input.newItemId },
+          requestId: input.requestId ?? crypto.randomUUID(),
         }));
       } catch (error) {
         return failure(error);
@@ -488,9 +527,10 @@ function registerInventoryTools(server: McpServer, client: SupabaseClient): void
     },
     async input => {
       try {
-        return result(await callRpc(client, 'inventory_archive_item', {
-          p_request_id: input.requestId ?? crypto.randomUUID(),
-          p_item_id: input.itemId,
+        return result(await callLife(token, 'inventory_archive_item', {
+          method: 'POST',
+          path: `/items/${segment(input.itemId)}/archive`,
+          requestId: input.requestId ?? crypto.randomUUID(),
         }));
       } catch (error) {
         return failure(error);
@@ -504,7 +544,7 @@ const mcpHandler = createMcpHandler(
     const token = requestInfo ? readBearerToken(requestInfo) : null;
     if (!token) throw new Error('A Sabah One OAuth access token is required.');
     const server = new McpServer({ name: 'sabah-one-inventory', version: '0.1.0' });
-    registerInventoryTools(server, createUserClient(token));
+    registerInventoryTools(server, createUserClient(token), token);
     return server;
   },
   { responseMode: 'json' },

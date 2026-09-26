@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { HEALTH_FAST_FOOD } from '../config/constants';
 import { toLocalDateStr } from '../services/financeHelpers';
 import { useHealthContext } from "../store/contexts/HealthContext";
+import { ServiceStatusBanner } from "../components/common/ServiceStatusBanner";
 import type {
   FastFoodExperienceRating,
   FastFoodLogEntry,
@@ -194,6 +195,7 @@ export default function HealthSurface() {
         </div>
       </div>
       <div className="surface-body health-surface">
+        <ServiceStatusBanner label="Journal could not be refreshed" error={health.error} onRetry={() => { void health.reload(); }} />
         <section className="health-hero">
           <div className="health-hero-copy">
             <div className="health-eyebrow">Fast food journal</div>

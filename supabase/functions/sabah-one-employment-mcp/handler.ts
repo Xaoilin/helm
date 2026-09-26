@@ -8,6 +8,9 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const FUNCTION_BASE_URL = `${SUPABASE_URL}/functions/v1/sabah-one-employment-mcp`;
 const RESOURCE_URL = `${FUNCTION_BASE_URL}/mcp`;
 const RESOURCE_METADATA_URL = `${FUNCTION_BASE_URL}/.well-known/oauth-protected-resource`;
+const LIFE_API_URL = (Deno.env.get('SABAH_ONE_LIFE_API_URL') || 'https://51.38.83.48').replace(/\/+$/, '');
+const LIFE_JOBS_URL = `${LIFE_API_URL}/api/life/v1/jobs`;
+const LIFE_TIMEOUT_MS = 15_000;
 const ALLOWED_ORIGINS = new Set(
   (Deno.env.get('SABAH_ONE_MCP_ALLOWED_ORIGINS') || [
     'https://xaoilin.github.io', 'http://localhost:5173', 'http://localhost:5174',
@@ -161,18 +164,79 @@ async function verifyAccess(request: Request): Promise<AuthInfo | Response> {
   };
 }
 
-async function callRpc(client: SupabaseClient, name: string, parameters: Record<string, unknown>) {
-  const { data, error } = await client.rpc(name, parameters);
-  if (error) {
-    return { isError: true, content: [{ type: 'text' as const, text: error.message || `Sabah One Employment rejected ${name}.` }] };
-  }
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(data) }],
-    structuredContent: { result: data },
-  };
+type QueryValue = string | number | boolean | undefined;
+
+interface LifeCall {
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  path: string;
+  query?: Record<string, QueryValue>;
+  body?: unknown;
+  requestId?: string;
 }
 
-function registerEmploymentTools(server: McpServer, client: SupabaseClient): void {
+function toolResult(data: unknown) {
+  return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: { result: data } };
+}
+
+function toolError(message: string) {
+  return { isError: true, content: [{ type: 'text' as const, text: message }] };
+}
+
+function lifeUrl(path: string, query: Record<string, QueryValue> = {}): URL {
+  const url = new URL(`${LIFE_JOBS_URL}${path}`);
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) url.searchParams.set(key, String(value));
+  }
+  return url;
+}
+
+async function readErrorMessage(response: Response): Promise<string | undefined> {
+  try {
+    const body = await response.json();
+    return typeof body?.message === 'string' && body.message ? body.message : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Forwards the agent's own OAuth token; the Life admin service rechecks the
+// Employment approval itself, and writes carry the caller's idempotency key.
+async function callLife(token: string, tool: string, call: LifeCall) {
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+  if (call.requestId) {
+    headers['Idempotency-Key'] = call.requestId;
+    headers['Content-Type'] = 'application/json';
+  }
+  const rejected = `Sabah One Employment rejected ${tool}.`;
+  try {
+    const response = await fetch(lifeUrl(call.path, call.query), {
+      method: call.method,
+      headers,
+      body: call.body === undefined ? undefined : JSON.stringify(call.body),
+      signal: AbortSignal.timeout(LIFE_TIMEOUT_MS),
+    });
+    if (!response.ok) return toolError((await readErrorMessage(response)) ?? rejected);
+    return toolResult(response.status === 204 ? null : await response.json());
+  } catch {
+    return toolError(rejected);
+  }
+}
+
+const applicationPath = (applicationId: string) => `/applications/${encodeURIComponent(applicationId)}`;
+
+// The tool clears an optional field with JSON null; the service takes set
+// fields plus the names of fields to clear.
+function toLifePatch(patch: Record<string, unknown>): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+  const clear: string[] = [];
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) clear.push(key);
+    else fields[key] = value;
+  }
+  return clear.length > 0 ? { ...fields, clear } : fields;
+}
+
+function registerEmploymentTools(server: McpServer, token: string): void {
   const readAnnotations = { readOnlyHint: true, idempotentHint: true, openWorldHint: false };
   const writeAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
   server.registerTool('employment_list_applications', {
@@ -184,33 +248,38 @@ function registerEmploymentTools(server: McpServer, client: SupabaseClient): voi
       limit: z.number().int().min(1).max(100).default(50), offset: z.number().int().min(0).max(10_000).default(0),
     }).strict(),
     annotations: readAnnotations,
-  }, input => callRpc(client, 'employment_list_applications', {
-    p_query: input.query, p_status: input.status ?? null, p_limit: input.limit, p_offset: input.offset,
-    p_work_type: input.workType ?? null, p_remote_status: input.remoteStatus ?? null,
+  }, input => callLife(token, 'employment_list_applications', {
+    method: 'GET', path: '/applications',
+    query: {
+      query: input.query, status: input.status, workType: input.workType, remoteStatus: input.remoteStatus,
+      limit: input.limit, offset: input.offset,
+    },
   }));
   server.registerTool('employment_get_application', {
     title: 'Get Sabah One Employment Application',
     description: 'Read one application and its evidence history by exact account-owned ID.',
     inputSchema: z.object({ applicationId: idSchema }).strict(), annotations: readAnnotations,
-  }, input => callRpc(client, 'employment_get_application', { p_application_id: input.applicationId }));
+  }, input => callLife(token, 'employment_get_application', { method: 'GET', path: applicationPath(input.applicationId) }));
   server.registerTool('employment_add_application', {
     title: 'Add Sabah One Employment Application',
     description: 'Record one verified job or freelance lead/application after searching for an existing record. Preserve unknown dates and remote eligibility; a recruiting email is not a confirmed offer. Reuse requestId only for an exact retry.',
     inputSchema: z.object({ requestId: requestIdSchema, application: applicationSchema }).strict(), annotations: writeAnnotations,
-  }, input => callRpc(client, 'employment_add_application', { p_request_id: input.requestId, p_application: input.application }));
+  }, input => callLife(token, 'employment_add_application', {
+    method: 'POST', path: '/applications', body: input.application, requestId: input.requestId,
+  }));
   server.registerTool('employment_update_application', {
     title: 'Update Sabah One Employment Application',
     description: 'Patch an existing job record from verified evidence. Omitted fields and all history are preserved; null clears an optional field. Append source evidence with employment_add_history. Never infer an offer, submission, or date.',
     inputSchema: z.object({ requestId: requestIdSchema, applicationId: idSchema, patch: patchSchema }).strict(), annotations: writeAnnotations,
-  }, input => callRpc(client, 'employment_update_application', {
-    p_request_id: input.requestId, p_application_id: input.applicationId, p_patch: input.patch,
+  }, input => callLife(token, 'employment_update_application', {
+    method: 'PATCH', path: applicationPath(input.applicationId), body: toLifePatch(input.patch), requestId: input.requestId,
   }));
   server.registerTool('employment_add_history', {
     title: 'Add Sabah One Employment Evidence',
     description: 'Append a concise sourced recruiting update without changing status or inventing a date. Include the email/job evidence URL when available; repeated history IDs or evidence URLs are deduplicated.',
     inputSchema: z.object({ requestId: requestIdSchema, applicationId: idSchema, history: historySchema }).strict(), annotations: writeAnnotations,
-  }, input => callRpc(client, 'employment_add_history', {
-    p_request_id: input.requestId, p_application_id: input.applicationId, p_history: input.history,
+  }, input => callLife(token, 'employment_add_history', {
+    method: 'POST', path: `${applicationPath(input.applicationId)}/history`, body: input.history, requestId: input.requestId,
   }));
   server.registerTool('employment_remove_application', {
     title: 'Remove Sabah One Employment Application',
@@ -219,15 +288,15 @@ function registerEmploymentTools(server: McpServer, client: SupabaseClient): voi
       requestId: requestIdSchema, applicationId: idSchema,
       confirmed: z.literal(true).describe('Must reflect explicit user confirmation to remove this exact application.'),
     }).strict(), annotations: { ...writeAnnotations, destructiveHint: true },
-  }, input => callRpc(client, 'employment_remove_application', {
-    p_request_id: input.requestId, p_application_id: input.applicationId, p_confirm: input.confirmed,
+  }, input => callLife(token, 'employment_remove_application', {
+    method: 'DELETE', path: applicationPath(input.applicationId), query: { confirm: input.confirmed }, requestId: input.requestId,
   }));
 }
 
 const mcpHandler = createMcpHandler(({ authInfo }) => {
   if (!authInfo) throw new Error('A verified Sabah One OAuth access token is required.');
   const server = new McpServer({ name: 'sabah-one-employment', version: '0.1.0' });
-  registerEmploymentTools(server, createUserClient(authInfo.token));
+  registerEmploymentTools(server, authInfo.token);
   return server;
 }, { responseMode: 'json' });
 

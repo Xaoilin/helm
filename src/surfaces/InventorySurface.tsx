@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useShell } from '../store/ShellContext';
 import { useInventoryContext } from '../store/contexts/InventoryContext';
+import { ServiceStatusBanner } from '../components/common/ServiceStatusBanner';
 import { useProjectContext } from '../store/contexts/ProjectContext';
 import type {
   InventoryCategory,
@@ -605,6 +606,7 @@ export default function InventorySurface() {
       </header>
       <section className="inventory-stats" aria-label="Inventory summary"><div><strong>{inventory.inventoryItems.filter(item => !item.archivedAt).length}</strong><span>Owned records</span></div><div><strong>{lowCount}</strong><span>Low stock</span></div><div><strong>{openNeedCount}</strong><span>Open needs</span></div></section>
       <section className="inventory-toolbar" aria-label="Inventory filters">
+        <ServiceStatusBanner label="Inventory could not be refreshed" error={inventory.error} onRetry={() => { void inventory.reload(); }} />
         <div className="inventory-view-tabs" role="tablist"><button className={view === 'owned' ? 'active' : ''} role="tab" aria-selected={view === 'owned'} onClick={() => setView('owned')}>Owned</button><button className={view === 'needed' ? 'active' : ''} role="tab" aria-selected={view === 'needed'} onClick={() => setView('needed')}>Needed</button></div>
         <label className="inventory-search"><span className="sr-only">Search inventory</span><input className="form-input" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search tools, stock, model, tag, location…" /></label>
         <select className="form-select inventory-category-filter" aria-label="Filter inventory category" value={category} onChange={e => setCategory(e.target.value as 'all' | InventoryCategory)}><option value="all">All major categories</option>{CATEGORY_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>

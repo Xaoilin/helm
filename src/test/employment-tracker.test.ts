@@ -61,16 +61,12 @@ describe('Employment tracker seeds', () => {
     expect(chainalysis.url).toBeUndefined();
   });
 
-  it('round-trips as one account-backed singleton record', () => {
+  it('still decodes a legacy singleton record but is never written, now that the life admin service owns it', () => {
     const state = createDefaultEmploymentTrackerState();
-    const encoded = encodeStoreValue('employment', state);
 
-    expect(encoded).toEqual([{
-      recordId: 'singleton',
-      payload: state,
-      position: null,
-    }]);
-    expect(decodeStoreValue('employment', encoded)).toEqual(state);
+    expect(() => encodeStoreValue('employment', state)).toThrow('retired or unknown: employment');
+    const legacyRecord = { recordId: 'singleton', payload: { ...state }, position: null };
+    expect(decodeStoreValue('employment', [legacyRecord])).toEqual(state);
   });
 });
 

@@ -1,0 +1,40 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/life/v1/jobs/applications"
+  },
+  "status": 200,
+  "body": {
+    "applicationId": "acme-engineer",
+    "application": {
+      "id": "acme-engineer",
+      "company": "Acme",
+      "role": "Engineer",
+      "url": "https://jobs.example/1",
+      "workType": "unknown",
+      "remoteRegion": "uk",
+      "remoteStatus": "confirmed",
+      "remoteEvidence": "UK remote in the listing",
+      "remoteCaveat": null,
+      "compensation": "£600/day",
+      "status": "applied",
+      "applicationDate": "2026-09-01",
+      "nextAction": "Review the latest evidence and decide the next step.",
+      "nextActionDate": null,
+      "notes": "",
+      "history": [
+        {
+          "id": "h1",
+          "kind": "application",
+          "date": null,
+          "summary": "Applied",
+          "details": "Via site",
+          "evidenceUrl": null
+        }
+      ],
+      "createdAt": "2026-09-26T22:08:07.361Z",
+      "updatedAt": "2026-09-26T22:08:07.361Z"
+    },
+    "duplicate": false
+  }
+}

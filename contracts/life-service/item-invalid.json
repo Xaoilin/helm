@@ -1,0 +1,11 @@
+{
+  "request": {
+    "method": "PUT",
+    "path": "/api/life/v1/inventory/items/bad"
+  },
+  "status": 400,
+  "body": {
+    "code": "invalid_subcategory",
+    "message": "subcategory filament does not belong to category tool."
+  }
+}

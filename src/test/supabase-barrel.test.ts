@@ -7,7 +7,6 @@ import * as barrel from '../store/supabase';
  * were replaced by the generic `store/supabase/oauthClients` gateway.
  */
 const PUBLIC_NAMES = [
-  'applyHelmInventoryMutations',
   'applyHelmMutations',
   'fetchHelmAccountSnapshot',
   'fetchHelmChangedCollections',

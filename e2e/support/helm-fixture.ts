@@ -14,13 +14,13 @@ import type {
   CalendarEvent,
   CalendarSource,
   EmploymentApplication,
-  EmploymentHistoryEntry,
   EquityPosition,
   EquityPositionDraft,
   Integration,
   Surface,
 } from '../../src/types/domain';
 import type { ServiceIntegration } from '../../src/services/backend/contracts';
+import type { FakeLifeSeed } from './fake-life-service';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
 const TEST_EMAIL = 'e2e@example.test';
@@ -100,12 +100,26 @@ export async function openApp(page: Page): Promise<void> {
   await expect(page.getByRole('main', { name: 'dashboard surface' })).toBeVisible();
 }
 
+/** Life admin service write paths, by the collection the scenario names. */
+const LIFE_WRITE_PATHS: Record<string, string> = {
+  employment: '/api/life/v1/jobs',
+  healthFastFoodEntries: '/api/life/v1/health/',
+  inventoryItems: '/api/life/v1/inventory/',
+  inventoryNeeds: '/api/life/v1/inventory/',
+  trips: '/api/life/v1/trips/',
+  tripLegs: '/api/life/v1/trips/',
+  tripItineraryItems: '/api/life/v1/trips/',
+  tripBookings: '/api/life/v1/trips/',
+  tripBudgetEntries: '/api/life/v1/trips/',
+};
+
 export function waitForMutation(page: Page, collection: string): Promise<Response> {
   return page.waitForResponse(response => {
-    if (response.request().method() !== 'POST') return false;
-    if (collection === 'employment' && /\/rpc\/employment_(add_application|update_application|add_history|remove_application)/u.test(response.url())) {
-      return true;
+    const lifePath = LIFE_WRITE_PATHS[collection];
+    if (lifePath) {
+      return response.request().method() !== 'GET' && new URL(response.url()).pathname.startsWith(lifePath);
     }
+    if (response.request().method() !== 'POST') return false;
     if (collection === 'equityPositions' && /\/rpc\/equity_(add_position|update_position|remove_position)/u.test(response.url())) {
       return true;
     }
@@ -194,12 +208,33 @@ function scenarioSettings(options: HelmScenarioOptions): Record<string, unknown>
   };
 }
 
+/** Collections the life admin service owns; a scenario's copy seeds its fake instead of the database. */
+const LIFE_COLLECTIONS = ['employment', 'healthFastFoodEntries', 'inventoryItems', 'inventoryNeeds', 'trips', 'tripLegs',
+  'tripItineraryItems', 'tripBookings', 'tripBudgetEntries'];
+
 /** Account-record collections. Settings and integrations belong to the profile service fake. */
 function buildStores(options: HelmScenarioOptions): Record<string, unknown> {
   const stores: Record<string, unknown> = { tasks: [], ...options.stores };
   delete stores.settings;
   delete stores.integrations;
+  for (const collection of LIFE_COLLECTIONS) delete stores[collection];
   return stores;
+}
+
+function lifeFromScenario(stores: Record<string, unknown> | undefined): FakeLifeSeed {
+  const list = <T,>(key: string) => stores?.[key] as T[] | undefined;
+  const employment = stores?.employment as { applications?: EmploymentApplication[] } | undefined;
+  return {
+    applications: employment?.applications,
+    fastFoodEntries: list('healthFastFoodEntries'),
+    inventoryItems: list('inventoryItems'),
+    inventoryNeeds: list('inventoryNeeds'),
+    trips: list('trips'),
+    tripLegs: list('tripLegs'),
+    tripItineraryItems: list('tripItineraryItems'),
+    tripBookings: list('tripBookings'),
+    tripBudgetEntries: list('tripBudgetEntries'),
+  };
 }
 
 interface DatabaseRouteOptions {
@@ -396,65 +431,6 @@ async function installDatabaseRoutes(
     publishChanges(changes, request.p_request_id);
   });
 
-  await page.route(/\/rest\/v1\/rpc\/employment_(add_application|update_application|add_history|remove_application)(\?|$)/u, async route => {
-    const name = new URL(route.request().url()).pathname.split('/').at(-1);
-    const request = route.request().postDataJSON() as {
-      p_application?: EmploymentApplication;
-      p_application_id?: string;
-      p_patch?: Partial<EmploymentApplication>;
-      p_history?: EmploymentHistoryEntry;
-      p_expected_updated_at?: string;
-      p_confirm?: boolean;
-    };
-    const row = rows.get(rowKey('employment', 'singleton'));
-    if (!row || row.deletedAt) {
-      await route.fulfill({ status: 404, json: { message: 'Employment tracker not found.' } });
-      return;
-    }
-    let applications = [...row.payload.applications as EmploymentApplication[]];
-    let application = applications.find(item => item.id === request.p_application_id);
-    const now = new Date().toISOString();
-    if (name === 'employment_add_application' && request.p_application) {
-      application = { ...request.p_application, createdAt: now, updatedAt: now };
-      applications.push(application);
-    } else if (!application) {
-      await route.fulfill({ status: 404, json: { message: 'Employment application not found.' } });
-      return;
-    } else if (request.p_expected_updated_at && request.p_expected_updated_at !== application.updatedAt) {
-      await route.fulfill({ status: 409, json: { message: 'Employment application changed; reload before saving.' } });
-      return;
-    } else if (name === 'employment_remove_application') {
-      if (!request.p_confirm) {
-        await route.fulfill({ status: 400, json: { message: 'Employment removal requires explicit confirmation.' } });
-        return;
-      }
-      applications = applications.filter(item => item.id !== application.id);
-    } else {
-      const history = [...application.history];
-      const newHistory = name === 'employment_add_history'
-        ? (request.p_history ? [request.p_history] : [])
-        : (request.p_patch?.history ?? []);
-      for (const entry of newHistory) {
-        if (!history.some(existing => existing.id === entry.id || (entry.evidenceUrl && existing.evidenceUrl === entry.evidenceUrl))) {
-          history.push(entry);
-        }
-      }
-      const updated = { ...application, ...request.p_patch, history, updatedAt: now };
-      for (const key of Object.keys(updated) as Array<keyof EmploymentApplication>) {
-        if (updated[key] === null) delete updated[key];
-      }
-      application = updated;
-      applications = applications.map(item => item.id === application.id ? application : item);
-    }
-    database.accountVersion += 1;
-    row.payload = { ...row.payload, applications };
-    row.revision += 1;
-    row.accountVersion = database.accountVersion;
-    row.updatedAt = now;
-    await route.fulfill({ json: { applicationId: application.id, accountVersion: database.accountVersion, duplicate: false } });
-    publishChanges([row]);
-  });
-
   await page.route(/\/rest\/v1\/rpc\/equity_(add_position|update_position|remove_position)(\?|$)/u, async route => {
     const name = new URL(route.request().url()).pathname.split('/').at(-1);
     const request = route.request().postDataJSON() as {
@@ -587,6 +563,7 @@ function servicesFromScenario(options: HelmScenarioOptions, settings: Record<str
         }
       : {}),
     integrations: serviceIntegrations(options.stores?.integrations),
+    life: lifeFromScenario(options.stores),
     calendar: {
       accounts: options.stores?.calendarAccounts as CalendarAccount[] | undefined,
       sources: options.stores?.calendarSources as CalendarSource[] | undefined,

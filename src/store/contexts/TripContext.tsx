@@ -1,22 +1,45 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+/**
+ * Trips, owned by the life admin service. Each change is shown at once and saved as one record; the
+ * service answers with the whole trip (dates refitted to its legs, the route renumbered, the budget
+ * worked out), which replaces the app's copy of that trip. A refused save shows why and reloads.
+ */
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
 import type {
   Trip,
   TripBooking,
   TripBookingInput,
-  TripBudgetCategory,
   TripBudgetEntry,
   TripBudgetEntryInput,
-  TripBudgetEntryStatus,
   TripItineraryItem,
   TripLeg,
-  TripStatus,
-  TripTransportBooking,
-  TripTransportMode,
 } from '../../types/domain';
-import { TRIP_BUDGET } from '../../config/constants';
-import { loadStore, saveStore } from '../persistence';
-import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
+import {
+  createTripPlan as createTripPlanInService,
+  deleteTrip,
+  deleteTripBooking,
+  deleteTripBudgetEntry,
+  deleteTripItineraryItem,
+  deleteTripLeg,
+  getTrips,
+  isLifeServiceEnabled,
+  moveTripLeg as moveTripLegInService,
+  saveTrip,
+  saveTripBooking,
+  saveTripBudgetEntry,
+  saveTripItineraryItem,
+  saveTripLeg,
+  withoutKeys,
+  type BookingInput,
+  type LegInput,
+  type TripInput,
+} from '../../services/backend/lifeServiceApi';
+import type { ServiceTripBudget, ServiceTripBundle } from '../../services/backend/lifeContracts';
+import { useServiceLoad } from './useServiceLoad';
+
+export type NewTrip = Omit<Trip, 'id' | 'createdAt' | 'updatedAt'>;
+export type PlanLeg = Omit<LegInput, 'tripId'> & { id: string };
+export type PlanBooking = TripBookingInput & { id: string };
 
 export interface TripContextValue {
   trips: Trip[];
@@ -24,12 +47,21 @@ export interface TripContextValue {
   tripItineraryItems: TripItineraryItem[];
   tripBookings: TripBooking[];
   tripBudgetEntries: TripBudgetEntry[];
+  /** Each trip's budget, worked out by the service from its bookings and budget items. */
+  tripBudgets: Record<string, ServiceTripBudget>;
   loaded: boolean;
-  addTrip: (trip: Omit<Trip, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  /** Why trips may be out of date; null while they are current. */
+  error: string | null;
+  reload: () => Promise<void>;
+  addTrip: (trip: NewTrip) => string;
+  /** Creates a trip with its route (in order) and first bookings in one save; bookings name plan leg IDs. */
+  createTripPlan: (trip: NewTrip, legs: PlanLeg[], bookings: PlanBooking[]) => string;
   updateTrip: (id: string, updates: Partial<Trip>) => void;
   removeTrip: (id: string) => void;
   addTripLeg: (leg: Omit<TripLeg, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateTripLeg: (id: string, updates: Partial<TripLeg>) => void;
+  /** Moves a leg one place earlier (-1) or later (1) in its route. */
+  moveTripLeg: (id: string, direction: -1 | 1) => void;
   removeTripLeg: (id: string) => void;
   addTripItineraryItem: (item: Omit<TripItineraryItem, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateTripItineraryItem: (id: string, updates: Partial<TripItineraryItem>) => void;
@@ -42,157 +74,18 @@ export interface TripContextValue {
   removeTripBudgetEntry: (id: string) => void;
 }
 
+interface TripState {
+  trips: Trip[];
+  legs: TripLeg[];
+  itineraryItems: TripItineraryItem[];
+  bookings: TripBooking[];
+  budgetEntries: TripBudgetEntry[];
+  budgets: Record<string, ServiceTripBudget>;
+}
+
+const EMPTY: TripState = { trips: [], legs: [], itineraryItems: [], bookings: [], budgetEntries: [], budgets: {} };
+
 export const TripCtx = createContext<TripContextValue | null>(null);
-
-const VALID_TRIP_STATUSES = new Set<TripStatus>(['planning', 'booked', 'in_trip', 'completed', 'archived']);
-const VALID_TRANSPORT_MODES = new Set<TripTransportMode>(['flight', 'train', 'bus', 'ferry', 'car', 'other']);
-const VALID_TRIP_BUDGET_CATEGORIES = new Set<TripBudgetCategory>(['transport', 'food', 'events', 'rent', 'shopping', 'fees', 'other']);
-const VALID_TRIP_BUDGET_STATUSES = new Set<TripBudgetEntryStatus>(['planned', 'paid']);
-
-function normalizeTrip(trip: Trip, fallbackName: string): Trip {
-  const createdAt = typeof trip.createdAt === 'string' && trip.createdAt ? trip.createdAt : new Date().toISOString();
-  const updatedAt = typeof trip.updatedAt === 'string' && trip.updatedAt ? trip.updatedAt : createdAt;
-  const budgetCurrency = typeof trip.budgetCurrency === 'string'
-    && trip.budgetCurrency.trim().length === 3
-    ? trip.budgetCurrency.trim().toUpperCase()
-    : TRIP_BUDGET.DEFAULT_CURRENCY;
-  const budgetTotal = Number.isFinite(trip.budgetTotal) ? Math.max(0, Math.round(trip.budgetTotal as number)) : 0;
-  return {
-    id: trip.id || uuid(),
-    name: trip.name?.trim() || fallbackName,
-    summary: trip.summary?.trim() || '',
-    notes: trip.notes || '',
-    status: VALID_TRIP_STATUSES.has(trip.status) ? trip.status : 'planning',
-    startDate: trip.startDate || '',
-    endDate: trip.endDate || trip.startDate || '',
-    budgetCurrency,
-    budgetTotal,
-    createdAt,
-    updatedAt,
-  };
-}
-
-function normalizeTripLeg(leg: TripLeg, index: number): TripLeg {
-  const createdAt = typeof leg.createdAt === 'string' && leg.createdAt ? leg.createdAt : new Date().toISOString();
-  const updatedAt = typeof leg.updatedAt === 'string' && leg.updatedAt ? leg.updatedAt : createdAt;
-  return {
-    id: leg.id || uuid(),
-    tripId: leg.tripId,
-    country: leg.country?.trim() || 'Unknown country',
-    city: leg.city?.trim() || 'Unknown city',
-    startDate: leg.startDate || '',
-    endDate: leg.endDate || leg.startDate || '',
-    sortOrder: Number.isFinite(leg.sortOrder) ? leg.sortOrder : index,
-    createdAt,
-    updatedAt,
-  };
-}
-
-function normalizeTripItineraryItem(item: TripItineraryItem, index: number): TripItineraryItem {
-  const createdAt = typeof item.createdAt === 'string' && item.createdAt ? item.createdAt : new Date().toISOString();
-  const updatedAt = typeof item.updatedAt === 'string' && item.updatedAt ? item.updatedAt : createdAt;
-  return {
-    id: item.id || uuid(),
-    tripId: item.tripId,
-    legId: item.legId,
-    date: item.date || '',
-    title: item.title?.trim() || 'Untitled plan',
-    startTime: item.startTime?.trim() || undefined,
-    endTime: item.endTime?.trim() || undefined,
-    location: item.location?.trim() || undefined,
-    notes: item.notes || '',
-    sortOrder: Number.isFinite(item.sortOrder) ? item.sortOrder : index,
-    createdAt,
-    updatedAt,
-  };
-}
-
-function normalizeTransportBooking(booking: Partial<TripTransportBooking>, base: Pick<TripBooking, 'tripId' | 'notes'>): TripTransportBooking {
-  const createdAt = typeof booking.createdAt === 'string' && booking.createdAt ? booking.createdAt : new Date().toISOString();
-  const updatedAt = typeof booking.updatedAt === 'string' && booking.updatedAt ? booking.updatedAt : createdAt;
-  const budgetAmount = Number.isFinite(booking.budgetAmount) ? Math.max(0, Math.round(booking.budgetAmount as number)) : undefined;
-  const budgetStatus = VALID_TRIP_BUDGET_STATUSES.has(booking.budgetStatus as TripBudgetEntryStatus)
-    ? booking.budgetStatus as TripBudgetEntryStatus
-    : undefined;
-  const budgetDate = typeof booking.budgetDate === 'string' && booking.budgetDate ? booking.budgetDate : undefined;
-  return {
-    id: typeof booking.id === 'string' && booking.id ? booking.id : uuid(),
-    tripId: booking.tripId || base.tripId,
-    legId: booking.legId?.trim() || undefined,
-    kind: 'transport',
-    mode: VALID_TRANSPORT_MODES.has(booking.mode as TripTransportMode) ? (booking.mode as TripTransportMode) : 'other',
-    title: booking.title?.trim() || 'Transport booking',
-    fromLabel: booking.fromLabel?.trim() || '',
-    toLabel: booking.toLabel?.trim() || '',
-    departAt: booking.departAt || '',
-    arriveAt: booking.arriveAt || booking.departAt || '',
-    budgetAmount,
-    budgetStatus,
-    budgetDate,
-    provider: booking.provider?.trim() || undefined,
-    confirmationCode: booking.confirmationCode?.trim() || undefined,
-    link: booking.link?.trim() || undefined,
-    notes: booking.notes || base.notes,
-    createdAt,
-    updatedAt,
-  };
-}
-
-function normalizeStayBooking(booking: Partial<TripBooking> & { kind: 'stay' }, tripId: string): TripBooking {
-  const createdAt = typeof booking.createdAt === 'string' && booking.createdAt ? booking.createdAt : new Date().toISOString();
-  const updatedAt = typeof booking.updatedAt === 'string' && booking.updatedAt ? booking.updatedAt : createdAt;
-  const budgetAmount = Number.isFinite(booking.budgetAmount) ? Math.max(0, Math.round(booking.budgetAmount as number)) : undefined;
-  const budgetStatus = VALID_TRIP_BUDGET_STATUSES.has(booking.budgetStatus as TripBudgetEntryStatus)
-    ? booking.budgetStatus as TripBudgetEntryStatus
-    : undefined;
-  const budgetDate = typeof booking.budgetDate === 'string' && booking.budgetDate ? booking.budgetDate : undefined;
-  return {
-    id: typeof booking.id === 'string' && booking.id ? booking.id : uuid(),
-    tripId: booking.tripId || tripId,
-    legId: booking.legId?.trim() || undefined,
-    kind: 'stay',
-    title: typeof booking.title === 'string' && booking.title.trim() ? booking.title.trim() : 'Stay booking',
-    propertyName: typeof booking.propertyName === 'string' && booking.propertyName.trim() ? booking.propertyName.trim() : 'Accommodation',
-    address: booking.address?.trim() || undefined,
-    city: typeof booking.city === 'string' && booking.city.trim() ? booking.city.trim() : '',
-    country: typeof booking.country === 'string' && booking.country.trim() ? booking.country.trim() : '',
-    checkInDate: typeof booking.checkInDate === 'string' ? booking.checkInDate : '',
-    checkOutDate: typeof booking.checkOutDate === 'string' && booking.checkOutDate ? booking.checkOutDate : (typeof booking.checkInDate === 'string' ? booking.checkInDate : ''),
-    budgetAmount,
-    budgetStatus,
-    budgetDate,
-    provider: booking.provider?.trim() || undefined,
-    confirmationCode: booking.confirmationCode?.trim() || undefined,
-    link: booking.link?.trim() || undefined,
-    notes: booking.notes || '',
-    createdAt,
-    updatedAt,
-  };
-}
-
-function normalizeTripBooking(booking: TripBooking): TripBooking {
-  if (booking.kind === 'transport') {
-    return normalizeTransportBooking(booking, { tripId: booking.tripId, notes: booking.notes || '' });
-  }
-  return normalizeStayBooking(booking, booking.tripId);
-}
-
-function normalizeTripBudgetEntry(entry: TripBudgetEntry): TripBudgetEntry {
-  const createdAt = typeof entry.createdAt === 'string' && entry.createdAt ? entry.createdAt : new Date().toISOString();
-  const updatedAt = typeof entry.updatedAt === 'string' && entry.updatedAt ? entry.updatedAt : createdAt;
-  return {
-    id: entry.id || uuid(),
-    tripId: entry.tripId,
-    title: entry.title?.trim() || 'Budget item',
-    category: VALID_TRIP_BUDGET_CATEGORIES.has(entry.category) ? entry.category : 'other',
-    amount: Number.isFinite(entry.amount) ? Math.max(0, Math.round(entry.amount)) : 0,
-    status: VALID_TRIP_BUDGET_STATUSES.has(entry.status) ? entry.status : 'planned',
-    date: typeof entry.date === 'string' ? entry.date : '',
-    notes: entry.notes || '',
-    createdAt,
-    updatedAt,
-  };
-}
 
 export function useTripContext(): TripContextValue {
   const ctx = useContext(TripCtx);
@@ -200,296 +93,242 @@ export function useTripContext(): TripContextValue {
   return ctx;
 }
 
+function stamp<T extends object>(record: T, id: string, existing?: { createdAt: string }) {
+  const now = new Date().toISOString();
+  return { ...record, id, createdAt: existing?.createdAt ?? now, updatedAt: now };
+}
+
+function withoutStamps<T extends { id: string; createdAt: string; updatedAt: string }>(record: T) {
+  return withoutKeys(record, 'id', 'createdAt', 'updatedAt');
+}
+
+function replaceById<T extends { id: string }>(records: T[], record: T): T[] {
+  return records.some(existing => existing.id === record.id)
+    ? records.map(existing => (existing.id === record.id ? record : existing))
+    : [...records, record];
+}
+
+/** The service's copy of one trip replaces the app's copy of it and all its parts. */
+function withBundle(state: TripState, bundle: ServiceTripBundle): TripState {
+  const tripId = bundle.trip.trip.id;
+  const others = <T extends { tripId: string }>(records: T[]) => records.filter(record => record.tripId !== tripId);
+  const exists = state.trips.some(trip => trip.id === tripId);
+  return {
+    trips: exists
+      ? state.trips.map(trip => (trip.id === tripId ? bundle.trip.trip : trip))
+      : [bundle.trip.trip, ...state.trips],
+    legs: [...others(state.legs), ...bundle.legs],
+    itineraryItems: [...others(state.itineraryItems), ...bundle.itineraryItems],
+    bookings: [...others(state.bookings), ...bundle.bookings],
+    budgetEntries: [...others(state.budgetEntries), ...bundle.budgetEntries],
+    budgets: { ...state.budgets, [tripId]: bundle.trip.budget },
+  };
+}
+
 export function TripProvider({ children }: { children: ReactNode }) {
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [tripLegs, setTripLegs] = useState<TripLeg[]>([]);
-  const [tripItineraryItems, setTripItineraryItems] = useState<TripItineraryItem[]>([]);
-  const [tripBookings, setTripBookings] = useState<TripBooking[]>([]);
-  const [tripBudgetEntries, setTripBudgetEntries] = useState<TripBudgetEntry[]>([]);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      const [storedTrips, storedTripLegs, storedTripItems, storedTripBookings, storedTripBudgetEntries] = await Promise.all([
-        loadStore<Trip[]>('trips'),
-        loadStore<TripLeg[]>('tripLegs'),
-        loadStore<TripItineraryItem[]>('tripItineraryItems'),
-        loadStore<TripBooking[]>('tripBookings'),
-        loadStore<TripBudgetEntry[]>('tripBudgetEntries'),
-      ]);
-
-      const nextTrips = (storedTrips || []).map((trip, index) => normalizeTrip(trip, `Trip ${index + 1}`));
-      const tripIdSet = new Set(nextTrips.map(trip => trip.id));
-      const nextLegs = (storedTripLegs || [])
-        .filter(leg => tripIdSet.has(leg.tripId))
-        .map((leg, index) => normalizeTripLeg(leg, index));
-      const legIdSet = new Set(nextLegs.map(leg => leg.id));
-      const nextItems = (storedTripItems || [])
-        .filter(item => tripIdSet.has(item.tripId) && legIdSet.has(item.legId))
-        .map((item, index) => normalizeTripItineraryItem(item, index));
-      const nextBookings = (storedTripBookings || [])
-        .filter(booking => tripIdSet.has(booking.tripId))
-        .map(normalizeTripBooking);
-      const nextBudgetEntries = (storedTripBudgetEntries || [])
-        .filter(entry => tripIdSet.has(entry.tripId))
-        .map(normalizeTripBudgetEntry);
-
-      setTrips(nextTrips);
-      setTripLegs(nextLegs);
-      setTripItineraryItems(nextItems);
-      setTripBookings(nextBookings);
-      setTripBudgetEntries(nextBudgetEntries);
-      setLoaded(true);
-    })();
+  const [state, setState] = useState<TripState>(EMPTY);
+  const stateRef = useRef<TripState>(EMPTY);
+  const publish = useCallback((next: TripState) => {
+    stateRef.current = next;
+    setState(next);
   }, []);
+  const change = useCallback((update: (current: TripState) => TripState) => publish(update(stateRef.current)),
+    [publish]);
 
-  useRemoteStoreRefresh(
-    ['trips', 'tripLegs', 'tripItineraryItems', 'tripBookings', 'tripBudgetEntries'],
-    async () => {
-      const [storedTrips, storedLegs, storedItems, storedBookings, storedBudgetEntries] = await Promise.all([
-        loadStore<Trip[]>('trips'),
-        loadStore<TripLeg[]>('tripLegs'),
-        loadStore<TripItineraryItem[]>('tripItineraryItems'),
-        loadStore<TripBooking[]>('tripBookings'),
-        loadStore<TripBudgetEntry[]>('tripBudgetEntries'),
-      ]);
-      const nextTrips = (storedTrips || []).map((trip, index) => normalizeTrip(trip, `Trip ${index + 1}`));
-      const tripIds = new Set(nextTrips.map(trip => trip.id));
-      const nextLegs = (storedLegs || [])
-        .filter(leg => tripIds.has(leg.tripId))
-        .map((leg, index) => normalizeTripLeg(leg, index));
-      const legIds = new Set(nextLegs.map(leg => leg.id));
-      setTrips(nextTrips);
-      setTripLegs(nextLegs);
-      setTripItineraryItems((storedItems || [])
-        .filter(item => tripIds.has(item.tripId) && legIds.has(item.legId))
-        .map((item, index) => normalizeTripItineraryItem(item, index)));
-      setTripBookings((storedBookings || [])
-        .filter(booking => tripIds.has(booking.tripId))
-        .map(normalizeTripBooking));
-      setTripBudgetEntries((storedBudgetEntries || [])
-        .filter(entry => tripIds.has(entry.tripId))
-        .map(normalizeTripBudgetEntry));
-    },
-  );
+  const load = useCallback(async () => {
+    const all = await getTrips();
+    publish({
+      trips: all.trips.map(entry => entry.trip),
+      legs: all.legs,
+      itineraryItems: all.itineraryItems,
+      bookings: all.bookings,
+      budgetEntries: all.budgetEntries,
+      budgets: Object.fromEntries(all.trips.map(entry => [entry.trip.id, entry.budget])),
+    });
+  }, [publish]);
+  const { loaded, error, reload, reportFailure } = useServiceLoad('Trips', isLifeServiceEnabled(), load);
 
-  useEffect(() => {
-    if (loaded) {
-      void saveStore('trips', trips);
-    }
-  }, [trips, loaded]);
+  const save = useCallback((write: Promise<ServiceTripBundle>) => {
+    write.then(bundle => change(current => withBundle(current, bundle)), reportFailure);
+  }, [change, reportFailure]);
 
-  useEffect(() => {
-    if (loaded) {
-      void saveStore('tripLegs', tripLegs);
-    }
-  }, [tripLegs, loaded]);
-
-  useEffect(() => {
-    if (loaded) {
-      void saveStore('tripItineraryItems', tripItineraryItems);
-    }
-  }, [tripItineraryItems, loaded]);
-
-  useEffect(() => {
-    if (loaded) {
-      void saveStore('tripBookings', tripBookings);
-    }
-  }, [tripBookings, loaded]);
-
-  useEffect(() => {
-    if (loaded) {
-      void saveStore('tripBudgetEntries', tripBudgetEntries);
-    }
-  }, [tripBudgetEntries, loaded]);
-
-  const addTrip = useCallback((trip: Omit<Trip, 'id' | 'createdAt' | 'updatedAt'>): string => {
+  const addTrip = useCallback((trip: NewTrip) => {
     const id = uuid();
-    const now = new Date().toISOString();
-    const nextTrip = normalizeTrip({
-      ...trip,
-      id,
-      createdAt: now,
-      updatedAt: now,
-    }, 'New Trip');
-    setTrips(prev => [nextTrip, ...prev]);
+    const input = { ...trip, name: trip.name.trim() || 'New Trip' };
+    change(current => ({ ...current, trips: [stamp(input, id) as Trip, ...current.trips] }));
+    save(saveTrip(id, input));
     return id;
-  }, []);
+  }, [change, save]);
+
+  const createTripPlan = useCallback((trip: NewTrip, legs: PlanLeg[], bookings: PlanBooking[]) => {
+    const id = uuid();
+    const input = { ...trip, name: trip.name.trim() || 'New Trip' };
+    change(current => ({
+      ...current,
+      trips: [stamp(input, id) as Trip, ...current.trips],
+      legs: [...current.legs, ...legs.map((leg, index) => stamp({ ...leg, tripId: id, sortOrder: index }, leg.id))],
+      bookings: [...current.bookings, ...bookings.map(booking => stamp({ ...booking, tripId: id }, booking.id) as TripBooking)],
+    }));
+    save(createTripPlanInService(id, input, legs, bookings.map(booking => ({ ...booking, tripId: id }))));
+    return id;
+  }, [change, save]);
 
   const updateTrip = useCallback((id: string, updates: Partial<Trip>) => {
-    const updatedAt = new Date().toISOString();
-    setTrips(prev => prev.map(trip => (
-      trip.id === id
-        ? normalizeTrip({
-          ...trip,
-          ...updates,
-          id,
-          updatedAt,
-        }, trip.name)
-        : trip
-    )));
-  }, []);
+    const current = stateRef.current.trips.find(trip => trip.id === id);
+    if (!current) return;
+    const next = { ...current, ...updates, id, name: (updates.name ?? current.name).trim() || current.name };
+    change(state => ({ ...state, trips: replaceById(state.trips, stamp(next, id, current)) }));
+    save(saveTrip(id, withoutStamps(next) as TripInput));
+  }, [change, save]);
 
   const removeTrip = useCallback((id: string) => {
-    setTrips(prev => prev.filter(trip => trip.id !== id));
-    setTripLegs(prev => prev.filter(leg => leg.tripId !== id));
-    setTripItineraryItems(prev => prev.filter(item => item.tripId !== id));
-    setTripBookings(prev => prev.filter(booking => booking.tripId !== id));
-    setTripBudgetEntries(prev => prev.filter(entry => entry.tripId !== id));
-  }, []);
+    change(state => ({
+      trips: state.trips.filter(trip => trip.id !== id),
+      legs: state.legs.filter(leg => leg.tripId !== id),
+      itineraryItems: state.itineraryItems.filter(item => item.tripId !== id),
+      bookings: state.bookings.filter(booking => booking.tripId !== id),
+      budgetEntries: state.budgetEntries.filter(entry => entry.tripId !== id),
+      budgets: Object.fromEntries(Object.entries(state.budgets).filter(([tripId]) => tripId !== id)),
+    }));
+    deleteTrip(id).catch(reportFailure);
+  }, [change, reportFailure]);
 
-  const addTripLeg = useCallback((leg: Omit<TripLeg, 'id' | 'createdAt' | 'updatedAt'>): string => {
+  const legInput = (leg: Pick<TripLeg, 'tripId' | 'country' | 'city' | 'startDate' | 'endDate'>): LegInput => ({
+    tripId: leg.tripId,
+    country: leg.country.trim() || 'Unknown country',
+    city: leg.city.trim() || 'Unknown city',
+    startDate: leg.startDate,
+    endDate: leg.endDate || leg.startDate,
+  });
+
+  const addTripLeg = useCallback((leg: Omit<TripLeg, 'id' | 'createdAt' | 'updatedAt'>) => {
     const id = uuid();
-    const now = new Date().toISOString();
-    const nextLeg = normalizeTripLeg({
-      ...leg,
-      id,
-      createdAt: now,
-      updatedAt: now,
-    }, leg.sortOrder);
-    setTripLegs(prev => [...prev, nextLeg]);
+    change(state => ({ ...state, legs: [...state.legs, stamp(leg, id)] }));
+    save(saveTripLeg(id, legInput(leg)));
     return id;
-  }, []);
+  }, [change, save]);
 
   const updateTripLeg = useCallback((id: string, updates: Partial<TripLeg>) => {
-    const updatedAt = new Date().toISOString();
-    setTripLegs(prev => prev.map((leg, index) => (
-      leg.id === id
-        ? normalizeTripLeg({
-          ...leg,
-          ...updates,
-          id,
-          updatedAt,
-        }, index)
-        : leg
-    )));
-  }, []);
+    const current = stateRef.current.legs.find(leg => leg.id === id);
+    if (!current) return;
+    const next = { ...current, ...updates, id };
+    change(state => ({ ...state, legs: replaceById(state.legs, stamp(next, id, current)) }));
+    save(saveTripLeg(id, legInput(next)));
+  }, [change, save]);
+
+  const moveTripLeg = useCallback((id: string, direction: -1 | 1) => {
+    save(moveTripLegInService(id, direction));
+  }, [save]);
 
   const removeTripLeg = useCallback((id: string) => {
-    setTripLegs(prev => prev.filter(leg => leg.id !== id));
-    setTripItineraryItems(prev => prev.filter(item => item.legId !== id));
-    setTripBookings(prev => prev.filter(booking => booking.legId !== id));
-  }, []);
+    change(state => ({
+      ...state,
+      legs: state.legs.filter(leg => leg.id !== id),
+      itineraryItems: state.itineraryItems.filter(item => item.legId !== id),
+      bookings: state.bookings.filter(booking => booking.legId !== id),
+    }));
+    save(deleteTripLeg(id));
+  }, [change, save]);
 
-  const addTripItineraryItem = useCallback((item: Omit<TripItineraryItem, 'id' | 'createdAt' | 'updatedAt'>): string => {
+  const itineraryInput = (item: Omit<TripItineraryItem, 'id' | 'createdAt' | 'updatedAt'>) => ({
+    ...item, title: item.title.trim() || 'Untitled plan',
+  });
+
+  const addTripItineraryItem = useCallback((item: Omit<TripItineraryItem, 'id' | 'createdAt' | 'updatedAt'>) => {
     const id = uuid();
-    const now = new Date().toISOString();
-    const nextItem = normalizeTripItineraryItem({
-      ...item,
-      id,
-      createdAt: now,
-      updatedAt: now,
-    }, item.sortOrder);
-    setTripItineraryItems(prev => [...prev, nextItem]);
+    change(state => ({ ...state, itineraryItems: [...state.itineraryItems, stamp(item, id)] }));
+    save(saveTripItineraryItem(id, itineraryInput(item)));
     return id;
-  }, []);
+  }, [change, save]);
 
   const updateTripItineraryItem = useCallback((id: string, updates: Partial<TripItineraryItem>) => {
-    const updatedAt = new Date().toISOString();
-    setTripItineraryItems(prev => prev.map((item, index) => (
-      item.id === id
-        ? normalizeTripItineraryItem({
-          ...item,
-          ...updates,
-          id,
-          updatedAt,
-        }, index)
-        : item
-    )));
-  }, []);
+    const current = stateRef.current.itineraryItems.find(item => item.id === id);
+    if (!current) return;
+    const next = { ...current, ...updates, id };
+    change(state => ({ ...state, itineraryItems: replaceById(state.itineraryItems, stamp(next, id, current)) }));
+    save(saveTripItineraryItem(id, itineraryInput(withoutStamps(next))));
+  }, [change, save]);
 
   const removeTripItineraryItem = useCallback((id: string) => {
-    setTripItineraryItems(prev => prev.filter(item => item.id !== id));
-  }, []);
+    change(state => ({ ...state, itineraryItems: state.itineraryItems.filter(item => item.id !== id) }));
+    save(deleteTripItineraryItem(id));
+  }, [change, save]);
 
-  const addTripBooking = useCallback((booking: TripBookingInput): string => {
+  const addTripBooking = useCallback((booking: TripBookingInput) => {
     const id = uuid();
-    const now = new Date().toISOString();
-    const nextBooking = normalizeTripBooking({
-      ...booking,
-      id,
-      createdAt: now,
-      updatedAt: now,
-    } as TripBooking);
-    setTripBookings(prev => [...prev, nextBooking]);
+    change(state => ({ ...state, bookings: [...state.bookings, stamp(booking, id) as TripBooking] }));
+    save(saveTripBooking(id, booking as BookingInput));
     return id;
-  }, []);
+  }, [change, save]);
 
   const updateTripBooking = useCallback((id: string, updates: Partial<TripBooking>) => {
-    const updatedAt = new Date().toISOString();
-    setTripBookings(prev => prev.map(booking => (
-      booking.id === id
-        ? normalizeTripBooking({
-          ...booking,
-          ...updates,
-          id,
-          updatedAt,
-        } as TripBooking)
-        : booking
-    )));
-  }, []);
+    const current = stateRef.current.bookings.find(booking => booking.id === id);
+    if (!current) return;
+    const next = { ...current, ...updates, id } as TripBooking;
+    change(state => ({ ...state, bookings: replaceById(state.bookings, stamp(next, id, current) as TripBooking) }));
+    save(saveTripBooking(id, withoutStamps(next) as BookingInput));
+  }, [change, save]);
 
   const removeTripBooking = useCallback((id: string) => {
-    setTripBookings(prev => prev.filter(booking => booking.id !== id));
-  }, []);
+    change(state => ({ ...state, bookings: state.bookings.filter(booking => booking.id !== id) }));
+    save(deleteTripBooking(id));
+  }, [change, save]);
 
-  const addTripBudgetEntry = useCallback((entry: TripBudgetEntryInput): string => {
+  const budgetInput = (entry: TripBudgetEntryInput): TripBudgetEntryInput => ({
+    ...entry, title: entry.title.trim() || 'Budget item',
+  });
+
+  const addTripBudgetEntry = useCallback((entry: TripBudgetEntryInput) => {
     const id = uuid();
-    const now = new Date().toISOString();
-    const nextEntry = normalizeTripBudgetEntry({
-      ...entry,
-      id,
-      createdAt: now,
-      updatedAt: now,
-    });
-    setTripBudgetEntries(prev => [...prev, nextEntry]);
+    change(state => ({ ...state, budgetEntries: [...state.budgetEntries, stamp(entry, id)] }));
+    save(saveTripBudgetEntry(id, budgetInput(entry)));
     return id;
-  }, []);
+  }, [change, save]);
 
   const updateTripBudgetEntry = useCallback((id: string, updates: Partial<TripBudgetEntry>) => {
-    const updatedAt = new Date().toISOString();
-    setTripBudgetEntries(prev => prev.map(entry => (
-      entry.id === id
-        ? normalizeTripBudgetEntry({
-          ...entry,
-          ...updates,
-          id,
-          updatedAt,
-        })
-        : entry
-    )));
-  }, []);
+    const current = stateRef.current.budgetEntries.find(entry => entry.id === id);
+    if (!current) return;
+    const next = { ...current, ...updates, id };
+    change(state => ({ ...state, budgetEntries: replaceById(state.budgetEntries, stamp(next, id, current)) }));
+    save(saveTripBudgetEntry(id, budgetInput(withoutStamps(next))));
+  }, [change, save]);
 
   const removeTripBudgetEntry = useCallback((id: string) => {
-    setTripBudgetEntries(prev => prev.filter(entry => entry.id !== id));
-  }, []);
+    change(state => ({ ...state, budgetEntries: state.budgetEntries.filter(entry => entry.id !== id) }));
+    save(deleteTripBudgetEntry(id));
+  }, [change, save]);
 
-  return (
-    <TripCtx.Provider value={{
-      trips,
-      tripLegs,
-      tripItineraryItems,
-      tripBookings,
-      tripBudgetEntries,
-      loaded,
-      addTrip,
-      updateTrip,
-      removeTrip,
-      addTripLeg,
-      updateTripLeg,
-      removeTripLeg,
-      addTripItineraryItem,
-      updateTripItineraryItem,
-      removeTripItineraryItem,
-      addTripBooking,
-      updateTripBooking,
-      removeTripBooking,
-      addTripBudgetEntry,
-      updateTripBudgetEntry,
-      removeTripBudgetEntry,
-    }}
-    >
-      {children}
-    </TripCtx.Provider>
-  );
+  const value = useMemo<TripContextValue>(() => ({
+    trips: state.trips,
+    tripLegs: state.legs,
+    tripItineraryItems: state.itineraryItems,
+    tripBookings: state.bookings,
+    tripBudgetEntries: state.budgetEntries,
+    tripBudgets: state.budgets,
+    loaded,
+    error,
+    reload,
+    addTrip,
+    createTripPlan,
+    updateTrip,
+    removeTrip,
+    addTripLeg,
+    updateTripLeg,
+    moveTripLeg,
+    removeTripLeg,
+    addTripItineraryItem,
+    updateTripItineraryItem,
+    removeTripItineraryItem,
+    addTripBooking,
+    updateTripBooking,
+    removeTripBooking,
+    addTripBudgetEntry,
+    updateTripBudgetEntry,
+    removeTripBudgetEntry,
+  }), [state, loaded, error, reload, addTrip, createTripPlan, updateTrip, removeTrip, addTripLeg, updateTripLeg,
+    moveTripLeg, removeTripLeg, addTripItineraryItem, updateTripItineraryItem, removeTripItineraryItem,
+    addTripBooking, updateTripBooking, removeTripBooking, addTripBudgetEntry, updateTripBudgetEntry,
+    removeTripBudgetEntry]);
+
+  return <TripCtx.Provider value={value}>{children}</TripCtx.Provider>;
 }

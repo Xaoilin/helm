@@ -1,6 +1,7 @@
 /**
- * Trip budget rules: money parsing and formatting, budget categories, the
- * ledger that merges booking costs with manual items, and its totals.
+ * Trip budget display rules: money parsing and formatting, budget categories,
+ * and the ledger that merges booking costs with manual items. The totals are
+ * worked out by the life admin service.
  *
  * Amounts are stored in minor units (pence, cents). Inputs are the decimal
  * strings a person types, so parsing lives here rather than in components.
@@ -16,6 +17,7 @@ import type {
 } from '../types/domain';
 import { getBookingDisplayTitle } from './tripDisplay';
 import type { BookingSeed } from './tripModel';
+import type { ServiceTripBudget } from './backend/lifeContracts';
 
 export interface BudgetEntryDraft {
   title: string;
@@ -231,29 +233,24 @@ export function buildBudgetLedger({
   return [...bookingEntries, ...manualLedgerEntries].sort(compareLedgerEntries);
 }
 
-function sumAmounts(entries: BudgetLedgerEntry[]): number {
-  return entries.reduce((sum, entry) => sum + (entry.amount || 0), 0);
-}
-
-function sumPaid(entries: BudgetLedgerEntry[]): number {
-  return sumAmounts(entries.filter(entry => hasBudgetAmount(entry.amount) && entry.status === 'paid'));
-}
-
-export function summarizeBudget(ledger: BudgetLedgerEntry[], bookings: TripBooking[], budgetTotal: number): BudgetTotals {
-  const forecastTotal = sumAmounts(ledger);
+/**
+ * The Budget tab's totals, as the life admin service works them out, with each category's label and
+ * icon. A trip the service has not answered for yet shows zeros.
+ */
+export function budgetTotalsFromService(budget: ServiceTripBudget | undefined, budgetTotal: number): BudgetTotals {
   return {
-    forecastTotal,
-    paidTotal: sumPaid(ledger),
-    remaining: budgetTotal - forecastTotal,
-    uncostedBookingCount: bookings.filter(booking => !hasBudgetAmount(booking.budgetAmount)).length,
+    forecastTotal: budget?.forecastTotal ?? 0,
+    paidTotal: budget?.paidTotal ?? 0,
+    remaining: budget?.remaining ?? budgetTotal,
+    uncostedBookingCount: budget?.uncostedBookingCount ?? 0,
     byCategory: TRIP_BUDGET.CATEGORIES.map(category => {
-      const entries = ledger.filter(entry => entry.category === category.value);
+      const totals = budget?.byCategory.find(entry => entry.category === category.value);
       return {
         ...category,
-        forecast: sumAmounts(entries),
-        paid: sumPaid(entries),
-        count: entries.length,
-        uncostedCount: entries.filter(entry => !hasBudgetAmount(entry.amount)).length,
+        forecast: totals?.forecast ?? 0,
+        paid: totals?.paid ?? 0,
+        count: totals?.count ?? 0,
+        uncostedCount: totals?.uncostedCount ?? 0,
       };
     }),
   };

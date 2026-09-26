@@ -1,0 +1,81 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/life/v1/trips/plans"
+  },
+  "status": 200,
+  "body": {
+    "trip": {
+      "id": "saudi",
+      "name": "Trip to Saudi",
+      "summary": "Family",
+      "notes": "",
+      "status": "planning",
+      "startDate": "2026-06-17",
+      "endDate": "2026-07-02",
+      "budgetCurrency": "GBP",
+      "budgetTotal": 500000,
+      "budget": {
+        "forecastTotal": 100000,
+        "paidTotal": 100000,
+        "remaining": 400000,
+        "uncostedBookingCount": 0,
+        "byCategory": [
+          {
+            "category": "transport",
+            "forecast": 100000,
+            "paid": 100000,
+            "count": 1,
+            "uncostedCount": 0
+          }
+        ]
+      },
+      "createdAt": "2026-09-26T22:08:06.724Z",
+      "updatedAt": "2026-09-26T22:08:06.724Z"
+    },
+    "legs": [
+      {
+        "id": "riyadh",
+        "tripId": "saudi",
+        "country": "Saudi Arabia",
+        "city": "Riyadh",
+        "startDate": null,
+        "endDate": null,
+        "sortOrder": 0,
+        "createdAt": "2026-09-26T22:08:06.724Z",
+        "updatedAt": "2026-09-26T22:08:06.724Z"
+      }
+    ],
+    "itineraryItems": [],
+    "bookings": [
+      {
+        "id": "flight",
+        "tripId": "saudi",
+        "legId": null,
+        "kind": "transport",
+        "title": "Flight to Saudi",
+        "mode": null,
+        "fromLabel": null,
+        "toLabel": null,
+        "departAt": null,
+        "arriveAt": null,
+        "propertyName": null,
+        "address": null,
+        "city": null,
+        "country": null,
+        "checkInDate": null,
+        "checkOutDate": null,
+        "budgetAmount": null,
+        "budgetStatus": null,
+        "budgetDate": null,
+        "provider": null,
+        "confirmationCode": null,
+        "link": null,
+        "notes": "",
+        "createdAt": "2026-09-26T22:08:06.750Z",
+        "updatedAt": "2026-09-26T22:08:06.750Z"
+      }
+    ],
+    "budgetEntries": []
+  }
+}

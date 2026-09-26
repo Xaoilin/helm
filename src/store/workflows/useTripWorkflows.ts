@@ -5,10 +5,6 @@ import {
   buildRouteDraftBookingSeed,
   buildRouteLegInputs,
   buildTripBasicsPayload,
-  deriveRangeAfterLegSave,
-  deriveTripRange,
-  planLegRemoval,
-  planLegSwap,
   type LegFormDraft,
   type WizardDraftState,
 } from '../../services/tripModel';
@@ -16,44 +12,34 @@ import { useTripContext } from '../contexts/TripContext';
 
 export interface TripWorkflows {
   /**
-   * Create a trip, its route legs, and its initial bookings from a finished
-   * Plan Trip draft. Bookings must already be materialized and valid. Draft
-   * leg ids are remapped to the created leg ids. Returns the new trip id.
+   * Create a trip, its route legs, and its initial bookings from a finished Plan Trip draft, in one
+   * save. Bookings must already be materialized and valid; they name the draft legs. Returns the new
+   * trip id. The service dates the trip from its legs.
    */
   createTripFromPlan: (draft: WizardDraftState) => string;
-  /** Add or edit one leg, then refit the trip range to its legs. */
+  /** Add or edit one leg; the service refits the trip's dates to its legs. */
   saveLeg: (input: { tripId: string; orderedLegs: TripLeg[]; editingLegId: string | null; form: LegFormDraft }) => void;
   /** Swap a leg with its neighbour in route order. Does nothing at either end. */
   moveLeg: (orderedLegs: TripLeg[], legId: string, direction: -1 | 1) => void;
-  /** Remove a leg (the store cascades its plans and bookings), renumber the rest, and refit the trip range. */
+  /** Remove a leg; the service removes its plans and bookings, renumbers the rest and refits the dates. */
   removeLeg: (input: { tripId: string; orderedLegs: TripLeg[]; legId: string }) => void;
 }
 
 /** Multi-record Trip writes, expressed once so the planner UI only says what the person asked for. */
 export function useTripWorkflows(): TripWorkflows {
-  const { addTrip, updateTrip, addTripLeg, updateTripLeg, removeTripLeg, addTripBooking } = useTripContext();
+  const { createTripPlan, addTripLeg, updateTripLeg, moveTripLeg, removeTripLeg } = useTripContext();
 
   const createTripFromPlan = useCallback((draft: WizardDraftState): string => {
-    const legInputs = buildRouteLegInputs(draft.routeDrafts);
-    const tripId = addTrip({
-      ...buildTripBasicsPayload(draft),
-      ...deriveTripRange(legInputs),
-    });
-
-    const legIdByDraftId = new Map<string, string>();
-    legInputs.forEach(({ draftId, ...leg }) => {
-      legIdByDraftId.set(draftId, addTripLeg({ ...leg, tripId }));
-    });
-
-    draft.wizardBookings.forEach(booking => {
-      addTripBooking({
-        ...buildBookingPayload(booking, tripId, buildRouteDraftBookingSeed(draft.routeDrafts, booking.legId)),
-        legId: booking.legId ? legIdByDraftId.get(booking.legId) : undefined,
-      });
-    });
-
-    return tripId;
-  }, [addTrip, addTripLeg, addTripBooking]);
+    const legs = buildRouteLegInputs(draft.routeDrafts).map(leg => ({
+      id: leg.draftId, country: leg.country, city: leg.city, startDate: leg.startDate, endDate: leg.endDate,
+    }));
+    const bookings = draft.wizardBookings.map(booking => ({
+      ...buildBookingPayload(booking, '', buildRouteDraftBookingSeed(draft.routeDrafts, booking.legId)),
+      id: booking.id,
+      legId: booking.legId,
+    }));
+    return createTripPlan({ ...buildTripBasicsPayload(draft), startDate: '', endDate: '' }, legs, bookings);
+  }, [createTripPlan]);
 
   const saveLeg = useCallback<TripWorkflows['saveLeg']>(({ tripId, orderedLegs, editingLegId, form }) => {
     const fields = {
@@ -67,19 +53,18 @@ export function useTripWorkflows(): TripWorkflows {
     } else {
       addTripLeg({ ...fields, tripId, sortOrder: orderedLegs.length });
     }
-    updateTrip(tripId, deriveRangeAfterLegSave(orderedLegs, editingLegId, form));
-  }, [addTripLeg, updateTripLeg, updateTrip]);
+  }, [addTripLeg, updateTripLeg]);
 
   const moveLeg = useCallback<TripWorkflows['moveLeg']>((orderedLegs, legId, direction) => {
-    planLegSwap(orderedLegs, legId, direction)?.forEach(({ id, sortOrder }) => updateTripLeg(id, { sortOrder }));
-  }, [updateTripLeg]);
+    const index = orderedLegs.findIndex(leg => leg.id === legId);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= orderedLegs.length) return;
+    moveTripLeg(legId, direction);
+  }, [moveTripLeg]);
 
-  const removeLeg = useCallback<TripWorkflows['removeLeg']>(({ tripId, orderedLegs, legId }) => {
+  const removeLeg = useCallback<TripWorkflows['removeLeg']>(({ legId }) => {
     removeTripLeg(legId);
-    const { reindexed, range } = planLegRemoval(orderedLegs, legId);
-    reindexed.forEach(leg => updateTripLeg(leg.id, { sortOrder: leg.sortOrder }));
-    updateTrip(tripId, range);
-  }, [removeTripLeg, updateTripLeg, updateTrip]);
+  }, [removeTripLeg]);
 
   return useMemo(
     () => ({ createTripFromPlan, saveLeg, moveLeg, removeLeg }),
