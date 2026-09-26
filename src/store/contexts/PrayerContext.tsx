@@ -84,7 +84,9 @@ import {
 import { logError } from '../../services/logger';
 import { loadStore, saveStore, saveStoreCommitted } from '../persistence';
 import { isPrayerServiceEnabled, savePrayerPreferences } from '../../services/backend/prayerServiceApi';
-import { usePrayerServiceSync, type PrayerServiceSyncState } from './usePrayerServiceSync';
+import { usePrayerServiceSync, type PrayerOutcomeRejection, type PrayerServiceSyncState } from './usePrayerServiceSync';
+import { revertRecord } from '../../services/backend/prayerOutcomeSync';
+import { assertPrayerCompletable, PrayerCompletionRejectedError, prayerCompletionRejection } from '../../services/prayerCompletionRules';
 import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 import { useGamificationContext } from './GamificationContext';
 import { useDailyMomentumContext } from './DailyMomentumContext';
@@ -134,6 +136,8 @@ interface CompletePrayerOptions {
   taskId?: string;
   prayerDate?: string;
   source?: PrayerCompletionSource;
+  /** Re-applies an already recorded outcome (reward recovery); skips the prayer-time rule. */
+  recordedAlready?: boolean;
 }
 
 interface PrayerContextValue {
@@ -159,6 +163,9 @@ interface PrayerContextValue {
   diagnostics: PrayerDiagnostics;
   /** Sync with the Spring Boot prayer service; `disabled` when it is not configured. */
   serviceSync: PrayerServiceSyncState;
+  /** Why the last completion was refused or not saved; shown until dismissed. */
+  completionNotice: string | null;
+  dismissCompletionNotice: () => void;
   requestPrayerCompletion: (
     prayerName: PrayerName,
     options?: Omit<PrayerCompletionRequest, 'prayerName' | 'suggestedStatus'>,
@@ -272,9 +279,16 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
+  const [completionNotice, setCompletionNotice] = useState<string | null>(null);
+  const dismissCompletionNotice = useCallback(() => setCompletionNotice(null), []);
   const getTracking = useCallback(() => trackingRef.current, []);
   const replaceTracking = useCallback((next: PrayerTrackingState) => { commitTracking(next); }, [commitTracking]);
-  const serviceSync = usePrayerServiceSync(getTracking, replaceTracking);
+  // The service refused an outcome outright: show the service's truth instead and say why.
+  const rejectOutcome = useCallback((rejection: PrayerOutcomeRejection) => {
+    commitTracking(current => revertRecord(current, rejection.key, rejection.confirmed));
+    setCompletionNotice(`${rejection.record.prayerName} on ${rejection.record.date} was not saved: ${rejection.message}`);
+  }, [commitTracking]);
+  const serviceSync = usePrayerServiceSync(getTracking, replaceTracking, rejectOutcome);
 
   useEffect(() => {
     if (!taskCtx.loaded || !gamificationCtx.loaded || !settingsCtx.loaded) return;
@@ -484,6 +498,15 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     const completedAt = new Date();
     const prayerDate = options.prayerDate || today;
     const source = options.source || 'system';
+    if (!options.recordedAlready) {
+      assertPrayerCompletable({
+        prayerName,
+        prayerDate,
+        today,
+        timetable: schedule && scheduleTimezoneValid ? schedule : null,
+        now: completedAt,
+      });
+    }
     const transition = buildPrayerCompletionTransition({
       prayerName,
       status,
@@ -547,7 +570,9 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     knowledge.knowledgeTopics.length,
     knowledge.lifestyleItems,
     settingsCtx.settings.goalTags,
+    schedule,
     scheduleTimezone,
+    scheduleTimezoneValid,
     taskCtx,
     today,
   ]);
@@ -574,6 +599,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
         completePrayer(record.prayerName, record.status, {
           prayerDate: record.date,
           source: record.source || 'system',
+          recordedAlready: true,
           ...(record.taskId ? { taskId: record.taskId } : {}),
         });
       } finally {
@@ -589,6 +615,18 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     },
   ) => {
     const prayerDate = options.prayerDate || today;
+    const rejection = prayerCompletionRejection({
+      prayerName,
+      prayerDate,
+      today,
+      timetable: schedule && scheduleTimezoneValid ? schedule : null,
+      now: new Date(),
+    });
+    if (rejection) {
+      setCompletionNotice(rejection);
+      return;
+    }
+    setCompletionNotice(null);
     const bounds = schedule && scheduleTimezoneValid
       ? getPrayerDeadlineBounds(schedule.prayers, prayerDate, prayerName, schedule.timezone)
       : null;
@@ -610,11 +648,19 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const confirmPrayerCompletion = useCallback((status: PrayerCompletionStatus) => {
     const pending = pendingCompletion;
     if (!pending) return null;
-    const result = completePrayer(pending.prayerName, status, {
-      taskId: pending.taskId,
-      prayerDate: pending.prayerDate,
-      source: pending.source,
-    });
+    let result: PrayerCompletionMutationResult;
+    try {
+      result = completePrayer(pending.prayerName, status, {
+        taskId: pending.taskId,
+        prayerDate: pending.prayerDate,
+        source: pending.source,
+      });
+    } catch (error) {
+      if (!(error instanceof PrayerCompletionRejectedError)) throw error;
+      setPendingCompletion(null);
+      setCompletionNotice(error.message);
+      return null;
+    }
     setPendingCompletion(null);
     pending.onCompleted?.(result);
     return result;
@@ -1116,6 +1162,8 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     adhanPrayer,
     diagnostics,
     serviceSync: serviceSync.state,
+    completionNotice,
+    dismissCompletionNotice,
     requestPrayerCompletion,
     cancelPrayerCompletion,
     confirmPrayerCompletion,
@@ -1137,9 +1185,11 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     cancelPrayerCompletion,
     canSnoozeActiveBoundedReminder,
     completePrayer,
+    completionNotice,
     confirmPrayerCompletion,
     correctPrayerOutcome,
     deadlines,
+    dismissCompletionNotice,
     localTimezone,
     diagnostics,
     dismissAdhan,

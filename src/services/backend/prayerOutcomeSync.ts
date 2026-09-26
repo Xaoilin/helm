@@ -136,6 +136,28 @@ export function planOutcomeSync(
   return operations;
 }
 
+/**
+ * Whether the service refused a change for good (a rule or validation failure), as opposed to
+ * a temporary failure worth retrying (network, timeout, server error, signed out).
+ */
+export function isPermanentRejection(error: unknown): error is ServiceError {
+  return error instanceof ServiceError
+    && error.status >= 400 && error.status < 500
+    && error.status !== 401 && error.status !== 408 && error.status !== 429;
+}
+
+/** Puts one record back to what the service confirmed, or removes it if the service has none. */
+export function revertRecord(
+  state: PrayerTrackingState,
+  key: string,
+  confirmed: PrayerTrackingRecord | undefined,
+): PrayerTrackingState {
+  const records = { ...state.records };
+  if (confirmed) records[key] = confirmed;
+  else delete records[key];
+  return { ...state, records };
+}
+
 /** Applies one operation and returns the updated confirmed outcomes. */
 export async function applyOutcomeOperation(
   operation: OutcomeOperation,
