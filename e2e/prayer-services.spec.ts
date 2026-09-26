@@ -75,6 +75,32 @@ test.describe('prayer and profile services', () => {
     expect(control.services.outcomes.has('2026-08-29::Fajr')).toBe(false);
   });
 
+  test('loading, reminders, reloads and focus never delete the service outcomes', async ({ page, scenario }) => {
+    // Noon: Dhuhr is current, so its reminder saves receipts while outcomes load (the live bug's setting).
+    const control = await scenario({ now: NOON, settings: { prayerEnabled: true, lifeHeroEnabled: false } });
+    control.services.tracking = {
+      trackingStartedAt: '2026-08-01T00:00:00Z', activationDate: null, activationPrayers: [], importedAt: null,
+    };
+    for (const [date, prayer] of [['2026-08-28', 'Fajr'], ['2026-08-28', 'Isha'], ['2026-08-29', 'Fajr']] as const) {
+      control.services.outcomes.set(`${date}::${prayer}`, {
+        id: crypto.randomUUID(), date, prayer, status: 'on_time', recordedAt: `${date}T05:00:00Z`,
+        source: 'dashboard', taskId: null, rewarded: true, deadlineAt: null,
+      });
+    }
+    await openApp(page);
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+    await expect(page.getByRole('button', { name: /Fajr Prayer — confirmed/u })).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.clock.fastForward(31_000);
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+
+    expect(control.services.calls.filter(call => call.startsWith('DELETE '))).toEqual([]);
+    expect(control.services.outcomes.size).toBe(3);
+  });
+
   test('uses the location saved in the profile service', async ({ page, scenario }) => {
     await scenario({
       now: NOON,

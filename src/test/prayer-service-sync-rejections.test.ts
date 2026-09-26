@@ -68,7 +68,7 @@ describe('revertRecord', () => {
 
 describe('usePrayerServiceSync', () => {
   let tracking: PrayerTrackingState;
-  const commit = vi.fn();
+  const commit = vi.fn((next: PrayerTrackingState) => { tracking = next; });
   const onRejected = vi.fn();
 
   beforeEach(() => {
@@ -101,7 +101,7 @@ describe('usePrayerServiceSync', () => {
     await load(hook);
 
     tracking = { ...tracking, records: { [`${TODAY}::Fajr`]: record('Fajr', 'on_time') } };
-    await act(async () => { hook.result.current.push(tracking); });
+    await act(async () => { hook.result.current.push(); });
 
     await waitFor(() => expect(onRejected).toHaveBeenCalledOnce());
     expect(onRejected).toHaveBeenCalledWith({
@@ -125,7 +125,7 @@ describe('usePrayerServiceSync', () => {
       [`${TODAY}::Fajr`]: record('Fajr', 'late'),
       [`${TODAY}::Dhuhr`]: record('Dhuhr', 'on_time'),
     } };
-    await act(async () => { hook.result.current.push(tracking); });
+    await act(async () => { hook.result.current.push(); });
 
     await waitFor(() => expect(hook.result.current.state.status).toBe('synced'));
     expect(onRejected).toHaveBeenCalledOnce();
@@ -142,7 +142,7 @@ describe('usePrayerServiceSync', () => {
     await load(hook);
 
     tracking = { ...tracking, records: { [`${TODAY}::Fajr`]: { ...record('Fajr', 'missed'), recordedAt: '2026-09-26T10:00:00.000Z' } } };
-    await act(async () => { hook.result.current.push(tracking); });
+    await act(async () => { hook.result.current.push(); });
 
     await waitFor(() => expect(onRejected).toHaveBeenCalledOnce());
     expect(onRejected.mock.calls[0][0].confirmed.status).toBe('late');
@@ -161,7 +161,7 @@ describe('usePrayerServiceSync', () => {
     await load(hook);
 
     tracking = { ...tracking, records: { [`${TODAY}::Fajr`]: record('Fajr', 'on_time') } };
-    await act(async () => { hook.result.current.push(tracking); });
+    await act(async () => { hook.result.current.push(); });
     await waitFor(() => expect(hook.result.current.state).toEqual({ status: 'error', error: 'The database is unavailable.' }));
     expect(onRejected).not.toHaveBeenCalled();
 
@@ -186,12 +186,60 @@ describe('usePrayerServiceSync', () => {
     await load(hook);
 
     tracking = { ...tracking, records: { [`${TODAY}::Fajr`]: record('Fajr', 'on_time') } };
-    await act(async () => { hook.result.current.push(tracking); });
+    await act(async () => { hook.result.current.push(); });
     await waitFor(() => expect(hook.result.current.state.status).toBe('error'));
 
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
     await waitFor(() => expect(hook.result.current.state.status).toBe('synced'));
     expect(api.createPrayerOutcome).toHaveBeenCalledTimes(2);
+  });
+
+  describe('bulk deletion safety net', () => {
+    const prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+
+    async function loadFiveOutcomes() {
+      api.listPrayerOutcomes.mockResolvedValue(prayers.map(prayer => serviceOutcome(prayer, 'on_time')));
+      api.deletePrayerOutcome.mockResolvedValue(undefined);
+      const hook = render();
+      await load(hook);
+      expect(Object.keys(tracking.records)).toHaveLength(5);
+      return hook;
+    }
+
+    it('refuses to delete many outcomes at once and says so, sending nothing', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const hook = await loadFiveOutcomes();
+
+      tracking = { ...tracking, records: {} };
+      await act(async () => { hook.result.current.push(); });
+
+      await waitFor(() => expect(hook.result.current.state.status).toBe('error'));
+      expect(hook.result.current.state.error).toContain('would delete 5 saved prayers');
+      expect(api.deletePrayerOutcome).not.toHaveBeenCalled();
+    });
+
+    it('deletes them all when the user resets all progress', async () => {
+      const hook = await loadFiveOutcomes();
+
+      hook.result.current.allowBulkDelete();
+      tracking = { ...tracking, records: {} };
+      await act(async () => { hook.result.current.push(); });
+
+      await waitFor(() => expect(hook.result.current.state.status).toBe('synced'));
+      expect(api.deletePrayerOutcome).toHaveBeenCalledTimes(5);
+    });
+
+    it('still lets a single undo through', async () => {
+      const hook = await loadFiveOutcomes();
+
+      const records = { ...tracking.records };
+      delete records[`${TODAY}::Isha`];
+      tracking = { ...tracking, records };
+      await act(async () => { hook.result.current.push(); });
+
+      await waitFor(() => expect(hook.result.current.state.status).toBe('synced'));
+      expect(api.deletePrayerOutcome).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('does not call the service when the service is not configured', async () => {

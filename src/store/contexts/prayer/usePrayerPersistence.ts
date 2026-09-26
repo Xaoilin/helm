@@ -26,6 +26,8 @@ export interface PrayerPersistence {
   serviceSync: PrayerServiceSyncState;
   /** Reloads outcomes from the service, e.g. to pick up misses the service records itself. */
   reload: () => void;
+  /** Lets the next change delete every outcome: the user asked to reset all progress. */
+  allowBulkDelete: () => void;
 }
 
 /** Reminder receipts from the account's `prayerTracking` record, applied to the current state. */
@@ -109,10 +111,10 @@ export function usePrayerPersistence({
     if (!loaded) return;
     // The account record keeps only reminder receipts (see recordCodec); outcomes go to the service.
     void saveStore('prayerTracking', tracking);
-    serviceSync.push(tracking);
+    serviceSync.push();
     // serviceSync.push is stable; the service receives every tracking change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, tracking]);
 
-  return { serviceSync: serviceSync.state, reload: serviceSync.rehydrate };
+  return { serviceSync: serviceSync.state, reload: serviceSync.rehydrate, allowBulkDelete: serviceSync.allowBulkDelete };
 }

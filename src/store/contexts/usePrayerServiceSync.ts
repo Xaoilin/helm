@@ -39,6 +39,8 @@ export interface PrayerLocation {
 }
 
 const RETRY_DELAY_MS = 30_000;
+/** More deletions than this in one sync need an explicit reset; undos delete one at a time. */
+export const MAX_DELETES_WITHOUT_RESET = 3;
 
 export function usePrayerServiceSync(
   getTracking: () => PrayerTrackingState,
@@ -53,6 +55,7 @@ export function usePrayerServiceSync(
   const confirmedRef = useRef<ConfirmedOutcomes | null>(null);
   const desiredRef = useRef<PrayerTrackingState['records'] | null>(null);
   const drainingRef = useRef(false);
+  const bulkDeleteAllowedRef = useRef(false);
   const locationRef = useRef<PrayerLocation | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
@@ -92,6 +95,17 @@ export function usePrayerServiceSync(
     try {
       let operations = planOutcomeSync(confirmedRef.current, desiredRef.current);
       while (operations.length > 0) {
+        const deletions = operations.filter(operation => operation.kind === 'delete').length;
+        if (deletions > MAX_DELETES_WITHOUT_RESET && !bulkDeleteAllowedRef.current) {
+          // A safety net: only "Reset all progress" removes many outcomes at once. Anything else
+          // asking to is a bug, so nothing is sent; reloading the page loads the service's data again.
+          console.error('Prayer service sync refused a bulk deletion', { deletions });
+          setState({
+            status: 'error',
+            error: `Not synced: this change would delete ${deletions} saved prayers. Reload the page.`,
+          });
+          return;
+        }
         setState({ status: 'syncing', error: null });
         for (const operation of operations) {
           try {
@@ -103,6 +117,7 @@ export function usePrayerServiceSync(
         }
         operations = planOutcomeSync(confirmedRef.current, desiredRef.current);
       }
+      bulkDeleteAllowedRef.current = false;
       setState({ status: 'synced', error: null });
     } catch (error) {
       fail(error, () => drainRef.current());
@@ -137,18 +152,20 @@ export function usePrayerServiceSync(
       const startDate = historyStartDate(dashboard.tracking.trackingStartedAt, local.records, getTracking().records);
       const confirmed = confirmedFromService(await listAllOutcomes(startDate, dashboard.today));
       const current = getTracking();
-      const records = mergeRecords(confirmed.records, current.records);
+      const next = applyServiceTracking(current, dashboard.tracking, mergeRecords(confirmed.records, current.records));
+      // Commit before accepting pushes, so no push can carry a state from before this merge.
+      commitTracking(next);
       confirmedRef.current = confirmed;
-      desiredRef.current = records;
+      desiredRef.current = next.records;
       setState({ status: 'synced', error: null });
       void drain();
-      return applyServiceTracking(current, dashboard.tracking, records);
+      return next;
     } catch (error) {
       confirmedRef.current = null;
       fail(error, () => rehydrateRef.current());
       return getTracking();
     }
-  }, [drain, fail, getTracking]);
+  }, [commitTracking, drain, fail, getTracking]);
 
   /** Concurrent loads (e.g. React's development double effects) share one request. */
   const hydrate = useCallback((local: PrayerTrackingState, location: PrayerLocation): Promise<PrayerTrackingState> => {
@@ -169,12 +186,18 @@ export function usePrayerServiceSync(
     rehydrateRef.current = () => void rehydrate();
   }, [drain, rehydrate]);
 
-  /** Queues the app's current outcomes to be sent to the service. */
-  const push = useCallback((tracking: PrayerTrackingState) => {
+  /**
+   * Queues the app's latest committed outcomes to be sent to the service. It never uses a copy from
+   * a render: one from before the service's outcomes were merged in would read as deleting them all.
+   */
+  const push = useCallback(() => {
     if (!enabled) return;
-    desiredRef.current = tracking.records;
+    desiredRef.current = getTracking().records;
     void drain();
-  }, [drain, enabled]);
+  }, [drain, enabled, getTracking]);
 
-  return { state, hydrate, push, rehydrate };
+  /** The next sync may delete any number of outcomes: the user asked to reset all progress. */
+  const allowBulkDelete = useCallback(() => { bulkDeleteAllowedRef.current = true; }, []);
+
+  return { state, hydrate, push, rehydrate, allowBulkDelete };
 }

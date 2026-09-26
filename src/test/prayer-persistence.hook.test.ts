@@ -107,6 +107,27 @@ describe('usePrayerPersistence', () => {
     expect(api.getPrayerDashboard).toHaveBeenCalledTimes(1);
   });
 
+  it('never deletes service outcomes when the first load finishes after its effect was cleaned up (live bug)', async () => {
+    let resolveOutcomes: (outcomes: unknown[]) => void = () => undefined;
+    api.listPrayerOutcomes.mockReturnValue(new Promise(resolve => { resolveOutcomes = resolve; }));
+    const { result, rerender } = renderPersistence();
+    await waitFor(() => expect(api.listPrayerOutcomes).toHaveBeenCalled());
+
+    // The loading effect is cleaned up while the service answers (e.g. its inputs changed).
+    rerender({ sourcesLoaded: true, locationReady: false });
+    rerender({ sourcesLoaded: true, locationReady: true });
+    await act(async () => { resolveOutcomes([serviceFajr]); });
+
+    // A routine change afterwards, such as a reminder receipt, is saved and pushed.
+    act(() => {
+      result.current.store.commitTracking(current => ({ ...current, reminderReceipts: { ...current.reminderReceipts } }));
+    });
+
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(api.deletePrayerOutcome).not.toHaveBeenCalled();
+    expect(result.current.store.tracking.records[FAJR_KEY]).toMatchObject({ status: 'on_time' });
+  });
+
   it('takes outcomes and the tracking start only from the prayer service', async () => {
     const { result } = renderPersistence();
 
