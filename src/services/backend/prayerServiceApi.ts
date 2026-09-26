@@ -1,6 +1,7 @@
 /** Typed calls to the prayer service (`/api/prayer/v1`). */
 import { PRAYER_BACKEND_URL } from '../../config';
 import type { PrayerCompletionSource, PrayerName, PrayerOutcomeStatus, PrayerTrackingState } from '../../types/domain';
+import { importTrackingKey, newWriteKey } from './idempotencyKeys';
 import { callService } from './serviceClient';
 import {
   dashboardSchema,
@@ -39,21 +40,23 @@ export interface CreateOutcomeRequest {
   taskId?: string;
 }
 
-export function createPrayerOutcome(request: CreateOutcomeRequest): Promise<ServiceOutcomeChange> {
-  return callService(PRAYER_BACKEND_URL, 'POST', `${BASE}/outcomes`, outcomeChangeSchema, request);
+export function createPrayerOutcome(request: CreateOutcomeRequest, idempotencyKey: string): Promise<ServiceOutcomeChange> {
+  return callService(PRAYER_BACKEND_URL, 'POST', `${BASE}/outcomes`, outcomeChangeSchema, request, { idempotencyKey });
 }
 
 export function correctPrayerOutcome(
   id: string,
   status: Exclude<PrayerOutcomeStatus, 'unclassified'>,
-  source?: PrayerCompletionSource,
+  source: PrayerCompletionSource | undefined,
+  idempotencyKey: string,
 ): Promise<ServiceOutcomeChange> {
   return callService(PRAYER_BACKEND_URL, 'PATCH', `${BASE}/outcomes/${encodeURIComponent(id)}`,
-    outcomeChangeSchema, { status, ...(source ? { source } : {}) });
+    outcomeChangeSchema, { status, ...(source ? { source } : {}) }, { idempotencyKey });
 }
 
-export function deletePrayerOutcome(id: string): Promise<void> {
-  return callService(PRAYER_BACKEND_URL, 'DELETE', `${BASE}/outcomes/${encodeURIComponent(id)}`, null);
+export function deletePrayerOutcome(id: string, idempotencyKey: string): Promise<void> {
+  return callService(PRAYER_BACKEND_URL, 'DELETE', `${BASE}/outcomes/${encodeURIComponent(id)}`, null, undefined,
+    { idempotencyKey });
 }
 
 /** One-time import of this browser account's legacy tracking; the service answers 409 afterwards. */
@@ -62,7 +65,7 @@ export function importPrayerTracking(state: PrayerTrackingState): Promise<Servic
     trackingStartedAt: state.trackingStartedAt,
     activationDayEligibility: state.activationDayEligibility,
     records: state.records,
-  });
+  }, { idempotencyKey: importTrackingKey(state) });
 }
 
 export function getPrayerPreferences(): Promise<ServicePreferences> {
@@ -70,5 +73,6 @@ export function getPrayerPreferences(): Promise<ServicePreferences> {
 }
 
 export function savePrayerPreferences(preferences: ServicePreferences): Promise<ServicePreferences> {
-  return callService(PRAYER_BACKEND_URL, 'PUT', `${BASE}/preferences`, preferencesSchema, preferences);
+  return callService(PRAYER_BACKEND_URL, 'PUT', `${BASE}/preferences`, preferencesSchema, preferences,
+    { idempotencyKey: newWriteKey() });
 }

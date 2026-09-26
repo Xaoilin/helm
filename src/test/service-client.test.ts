@@ -26,6 +26,24 @@ it('sends the signed-in user token and parses the response through its contract'
   expect(init?.signal).toBeInstanceOf(AbortSignal);
 });
 
+it('names a write with its idempotency key', async () => {
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
+
+  await callService('https://svc.test', 'DELETE', '/api/prayer/v1/outcomes/1', null, undefined,
+    { idempotencyKey: 'prayer-outcome:delete:1' });
+
+  expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ 'Idempotency-Key': 'prayer-outcome:delete:1' });
+});
+
+it('sends no idempotency key when none is given', async () => {
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    Response.json({ enabled: true, reminderEnabled: false, reminderMinutes: 15 }));
+
+  await callService('https://svc.test', 'GET', '/api/prayer/v1/preferences', preferencesSchema);
+
+  expect(fetchMock.mock.calls[0][1]?.headers).not.toHaveProperty('Idempotency-Key');
+});
+
 it('never calls a service without a signed-in user', async () => {
   auth.token = null;
   const fetchMock = vi.spyOn(globalThis, 'fetch');

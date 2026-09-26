@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrayerTrackingRecord, PrayerTrackingState } from '../types/domain';
 import { isPermanentRejection, revertRecord } from '../services/backend/prayerOutcomeSync';
@@ -84,8 +85,9 @@ describe('usePrayerServiceSync', () => {
     vi.useRealTimers();
   });
 
-  function render() {
-    return renderHook(() => usePrayerServiceSync(() => tracking, commit, onRejected));
+  function render(options: { strict?: boolean } = {}) {
+    return renderHook(() => usePrayerServiceSync(() => tracking, commit, onRejected),
+      options.strict ? { wrapper: StrictMode } : {});
   }
 
   async function load(hook: ReturnType<typeof render>) {
@@ -162,6 +164,30 @@ describe('usePrayerServiceSync', () => {
     await act(async () => { hook.result.current.push(tracking); });
     await waitFor(() => expect(hook.result.current.state).toEqual({ status: 'error', error: 'The database is unavailable.' }));
     expect(onRejected).not.toHaveBeenCalled();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    await waitFor(() => expect(hook.result.current.state.status).toBe('synced'));
+    expect(api.createPrayerOutcome).toHaveBeenCalledTimes(2);
+    // The retry is the same action, so the service applies it once even if the first attempt landed.
+    const [first, retry] = api.createPrayerOutcome.mock.calls;
+    expect(retry[1]).toBe(first[1]);
+    expect(first[1]).toBe(`prayer-outcome:create:${TODAY}:Fajr:on_time:2026-09-26T09:00:00.000Z`);
+  });
+
+  it('still retries under StrictMode, which unmounts and remounts every component once', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    api.createPrayerOutcome
+      .mockRejectedValueOnce(new ServiceError(503, 'write_timeout', 'The save was not confirmed in time.'))
+      .mockImplementation(async (request: { prayer: string; status: string }) => ({
+        outcome: serviceOutcome(request.prayer, request.status), firstReward: true,
+      }));
+    const hook = render({ strict: true });
+    await load(hook);
+
+    tracking = { ...tracking, records: { [`${TODAY}::Fajr`]: record('Fajr', 'on_time') } };
+    await act(async () => { hook.result.current.push(tracking); });
+    await waitFor(() => expect(hook.result.current.state.status).toBe('error'));
 
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
     await waitFor(() => expect(hook.result.current.state.status).toBe('synced'));
