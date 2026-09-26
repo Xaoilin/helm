@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 import { logError } from '../../services/logger';
 import type { AssistantActivityEntry, AssistantUndoResult } from '../../types/domain';

@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { DEFAULT_PROFILE } from '../../services/gamification';
 import type {
   CalendarAccount,

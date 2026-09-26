@@ -60,6 +60,14 @@ describe('Activity surface', () => {
     expect(mocks.getProductUsageEvents).not.toHaveBeenCalled();
   });
 
+  it('does not show the deprecated Lina audit trail', async () => {
+    render(<ActivitySurface />);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Usage overview' })).toBeInTheDocument());
+
+    expect(screen.queryByRole('heading', { name: 'Assistant actions' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Lina activity summary')).not.toBeInTheDocument();
+  });
+
   it('shows filtered content-free usage states and keeps Life Hero progression separate', async () => {
     render(<ActivitySurface />);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Usage overview' })).toBeInTheDocument());

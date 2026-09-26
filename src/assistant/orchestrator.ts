@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { HostedAssistantPausedError } from '../services/hostedAssistantAccess';
 import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import { LIMITS } from '../config/constants';

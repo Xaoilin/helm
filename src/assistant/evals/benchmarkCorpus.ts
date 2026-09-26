@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import type { CapabilityId } from '../capabilities';
 import type { AssistantEntityKind } from '../shared';
 import type { Surface } from '../../types/domain';

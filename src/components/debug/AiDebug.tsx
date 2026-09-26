@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   HOSTED_ASSISTANT_BILLING_FUNCTION,

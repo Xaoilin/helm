@@ -140,6 +140,7 @@ for (const width of [390, 1440]) {
   });
 
   test(`Chat keeps a rejected quick prompt and retries once at ${width}px`, async ({ page, scenario }, testInfo) => {
+    test.skip(true, 'The Lina assistant is disabled pending removal; see docs/deprecated-features.md');
     await scenario();
     // Inject a generic rejection at the runtime boundary. No model/provider is used.
     await page.route('**/src/assistant/runtime.ts*', route => route.fulfill({

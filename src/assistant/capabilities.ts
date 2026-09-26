@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import type { InventoryCategory, InventoryCondition, InventoryNeedPriority, InventorySubcategory, InventoryTrackingMode, Surface, TaskCategory, TaskPriority } from '../types/domain';
 import { INVENTORY_SUBCATEGORY_OPTIONS } from '../inventory/inventoryModel';
 

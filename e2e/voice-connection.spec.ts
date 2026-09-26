@@ -1,5 +1,8 @@
 import { expect, openApp, test } from './support/helm-fixture';
 
+// Deprecated: remove this spec with the feature.
+test.skip(true, 'Voice is disabled pending removal; see docs/deprecated-features.md');
+
 const reference = 'a0000000-0000-4000-8000-000000000001';
 for (const width of [390, 1440]) {
   test(`voice connection stores only a reference and preserves migration input at ${width}px`, async ({ page, scenario }, testInfo) => {

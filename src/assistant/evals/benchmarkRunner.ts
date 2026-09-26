@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { ASSISTANT_BENCHMARK } from '../../config/constants';
 import type { CapabilityId } from '../capabilities';
 import { buildAssistantModelTurnJsonSchema, parseAssistantModelTextTurn } from '../orchestrationSchema';

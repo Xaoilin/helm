@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import type { LifeHeroEvidenceInput } from '../types/domain';
 
 export const ELIF_B_PROVIDER_LABEL = 'Elif B';

@@ -63,40 +63,42 @@ test('Quran reading stays stable on reload and changes with the prayer date', as
 });
 
 for (const width of [1440, 390]) {
-  test(`paused hosted AI stays clear across Settings, Debug and Chat at ${width}px`, async ({ page, scenario }, testInfo) => {
-    await scenario();
-    let aiWorkRequests = 0;
-    await page.route('**/functions/v1/assistant-openai*', async route => {
-      const billing = route.request().url().endsWith('assistant-openai-billing');
-      const action = route.request().postDataJSON()?.action;
-      if (!billing && action !== 'health') aiWorkRequests++;
-      await route.fulfill({ status: billing ? 403 : action === 'health' ? 200 : 503, contentType: 'application/json', body: JSON.stringify(
-        billing ? { code: 'operator_required', error: 'Project billing is available only to an authorized operator.' } :
-          { ok: action === 'health', mode: 'paused', model: 'gpt-5.4', code: 'hosted_ai_paused', message: 'Hosted AI is paused. Use the app controls directly.', error: 'Hosted AI is paused. Use the app controls directly.' },
-      ) });
+  test(`the disabled Lina assistant stays out of navigation, Settings and Debug at ${width}px`, async ({ page, scenario }, testInfo) => {
+    // Chat, Lina and hosted AI are disabled pending removal; see docs/deprecated-features.md.
+    await scenario({ initialSurface: 'chat', settings: { assistantEnabled: true, wakeWordEnabled: true, lifeHeroEnabled: true } });
+    const deprecatedCalls: string[] = [];
+    page.on('request', request => {
+      if (/\/functions\/v1\/(assistant-openai|assistant-speech|github-life-hero)|life_hero|:11434\//u.test(request.url())) deprecatedCalls.push(request.url());
     });
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setViewportSize({ width, height: 900 });
     await openApp(page);
-    for (const surface of ['Settings', 'Debug', 'Chat']) {
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await page.getByRole('button', { name: `Navigate to ${surface}`, exact: true }).click();
-      if (surface === 'Debug') await page.getByRole('button', { name: 'AI Assistant' }).click();
-      await page.setViewportSize({ width, height: 900 });
-      const status = page.getByText('Hosted AI paused', { exact: surface !== 'Chat' }).first();
-      await status.scrollIntoViewIfNeeded();
-      await expect(status).toBeVisible();
-      if (surface === 'Debug') await expect(page.getByRole('button', { name: 'Run Hosted Smoke Test', exact: true })).toBeDisabled();
-      if (surface === 'Chat') {
-        await page.getByRole('button', { name: 'New conversation', exact: true }).last().click();
-        await expect(page.getByPlaceholder('Hosted AI is paused')).toBeDisabled();
-        await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-        await expect(page.getByRole('button', { name: 'Help me plan my week', exact: true })).toBeDisabled();
-        await expect(page.getByText('Lina is thinking...', { exact: false })).toHaveCount(0);
-      }
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath(`${surface.toLowerCase()}-${width}.png`) });
+    await expect(page.getByRole('main', { name: 'dashboard surface', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Navigate to Chat', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Lina/u })).toHaveCount(0);
+    await expect(page.getByLabel('Life Hero companion')).toHaveCount(0);
+    if (width === 390) {
+      await page.getByRole('button', { name: 'Open more navigation', exact: true }).click();
+      const more = page.getByRole('dialog', { name: 'More navigation' });
+      await expect(more.getByRole('button', { name: 'Chat', exact: true })).toHaveCount(0);
+      await more.getByRole('button', { name: 'Settings', exact: true }).click();
+    } else {
+      await page.getByRole('button', { name: 'Navigate to Settings', exact: true }).click();
     }
-    expect(aiWorkRequests).toBe(0);
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    for (const heading of ['Life Hero', 'Voice Assistant (Lina)', 'Local AI (Ollama)']) {
+      await expect(page.getByRole('heading', { name: heading, exact: true })).toHaveCount(0);
+    }
+    await expect(page.getByLabel('Microphone')).toHaveCount(0);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole('button', { name: 'Navigate to Debug', exact: true }).click();
+    await page.setViewportSize({ width, height: 900 });
+    for (const tab of ['Wake Word', 'AI Assistant', 'Audio Pipeline']) {
+      await expect(page.getByRole('button', { name: new RegExp(tab, 'u') })).toHaveCount(0);
+    }
+    await expect(page.getByRole('button', { name: /Network \/ APIs/u })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`deprecated-assistant-hidden-${width}.png`) });
+    expect(deprecatedCalls).toEqual([]);
   });
 }
 

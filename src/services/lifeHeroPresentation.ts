@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { LIFE_HERO_STATS, lifeHeroMomentumMultiplier } from './lifeHeroProgression';
 import type {
   LifeHeroConditionState,

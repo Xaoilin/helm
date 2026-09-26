@@ -57,6 +57,11 @@ function GoogleSyncBridge({ children }: { children: ReactNode }) {
   return <GoogleSyncProvider app={app}>{children}</GoogleSyncProvider>;
 }
 
+/**
+ * @deprecated Disabled 2026-09-26 with the Lina assistant; remove with the feature.
+ * Still mounted so readiness hooks keep their context, but nothing sends a turn.
+ * See docs/deprecated-features.md.
+ */
 function ChatBridge({ children }: { children: ReactNode }) {
   const calendar = useCalendar();
   const projects = useProjectContext();

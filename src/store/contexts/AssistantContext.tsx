@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
 import { LIMITS } from '../../config/constants';
