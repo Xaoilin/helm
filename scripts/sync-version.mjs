@@ -79,7 +79,7 @@ if (releaseManifest.version !== packageVersion) {
 }
 
 if (checkOnly) {
-  if (currentBranch.startsWith('codex/')) {
+  if (currentBranch && currentBranch !== 'master') {
     try {
       const masterPackageJson = JSON.parse(run('git', ['show', 'origin/master:package.json']));
       const masterVersion = masterPackageJson?.version;

@@ -6,7 +6,7 @@ Sabah One is delivered as a GitHub Pages website backed by Supabase. The browser
 
 The normal change flow is:
 
-1. Work on a dedicated `codex/<short-description>` branch.
+1. Work on a dedicated topic branch (for example `codex/<short-description>` or `claude/<short-description>`).
 2. Keep the change within its stated ownership and preserve unrelated work.
 3. Add or update the smallest relevant regression coverage and documentation.
 4. Let the protected pull-request checks validate the exact branch contents.
@@ -46,7 +46,7 @@ The required hosted-web checks are policy, database contract, lint, typecheck, u
 
 - `master` is protected by pull requests and the required policy, database, lint, typecheck, unit, browser E2E, web-build, and review checks.
 - Pull-request runs are tied to the exact branch tree. Draft and concurrency controls prevent stale evidence from being treated as current.
-- Same-repository `codex/*` pull requests can be promoted only after their required checks pass and the promoted tree is verified against the tested tree.
+- Same-repository pull requests (any branch name; drafts are held) can be promoted only after their required checks pass and the promoted tree is verified against the tested tree.
 - GitHub Pages deployment runs only for the protected `master` path. Supabase Edge Function deployment follows the same candidate identity where a function changed.
 - API-funded automated review is off by default. Codex source review is completed before promotion; the stable `codex-review` check reports the API deferral truthfully. Explicit opt-in automated review remains advisory when unavailable; completed high-severity findings remain blocking.
 - Post-promotion verification fails closed for a source, tree, artifact, deployment, or live-version mismatch.

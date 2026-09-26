@@ -4,7 +4,7 @@ HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the lin
 
 ## Start Here
 
-1. Work from this repository root on a dedicated `codex/<topic>` branch.
+1. Work from this repository root on a dedicated topic branch (for example `codex/<topic>` or `claude/<topic>`). Any ready same-repository PR auto-promotes after its checks pass; keep it a draft to hold it.
 2. Keep the change scoped to the requested user outcome and preserve unrelated work.
 3. Use GitHub Actions as the validation authority: policy, database, lint, typecheck, unit, browser E2E, and web-build checks must remain truthful.
 4. Review visible changes in a browser at the relevant responsive widths. Capture rendered evidence when practical.
