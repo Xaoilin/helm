@@ -7,6 +7,7 @@ import {
   applyOutcomeOperation,
   applyServiceTracking,
   confirmedFromService,
+  historyStartDate,
   listAllOutcomes,
   mergeRecords,
   planOutcomeSync,
@@ -150,4 +151,11 @@ describe('loading unchanged data causes no save', () => {
 
     expect(applyServiceTracking(local, tracking, {}).activationDayEligibility).toEqual(local.activationDayEligibility);
   });
+});
+
+it('loads history from the earliest outcome when it predates the tracking start', () => {
+  const legacy = { '2026-04-02::Fajr': record('2026-04-02', 'Fajr', 'on_time') };
+
+  expect(historyStartDate('2026-09-01T08:00:00Z', {}, legacy)).toBe('2026-04-02');
+  expect(historyStartDate('2026-09-01T08:00:00Z', {})).toBe('2026-09-01');
 });

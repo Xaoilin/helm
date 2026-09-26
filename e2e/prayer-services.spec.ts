@@ -43,6 +43,11 @@ test.describe('prayer and profile services', () => {
               date: '2026-08-28', prayerName: 'Isha', status: 'on_time',
               recordedAt: '2026-08-28T20:00:00.000Z', rewarded: true, source: 'dashboard',
             },
+            // History can predate the tracking start; it must load, not be re-sent.
+            '2026-04-02::Fajr': {
+              date: '2026-04-02', prayerName: 'Fajr', status: 'late',
+              recordedAt: '2026-08-20T08:00:00.000Z', rewarded: true, source: 'migration',
+            },
           },
           reminderReceipts: {},
           boundedReminderReceipts: {},
@@ -54,11 +59,14 @@ test.describe('prayer and profile services', () => {
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
     expect(control.services.calls.filter(call => call === 'POST /api/prayer/v1/import')).toHaveLength(1);
     expect(control.services.outcomes.get('2026-08-28::Isha')?.status).toBe('on_time');
+    expect(control.services.outcomes.get('2026-04-02::Fajr')?.status).toBe('late');
+    expect(control.services.conflicts).toBe(0);
     expect(control.services.tracking?.trackingStartedAt).toBe('2026-08-20T08:00:00.000Z');
 
     await page.reload();
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
     expect(control.services.calls.filter(call => call === 'POST /api/prayer/v1/import')).toHaveLength(1);
+    expect(control.services.conflicts).toBe(0);
   });
 
   test('uses the location saved in the profile service', async ({ page, scenario }) => {
