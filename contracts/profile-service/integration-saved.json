@@ -1,0 +1,14 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/profile/v1/integrations/google"
+  },
+  "status" : 200,
+  "body" : {
+    "provider" : "google",
+    "status" : "connected",
+    "configuredAt" : "2026-09-26T10:00:00Z",
+    "lastError" : null,
+    "updatedAt" : "2026-09-26T19:04:49.654885Z"
+  }
+}
