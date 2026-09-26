@@ -56,6 +56,7 @@ describe('capability-shaped application composition', () => {
       '<ProjectProvider>',
       '<TaskProvider>',
       '<PrayerProvider>',
+      '<DailyTaskRollover />',
       '<ClockProvider>',
       '<AssistantProvider>',
       '<AssistantActivityProvider>',

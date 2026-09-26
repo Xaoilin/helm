@@ -192,9 +192,9 @@ export function updateStreak(
   };
 }
 
-export function checkStreakBroken(profile: GamificationProfile): boolean {
+export function checkStreakBroken(profile: GamificationProfile, now: Date = new Date()): boolean {
   if (!profile.lastCompletionDate) return false;
-  const today = new Date();
+  const today = new Date(now);
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = toLocalDateStr(yesterday);

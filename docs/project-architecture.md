@@ -26,7 +26,7 @@ The visible version comes from the web build and the deployed `public/release.js
 
 `src/store/AppProviders.tsx` composes the existing domain providers without exposing an app-wide service bag. Components import the smallest owning domain hook they need: Calendar consumers use `useCalendar`, Task consumers use `useTaskContext`, Settings consumers use `useSettingsContext`, and so on. Updating one domain no longer republishes an object containing every other domain capability.
 
-Provider order remains explicit because several providers consume earlier owners. Settings and Gamification wrap Daily Momentum; Calendar precedes Trips; Projects precedes Tasks; Prayer and Clock follow the data domains; Assistant Activity follows Assistant; then the named Chat bridge, Shell, assistant-undo coordinator, and Google Sync bridge wrap rendered consumers. `src/test/composition.boundaries.test.ts` checks the order and ownership markers.
+Provider order remains explicit because several providers consume earlier owners. Settings and Gamification wrap Daily Momentum; Calendar precedes Trips; Projects precedes Tasks; Prayer and Clock follow the data domains, with the named `DailyTaskRollover` workflow mounted once between them so habit resets and streak-break resets run whichever page is open; Assistant Activity follows Assistant; then the named Chat bridge, Shell, assistant-undo coordinator, and Google Sync bridge wrap rendered consumers. `src/test/composition.boundaries.test.ts` checks the order and ownership markers.
 
 `src/store/ShellContext.tsx` owns only the active surface, one-shot assistant navigation requests, session restoration, and the readiness gate. Chat and voice can hand Shell a typed request to open a Tasks view or reveal a grounded Project without creating a second navigation path. Because rendered consumers mount after readiness, they do not need a cross-domain `loaded` capability.
 
@@ -36,6 +36,7 @@ Cross-domain behavior is retained only where one domain cannot own the invariant
 - `GoogleSyncBridge` supplies only Calendar account, source, event, and mutation capabilities to `GoogleSyncProvider`, preserving account -> source -> event identity.
 - `AssistantUndoProvider` is the single owner of supported assistant inverse operations and activity status publication.
 - `useProjectRemovalWorkflow` removes a Project and clears its Task references as one named workflow.
+- `useDailyTaskRollover` reopens completed habits once per app day (prayer tasks once per prayer-timetable day) and zeroes a missed streak, using the rules in `src/services/taskModel.ts`.
 
 The selected design reuses existing domain contexts. A dependency-injection container, Redux migration, generic service locator, and replacement all-app context were rejected because they would add another global contract without hiding new knowledge. `scripts/verify-capability-composition.mjs` rejects the retired façade identifiers, generic service-locator names, and non-workflow contracts spanning four or more recognized domains. Revisit this decision only when a concrete workflow cannot preserve its invariant within one owner or one explicitly named coordinator.
 

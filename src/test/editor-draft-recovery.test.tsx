@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   projects: { projects: [] },
   settings: {
     settings: { deepgramApiKey: '', elevenLabsApiKey: '', goalTags: [] },
+    appTimeZone: { effectiveTimeZone: 'UTC' },
   },
   sync: { readOnly: false },
   shell: {
@@ -71,7 +72,7 @@ const mocks = vi.hoisted(() => ({
     updateGamification: vi.fn(),
   },
   knowledge: { knowledgeEntries: [], knowledgeTopics: [], lifestyleItems: [] },
-  prayer: { getOutcome: vi.fn(), requestPrayerCompletion: vi.fn() },
+  prayer: { today: '2026-09-08', getOutcome: vi.fn(), requestPrayerCompletion: vi.fn() },
 }));
 
 vi.mock('../store/supabase', () => ({
