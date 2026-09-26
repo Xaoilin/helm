@@ -476,8 +476,6 @@ export default function VoiceAssistant({ prayerData }: Props) {
           removeTask: tasks.removeTask,
           upsertAssistantCorrection: assistant.upsertCorrection,
           noteAssistantCorrectionApplied: assistant.noteCorrectionApplied,
-          addCalendarEvent: calendar.addCalendarEvent,
-          updateCalendarEvent: calendar.updateCalendarEvent,
           addTransaction: finance.addTransaction,
           addKnowledgeEntry: knowledge.addKnowledgeEntry,
           addInventoryItem: inventory.addInventoryItem,

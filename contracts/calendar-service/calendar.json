@@ -1,0 +1,70 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/calendar/v1/calendar?from=2026-09-01&to=2026-12-31"
+  },
+  "status" : 200,
+  "body" : {
+    "accounts" : [
+      {
+        "id" : "1f9a9a9b-3dc4-498e-a315-24b42744be89",
+        "provider" : "local",
+        "name" : "Home",
+        "email" : "",
+        "isPrimary" : true,
+        "paletteIndex" : null,
+        "authStatus" : "connected",
+        "authError" : null,
+        "lastSyncedAt" : null,
+        "syncError" : null
+      },
+      {
+        "id" : "7e724593-c457-47b1-8c3b-cff4c8d0431c",
+        "provider" : "google",
+        "name" : "Sabah",
+        "email" : "sabah@example.com",
+        "isPrimary" : false,
+        "paletteIndex" : null,
+        "authStatus" : "connected",
+        "authError" : null,
+        "lastSyncedAt" : "2026-09-26T05:49:27.689637Z",
+        "syncError" : null
+      }
+    ],
+    "sources" : [
+      {
+        "id" : "89f814b4-10c4-4b3e-bb00-715ef8490488",
+        "accountId" : "1f9a9a9b-3dc4-498e-a315-24b42744be89",
+        "name" : "Calendar",
+        "color" : "#4f5bff",
+        "visible" : true,
+        "googleCalendarId" : null,
+        "accessRole" : null,
+        "writable" : true
+      },
+      {
+        "id" : "cf2214d3-55bc-42e9-8836-aafec4980c5d",
+        "accountId" : "7e724593-c457-47b1-8c3b-cff4c8d0431c",
+        "name" : "Sabah",
+        "color" : "#4f5bff",
+        "visible" : true,
+        "googleCalendarId" : "sabah@example.com",
+        "accessRole" : "owner",
+        "writable" : true
+      }
+    ],
+    "events" : [
+      {
+        "id" : "ebc9aa21-31e5-4ce6-bc25-75c1aa3c26c2",
+        "sourceId" : "cf2214d3-55bc-42e9-8836-aafec4980c5d",
+        "title" : "Dentist",
+        "description" : "Check-up",
+        "location" : "High Street",
+        "allDay" : false,
+        "start" : "2026-10-01T09:00:00Z",
+        "end" : "2026-10-01T10:00:00Z",
+        "googleEventId" : "g1"
+      }
+    ]
+  }
+}

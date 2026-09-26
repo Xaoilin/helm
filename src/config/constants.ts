@@ -208,6 +208,10 @@ export const API_TIMEOUT = {
   PRAYER_BACKEND_HEALTH: 5_000,
   /** Signed-in data calls to the Spring Boot prayer and profile services */
   SERVICE_API: 10_000,
+  /** Calendar writes that go through Google first; the service answers within 12 seconds */
+  CALENDAR_WRITE: 15_000,
+  /** Mirroring every connected Google calendar */
+  CALENDAR_SYNC: 60_000,
 } as const;
 
 // ── Limits ──

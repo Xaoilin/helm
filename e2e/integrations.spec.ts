@@ -82,6 +82,10 @@ for (const width of [390, 1440]) {
         accountEmail: account.email, serverCredentialPresent: true, credentialHealth: 'needs_reconnect',
       })) } });
     });
+    const calendarDeletes: string[] = [];
+    page.on('request', request => {
+      if (request.method() === 'DELETE' && request.url().includes('/api/calendar/v1/accounts/')) calendarDeletes.push(request.url());
+    });
     const githubActions: string[] = [];
     await page.route('**/functions/v1/github-life-hero*', async route => {
       githubActions.push(route.request().postDataJSON().action);
@@ -104,7 +108,8 @@ for (const width of [390, 1440]) {
     await expect(surface.getByRole('button', { name: /GitHub App/ })).toHaveCount(0);
     await expect(surface.getByRole('button', { name: /Simulate|Sync GitHub evidence|Choose repositories/ })).toHaveCount(0);
     await expect(surface.getByRole('heading', { name: /Slack|Linear/ })).toHaveCount(0);
-    expect(googleActions.every(action => action === 'get_account_status')).toBe(true);
+    // The browser never calls the Google credential function: the calendar service does.
+    expect(googleActions).toEqual([]);
     expect(githubActions).toEqual([]);
     expect(integrationWrites.every(write => write.op !== 'delete' && (!('recordId' in write) || !['int-google', 'int-github'].includes(write.recordId)))).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -136,7 +141,9 @@ for (const width of [390, 1440]) {
     }
     await expect.poll(() => integrationWrites.some(write => write.op === 'patch' && write.recordId === google.id && write.set.status === 'disconnected')).toBe(true);
     await testInfo.attach('integration-writes', { contentType: 'application/json', body: JSON.stringify(integrationWrites) });
-    expect(googleActions.filter(action => action === 'revoke_account')).toHaveLength(2);
+    // Each disconnect asks the calendar service, which revokes the stored Google credential.
+    expect(calendarDeletes).toHaveLength(2);
+    expect(googleActions).toEqual([]);
     expect(integrationWrites.some(write => write.op === 'delete')).toBe(false);
   });
 }

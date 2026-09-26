@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { User } from '@supabase/supabase-js';
 import {
   getSessionUser,
+  SessionUnavailableError,
   isSupabaseReady,
   onAuthStateChange,
   signInWithGoogle as startGoogleSignIn,
@@ -15,6 +16,9 @@ interface AuthSessionContextValue {
   loading: boolean;
   supabaseReady: boolean;
   sessionKey: string;
+  /** The auth server could not be reached to renew the stored session; the user is not signed out. */
+  sessionUnavailable: boolean;
+  retrySession: () => void;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -38,6 +42,8 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [bootstrapped, setBootstrapped] = useState(!supabaseReady);
   const [loading, setLoading] = useState(supabaseReady);
   const [generation, setGeneration] = useState(0);
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
+  const [sessionAttempt, setSessionAttempt] = useState(0);
   const authUserRef = useRef<User | null>(null);
 
   useEffect(() => {
@@ -52,6 +58,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     let initialEventPending = true;
 
+    setSessionUnavailable(false);
     getSessionUser().then(user => {
       if (cancelled || !initialEventPending) return;
       setAuthUser(user);
@@ -59,6 +66,13 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       setBootstrapped(true);
       setLoading(false);
       initialEventPending = false;
+    }, (error: unknown) => {
+      if (cancelled || !initialEventPending) return;
+      if (!(error instanceof SessionUnavailableError)) throw error;
+      // Keep the stored session: offer a retry rather than a sign-in screen.
+      setSessionUnavailable(true);
+      setBootstrapped(true);
+      setLoading(false);
     });
 
     const unsubscribe = onAuthStateChange(({ event, user }) => {
@@ -67,8 +81,13 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       const previousUserId = authUserRef.current?.id ?? null;
       const nextUserId = user?.id ?? null;
 
-      authUserRef.current = user;
-      setAuthUser(user);
+      // A token refresh keeps the same user object, so data providers do not reload every hour.
+      const sameUser = previousUserId !== null && previousUserId === nextUserId && event !== 'USER_UPDATED';
+      if (!sameUser) {
+        authUserRef.current = user;
+        setAuthUser(user);
+      }
+      setSessionUnavailable(false);
       setBootstrapped(true);
       setLoading(false);
 
@@ -89,7 +108,12 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       unsubscribe();
     };
-  }, [supabaseReady]);
+  }, [supabaseReady, sessionAttempt]);
+
+  const retrySession = useCallback(() => {
+    setLoading(true);
+    setSessionAttempt(current => current + 1);
+  }, []);
 
   const signInWithGoogle = useCallback(async () => {
     await startGoogleSignIn();
@@ -110,6 +134,8 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
         loading,
         supabaseReady,
         sessionKey: `${authUser?.id ?? 'signed-out'}:${generation}`,
+        sessionUnavailable,
+        retrySession,
         signInWithGoogle,
         signOut,
       }}

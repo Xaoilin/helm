@@ -2,10 +2,31 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { callService, ServiceError } from '../services/backend/serviceClient';
 import { preferencesSchema } from '../services/backend/contracts';
 
-const auth = vi.hoisted(() => ({ token: 'user-access-token' as string | null }));
-vi.mock('../store/supabase', () => ({ getCurrentAccessToken: () => auth.token }));
+const auth = vi.hoisted(() => ({
+  token: 'user-access-token' as string | null,
+  renewed: 'renewed-access-token' as string | null,
+  renewals: 0,
+  unreachable: false,
+}));
+vi.mock('../store/supabase', () => {
+  class SessionUnavailableError extends Error {}
+  return {
+    SessionUnavailableError,
+    getFreshAccessToken: async ({ forceRefresh = false }: { forceRefresh?: boolean } = {}) => {
+      if (!forceRefresh) return auth.token;
+      auth.renewals += 1;
+      if (auth.unreachable) throw new SessionUnavailableError('unreachable');
+      return auth.renewed;
+    },
+  };
+});
 
-beforeEach(() => { auth.token = 'user-access-token'; });
+beforeEach(() => {
+  auth.token = 'user-access-token';
+  auth.renewed = 'renewed-access-token';
+  auth.renewals = 0;
+  auth.unreachable = false;
+});
 afterEach(() => vi.restoreAllMocks());
 
 it('sends the signed-in user token and parses the response through its contract', async () => {
@@ -76,4 +97,35 @@ it('reports unreachable services and timeouts', async () => {
 
   await expect(callService('https://svc.test', 'GET', '/x', null)).rejects.toMatchObject({ code: 'network' });
   await expect(callService('https://svc.test', 'GET', '/x', null)).rejects.toMatchObject({ code: 'timeout' });
+});
+
+it('renews the session once and retries when a token is rejected, keeping the idempotency key', async () => {
+  const fetchMock = vi.spyOn(globalThis, 'fetch')
+    .mockResolvedValueOnce(new Response(null, { status: 401 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+  await callService('https://svc.test', 'DELETE', '/x', null, undefined, { idempotencyKey: 'delete-1' });
+
+  expect(auth.renewals).toBe(1);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(fetchMock.mock.calls[1][1]?.headers).toMatchObject({
+    Authorization: 'Bearer renewed-access-token',
+    'Idempotency-Key': 'delete-1',
+  });
+});
+
+it('reports a rejected renewed token as unauthorized after one retry, without looping', async () => {
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json(
+    { code: 'invalid_token', message: 'Rejected.' }, { status: 401 }));
+
+  await expect(callService('https://svc.test', 'GET', '/x', null)).rejects.toMatchObject({ status: 401 });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+it('treats an unreachable auth server as a transient failure, not a sign-out', async () => {
+  auth.unreachable = true;
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 401 }));
+
+  await expect(callService('https://svc.test', 'GET', '/x', null))
+    .rejects.toMatchObject({ status: 0, code: 'session_unavailable' });
 });

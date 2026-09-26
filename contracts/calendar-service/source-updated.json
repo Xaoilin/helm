@@ -1,0 +1,17 @@
+{
+  "request" : {
+    "method" : "PATCH",
+    "path" : "/api/calendar/v1/sources/{sourceId}"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "cf2214d3-55bc-42e9-8836-aafec4980c5d",
+    "accountId" : "7e724593-c457-47b1-8c3b-cff4c8d0431c",
+    "name" : "Sabah",
+    "color" : "#ff8800",
+    "visible" : false,
+    "googleCalendarId" : "sabah@example.com",
+    "accessRole" : "owner",
+    "writable" : true
+  }
+}

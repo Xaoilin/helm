@@ -17,10 +17,6 @@ import {
 import type { Surface } from './types/domain';
 import { APP_RELEASE_LABEL, APP_RELEASE_VERSION } from './config/release';
 import { ASSISTANT_ENABLED, VOICE_ENABLED, isSurfaceAvailable } from './config/deprecatedFeatures';
-import {
-  getGoogleCalendarAuthPatch,
-  isGoogleCalendarAccount,
-} from './services/googleCalendarAuthManager';
 import { useDialog } from './hooks/useDialog';
 import { useOptionalAuthSession } from './store/AuthSessionContext';
 import { useSyncAvailability } from './store/SyncAvailabilityContext';
@@ -72,7 +68,7 @@ const LINA_PANEL_ENABLED = ASSISTANT_ENABLED && VOICE_ENABLED;
 
 function AppInner() {
   const shell = useShell();
-  const { calendarAccounts, updateCalendarAccount, loaded: calendarLoaded } = useCalendar();
+  const { calendarAccounts, loaded: calendarLoaded } = useCalendar();
   const { integrations, updateIntegration, loaded: settingsLoaded } = useSettingsContext();
   const sharedPageReady = useSharedPageReady();
   const { readOnly } = useSyncAvailability();
@@ -153,23 +149,10 @@ function AppInner() {
 
   useEffect(() => {
     if (readOnly || !calendarLoaded || !settingsLoaded) return;
-    for (const account of calendarAccounts) {
-      if (!isGoogleCalendarAccount(account)) continue;
-
-      const patch = getGoogleCalendarAuthPatch(account);
-      const hasChanges = Object.entries(patch).some(([key, value]) => account[key as keyof typeof account] !== value);
-      if (hasChanges) {
-        updateCalendarAccount(account.id, patch);
-      }
-    }
-  }, [authUser?.email, calendarAccounts, calendarLoaded, settingsLoaded, readOnly, updateCalendarAccount]);
-
-  useEffect(() => {
-    if (readOnly || !calendarLoaded || !settingsLoaded) return;
     const googleIntegration = integrations.find(integration => integration.provider === 'google');
     if (!googleIntegration) return;
 
-    const googleAccounts = calendarAccounts.filter(isGoogleCalendarAccount);
+    const googleAccounts = calendarAccounts.filter(account => account.provider === 'google');
     const problemAccount = googleAccounts.find(account =>
       account.authStatus === 'needs_reconnect'
       || account.authStatus === 'revoked'

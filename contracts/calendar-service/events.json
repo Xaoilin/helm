@@ -1,0 +1,18 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/calendar/v1/events?from=2026-10-01&to=2026-10-31"
+  },
+  "status" : 200,
+  "body" : [ {
+    "id" : "ebc9aa21-31e5-4ce6-bc25-75c1aa3c26c2",
+    "sourceId" : "cf2214d3-55bc-42e9-8836-aafec4980c5d",
+    "title" : "Dentist",
+    "description" : "Check-up",
+    "location" : "High Street",
+    "allDay" : false,
+    "start" : "2026-10-01T09:00:00Z",
+    "end" : "2026-10-01T10:00:00Z",
+    "googleEventId" : "g1"
+  } ]
+}

@@ -9,7 +9,16 @@ import {
   type FakeServices,
   type FakeServicesOptions,
 } from './fake-services';
-import type { EmploymentApplication, EmploymentHistoryEntry, EquityPosition, EquityPositionDraft, Surface } from '../../src/types/domain';
+import type {
+  CalendarAccount,
+  CalendarEvent,
+  CalendarSource,
+  EmploymentApplication,
+  EmploymentHistoryEntry,
+  EquityPosition,
+  EquityPositionDraft,
+  Surface,
+} from '../../src/types/domain';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
 const TEST_EMAIL = 'e2e@example.test';
@@ -655,6 +664,11 @@ function servicesFromScenario(options: HelmScenarioOptions, settings: Record<str
       reminderMinutes: typeof settings.prayerReminderMinutes === 'number' ? settings.prayerReminderMinutes : 15,
     },
     ...(location ? { profile: location } : {}),
+    calendar: {
+      accounts: options.stores?.calendarAccounts as CalendarAccount[] | undefined,
+      sources: options.stores?.calendarSources as CalendarSource[] | undefined,
+      events: options.stores?.calendarEvents as CalendarEvent[] | undefined,
+    },
     ...options.services,
   };
 }

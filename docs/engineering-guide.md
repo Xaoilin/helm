@@ -92,7 +92,12 @@ Direct browser review is required for visible user flows and especially for OAut
 - Realtime channel failures leave healthy database HTTPS operations available. Polling/version reconciliation and channel retry have independent recovery; never treat a dropped WebSocket as invalid authentication.
 - Database recovery and channel reconnect each allow five retries with exponential delays and up to 25% jitter. Hidden/offline pages pause recovery; foreground, online and explicit retry open a new cycle. During database failure, periodic checks, Broadcast and repeated same-account auth bootstrap cannot bypass that cycle. A successful version probe precedes refresh snapshots; initial hydration remains a single coalesced load. Removing a failed Broadcast subscription stops its SDK rejoin and, when it is the final channel, socket retry.
 - The locked Supabase Auth 2.111.0 SDK owns session renewal: concurrent refresh calls share one promise, transient retries back off within a 30-second attempt-start budget, and failures impose a 60-second same-token cooldown. No application token-refresh loop is added. Auth revision checks reject bootstrap completion superseded by sign-out or account changes. Existing mutation retries reuse the same request ID and operations; read recovery never replays writes.
-- Transient read failures preserve confirmed same-account data and drafts with visible freshness; invalid authorization, account changes and schema incompatibility fail closed. Domain operation errors do not invalidate unrelated capabilities.
+- Session rules (signing out is only ever the user's choice or the auth server ending the session):
+  - Calls to Sabah One services take their token from `getFreshAccessToken`, which renews a token within a minute of expiry. A `401` renews the session once and retries with the same `Idempotency-Key`; a second `401` is reported, never turned into a sign-out.
+  - A database `401`, `403`, `42501` or `PGRST30x` first renews the session. If renewal works (the token had expired in a sleeping or background tab) or the auth server is unreachable, confirmed data stays on screen and bounded recovery reloads it. Only a session the auth server has ended clears account data.
+  - At startup, a stored session whose renewal fails for a network reason is retried and then shown as "Reconnecting to Sabah One" with Retry, never as the sign-in screen. The SDK's null `INITIAL_SESSION` for that case is ignored.
+  - Google Calendar access never touches the Sabah One session: consent uses Google's popup code flow, credentials stay server-side, and Google problems are `409 google_reconnect_required`, not `401`.
+- Transient read failures preserve confirmed same-account data and drafts with visible freshness; ended sessions, account changes and schema incompatibility fail closed. Domain operation errors do not invalidate unrelated capabilities.
 - Degraded states must say what is unavailable and what the user can do in the page; the in-app reminder banner is the fallback for unavailable browser notifications.
 - Diagnostics redact tokens and secrets while retaining request IDs and normalized failure codes where available.
 
@@ -110,8 +115,9 @@ Direct browser review is required for visible user flows and especially for OAut
 ## Integration setup
 
 Integrations always offers Google Calendar and the read-only GitHub App, including
-for empty or partial account collections. Configure Google to link the signed-in
-profile or add another account; reconnect remains explicit for each account.
+for empty or partial account collections. Configure Google to connect the signed-in
+profile's Google account or another one through Google's consent popup; reconnect
+remains explicit for each account. None of these replace the Sabah One session.
 GitHub uses **Install and authorize GitHub App**, followed by repository selection
 and evidence sync. Revoked GitHub access requires **Reconnect GitHub App**.
 Provider failures remain visible and leave setup available for an explicit retry.
@@ -120,7 +126,8 @@ Slack and Linear are unavailable; there are no simulated connection actions.
 Google deployment configuration belongs to the site operator, not an end-user
 Settings field. The Pages build uses `VITE_GOOGLE_OAUTH_CLIENT_ID`; the hosted
 `google-calendar-oauth` function uses the matching `GOOGLE_OAUTH_CLIENT_ID` and
-server-only `GOOGLE_OAUTH_CLIENT_SECRET`. Use the existing protected deployment
+server-only `GOOGLE_OAUTH_CLIENT_SECRET`, and serves only the calendar service,
+which calls it on the user's behalf. Use the existing protected deployment
 workflow and authorized website configuration. Missing build configuration
 disables adding another Google account and explains who can restore setup.
 

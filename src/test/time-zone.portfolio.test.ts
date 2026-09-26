@@ -4,15 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { extractTemporalReference } from '../assistant/temporalResolver';
 import { resolveAppTimeZone } from '../services/appTimeZone';
 import {
-  getAllDayCalendarDateRange,
-  isAllDayCalendarEventOnDate,
-} from '../services/calendarEventDates';
-import {
-  googleEventToLocal,
-  localEventToGooglePayload,
-  type GoogleCalendarEvent,
-} from '../services/googleCalendarApi';
-import {
   buildPrayerScheduleDays,
   buildPrayerSchedulePolicySnapshot,
 } from '../services/prayerSchedulePolicy';
@@ -157,73 +148,13 @@ describe('effective app time-zone policy', () => {
     expect(resolution?.start).toBe('2026-08-30T11:30:00.000Z');
   });
 
-  it('round-trips single-day and multi-day Google all-day dates without zone drift', () => {
-    const appTimeZone = resolveAppTimeZone(
-      'America/New_York',
-      'Europe/London',
-    ).effectiveTimeZone;
-    const cases = [
-      { start: '2026-08-29', exclusiveEnd: '2026-08-30', inclusiveEnd: '2026-08-29' },
-      { start: '2026-08-29', exclusiveEnd: '2026-09-01', inclusiveEnd: '2026-08-31' },
-    ];
-
-    for (const [index, expected] of cases.entries()) {
-      const googleEvent: GoogleCalendarEvent = {
-        id: `all-day-${index}`,
-        summary: `All day ${index}`,
-        start: { date: expected.start },
-        end: { date: expected.exclusiveEnd },
-      };
-      const local = googleEventToLocal(googleEvent, 'source-google', 'primary');
-
-      expect(local.start).toBe(expected.start);
-      expect(local.end).toBe(expected.inclusiveEnd);
-      expect(getAllDayCalendarDateRange(local, appTimeZone)).toEqual({
-        startDate: expected.start,
-        endDate: expected.inclusiveEnd,
-      });
-      expect(isAllDayCalendarEventOnDate(local, expected.start, appTimeZone)).toBe(true);
-      expect(isAllDayCalendarEventOnDate(local, expected.inclusiveEnd, appTimeZone)).toBe(true);
-      if (index === 1) {
-        expect(isAllDayCalendarEventOnDate(local, '2026-08-30', appTimeZone)).toBe(true);
-        expect(isAllDayCalendarEventOnDate(local, expected.exclusiveEnd, appTimeZone)).toBe(false);
-      }
-      expect(localEventToGooglePayload(local, appTimeZone)).toMatchObject({
-        start: { date: expected.start },
-        end: { date: expected.exclusiveEnd },
-      });
-    }
-  });
-
-  it('writes Google timed events with the effective app zone explicitly', () => {
-    expect(localEventToGooglePayload({
-      title: 'Review',
-      description: '',
-      start: '2026-08-29T13:00:00.000Z',
-      end: '2026-08-29T14:00:00.000Z',
-      allDay: false,
-    }, 'America/New_York')).toMatchObject({
-      start: { dateTime: '2026-08-29T13:00:00.000Z', timeZone: 'America/New_York' },
-      end: { dateTime: '2026-08-29T14:00:00.000Z', timeZone: 'America/New_York' },
-    });
-    expect(() => localEventToGooglePayload({
-      title: 'Review',
-      description: '',
-      start: '2026-08-29T13:00:00.000Z',
-      end: '2026-08-29T14:00:00.000Z',
-      allDay: false,
-    }, 'Not/AZone')).toThrow('valid app time zone');
-  });
-
   it('keeps direct browser time-zone discovery behind one resolver', () => {
     const resolver = readFileSync(resolve(root, 'src/services/appTimeZone.ts'), 'utf8');
     const prayerContext = readFileSync(resolve(root, 'src/store/contexts/PrayerContext.tsx'), 'utf8');
     const planner = readFileSync(resolve(root, 'src/assistant/planner.ts'), 'utf8');
-    const calendarApi = readFileSync(resolve(root, 'src/services/googleCalendarApi.ts'), 'utf8');
     expect(resolver).toContain('Intl.DateTimeFormat().resolvedOptions().timeZone');
     expect(prayerContext).not.toContain('Intl.DateTimeFormat().resolvedOptions().timeZone');
     expect(planner).not.toContain('Intl.DateTimeFormat().resolvedOptions().timeZone');
-    expect(calendarApi).not.toContain('Intl.DateTimeFormat().resolvedOptions().timeZone');
   });
 
   it('keeps React prayer orchestration dependent on cohesive policy boundaries', () => {

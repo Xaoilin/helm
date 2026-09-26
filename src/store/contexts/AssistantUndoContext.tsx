@@ -113,14 +113,9 @@ export function executeAssistantActivityUndo(
         break;
       }
       case 'calendar.delete':
-        dependencies.calendar.removeCalendarEvent(operation.id);
-        break;
       case 'calendar.replace':
-        if (!dependencies.calendar.calendarEvents.some(event => event.id === operation.event.id)) {
-          throw new Error('The calendar event no longer exists.');
-        }
-        dependencies.calendar.updateCalendarEvent(operation.event.id, operation.event);
-        break;
+        // Calendar changes are confirmed by the calendar service (and Google), not undone locally.
+        throw new Error('Calendar actions can no longer be undone here; change the event in Calendar.');
       case 'finance.delete_transaction':
         if (!dependencies.finance.transactions.some(transaction => transaction.id === operation.id)) {
           throw new Error('The transaction was already removed.');

@@ -1,5 +1,5 @@
 /** Supabase Auth sign-in, sign-out, session bootstrap and auth events. */
-import type { AuthChangeEvent, User } from '@supabase/supabase-js';
+import { isAuthRetryableFetchError, type AuthChangeEvent, type User } from '@supabase/supabase-js';
 import { logWarn } from '../../services/logger';
 import { classifyOperationalFailure, recordOperationalEvent } from '../../services/operationalTelemetry';
 import {
@@ -50,56 +50,116 @@ export async function signOut(): Promise<void> {
   recordOperationalEvent({ domain: 'auth', operation: 'session', outcome: 'changed', reason: 'signed_out' });
 }
 
+/** Startup waits this long between attempts when the auth server cannot be reached. */
+const SESSION_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
+/** A token this close to expiry is renewed before use, so a request never leaves with a dead token. */
+const TOKEN_EXPIRY_MARGIN_SECONDS = 60;
+
+/**
+ * The auth server could not be reached to renew a stored session. The session may still be valid,
+ * so this is never treated as "signed out".
+ */
+export class SessionUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super('Sabah One could not reach its sign-in service to renew your session.');
+    this.name = 'SessionUnavailableError';
+    this.cause = cause;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * The signed-in user at startup, or null only when there is genuinely no session.
+ *
+ * A stored session whose renewal fails for a network reason is retried; if the auth server stays
+ * unreachable, {@link SessionUnavailableError} is thrown so the app can offer a retry instead of a
+ * sign-in screen (the SDK keeps such sessions stored, and signing in again would not help).
+ */
 export async function getSessionUser(): Promise<User | null> {
   const activeClient = getClient();
   if (!activeClient) return null;
   const revision = getAuthSessionRevision();
   const superseded = () => getClient() !== activeClient || revision !== getAuthSessionRevision();
   const startedAt = performance.now();
-  try {
-    const { data: { session }, error } = await activeClient.auth.getSession();
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= SESSION_RETRY_DELAYS_MS.length; attempt += 1) {
+    if (attempt > 0) await sleep(SESSION_RETRY_DELAYS_MS[attempt - 1]);
     // An auth event may supersede this read while the SDK recovers its session.
     if (superseded()) return getCurrentSessionUser();
-    if (error) throw error;
-    if (session?.user) {
+    const { data: { session }, error } = await activeClient.auth.getSession();
+    if (superseded()) return getCurrentSessionUser();
+    if (!error) {
       recordAuthSession(session);
       recordOperationalEvent({
         domain: 'auth',
         operation: 'session',
-        outcome: 'ok',
-        reason: 'initial_session',
+        outcome: session?.user ? 'ok' : 'changed',
+        reason: session?.user ? 'initial_session' : 'signed_out',
         durationMs: performance.now() - startedAt,
       });
-      return session.user;
+      return session?.user ?? null;
     }
-  } catch (error) {
-    if (superseded()) return getCurrentSessionUser();
-    logWarn('Supabase', `Session bootstrap failed: ${error instanceof Error ? error.message : String(error)}`);
-    recordAuthSession(null);
-    recordOperationalEvent({
-      domain: 'auth',
-      operation: 'session',
-      outcome: 'failed',
-      reason: classifyOperationalFailure(error),
-      durationMs: performance.now() - startedAt,
-    });
-    return null;
+    lastError = error;
+    if (!isAuthRetryableFetchError(error)) break;
+    logWarn('Supabase', `Session renewal failed; retrying: ${error.message}`);
   }
-  recordAuthSession(null);
   recordOperationalEvent({
     domain: 'auth',
     operation: 'session',
-    outcome: 'changed',
-    reason: 'signed_out',
+    outcome: 'failed',
+    reason: classifyOperationalFailure(lastError),
     durationMs: performance.now() - startedAt,
   });
+  if (isAuthRetryableFetchError(lastError)) throw new SessionUnavailableError(lastError);
+  // The refresh token was rejected: the session has ended and the SDK has removed it.
+  logWarn('Supabase', `Session ended: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+  recordAuthSession(null);
   return null;
+}
+
+let refreshInFlight: Promise<string | null> | null = null;
+
+/**
+ * An access token that is valid for at least a minute, renewing the session first when needed.
+ * Every call to a Sabah One service uses this rather than a cached token, so a tab that slept or
+ * sat in the background never sends an expired one.
+ *
+ * @param forceRefresh renew even if the current token looks valid (after a 401)
+ * @returns null only when there is no session: the user is signed out
+ * @throws SessionUnavailableError when the auth server cannot be reached; the session is kept
+ */
+export async function getFreshAccessToken(options: { forceRefresh?: boolean } = {}): Promise<string | null> {
+  const activeClient = getClient();
+  if (!activeClient) return null;
+  if (!options.forceRefresh) {
+    const { data: { session }, error } = await activeClient.auth.getSession();
+    if (error && isAuthRetryableFetchError(error)) throw new SessionUnavailableError(error);
+    if (!session) return null;
+    if ((session.expires_at ?? 0) - TOKEN_EXPIRY_MARGIN_SECONDS > Date.now() / 1000) return session.access_token;
+  }
+  // One renewal at a time; the SDK also serialises renewals across tabs.
+  refreshInFlight ??= activeClient.auth.refreshSession()
+    .then(async ({ data, error }) => {
+      if (!error) return data.session?.access_token ?? null;
+      if (isAuthRetryableFetchError(error)) throw new SessionUnavailableError(error);
+      // Another tab may have renewed the session first; use whatever session storage now holds.
+      const { data: { session } } = await activeClient.auth.getSession();
+      return session?.access_token ?? null;
+    })
+    .finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
 }
 
 export function onAuthStateChange(callback: (change: AuthStateChange) => void): () => void {
   const client = getClient();
   if (!client) return () => {};
   const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
+    // The SDK reports INITIAL_SESSION as null when renewing a stored session fails for a network
+    // reason, while keeping that session. getSessionUser decides the startup state instead.
+    if (event === 'INITIAL_SESSION' && !session) return;
     advanceAuthSessionRevision();
     const user = session?.user || null;
     recordAuthSession(session ?? null);

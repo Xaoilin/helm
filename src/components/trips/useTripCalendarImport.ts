@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { pickDefaultCalendarSource, resolveCalendarImportRange, type CalendarImportTarget } from '../../services/tripCalendarImport';
-import { useCalendar } from '../../store/contexts/CalendarContext';
+import { calendarErrorMessage, useCalendar } from '../../store/contexts/CalendarContext';
 
 /** State for copying one trip plan or booking into a Calendar source. */
 export function useTripCalendarImport() {
-  const { calendarAccounts, calendarSources, addCalendarEvent } = useCalendar();
+  const { calendarAccounts, calendarSources: allSources, addCalendarEvent } = useCalendar();
+  // Read-only Google calendars cannot take new events.
+  const calendarSources = allSources.filter(source => source.writable !== false);
   const [target, setTarget] = useState<CalendarImportTarget | null>(null);
   const [sourceId, setSourceId] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
@@ -19,22 +21,28 @@ export function useTripCalendarImport() {
     setSourceId(pickDefaultCalendarSource(calendarAccounts, calendarSources)?.id || '');
   }
 
-  function confirm(): void {
+  async function confirm(): Promise<void> {
     if (!target || !sourceId) return;
     const range = resolveCalendarImportRange(target);
     if (!range) {
       setNotice('The calendar dates are invalid.');
       return;
     }
-    addCalendarEvent({
-      sourceId,
-      title: target.title,
-      description: target.description,
-      start: range.start,
-      end: range.end,
-      allDay: target.allDay,
-      location: target.location,
-    });
+    try {
+      // Written to Google too when the chosen calendar is a Google calendar.
+      await addCalendarEvent({
+        sourceId,
+        title: target.title,
+        description: target.description,
+        start: range.start,
+        end: range.end,
+        allDay: target.allDay,
+        location: target.location,
+      });
+    } catch (error) {
+      setNotice(`The trip item was not added to Calendar: ${calendarErrorMessage(error)}`);
+      return;
+    }
     setTarget(null);
   }
 

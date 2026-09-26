@@ -1,0 +1,17 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/calendar/v1/sources"
+  },
+  "status" : 201,
+  "body" : {
+    "id" : "e70c0d0d-511f-441e-aaf7-7a9bd1253a3d",
+    "accountId" : "1f9a9a9b-3dc4-498e-a315-24b42744be89",
+    "name" : "Family",
+    "color" : "#22aa66",
+    "visible" : true,
+    "googleCalendarId" : null,
+    "accessRole" : null,
+    "writable" : true
+  }
+}

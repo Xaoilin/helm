@@ -15,7 +15,10 @@ import {
 import { createPrayerTrackingState } from '../services/prayerTracking';
 
 vi.mock('../config', () => ({ PRAYER_BACKEND_URL: 'https://prayer.test' }));
-vi.mock('../store/supabase', () => ({ getCurrentAccessToken: () => 'token' }));
+vi.mock('../store/supabase', () => ({
+  getFreshAccessToken: async () => 'token',
+  SessionUnavailableError: class extends Error {},
+}));
 
 afterEach(() => vi.restoreAllMocks());
 

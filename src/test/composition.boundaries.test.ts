@@ -43,7 +43,7 @@ describe('capability-shaped application composition', () => {
     );
   });
 
-  it('keeps provider order, readiness, Chat, Google Sync, and undo ownership explicit', () => {
+  it('keeps provider order, readiness, Chat, and undo ownership explicit', () => {
     const providers = readFileSync(resolve(root, 'src/store/AppProviders.tsx'), 'utf8');
     const shell = readFileSync(resolve(root, 'src/store/ShellContext.tsx'), 'utf8');
     const pageGate = readFileSync(resolve(root, 'src/store/PageReadinessGate.tsx'), 'utf8');
@@ -62,7 +62,6 @@ describe('capability-shaped application composition', () => {
       '<AssistantActivityProvider>',
       '<ChatBridge>',
       '<AssistantUndoProvider>',
-      '<GoogleSyncBridge>',
     ].map(marker => providers.indexOf(marker));
 
     expect(providerOrder.every(index => index >= 0)).toBe(true);
@@ -72,7 +71,8 @@ describe('capability-shaped application composition', () => {
     expect(providers).not.toContain('DashboardFocus');
     expect(shell).not.toContain('DashboardFocus');
     expect(providers).toContain('<ChatProvider crossDomain={crossDomain}>');
-    expect(providers).toContain('<GoogleSyncProvider app={app}>');
+    // Google Calendar sync runs in the calendar service, not in the browser.
+    expect(providers).not.toContain('GoogleSync');
     expect(existsSync(resolve(root, 'src/store/AppContext.tsx'))).toBe(false);
 
     const undoOwners = Object.entries(sources)
