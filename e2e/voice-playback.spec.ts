@@ -1,5 +1,8 @@
 import { expect, openApp, test } from './support/helm-fixture';
 
+// Deprecated: remove this spec with the feature.
+test.skip(true, 'Voice is disabled pending removal; see docs/deprecated-features.md');
+
 const reference = 'a0000000-0000-4000-8000-000000000001';
 
 for (const surface of ['Life Hero', 'Lina'] as const) {

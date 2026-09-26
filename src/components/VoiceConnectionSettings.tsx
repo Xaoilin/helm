@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { useEffect, useState } from 'react';
 import { ELEVENLABS_VOICE_ID } from '../config';
 import { useSettingsContext } from '../store/contexts/SettingsContext';

@@ -1,5 +1,8 @@
 import { expect, openApp, test } from './support/helm-fixture';
 
+// Deprecated: remove this spec with the feature.
+test.skip(true, 'Life Hero (Apple Health movement evidence) is disabled pending removal; see docs/deprecated-features.md');
+
 const EXPORT = `<?xml version="1.0"?>
 <HealthData>
   <ExportDate value="2026-08-31 12:00:00 +0000"/>

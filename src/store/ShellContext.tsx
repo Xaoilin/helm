@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { STORAGE_KEYS } from '../config/constants';
+import { isSurfaceAvailable } from '../config/deprecatedFeatures';
 import {
   normalizeAssistantNavigationRequest,
   subscribeAssistantNavigation,
@@ -38,6 +39,10 @@ export function useShell(): ShellContextValue {
 }
 
 function isShellSurface(value: string | null): value is Surface {
+  return isKnownSurface(value) && isSurfaceAvailable(value);
+}
+
+function isKnownSurface(value: string | null): value is Surface {
   switch (value) {
     case 'dashboard':
     case 'chat':
@@ -81,7 +86,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
   const navigate = useCallback((nextSurface: Surface) => {
     loadGeneration.current += 1;
-    setSurface(nextSurface);
+    setSurface(isShellSurface(nextSurface) ? nextSurface : 'dashboard');
     setPageLoadError(null);
     setAssistantNavigationRequest(null);
   }, []);

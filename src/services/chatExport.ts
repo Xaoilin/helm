@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { APP_RELEASE_VERSION } from '../config/release';
 import type { ChatConversation, ChatMessage } from '../types/domain';
 

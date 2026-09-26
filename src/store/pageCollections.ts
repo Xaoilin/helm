@@ -1,3 +1,4 @@
+import { ASSISTANT_ENABLED } from '../config/deprecatedFeatures';
 import type { Surface } from '../types/domain';
 
 // Background reminders, rewards, calendar sync, and running timers remain
@@ -32,7 +33,8 @@ const PAGE_COLLECTIONS: Record<Surface, readonly string[]> = {
   knowledge: [],
   profile: [],
   integrations: [],
-  activity: ['assistantActivityLog', ...FINANCE_COLLECTIONS],
+  // The Lina audit trail (and the finance records its undo reads) is disabled with the assistant.
+  activity: ASSISTANT_ENABLED ? ['assistantActivityLog', ...FINANCE_COLLECTIONS] : [],
   settings: [],
   debug: [],
   chat: ASSISTANT_PAGE_COLLECTIONS,

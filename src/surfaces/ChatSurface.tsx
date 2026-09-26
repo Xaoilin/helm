@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { useState, useRef, useEffect } from 'react';
 import { useChatContext } from "../store/contexts/ChatContext";
 import { useSettingsContext } from "../store/contexts/SettingsContext";

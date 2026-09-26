@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { SUPABASE_ANON_KEY } from '../config';
 import { LOCALHOST_HOSTNAMES } from '../config/constants';
 import type { SupabaseClient } from '@supabase/supabase-js';

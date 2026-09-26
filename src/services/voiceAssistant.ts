@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { SUPABASE_URL } from '../config';
 import { API_TIMEOUT, TIMING, VOICE_SESSION } from '../config/constants';
 import type { AssistantLang } from '../assistant/shared';

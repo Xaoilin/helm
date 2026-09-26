@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import type { AssistantProvider, Settings } from '../types/domain';
 import { testHostedAssistantConnection } from './hostedAssistantApi';

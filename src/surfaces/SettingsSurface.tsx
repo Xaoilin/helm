@@ -21,6 +21,7 @@ import {
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
 import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import { VoiceConnectionSettings } from '../components/VoiceConnectionSettings';
+import { ASSISTANT_ENABLED, LIFE_HERO_ENABLED, VOICE_ENABLED } from '../config/deprecatedFeatures';
 import { DEFAULT_PROFILE } from '../services/gamification';
 import { getAssistantProviderSetting, getAssistantRuntimeStatus } from '../services/assistantAvailability';
 import {
@@ -88,6 +89,7 @@ export default function SettingsSurface() {
   // Microphone devices
   const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
   useEffect(() => {
+    if (!VOICE_ENABLED) return;
     if (!navigator.mediaDevices?.enumerateDevices) return;
     // Need to request mic permission first to get labels
     navigator.mediaDevices.getUserMedia({ audio: true })
@@ -97,6 +99,7 @@ export default function SettingsSurface() {
   }, []);
 
   useEffect(() => {
+    if (!ASSISTANT_ENABLED) return;
     let cancelled = false;
     getAssistantRuntimeStatus({
       assistantProvider: selectedProvider,
@@ -722,7 +725,8 @@ export default function SettingsSurface() {
           </div>
         </div>
 
-        {/* Life Hero */}
+        {/* Life Hero (deprecated: docs/deprecated-features.md) */}
+        {LIFE_HERO_ENABLED && <>
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Life Hero</h3>
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
@@ -748,8 +752,10 @@ export default function SettingsSurface() {
               : 'The character companion is disabled.'}
           </div>
         </div>
+        </>}
 
-        {/* Voice Assistant (Lina) */}
+        {/* Voice Assistant (Lina) (deprecated: docs/deprecated-features.md) */}
+        {ASSISTANT_ENABLED && <>
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Voice Assistant (Lina)</h3>
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -769,6 +775,7 @@ export default function SettingsSurface() {
               ? 'Need fewer accidental wake-ups? Leave Lina on and turn off the wake word below.'
               : 'Lina is off. The floating button, keyboard shortcut, and wake word are all disabled until you turn her back on.'}
           </div>
+          {VOICE_ENABLED && <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 10 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 500 }}>Wake word ("Hey Lina")</div>
@@ -786,6 +793,7 @@ export default function SettingsSurface() {
               Wake-word listening is currently inactive because Lina is turned off.
             </div>
           )}
+          </>}
           {/* Language */}
           <div className="form-group" style={{ marginTop: 12, marginBottom: 12 }}>
             <label htmlFor="settings-assistant-provider">Open-ended AI mode</label>
@@ -853,11 +861,11 @@ export default function SettingsSurface() {
               Lina will respond and listen in the selected language. Voice recognition also switches language.
             </div>
           </div>
-          <VoiceConnectionSettings />
+          {VOICE_ENABLED && <VoiceConnectionSettings />}
           <div style={{ fontSize: 10, color: '#4a4e62', marginBottom: 10 }}>
             Tip: if Lina mishears you, say <strong>"No, I said ..."</strong>. Sabah One stores that correction locally and reuses it for future voice and chat commands.
           </div>
-          {microphones.length > 0 && (
+          {VOICE_ENABLED && microphones.length > 0 && (
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label htmlFor="settings-mic">Microphone</label>
               <select
@@ -881,7 +889,10 @@ export default function SettingsSurface() {
           )}
         </div>
 
-        {/* Ollama LLM */}
+        </>}
+
+        {/* Ollama LLM (deprecated with the assistant: docs/deprecated-features.md) */}
+        {ASSISTANT_ENABLED && <>
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Local AI (Ollama)</h3>
         <div className="card">
           <div style={{ fontSize: 12, color: '#9499b0', marginBottom: 10 }}>
@@ -904,6 +915,7 @@ export default function SettingsSurface() {
             onModelChange={(model) => settingsContext.updateSettings({ ollamaModel: model || undefined })}
           />
         </div>
+        </>}
 
         {/* Reset Gamification */}
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>Gamification Reset</h3>
@@ -955,7 +967,7 @@ export default function SettingsSurface() {
           <div className="info-box" style={{ marginTop: 12 }}>
             Runtime status is reported where the feature actually lives:
             <br />
-            Chat shows the active assistant runtime state, Calendar labels manual providers, Integrations shows supported setup, and Projects keeps account-backed references together.
+            {ASSISTANT_ENABLED ? 'Chat shows the active assistant runtime state, ' : ''}Calendar labels manual providers, Integrations shows supported setup, and Projects keeps account-backed references together.
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
 import { appendGoogleCalendarDiagnosticEvent } from '../services/googleCalendarDiagnosticEvents';
 import { getAuthSessionSnapshot } from '../store/supabase';
 import { getAppDate } from '../services/appTimeZone';
+import { LIFE_HERO_ENABLED } from '../config/deprecatedFeatures';
 import {
   beginGithubLifeHeroAuthorization,
   completeGithubLifeHeroAuthorization,
@@ -70,7 +71,8 @@ export default function IntegrationsSurface() {
   const [githubError, setGithubError] = useState<string | null>(null);
 
   // One supported card per provider; never persist this display projection.
-  const integrations = defaultIntegrations.map(provider => ({
+  // The GitHub App only feeds Life Hero evidence, so it is hidden with Life Hero.
+  const integrations = defaultIntegrations.filter(provider => LIFE_HERO_ENABLED || provider.provider !== 'github').map(provider => ({
     ...provider,
     ...settings.integrations.find(record => record.provider === provider.provider),
     name: provider.name,
@@ -123,11 +125,12 @@ export default function IntegrationsSurface() {
   }, [isSignedIn, setGithubConnectionStatus]);
 
   useEffect(() => {
+    if (!LIFE_HERO_ENABLED) return;
     void loadGithubStatus();
   }, [loadGithubStatus]);
 
   useEffect(() => {
-    if (!isSignedIn) return;
+    if (!LIFE_HERO_ENABLED || !isSignedIn) return;
     const params = new URLSearchParams(window.location.search);
     const state = params.get('state');
     const code = params.get('code');
@@ -517,7 +520,7 @@ export default function IntegrationsSurface() {
       </div>
       <div className="surface-body">
         <div className="info-box">
-          Connect Google Calendar or the read-only GitHub App while signed into Sabah One.
+          {LIFE_HERO_ENABLED ? 'Connect Google Calendar or the read-only GitHub App while signed into Sabah One.' : 'Connect Google Calendar while signed into Sabah One.'}
           Slack and Linear connections are unavailable.
         </div>
 

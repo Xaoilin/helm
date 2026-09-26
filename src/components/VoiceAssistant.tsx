@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useShell } from "../store/ShellContext";
 import { useCalendar } from "../store/contexts/CalendarContext";

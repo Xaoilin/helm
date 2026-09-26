@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 import { GITHUB_LIFE_HERO_FUNCTION } from '../config';
 import { API_TIMEOUT } from '../config/constants';

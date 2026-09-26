@@ -7,6 +7,9 @@ import { expect, test } from '@playwright/test';
 import { inspectLifeHeroGlb, REQUIRED_LIFE_HERO_CLIPS } from '../scripts/inspect-life-hero-glb.mjs';
 import { readGlb } from '../scripts/lib/glb.mjs';
 
+// Deprecated: remove this spec with the feature.
+test.skip(true, 'Life Hero is disabled pending removal; see docs/deprecated-features.md');
+
 const CONCEPT_PATH = 'concepts/life-hero/index.html';
 const EVIDENCE_DIRECTORY = path.resolve('docs/design/evidence');
 const MODEL_PATH = path.resolve('public/concepts/life-hero/assets/life-hero-modular.glb');
