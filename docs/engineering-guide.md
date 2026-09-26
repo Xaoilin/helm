@@ -142,7 +142,9 @@ the existing external-access gaps in `agent-access.md` remain unchanged.
 - Pair state colours with visible text. Browser-native behavior is an enhancement, not the sole route to an important outcome.
 
 The More sheet and Secret, Task and Trip wizard editors share `useDialog` for
-initial focus, containment, Escape and return focus. Draft editors compare the
+initial focus, containment, Escape and return focus. The Project reference
+drawer and the Project and Milestone editors use it too; when the opener has
+left the page, `restoreFocusFallback` finds the project's card again. Draft editors compare the
 current fields with their opening values; dismissal asks for explicit discard
 only when changed, and pending saves cannot dismiss. Successful save closes
 directly. Avoid adding React `autoFocus` to these controls: it runs before the
