@@ -4,7 +4,7 @@ This document records the current automation policy for Sabah One. The product i
 
 ## Policy
 
-1. Start each change on a dedicated `codex/*` branch and state its ownership, dependencies, evidence, and stopping conditions.
+1. Start each change on a dedicated topic branch (for example `codex/*` or `claude/*`) and state its ownership, dependencies, evidence, and stopping conditions.
 2. Keep the smallest coherent change that can falsify the requested outcome. Preserve unrelated work and stop on unexpected overlap or tree drift.
 3. Pull-request checks cover policy, database contracts, lint, typecheck, unit tests, browser E2E, and the web build. Visual browser review supplies evidence for rendered claims.
 4. The exact tested tree is the candidate. A newer or different tree must not inherit an earlier check result.

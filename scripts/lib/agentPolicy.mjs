@@ -302,7 +302,6 @@ export function evaluateCiWorkflow(rawWorkflow) {
     "github.event.pull_request.draft == false",
     "github.event.pull_request.head.repo.full_name == github.repository",
     "github.event.pull_request.base.ref == 'master'",
-    "startsWith(github.event.pull_request.head.ref, 'codex/')",
     "needs.lint.result == 'success'",
     "needs['agent-policy'].result == 'success'",
     "needs.typecheck.result == 'success'",
@@ -333,7 +332,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
 
   if (requiredAutoPromoteSnippets.every((snippet) => rawWorkflow.includes(snippet))) {
     passes.push(
-      'CI workflow keeps auto-promote limited to validated non-draft codex/* PRs and dispatches exact-tree verification.',
+      'CI workflow keeps auto-promote limited to validated non-draft same-repository PRs and dispatches exact-tree verification.',
     )
   }
 

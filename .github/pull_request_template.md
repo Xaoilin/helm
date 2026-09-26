@@ -18,4 +18,4 @@
 
 - [ ] Version bumped and release files synced
 - [ ] PR is non-draft if it should auto-promote
-- [ ] Auto-promote is expected only for same-repo `codex/*` branches targeting `master`
+- [ ] Auto-promote merges any ready (non-draft) same-repo branch targeting `master` once checks pass; keep it a draft to hold it
