@@ -98,8 +98,8 @@ for (const width of [1440, 390]) {
     await expect(revoke).toBeDisabled();
     expect(revokedDomains).toEqual(['Employment']);
     expect(oauthGrantRevocations).toBe(0);
-    const inventoryPanel = page.locator('.inventory-client-settings').filter({ hasText: 'Approved Inventory clients' });
-    await expect(inventoryPanel.getByRole('button', { name: 'Revoke', exact: true })).toBeEnabled();
+    const inventoryPanel = page.getByRole('region', { name: 'Codex Inventory Access' });
+    await expect(inventoryPanel.getByRole('button', { name: `Revoke Inventory access for ${client.clientName}` })).toBeEnabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`employment-revoked-${width}.png`) });
   });

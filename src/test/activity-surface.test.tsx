@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../store/AuthSessionContext', () => ({ useOptionalAuthSession: () => mocks.auth }));
-vi.mock('../store/supabase', () => ({ getProductUsageEvents: mocks.getProductUsageEvents }));
+vi.mock('../store/supabase/productUsage', () => ({ getProductUsageEvents: mocks.getProductUsageEvents }));
 vi.mock('../store/contexts/AssistantActivityContext', () => ({ useAssistantActivityContext: () => mocks.assistantActivity }));
 vi.mock('../store/contexts/AssistantUndoContext', () => ({ useAssistantUndo: () => mocks.assistantUndo }));
 

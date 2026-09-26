@@ -1,23 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSettingsContext } from "../store/contexts/SettingsContext";
 import { useGamificationContext } from "../store/contexts/GamificationContext";
-import {
-  isSupabaseReady,
-  isAuthenticated,
-  getCurrentUserId,
-  listEmploymentOAuthClients,
-  listEquityOAuthClients,
-  listFinanceOAuthClients,
-  listInventoryOAuthClients,
-  revokeEmploymentOAuthClient,
-  revokeEquityOAuthClient,
-  revokeFinanceOAuthClient,
-  revokeInventoryOAuthClient,
-  type EmploymentOAuthClientApproval,
-  type EquityOAuthClientApproval,
-  type FinanceOAuthClientApproval,
-  type InventoryOAuthClientApproval,
-} from '../store/supabase';
+import { useAuthSession } from '../store/AuthSessionContext';
+import { OAuthClientApprovalsSection } from '../components/settings/OAuthClientApprovalsSection';
+import { OAUTH_CLIENT_DOMAINS } from '../store/supabase/oauthClients';
 import type { AssistantRuntimeStatus } from '../services/assistantAvailability';
 import { DEFAULT_ASSISTANT_PROVIDER, OLLAMA_ENDPOINT } from '../config';
 import { VoiceConnectionSettings } from '../components/VoiceConnectionSettings';
@@ -50,22 +36,13 @@ export default function SettingsSurface() {
   const gamification = useGamificationContext();
   const prayer = usePrayerContext();
   const momentum = useDailyMomentumContext();
+  const authSession = useAuthSession();
+  const signedInUserId = authSession.authUser?.id ?? null;
   const { settings } = settingsContext;
   const linaEnabled = settings.assistantEnabled !== false;
   const [confirmReset, setConfirmReset] = useState(false);
   const [prayerTestStatus, setPrayerTestStatus] = useState<string | null>(null);
   const [syncSession, setSyncSession] = useState(() => getSyncSessionSnapshot());
-  const [inventoryClients, setInventoryClients] = useState<InventoryOAuthClientApproval[]>([]);
-  const [inventoryClientStatus, setInventoryClientStatus] = useState('');
-  const [employmentClients, setEmploymentClients] = useState<EmploymentOAuthClientApproval[]>([]);
-  const [employmentClientStatus, setEmploymentClientStatus] = useState('');
-  const [revokingEmploymentClientId, setRevokingEmploymentClientId] = useState<string | null>(null);
-  const [equityClients, setEquityClients] = useState<EquityOAuthClientApproval[]>([]);
-  const [equityClientStatus, setEquityClientStatus] = useState('');
-  const [revokingEquityClientId, setRevokingEquityClientId] = useState<string | null>(null);
-  const [financeClients, setFinanceClients] = useState<FinanceOAuthClientApproval[]>([]);
-  const [financeClientStatus, setFinanceClientStatus] = useState('');
-  const [revokingFinanceClientId, setRevokingFinanceClientId] = useState<string | null>(null);
   const [appTimeZoneInput, setAppTimeZoneInput] = useState(settings.appTimezone || '');
   const [appTimeZoneStatus, setAppTimeZoneStatus] = useState<{
     tone: 'saving' | 'saved' | 'error';
@@ -84,7 +61,7 @@ export default function SettingsSurface() {
   const selectedProvider = getAssistantProviderSetting(settings);
   const selectedHostedModel = getHostedAssistantModelSetting(settings);
   const selectedHostedModelOption = getHostedAssistantModelOption(selectedHostedModel);
-  const authSyncKey = `${isSupabaseReady()}:${isAuthenticated()}:${getCurrentUserId() || ''}`;
+  const authSyncKey = `${authSession.supabaseReady}:${signedInUserId ?? ''}`;
 
   // Microphone devices
   const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
@@ -119,81 +96,6 @@ export default function SettingsSurface() {
     setAppTimeZoneInput(settings.appTimezone || '');
   }, [settings.appTimezone]);
 
-  useEffect(() => {
-    if (!isAuthenticated()) return;
-    let cancelled = false;
-    void listInventoryOAuthClients()
-      .then(clients => { if (!cancelled) setInventoryClients(clients); })
-      .catch(error => { if (!cancelled) setInventoryClientStatus(error instanceof Error ? error.message : String(error)); });
-    void listEmploymentOAuthClients()
-      .then(clients => { if (!cancelled) setEmploymentClients(clients); })
-      .catch(error => { if (!cancelled) setEmploymentClientStatus(error instanceof Error ? error.message : String(error)); });
-    void listEquityOAuthClients()
-      .then(clients => { if (!cancelled) setEquityClients(clients); })
-      .catch(error => { if (!cancelled) setEquityClientStatus(error instanceof Error ? error.message : String(error)); });
-    void listFinanceOAuthClients()
-      .then(clients => { if (!cancelled) setFinanceClients(clients); })
-      .catch(error => { if (!cancelled) setFinanceClientStatus(error instanceof Error ? error.message : String(error)); });
-    return () => { cancelled = true; };
-  }, [authSyncKey]);
-
-  const revokeInventoryClient = async (client: InventoryOAuthClientApproval) => {
-    setInventoryClientStatus(`Revoking ${client.clientName}…`);
-    try {
-      await revokeInventoryOAuthClient(client.clientId);
-      setInventoryClients(current => current.map(entry => entry.clientId === client.clientId
-        ? { ...entry, revokedAt: new Date().toISOString() }
-        : entry));
-      setInventoryClientStatus(`${client.clientName} can no longer access Inventory.`);
-    } catch (error) {
-      void listInventoryOAuthClients()
-        .then(setInventoryClients)
-        .catch(() => { /* the original revocation result remains authoritative */ });
-      setInventoryClientStatus(error instanceof Error ? error.message : String(error));
-    }
-  };
-
-  const revokeEmploymentClient = async (client: EmploymentOAuthClientApproval) => {
-    setRevokingEmploymentClientId(client.clientId);
-    setEmploymentClientStatus(`Revoking ${client.clientName}…`);
-    try {
-      const revoked = await revokeEmploymentOAuthClient(client.clientId);
-      setEmploymentClients(current => current.map(entry => entry.clientId === client.clientId ? revoked : entry));
-      setEmploymentClientStatus(`${client.clientName} can no longer access Employment. Other approvals are unchanged.`);
-    } catch (error) {
-      setEmploymentClientStatus(error instanceof Error ? error.message : String(error));
-    } finally {
-      setRevokingEmploymentClientId(null);
-    }
-  };
-
-  const revokeEquityClient = async (client: EquityOAuthClientApproval) => {
-    setRevokingEquityClientId(client.clientId);
-    setEquityClientStatus(`Revoking ${client.clientName}…`);
-    try {
-      const revoked = await revokeEquityOAuthClient(client.clientId);
-      setEquityClients(current => current.map(entry => entry.clientId === client.clientId ? revoked : entry));
-      setEquityClientStatus(`${client.clientName} can no longer access Equity. Other approvals are unchanged.`);
-    } catch (error) {
-      setEquityClientStatus(error instanceof Error ? error.message : String(error));
-    } finally {
-      setRevokingEquityClientId(null);
-    }
-  };
-  const revokeFinanceClient = async (client: FinanceOAuthClientApproval) => {
-    setRevokingFinanceClientId(client.clientId);
-    setFinanceClientStatus(`Revoking ${client.clientName}…`);
-    try {
-      const revoked = await revokeFinanceOAuthClient(client.clientId);
-      setFinanceClients(current => current.map(entry => entry.clientId === client.clientId ? revoked : entry));
-      setFinanceClientStatus(`${client.clientName} can no longer access Finance. Other approvals are unchanged.`);
-    } catch (error) {
-      setFinanceClientStatus(error instanceof Error ? error.message : String(error));
-    } finally {
-      setRevokingFinanceClientId(null);
-    }
-  };
-
   return (
     <>
       <div className="surface-header">
@@ -220,7 +122,7 @@ export default function SettingsSurface() {
                   : syncSession.hasUsableSnapshot ? 'Last confirmed data (read-only)' : 'Loading database state'}
               </div>
               <div className="sync-status-detail">
-                {`Signed in as ${getCurrentUserId()?.slice(0, 8)}... Shared data belongs to this account and is read and written through Supabase only. Sabah One resolves concurrent updates automatically.`}
+                {`Signed in as ${signedInUserId?.slice(0, 8)}... Shared data belongs to this account and is read and written through Supabase only. Sabah One resolves concurrent updates automatically.`}
               </div>
             </div>
             <div className="sync-status-actions">
@@ -240,93 +142,7 @@ export default function SettingsSurface() {
           </div>
         </div>
 
-        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Codex Inventory Access</h3>
-        <div className="card inventory-client-settings">
-          <div className="inventory-client-settings-intro">
-            <div>
-              <strong>Approved Inventory clients</strong>
-              <p>Each client is individually revocable. Access is limited in the database to Inventory records and minimal project name resolution.</p>
-            </div>
-            <span className="tag tag-primary">OAuth 2.1 beta</span>
-          </div>
-          <div className="inventory-client-boundary">Chats, calendars, finance, secrets, generic snapshots, and every non-Inventory RPC stay blocked.</div>
-          <div className="inventory-client-list">
-            {inventoryClients.length === 0 && <div className="inventory-empty-inline">No Codex Inventory client has been approved.</div>}
-            {inventoryClients.map(client => (
-              <div key={client.clientId} className="inventory-client-row">
-                <div><strong>{client.clientName}</strong><span>{client.clientId}</span><small>{client.revokedAt ? `Revoked ${new Date(client.revokedAt).toLocaleString()}` : `Approved ${new Date(client.approvedAt).toLocaleString()}`}</small></div>
-                <button className="btn btn-danger btn-sm" type="button" disabled={Boolean(client.revokedAt)} onClick={() => void revokeInventoryClient(client)}>{client.revokedAt ? 'Revoked' : 'Revoke'}</button>
-              </div>
-            ))}
-          </div>
-          {inventoryClientStatus && <div className="inventory-client-status" role="status">{inventoryClientStatus}</div>}
-        </div>
-
-        <h3 id="employment-client-heading" style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Codex Employment Access</h3>
-        <section className="card inventory-client-settings" aria-labelledby="employment-client-heading">
-          <div className="inventory-client-settings-intro">
-            <div>
-              <strong>Approved Employment clients</strong>
-              <p>These clients can read and update your jobs, application history and next actions. Employment access is approved separately from Inventory.</p>
-            </div>
-            <span className="tag tag-primary">OAuth 2.1 beta</span>
-          </div>
-          <div className="inventory-client-boundary">This connection does not grant email access or permission to send messages or submit applications.</div>
-          <div className="inventory-client-list">
-            {employmentClients.length === 0 && <div className="inventory-empty-inline">No Codex Employment client has been approved.</div>}
-            {employmentClients.map(client => (
-              <div key={client.clientId} className="inventory-client-row">
-                <div><strong>{client.clientName}</strong><span>{client.clientId}</span><small>{client.revokedAt ? `Revoked ${new Date(client.revokedAt).toLocaleString()}` : `Approved ${new Date(client.approvedAt).toLocaleString()}`}</small></div>
-                <button className="btn btn-danger btn-sm" type="button" aria-label={`Revoke Employment access for ${client.clientName}`} disabled={Boolean(client.revokedAt) || revokingEmploymentClientId !== null} onClick={() => void revokeEmploymentClient(client)}>{client.revokedAt ? 'Revoked' : revokingEmploymentClientId === client.clientId ? 'Revoking…' : 'Revoke'}</button>
-              </div>
-            ))}
-          </div>
-          {employmentClientStatus && <div className="inventory-client-status" role="status">{employmentClientStatus}</div>}
-        </section>
-
-        <h3 id="equity-client-heading" style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Codex Equity Access</h3>
-        <section className="card inventory-client-settings" aria-labelledby="equity-client-heading">
-          <div className="inventory-client-settings-intro">
-            <div>
-              <strong>Approved Equity clients</strong>
-              <p>These clients can read and maintain your stock holdings, option grants, plans and next actions. Equity access is approved separately from Inventory and Employment.</p>
-            </div>
-            <span className="tag tag-primary">OAuth 2.1 beta</span>
-          </div>
-          <div className="inventory-client-boundary">This connection does not grant banking access or permission to trade shares, exercise options, move money or contact your employer.</div>
-          <div className="inventory-client-list">
-            {equityClients.length === 0 && <div className="inventory-empty-inline">No Codex Equity client has been approved.</div>}
-            {equityClients.map(client => (
-              <div key={client.clientId} className="inventory-client-row">
-                <div><strong>{client.clientName}</strong><span>{client.clientId}</span><small>{client.revokedAt ? `Revoked ${new Date(client.revokedAt).toLocaleString()}` : `Approved ${new Date(client.approvedAt).toLocaleString()}`}</small></div>
-                <button className="btn btn-danger btn-sm" type="button" aria-label={`Revoke Equity access for ${client.clientName}`} disabled={Boolean(client.revokedAt) || revokingEquityClientId !== null} onClick={() => void revokeEquityClient(client)}>{client.revokedAt ? 'Revoked' : revokingEquityClientId === client.clientId ? 'Revoking…' : 'Revoke'}</button>
-              </div>
-            ))}
-          </div>
-          {equityClientStatus && <div className="inventory-client-status" role="status">{equityClientStatus}</div>}
-        </section>
-
-        <h3 id="finance-client-heading" style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Codex Finance Access</h3>
-        <section className="card inventory-client-settings" aria-labelledby="finance-client-heading">
-          <div className="inventory-client-settings-intro">
-            <div>
-              <strong>Approved Finance clients</strong>
-              <p>These clients can read and maintain your dated banking review, monthly spending, budget assumptions and loans. Finance access is approved separately from Inventory, Employment and Equity.</p>
-            </div>
-            <span className="tag tag-primary">OAuth 2.1 beta</span>
-          </div>
-          <div className="inventory-client-boundary">This connection cannot access banks directly, move money, take loans or make repayments.</div>
-          <div className="inventory-client-list">
-            {financeClients.length === 0 && <div className="inventory-empty-inline">No Codex Finance client has been approved.</div>}
-            {financeClients.map(client => (
-              <div key={client.clientId} className="inventory-client-row">
-                <div><strong>{client.clientName}</strong><span>{client.clientId}</span><small>{client.revokedAt ? `Revoked ${new Date(client.revokedAt).toLocaleString()}` : `Approved ${new Date(client.approvedAt).toLocaleString()}`}</small></div>
-                <button className="btn btn-danger btn-sm" type="button" aria-label={`Revoke Finance access for ${client.clientName}`} disabled={Boolean(client.revokedAt) || revokingFinanceClientId !== null} onClick={() => void revokeFinanceClient(client)}>{client.revokedAt ? 'Revoked' : revokingFinanceClientId === client.clientId ? 'Revoking…' : 'Revoke'}</button>
-              </div>
-            ))}
-          </div>
-          {financeClientStatus && <div className="inventory-client-status" role="status">{financeClientStatus}</div>}
-        </section>
+        {OAUTH_CLIENT_DOMAINS.map(domain => <OAuthClientApprovalsSection key={domain} domain={domain} />)}
 
         <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>App time zone</h3>
         <div className="card app-time-zone-settings">
