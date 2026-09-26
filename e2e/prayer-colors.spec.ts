@@ -67,37 +67,24 @@ test('visually distinguishes prayed, missed, current, next, and upcoming prayers
     'A different visual surface was requested.',
   );
 
-  await scenario({
+  const control = await scenario({
     now: '2026-08-29T16:00:00.000Z',
     settings: {
       prayerEnabled: true,
       prayerCity: 'Bedford',
       prayerCountry: 'United Kingdom',
     },
-    stores: {
-      prayerTracking: {
-        schemaVersion: 1,
-        trackingStartedAt: '2026-08-29T00:00:00.000Z',
-        records: {
-          '2026-08-29::Fajr': {
-            date: '2026-08-29',
-            prayerName: 'Fajr',
-            status: 'on_time',
-            recordedAt: '2026-08-29T04:30:00.000Z',
-            source: 'dashboard',
-          },
-          '2026-08-29::Dhuhr': {
-            date: '2026-08-29',
-            prayerName: 'Dhuhr',
-            status: 'missed',
-            recordedAt: '2026-08-29T15:30:00.000Z',
-            source: 'system',
-          },
-        },
-        reminderReceipts: {},
-        boundedReminderReceipts: {},
-      },
-    },
+  });
+  control.services.tracking = {
+    trackingStartedAt: '2026-08-29T00:00:00Z', activationDate: null, activationPrayers: [], importedAt: null,
+  };
+  control.services.outcomes.set('2026-08-29::Fajr', {
+    id: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', date: '2026-08-29', prayer: 'Fajr', status: 'on_time',
+    recordedAt: '2026-08-29T04:30:00Z', source: 'dashboard', taskId: null, rewarded: true, deadlineAt: null,
+  });
+  control.services.outcomes.set('2026-08-29::Dhuhr', {
+    id: '1b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e', date: '2026-08-29', prayer: 'Dhuhr', status: 'missed',
+    recordedAt: '2026-08-29T15:30:00Z', source: 'system', taskId: null, rewarded: false, deadlineAt: null,
   });
 
   for (const viewport of requestedViewports()) {

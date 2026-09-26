@@ -89,4 +89,40 @@ describe('usePrayerClock', () => {
     unmount();
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  describe('when the timetable or callback changes', () => {
+    beforeEach(() => {
+      // 23:59:50 in London (BST): the prayer date rolls over ten seconds later.
+      vi.setSystemTime(new Date('2026-09-30T22:59:50Z'));
+    });
+
+    it('still detects the rollover on the tick that was already due', () => {
+      const first = vi.fn();
+      const second = vi.fn();
+      const hook = renderHook(props => usePrayerClock(props), {
+        initialProps: { scheduleTimeZone: 'Europe/London', onDayChange: first, onResume },
+      });
+      expect(hook.result.current.today).toBe('2026-09-30');
+
+      // New callback 5s in, as when prayer settings arrive from their services.
+      act(() => { vi.advanceTimersByTime(5_000); });
+      hook.rerender({ scheduleTimeZone: 'Europe/London', onDayChange: second, onResume });
+      act(() => { vi.advanceTimersByTime(PRAYER_REMINDERS.RUNTIME_TICK_MS - 5_000); });
+
+      expect(hook.result.current.today).toBe('2026-10-01');
+      expect(second).toHaveBeenCalledTimes(1);
+      expect(first).not.toHaveBeenCalled();
+    });
+
+    it('uses the latest timetable zone when the tick fires', () => {
+      const hook = renderClock('Europe/London');
+
+      // In New York it is still 30 September after London's midnight.
+      hook.rerender({ scheduleTimeZone: 'America/New_York', onDayChange, onResume });
+      act(() => { vi.advanceTimersByTime(PRAYER_REMINDERS.RUNTIME_TICK_MS); });
+
+      expect(hook.result.current.today).toBe('2026-09-30');
+      expect(onDayChange).not.toHaveBeenCalled();
+    });
+  });
 });

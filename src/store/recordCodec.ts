@@ -30,6 +30,24 @@ export const DEVICE_SETTING_FIELDS = [
 
 export type DeviceSettings = Pick<Settings, (typeof DEVICE_SETTING_FIELDS)[number]>;
 
+/**
+ * Settings owned by the Spring services, never stored in the account record: prayer preferences
+ * (prayer service) and location and display time zone (profile service). They live in memory and
+ * are loaded from, and saved to, their service.
+ */
+export const SERVICE_SETTING_FIELDS = [
+  'prayerEnabled',
+  'prayerReminderEnabled',
+  'prayerReminderMinutes',
+  'prayerCity',
+  'prayerCountry',
+  'appTimezone',
+] as const satisfies readonly (keyof Settings)[];
+
+export type ServiceSettings = Pick<Settings, (typeof SERVICE_SETTING_FIELDS)[number]>;
+
+const SERVICE_SETTING_FIELD_SET = new Set<string>(SERVICE_SETTING_FIELDS);
+
 const DEVICE_SETTING_FIELD_SET = new Set<string>(DEVICE_SETTING_FIELDS);
 const LEGACY_PROVIDER_FIELDS = new Set(['deepgramApiKey', 'elevenLabsApiKey', 'monzoAccessToken']);
 
@@ -48,14 +66,8 @@ const SHARED_SETTING_FIELDS = new Set<string>([
   'theme',
   'dataRetentionDays',
   'telemetry',
-  'appTimezone',
   'defaultCalendarTab',
   'goalTags',
-  'prayerEnabled',
-  'prayerCity',
-  'prayerCountry',
-  'prayerReminderEnabled',
-  'prayerReminderMinutes',
   'lifeHeroEnabled',
   'assistantEnabled',
   'elevenLabsVoiceId',
@@ -91,10 +103,12 @@ function assertRecordId(value: unknown, collection: string, index: number): stri
 export function splitSettings(value: unknown): {
   shared: Partial<Settings>;
   device: DeviceSettings;
+  service: ServiceSettings;
 } {
   const shared: Partial<Settings> = {};
   const device: DeviceSettings = {};
-  if (!isRecord(value)) return { shared, device };
+  const service: ServiceSettings = {};
+  if (!isRecord(value)) return { shared, device, service };
 
   for (const [key, entry] of Object.entries(value)) {
     if (LEGACY_PROVIDER_FIELDS.has(key)) continue;
@@ -104,12 +118,14 @@ export function splitSettings(value: unknown): {
       (device as Record<string, unknown>)[key] = entry;
     } else if (key === 'appTimezone') {
       const timeZone = validateIanaTimeZone(entry);
-      if (timeZone) shared.appTimezone = timeZone;
+      if (timeZone) service.appTimezone = timeZone;
+    } else if (SERVICE_SETTING_FIELD_SET.has(key)) {
+      (service as Record<string, unknown>)[key] = entry;
     } else if (SHARED_SETTING_FIELDS.has(key)) {
       (shared as Record<string, unknown>)[key] = entry;
     }
   }
-  return { shared, device };
+  return { shared, device, service };
 }
 
 export function sanitizeSharedStoreValue(collection: string, value: unknown): unknown {
@@ -124,7 +140,9 @@ export function sanitizeLegacyStoreValue(collection: string, value: unknown): {
   assertKnownCollection(collection);
   if (collection === 'settings') {
     if (!isRecord(value)) return { value: {}, ambiguous: value != null };
-    const known = new Set([...SHARED_SETTING_FIELDS, ...DEVICE_SETTING_FIELD_SET, ...LEGACY_PROVIDER_FIELDS]);
+    const known = new Set([
+      ...SHARED_SETTING_FIELDS, ...DEVICE_SETTING_FIELD_SET, ...SERVICE_SETTING_FIELD_SET, ...LEGACY_PROVIDER_FIELDS,
+    ]);
     return {
       value,
       ambiguous: Object.keys(value).some(key => !known.has(key)),
@@ -201,27 +219,19 @@ function encodeGamification(value: unknown): EncodedStoreRecord[] {
   return records;
 }
 
+/**
+ * The account's `prayerTracking` record holds only reminder receipts: outcomes, the tracking start
+ * and activation belong to the prayer service. Older outcome and activation rows are left out, so
+ * the next save tombstones them.
+ */
 function encodePrayerTracking(value: unknown): EncodedStoreRecord[] {
   if (!isRecord(value)) return [];
   const tracking = value as unknown as PrayerTrackingState;
   const records: EncodedStoreRecord[] = [{
     recordId: 'meta',
-    payload: {
-      schemaVersion: tracking.schemaVersion,
-      trackingStartedAt: tracking.trackingStartedAt,
-    },
+    payload: { schemaVersion: tracking.schemaVersion },
     position: null,
   }];
-  if (tracking.activationDayEligibility) {
-    records.push({
-      recordId: 'activation',
-      payload: tracking.activationDayEligibility as unknown as Record<string, unknown>,
-      position: null,
-    });
-  }
-  for (const [id, entry] of Object.entries(tracking.records || {})) {
-    records.push({ recordId: `record:${id}`, payload: entry as unknown as Record<string, unknown>, position: null });
-  }
   for (const [id, entry] of Object.entries(tracking.reminderReceipts || {})) {
     records.push({ recordId: `reminder:${id}`, payload: entry as unknown as Record<string, unknown>, position: null });
   }
@@ -291,14 +301,10 @@ function decodeGamification(records: EncodedStoreRecord[]): GamificationProfile 
 function decodePrayerTracking(records: EncodedStoreRecord[]): PrayerTrackingState | null {
   if (records.length === 0) return null;
   const meta = records.find(record => record.recordId === 'meta')?.payload ?? {};
-  const activation = records.find(record => record.recordId === 'activation')?.payload;
-  const tracked: PrayerTrackingState['records'] = {};
   const reminders: PrayerTrackingState['reminderReceipts'] = {};
   const boundedReminders: PrayerTrackingState['boundedReminderReceipts'] = {};
   for (const record of records) {
-    if (record.recordId.startsWith('record:')) {
-      tracked[record.recordId.slice('record:'.length)] = record.payload as never;
-    } else if (record.recordId.startsWith('reminder:')) {
+    if (record.recordId.startsWith('reminder:')) {
       reminders[record.recordId.slice('reminder:'.length)] = record.payload as never;
     } else if (record.recordId.startsWith('bounded:')) {
       boundedReminders[record.recordId.slice('bounded:'.length)] = record.payload as never;
@@ -307,8 +313,7 @@ function decodePrayerTracking(records: EncodedStoreRecord[]): PrayerTrackingStat
   return {
     schemaVersion: typeof meta.schemaVersion === 'number' ? meta.schemaVersion : 1,
     trackingStartedAt: typeof meta.trackingStartedAt === 'string' ? meta.trackingStartedAt : new Date().toISOString(),
-    ...(activation ? { activationDayEligibility: activation as never } : {}),
-    records: tracked,
+    records: {},
     reminderReceipts: reminders,
     boundedReminderReceipts: boundedReminders,
   };

@@ -1,7 +1,6 @@
 import { act, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PrayerTrackingRecord } from '../types/domain';
 import { PrayerProvider, usePrayerContext, type PrayerContextValue } from '../store/contexts/PrayerContext';
 import { TaskCtx, type TaskContextValue } from '../store/contexts/TaskContext';
 import { GamificationCtx, type GamificationContextValue } from '../store/contexts/GamificationContext';
@@ -22,10 +21,9 @@ const persistence = vi.hoisted(() => ({
 vi.mock('../store/persistence', () => persistence);
 
 const prayerService = vi.hoisted(() => ({
-  isPrayerServiceEnabled: vi.fn(() => false),
-  savePrayerPreferences: vi.fn(),
+  isPrayerServiceEnabled: vi.fn(() => true),
+  getPrayerSchedule: vi.fn(),
   getPrayerDashboard: vi.fn(),
-  importPrayerTracking: vi.fn(),
   listPrayerOutcomes: vi.fn(),
   createPrayerOutcome: vi.fn(),
   correctPrayerOutcome: vi.fn(),
@@ -35,9 +33,21 @@ vi.mock('../services/backend/prayerServiceApi', () => prayerService);
 
 const FAJR_KEY = getPrayerRecordKey(PRAYER_TEST_DATE, 'Fajr');
 const DHUHR_KEY = getPrayerRecordKey(PRAYER_TEST_DATE, 'Dhuhr');
-const storedFajr: PrayerTrackingRecord = {
-  date: PRAYER_TEST_DATE, prayerName: 'Fajr', status: 'on_time', recordedAt: '2026-09-26T05:30:00.000Z', source: 'dashboard',
+const serviceFajr = {
+  id: '1c52385c-3d06-43e5-849f-8c9652ddf677', date: PRAYER_TEST_DATE, prayer: 'Fajr', status: 'on_time',
+  recordedAt: '2026-09-26T05:30:00Z', source: 'dashboard', taskId: null, rewarded: true, deadlineAt: null,
 };
+
+/** The prayer service's timetable for the fixture day. */
+function serviceSchedule() {
+  const times = makePrayerTimesData();
+  return {
+    date: times.date, hijriDate: times.hijriDate, city: times.city, country: times.country,
+    timezone: times.timezone, method: times.method,
+    times: times.prayers.map(({ name, nameArabic, time, type }) => ({ name, nameArabic, time, type })),
+    windows: [],
+  };
+}
 const dhuhrTask = makeTask({ id: 'task-dhuhr', title: 'Dhuhr Prayer', category: 'prayer', prayerName: 'Dhuhr' });
 
 const VALUE_KEYS: (keyof PrayerContextValue)[] = [
@@ -77,6 +87,7 @@ function fakeOwners() {
     loaded: true,
     appTimeZone: { browserTimeZone: 'Europe/London', effectiveTimeZone: 'Europe/London', source: 'automatic' },
     appTimeZoneLoadWarning: null,
+    serviceSettingsReady: true,
     updateSettings: vi.fn(),
     saveAppTimeZonePreference: vi.fn(),
     updateIntegration: vi.fn(),
@@ -100,21 +111,31 @@ beforeEach(() => {
   // Dhuhr started at 11:55Z (its opportunity reminder runs until 12:25Z); it is on time until Asr, 15:20Z.
   vi.setSystemTime(new Date('2026-09-26T12:00:00Z'));
   vi.clearAllMocks();
-  // The same-day timetable cache, so the provider needs no network.
-  localStorage.setItem('helm:prayer-times-cache', JSON.stringify({ ...makePrayerTimesData(), source: 'network' }));
-  persistence.loadStore.mockResolvedValue({
-    trackingStartedAt: '2026-09-01T00:00:00.000Z',
-    records: { [FAJR_KEY]: storedFajr },
+  prayerService.isPrayerServiceEnabled.mockReturnValue(true);
+  prayerService.getPrayerSchedule.mockResolvedValue(serviceSchedule());
+  prayerService.getPrayerDashboard.mockResolvedValue({
+    today: PRAYER_TEST_DATE,
+    tracking: {
+      trackingStartedAt: '2026-09-01T00:00:00Z', activationDate: null, activationPrayers: [], importedAt: null,
+    },
   });
+  prayerService.listPrayerOutcomes.mockResolvedValue([serviceFajr]);
+  prayerService.createPrayerOutcome.mockImplementation(async (request: { prayer: string; status: string }) => ({
+    outcome: { ...serviceFajr, id: crypto.randomUUID(), prayer: request.prayer, status: request.status },
+    firstReward: true,
+  }));
+  // The account record holds only reminder receipts.
+  persistence.loadStore.mockResolvedValue(null);
 });
 
 describe('PrayerProvider', () => {
-  it('loads stored tracking and the timetable and publishes the same value shape', async () => {
+  it('loads outcomes and the timetable from the prayer service and publishes the same value shape', async () => {
     renderPrayerProvider();
 
     await waitFor(() => expect(prayer.loaded).toBe(true));
     await waitFor(() => expect(prayer.scheduleStatus).toBe('ready'));
-    expect(persistence.loadStore).toHaveBeenCalledWith('prayerTracking');
+    await waitFor(() => expect(prayer.serviceSync.status).toBe('synced'));
+    expect(prayerService.getPrayerSchedule).toHaveBeenCalledWith('Bedford', 'United Kingdom', undefined);
     expect(Object.keys(prayer).sort()).toEqual([...VALUE_KEYS].sort());
     expect(prayer.tracking.records[FAJR_KEY]).toMatchObject({ status: 'on_time' });
     expect(prayer.getOutcome(PRAYER_TEST_DATE, 'Fajr')).toMatchObject({ status: 'on_time' });
@@ -124,7 +145,6 @@ describe('PrayerProvider', () => {
     expect(prayer.timezoneMatches).toBe(true);
     expect(prayer.deadlines.Dhuhr?.deadlineName).toBe('Asr');
     expect(prayer.nextPrayer?.prayer.name).toBe('Asr');
-    expect(prayer.serviceSync).toEqual({ status: 'disabled', error: null });
     expect(prayer.diagnostics).toMatchObject({
       scheduleStatus: 'ready',
       location: 'Bedford, United Kingdom',
@@ -137,11 +157,10 @@ describe('PrayerProvider', () => {
     expect(prayer.activeBoundedReminder?.title).toBe('Dhuhr prayer opportunity');
   });
 
-  it('completes a prayer across tracking, gamification and its task, then saves it', async () => {
+  it('completes a prayer across tracking, gamification and its task, then saves it to the prayer service', async () => {
     const owners = renderPrayerProvider();
     await waitFor(() => expect(prayer.scheduleStatus).toBe('ready'));
-    await waitFor(() => expect(prayer.loaded).toBe(true));
-    persistence.saveStore.mockClear();
+    await waitFor(() => expect(prayer.serviceSync.status).toBe('synced'));
 
     act(() => { prayer.requestPrayerCompletion('Dhuhr', { source: 'dashboard' }); });
     await waitFor(() => expect(prayer.pendingCompletion).toMatchObject({ prayerName: 'Dhuhr', suggestedStatus: 'on_time' }));
@@ -156,10 +175,21 @@ describe('PrayerProvider', () => {
       prayerCompletionLedger: expect.objectContaining({ [DHUHR_KEY]: expect.objectContaining({ rewarded: true }) }),
     }));
     expect(owners.tasks.updateTask).toHaveBeenCalledWith('task-dhuhr', expect.objectContaining({ completed: true }));
-    await waitFor(() => expect(persistence.saveStore).toHaveBeenCalledWith(
-      'prayerTracking',
-      expect.objectContaining({ records: expect.objectContaining({ [DHUHR_KEY]: expect.anything() }) }),
+    await waitFor(() => expect(prayerService.createPrayerOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ date: PRAYER_TEST_DATE, prayer: 'Dhuhr', status: 'on_time' }),
+      expect.stringMatching(/^prayer-outcome:create:/u),
     ));
+  });
+
+  it('starts nothing until prayer preferences and location come from their services', async () => {
+    const owners = fakeOwners();
+    renderPrayerProvider({ ...owners, settings: { ...owners.settings, serviceSettingsReady: false } });
+
+    await act(async () => { await Promise.resolve(); });
+
+    expect(prayerService.getPrayerSchedule).not.toHaveBeenCalled();
+    expect(prayerService.getPrayerDashboard).not.toHaveBeenCalled();
+    expect(prayer.scheduleStatus).toBe('idle');
   });
 
   it('refuses to open a completion for a prayer that has not started', async () => {

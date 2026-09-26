@@ -72,6 +72,7 @@ function fakeSettings(): SettingsContextValue {
     loaded: true,
     appTimeZone: { effectiveTimeZone: 'Europe/London', browserTimeZone: 'Europe/London', source: 'browser' },
     appTimeZoneLoadWarning: null,
+    serviceSettingsReady: true,
     updateSettings: vi.fn(),
     saveAppTimeZonePreference: vi.fn().mockResolvedValue(undefined),
     updateIntegration: vi.fn(),

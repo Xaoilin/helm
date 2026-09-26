@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(27);
+select plan(28);
 
 select has_function(
   'public', 'sync_life_hero_evidence', array['date'],
@@ -23,6 +23,23 @@ select ok(
   'anonymous sessions cannot reconcile Life Hero evidence'
 );
 
+-- Prayer outcomes live in the prayer service's schema (created by its Flyway migrations in
+-- production); this fresh test database gets the columns Life Hero reads.
+create schema if not exists prayer;
+create table if not exists prayer.outcome (
+  id uuid primary key,
+  user_id uuid not null,
+  prayer_date date not null,
+  prayer_name text not null,
+  status text not null,
+  recorded_at timestamptz not null
+);
+insert into prayer.outcome (id, user_id, prayer_date, prayer_name, status, recorded_at) values
+  ('a1000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
+   '2026-05-01', 'Fajr', 'on_time', '2026-05-01T04:30:00Z'),
+  ('a1000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111',
+   '2026-05-01', 'Dhuhr', 'missed', '2026-05-01T13:00:00Z');
+
 insert into public.helm_records (
   user_id, collection, record_id, payload, revision, account_version, created_at, updated_at
 ) values
@@ -32,14 +49,10 @@ insert into public.helm_records (
     1, 10, '2026-05-01T00:00:00Z', '2026-05-01T00:00:00Z'
   ),
   (
-    '11111111-1111-4111-8111-111111111111', 'prayerTracking', 'record:2026-05-01:Fajr',
-    '{"date":"2026-05-01","prayerName":"Fajr","status":"on_time","recordedAt":"2026-05-01T04:30:00Z"}',
-    1, 10, '2026-05-01T04:30:00Z', '2026-05-01T04:30:00Z'
-  ),
-  (
-    '11111111-1111-4111-8111-111111111111', 'prayerTracking', 'record:2026-05-01:Dhuhr',
-    '{"date":"2026-05-01","prayerName":"Dhuhr","status":"missed","recordedAt":"2026-05-01T13:00:00Z"}',
-    1, 10, '2026-05-01T13:00:00Z', '2026-05-01T13:00:00Z'
+    -- A stale outcome mirrored before the prayer service owned outcomes: no longer evidence.
+    '11111111-1111-4111-8111-111111111111', 'prayerTracking', 'record:2026-05-02::Fajr',
+    '{"date":"2026-05-02","prayerName":"Fajr","status":"on_time","recordedAt":"2026-05-02T04:30:00Z"}',
+    1, 10, '2026-05-02T04:30:00Z', '2026-05-02T04:30:00Z'
   ),
   (
     '11111111-1111-4111-8111-111111111111', 'tasks', 'completed-task',
@@ -134,6 +147,11 @@ select is(
   (select count(*)::integer from public.life_hero_evidence where stat = 'faith'),
   1,
   'positive Prayer completion maps to Faith while missed Prayer does not award XP'
+);
+select is(
+  (select source_reference from public.life_hero_evidence where stat = 'faith'),
+  'helm:prayerTracking:record:2026-05-01::Fajr',
+  'Prayer evidence comes from prayer.outcome under the reference mirrored outcomes used'
 );
 select is(
   (select count(*)::integer from public.life_hero_evidence where stat = 'knowledge'),

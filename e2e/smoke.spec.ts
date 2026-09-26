@@ -115,7 +115,8 @@ test('keeps Dashboard Tasks and Prayer active without focus AI or cache writes @
   await page.getByRole('checkbox', { name: 'Mark "Plan focused work" as complete' }).click();
   await taskWrite;
   await page.getByRole('button', { name: 'Navigate to Dashboard' }).click();
-  const prayerWrite = waitForMutation(page, 'prayerTracking');
+  const prayerWrite = page.waitForRequest(request => request.method() === 'POST'
+    && request.url().endsWith('/api/prayer/v1/outcomes'));
   await page.getByRole('button', { name: 'Complete Dhuhr Prayer — Current prayer' }).click();
   await page.getByRole('dialog').getByRole('button', { name: /^On time/ }).click();
   await prayerWrite;

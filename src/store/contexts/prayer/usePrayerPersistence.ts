@@ -1,7 +1,6 @@
-import { useEffect } from 'react';
-import type { GamificationProfile, PrayerTrackingState, Task } from '../../../types/domain';
+import { useEffect, useRef } from 'react';
+import type { PrayerTrackingState } from '../../../types/domain';
 import { normalizePrayerTrackingState } from '../../../services/prayerTracking';
-import { isPrayerServiceEnabled, savePrayerPreferences } from '../../../services/backend/prayerServiceApi';
 import { loadStore, saveStore } from '../../persistence';
 import { useRemoteStoreRefresh } from '../useRemoteStoreRefresh';
 import {
@@ -12,94 +11,108 @@ import {
 } from '../usePrayerServiceSync';
 import type { PrayerTrackingStore } from './usePrayerTracking';
 
-export interface PrayerPreferences {
-  enabled: boolean;
-  reminderEnabled: boolean;
-  reminderMinutes: number;
-}
-
 export interface PrayerPersistenceInput {
   store: PrayerTrackingStore;
-  /** Tasks, gamification and settings have loaded, so legacy data can be migrated. */
+  /** Tasks, rewards and settings have loaded, so reminder receipts can load. */
   sourcesLoaded: boolean;
-  /** Legacy sources older tracking data is rebuilt from when it is first normalized. */
-  gamification: GamificationProfile;
-  tasks: readonly Task[];
+  /** The location has come from the profile service, so outcomes can load for it. */
+  locationReady: boolean;
   location: PrayerLocation;
-  preferences: PrayerPreferences;
   /** The prayer service refused an outcome for good. */
   onRejected: (rejection: PrayerOutcomeRejection) => void;
 }
 
+export interface PrayerPersistence {
+  serviceSync: PrayerServiceSyncState;
+  /** Reloads outcomes from the service, e.g. to pick up misses the service records itself. */
+  reload: () => void;
+}
+
+/** Reminder receipts from the account's `prayerTracking` record, applied to the current state. */
+function withStoredReceipts(current: PrayerTrackingState, stored: unknown): PrayerTrackingState {
+  if (!stored) return current;
+  const receipts = normalizePrayerTrackingState(stored, { now: new Date() });
+  return {
+    ...current,
+    reminderReceipts: receipts.reminderReceipts,
+    boundedReminderReceipts: receipts.boundedReminderReceipts,
+  };
+}
+
 /**
- * Keeps prayer tracking in step with where it is stored: the account's Supabase
- * record (loaded, refreshed on remote change, saved on every change) and, when
- * configured, the Spring prayer service (the outcome source of truth, merged in
- * when it answers, and sent every change). Prayer preferences edited in
- * Settings are mirrored to the service too.
+ * Keeps prayer tracking in step with where it is stored. The prayer service is the only store of
+ * outcomes, the tracking start and activation: they load from it (again whenever the page becomes
+ * visible, to pick up other devices) and every change is sent to it. Reminder receipts, which the
+ * service does not hold, live in the account's `prayerTracking` record.
  */
 export function usePrayerPersistence({
   store,
   sourcesLoaded,
-  gamification,
-  tasks,
+  locationReady,
   location,
-  preferences,
   onRejected,
-}: PrayerPersistenceInput): PrayerServiceSyncState {
+}: PrayerPersistenceInput): PrayerPersistence {
   const { tracking, loaded, markLoaded, getTracking, commitTracking } = store;
   const { city, country } = location;
-  const { enabled, reminderEnabled, reminderMinutes } = preferences;
   const serviceSync = usePrayerServiceSync(getTracking, commitTracking, onRejected);
-
-  const normalizeStored = (value: unknown): PrayerTrackingState => normalizePrayerTrackingState(value, {
-    now: new Date(),
-    dailyLog: gamification.dailyLog,
-    prayerCompletionLedger: gamification.prayerCompletionLedger,
-    tasks,
-  });
 
   useEffect(() => {
     if (!sourcesLoaded) return;
     let cancelled = false;
 
-    void loadStore<unknown>('prayerTracking').then(async value => {
+    void loadStore<unknown>('prayerTracking').then(stored => {
       if (cancelled) return;
-      const normalized = commitTracking(normalizeStored(value));
+      commitTracking(current => withStoredReceipts(current, stored));
       markLoaded();
-      // The prayer service is the source of truth for outcomes when configured; its data is
-      // merged in when it arrives, so the page never waits for it.
-      const hydrated = await serviceSync.hydrate(normalized, { city, country });
-      if (!cancelled && hydrated !== getTracking()) commitTracking(hydrated);
     });
 
     return () => {
       cancelled = true;
     };
-    // Initial migration intentionally uses the first fully loaded task/profile snapshots.
+    // Receipts load once; outcomes load below when the location is final.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourcesLoaded]);
 
+  // The page does not wait for the service: outcomes merge in when it answers.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (!loaded || !locationReady || hydratedRef.current) return;
+    hydratedRef.current = true;
+    let cancelled = false;
+    void serviceSync.hydrate(getTracking(), { city, country }).then(hydrated => {
+      if (!cancelled && hydrated !== getTracking()) commitTracking(hydrated);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // The first load uses the final location; later changes reload through the service sync.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, locationReady]);
+
   useRemoteStoreRefresh(['prayerTracking'], async () => {
-    const value = await loadStore<unknown>('prayerTracking');
-    const normalized = commitTracking(normalizeStored(value));
-    const hydrated = await serviceSync.hydrate(normalized, { city, country });
-    if (hydrated !== getTracking()) commitTracking(hydrated);
+    const stored = await loadStore<unknown>('prayerTracking');
+    commitTracking(current => withStoredReceipts(current, stored));
   });
 
   useEffect(() => {
     if (!loaded) return;
+    const reloadWhenVisible = () => {
+      if (document.visibilityState === 'visible') void serviceSync.rehydrate();
+    };
+    document.addEventListener('visibilitychange', reloadWhenVisible);
+    return () => document.removeEventListener('visibilitychange', reloadWhenVisible);
+    // serviceSync.rehydrate is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    // The account record keeps only reminder receipts (see recordCodec); outcomes go to the service.
     void saveStore('prayerTracking', tracking);
     serviceSync.push(tracking);
-    // serviceSync.push is stable; the service mirrors every tracking change.
+    // serviceSync.push is stable; the service receives every tracking change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, tracking]);
 
-  useEffect(() => {
-    if (!loaded || !isPrayerServiceEnabled()) return;
-    void savePrayerPreferences({ enabled, reminderEnabled, reminderMinutes })
-      .catch(error => console.error('Prayer preferences could not be saved to the prayer service', error));
-  }, [loaded, enabled, reminderEnabled, reminderMinutes]);
-
-  return serviceSync.state;
+  return { serviceSync: serviceSync.state, reload: serviceSync.rehydrate };
 }

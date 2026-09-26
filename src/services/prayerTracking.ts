@@ -2,7 +2,6 @@ import type {
   BoundedReminderReceipt,
   PrayerActivationDayEligibility,
   PrayerCompletionSource,
-  PrayerCompletionLedgerEntry,
   PrayerCompletionStatus,
   PrayerDeadlineBounds,
   PrayerDeadlineName,
@@ -16,10 +15,8 @@ import type {
   PrayerScheduleEntry,
   PrayerTrackingRecord,
   PrayerTrackingState,
-  Task,
 } from '../types/domain';
 import { toLocalDateStr } from './financeHelpers';
-import { getPrayerTaskName } from './prayerTasks';
 import { prayerZonedDateTimeToInstant, shiftPrayerDate } from './prayerTimeZone';
 
 export const PRAYER_TRACKING_SCHEMA_VERSION = 1;
@@ -42,13 +39,8 @@ const PRAYER_NAME_SET = new Set<string>(CANONICAL_PRAYER_NAMES);
 const OUTCOME_STATUS_SET = new Set<string>(['on_time', 'late', 'missed', 'unclassified']);
 const LOCAL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-type LegacyPrayerTask = Pick<Task, 'id' | 'category' | 'title' | 'prayerName'>;
-
 export interface NormalizePrayerTrackingOptions {
   now?: Date;
-  dailyLog?: Record<string, string[]>;
-  prayerCompletionLedger?: Record<string, PrayerCompletionLedgerEntry>;
-  tasks?: readonly LegacyPrayerTask[];
 }
 
 export interface SetPrayerOutcomeInput {
@@ -348,67 +340,6 @@ export function normalizePrayerTrackingState(
         ...(attemptedAt ? { attemptedAt } : {}),
         ...(notifiedAt ? { notifiedAt } : {}),
         ...(snoozedUntil ? { snoozedUntil } : {}),
-      };
-    }
-  }
-
-  for (const candidate of Object.values(options.prayerCompletionLedger ?? {})) {
-    if (!isObject(candidate)) continue;
-    if (
-      typeof candidate.date !== 'string'
-      || !parseLocalDate(candidate.date)
-      || !isPrayerName(candidate.prayerName)
-      || !isPrayerOutcomeStatus(candidate.status)
-    ) {
-      continue;
-    }
-    const key = getPrayerRecordKey(candidate.date, candidate.prayerName);
-    if (records[key]) continue;
-    const record: PrayerTrackingRecord = {
-      date: candidate.date,
-      prayerName: candidate.prayerName,
-      status: candidate.status,
-      recordedAt: normalizeInstant(candidate.recordedAt, trackingStartedAt),
-      source: typeof candidate.source === 'string' && candidate.source.trim()
-        ? candidate.source
-        : 'system',
-    };
-    if (candidate.rewarded === true) record.rewarded = true;
-    if (typeof candidate.taskId === 'string' && candidate.taskId.trim()) {
-      record.taskId = candidate.taskId;
-    }
-    records[key] = record;
-  }
-
-  const prayerTaskById = new Map<string, { prayerName: PrayerName; taskId?: string }>(
-    CANONICAL_PRAYER_NAMES.map(prayerName => [
-      getPrayerRewardLogId(prayerName),
-      { prayerName },
-    ]),
-  );
-  for (const task of options.tasks ?? []) {
-    const prayerName = getPrayerTaskName(task);
-    if (prayerName && isPrayerName(prayerName)) {
-      prayerTaskById.set(task.id, { prayerName, taskId: task.id });
-    }
-  }
-
-  for (const [date, taskIds] of Object.entries(options.dailyLog ?? {})) {
-    if (!parseLocalDate(date) || !Array.isArray(taskIds)) continue;
-    for (const taskId of taskIds) {
-      const prayerTask = prayerTaskById.get(taskId);
-      if (!prayerTask) continue;
-
-      const key = getPrayerRecordKey(date, prayerTask.prayerName);
-      if (records[key]) continue;
-      records[key] = {
-        date,
-        prayerName: prayerTask.prayerName,
-        status: 'unclassified',
-        recordedAt: trackingStartedAt,
-        rewarded: true,
-        ...(prayerTask.taskId ? { taskId: prayerTask.taskId } : {}),
-        source: 'migration',
       };
     }
   }

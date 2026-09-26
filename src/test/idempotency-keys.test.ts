@@ -4,7 +4,6 @@ import {
   correctOutcomeKey,
   createOutcomeKey,
   deleteOutcomeKey,
-  importTrackingKey,
   newWriteKey,
 } from '../services/backend/idempotencyKeys';
 
@@ -55,7 +54,6 @@ describe('keys the service accepts', () => {
     ['create', createOutcomeKey(record())],
     ['correct', correctOutcomeKey(ID, record())],
     ['delete', deleteOutcomeKey(ID)],
-    ['import', importTrackingKey({ trackingStartedAt: '2026-04-01T08:00:00.000Z' })],
     ['new write', newWriteKey()],
   ])('%s keys are 1-200 visible ASCII characters', (_name, key) => {
     expect(key).toMatch(VALID_KEY);
@@ -65,11 +63,6 @@ describe('keys the service accepts', () => {
 it('deleting one outcome is one action however often it is retried', () => {
   expect(deleteOutcomeKey(ID)).toBe(deleteOutcomeKey(ID));
   expect(deleteOutcomeKey(ID)).not.toBe(deleteOutcomeKey('another-id'));
-});
-
-it('the legacy import is one action per account', () => {
-  const state = { trackingStartedAt: '2026-04-01T08:00:00.000Z' };
-  expect(importTrackingKey(state)).toBe(importTrackingKey({ ...state }));
 });
 
 it('whole-value saves get a new key each time', () => {

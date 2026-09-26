@@ -30,23 +30,19 @@ test.describe('prayer and profile services', () => {
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
   });
 
-  test('imports the existing prayer history once', async ({ page, scenario }) => {
+  test('shows only the prayer service outcomes, never the account record copy, and re-sends nothing', async ({ page, scenario }) => {
     const control = await scenario({
       now: NOON,
       settings: { prayerEnabled: true, lifeHeroEnabled: false },
       stores: {
+        // An outcome the old Supabase mirror still holds; the service never had it.
         prayerTracking: {
           schemaVersion: 1,
           trackingStartedAt: '2026-08-20T08:00:00.000Z',
           records: {
-            '2026-08-28::Isha': {
-              date: '2026-08-28', prayerName: 'Isha', status: 'on_time',
-              recordedAt: '2026-08-28T20:00:00.000Z', rewarded: true, source: 'dashboard',
-            },
-            // History can predate the tracking start; it must load, not be re-sent.
-            '2026-04-02::Fajr': {
-              date: '2026-04-02', prayerName: 'Fajr', status: 'late',
-              recordedAt: '2026-08-20T08:00:00.000Z', rewarded: true, source: 'migration',
+            '2026-08-29::Fajr': {
+              date: '2026-08-29', prayerName: 'Fajr', status: 'late',
+              recordedAt: '2026-08-29T06:00:00.000Z', rewarded: true, source: 'dashboard',
             },
           },
           reminderReceipts: {},
@@ -54,19 +50,29 @@ test.describe('prayer and profile services', () => {
         },
       },
     });
+    control.services.tracking = {
+      trackingStartedAt: '2026-08-20T08:00:00Z', activationDate: null, activationPrayers: [], importedAt: null,
+    };
+    // History can predate the tracking start; it must load, not be re-sent.
+    control.services.outcomes.set('2026-04-02::Fajr', {
+      id: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b', date: '2026-04-02', prayer: 'Fajr', status: 'late',
+      recordedAt: '2026-08-20T08:00:00Z', source: 'migration', taskId: null, rewarded: true, deadlineAt: null,
+    });
     await openApp(page);
 
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
-    expect(control.services.calls.filter(call => call === 'POST /api/prayer/v1/import')).toHaveLength(1);
-    expect(control.services.outcomes.get('2026-08-28::Isha')?.status).toBe('on_time');
-    expect(control.services.outcomes.get('2026-04-02::Fajr')?.status).toBe('late');
-    expect(control.services.conflicts).toBe(0);
-    expect(control.services.tracking?.trackingStartedAt).toBe('2026-08-20T08:00:00.000Z');
-
+    await expect(page.getByRole('button', { name: /Fajr Prayer — confirmed/u })).toHaveCount(0);
     await page.reload();
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
-    expect(control.services.calls.filter(call => call === 'POST /api/prayer/v1/import')).toHaveLength(1);
+
+    const writes = control.services.calls.filter(call => !call.startsWith('GET '));
+    expect(writes.filter(call => call.startsWith('POST /api/prayer') || call.startsWith('PATCH ') || call.startsWith('DELETE ')))
+      .toEqual([]);
+    expect(control.services.calls).not.toContain('POST /api/prayer/v1/import');
+    // Preferences are read from the service; loading the page never writes them back.
+    expect(control.services.calls).not.toContain('PUT /api/prayer/v1/preferences');
     expect(control.services.conflicts).toBe(0);
+    expect(control.services.outcomes.has('2026-08-29::Fajr')).toBe(false);
   });
 
   test('uses the location saved in the profile service', async ({ page, scenario }) => {
@@ -76,7 +82,7 @@ test.describe('prayer and profile services', () => {
       services: { profile: { city: 'London', country: 'United Kingdom', timeZone: null } },
     });
     const londonTimetable = page.waitForRequest(request =>
-      request.url().includes('timingsByCity') && new URL(request.url()).searchParams.get('city') === 'London');
+      request.url().includes('/api/prayer/v1/schedule') && new URL(request.url()).searchParams.get('city') === 'London');
     await openApp(page);
 
     await londonTimetable;

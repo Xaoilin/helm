@@ -98,8 +98,6 @@ export const dashboardSchema = z.object({
   monthStats: statsSchema,
 });
 
-export const importResultSchema = z.object({ imported: z.number().int(), skipped: z.number().int() });
-
 export const globalSettingsSchema = z.object({
   city: z.string(),
   country: z.string(),
@@ -112,7 +110,7 @@ export type ServiceOutcomeChange = z.infer<typeof outcomeChangeSchema>;
 export type ServicePreferences = z.infer<typeof preferencesSchema>;
 export type ServiceDashboard = z.infer<typeof dashboardSchema>;
 export type ServiceTracking = z.infer<typeof trackingSchema>;
-export type ServiceImportResult = z.infer<typeof importResultSchema>;
+export type ServiceSchedule = z.infer<typeof scheduleSchema>;
 export type ServiceGlobalSettings = z.infer<typeof globalSettingsSchema>;
 
 /** Response schemas keyed by fixture file name in `contracts/<service>/`. */
@@ -126,7 +124,6 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   'prayer-service/stats': statsSchema,
   'prayer-service/preferences': preferencesSchema,
   'prayer-service/preferences-updated': preferencesSchema,
-  'prayer-service/import-result': importResultSchema,
   'profile-service/settings-default': globalSettingsSchema,
   'profile-service/settings-updated': globalSettingsSchema,
   'profile-service/settings-invalid': apiErrorSchema,

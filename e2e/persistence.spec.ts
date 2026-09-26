@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import type { EquityPosition } from '../src/types/domain';
 import { FINANCE_REVIEW } from '../src/test/finance-review-fixture';
@@ -217,6 +218,12 @@ test('persists an account setting through reload', async ({ page, scenario }) =>
   await expect(page.getByText('Light theme is not yet available.')).toBeVisible();
 });
 
+function waitForProfileSave(page: Page, timeZone: string | null) {
+  return page.waitForRequest(request => request.method() === 'PUT'
+    && request.url().endsWith('/api/profile/v1/settings')
+    && (request.postDataJSON() as { timeZone: string | null }).timeZone === timeZone);
+}
+
 test('validates, persists, reloads, and resets the account app time zone', async ({ page, scenario }) => {
   await scenario({
     now: '2026-08-29T11:00:00.000Z',
@@ -234,7 +241,8 @@ test('validates, persists, reloads, and resets the account app time zone', async
   );
 
   await timeZone.fill('America/New_York');
-  const preferredWrite = waitForMutation(page, 'settings');
+  // The display time zone is owned by the profile service.
+  const preferredWrite = waitForProfileSave(page, 'America/New_York');
   await page.getByRole('button', { name: 'Save time zone' }).click();
   await preferredWrite;
   await expect(page.getByText('Saved America/New_York to your account.')).toBeVisible();
@@ -254,7 +262,7 @@ test('validates, persists, reloads, and resets the account app time zone', async
   )).toBeVisible();
   await page.getByRole('button', { name: 'Navigate to Settings' }).click();
 
-  const automaticWrite = waitForMutation(page, 'settings');
+  const automaticWrite = waitForProfileSave(page, null);
   await page.getByRole('button', { name: 'Use Automatic' }).click();
   await automaticWrite;
   await expect(page.getByLabel('IANA time zone')).toHaveValue('');

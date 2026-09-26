@@ -144,7 +144,10 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const settingsOwner = useSettingsContext();
 
   const { settings } = settingsOwner;
-  const prayerEnabled = settings.prayerEnabled !== false;
+  // Prayer preferences and location come from their services: wait for them, so the app never
+  // briefly runs prayer features, or fetches a timetable, from defaults.
+  const serviceSettingsReady = settingsOwner.serviceSettingsReady;
+  const prayerEnabled = serviceSettingsReady && settings.prayerEnabled !== false;
   const reminderEnabled = settings.prayerReminderEnabled !== false;
   const reminderMinutes = settings.prayerReminderMinutes ?? PRAYER_REMINDERS.DEFAULT_MINUTES;
   const city = settings.prayerCity || 'Bedford';
@@ -180,17 +183,6 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     scheduleTimeZone: scheduleTimezone,
     onDayChange: reloadForNewDay,
     onResume: resume,
-  });
-
-  usePrayerOutcomeUpkeep({
-    loaded,
-    tracking,
-    commitTracking,
-    timetable,
-    reminderSchedules,
-    reminderSchedulesValid,
-    today,
-    now,
   });
 
   const { scheduleDays, stats, deadlines, nextPrayer } = useMemo(() => buildPrayerSchedulePolicySnapshot({
@@ -279,15 +271,23 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     setCompletionNotice(`${rejection.record.prayerName} on ${rejection.record.date} was not saved: ${rejection.message}`);
   }, [revertRefusedOutcome]);
 
-  // Persistence: Supabase record and Spring prayer service.
-  const serviceSync = usePrayerPersistence({
+  // Persistence: the prayer service for outcomes, the account record for reminder receipts.
+  // Rewards and tasks load first, so reward recovery never mistakes a missing receipt.
+  const { serviceSync, reload: reloadOutcomes } = usePrayerPersistence({
     store,
     sourcesLoaded: taskOwner.loaded && gamificationOwner.loaded && settingsOwner.loaded,
-    gamification: gamificationOwner.gamification,
-    tasks: taskOwner.tasks,
+    locationReady: serviceSettingsReady,
     location: { city, country },
-    preferences: { enabled: prayerEnabled, reminderEnabled, reminderMinutes },
     onRejected: rejectOutcome,
+  });
+  usePrayerOutcomeUpkeep({
+    loaded,
+    tracking,
+    reminderSchedules,
+    reminderSchedulesValid,
+    today,
+    now,
+    reload: reloadOutcomes,
   });
   usePrayerRewardRecovery({ loaded, records: tracking.records, getGamification, completePrayer });
 

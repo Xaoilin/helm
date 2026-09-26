@@ -3,7 +3,7 @@
  * the service's values replace the app's; the first time, the app's current values seed it.
  * Later edits in Settings are written back. Failures are logged and retried on the next edit.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Settings } from '../../types/domain';
 import {
   getGlobalSettings,
@@ -37,11 +37,18 @@ function sameLocation(left: Location, right: Location): boolean {
   return left.city === right.city && left.country === right.country && left.timeZone === right.timeZone;
 }
 
+export interface ProfileSettingsSync {
+  /** The profile service has answered (or is not configured), so the location is final. */
+  ready: boolean;
+  /** Saves a location now and resolves once the profile service has it (a no-op when not configured). */
+  saveLocation: (location: Location) => Promise<void>;
+}
+
 export function useProfileSettingsSync(
   loaded: boolean,
   settings: Settings,
   applyLocation: (location: Location) => void,
-): void {
+): ProfileSettingsSync {
   const enabled = isProfileServiceEnabled();
   const [ready, setReady] = useState(false);
   const startedRef = useRef(false);
@@ -81,4 +88,11 @@ export function useProfileSettingsSync(
       console.error('Global settings could not be saved to the profile service', error);
     });
   }, [enabled, ready, settings]);
+
+  const saveLocation = useCallback(async (location: Location) => {
+    if (!enabled) return;
+    lastSavedRef.current = await saveGlobalSettings(location);
+  }, [enabled]);
+
+  return { ready: ready || !enabled, saveLocation };
 }
