@@ -72,11 +72,12 @@ describe('Night Compass activities', () => {
     expect(screen.queryByLabelText('Life Hero companion')).not.toBeInTheDocument();
   });
 
-  it('mounts the character companion only after explicit opt-in', () => {
+  it('does not mount the deprecated Life Hero companion even when the stored setting opts in', () => {
+    // Life Hero is disabled by build flag (docs/deprecated-features.md); the old setting cannot revive it.
     mocks.settings.settings.lifeHeroEnabled = true;
     render(<NightCompassDashboard />);
 
-    expect(screen.getByLabelText('Life Hero companion')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Life Hero companion')).not.toBeInTheDocument();
   });
 
   it('gives every Learn and Move activity title pointer and keyboard help', () => {

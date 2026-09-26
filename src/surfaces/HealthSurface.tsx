@@ -3,6 +3,7 @@ import { HEALTH_FAST_FOOD } from '../config/constants';
 import { toLocalDateStr } from '../services/financeHelpers';
 import { useHealthContext } from "../store/contexts/HealthContext";
 import AppleHealthMovementImport from '../components/AppleHealthMovementImport';
+import { LIFE_HERO_ENABLED } from '../config/deprecatedFeatures';
 import { useSettingsContext } from '../store/contexts/SettingsContext';
 import type {
   FastFoodExperienceRating,
@@ -225,7 +226,7 @@ export default function HealthSurface() {
           </div>
         </section>
 
-        <AppleHealthMovementImport timeZone={appTimeZone.effectiveTimeZone} />
+        {LIFE_HERO_ENABLED && <AppleHealthMovementImport timeZone={appTimeZone.effectiveTimeZone} />}
 
         <div className="health-layout">
           <section className="health-quick-log">

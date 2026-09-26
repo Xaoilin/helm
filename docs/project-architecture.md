@@ -18,7 +18,7 @@ The current stack is:
 
 ### Hosted web shell
 
-The React shell renders navigation, the active surface, the global Lina panel, and Supabase sign-in controls. The supported surfaces are Dashboard, Chat, Calendar, Clock, Trips, Tasks, Employment, Projects, Inventory, Secrets, Finance, Health, Knowledge, Profile, Integrations, Activity, Settings, and Debug.
+The React shell renders navigation, the active surface, and Supabase sign-in controls. The global Lina panel and the Chat surface are disabled (see [deprecated features](deprecated-features.md)); a stored or requested `chat` surface opens the Dashboard. The supported surfaces are Dashboard, Calendar, Clock, Trips, Tasks, Employment, Projects, Inventory, Secrets, Finance, Health, Knowledge, Profile, Integrations, Activity, Settings, and Debug.
 
 The visible version comes from the web build and the deployed `public/release.json` manifest. Open pages check the manifest with a five-second deadline and perform one browser reload when a newer deployed semver is available. Reload waits until the page is visible and mounted, with no queued writes, open modal, or visible editable text; a deferred check does not consume the reload marker. The active surface is kept in browser session state so a legitimate reload can return the user to the same section.
 
@@ -26,7 +26,7 @@ The visible version comes from the web build and the deployed `public/release.js
 
 `src/store/AppProviders.tsx` composes the existing domain providers without exposing an app-wide service bag. Components import the smallest owning domain hook they need: Calendar consumers use `useCalendar`, Task consumers use `useTaskContext`, Settings consumers use `useSettingsContext`, and so on. Updating one domain no longer republishes an object containing every other domain capability.
 
-Provider order remains explicit because several providers consume earlier owners. Settings and Gamification wrap Daily Momentum; Calendar precedes Trips; Projects precedes Tasks; Prayer and Clock follow the data domains, with the named `DailyTaskRollover` workflow mounted once between them so habit resets and streak-break resets run whichever page is open; Assistant Activity follows Assistant; then the named Chat bridge, Shell, assistant-undo coordinator, and Google Sync bridge wrap rendered consumers. `src/test/composition.boundaries.test.ts` checks the order and ownership markers.
+Provider order remains explicit because several providers consume earlier owners. Settings and Gamification wrap Daily Momentum; Calendar precedes Trips; Projects precedes Tasks; Prayer and Clock follow the data domains, with the named `DailyTaskRollover` workflow mounted once between them so habit resets and streak-break resets run whichever page is open; Assistant Activity follows Assistant; then the named Chat bridge, Shell, assistant-undo coordinator, and Google Sync bridge wrap rendered consumers. `src/test/composition.boundaries.test.ts` checks the order and ownership markers. The assistant providers and `ChatBridge` stay mounted while the assistant is disabled so readiness hooks keep their contexts; they load nothing because no surface activates their collections, and they are removed with the assistant (see [deprecated features](deprecated-features.md)).
 
 `src/store/ShellContext.tsx` owns only the active surface, one-shot assistant navigation requests, session restoration, and the readiness gate. Chat and voice can hand Shell a typed request to open a Tasks view or reveal a grounded Project without creating a second navigation path. Because rendered consumers mount after readiness, they do not need a cross-domain `loaded` capability.
 
@@ -100,6 +100,8 @@ Calendar sync is passive and account-bound. Opening Calendar or pressing `Sync` 
 The voice connection stores only `elevenLabsSecretId` in the device settings partition; `elevenLabsVoiceId` stays in the existing shared public settings. New device writes use `helm:device:deviceSettings:v2` and exclude provider values. The original device/legacy settings sources remain unchanged for the existing Secrets migration. `assistant-speech` verifies a real user and, only when hosted AI is enabled, calls the existing `list_helm_secrets` and `reveal_helm_secret` with that user JWT. It accepts one active API-key reference, text and a public voice ID, and returns MP3 audio or sanitized errors. There is no second Vault store or generic secret API. See [Voice provider security](voice-provider-security.md).
 
 ### Assistant and voice
+
+The Lina assistant (Chat and voice) and Life Hero were disabled on 2026-09-26 by the build-time switches in `src/config/deprecatedFeatures.ts` and are scheduled for removal. The description below records the retained code; nothing in it runs in the product. See [deprecated features](deprecated-features.md).
 
 Chat and voice use the shared grounded assistant runtime in `src/assistant/`. Hosted GPT-5.4-family models provide planning and narration through `assistant-openai`, while Settings may select a configured Ollama endpoint; browser code supplies transcript normalization, capability and entity retrieval, effective-app-zone temporal resolution, validation, confirmation, deterministic execution, and debug tracing for both. Prayer-relative anchors receive the schedule zone separately.
 

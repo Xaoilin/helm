@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import type { AssistantCorrection } from '../types/domain';
 import type { AssistantConversationMessage, AssistantLang } from './shared';
 

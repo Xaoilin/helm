@@ -5,21 +5,23 @@ import PersistenceDebug from '../components/debug/PersistenceDebug';
 import WakeWordDebug from '../components/debug/WakeWordDebug';
 import PrayerDebug from '../components/debug/PrayerDebug';
 import OperationalDebug from '../components/debug/OperationalDebug';
+import { ASSISTANT_ENABLED, VOICE_ENABLED } from '../config/deprecatedFeatures';
 
 type DebugTab = 'wakeword' | 'ai' | 'audio' | 'network' | 'prayer' | 'persistence' | 'operations';
 
-export default function DebugSurface() {
-  const [tab, setTab] = useState<DebugTab>('wakeword');
+const DEBUG_TABS: { id: DebugTab; label: string; icon: string; enabled: boolean }[] = [
+  { id: 'wakeword', label: 'Wake Word', icon: '🎤', enabled: VOICE_ENABLED },
+  { id: 'ai', label: 'AI Assistant', icon: '🧠', enabled: ASSISTANT_ENABLED },
+  { id: 'audio', label: 'Audio Pipeline', icon: '🔊', enabled: VOICE_ENABLED },
+  { id: 'network', label: 'Network / APIs', icon: '🌐', enabled: true },
+  { id: 'prayer', label: 'Prayer', icon: '🕌', enabled: true },
+  { id: 'persistence', label: 'Persistence', icon: '💾', enabled: true },
+  { id: 'operations', label: 'Operations', icon: '📊', enabled: true },
+];
 
-  const tabs: { id: DebugTab; label: string; icon: string }[] = [
-    { id: 'wakeword', label: 'Wake Word', icon: '🎤' },
-    { id: 'ai', label: 'AI Assistant', icon: '🧠' },
-    { id: 'audio', label: 'Audio Pipeline', icon: '🔊' },
-    { id: 'network', label: 'Network / APIs', icon: '🌐' },
-    { id: 'prayer', label: 'Prayer', icon: '🕌' },
-    { id: 'persistence', label: 'Persistence', icon: '💾' },
-    { id: 'operations', label: 'Operations', icon: '📊' },
-  ];
+export default function DebugSurface() {
+  const tabs = DEBUG_TABS.filter(t => t.enabled);
+  const [tab, setTab] = useState<DebugTab>(tabs[0].id);
 
   return (
     <>
@@ -42,9 +44,9 @@ export default function DebugSurface() {
           ))}
         </div>
 
-        {tab === 'wakeword' && <WakeWordDebug />}
-        {tab === 'ai' && <AiDebug />}
-        {tab === 'audio' && (
+        {VOICE_ENABLED && tab === 'wakeword' && <WakeWordDebug />}
+        {ASSISTANT_ENABLED && tab === 'ai' && <AiDebug />}
+        {VOICE_ENABLED && tab === 'audio' && (
           <div className="card" style={{ padding: 20, color: '#6b6f85' }}>
             Audio pipeline debugging — coming soon. Will test Deepgram STT, ElevenLabs TTS, and browser audio routing.
           </div>

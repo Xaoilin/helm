@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AssistantLang } from '../assistant/shared';
 import { ELEVENLABS_VOICE_ID } from '../config';

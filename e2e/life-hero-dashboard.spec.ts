@@ -1,6 +1,9 @@
 import type { Page } from '@playwright/test';
 import { expect, openApp, test } from './support/helm-fixture';
 
+// Deprecated: remove this spec with the feature.
+test.skip(true, 'Life Hero is disabled pending removal; see docs/deprecated-features.md');
+
 const LIFE_HERO_SETTINGS = { lifeHeroEnabled: true };
 
 function requestedViewports(): string[] {

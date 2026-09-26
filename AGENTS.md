@@ -15,7 +15,7 @@ HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the lin
 - `src/types/domain.ts` owns app data shapes.
 - Shared app data is signed-in and database-authoritative. Writes require server confirmation; transient failures may retain only the same account's confirmed in-memory data. Invalid authorization and account changes fail closed.
 - Calendar data remains account -> source -> event, with intentional multi-account support.
-- Voice and chat share one assistant runtime and one mutation path.
+- Voice and chat share one assistant runtime and one mutation path. Both, and Life Hero, are disabled pending removal; see `docs/deprecated-features.md`.
 - Secret values belong in the account-owned Supabase Vault path. Never place plaintext in shared records, browser storage, Broadcast payloads, logs, exports, assistant context, or durable memory.
 - Project catalogue records may sync names, links, documentation, and display-only guidance; private credentials never enter shared records or assistant context.
 - Prayer reminders use a page-open browser timer and Web Notifications when permitted. The in-app banner is the fallback when notification permission or delivery is unavailable.

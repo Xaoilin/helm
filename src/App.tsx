@@ -16,6 +16,7 @@ import {
 } from './store/supabase';
 import type { Surface } from './types/domain';
 import { APP_RELEASE_LABEL, APP_RELEASE_VERSION } from './config/release';
+import { ASSISTANT_ENABLED, VOICE_ENABLED, isSurfaceAvailable } from './config/deprecatedFeatures';
 import {
   getGoogleCalendarAuthPatch,
   isGoogleCalendarAccount,
@@ -56,7 +57,7 @@ const SURFACE_REGISTRY = {
   debug: { label: 'Debug', icon: '\u{1F41E}', component: lazy(() => import('./surfaces/DebugSurface')) },
 } satisfies Record<Surface, SurfaceDefinition>;
 
-const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = (Object.keys(SURFACE_REGISTRY) as Surface[]).map(surface => ({
+const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = (Object.keys(SURFACE_REGISTRY) as Surface[]).filter(isSurfaceAvailable).map(surface => ({
   surface,
   label: SURFACE_REGISTRY[surface].label,
   icon: SURFACE_REGISTRY[surface].icon,
@@ -66,6 +67,8 @@ const PRIMARY_MOBILE_NAV: Surface[] = ['dashboard', 'chat', 'calendar', 'tasks']
 const MOBILE_NAV_ITEMS = NAV_ITEMS.filter(item => PRIMARY_MOBILE_NAV.includes(item.surface));
 const MOBILE_MORE_ITEMS = NAV_ITEMS.filter(item => !PRIMARY_MOBILE_NAV.includes(item.surface));
 const VoiceAssistant = lazy(() => import('./components/VoiceAssistant'));
+// VoiceAssistant is both the floating Lina panel and the voice runtime.
+const LINA_PANEL_ENABLED = ASSISTANT_ENABLED && VOICE_ENABLED;
 
 function AppInner() {
   const shell = useShell();
@@ -342,7 +345,7 @@ function AppInner() {
             <div className="mobile-more-header">
               <div>
                 <div className="mobile-more-title">More</div>
-                <div className="mobile-more-subtitle">All Lina surfaces</div>
+                <div className="mobile-more-subtitle">All Sabah One surfaces</div>
               </div>
               <button className="btn-icon" onClick={closeMoreDialog} aria-label="Close more navigation">
                 &times;
@@ -404,7 +407,7 @@ function AppInner() {
         </button>
       </nav>
       {!readOnly && sharedPageReady && <PrayerGlobalOverlays />}
-      {!readOnly && sharedPageReady && (
+      {LINA_PANEL_ENABLED && !readOnly && sharedPageReady && (
         <Suspense fallback={null}>
           <VoiceAssistant />
         </Suspense>

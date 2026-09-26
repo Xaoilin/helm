@@ -42,10 +42,10 @@ for (const width of [390, 1440]) {
     await openIntegrations(page, width);
     const surface = page.getByRole('main', { name: 'integrations surface' });
     const googleCard = surface.locator('.card').filter({ has: page.getByRole('heading', { name: /^Google Calendar/ }) });
-    const githubCard = surface.locator('.card').filter({ has: page.getByRole('heading', { name: /^GitHub/ }) });
-    await expect(surface.locator('.card')).toHaveCount(2);
+    // The GitHub App only feeds Life Hero, which is disabled pending removal (docs/deprecated-features.md).
+    await expect(surface.locator('.card')).toHaveCount(1);
     await expect(googleCard).toBeVisible();
-    await expect(githubCard).toBeVisible();
+    await expect(surface.getByRole('heading', { name: /^GitHub/ })).toHaveCount(0);
     await expect(surface.getByText('Slack and Linear connections are unavailable.', { exact: false })).toBeVisible();
     await expect(surface.getByRole('button', { name: /Simulate|Disconnect/ })).toHaveCount(0);
     const configure = googleCard.getByRole('button', { name: /Configure|Add Account/ });
@@ -57,15 +57,7 @@ for (const width of [390, 1440]) {
     await page.screenshot({ path: testInfo.outputPath(`integrations-empty-setup-${width}.png`) });
     await googleCard.getByRole('button', { name: 'Cancel', exact: true }).click();
 
-    const authorize = githubCard.getByRole('button', { name: 'Install and authorize GitHub App', exact: true });
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      await authorize.focus();
-      await page.keyboard.press('Enter');
-      await expect(githubCard.getByRole('alert')).toHaveText('GitHub setup is temporarily unavailable. Try again later.');
-      await expect(authorize).toBeEnabled();
-      expect(actions.filter(action => action === 'begin_authorization')).toHaveLength(attempt);
-    }
-    await expect(githubCard.getByRole('status').first()).toHaveText('disconnected');
+    expect(actions).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`integrations-provider-error-${width}.png`) });
   });
@@ -106,22 +98,24 @@ for (const width of [390, 1440]) {
     });
     await openIntegrations(page, width);
     const surface = page.getByRole('main', { name: 'integrations surface' });
-    await expect(surface.locator('.card')).toHaveCount(2);
+    await expect(surface.locator('.card')).toHaveCount(1);
     await expect(surface.getByText('(2 accounts)', { exact: true })).toBeVisible();
     await expect(surface.getByRole('button', { name: 'Reconnect', exact: true })).toHaveCount(2);
-    await expect(surface.getByRole('button', { name: 'Reconnect GitHub App', exact: true })).toBeVisible();
+    await expect(surface.getByRole('button', { name: /GitHub App/ })).toHaveCount(0);
     await expect(surface.getByRole('button', { name: /Simulate|Sync GitHub evidence|Choose repositories/ })).toHaveCount(0);
     await expect(surface.getByRole('heading', { name: /Slack|Linear/ })).toHaveCount(0);
     expect(googleActions.every(action => action === 'get_account_status')).toBe(true);
-    expect(githubActions.every(action => action === 'get_status')).toBe(true);
+    expect(githubActions).toEqual([]);
     expect(integrationWrites.every(write => write.op !== 'delete' && (!('recordId' in write) || !['int-google', 'int-github'].includes(write.recordId)))).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`integrations-reconnect-${width}.png`) });
     if (width === 390) {
+      // One supported card remains, so a shorter phone viewport proves the surface still scrolls.
+      await page.setViewportSize({ width: 390, height: 480 });
       const scroller = surface;
       const size = await scroller.evaluate(element => ({ client: element.clientHeight, scroll: element.scrollHeight }));
       expect(size.scroll).toBeGreaterThan(size.client);
-      const anchor = surface.getByRole('heading', { name: /^GitHub/ });
+      const anchor = surface.getByRole('heading', { name: /^Google Calendar/ });
       const before = await anchor.boundingBox();
       await scroller.hover();
       await page.mouse.wheel(0, 600);
@@ -130,7 +124,7 @@ for (const width of [390, 1440]) {
       await surface.getByRole('button', { name: 'Reconnect', exact: true }).first().focus();
       await page.keyboard.press('PageDown');
       await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-      await surface.getByRole('button', { name: 'Reconnect GitHub App', exact: true }).focus();
+      await surface.getByRole('button', { name: 'Reconnect', exact: true }).last().focus();
       await page.screenshot({ path: testInfo.outputPath('integrations-reconnect-scrolled-390.png') });
       await testInfo.attach('integration-scroll', { contentType: 'application/json', body: JSON.stringify({ width, ...size, offset: await scroller.evaluate(element => element.scrollTop) }) });
     }

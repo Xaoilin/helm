@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { useState, useRef, useCallback } from 'react';
 import { useSettingsContext } from "../../store/contexts/SettingsContext";
 import WakeWordEngine from 'openwakeword-wasm-browser';

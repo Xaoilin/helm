@@ -26,6 +26,7 @@ import { useMilestoneCelebration } from '../../store/contexts/MilestoneCelebrati
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import PrayerStatsCard from './PrayerStatsCard';
 import LifeHeroCompanion from './LifeHeroCompanion';
+import { LIFE_HERO_ENABLED } from '../../config/deprecatedFeatures';
 import type {
   DailyPillar,
   PrayerName,
@@ -377,7 +378,7 @@ export default function NightCompassDashboard() {
   const motivation = getQuranMotivationForDate(prayer.today);
 
   const prayerEnabled = settings.settings.prayerEnabled !== false;
-  const lifeHeroEnabled = settings.settings.lifeHeroEnabled === true;
+  const lifeHeroEnabled = LIFE_HERO_ENABLED && settings.settings.lifeHeroEnabled === true;
   const scheduleRepairNeeded = prayerEnabled && (
     prayer.scheduleStatus === 'unavailable'
     || Boolean(prayer.schedule && !prayer.scheduleTimezoneValid)

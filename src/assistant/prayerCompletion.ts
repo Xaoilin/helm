@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import type { PrayerCompletionStatus, PrayerName } from '../types/domain';
 import type { AssistantLang } from './shared';
 

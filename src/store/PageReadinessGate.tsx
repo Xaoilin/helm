@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ASSISTANT_ENABLED } from '../config/deprecatedFeatures';
 import { useShell } from './ShellContext';
 import { useSyncAvailability } from './SyncAvailabilityContext';
 import { useAssistantActivityContext } from './contexts/AssistantActivityContext';
@@ -58,7 +59,7 @@ export function PageReadinessGate({ children }: { children: ReactNode }) {
     : shell.surface === 'inventory' ? inventory && projects
     : shell.surface === 'health' ? health
     : shell.surface === 'finance' ? finance
-    : shell.surface === 'activity' ? activity && finance
+    : shell.surface === 'activity' ? !ASSISTANT_ENABLED || (activity && finance)
     : true; // Employment and its confirmed first seed retain their own loading UI.
 
   if ((!shared || !pageReady) && shell.pageLoadError) {

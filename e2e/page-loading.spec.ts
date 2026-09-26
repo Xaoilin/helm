@@ -158,6 +158,8 @@ test('failed page loads cannot replace unloaded records and an explicit retry re
 });
 
 test('Activity fetches only one bounded page until more is requested', async ({ page, scenario }, testInfo) => {
+  // The paged Lina audit trail is the only Activity section that reads assistantActivityLog.
+  test.skip(true, 'The Lina assistant is disabled pending removal; see docs/deprecated-features.md');
   const activity: AssistantActivityEntry[] = Array.from({ length: 120 }, (_, index) => ({
     id: `activity-${String(index + 1).padStart(3, '0')}`, actor: 'system', domain: 'assistant',
     action: 'recorded', summary: `Synthetic action ${String(index + 1).padStart(3, '0')}`,
@@ -232,6 +234,19 @@ test('Activity fetches only one bounded page until more is requested', async ({ 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   await testInfo.attach('activity-page-requests', { body: JSON.stringify(reads.pages.map(url => url.pathname + url.search)), contentType: 'application/json' });
+});
+
+test('Activity and a stored chat surface read no assistant records while the assistant is disabled', async ({ page, scenario }) => {
+  await scenario({ initialSurface: 'chat', stores });
+  const reads = observeDataReads(page);
+  await page.goto('/');
+  await expect(page.getByRole('main', { name: 'dashboard surface', exact: true })).toBeVisible();
+  await navigate(page, 'activity');
+  await expect(page.getByRole('heading', { name: 'Activity', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Assistant actions', exact: true })).toHaveCount(0);
+  const assistantCollections = ['conversations', 'assistantCorrections', 'assistantActivityLog'];
+  expect(reads.snapshots.flatMap(read => read.collections ?? []).filter(key => assistantCollections.includes(key))).toEqual([]);
+  expect(reads.pages.filter(url => assistantCollections.some(key => url.searchParams.get('collection') === `eq.${key}`))).toEqual([]);
 });
 
 

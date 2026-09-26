@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ASSISTANT_ENABLED } from '../config/deprecatedFeatures';
 import { logError } from '../services/logger';
 import { getProductUsageEvents } from '../store/supabase';
 import { useOptionalAuthSession } from '../store/AuthSessionContext';
@@ -299,5 +300,6 @@ function AssistantActivitySection() {
 }
 
 export default function ActivitySurface() {
-  return <><div className="surface-header"><div><h1>Activity</h1><div className="subtitle">Private usage insight and the Lina account audit trail.</div></div></div><div className="surface-body activity-surface"><UsageSection /><AssistantActivitySection /></div></>;
+  const subtitle = ASSISTANT_ENABLED ? 'Private usage insight and the Lina account audit trail.' : 'Private usage insight.';
+  return <><div className="surface-header"><div><h1>Activity</h1><div className="subtitle">{subtitle}</div></div></div><div className="surface-body activity-surface"><UsageSection />{ASSISTANT_ENABLED && <AssistantActivitySection />}</div></>;
 }

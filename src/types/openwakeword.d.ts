@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 declare module 'openwakeword-wasm-browser' {
   interface WakeWordEngineConfig {
     keywords?: string[];

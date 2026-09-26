@@ -1,3 +1,4 @@
+/** @deprecated Disabled 2026-09-26; remove with the feature. See docs/deprecated-features.md */
 import { HostedAssistantPausedError } from '../services/hostedAssistantAccess';
 import type { AssistantProvider, CalendarSource, FinanceAccount, KnowledgeTopic, Task } from '../types/domain';
 import { DEFAULT_ASSISTANT_PROVIDER, HOSTED_ASSISTANT_MODEL, OLLAMA_ENDPOINT } from '../config';
