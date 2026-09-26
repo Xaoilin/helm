@@ -23,6 +23,11 @@ import {
 } from '../services/githubLifeHero';
 const GOOGLE_SIGN_IN_REQUIRED_MESSAGE = 'Sign in to Sabah One before connecting Google Calendar.';
 
+function googleIntegrationStatus(accounts: CalendarAccount[]): 'connected' | 'error' | 'disconnected' {
+  if (accounts.length === 0) return 'disconnected';
+  return accounts.some(account => account.authStatus && account.authStatus !== 'connected') ? 'error' : 'connected';
+}
+
 function googleStatusLabel(account: CalendarAccount): string {
   switch (account.authStatus) {
     case 'needs_reconnect':
@@ -308,8 +313,12 @@ export default function IntegrationsSurface() {
         )}
 
         {integrations.map(integration => {
-          const status = integration.status === 'mocked' ? 'disconnected' : integration.status;
           const isGoogle = integration.provider === 'google';
+          // Google's status comes from the calendar service's accounts; it is never saved, so open
+          // tabs holding different copies of the calendar cannot overwrite each other.
+          const status = isGoogle
+            ? googleIntegrationStatus(googleAccounts)
+            : integration.status === 'mocked' ? 'disconnected' : integration.status;
           const isGithub = integration.provider === 'github';
 
           return (

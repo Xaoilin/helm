@@ -139,7 +139,10 @@ for (const width of [390, 1440]) {
       await surface.getByRole('button', { name: 'Yes', exact: true }).click();
       await expect(surface.getByRole('button', { name: 'Reconnect', exact: true })).toHaveCount(remaining);
     }
-    await expect.poll(() => integrationWrites.some(write => write.op === 'patch' && write.recordId === google.id && write.set.status === 'disconnected')).toBe(true);
+    // Google's status is derived from the calendar service, never saved: open tabs holding different
+    // copies of the calendar used to overwrite each other's saved status in an endless write loop.
+    await expect(surface.locator('.card').first().getByRole('status').first()).toHaveText('disconnected');
+    expect(integrationWrites).toEqual([]);
     await testInfo.attach('integration-writes', { contentType: 'application/json', body: JSON.stringify(integrationWrites) });
     // Each disconnect asks the calendar service, which revokes the stored Google credential.
     expect(calendarDeletes).toHaveLength(2);

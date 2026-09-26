@@ -78,3 +78,24 @@ test('a Google account that needs reconnecting explains itself and leaves the us
   await expect(page.getByRole('heading', { name: 'Calendar', exact: true })).toBeVisible();
   await expect(page.getByText(/Sign in/)).toHaveCount(0);
 });
+
+test('a calendar that fails to load retries by itself', async ({ page, scenario }) => {
+  await scenario({ now: NOW, settings: { defaultCalendarTab: 'agenda' }, stores: {
+    calendarAccounts: [makeCalendarAccount()], calendarSources: [makeCalendarSource()],
+  } });
+  let failed = 0;
+  await page.route('**/api/calendar/v1/calendar?*', async route => {
+    if (failed === 0) {
+      failed += 1;
+      return route.fulfill({ status: 503, json: { code: 'database_unavailable', message: 'The database is unavailable.' } });
+    }
+    return route.fallback();
+  });
+
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Calendar', exact: true }).click();
+
+  await expect(page.getByText('1 account', { exact: false })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('Calendar could not be refreshed', { exact: false })).toHaveCount(0);
+  expect(failed).toBe(1);
+});
