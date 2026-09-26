@@ -18,7 +18,7 @@ import { TRIP_BUDGET } from '../../config/constants';
 import { loadStore, saveStore } from '../persistence';
 import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
 
-interface TripContextValue {
+export interface TripContextValue {
   trips: Trip[];
   tripLegs: TripLeg[];
   tripItineraryItems: TripItineraryItem[];
