@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { MetricCard } from '../components/common/MetricCard';
 import { ASSISTANT_ENABLED } from '../config/deprecatedFeatures';
 import { logError } from '../services/logger';
 import { getProductUsageEvents } from '../store/supabase/productUsage';
@@ -64,16 +65,6 @@ function statusTone(entry: AssistantActivityEntry): string {
 
 function domainLabel(entry: AssistantActivityEntry): string {
   return entry.domain.charAt(0).toUpperCase() + entry.domain.slice(1);
-}
-
-function MetricCard({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <div className="activity-stat">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{hint}</small>
-    </div>
-  );
 }
 
 function FilterControls({
@@ -169,10 +160,10 @@ function UsageInsights({ insights }: { insights: ProductUsageInsights }) {
   return (
     <>
       <div className="activity-stats" aria-label="Usage summary">
-        <MetricCard label="Events" value={formatCount(insights.summary.eventCount)} hint="content-free records" />
-        <MetricCard label="Sessions" value={formatCount(insights.summary.sessionCount)} hint="unique private sessions" />
-        <MetricCard label="Surfaces" value={formatCount(insights.summary.activeSurfaceCount)} hint="surfaces with activity" />
-        <MetricCard label="Errors" value={formatCount(insights.summary.errorCount)} hint="coded failures" />
+        <MetricCard variant="stat" label="Events" value={formatCount(insights.summary.eventCount)} note="content-free records" />
+        <MetricCard variant="stat" label="Sessions" value={formatCount(insights.summary.sessionCount)} note="unique private sessions" />
+        <MetricCard variant="stat" label="Surfaces" value={formatCount(insights.summary.activeSurfaceCount)} note="surfaces with activity" />
+        <MetricCard variant="stat" label="Errors" value={formatCount(insights.summary.errorCount)} note="coded failures" />
       </div>
 
       {insights.coldStart ? (
@@ -282,7 +273,7 @@ function AssistantActivitySection() {
   return (
     <section className="activity-audit" aria-labelledby="activity-audit-title">
       <div className="activity-section-heading"><div><span className="activity-eyebrow">Lina audit trail</span><h2 id="activity-audit-title">Assistant actions</h2><p>Account-backed actions with undo when Sabah One has a grounded inverse operation.</p></div></div>
-      <div className="activity-stats" aria-label="Lina activity summary"><MetricCard label="Loaded actions" value={formatCount(entries.length)} hint="account-backed actions in this view" /><MetricCard label="Undoable now" value={formatCount(undoableCount)} hint="grounded inverse available" /><MetricCard label="Voice actions" value={formatCount(voiceCount)} hint="recorded from voice" /></div>
+      <div className="activity-stats" aria-label="Lina activity summary"><MetricCard variant="stat" label="Loaded actions" value={formatCount(entries.length)} note="account-backed actions in this view" /><MetricCard variant="stat" label="Undoable now" value={formatCount(undoableCount)} note="grounded inverse available" /><MetricCard variant="stat" label="Voice actions" value={formatCount(voiceCount)} note="recorded from voice" /></div>
       {notice && <div className="activity-notice" role="status">{notice}</div>}
       {entries.length === 0 ? <div className="activity-panel activity-state"><strong>No Lina actions logged yet.</strong><span>Assistant actions will appear here when an account-backed action is recorded.</span></div> : <div className="activity-list" aria-label="Lina action log">{entries.map(entry => {
         const canUndo = Boolean(entry.undoOperation && entry.status === 'applied');

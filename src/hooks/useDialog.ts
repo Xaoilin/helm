@@ -5,19 +5,32 @@ interface DialogOptions {
   onClose: () => void;
   dirty?: boolean;
   busy?: boolean;
+  /**
+   * Called on close when the element focused before opening has left the
+   * page, for example because the card that opened the dialog moved sections.
+   */
+  restoreFocusFallback?: () => void;
 }
 
-/** Focus and dismissal behavior shared by the More sheet and draft editors. */
-export function useDialog({ open, onClose, dirty = false, busy = false }: DialogOptions) {
-  const dialogRef = useRef<HTMLDivElement>(null);
+/** Focus and dismissal behavior shared by the More sheet, drawers, and draft editors. */
+export function useDialog<T extends HTMLElement = HTMLDivElement>({
+  open,
+  onClose,
+  dirty = false,
+  busy = false,
+  restoreFocusFallback,
+}: DialogOptions) {
+  const dialogRef = useRef<T>(null);
   const requestClose = useCallback(() => {
     if (busy) return;
     if (dirty && !window.confirm('Discard unsaved changes? Your draft will be lost.')) return;
     onClose();
   }, [busy, dirty, onClose]);
   const closeRef = useRef(requestClose);
+  const fallbackRef = useRef(restoreFocusFallback);
 
   useEffect(() => { closeRef.current = requestClose; }, [requestClose]);
+  useEffect(() => { fallbackRef.current = restoreFocusFallback; }, [restoreFocusFallback]);
 
   useEffect(() => {
     if (!open) return;
@@ -60,6 +73,7 @@ export function useDialog({ open, onClose, dirty = false, busy = false }: Dialog
       document.removeEventListener('keydown', keydown);
       document.removeEventListener('focusin', containFocus);
       if (returnTarget?.isConnected) returnTarget.focus();
+      else fallbackRef.current?.();
     };
   }, [open]);
 
