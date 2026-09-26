@@ -29,6 +29,8 @@ const STATUSES = new Set(['on_time', 'late', 'missed', 'unclassified']);
 export interface FakeServicesOptions {
   /** Every data call answers with this status, e.g. 503 for an outage. */
   failureStatus?: number;
+  /** Every outcome create is refused with this 409 error, like the real service's time rules. */
+  rejectCreates?: { code: string; message: string };
   /** Saved global settings; omitted means the user never saved any. */
   profile?: Pick<ServiceGlobalSettings, 'city' | 'country' | 'timeZone'>;
 }
@@ -42,6 +44,7 @@ export interface FakeServices {
   /** Creates refused because the outcome already existed (the app re-sent known data). */
   conflicts: number;
   failureStatus?: number;
+  rejectCreates?: { code: string; message: string };
 }
 
 export function createFakeServices(options: FakeServicesOptions = {}): FakeServices {
@@ -55,6 +58,7 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
     calls: [],
     conflicts: 0,
     failureStatus: options.failureStatus,
+    rejectCreates: options.rejectCreates,
   };
 }
 
@@ -141,6 +145,7 @@ function listOutcomes(services: FakeServices, url: URL): ServiceOutcome[] {
 }
 
 function createOutcome(route: Route, services: FakeServices, body: Record<string, unknown>, now: Date) {
+  if (services.rejectCreates) return reply(route, 409, services.rejectCreates, apiErrorSchema);
   const key = `${body.date}::${body.prayer}`;
   if (services.outcomes.has(key)) {
     services.conflicts += 1;

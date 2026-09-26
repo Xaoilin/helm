@@ -98,4 +98,39 @@ test.describe('prayer and profile services', () => {
     await expect(page.getByRole('button', { name: /Dhuhr Prayer — confirmed/u })).toBeVisible();
     expect(control.services.outcomes.size).toBe(0);
   });
+
+  test('refuses to complete a prayer before it starts and sends nothing', async ({ page, scenario }) => {
+    // 02:10 in London: Fajr (05:00) and Dhuhr (13:00) have not started.
+    const control = await scenario({ now: '2026-08-29T01:10:00.000Z', settings: { prayerEnabled: true, lifeHeroEnabled: false } });
+    await openApp(page);
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+
+    for (const prayer of ['Fajr', 'Dhuhr']) {
+      await page.getByRole('button', { name: new RegExp(`Complete ${prayer} Prayer`, 'u') }).click();
+      await expect(page.getByRole('alert').filter({ hasText: `${prayer} has not started yet.` })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: `How was ${prayer} prayed?` })).toHaveCount(0);
+    }
+    await expect(page.getByRole('button', { name: /Fajr Prayer — confirmed/u })).toHaveCount(0);
+    expect(control.services.calls.filter(call => call === 'POST /api/prayer/v1/outcomes')).toEqual([]);
+
+    await page.getByRole('button', { name: 'Dismiss' }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'has not started yet' })).toHaveCount(0);
+  });
+
+  test('reverts and explains a completion the prayer service refuses', async ({ page, scenario }) => {
+    await scenario({
+      now: NOON,
+      settings: { prayerEnabled: true, lifeHeroEnabled: false },
+      services: { rejectCreates: { code: 'prayer_not_started', message: 'Dhuhr has not started yet.' } },
+    });
+    await openApp(page);
+
+    await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
+    await page.getByRole('button', { name: /On time/u }).click();
+
+    await expect(page.getByRole('alert').filter({ hasText: 'Dhuhr on 2026-08-29 was not saved: Dhuhr has not started yet.' }))
+      .toBeVisible();
+    await expect(page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u })).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+  });
 });

@@ -58,6 +58,7 @@ import type {
 } from './shared';
 import { extractTemporalReference } from './temporalResolver';
 import { buildPrayerStatusQuestion } from './prayerCompletion';
+import { PrayerCompletionRejectedError } from '../services/prayerCompletionRules';
 
 interface PendingPrayerCompletionDraft {
   prayerName: PrayerName;
@@ -773,7 +774,13 @@ function executeSingleStep(
           };
         }
 
-        const completion = handlers.completePrayer(prayerName, prayerStatus, resolvedTask.id);
+        let completion: ReturnType<NonNullable<typeof handlers.completePrayer>>;
+        try {
+          completion = handlers.completePrayer(prayerName, prayerStatus, resolvedTask.id);
+        } catch (error) {
+          if (error instanceof PrayerCompletionRejectedError) return { kind: 'clarify', reason: error.message };
+          throw error;
+        }
         const now = getNow(context);
         const today = toLocalDateStr(now);
         const completedAt = now.toISOString();

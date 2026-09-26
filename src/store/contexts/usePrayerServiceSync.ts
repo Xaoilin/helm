@@ -4,12 +4,13 @@
  * are reported through `state.error` and retried; the local state keeps working meanwhile.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PrayerTrackingState } from '../../types/domain';
+import type { PrayerTrackingRecord, PrayerTrackingState } from '../../types/domain';
 import {
   applyOutcomeOperation,
   applyServiceTracking,
   confirmedFromService,
   historyStartDate,
+  isPermanentRejection,
   listAllOutcomes,
   mergeRecords,
   planOutcomeSync,
@@ -25,6 +26,14 @@ export interface PrayerServiceSyncState {
   error: string | null;
 }
 
+/** An outcome change the service refused; the app should show `confirmed` again. */
+export interface PrayerOutcomeRejection {
+  key: string;
+  record: PrayerTrackingRecord;
+  confirmed: PrayerTrackingRecord | undefined;
+  message: string;
+}
+
 export interface PrayerLocation {
   city: string;
   country: string;
@@ -35,6 +44,7 @@ const RETRY_DELAY_MS = 30_000;
 export function usePrayerServiceSync(
   getTracking: () => PrayerTrackingState,
   commitTracking: (next: PrayerTrackingState) => void,
+  onRejected: (rejection: PrayerOutcomeRejection) => void,
 ) {
   const enabled = isPrayerServiceEnabled();
   const [state, setState] = useState<PrayerServiceSyncState>({
@@ -68,7 +78,11 @@ export function usePrayerServiceSync(
     }, RETRY_DELAY_MS);
   }, []);
 
-  /** Sends pending changes one at a time until the service matches the app. */
+  /**
+   * Sends pending changes one at a time until the service matches the app. A change the service
+   * refuses for good is reverted to the service's version and reported, never retried; any other
+   * failure stops the run and retries later.
+   */
   const drain = useCallback(async (): Promise<void> => {
     if (drainingRef.current || !confirmedRef.current || !desiredRef.current) return;
     drainingRef.current = true;
@@ -77,7 +91,12 @@ export function usePrayerServiceSync(
       while (operations.length > 0) {
         setState({ status: 'syncing', error: null });
         for (const operation of operations) {
-          confirmedRef.current = await applyOutcomeOperation(operation, confirmedRef.current);
+          try {
+            confirmedRef.current = await applyOutcomeOperation(operation, confirmedRef.current);
+          } catch (error) {
+            if (!isPermanentRejection(error)) throw error;
+            dropRejected(operation.key, error.message);
+          }
         }
         operations = planOutcomeSync(confirmedRef.current, desiredRef.current);
       }
@@ -87,7 +106,17 @@ export function usePrayerServiceSync(
     } finally {
       drainingRef.current = false;
     }
-  }, [fail]);
+
+    function dropRejected(key: string, message: string) {
+      const confirmed = confirmedRef.current!.records[key];
+      const record = desiredRef.current![key];
+      const desired = { ...desiredRef.current! };
+      if (confirmed) desired[key] = confirmed;
+      else delete desired[key];
+      desiredRef.current = desired;
+      if (record) onRejected({ key, record, confirmed, message });
+    }
+  }, [fail, onRejected]);
 
   /**
    * Loads the service's outcomes and merges them into the app's current state (read when the
