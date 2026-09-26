@@ -60,6 +60,7 @@ import {
   applyPrayerCompletionUndo,
   buildPrayerCompletionTransition,
   buildPrayerCorrectionTransition,
+  withdrawRefusedPrayerReward,
 } from '../../services/prayerCompletionPolicy';
 import {
   buildPrayerReminderGroups,
@@ -221,6 +222,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const [adhanPrayer, setAdhanPrayer] = useState<PrayerTime | null>(null);
   const trackingRef = useRef(tracking);
   const gamificationRef = useRef(gamificationCtx.gamification);
+  const taskCtxRef = useRef(taskCtx);
   const todayRef = useRef(toLocalDateStr(now));
   const refreshSequenceRef = useRef(0);
   const reminderReconcileQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -270,6 +272,10 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     gamificationRef.current = gamificationCtx.gamification;
   }, [gamificationCtx.gamification]);
 
+  useEffect(() => {
+    taskCtxRef.current = taskCtx;
+  }, [taskCtx]);
+
   const commitTracking = useCallback((
     update: PrayerTrackingState | ((current: PrayerTrackingState) => PrayerTrackingState),
   ): PrayerTrackingState => {
@@ -279,14 +285,37 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
+  const withdrawReward = (prayerDate: string, prayerName: PrayerName) => {
+    const tasks = taskCtxRef.current;
+    const { gamificationAfter, taskId } = withdrawRefusedPrayerReward({
+      prayerDate,
+      prayerName,
+      tasks: tasks.tasks,
+      gamification: gamificationRef.current,
+    });
+    if (gamificationAfter !== gamificationRef.current) {
+      gamificationRef.current = gamificationAfter;
+      gamificationCtx.updateGamification(gamificationAfter);
+    }
+    const task = taskId ? tasks.tasks.find(candidate => candidate.id === taskId) : undefined;
+    if (task?.completed && prayerDate === todayRef.current) {
+      tasks.updateTask(task.id, { completed: false, completedAt: undefined });
+    }
+  };
+
   const [completionNotice, setCompletionNotice] = useState<string | null>(null);
   const dismissCompletionNotice = useCallback(() => setCompletionNotice(null), []);
   const getTracking = useCallback(() => trackingRef.current, []);
   const replaceTracking = useCallback((next: PrayerTrackingState) => { commitTracking(next); }, [commitTracking]);
   // The service refused an outcome outright: show the service's truth instead and say why.
   const rejectOutcome = useCallback((rejection: PrayerOutcomeRejection) => {
+    const { date, prayerName } = rejection.record;
     commitTracking(current => revertRecord(current, rejection.key, rejection.confirmed));
-    setCompletionNotice(`${rejection.record.prayerName} on ${rejection.record.date} was not saved: ${rejection.message}`);
+    // A refused first completion must also give back its reward, or the next load rebuilds it.
+    if (!rejection.confirmed) withdrawReward(date, prayerName);
+    setCompletionNotice(`${prayerName} on ${date} was not saved: ${rejection.message}`);
+    // withdrawReward reads refs only, so it never goes stale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commitTracking]);
   const serviceSync = usePrayerServiceSync(getTracking, replaceTracking, rejectOutcome);
 
