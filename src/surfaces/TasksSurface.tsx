@@ -5,96 +5,47 @@ import { useGamificationContext } from "../store/contexts/GamificationContext";
 import { useKnowledgeContext } from "../store/contexts/KnowledgeContext";
 import { useProjectContext } from "../store/contexts/ProjectContext";
 import { useSettingsContext } from "../store/contexts/SettingsContext";
-import HabitCards from '../components/HabitCards';
-import { TIMING } from '../config/constants';
-import { EMOJI_PALETTE, getHabitEmoji } from '../services/habitEmoji';
-import type { PrayerName, Task, TaskCategory, TaskPriority } from '../types/domain';
-import {
-  processTaskCompletion,
-  buildCompletionContext,
-  recordHabitCompletion,
-  checkStreakBroken,
-  xpToNextLevel,
-  titleForLevel,
-  getBadgeDef,
-} from '../services/gamification';
-import {
-  comparePrayerTasks,
-  getPrayerTaskName,
-  getPrayerTaskTitle,
-  isHabitTask,
-  isPrayerTask,
-  isStandardDailyTask,
-  PRAYER_TASK_ORDER,
-} from '../services/prayerTasks';
 import { usePrayerContext } from '../store/contexts/PrayerContext';
-import { useDialog } from '../hooks/useDialog';
+import HabitCards from '../components/HabitCards';
+import AllTaskCard from '../components/tasks/AllTaskCard';
+import GamificationPanel from '../components/tasks/GamificationPanel';
+import { ActiveGoalCard, CompletedGoalCard } from '../components/tasks/GoalCard';
+import { RewardToasts } from '../components/tasks/RewardToasts';
+import { useRewardToasts } from '../components/tasks/useRewardToasts';
+import TaskEditorDialog from '../components/tasks/TaskEditorDialog';
+import TaskRow, { type TaskItemActions } from '../components/tasks/TaskRow';
+import { TIMING } from '../config/constants';
+import type { PrayerOutcomeStatus, Task, TaskCategory } from '../types/domain';
+import { getPrayerTaskName } from '../services/prayerTasks';
+import {
+  buildCompletionReward,
+  buildTaskFromForm,
+  buildTaskToggleUpdate,
+  countKnowledgeProgress,
+  createTaskForm,
+  filterAllTasks,
+  filterByProject,
+  filterGoals,
+  getAllTaskSectionId,
+  getTaskAppDate,
+  groupAllTaskSections,
+  isCompletionLocked,
+  selectTodayTasks,
+  summarizeAllTasks,
+  taskToForm,
+  type AllTaskFilters,
+  type AllTaskSectionId,
+  type TaskFormState,
+} from '../services/taskModel';
 
 type Tab = 'today' | 'all' | 'goals';
+type AllTaskAccordionSectionId = AllTaskSectionId | 'completed';
 
-interface Toast {
-  id: string;
-  type: 'xp' | 'levelup' | 'badge' | 'streak';
-  text: string;
-  emoji?: string;
-}
+const DEFAULT_ALL_TASK_FILTERS: AllTaskFilters = { category: 'all', priority: 'all', status: 'all' };
 
-interface AllTaskSection {
-  id: 'overdue' | 'today' | 'upcoming' | 'prayers' | 'routines' | 'later';
-  title: string;
-  description: string;
-  items: Task[];
-}
-
-type AllTaskAccordionSectionId = AllTaskSection['id'] | 'completed';
-
-interface TaskFormState {
-  title: string;
-  description: string;
-  priority: TaskPriority;
-  category: TaskCategory;
-  prayerName: PrayerName;
-  dueDate: string;
-  recurringFreq: 'daily' | 'weekdays' | 'weekly';
-  goalTag: string;
-  habitEmoji: string;
-  taskProjectId: string;
-}
-
-function areTaskFormsEqual(left: TaskFormState, right: TaskFormState): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function toLocalDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function fromLocalDateStr(dateStr: string): Date {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function shiftLocalDate(dateStr: string, days: number): string {
-  const next = fromLocalDateStr(dateStr);
-  next.setDate(next.getDate() + days);
-  return toLocalDateStr(next);
-}
-
-function formatShortDate(dateStr: string): string {
-  return fromLocalDateStr(dateStr).toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function getAllTaskSectionId(task: Task, todayStr: string): AllTaskSection['id'] {
-  if (isPrayerTask(task)) return 'prayers';
-  if (task.category === 'daily') return 'routines';
-  if (!task.dueDate) return 'later';
-  if (task.dueDate < todayStr) return 'overdue';
-  if (task.dueDate === todayStr) return 'today';
-  return 'upcoming';
+interface EditorState {
+  editing: Task | null;
+  initialForm: TaskFormState;
 }
 
 export default function TasksSurface() {
@@ -106,69 +57,23 @@ export default function TasksSurface() {
   const settings = useSettingsContext();
   const prayer = usePrayerContext();
   const [tab, setTab] = useState<Tab>('today');
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<Task | null>(null);
+  const [editor, setEditor] = useState<EditorState | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showCompletedGoals, setShowCompletedGoals] = useState(false);
   const [expandedAllTaskSections, setExpandedAllTaskSections] = useState<Partial<Record<AllTaskAccordionSectionId, boolean>>>({
     completed: false,
   });
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const [showLevelFlash, setShowLevelFlash] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
-
-  // Form state
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<TaskPriority>('medium');
-  const [category, setCategory] = useState<TaskCategory>('task');
-  const [prayerName, setPrayerName] = useState<PrayerName>('Fajr');
-  const [dueDate, setDueDate] = useState('');
-  const [recurringFreq, setRecurringFreq] = useState<'daily' | 'weekdays' | 'weekly'>('daily');
-  const [goalTag, setGoalTag] = useState('');
-  const [habitEmoji, setHabitEmoji] = useState('');
-  const [taskProjectId, setTaskProjectId] = useState('');
-  const [initialForm, setInitialForm] = useState<TaskFormState | null>(null);
-
-  // Filters
   const [filterGoalTag, setFilterGoalTag] = useState<string>('all');
   const [filterProjectId, setFilterProjectId] = useState<string>('all');
+  const [allTaskFilters, setAllTaskFilters] = useState<AllTaskFilters>(DEFAULT_ALL_TASK_FILTERS);
+  const { toasts, showLevelFlash, celebrate } = useRewardToasts();
 
-  // Filters for All Tasks tab
-  const [filterCategory, setFilterCategory] = useState<'all' | 'daily' | 'prayer' | 'task'>('all');
-  const [filterPriority, setFilterPriority] = useState<'all' | TaskPriority>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'completed'>('all');
-
-  const todayStr = toLocalDateStr(new Date());
-  const isWeekday = () => { const d = new Date().getDay(); return d >= 1 && d <= 5; };
+  const appTimeZone = settings.appTimeZone.effectiveTimeZone;
+  const appDate = getTaskAppDate(new Date(), appTimeZone);
   const assistantNavigationRequest = shell.assistantNavigationRequest;
   const dismissAssistantNavigationRequest = shell.dismissAssistantNavigationRequest;
   const tasks = taskContext.tasks;
-
-  function closeForm(): void {
-    setShowForm(false);
-    setEditing(null);
-    setInitialForm(null);
-  }
-
-  const taskForm = {
-    title,
-    description,
-    priority,
-    category,
-    prayerName,
-    dueDate,
-    recurringFreq,
-    goalTag,
-    habitEmoji,
-    taskProjectId,
-  } satisfies TaskFormState;
-
-  const { dialogRef: taskDialogRef, requestClose: requestTaskClose } = useDialog({
-    open: showForm,
-    onClose: closeForm,
-    dirty: Boolean(initialForm && !areTaskFormsEqual(taskForm, initialForm)),
-  });
 
   useEffect(() => {
     const request = assistantNavigationRequest;
@@ -183,9 +88,7 @@ export default function TasksSurface() {
       setTab(tasksState.tab);
     }
     if (tasksState?.resetFilters) {
-      setFilterCategory('all');
-      setFilterPriority('all');
-      setFilterStatus('all');
+      setAllTaskFilters(DEFAULT_ALL_TASK_FILTERS);
       setFilterGoalTag('all');
       setFilterProjectId('all');
     }
@@ -198,33 +101,6 @@ export default function TasksSurface() {
 
     dismissAssistantNavigationRequest(request.id);
   }, [assistantNavigationRequest, dismissAssistantNavigationRequest, tasks]);
-
-  // ── Recurring reset ──
-  useEffect(() => {
-    const habitsToReset = taskContext.tasks.filter(t => {
-      if (!isHabitTask(t) || !t.recurring || !t.completed) return false;
-      if (t.recurring.lastReset === todayStr) return false;
-      // Weekday-only habits: don't reset on weekends
-      if (t.recurring.frequency === 'weekdays' && !isWeekday()) return false;
-      return true;
-    });
-    for (const t of habitsToReset) {
-      taskContext.updateTask(t.id, {
-        completed: false,
-        completedAt: undefined,
-        recurring: { ...t.recurring!, lastReset: todayStr },
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayStr]);
-
-  // Check if streak was broken (missed a day)
-  useEffect(() => {
-    if (checkStreakBroken(gamification.gamification) && gamification.gamification.currentStreak > 0) {
-      gamification.updateGamification({ ...gamification.gamification, currentStreak: 0 });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayStr]);
 
   useEffect(() => {
     if (!highlightedTaskId) return;
@@ -246,139 +122,23 @@ export default function TasksSurface() {
     };
   }, [highlightedTaskId]);
 
-  // Toast helpers
-  const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).slice(2);
-    setToasts(prev => [...prev, { ...toast, id }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
-  }, []);
-
   // ── Derived data ──
-  const projectFilteredTasks = useMemo(() => (
-    filterProjectId === 'all'
-      ? taskContext.tasks
-      : taskContext.tasks.filter(task => task.projectId === filterProjectId)
-  ), [taskContext.tasks, filterProjectId]);
-
-  const prayerTasks = useMemo(() =>
-    projectFilteredTasks
-      .filter(isPrayerTask)
-      .sort((a, b) => (a.completed === b.completed ? comparePrayerTasks(a, b) : a.completed ? 1 : -1)),
-    [projectFilteredTasks]
+  const projectFilteredTasks = useMemo(() => filterByProject(tasks, filterProjectId), [tasks, filterProjectId]);
+  const { prayerTasks, dailyHabits, dueTodayTasks } = useMemo(
+    () => selectTodayTasks(projectFilteredTasks, appDate),
+    [projectFilteredTasks, appDate],
   );
-  const dailyHabits = useMemo(() =>
-    projectFilteredTasks
-      .filter(isStandardDailyTask)
-      .sort((a, b) => (a.completed === b.completed ? 0 : a.completed ? 1 : -1)),
-    [projectFilteredTasks]
-  );
-
-  const dueTodayTasks = useMemo(() =>
-    projectFilteredTasks
-      .filter(t => t.category === 'task' && t.dueDate && t.dueDate <= todayStr)
-      .sort((a, b) => {
-        if (a.completed !== b.completed) return a.completed ? 1 : -1;
-        return (a.dueDate || '').localeCompare(b.dueDate || '');
-      }),
-    [projectFilteredTasks, todayStr]
-  );
-
-  const todayItems = useMemo(() => [...prayerTasks, ...dailyHabits, ...dueTodayTasks], [prayerTasks, dailyHabits, dueTodayTasks]);
+  const todayItems = [...prayerTasks, ...dailyHabits, ...dueTodayTasks];
   const todayDone = todayItems.filter(t => t.completed).length;
   const todayTotal = todayItems.length;
-  const tomorrowStr = useMemo(() => shiftLocalDate(todayStr, 1), [todayStr]);
 
-  const allTasks = useMemo(() => {
-    let filtered = projectFilteredTasks.filter(t => t.category !== 'goal');
-    if (filterCategory !== 'all') filtered = filtered.filter(t => t.category === filterCategory);
-    if (filterPriority !== 'all') filtered = filtered.filter(t => t.priority === filterPriority);
-    if (filterStatus === 'active') filtered = filtered.filter(t => !t.completed);
-    if (filterStatus === 'completed') filtered = filtered.filter(t => t.completed);
-
-    const priorityOrder = { high: 0, medium: 1, low: 2 };
-    return filtered.sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
-      const pDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
-      if (pDiff !== 0) return pDiff;
-      return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
-    });
-  }, [projectFilteredTasks, filterCategory, filterPriority, filterStatus]);
-
-  const scopedAllTasks = useMemo(
-    () => projectFilteredTasks.filter(task => task.category !== 'goal'),
-    [projectFilteredTasks],
-  );
-
-  const selectedProjectName = useMemo(
-    () => projects.projects.find(project => project.id === filterProjectId)?.name,
-    [projects.projects, filterProjectId],
-  );
-
-  const allTaskStats = useMemo(() => {
-    const active = scopedAllTasks.filter(task => !task.completed).length;
-    const completed = scopedAllTasks.filter(task => task.completed).length;
-    const overdue = scopedAllTasks.filter(task => !task.completed && task.category === 'task' && !!task.dueDate && task.dueDate < todayStr).length;
-    const dueToday = scopedAllTasks.filter(task => !task.completed && task.category === 'task' && task.dueDate === todayStr).length;
-    const prayers = scopedAllTasks.filter(task => !task.completed && isPrayerTask(task)).length;
-    const routines = scopedAllTasks.filter(task => !task.completed && task.category === 'daily').length;
-    return { active, completed, overdue, dueToday, prayers, routines };
-  }, [scopedAllTasks, todayStr]);
-
-  const allTaskSections = useMemo<AllTaskSection[]>(() => {
-    const overdue: Task[] = [];
-    const dueToday: Task[] = [];
-    const upcoming: Task[] = [];
-    const prayers: Task[] = [];
-    const routines: Task[] = [];
-    const later: Task[] = [];
-
-    allTasks
-      .filter(task => !task.completed)
-      .forEach(task => {
-        if (isPrayerTask(task)) {
-          prayers.push(task);
-          return;
-        }
-
-        if (task.category === 'daily') {
-          routines.push(task);
-          return;
-        }
-
-        if (!task.dueDate) {
-          later.push(task);
-          return;
-        }
-
-        if (task.dueDate < todayStr) {
-          overdue.push(task);
-          return;
-        }
-
-        if (task.dueDate === todayStr) {
-          dueToday.push(task);
-          return;
-        }
-
-        upcoming.push(task);
-      });
-
-    const sections: AllTaskSection[] = [
-      { id: 'overdue', title: 'Overdue', description: 'Needs attention first.', items: overdue },
-      { id: 'today', title: 'Due today', description: 'Keep today moving without losing track.', items: dueToday },
-      { id: 'upcoming', title: 'Upcoming', description: 'Scheduled next so you can plan ahead.', items: upcoming },
-      { id: 'prayers', title: 'Islamic', description: 'Prayer commitments tracked in their own lane.', items: prayers },
-      { id: 'routines', title: 'Routines', description: 'Daily habits and repeating commitments.', items: routines },
-      { id: 'later', title: 'Later', description: 'Open tasks without a due date yet.', items: later },
-    ];
-
-    return sections.filter(section => section.items.length > 0);
-  }, [allTasks, todayStr]);
-
-  const completedAllTasks = useMemo(
-    () => allTasks.filter(task => task.completed),
-    [allTasks],
-  );
+  const allTasks = useMemo(() => filterAllTasks(projectFilteredTasks, allTaskFilters), [projectFilteredTasks, allTaskFilters]);
+  const scopedAllTasks = useMemo(() => projectFilteredTasks.filter(task => task.category !== 'goal'), [projectFilteredTasks]);
+  const allTaskStats = useMemo(() => summarizeAllTasks(scopedAllTasks, appDate), [scopedAllTasks, appDate]);
+  const allTaskSections = useMemo(() => groupAllTaskSections(allTasks, appDate), [allTasks, appDate]);
+  const completedAllTasks = useMemo(() => allTasks.filter(task => task.completed), [allTasks]);
+  const selectedProjectName = projects.projects.find(project => project.id === filterProjectId)?.name;
+  const filterStatus = allTaskFilters.status;
 
   useEffect(() => {
     setExpandedAllTaskSections(prev => {
@@ -417,229 +177,91 @@ export default function TasksSurface() {
 
     const targetSectionId: AllTaskAccordionSectionId = highlightedTask.completed
       ? 'completed'
-      : getAllTaskSectionId(highlightedTask, todayStr);
+      : getAllTaskSectionId(highlightedTask, appDate);
 
     setExpandedAllTaskSections(prev => (
       prev[targetSectionId] === false ? { ...prev, [targetSectionId]: true } : prev
     ));
-  }, [allTasks, highlightedTaskId, todayStr]);
+  }, [allTasks, highlightedTaskId, appDate]);
 
   const hasAllTaskFilters = filterProjectId !== 'all'
-    || filterCategory !== 'all'
-    || filterPriority !== 'all'
-    || filterStatus !== 'all';
+    || allTaskFilters.category !== 'all'
+    || allTaskFilters.priority !== 'all'
+    || allTaskFilters.status !== 'all';
 
   const goalTags = useMemo(() => settings.settings.goalTags || [], [settings.settings.goalTags]);
-
-  const activeGoals = useMemo(() => {
-    let goals = projectFilteredTasks.filter(t => t.category === 'goal' && !t.completed);
-    if (filterGoalTag === '') goals = goals.filter(g => !g.goalTag);
-    else if (filterGoalTag !== 'all') goals = goals.filter(g => g.goalTag === filterGoalTag);
-    return goals;
-  }, [projectFilteredTasks, filterGoalTag]);
-  const completedGoals = useMemo(() => {
-    let goals = projectFilteredTasks.filter(t => t.category === 'goal' && t.completed);
-    if (filterGoalTag === '') goals = goals.filter(g => !g.goalTag);
-    else if (filterGoalTag !== 'all') goals = goals.filter(g => g.goalTag === filterGoalTag);
-    return goals;
-  }, [projectFilteredTasks, filterGoalTag]);
+  const activeGoals = useMemo(() => filterGoals(projectFilteredTasks, filterGoalTag, false), [projectFilteredTasks, filterGoalTag]);
+  const completedGoals = useMemo(() => filterGoals(projectFilteredTasks, filterGoalTag, true), [projectFilteredTasks, filterGoalTag]);
 
   // ── Actions ──
   const openAdd = (defaultCategory?: TaskCategory) => {
-    const nextCategory = defaultCategory || (tab === 'goals' ? 'goal' : 'task');
-    const nextDueDate = tab === 'today' ? todayStr : '';
-    const nextGoalTag = filterGoalTag !== 'all' ? filterGoalTag : '';
-    const nextProjectId = filterProjectId !== 'all' ? filterProjectId : '';
-    const nextForm: TaskFormState = {
-      title: '',
-      description: '',
-      priority: 'medium',
-      category: nextCategory,
-      prayerName: 'Fajr',
-      dueDate: nextDueDate,
-      recurringFreq: 'daily',
-      goalTag: nextGoalTag,
-      habitEmoji: '',
-      taskProjectId: nextProjectId,
-    };
-    setTitle(nextForm.title);
-    setDescription(nextForm.description);
-    setPriority(nextForm.priority);
-    setCategory(nextForm.category);
-    setPrayerName(nextForm.prayerName);
-    setDueDate(nextForm.dueDate);
-    setRecurringFreq(nextForm.recurringFreq);
-    setGoalTag(nextForm.goalTag);
-    setTaskProjectId(nextForm.taskProjectId);
-    setHabitEmoji(nextForm.habitEmoji);
-    setInitialForm(nextForm);
-    setEditing(null); setShowForm(true);
+    setEditor({
+      editing: null,
+      initialForm: createTaskForm({
+        category: defaultCategory || (tab === 'goals' ? 'goal' : 'task'),
+        dueDate: tab === 'today' ? appDate : '',
+        goalTag: filterGoalTag !== 'all' ? filterGoalTag : '',
+        projectId: filterProjectId !== 'all' ? filterProjectId : '',
+      }),
+    });
   };
 
-  const openEdit = (task: Task) => {
-    const nextForm: TaskFormState = {
-      title: task.title,
-      description: task.description,
-      priority: task.priority,
-      category: task.category,
-      prayerName: task.prayerName || 'Fajr',
-      dueDate: task.dueDate || '',
-      recurringFreq: task.recurring?.frequency || 'daily',
-      goalTag: task.goalTag || '',
-      habitEmoji: task.emoji || '',
-      taskProjectId: task.projectId || '',
-    };
-    setTitle(nextForm.title);
-    setDescription(nextForm.description);
-    setPriority(nextForm.priority);
-    setCategory(nextForm.category);
-    setPrayerName(nextForm.prayerName);
-    setDueDate(nextForm.dueDate);
-    setRecurringFreq(nextForm.recurringFreq);
-    setGoalTag(nextForm.goalTag);
-    setTaskProjectId(nextForm.taskProjectId);
-    setHabitEmoji(nextForm.habitEmoji);
-    setInitialForm(nextForm);
-    setEditing(task); setShowForm(true);
-  };
+  const openEdit = (task: Task) => setEditor({ editing: task, initialForm: taskToForm(task) });
+  const closeEditor = useCallback(() => setEditor(null), []);
 
-  const save = () => {
-    const resolvedTitle = category === 'prayer' ? getPrayerTaskTitle(prayerName) : title.trim();
-    if (!resolvedTitle) return;
-    const normalizedProjectId = category === 'daily' || category === 'prayer' ? undefined : (taskProjectId || undefined);
-    const nextBoardOrder = category === 'task' && normalizedProjectId
-      ? (editing && editing.projectId === normalizedProjectId && typeof editing.boardOrder === 'number'
-        ? editing.boardOrder
-        : taskContext.tasks
-          .filter(task => task.projectId === normalizedProjectId && task.category === 'task')
-          .reduce((max, task) => Math.max(max, task.boardOrder ?? 0), 0) + 1)
-      : undefined;
-    const data: Omit<Task, 'id' | 'createdAt' | 'updatedAt'> = {
-      title: resolvedTitle,
-      description: description.trim(),
-      priority,
-      category,
-      completed: editing?.completed ?? false,
-      completedAt: editing?.completedAt,
-      dueDate: category === 'daily' || category === 'prayer' ? undefined : (dueDate || undefined),
-      recurring: category === 'daily'
-        ? { frequency: recurringFreq, lastReset: editing?.recurring?.lastReset }
-        : category === 'prayer'
-          ? { frequency: 'daily', lastReset: editing?.recurring?.lastReset }
-          : undefined,
-      prayerName: category === 'prayer' ? prayerName : undefined,
-      goalTag: category === 'goal' && goalTag ? goalTag : undefined,
-      emoji: category === 'daily' && habitEmoji ? habitEmoji : undefined,
-      projectId: normalizedProjectId,
-      workflowState: category === 'task' && normalizedProjectId ? (editing?.workflowState || 'backlog') : undefined,
-      blockedReason: category === 'task' && normalizedProjectId ? editing?.blockedReason : undefined,
-      boardOrder: nextBoardOrder,
-    };
+  const save = (form: TaskFormState) => {
+    const editing = editor?.editing ?? null;
+    const data = buildTaskFromForm(form, editing, tasks);
+    if (!data) return;
     if (editing) {
       taskContext.updateTask(editing.id, data);
     } else {
       taskContext.addTask(data);
     }
-    closeForm();
+    closeEditor();
   };
 
   const toggleComplete = (task: Task) => {
-    const nowDate = new Date();
-    const now = nowDate.toISOString();
+    if (isCompletionLocked(task)) return;
     const completing = !task.completed;
-
-    // Habit-like items stay locked for the day once completed
-    if (isHabitTask(task) && !completing) return;
-    const canonicalPrayerName = getPrayerTaskName(task);
-    if (canonicalPrayerName && completing) {
-      prayer.requestPrayerCompletion(canonicalPrayerName, {
+    const prayerName = getPrayerTaskName(task);
+    if (prayerName && completing) {
+      prayer.requestPrayerCompletion(prayerName, {
         taskId: task.id,
         source: 'tasks',
-        onCompleted: completion => {
-          const result = completion.gamificationResult;
-          if (completion.xpEarned > 0) {
-            addToast({ type: 'xp', text: `+${completion.xpEarned} XP`, emoji: '\u2728' });
-          }
-          if (result?.leveledUp) {
-            addToast({ type: 'levelup', text: `Level ${result.newLevel}! ${result.newTitle}`, emoji: '\u{1F31F}' });
-            setShowLevelFlash(true);
-            setTimeout(() => setShowLevelFlash(false), 1000);
-          }
-          if (result?.isStreakMilestone) {
-            addToast({ type: 'streak', text: `${result.streakUpdate.currentStreak}-day streak!`, emoji: '\u{1F525}' });
-          }
-          for (const badge of result?.newBadges || []) {
-            addToast({ type: 'badge', text: `${badge.name} unlocked!`, emoji: badge.emoji });
-          }
-        },
+        onCompleted: completion => celebrate(completion.xpEarned, completion.gamificationResult),
       });
       return;
     }
 
-    taskContext.updateTask(task.id, {
-      completed: completing,
-      completedAt: completing ? now : undefined,
-      ...(task.recurring && completing ? { recurring: { ...task.recurring, lastReset: todayStr } } : {}),
+    const now = new Date();
+    taskContext.updateTask(task.id, buildTaskToggleUpdate(task, now, appDate));
+    if (!completing) return;
+
+    const reward = buildCompletionReward({
+      task,
+      tasks,
+      profile: gamification.gamification,
+      goalTags: settings.settings.goalTags,
+      knowledge: countKnowledgeProgress(knowledge),
+      now,
+      appDate,
+      appTimeZone,
     });
-
-    // Gamification: award XP on completion (once per habit per day)
-    if (completing) {
-      // Check if this habit already got XP today (prevent farming)
-      const todayLog = gamification.gamification.dailyLog?.[todayStr] || [];
-      const alreadyRewarded = isHabitTask(task) && todayLog.includes(task.id);
-
-      if (alreadyRewarded) return; // no duplicate XP
-
-      const completionsToday = taskContext.tasks.filter(t => t.completed && t.completedAt?.startsWith(todayStr)).length;
-      const extCtx = buildCompletionContext(taskContext.tasks, settings.settings.goalTags, todayStr, gamification.gamification, {
-        knowledgeEntries: knowledge.knowledgeEntries.length,
-        knowledgeTopics: knowledge.knowledgeTopics.length,
-        lifestyleHaramMastered: knowledge.lifestyleItems.filter(i => i.type === 'haram' && i.status === 'mastered').length,
-        lifestyleHalalConsistent: knowledge.lifestyleItems.filter(i => i.type === 'halal' && i.status === 'consistent').length,
-        lifestyleTotal: knowledge.lifestyleItems.length,
-      });
-      const result = processTaskCompletion(gamification.gamification, task, completionsToday, nowDate, extCtx);
-      let profile = result.updatedProfile;
-      if (isHabitTask(task)) {
-        profile = recordHabitCompletion(profile, task.id, todayStr);
-      }
-      gamification.updateGamification(profile);
-
-      // XP toast
-      addToast({ type: 'xp', text: `+${result.xpEarned} XP`, emoji: '\u2728' });
-
-      // Level up celebration
-      if (result.leveledUp) {
-        addToast({ type: 'levelup', text: `Level ${result.newLevel}! ${result.newTitle}`, emoji: '\u{1F31F}' });
-        setShowLevelFlash(true);
-        setTimeout(() => setShowLevelFlash(false), 1000);
-      }
-
-      // Streak milestone
-      if (result.isStreakMilestone) {
-        addToast({ type: 'streak', text: `${result.streakUpdate.currentStreak}-day streak!`, emoji: '\u{1F525}' });
-      }
-
-      // New badges
-      for (const badge of result.newBadges) {
-        addToast({ type: 'badge', text: `${badge.name} unlocked!`, emoji: badge.emoji });
-      }
-    }
+    if (!reward) return;
+    gamification.updateGamification(reward.profile);
+    celebrate(reward.result.xpEarned, reward.result);
   };
 
   const handleDelete = (id: string) => {
     taskContext.removeTask(id);
     setDeletingId(null);
-    if (editing?.id === id) closeForm();
+    if (editor?.editing?.id === id) closeEditor();
   };
-
-  const isAssistantHighlighted = useCallback((taskId: string) => highlightedTaskId === taskId, [highlightedTaskId]);
 
   const resetAllTaskFilters = useCallback(() => {
     setFilterProjectId('all');
-    setFilterCategory('all');
-    setFilterPriority('all');
-    setFilterStatus('all');
+    setAllTaskFilters(DEFAULT_ALL_TASK_FILTERS);
   }, []);
 
   const toggleAllTaskSection = useCallback((sectionId: AllTaskAccordionSectionId) => {
@@ -650,189 +272,45 @@ export default function TasksSurface() {
   }, []);
 
   // ── Render helpers ──
-  const renderTaskRow = (task: Task) => (
-    <div
-      key={task.id}
-      id={`task-item-${task.id}`}
-      className={`task-row ${task.completed ? 'completed' : ''} ${isAssistantHighlighted(task.id) ? 'assistant-focus' : ''}`}
-    >
-      <input
-        type="checkbox"
-        className="task-checkbox"
-        checked={task.completed}
-        onChange={() => toggleComplete(task)}
-        aria-label={`Mark "${task.title}" as ${task.completed ? 'incomplete' : 'complete'}`}
-      />
-      <div className="task-content">
-        {task.projectId && (
-          <div style={{ marginBottom: 6 }}>
-            <span className="tag tag-connected">{projects.projects.find(project => project.id === task.projectId)?.name || 'Project'}</span>
-          </div>
-        )}
-        <div className={`task-title ${task.completed ? 'task-title-done' : ''}`}>
-          {task.title}
-          {task.priority !== 'low' && <span className={`tag tag-${task.priority}`}>{task.priority}</span>}
-          {task.category === 'daily' && <span className="tag tag-daily">daily</span>}
-          {task.category === 'prayer' && <span className="tag tag-daily">prayer</span>}
-          {(() => {
-            const name = getPrayerTaskName(task);
-            const status = name ? prayer.getOutcome(todayStr, name)?.status : undefined;
-            return status
-              ? <span className={`prayer-outcome-badge compact ${status}`}>{status === 'on_time' ? 'On time' : status === 'unclassified' ? 'Legacy' : status}</span>
-              : null;
-          })()}
-        </div>
-        <div className="task-meta">
-          {task.dueDate && (
-            <span className={task.dueDate < todayStr && !task.completed ? 'tag tag-overdue' : ''} style={task.dueDate < todayStr && !task.completed ? { padding: '1px 6px', borderRadius: 3 } : {}}>
-              {task.dueDate < todayStr && !task.completed ? 'Overdue' : `Due ${task.dueDate}`}
-            </span>
-          )}
-          {task.category === 'prayer'
-            ? <span>Islamic prayer</span>
-            : task.recurring && <span>Repeats {task.recurring.frequency}</span>}
-          {task.description && <span>{task.description.slice(0, 60)}{task.description.length > 60 ? '...' : ''}</span>}
-        </div>
-      </div>
-      <div className="task-actions">
-        <button className="btn-icon btn-sm" onClick={() => openEdit(task)} aria-label={`Edit "${task.title}"`} style={{ fontSize: 11 }}>Edit</button>
-        {deletingId === task.id ? (
-          <div className="confirm-bar" role="alert" style={{ margin: 0, padding: '4px 8px' }}>
-            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(task.id)}>Delete</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setDeletingId(null)}>Cancel</button>
-          </div>
-        ) : (
-          <button className="btn-icon btn-sm" onClick={() => setDeletingId(task.id)} aria-label={`Delete "${task.title}"`} style={{ fontSize: 11, color: '#ff6b6b' }}>&times;</button>
-        )}
-      </div>
-    </div>
+  const projectNameFor = (task: Task) => (
+    task.projectId ? projects.projects.find(project => project.id === task.projectId)?.name : undefined
   );
-
+  // Prayer outcomes are keyed by the prayer timetable's date, not the app date.
+  const prayerOutcomeFor = (task: Task): PrayerOutcomeStatus | undefined => {
+    const name = getPrayerTaskName(task);
+    return name ? prayer.getOutcome(prayer.today, name)?.status : undefined;
+  };
+  const itemActions: TaskItemActions = {
+    onToggle: toggleComplete,
+    onEdit: openEdit,
+    onDeleteRequest: setDeletingId,
+    onDeleteCancel: () => setDeletingId(null),
+    onDelete: handleDelete,
+  };
+  const itemProps = (task: Task) => ({
+    ...itemActions,
+    key: task.id,
+    task,
+    appDate,
+    projectName: projectNameFor(task),
+    prayerOutcome: prayerOutcomeFor(task),
+    highlighted: highlightedTaskId === task.id,
+    deleting: deletingId === task.id,
+  });
   const renderAllTaskCard = (task: Task) => {
-    const projectName = task.projectId ? projects.projects.find(project => project.id === task.projectId)?.name || 'Project' : undefined;
-    const canonicalPrayerName = getPrayerTaskName(task);
-    const canonicalPrayerOutcome = canonicalPrayerName
-      ? prayer.getOutcome(todayStr, canonicalPrayerName)?.status
-      : undefined;
-    const canonicalPrayerOutcomeLabel = canonicalPrayerOutcome === 'on_time'
-      ? 'on time'
-      : canonicalPrayerOutcome === 'unclassified'
-        ? 'legacy, unclassified'
-        : canonicalPrayerOutcome;
-    const completionDate = task.completedAt ? toLocalDateStr(new Date(task.completedAt)) : undefined;
-    const dueLabel = task.dueDate
-      ? task.dueDate < todayStr && !task.completed
-        ? `Overdue · ${formatShortDate(task.dueDate)}`
-        : task.dueDate === todayStr
-          ? 'Due today'
-          : task.dueDate === tomorrowStr
-            ? 'Due tomorrow'
-            : `Due ${formatShortDate(task.dueDate)}`
-      : undefined;
-    const dueTone = task.dueDate
-      ? task.dueDate < todayStr && !task.completed
-        ? 'danger'
-        : task.dueDate === todayStr
-          ? 'today'
-          : 'future'
-      : undefined;
-    const footerNote = task.completed
-      ? canonicalPrayerOutcomeLabel
-        ? `Prayer recorded ${canonicalPrayerOutcomeLabel}`
-        : completionDate === todayStr
-          ? 'Completed today'
-          : completionDate
-            ? `Completed ${formatShortDate(completionDate)}`
-            : 'Completed'
-      : task.recurring
-        ? `Repeats ${task.recurring.frequency}`
-        : task.dueDate
-          ? `Scheduled for ${formatShortDate(task.dueDate)}`
-          : 'No due date yet';
-
-    return (
-      <div
-        key={task.id}
-        id={`task-item-${task.id}`}
-        className={`all-task-card ${task.completed ? 'completed' : ''} ${isAssistantHighlighted(task.id) ? 'assistant-focus' : ''}`}
-      >
-        <div className="all-task-card-header">
-          <div className="all-task-card-main">
-            <input
-              type="checkbox"
-              className="task-checkbox all-task-checkbox"
-              checked={task.completed}
-              onChange={() => toggleComplete(task)}
-              aria-label={`Mark "${task.title}" as ${task.completed ? 'incomplete' : 'complete'}`}
-            />
-            <div className="all-task-card-copy">
-              <div className="all-task-card-labels">
-                {task.category === 'daily' && (
-                  <span className="all-task-habit-emoji" aria-hidden="true">
-                    {getHabitEmoji(task.title, task.emoji)}
-                  </span>
-                )}
-                {task.category === 'prayer' && (
-                  <span className="all-task-habit-emoji" aria-hidden="true">
-                    {'\u{1F54C}'}
-                  </span>
-                )}
-                <span className={`all-task-type ${task.category}`}>
-                  {task.category === 'daily' ? 'Routine' : task.category === 'prayer' ? 'Prayer' : 'Task'}
-                </span>
-                {canonicalPrayerOutcome && (
-                  <span className={`prayer-outcome-badge compact ${canonicalPrayerOutcome}`}>
-                    {canonicalPrayerOutcomeLabel}
-                  </span>
-                )}
-                <span className={`tag tag-${task.priority}`}>{task.priority}</span>
-                {projectName && <span className="tag tag-connected">{projectName}</span>}
-              </div>
-              <div className={`all-task-card-title ${task.completed ? 'done' : ''}`}>{task.title}</div>
-              {task.description && (
-                <p className="all-task-card-desc">
-                  {task.description.length > 110 ? `${task.description.slice(0, 110)}...` : task.description}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="all-task-card-side">
-            {dueLabel && (
-              <span className={`all-task-date-badge ${dueTone}`}>
-                {dueLabel}
-              </span>
-            )}
-            <div className="all-task-card-actions">
-              <button className="btn-icon btn-sm" onClick={() => openEdit(task)} aria-label={`Edit "${task.title}"`} style={{ fontSize: 11 }}>
-                Edit
-              </button>
-              <button
-                className="btn-icon btn-sm"
-                onClick={() => setDeletingId(current => current === task.id ? null : task.id)}
-                aria-label={`Delete "${task.title}"`}
-                style={{ fontSize: 11, color: '#ff6b6b' }}
-              >
-                {deletingId === task.id ? 'Close' : '\u00d7'}
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className="all-task-card-footer">
-          <span>{footerNote}</span>
-          {isHabitTask(task) && task.recurring && <span>Reset {task.recurring.lastReset ? `last on ${formatShortDate(task.recurring.lastReset)}` : 'automatically'}</span>}
-        </div>
-        {deletingId === task.id && (
-          <div className="confirm-bar all-task-confirm" role="alert">
-            <span>Delete this {task.category === 'daily' ? 'routine' : task.category === 'prayer' ? 'prayer task' : 'task'}?</span>
-            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(task.id)}>Delete</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setDeletingId(null)}>Cancel</button>
-          </div>
-        )}
-      </div>
-    );
+    const { key, ...props } = itemProps(task);
+    return <AllTaskCard key={key} {...props} appTimeZone={appTimeZone} />;
+  };
+  const renderTaskRow = (task: Task) => {
+    const { key, ...props } = itemProps(task);
+    return <TaskRow key={key} {...props} />;
+  };
+  const goalProps = (goal: Task) => {
+    const { key, task, ...props } = itemProps(goal);
+    return { key, goal: task, ...props };
   };
 
-  const activeCount = taskContext.tasks.filter(t => !t.completed && t.category !== 'goal').length;
+  const activeCount = tasks.filter(t => !t.completed && t.category !== 'goal').length;
   const goalCount = activeGoals.length;
 
   return (
@@ -841,9 +319,9 @@ export default function TasksSurface() {
         <div>
           <h1>Tasks</h1>
           <div className="subtitle">
-            {taskContext.tasks.length === 0
+            {tasks.length === 0
               ? 'No tasks yet'
-              : `${activeCount} active task${activeCount !== 1 ? 's' : ''}${goalCount > 0 ? ` \u00b7 ${goalCount} goal${goalCount !== 1 ? 's' : ''}` : ''}`}
+              : `${activeCount} active task${activeCount !== 1 ? 's' : ''}${goalCount > 0 ? ` · ${goalCount} goal${goalCount !== 1 ? 's' : ''}` : ''}`}
           </div>
         </div>
         <button className="btn btn-primary" onClick={() => openAdd()}>+ Add Task</button>
@@ -862,49 +340,7 @@ export default function TasksSurface() {
         {/* ── Today ── */}
         {tab === 'today' && (
           <>
-            {/* Gamification stats panel */}
-            {(() => {
-              const gam = gamification.gamification;
-              const xp = xpToNextLevel(gam.totalXp);
-              const title = titleForLevel(gam.level);
-              const streakMilestone = [7, 14, 30, 60, 100].includes(gam.currentStreak);
-              return (
-                <div className="gam-panel">
-                  <div className="gam-level">
-                    <div className="gam-level-num">{gam.level}</div>
-                    <div className="gam-level-label">{title}</div>
-                  </div>
-                  <div className="gam-xp-section">
-                    <div className="gam-xp-title">
-                      <span>{gam.totalXp} XP total</span>
-                      <span>{xp.current} / {xp.needed} to level {gam.level + 1}</span>
-                    </div>
-                    <div className="gam-xp-bar">
-                      <div className="gam-xp-fill" style={{ width: `${xp.progress * 100}%` }} />
-                    </div>
-                  </div>
-                  <div className="gam-stats">
-                    {gam.currentStreak > 0 && (
-                      <div className={`gam-streak ${streakMilestone ? 'milestone' : ''}`}>
-                        <span className="gam-streak-fire">{'\u{1F525}'}</span>
-                        {gam.currentStreak}d
-                      </div>
-                    )}
-                    {gam.badges.length > 0 && (
-                      <div className="gam-badges-row">
-                        {gam.badges.slice(-5).map(id => {
-                          const b = getBadgeDef(id);
-                          return b ? (
-                            <span key={id} className={`gam-badge ${b.rarity}`} title={`${b.name}: ${b.description}`}>{b.emoji}</span>
-                          ) : null;
-                        })}
-                        {gam.badges.length > 5 && <span style={{ fontSize: 11, color: '#6b6f85', alignSelf: 'center' }}>+{gam.badges.length - 5}</span>}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
+            <GamificationPanel profile={gamification.gamification} />
 
             {todayTotal > 0 && (
               <div className="progress-summary">
@@ -931,14 +367,7 @@ export default function TasksSurface() {
                 {prayerTasks.length > 0 && (
                   <>
                     <div className="section-heading">Islamic</div>
-                    <HabitCards
-                      habits={prayerTasks}
-                      onComplete={toggleComplete}
-                      getPrayerOutcome={task => {
-                        const name = getPrayerTaskName(task);
-                        return name ? prayer.getOutcome(todayStr, name)?.status : undefined;
-                      }}
-                    />
+                    <HabitCards habits={prayerTasks} onComplete={toggleComplete} getPrayerOutcome={prayerOutcomeFor} />
                   </>
                 )}
                 {dailyHabits.length > 0 && (
@@ -973,26 +402,18 @@ export default function TasksSurface() {
                 </p>
               </div>
               <div className="all-tasks-metrics" aria-label="All task summary">
-                <div className="all-tasks-metric">
-                  <span className="label">Overdue</span>
-                  <span className="value">{allTaskStats.overdue}</span>
-                </div>
-                <div className="all-tasks-metric">
-                  <span className="label">Due today</span>
-                  <span className="value">{allTaskStats.dueToday}</span>
-                </div>
-                <div className="all-tasks-metric">
-                  <span className="label">Islamic</span>
-                  <span className="value">{allTaskStats.prayers}</span>
-                </div>
-                <div className="all-tasks-metric">
-                  <span className="label">Routines</span>
-                  <span className="value">{allTaskStats.routines}</span>
-                </div>
-                <div className="all-tasks-metric">
-                  <span className="label">Completed</span>
-                  <span className="value">{allTaskStats.completed}</span>
-                </div>
+                {([
+                  ['Overdue', allTaskStats.overdue],
+                  ['Due today', allTaskStats.dueToday],
+                  ['Islamic', allTaskStats.prayers],
+                  ['Routines', allTaskStats.routines],
+                  ['Completed', allTaskStats.completed],
+                ] as const).map(([label, value]) => (
+                  <div key={label} className="all-tasks-metric">
+                    <span className="label">{label}</span>
+                    <span className="value">{value}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -1007,7 +428,7 @@ export default function TasksSurface() {
                 </label>
                 <label className="all-tasks-filter-field">
                   <span>Type</span>
-                  <select className="form-select" value={filterCategory} onChange={e => setFilterCategory(e.target.value as typeof filterCategory)}>
+                  <select className="form-select" value={allTaskFilters.category} onChange={e => setAllTaskFilters(current => ({ ...current, category: e.target.value as AllTaskFilters['category'] }))}>
                     <option value="all">All types</option>
                     <option value="daily">Daily habits</option>
                     <option value="prayer">Prayer tasks</option>
@@ -1016,7 +437,7 @@ export default function TasksSurface() {
                 </label>
                 <label className="all-tasks-filter-field">
                   <span>Priority</span>
-                  <select className="form-select" value={filterPriority} onChange={e => setFilterPriority(e.target.value as typeof filterPriority)}>
+                  <select className="form-select" value={allTaskFilters.priority} onChange={e => setAllTaskFilters(current => ({ ...current, priority: e.target.value as AllTaskFilters['priority'] }))}>
                     <option value="all">All priorities</option>
                     <option value="high">High</option>
                     <option value="medium">Medium</option>
@@ -1025,7 +446,7 @@ export default function TasksSurface() {
                 </label>
                 <label className="all-tasks-filter-field">
                   <span>Status</span>
-                  <select className="form-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value as typeof filterStatus)}>
+                  <select className="form-select" value={allTaskFilters.status} onChange={e => setAllTaskFilters(current => ({ ...current, status: e.target.value as AllTaskFilters['status'] }))}>
                     <option value="all">All statuses</option>
                     <option value="active">Active</option>
                     <option value="completed">Completed</option>
@@ -1054,11 +475,21 @@ export default function TasksSurface() {
               </div>
             ) : (
               <div className="all-tasks-sections">
-                {allTaskSections.map(section => {
-                  const isExpanded = expandedAllTaskSections[section.id] ?? true;
+                {[
+                  ...allTaskSections,
+                  ...(completedAllTasks.length > 0
+                    ? [{
+                      id: 'completed' as const,
+                      title: 'Completed',
+                      description: 'Finished items stay here for reference and quick reopen.',
+                      items: completedAllTasks,
+                    }]
+                    : []),
+                ].map(section => {
+                  const isExpanded = expandedAllTaskSections[section.id] ?? section.id !== 'completed';
 
                   return (
-                    <section key={section.id} className="all-task-section">
+                    <section key={section.id} className={`all-task-section${section.id === 'completed' ? ' completed' : ''}`}>
                       <button
                         className="all-task-section-header all-task-section-toggle"
                         onClick={() => toggleAllTaskSection(section.id)}
@@ -1070,7 +501,7 @@ export default function TasksSurface() {
                           <p>{section.description}</p>
                         </div>
                         <span className="all-task-section-count">
-                          {isExpanded ? '\u25BE' : '\u25B8'} {section.items.length}
+                          {isExpanded ? '▾' : '▸'} {section.items.length}
                         </span>
                       </button>
                       {isExpanded && (
@@ -1081,38 +512,6 @@ export default function TasksSurface() {
                     </section>
                   );
                 })}
-
-                {completedAllTasks.length > 0 && (
-                  <section className="all-task-section completed">
-                    {(() => {
-                      const isExpanded = expandedAllTaskSections.completed ?? false;
-
-                      return (
-                        <>
-                          <button
-                            className="all-task-section-header all-task-section-toggle"
-                            onClick={() => toggleAllTaskSection('completed')}
-                            aria-expanded={isExpanded}
-                            aria-controls="all-task-section-completed"
-                          >
-                            <div>
-                              <h3>Completed</h3>
-                              <p>Finished items stay here for reference and quick reopen.</p>
-                            </div>
-                            <span className="all-task-section-count">
-                              {isExpanded ? '\u25BE' : '\u25B8'} {completedAllTasks.length}
-                            </span>
-                          </button>
-                          {isExpanded && (
-                            <div className="all-task-section-list" id="all-task-section-completed">
-                              {completedAllTasks.map(renderAllTaskCard)}
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </section>
-                )}
               </div>
             )}
           </>
@@ -1121,7 +520,6 @@ export default function TasksSurface() {
         {/* ── Goals ── */}
         {tab === 'goals' && (
           <>
-            {/* Goal tag filter */}
             {goalTags.length > 0 && (
               <div className="filter-bar">
                 <select className="form-select" value={filterProjectId} onChange={e => setFilterProjectId(e.target.value)}>
@@ -1143,7 +541,7 @@ export default function TasksSurface() {
                     {tag}
                   </button>
                 ))}
-                {taskContext.tasks.some(t => t.category === 'goal' && !t.goalTag) && (
+                {tasks.some(t => t.category === 'goal' && !t.goalTag) && (
                   <button
                     className={`btn btn-sm ${filterGoalTag === '' ? 'btn-primary' : 'btn-secondary'}`}
                     onClick={() => setFilterGoalTag('')}
@@ -1163,66 +561,20 @@ export default function TasksSurface() {
               </div>
             ) : (
               <>
-                {activeGoals.map(goal => (
-                  <div
-                    key={goal.id}
-                    id={`task-item-${goal.id}`}
-                    className={`goal-card ${isAssistantHighlighted(goal.id) ? 'assistant-focus' : ''}`}
-                  >
-                    <div className="goal-title">
-                      {goal.title}
-                      <span className={`tag tag-${goal.priority}`}>{goal.priority}</span>
-                      {goal.goalTag && <span className="tag tag-goal">{goal.goalTag}</span>}
-                      {goal.projectId && <span className="tag tag-connected">{projects.projects.find(project => project.id === goal.projectId)?.name || 'Project'}</span>}
-                    </div>
-                    {goal.description && <div className="goal-desc">{goal.description}</div>}
-                    <div className="goal-meta">
-                      {goal.dueDate && <span>Target: {goal.dueDate}</span>}
-                      <span>Created {new Date(goal.createdAt).toLocaleDateString()}</span>
-                    </div>
-                    <div className="actions-row" style={{ marginTop: 10 }}>
-                      <button className="btn btn-success btn-sm" onClick={() => toggleComplete(goal)}>Mark Complete</button>
-                      <button className="btn btn-secondary btn-sm" onClick={() => openEdit(goal)}>Edit</button>
-                      {deletingId === goal.id ? (
-                        <div className="confirm-bar" role="alert" style={{ margin: 0 }}>
-                          Delete this goal?
-                          <button className="btn btn-danger btn-sm" onClick={() => handleDelete(goal.id)}>Delete</button>
-                          <button className="btn btn-secondary btn-sm" onClick={() => setDeletingId(null)}>Cancel</button>
-                        </div>
-                      ) : (
-                        <button className="btn btn-danger btn-sm" onClick={() => setDeletingId(goal.id)}>Remove</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                {activeGoals.map(goal => {
+                  const { key, ...props } = goalProps(goal);
+                  return <ActiveGoalCard key={key} {...props} />;
+                })}
 
                 {completedGoals.length > 0 && (
                   <div className="completed-section">
                     <button className="completed-section-toggle" onClick={() => setShowCompletedGoals(!showCompletedGoals)}>
-                      {showCompletedGoals ? '\u25BC' : '\u25B6'} Completed Goals ({completedGoals.length})
+                      {showCompletedGoals ? '▼' : '▶'} Completed Goals ({completedGoals.length})
                     </button>
-                    {showCompletedGoals && completedGoals.map(goal => (
-                      <div
-                        key={goal.id}
-                        id={`task-item-${goal.id}`}
-                        className={`goal-card completed ${isAssistantHighlighted(goal.id) ? 'assistant-focus' : ''}`}
-                        style={{ marginTop: 8 }}
-                      >
-                        <div className="goal-title" style={{ textDecoration: 'line-through' }}>
-                          {goal.title}
-                        </div>
-                        {goal.completedAt && <div className="goal-meta">Completed {new Date(goal.completedAt).toLocaleDateString()}</div>}
-                        <div className="actions-row" style={{ marginTop: 8 }}>
-                          <button className="btn btn-secondary btn-sm" onClick={() => toggleComplete(goal)}>Reopen</button>
-                          <button className="btn btn-danger btn-sm" onClick={() => {
-                            if (deletingId === goal.id) handleDelete(goal.id);
-                            else setDeletingId(goal.id);
-                          }}>
-                            {deletingId === goal.id ? 'Confirm Delete' : 'Remove'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                    {showCompletedGoals && completedGoals.map(goal => {
+                      const { key, ...props } = goalProps(goal);
+                      return <CompletedGoalCard key={key} {...props} />;
+                    })}
                   </div>
                 )}
               </>
@@ -1231,139 +583,19 @@ export default function TasksSurface() {
         )}
       </div>
 
-      {/* ── Add/Edit Modal ── */}
-      {showForm && (
-        <div className="modal-overlay" onClick={requestTaskClose}>
-          <div
-            ref={taskDialogRef}
-            className="modal"
-            onClick={e => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            tabIndex={-1}
-            aria-label={editing ? 'Edit Task' : 'Add Task'}
-          >
-            <h2>{editing ? 'Edit Task' : 'Add Task'}</h2>
-            <div className="form-group">
-              <label htmlFor={category === 'prayer' ? 'task-prayer-name' : 'task-title'}>{category === 'prayer' ? 'Prayer' : 'Title'}</label>
-              {category === 'prayer' ? (
-                <select
-                  id="task-prayer-name"
-                  className="form-select"
-                  value={prayerName}
-                  onChange={e => setPrayerName(e.target.value as PrayerName)}
-                >
-                  {PRAYER_TASK_ORDER.map(name => <option key={name} value={name}>{name}</option>)}
-                </select>
-              ) : (
-                <input id="task-title" className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="What needs to be done?" />
-              )}
-            </div>
-            <div className="form-group">
-              <label htmlFor="task-desc">Description (optional)</label>
-              <textarea id="task-desc" className="form-input" value={description} onChange={e => setDescription(e.target.value)} placeholder="Details, notes, links..." />
-            </div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label htmlFor="task-category">Type</label>
-                <select id="task-category" className="form-select" value={category} onChange={e => setCategory(e.target.value as TaskCategory)}>
-                  <option value="task">One-off Task</option>
-                  <option value="prayer">Prayer Task</option>
-                  <option value="daily">Daily Habit</option>
-                  <option value="goal">Long-term Goal</option>
-                </select>
-              </div>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label htmlFor="task-priority">Priority</label>
-                <select id="task-priority" className="form-select" value={priority} onChange={e => setPriority(e.target.value as TaskPriority)}>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
-              </div>
-            </div>
-            {category !== 'daily' && category !== 'prayer' && (
-              <div className="form-group">
-                <label htmlFor="task-due">{category === 'goal' ? 'Target Date' : 'Due Date'} (optional)</label>
-                <input id="task-due" className="form-input" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
-              </div>
-            )}
-            {category === 'daily' && (
-              <>
-                <div className="form-group">
-                  <label htmlFor="task-freq">Repeats</label>
-                  <select id="task-freq" className="form-select" value={recurringFreq} onChange={e => setRecurringFreq(e.target.value as typeof recurringFreq)}>
-                    <option value="daily">Every day</option>
-                    <option value="weekdays">Weekdays only</option>
-                    <option value="weekly">Weekly</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Icon</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontSize: 28 }}>{getHabitEmoji(title, habitEmoji)}</span>
-                    <span style={{ fontSize: 11, color: '#6b6f85' }}>{habitEmoji ? 'Custom' : 'Auto-detected'}</span>
-                    {habitEmoji && <button className="btn btn-secondary btn-sm" style={{ fontSize: 10 }} onClick={() => setHabitEmoji('')}>Reset</button>}
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {EMOJI_PALETTE.map(em => (
-                      <button
-                        key={em}
-                        type="button"
-                        onClick={() => setHabitEmoji(em)}
-                        style={{
-                          fontSize: 18, padding: '4px 6px', background: habitEmoji === em ? '#1e2140' : 'transparent',
-                          border: habitEmoji === em ? '1px solid #4f5bff' : '1px solid transparent',
-                          borderRadius: 6, cursor: 'pointer',
-                        }}
-                      >{em}</button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-            {category === 'goal' && goalTags.length > 0 && (
-              <div className="form-group">
-                <label htmlFor="task-goaltag">Category</label>
-                <select id="task-goaltag" className="form-select" value={goalTag} onChange={e => setGoalTag(e.target.value)}>
-                  <option value="">None</option>
-                  {goalTags.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-            )}
-            {category !== 'daily' && category !== 'prayer' && projects.projects.length > 0 && (
-              <div className="form-group">
-                <label htmlFor="task-project">Project (optional)</label>
-                <select id="task-project" className="form-select" value={taskProjectId} onChange={e => setTaskProjectId(e.target.value)}>
-                  <option value="">None</option>
-                  {projects.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-                </select>
-              </div>
-            )}
-            <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={requestTaskClose}>Cancel</button>
-              <button className="btn btn-primary" onClick={save} disabled={category !== 'prayer' && !title.trim()}>
-                {editing ? 'Save' : 'Add'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {editor && (
+        <TaskEditorDialog
+          key={editor.editing?.id ?? 'new'}
+          initialForm={editor.initialForm}
+          isEditing={Boolean(editor.editing)}
+          goalTags={goalTags}
+          projects={projects.projects}
+          onSave={save}
+          onClose={closeEditor}
+        />
       )}
 
-      {/* Gamification toasts */}
-      {toasts.length > 0 && (
-        <div className="gam-toast-container">
-          {toasts.map(t => (
-            <div key={t.id} className={`gam-toast ${t.type}`}>
-              {t.emoji && <span>{t.emoji}</span>}
-              {t.text}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Level up flash */}
-      {showLevelFlash && <div className="gam-levelup-flash" />}
+      <RewardToasts toasts={toasts} showLevelFlash={showLevelFlash} />
     </>
   );
 }

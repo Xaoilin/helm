@@ -20,6 +20,13 @@ import { TripProvider } from './contexts/TripContext';
 import { AssistantUndoProvider } from './contexts/AssistantUndoContext';
 import { MilestoneCelebrationProvider } from './contexts/MilestoneCelebrationContext';
 import { ShellProvider } from './ShellContext';
+import { useDailyTaskRollover } from './workflows/useDailyTaskRollover';
+
+/** Runs the daily habit and streak rollover once for the whole app, whichever page is open. */
+function DailyTaskRollover() {
+  useDailyTaskRollover();
+  return null;
+}
 
 function GoogleSyncBridge({ children }: { children: ReactNode }) {
   const calendar = useCalendar();
@@ -132,6 +139,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
                           <HealthProvider>
                             <FinanceProvider>
                               <PrayerProvider>
+                                <DailyTaskRollover />
                                 <ClockProvider>
                                   <AssistantProvider>
                                     <AssistantActivityProvider>
