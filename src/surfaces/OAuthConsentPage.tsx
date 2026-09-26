@@ -1,114 +1,89 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useAuthSession } from '../store/AuthSessionContext';
+import { signInWithGoogle } from '../store/supabase/auth';
 import {
-  approveEmploymentOAuthClient,
-  approveEquityOAuthClient,
-  approveFinanceOAuthClient,
-  approveInventoryOAuthClient,
-  getClient,
-  revokeEmploymentOAuthClient,
-  revokeEquityOAuthClient,
-  revokeFinanceOAuthClient,
-  revokeInventoryOAuthClientAllowlist,
-  signInWithGoogle,
-} from '../store/supabase';
+  approveOAuthAuthorization,
+  denyOAuthAuthorization,
+  getOAuthAuthorization,
+  type OAuthAuthorizationDetails,
+} from '../store/supabase/oauthAuthorization';
+import {
+  approveOAuthClientAccess,
+  revokeOAuthClientAllowlist,
+  type OAuthClientDomain,
+} from '../store/supabase/oauthClients';
+import { approveOAuthConsent } from '../services/oauthConsent';
 
-interface AuthorizationDetails {
-  authorization_id: string;
-  redirect_uri: string;
-  scope: string;
-  client: { id: string; name: string; uri: string; logo_uri: string };
-  user: { id: string; email: string };
+type ConsentArea = 'Inventory' | 'Employment' | 'Equity' | 'Finance';
+
+const CONSENT_AREA_DOMAINS: Record<ConsentArea, OAuthClientDomain> = {
+  Inventory: 'inventory',
+  Employment: 'employment',
+  Equity: 'equity',
+  Finance: 'finance',
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export default function OAuthConsentPage() {
   const auth = useAuthSession();
-  const [details, setDetails] = useState<AuthorizationDetails | null>(null);
+  const [details, setDetails] = useState<OAuthAuthorizationDetails | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<'approve' | 'deny' | null>(null);
-  const [access, setAccess] = useState<'Inventory' | 'Employment' | 'Equity' | 'Finance' | null>(null);
+  const [access, setAccess] = useState<ConsentArea | null>(null);
   const authorizationId = new URLSearchParams(window.location.search).get('authorization_id') || '';
 
   useEffect(() => {
     if (!auth.bootstrapped || !auth.authUser || !authorizationId) return;
-    const database = getClient();
-    if (!database) {
-      setError('Sabah One database configuration is unavailable.');
-      return;
-    }
     let cancelled = false;
-    void database.auth.oauth.getAuthorizationDetails(authorizationId).then(({ data, error: requestError }) => {
+    getOAuthAuthorization(authorizationId).then(lookup => {
       if (cancelled) return;
-      if (requestError || !data) {
-        setError(requestError?.message || 'This authorization request is unavailable or expired.');
+      if (lookup.kind === 'resolved') {
+        window.location.assign(lookup.redirectUrl);
         return;
       }
-      if ('redirect_url' in data) {
-        window.location.assign(data.redirect_url);
-        return;
-      }
-      setDetails(data as AuthorizationDetails);
+      setDetails(lookup.details);
+    }, (requestError: unknown) => {
+      if (!cancelled) setError(errorMessage(requestError));
     });
     return () => { cancelled = true; };
   }, [auth.authUser, auth.bootstrapped, authorizationId]);
 
   const approve = async () => {
     if (!details || !access) return;
-    const database = getClient();
-    if (!database) return;
+    const domain = CONSENT_AREA_DOMAINS[access];
     setBusy('approve');
     setError('');
-    const approveClient = {
-      Inventory: approveInventoryOAuthClient,
-      Employment: approveEmploymentOAuthClient,
-      Equity: approveEquityOAuthClient,
-      Finance: approveFinanceOAuthClient,
-    }[access];
-    const revokeClient = {
-      Inventory: revokeInventoryOAuthClientAllowlist,
-      Employment: revokeEmploymentOAuthClient,
-      Equity: revokeEquityOAuthClient,
-      Finance: revokeFinanceOAuthClient,
-    }[access];
-    try {
-      await approveClient(details.client.id, details.client.name || `Sabah One ${access}`);
-      const { data, error: approvalError } = await database.auth.oauth.approveAuthorization(
-        details.authorization_id,
-        { skipBrowserRedirect: true },
-      );
-      if (approvalError || !data?.redirect_url) {
-        throw approvalError || new Error('OAuth approval did not return a redirect.');
-      }
-      window.location.assign(data.redirect_url);
-    } catch (caught) {
-      let message = caught instanceof Error ? caught.message : String(caught);
-      try {
-        await revokeClient(details.client.id);
-      } catch (rollbackError) {
-        const detail = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
-        message += ` ${access} approval could not be rolled back: ${detail}. Revoke this client's ${access} access in Settings.`;
-      }
-      setError(message);
-      setBusy(null);
+    const outcome = await approveOAuthConsent({
+      approveClientAccess: (clientId, clientName) => approveOAuthClientAccess(domain, clientId, clientName),
+      approveAuthorization: approveOAuthAuthorization,
+      revokeClientAccess: clientId => revokeOAuthClientAllowlist(domain, clientId),
+    }, {
+      authorizationId: details.authorization_id,
+      clientId: details.client.id,
+      clientName: details.client.name || `Sabah One ${access}`,
+      areaLabel: access,
+    });
+    if (outcome.ok) {
+      window.location.assign(outcome.redirectUrl);
+      return;
     }
+    setError(outcome.message);
+    setBusy(null);
   };
 
   const deny = async () => {
     if (!details) return;
-    const database = getClient();
-    if (!database) return;
     setBusy('deny');
     setError('');
-    const { data, error: denialError } = await database.auth.oauth.denyAuthorization(
-      details.authorization_id,
-      { skipBrowserRedirect: true },
-    );
-    if (denialError || !data?.redirect_url) {
-      setError(denialError?.message || 'The authorization request could not be denied.');
+    try {
+      window.location.assign(await denyOAuthAuthorization(details.authorization_id));
+    } catch (denialError) {
+      setError(errorMessage(denialError));
       setBusy(null);
-      return;
     }
-    window.location.assign(data.redirect_url);
   };
 
   if (!authorizationId) {

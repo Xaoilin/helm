@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ASSISTANT_ENABLED } from '../config/deprecatedFeatures';
 import { logError } from '../services/logger';
-import { getProductUsageEvents } from '../store/supabase';
+import { getProductUsageEvents } from '../store/supabase/productUsage';
 import { useOptionalAuthSession } from '../store/AuthSessionContext';
 import { useAssistantActivityContext } from '../store/contexts/AssistantActivityContext';
 import { useAssistantUndo } from '../store/contexts/AssistantUndoContext';

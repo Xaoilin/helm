@@ -8,7 +8,7 @@ import {
   revealHelmSecret,
   saveHelmSecret,
   setHelmSecretArchived,
-} from '../store/supabase';
+} from '../store/supabase/secrets';
 import type {
   HelmSecretDetail,
   HelmSecretSummary,

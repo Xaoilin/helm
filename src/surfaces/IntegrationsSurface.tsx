@@ -5,7 +5,7 @@ import type { CalendarAccount } from '../types/domain';
 import { useGoogleSync } from '../hooks/useGoogleSync';
 import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
 import { appendGoogleCalendarDiagnosticEvent } from '../services/googleCalendarDiagnosticEvents';
-import { getAuthSessionSnapshot } from '../store/supabase';
+import { getAuthSessionSnapshot } from '../store/supabase/client';
 import { getAppDate } from '../services/appTimeZone';
 import { LIFE_HERO_ENABLED } from '../config/deprecatedFeatures';
 import {

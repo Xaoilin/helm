@@ -28,6 +28,37 @@ export default defineConfig([
     },
   },
   {
+    // UI import boundary: surfaces and components reach Supabase through a
+    // specific gateway module (for example `store/supabase/secrets`) or a
+    // service, never through the compatibility barrel, and use the stable
+    // `store/persistence` consumer API rather than its internals.
+    files: ['src/surfaces/**/*.{ts,tsx}', 'src/components/**/*.{ts,tsx}'],
+    ignores: [
+      // Deprecated features, see docs/deprecated-features.md. They are being
+      // disabled rather than migrated, so they keep their existing imports.
+      'src/surfaces/ChatSurface.tsx',
+      'src/components/VoiceConnectionSettings.tsx',
+      'src/components/AppleHealthMovementImport.tsx',
+      'src/components/knowledge/ElifBManualEvidence.tsx',
+      'src/components/dashboard/LifeHeroCompanion.tsx',
+      'src/components/debug/AiDebug.tsx',
+    ],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            regex: '(^|/)store/supabase$',
+            message: 'Import the specific gateway module under store/supabase/ (or a service); the store/supabase barrel is for existing non-UI code only.',
+          },
+          {
+            regex: '(^|/)store/persistence/',
+            message: 'Use the store/persistence consumer API; its internal modules are not a UI dependency.',
+          },
+        ],
+      }],
+    },
+  },
+  {
     files: ['src/store/**/*.ts', 'src/store/**/*.tsx', 'src/test/**/*.ts', 'src/test/**/*.tsx'],
     rules: {
       'react-refresh/only-export-components': 'off',

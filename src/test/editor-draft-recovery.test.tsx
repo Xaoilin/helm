@@ -75,7 +75,7 @@ const mocks = vi.hoisted(() => ({
   prayer: { today: '2026-09-08', getOutcome: vi.fn(), requestPrayerCompletion: vi.fn() },
 }));
 
-vi.mock('../store/supabase', () => ({
+vi.mock('../store/supabase/secrets', () => ({
   listHelmSecrets: mocks.secrets.list,
   revealHelmSecret: mocks.secrets.reveal,
   saveHelmSecret: mocks.secrets.save,
