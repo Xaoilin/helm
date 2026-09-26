@@ -273,7 +273,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
 
   // Persistence: the prayer service for outcomes, the account record for reminder receipts.
   // Rewards and tasks load first, so reward recovery never mistakes a missing receipt.
-  const { serviceSync, reload: reloadOutcomes } = usePrayerPersistence({
+  const { serviceSync, reload: reloadOutcomes, allowBulkDelete } = usePrayerPersistence({
     store,
     sourcesLoaded: taskOwner.loaded && gamificationOwner.loaded && settingsOwner.loaded,
     locationReady: serviceSettingsReady,
@@ -304,8 +304,10 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   );
 
   const replacePrayerTracking = useCallback((state: PrayerTrackingState) => {
+    // Replacing the tracking (Settings → Reset all progress) is the one bulk deletion allowed.
+    allowBulkDelete();
     commitTracking(normalizePrayerTrackingState(state, { now: new Date() }));
-  }, [commitTracking]);
+  }, [allowBulkDelete, commitTracking]);
 
   const { adhanPrayer, dismissAdhan } = usePrayerAdhan({ prayerEnabled, timetable, now, today });
 
