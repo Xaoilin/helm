@@ -6,6 +6,7 @@ import {
   zonedDateTimeToInstant,
   type ZonedDateTimeParts,
 } from './timeZone';
+import { toLocalDateStr } from './localDate';
 
 export type PrayerZonedDateTimeParts = ZonedDateTimeParts;
 
@@ -22,6 +23,15 @@ export function getPrayerZonedDateTimeParts(
 
 export function getPrayerZonedDate(instant: Date, timeZone: string): string | null {
   return getZonedDate(instant, timeZone);
+}
+
+/**
+ * The prayer date at `now`: the schedule zone's date when that zone is valid,
+ * otherwise the host's local date (before a timetable has loaded).
+ */
+export function getPrayerDateAt(now: Date, scheduleTimeZone: string): string {
+  if (!scheduleTimeZone) return toLocalDateStr(now);
+  return getPrayerZonedDate(now, scheduleTimeZone) ?? toLocalDateStr(now);
 }
 
 export function getPrayerZonedClockSeconds(instant: Date, timeZone: string): number | null {

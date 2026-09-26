@@ -16,6 +16,7 @@ import {
 import {
   getPrayerZonedDate,
   shiftPrayerDate,
+  validatePrayerTimeZone,
 } from './prayerTimeZone';
 import {
   getNextPrayer,
@@ -125,4 +126,40 @@ export function classifyExpiredPrayerOutcomes(input: {
     }
   }
   return next;
+}
+
+/**
+ * Refuses a fetched timetable that cannot drive today's prayer rules: its zone
+ * must be a valid IANA zone and its date must be the current date in that zone.
+ */
+export function assertCurrentPrayerSchedule(schedule: PrayerTimesData, now: Date): void {
+  const timezone = validatePrayerTimeZone(schedule.timezone);
+  const currentPrayerDate = timezone ? getPrayerZonedDate(now, timezone) : null;
+  if (!timezone || !currentPrayerDate) {
+    throw new Error('Prayer schedule timezone is invalid or missing.');
+  }
+  if (schedule.date !== currentPrayerDate) {
+    throw new Error(`Prayer schedule is for ${schedule.date}, not the current schedule date.`);
+  }
+}
+
+/**
+ * Keeps the timetables reminders need after a refresh: the new day's, plus the
+ * previous day's when already held, because its last deadline can still be open.
+ */
+export function retainReminderSchedules(
+  current: Readonly<Record<string, PrayerTimesData>>,
+  next: PrayerTimesData,
+): Record<string, PrayerTimesData> {
+  const previousDate = shiftPrayerDate(next.date, -1);
+  return {
+    ...(previousDate && current[previousDate] ? { [previousDate]: current[previousDate] } : {}),
+    [next.date]: next,
+  };
+}
+
+/** Reminders run only when at least one timetable is held and every held zone is valid. */
+export function reminderSchedulesHaveValidZones(schedules: readonly PrayerTimesData[]): boolean {
+  return schedules.length > 0
+    && schedules.every(candidate => Boolean(validatePrayerTimeZone(candidate.timezone || '')));
 }
