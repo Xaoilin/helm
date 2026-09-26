@@ -14,7 +14,8 @@ import type {
   ProjectKind,
   ProjectRunRecipe,
 } from '../../types/domain';
-import { getProjectAvailability } from './projectCatalogModel';
+import { useDialog } from '../../hooks/useDialog';
+import { getProjectAvailability, isWebUrl } from '../../services/projectModel';
 
 const KIND_LABELS: Record<ProjectKind, string> = {
   web_app: 'Web app',
@@ -36,15 +37,6 @@ function initials(name: string): string {
     .slice(0, 2)
     .map(part => part[0]?.toUpperCase())
     .join('') || 'PR';
-}
-
-function isSafeExternalUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' || url.protocol === 'http:';
-  } catch {
-    return false;
-  }
 }
 
 function StatusBadge({ project }: { project: Project }) {
@@ -273,10 +265,10 @@ export function ProjectCard({
     transition: { duration: 160, easing: 'cubic-bezier(0.2, 0.75, 0.22, 1)' },
   });
   const liveLink = (project.links || []).find(link => (
-    link.kind === 'deployment' && isSafeExternalUrl(link.url)
+    link.kind === 'deployment' && isWebUrl(link.url)
   ));
   const repositoryLink = (project.links || []).find(link => (
-    link.kind === 'repository' && isSafeExternalUrl(link.url)
+    link.kind === 'repository' && isWebUrl(link.url)
   ));
 
   return (
@@ -407,44 +399,10 @@ export function ProjectReferenceDrawer({
   onPinChange: (pinned: boolean) => void;
   onArchiveChange: (archived: boolean) => void;
 }) {
-  const drawerRef = useRef<HTMLElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    closeButtonRef.current?.focus();
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== 'Tab' || !drawerRef.current) return;
-      const focusable = Array.from(drawerRef.current.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      )).filter(element => !element.hasAttribute('hidden'));
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      previousFocus?.focus();
-    };
-  }, [onClose]);
+  const { dialogRef: drawerRef } = useDialog<HTMLElement>({ open: true, onClose });
 
   const safeLinks = useMemo(
-    () => (project.links || []).filter(link => isSafeExternalUrl(link.url)),
+    () => (project.links || []).filter(link => isWebUrl(link.url)),
     [project.links],
   );
   const availability = getProjectAvailability(project);
@@ -458,6 +416,7 @@ export function ProjectReferenceDrawer({
         aria-modal="true"
         aria-labelledby="project-drawer-title"
         aria-describedby="project-drawer-summary"
+        tabIndex={-1}
         onMouseDown={event => event.stopPropagation()}
       >
         <header className="project-drawer-header">
@@ -465,7 +424,7 @@ export function ProjectReferenceDrawer({
             <span className="project-drawer-eyebrow">{KIND_LABELS[project.kind || 'other']}</span>
             <h2 id="project-drawer-title">{project.name}</h2>
           </div>
-          <button ref={closeButtonRef} className="project-drawer-close" type="button" onClick={onClose} aria-label={`Close ${project.name} details`}>
+          <button className="project-drawer-close" type="button" onClick={onClose} aria-label={`Close ${project.name} details`}>
             <span aria-hidden="true">×</span>
           </button>
         </header>
