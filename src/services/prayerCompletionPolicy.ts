@@ -171,6 +171,7 @@ export function buildPrayerCompletionTransition(input: {
         rewarded: true,
         ...(task?.id ? { taskId: task.id } : {}),
         source: input.source,
+        ...(xpEarned > 0 ? { xpEarned } : {}),
       },
     },
   };
@@ -379,5 +380,62 @@ export function applyPrayerCompletionUndo(
   return {
     trackingAfter: { ...tracking, records },
     gamificationAfter: reversePrayerGamification(gamification, inverse),
+  };
+}
+
+/**
+ * The prayer service refused a completion it never confirmed: take back its reward receipt.
+ * Without this the refused outcome is rebuilt from the ledger or daily log on every load and
+ * sent again. XP is returned only when the receipt recorded how much was granted.
+ */
+export function withdrawRefusedPrayerReward(input: {
+  prayerDate: string;
+  prayerName: PrayerName;
+  tasks: readonly Task[];
+  gamification: GamificationProfile;
+}): { gamificationAfter: GamificationProfile; taskId?: string } {
+  const { gamification, prayerDate, prayerName } = input;
+  const rewardKey = getPrayerRecordKey(prayerDate, prayerName);
+  const entry = gamification.prayerCompletionLedger?.[rewardKey];
+  const logIds = new Set([
+    getPrayerRewardLogId(prayerName),
+    ...getMatchingPrayerTasks(input.tasks, prayerName).map(task => task.id),
+    ...(entry?.taskId ? [entry.taskId] : []),
+  ]);
+  const dayLog = gamification.dailyLog?.[prayerDate] ?? [];
+  if (!entry && !dayLog.some(taskId => logIds.has(taskId))) return { gamificationAfter: gamification };
+
+  const ledger = { ...(gamification.prayerCompletionLedger ?? {}) };
+  delete ledger[rewardKey];
+  const dailyLog = { ...(gamification.dailyLog ?? {}) };
+  const keptLog = dayLog.filter(taskId => !logIds.has(taskId));
+  if (keptLog.length > 0) dailyLog[prayerDate] = keptLog;
+  else delete dailyLog[prayerDate];
+
+  const gamificationAfter: GamificationProfile = {
+    ...gamification,
+    dailyLog,
+    prayerCompletionLedger: ledger,
+    ...returnedXp(gamification, entry?.xpEarned, entry?.taskId ?? getPrayerRewardLogId(prayerName)),
+  };
+  return { gamificationAfter, ...(entry?.taskId ? { taskId: entry.taskId } : {}) };
+}
+
+function returnedXp(
+  gamification: GamificationProfile,
+  xpEarned: number | undefined,
+  rewardLogId: string,
+): Partial<GamificationProfile> {
+  if (!xpEarned || xpEarned <= 0) return {};
+  const totalXp = Math.max(0, gamification.totalXp - xpEarned);
+  const habitTallies = { ...(gamification.habitTallies ?? {}) };
+  const tally = (habitTallies[rewardLogId] ?? 0) - 1;
+  if (tally > 0) habitTallies[rewardLogId] = tally;
+  else delete habitTallies[rewardLogId];
+  return {
+    totalXp,
+    level: levelFromXp(totalXp),
+    totalTasksCompleted: Math.max(0, gamification.totalTasksCompleted - 1),
+    habitTallies,
   };
 }

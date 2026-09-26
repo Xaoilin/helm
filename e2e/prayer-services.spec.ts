@@ -133,4 +133,25 @@ test.describe('prayer and profile services', () => {
     await expect(page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u })).toBeVisible();
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
   });
+
+  test('a refused completion stays refused after a reload and is not sent again', async ({ page, scenario }) => {
+    const control = await scenario({
+      now: NOON,
+      settings: { prayerEnabled: true, lifeHeroEnabled: false },
+      services: { rejectCreates: { code: 'prayer_not_started', message: 'Dhuhr has not started yet.' } },
+    });
+    const creates = () => control.services.calls.filter(call => call === 'POST /api/prayer/v1/outcomes').length;
+    await openApp(page);
+
+    await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
+    await page.getByRole('button', { name: /On time/u }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Dhuhr on 2026-08-29 was not saved' })).toBeVisible();
+    expect(creates()).toBe(1);
+
+    await page.reload();
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+    await expect(page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u })).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'was not saved' })).toHaveCount(0);
+    expect(creates()).toBe(1);
+  });
 });

@@ -689,6 +689,8 @@ export interface PrayerCompletionLedgerEntry {
   rewarded: boolean;
   taskId?: string;
   source?: PrayerCompletionSource;
+  /** XP this completion granted, so a refused completion can return it. */
+  xpEarned?: number;
 }
 
 export interface PrayerReminderReceipt {
