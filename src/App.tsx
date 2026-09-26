@@ -14,7 +14,6 @@ import {
 } from './store/supabase';
 import type { Surface } from './types/domain';
 import { APP_RELEASE_LABEL, APP_RELEASE_VERSION } from './config/release';
-import { ASSISTANT_ENABLED, VOICE_ENABLED, isSurfaceAvailable } from './config/deprecatedFeatures';
 import { useDialog } from './hooks/useDialog';
 import { useOptionalAuthSession } from './store/AuthSessionContext';
 import { useSyncAvailability } from './store/SyncAvailabilityContext';
@@ -32,7 +31,6 @@ type SurfaceDefinition = {
 
 const SURFACE_REGISTRY = {
   dashboard: { label: 'Dashboard', icon: '\u{1F3E0}', component: DashboardSurface },
-  chat: { label: 'Chat', icon: '\u{1F4AC}', component: lazy(() => import('./surfaces/ChatSurface')) },
   calendar: { label: 'Calendar', icon: '\u{1F4C5}', component: lazy(() => import('./surfaces/CalendarSurface')) },
   clock: { label: 'Clock', icon: '\u23F1\uFE0F', component: lazy(() => import('./surfaces/ClockSurface')) },
   trips: { label: 'Trips', icon: '\u{1F6EB}', component: lazy(() => import('./surfaces/TripsSurface')) },
@@ -51,18 +49,15 @@ const SURFACE_REGISTRY = {
   debug: { label: 'Debug', icon: '\u{1F41E}', component: lazy(() => import('./surfaces/DebugSurface')) },
 } satisfies Record<Surface, SurfaceDefinition>;
 
-const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = (Object.keys(SURFACE_REGISTRY) as Surface[]).filter(isSurfaceAvailable).map(surface => ({
+const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = (Object.keys(SURFACE_REGISTRY) as Surface[]).map(surface => ({
   surface,
   label: SURFACE_REGISTRY[surface].label,
   icon: SURFACE_REGISTRY[surface].icon,
 }));
 
-const PRIMARY_MOBILE_NAV: Surface[] = ['dashboard', 'chat', 'calendar', 'tasks'];
+const PRIMARY_MOBILE_NAV: Surface[] = ['dashboard', 'calendar', 'tasks'];
 const MOBILE_NAV_ITEMS = NAV_ITEMS.filter(item => PRIMARY_MOBILE_NAV.includes(item.surface));
 const MOBILE_MORE_ITEMS = NAV_ITEMS.filter(item => !PRIMARY_MOBILE_NAV.includes(item.surface));
-const VoiceAssistant = lazy(() => import('./components/VoiceAssistant'));
-// VoiceAssistant is both the floating Lina panel and the voice runtime.
-const LINA_PANEL_ENABLED = ASSISTANT_ENABLED && VOICE_ENABLED;
 
 function AppInner() {
   const shell = useShell();
@@ -358,11 +353,6 @@ function AppInner() {
         </button>
       </nav>
       {!readOnly && sharedPageReady && <PrayerGlobalOverlays />}
-      {LINA_PANEL_ENABLED && !readOnly && sharedPageReady && (
-        <Suspense fallback={null}>
-          <VoiceAssistant />
-        </Suspense>
-      )}
     </div>
   );
 }

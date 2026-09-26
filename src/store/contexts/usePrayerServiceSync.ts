@@ -15,7 +15,9 @@ import {
   mergeRecords,
   planOutcomeSync,
   type ConfirmedOutcomes,
+  type OutcomeOperation,
 } from '../../services/backend/prayerOutcomeSync';
+import { correctOutcomeKey, createOutcomeKey } from '../../services/backend/idempotencyKeys';
 import { getPrayerDashboard, isPrayerServiceEnabled } from '../../services/backend/prayerServiceApi';
 
 export type PrayerServiceSyncStatus = 'disabled' | 'loading' | 'synced' | 'syncing' | 'error';
@@ -23,6 +25,13 @@ export type PrayerServiceSyncStatus = 'disabled' | 'loading' | 'synced' | 'synci
 export interface PrayerServiceSyncState {
   status: PrayerServiceSyncStatus;
   error: string | null;
+}
+
+/** The user action an operation performs: a create or correction is its idempotency key. */
+function refusalKey(operation: OutcomeOperation): string {
+  if (operation.kind === 'create') return createOutcomeKey(operation.record);
+  if (operation.kind === 'correct') return correctOutcomeKey(operation.id, operation.record);
+  return `delete:${operation.id}`;
 }
 
 /** An outcome change the service refused; the app should show `confirmed` again. */
@@ -56,6 +65,9 @@ export function usePrayerServiceSync(
   const desiredRef = useRef<PrayerTrackingState['records'] | null>(null);
   const drainingRef = useRef(false);
   const bulkDeleteAllowedRef = useRef(false);
+  // Idempotency keys of changes the service refused for good. A push can still carry a refused
+  // change until its revert is committed; the same user action is never sent again.
+  const refusedRef = useRef(new Set<string>());
   const locationRef = useRef<PrayerLocation | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
@@ -92,8 +104,10 @@ export function usePrayerServiceSync(
   const drain = useCallback(async (): Promise<void> => {
     if (drainingRef.current || !confirmedRef.current || !desiredRef.current) return;
     drainingRef.current = true;
+    const plan = () => planOutcomeSync(confirmedRef.current!, desiredRef.current!)
+      .filter(operation => !refusedRef.current.has(refusalKey(operation)));
     try {
-      let operations = planOutcomeSync(confirmedRef.current, desiredRef.current);
+      let operations = plan();
       while (operations.length > 0) {
         const deletions = operations.filter(operation => operation.kind === 'delete').length;
         if (deletions > MAX_DELETES_WITHOUT_RESET && !bulkDeleteAllowedRef.current) {
@@ -112,10 +126,11 @@ export function usePrayerServiceSync(
             confirmedRef.current = await applyOutcomeOperation(operation, confirmedRef.current);
           } catch (error) {
             if (!isPermanentRejection(error)) throw error;
+            refusedRef.current.add(refusalKey(operation));
             dropRejected(operation.key, error.message);
           }
         }
-        operations = planOutcomeSync(confirmedRef.current, desiredRef.current);
+        operations = plan();
       }
       bulkDeleteAllowedRef.current = false;
       setState({ status: 'synced', error: null });

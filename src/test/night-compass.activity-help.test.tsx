@@ -10,10 +10,10 @@ import {
 const mocks = vi.hoisted(() => ({
   shell: {
     navigate: vi.fn(),
-    requestAssistantNavigation: vi.fn(),
+    requestNavigation: vi.fn(),
   },
   settings: {
-    settings: { prayerEnabled: false, prayerCity: 'Bedford', lifeHeroEnabled: false },
+    settings: { prayerEnabled: false, prayerCity: 'Bedford' },
     appTimeZone: { effectiveTimeZone: 'UTC' },
   },
   tasks: { tasks: [] },
@@ -52,32 +52,14 @@ vi.mock('../store/contexts/MilestoneCelebrationContext', () => ({
   useMilestoneCelebration: () => mocks.celebration,
 }));
 vi.mock('../components/dashboard/PrayerStatsCard', () => ({ default: () => null }));
-vi.mock('../components/dashboard/LifeHeroCompanion', () => ({
-  default: () => <aside aria-label="Life Hero companion" />,
-}));
 
 describe('Night Compass activities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.momentum.loaded = true;
-    mocks.settings.settings.lifeHeroEnabled = false;
     mocks.momentum.getDay.mockReturnValue(
       getDailyMomentumDay(createDefaultDailyMomentumState(), '2026-08-29'),
     );
-  });
-
-  it('does not mount the character companion by default', () => {
-    render(<NightCompassDashboard />);
-
-    expect(screen.queryByLabelText('Life Hero companion')).not.toBeInTheDocument();
-  });
-
-  it('does not mount the deprecated Life Hero companion even when the stored setting opts in', () => {
-    // Life Hero is disabled by build flag (docs/deprecated-features.md); the old setting cannot revive it.
-    mocks.settings.settings.lifeHeroEnabled = true;
-    render(<NightCompassDashboard />);
-
-    expect(screen.queryByLabelText('Life Hero companion')).not.toBeInTheDocument();
   });
 
   it('gives every Learn and Move activity title pointer and keyboard help', () => {

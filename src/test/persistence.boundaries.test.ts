@@ -200,7 +200,7 @@ describe('persistence write boundary', () => {
 describe('device and runtime ownership boundaries', () => {
   beforeEach(() => localStorage.clear());
 
-  it('preserves legacy provider values for migration while all new device writes contain references only', () => {
+  it('leaves legacy provider values in their original source and never writes provider or retired fields', () => {
     const store = new PersistenceDeviceStore();
     const original = JSON.stringify({ elevenLabsApiKey: 'legacy-eleven-key', deepgramApiKey: 'legacy-deep-key' });
     const sharedOriginal = JSON.stringify({ elevenLabsApiKey: 'older-shared-key', theme: 'dark' });
@@ -209,25 +209,24 @@ describe('device and runtime ownership boundaries', () => {
     store.save(DEVICE_SETTINGS_STORE_KEY, {
       elevenLabsApiKey: 'new-plaintext-must-not-persist', deepgramApiKey: 'new-deep-plaintext', monzoAccessToken: 'new-monzo-plaintext',
       elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001', microphoneDeviceId: 'mic-1',
+      googleOAuthClientId: 'client-1',
     });
-    expect(JSON.parse(localStorage.getItem('helm:device:deviceSettings:v2')!)).toEqual({
-      elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001', microphoneDeviceId: 'mic-1',
-    });
+    expect(JSON.parse(localStorage.getItem('helm:device:deviceSettings:v2')!)).toEqual({ googleOAuthClientId: 'client-1' });
     expect(localStorage.getItem('helm:device:deviceSettings')).toBe(original);
     expect(localStorage.getItem('helm:settings')).toBe(sharedOriginal);
-    expect(store.load(DEVICE_SETTINGS_STORE_KEY)).toMatchObject({ elevenLabsApiKey: 'legacy-eleven-key', deepgramApiKey: 'legacy-deep-key' });
+    expect(store.load(DEVICE_SETTINGS_STORE_KEY)).toEqual({ googleOAuthClientId: 'client-1' });
   });
 
   it('keeps device settings under the device-only key and shared legacy data separate', () => {
     const store = new PersistenceDeviceStore();
-    store.save(DEVICE_SETTINGS_STORE_KEY, { microphoneDeviceId: 'mic-1' });
+    store.save(DEVICE_SETTINGS_STORE_KEY, { googleOAuthClientId: 'client-1' });
     localStorage.setItem('helm:tasks', JSON.stringify([{ id: 'task-legacy', title: 'Legacy' }]));
     // Settings are owned by the profile service: a legacy browser copy is never offered for import.
     localStorage.setItem('helm:settings', JSON.stringify({ theme: 'dark' }));
 
     expect(isDeviceStoreKey('deviceSettings')).toBe(true);
-    expect(store.load(DEVICE_SETTINGS_STORE_KEY)).toEqual({ microphoneDeviceId: 'mic-1' });
-    expect(localStorage.getItem('helm:device:deviceSettings:v2')).toContain('mic-1');
+    expect(store.load(DEVICE_SETTINGS_STORE_KEY)).toEqual({ googleOAuthClientId: 'client-1' });
+    expect(localStorage.getItem('helm:device:deviceSettings:v2')).toContain('client-1');
     expect(store.readLegacySharedValue('tasks').value).toEqual([{ id: 'task-legacy', title: 'Legacy' }]);
     expect(store.listLegacyCandidates(() => false)).toEqual([
       expect.objectContaining({ key: 'tasks', localStorage: true, remoteExists: false }),

@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MetricCard } from '../components/common/MetricCard';
-import { ASSISTANT_ENABLED } from '../config/deprecatedFeatures';
 import { logError } from '../services/logger';
 import { getProductUsageEvents } from '../store/supabase/productUsage';
 import { useOptionalAuthSession } from '../store/AuthSessionContext';
-import { useAssistantActivityContext } from '../store/contexts/AssistantActivityContext';
-import { useAssistantUndo } from '../store/contexts/AssistantUndoContext';
 import {
   buildProductUsageInsights,
   DEFAULT_PRODUCT_USAGE_FILTERS,
@@ -17,22 +14,10 @@ import {
   type UsageRangeDays,
 } from '../services/productUsageInsights';
 import type {
-  AssistantActivityEntry,
   ProductUsageEventKind,
   ProductUsageOutcome,
   Surface,
 } from '../types/domain';
-
-function formatActivityTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString([], {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 function formatCount(value: number): string {
   return value.toLocaleString();
@@ -40,31 +25,6 @@ function formatCount(value: number): string {
 
 function taxonomyLabel(value: string): string {
   return value.replace(/_/g, ' ');
-}
-
-function actorLabel(entry: AssistantActivityEntry): string {
-  switch (entry.actor) {
-    case 'voice': return 'Voice';
-    case 'system': return 'System';
-    case 'chat':
-    default: return 'Chat';
-  }
-}
-
-function statusLabel(entry: AssistantActivityEntry): string {
-  if (entry.status === 'undone') return 'Undone';
-  if (entry.status === 'undo_failed') return 'Undo failed';
-  return entry.undoOperation ? 'Undo available' : 'Logged';
-}
-
-function statusTone(entry: AssistantActivityEntry): string {
-  if (entry.status === 'undone') return 'success';
-  if (entry.status === 'undo_failed') return 'danger';
-  return entry.undoOperation ? 'ready' : 'neutral';
-}
-
-function domainLabel(entry: AssistantActivityEntry): string {
-  return entry.domain.charAt(0).toUpperCase() + entry.domain.slice(1);
 }
 
 function FilterControls({
@@ -194,7 +154,7 @@ function UsageInsights({ insights }: { insights: ProductUsageInsights }) {
         <div className="activity-section-heading"><div><span className="activity-eyebrow">Reliability</span><h2 id="activity-errors-title">Coded errors</h2></div><span className="activity-panel-note">No raw messages</span></div>
         {insights.errors.length === 0 ? <p className="activity-muted">No coded errors match these filters.</p> : <div className="activity-error-list">{insights.errors.map(error => <div className="activity-error-row" key={`${error.code}:${error.surface}`}><strong>{taxonomyLabel(error.code)}</strong><span>{taxonomyLabel(error.surface)}</span><b>{formatCount(error.count)}</b></div>)}</div>}
       </section>
-      <p className="activity-privacy-note">Private to this signed-in account. Analytics is content-free and separate from Life Hero progression.</p>
+      <p className="activity-privacy-note">Private to this signed-in account. Analytics is content-free.</p>
     </>
   );
 }
@@ -252,45 +212,6 @@ function UsageSection() {
   );
 }
 
-function AssistantActivitySection() {
-  const activity = useAssistantActivityContext();
-  const assistantUndo = useAssistantUndo();
-  const [notice, setNotice] = useState<string>('');
-  const [undoingId, setUndoingId] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const entries = activity.assistantActivityLog;
-  const undoableCount = entries.filter(entry => entry.undoOperation && entry.status === 'applied').length;
-  const voiceCount = entries.filter(entry => entry.actor === 'voice').length;
-
-  function handleUndo(entry: AssistantActivityEntry) {
-    if (!entry.undoOperation || entry.status !== 'applied') return;
-    setUndoingId(entry.id);
-    const result = assistantUndo.undoAssistantActivity(entry.id);
-    setNotice(result.message);
-    setUndoingId(null);
-  }
-
-  return (
-    <section className="activity-audit" aria-labelledby="activity-audit-title">
-      <div className="activity-section-heading"><div><span className="activity-eyebrow">Lina audit trail</span><h2 id="activity-audit-title">Assistant actions</h2><p>Account-backed actions with undo when Sabah One has a grounded inverse operation.</p></div></div>
-      <div className="activity-stats" aria-label="Lina activity summary"><MetricCard variant="stat" label="Loaded actions" value={formatCount(entries.length)} note="account-backed actions in this view" /><MetricCard variant="stat" label="Undoable now" value={formatCount(undoableCount)} note="grounded inverse available" /><MetricCard variant="stat" label="Voice actions" value={formatCount(voiceCount)} note="recorded from voice" /></div>
-      {notice && <div className="activity-notice" role="status">{notice}</div>}
-      {entries.length === 0 ? <div className="activity-panel activity-state"><strong>No Lina actions logged yet.</strong><span>Assistant actions will appear here when an account-backed action is recorded.</span></div> : <div className="activity-list" aria-label="Lina action log">{entries.map(entry => {
-        const canUndo = Boolean(entry.undoOperation && entry.status === 'applied');
-        return <article className="activity-entry" key={entry.id}><div className="activity-entry-main"><div className="activity-entry-topline"><span className={`activity-status ${statusTone(entry)}`}>{statusLabel(entry)}</span><span>{domainLabel(entry)}</span><span>{actorLabel(entry)}</span><time dateTime={entry.createdAt}>{formatActivityTime(entry.createdAt)}</time></div><h3>{entry.summary}</h3>{entry.sourceTranscript && <div className="activity-transcript"><span>Request</span><p>{entry.sourceTranscript}</p></div>}{entry.details.length > 0 && <ul className="activity-details">{entry.details.slice(0, 5).map(detail => <li key={detail}>{detail}</li>)}</ul>}{entry.undoError && <div className="activity-error">{entry.undoError}</div>}</div><div className="activity-entry-actions">{canUndo ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleUndo(entry)} disabled={undoingId === entry.id}>{undoingId === entry.id ? 'Undoing…' : 'Undo'}</button> : <span className="activity-no-undo">{entry.status === 'undone' ? 'Action undone' : 'No undo'}</span>}</div></article>;
-      })}</div>}
-      {activity.hasMore && <button type="button" className="btn btn-secondary" disabled={loadingMore} onClick={async () => {
-        setLoadingMore(true);
-        setNotice('');
-        try { await activity.loadMore(); }
-        catch (error) { setNotice(error instanceof Error ? error.message : 'More activity could not be loaded.'); }
-        finally { setLoadingMore(false); }
-      }}>{loadingMore ? 'Loading activity…' : 'Load more activity'}</button>}
-    </section>
-  );
-}
-
 export default function ActivitySurface() {
-  const subtitle = ASSISTANT_ENABLED ? 'Private usage insight and the Lina account audit trail.' : 'Private usage insight.';
-  return <><div className="surface-header"><div><h1>Activity</h1><div className="subtitle">{subtitle}</div></div></div><div className="surface-body activity-surface"><UsageSection />{ASSISTANT_ENABLED && <AssistantActivitySection />}</div></>;
+  return <><div className="surface-header"><div><h1>Activity</h1><div className="subtitle">Private usage insight.</div></div></div><div className="surface-body activity-surface"><UsageSection /></div></>;
 }

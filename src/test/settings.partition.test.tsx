@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings, SettingsProvider, useSettingsContext } from '../store/contexts/SettingsContext';
 import { splitSettings } from '../store/recordCodec';
+import type { Settings } from '../types/domain';
 
 const persistenceMocks = vi.hoisted(() => ({
   loadDeviceStore: vi.fn(),
@@ -58,9 +59,9 @@ function SettingsProbe() {
   return (
     <button
       type="button"
-      onClick={() => updateSettings({ theme: 'dark', deepgramApiKey: 'changed-device-token', elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001' })}
+      onClick={() => updateSettings({ theme: 'dark', deepgramApiKey: 'changed-device-token', googleOAuthClientId: 'changed-client' } as Partial<Settings>)}
     >
-      {loaded ? `${settings.theme}|${settings.prayerCity}|${settings.deepgramApiKey}` : 'loading'}
+      {loaded ? `${settings.theme}|${settings.prayerCity}|${(settings as Record<string, unknown>).deepgramApiKey}` : 'loading'}
     </button>
   );
 }
@@ -109,12 +110,11 @@ describe('settings shared/device partition', () => {
     expect(splitSettings({
       theme: 'light',
       telemetry: true,
-      lifeHeroEnabled: true,
       deepgramApiKey: 'secret',
       supabaseUrl: 'https://device.example.test',
       unknownField: 'discarded',
     })).toEqual({
-      shared: { lifeHeroEnabled: true },
+      shared: {},
       device: {
         supabaseUrl: 'https://device.example.test',
       },
@@ -122,17 +122,24 @@ describe('settings shared/device partition', () => {
     });
   });
 
-  it('keeps the character-based Life Hero explicitly off by default', () => {
-    expect(defaultSettings.lifeHeroEnabled).toBe(false);
-  });
-
-  it('keeps a validated voice reference device-only and the public voice ID shared', () => {
-    expect(splitSettings({ elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001', elevenLabsVoiceId: 'voice123', monzoAccessToken: 'plaintext' })).toEqual({
-      shared: { elevenLabsVoiceId: 'voice123' }, device: { elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001' },
-      service: {},
-    });
-    expect(splitSettings({ elevenLabsSecretId: 'accidentally-pasted-provider-key' }))
-      .toEqual({ shared: {}, device: {}, service: {} });
+  it('ignores stored settings of the removed Life Hero, assistant and voice features', () => {
+    expect(splitSettings({
+      theme: 'dark',
+      lifeHeroEnabled: true,
+      assistantEnabled: true,
+      assistantLanguage: 'ar',
+      assistantProvider: 'hosted',
+      hostedModel: 'gpt-5.4',
+      elevenLabsVoiceId: 'voice123',
+      elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001',
+      wakeWordEnabled: true,
+      microphoneDeviceId: 'mic-1',
+      ollamaEndpoint: 'http://localhost:11434',
+      ollamaModel: 'llama3',
+      monzoAccessToken: 'plaintext',
+    })).toEqual({ shared: {}, device: {}, service: { theme: 'dark' } });
+    expect(Object.keys(defaultSettings)).not.toContain('lifeHeroEnabled');
+    expect(Object.keys(defaultSettings)).not.toContain('assistantProvider');
   });
 
   it('allows only validated IANA app time zones, owned by the profile service', () => {
@@ -190,7 +197,7 @@ describe('settings shared/device partition', () => {
     expect(persistenceMocks.saveDeviceStore.mock.calls.at(-1)).toEqual([
       'deviceSettings',
       {
-        elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001',
+        googleOAuthClientId: 'changed-client',
         supabaseUrl: 'https://device.example.test',
       },
     ]);

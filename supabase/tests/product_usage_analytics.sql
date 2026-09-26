@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(35);
+select plan(31);
 
 select has_table('public', 'product_usage_events', 'private product usage table exists');
 select has_function(
@@ -45,18 +45,6 @@ select ok(
     and not has_table_privilege('authenticated', 'public.product_usage_events', 'update')
     and not has_table_privilege('authenticated', 'public.product_usage_events', 'delete'),
   'authenticated accounts cannot bypass the ingest RPC'
-);
-select ok(
-  not exists (
-    select 1
-    from pg_constraint
-    where conrelid = 'public.product_usage_events'::regclass
-      and confrelid in (
-        'public.life_hero_evidence'::regclass,
-        'public.life_hero_awards'::regclass
-      )
-  ),
-  'product usage has no Life Hero ledger relationship'
 );
 set local role authenticated;
 select set_config(
@@ -163,23 +151,6 @@ select throws_ok(
   '42501',
   'permission denied for table product_usage_events',
   'direct event writes are denied'
-);
-select is(
-  (select count(*)::integer from public.life_hero_evidence),
-  0,
-  'analytics ingestion creates no Life Hero evidence'
-);
-select is(
-  (select count(*)::integer from public.life_hero_awards),
-  0,
-  'analytics ingestion creates no Life Hero award'
-);
-select ok(
-  not exists (
-    select 1 from public.life_hero_evidence_rules
-    where evidence_type in ('app_usage', 'product_usage', 'analytics_event')
-  ),
-  'analytics still has no Life Hero XP rule'
 );
 
 select set_config(

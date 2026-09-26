@@ -5,7 +5,7 @@ const database = vi.hoisted(() => ({
   isSupabaseReady: vi.fn(() => true), isAuthenticated: vi.fn(() => true),
   getCurrentUserId: vi.fn(() => 'page-user'), fetchHelmAccountSnapshot: vi.fn(),
   fetchHelmChangedCollections: vi.fn(),
-  fetchHelmCollections: vi.fn(), fetchHelmCollectionPage: vi.fn(),
+  fetchHelmCollections: vi.fn(),
   probeHelmAccountVersion: vi.fn(() => Promise.resolve(7)),
   subscribeHelmBroadcast: vi.fn(() => () => undefined),
   subscribeSupabaseRealtimeSnapshot: vi.fn(() => () => undefined),
@@ -15,7 +15,7 @@ const database = vi.hoisted(() => ({
 vi.mock('../store/supabase', () => database);
 import {
   activateStoreCollections, bootstrapDatabasePersistence, getStoreLoadState,
-  loadMoreStoreRecords, loadStore, resetDatabasePersistence, saveStore, saveStoreCommitted,
+  loadStore, resetDatabasePersistence, saveStore, saveStoreCommitted,
   getSyncSessionSnapshot, releaseStoreCollections, subscribeHelmSecretChanges,
 } from '../store/persistence';
 import { PersistenceRecordCache } from '../store/persistence/cache';
@@ -91,38 +91,6 @@ it('discards a page read completing after account reset and releases unloaded re
   expect(getStoreLoadState('trips').loaded).toBe(false);
 });
 
-it('loads subsequent activity pages only on demand and preserves unseen records during edits', async () => {
-  const all = Array.from({ length: 110 }, (_, i) => record('assistantActivityLog', `activity-${i}`, i));
-  database.fetchHelmCollectionPage.mockImplementation(async (_key: string, offset: number, limit: number) => ({
-    records: all.slice(offset, offset + limit), hasMore: offset + limit < all.length,
-  }));
-  await bootstrapDatabasePersistence(['employment']);
-  expect(database.fetchHelmCollectionPage).not.toHaveBeenCalled();
-  await activateStoreCollections(['assistantActivityLog']);
-  expect(database.fetchHelmAccountSnapshot).toHaveBeenLastCalledWith([]);
-  expect((await loadStore<unknown[]>('assistantActivityLog'))?.length).toBe(50);
-  expect(getStoreLoadState('assistantActivityLog').complete).toBe(false);
-  await Promise.all([loadMoreStoreRecords('assistantActivityLog'), loadMoreStoreRecords('assistantActivityLog')]);
-  expect((await loadStore<unknown[]>('assistantActivityLog'))?.length).toBe(100);
-  expect(database.fetchHelmCollectionPage).toHaveBeenCalledTimes(2);
-  expect(database.fetchHelmCollectionPage).toHaveBeenLastCalledWith('assistantActivityLog', 50, 50);
-  await loadMoreStoreRecords('assistantActivityLog');
-  expect((await loadStore<unknown[]>('assistantActivityLog'))?.length).toBe(110);
-  expect(getStoreLoadState('assistantActivityLog').complete).toBe(true);
-  await loadMoreStoreRecords('assistantActivityLog');
-  expect(database.fetchHelmCollectionPage).toHaveBeenCalledTimes(3);
-
-  const cache = new PersistenceRecordCache();
-  cache.replaceCollection('assistantActivityLog', all.slice(0, 50));
-  cache.confirm('assistantActivityLog', false, 50);
-  cache.markDeliveredFromCache('assistantActivityLog');
-  cache.applyChanges(all.slice(50));
-  const desired = all.slice(0, 50).map(row => row.payload);
-  desired[0] = { ...desired[0], title: 'Changed' };
-  const mutations = cache.buildMutations('assistantActivityLog', desired);
-  expect(mutations).toEqual([{ op: 'patch', collection: 'assistantActivityLog', recordId: 'activity-0', set: { title: 'Changed' }, unset: [] }]);
-});
-
 it('reconciles a missed change in loaded data before a new page advances the global checkpoint', async () => {
   let version = 7;
   let broadcast!: (event: { accountVersion: number; changes: Array<{ collection: string }> }) => void;
@@ -150,26 +118,6 @@ it('reconciles a missed change in loaded data before a new page advances the glo
   await vi.advanceTimersByTimeAsync(600_000);
   expect(await loadStore('employment')).toEqual({ stage: 'interviewing' });
   expect(database.fetchHelmAccountSnapshot).toHaveBeenCalledTimes(3);
-});
-
-it('rejects an older staged paged response after a newer confirmed write', async () => {
-  const old = record('assistantActivityLog', 'action-1');
-  database.fetchHelmCollectionPage.mockResolvedValue({ records: [old], hasMore: false });
-  await bootstrapDatabasePersistence(['employment', 'assistantActivityLog']);
-  await loadStore('assistantActivityLog');
-  let finishPage!: (value: unknown) => void;
-  database.fetchHelmCollectionPage.mockImplementationOnce(() => new Promise(resolve => { finishPage = resolve; }));
-  vi.setSystemTime(new Date('2026-09-22T10:11:00Z'));
-  const pending = activateStoreCollections(['assistantActivityLog']);
-  await vi.waitFor(() => expect(database.fetchHelmCollectionPage).toHaveBeenCalledTimes(2));
-  const updated = { ...old, payload: { ...old.payload, title: 'Confirmed newer' }, accountVersion: 8, revision: 2 };
-  database.applyHelmMutations.mockResolvedValue({ requestId: 'write', changes: [updated], accountVersion: 8 });
-  await saveStoreCommitted('assistantActivityLog', [updated.payload]);
-  database.probeHelmAccountVersion.mockResolvedValue(8);
-  finishPage({ records: [old], hasMore: false });
-  await expect(pending).rejects.toThrow('changed while loading');
-  expect(await loadStore('assistantActivityLog')).toEqual([updated.payload]);
-  expect(getSyncSessionSnapshot().accountVersion).toBe(8);
 });
 
 function eventServer() {

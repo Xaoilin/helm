@@ -264,19 +264,4 @@ describe('Projects surface', () => {
       expect(screen.getByRole('heading', { name: 'Your work, easy to find again.' })).toBeInTheDocument();
     });
   });
-
-  it('reveals the project an assistant navigation request names, then dismisses it', () => {
-    const { shell } = renderSurface({
-      shell: {
-        assistantNavigationRequest: {
-          id: 'request-1',
-          surface: 'projects',
-          surfaceState: { projects: { revealProjectId: 'atlas' } },
-        } as never,
-      },
-    });
-
-    expect(screen.getByRole('dialog', { name: 'Atlas' })).toBeInTheDocument();
-    expect(shell.dismissAssistantNavigationRequest).toHaveBeenCalledWith('request-1');
-  });
 });

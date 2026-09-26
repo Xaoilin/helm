@@ -1,30 +1,18 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import VoiceAssistant from '../components/VoiceAssistant';
 import { PageReadinessGate } from '../store/PageReadinessGate';
 import { ShellProvider, useShell } from '../store/ShellContext';
-import { ASSISTANT_PAGE_COLLECTIONS, getPageCollections } from '../store/pageCollections';
+import { getPageCollections } from '../store/pageCollections';
 
 const mocks = vi.hoisted(() => ({
   extraLoaded: false,
-  wake: () => {},
   activate: vi.fn(),
   release: vi.fn(),
   refresh: vi.fn(),
-  createConversation: vi.fn(),
-  recordConversation: vi.fn(),
-  speak: vi.fn(),
-  stop: vi.fn(),
-  listen: vi.fn(),
-  runAssistantTurn: vi.fn(),
 }));
 
 vi.mock('../store/persistence', () => ({ activateStoreCollections: mocks.activate, releaseStoreCollections: mocks.release, refreshDatabasePersistence: mocks.refresh }));
-vi.mock('../assistant/runtime', () => ({ runAssistantTurn: mocks.runAssistantTurn }));
-vi.mock('../hooks/useVoiceInput', () => ({ useVoiceInput: () => ({ voiceBackend: 'chrome', startListening: mocks.listen, stopListening: mocks.stop, cancelListening: mocks.stop }) }));
-vi.mock('../hooks/useVoiceOutput', () => ({ useVoiceOutput: () => ({ speak: mocks.speak, stopSpeaking: mocks.stop, notice: null }) }));
-vi.mock('../hooks/useWakeWord', () => ({ useWakeWord: (options: { onWakeWordDetected: () => void }) => { mocks.wake = options.onWakeWordDetected; } }));
-vi.mock('../store/contexts/SettingsContext', () => ({ useSettingsContext: () => ({ loaded: true, settings: { assistantEnabled: true, wakeWordEnabled: true }, appTimeZone: { effectiveTimeZone: 'UTC' } }) }));
+vi.mock('../store/contexts/SettingsContext', () => ({ useSettingsContext: () => ({ loaded: true, settings: {}, appTimeZone: { effectiveTimeZone: 'UTC' } }) }));
 vi.mock('../store/contexts/CalendarContext', () => ({ useCalendar: () => ({ loaded: true, calendarAccounts: [], calendarSources: [], calendarEvents: [] }) }));
 vi.mock('../store/contexts/TaskContext', () => ({ useTaskContext: () => ({ loaded: true, tasks: [] }) }));
 vi.mock('../store/contexts/GamificationContext', () => ({ useGamificationContext: () => ({ loaded: true, gamification: {} }) }));
@@ -37,10 +25,6 @@ vi.mock('../store/contexts/InventoryContext', () => ({ useInventoryContext: () =
 vi.mock('../store/contexts/FinanceContext', () => ({ useFinanceContext: () => ({ loaded: mocks.extraLoaded, financeAccounts: [], transactions: [] }) }));
 vi.mock('../store/contexts/TripContext', () => ({ useTripContext: () => ({ loaded: mocks.extraLoaded }) }));
 vi.mock('../store/contexts/HealthContext', () => ({ useHealthContext: () => ({ loaded: mocks.extraLoaded }) }));
-vi.mock('../store/contexts/AssistantContext', () => ({ useAssistantContext: () => ({ loaded: mocks.extraLoaded, corrections: [] }) }));
-vi.mock('../store/contexts/AssistantActivityContext', () => ({ useAssistantActivityContext: () => ({ loaded: mocks.extraLoaded, assistantActivityLog: [] }) }));
-vi.mock('../store/contexts/AssistantUndoContext', () => ({ useAssistantUndo: () => ({}) }));
-vi.mock('../store/contexts/ChatContext', () => ({ useChatContext: () => ({ loaded: mocks.extraLoaded, createConversation: mocks.createConversation, recordAssistantConversationTurn: mocks.recordConversation }) }));
 
 function PageProbe() {
   const shell = useShell();
@@ -56,8 +40,6 @@ beforeEach(() => {
   mocks.extraLoaded = false;
   mocks.activate.mockResolvedValue(undefined);
   mocks.refresh.mockResolvedValue(undefined);
-  mocks.createConversation.mockReturnValue('confirmed-conversation');
-  mocks.speak.mockResolvedValue(undefined);
 });
 
 describe('page demand and readiness', () => {
@@ -91,87 +73,3 @@ describe('page demand and readiness', () => {
   });
 });
 
-describe('Lina demand loading', () => {
-  it('keeps the affordance idle and waits for a current provider render before hands-free conversation creation', async () => {
-    let finishActivation!: () => void;
-    mocks.activate.mockImplementation((keys: readonly string[]) => keys.includes('conversations')
-      ? new Promise<void>(resolve => { finishActivation = resolve; }) : Promise.resolve());
-    const view = render(<ShellProvider><VoiceAssistant /></ShellProvider>);
-    expect(screen.getByRole('button', { name: 'Talk to Lina' })).toBeEnabled();
-    expect(mocks.activate).not.toHaveBeenCalledWith(ASSISTANT_PAGE_COLLECTIONS, 'assistant');
-    act(() => mocks.wake());
-    expect(mocks.activate).toHaveBeenCalledWith(ASSISTANT_PAGE_COLLECTIONS, 'assistant');
-    expect(screen.getByRole('status')).toHaveTextContent('Loading Lina account data');
-    expect(mocks.createConversation).not.toHaveBeenCalled();
-    await act(async () => finishActivation());
-    expect(mocks.createConversation).not.toHaveBeenCalled();
-    mocks.extraLoaded = true;
-    view.rerender(<ShellProvider><VoiceAssistant /></ShellProvider>);
-    await waitFor(() => expect(mocks.createConversation).toHaveBeenCalledOnce());
-    expect(mocks.runAssistantTurn).not.toHaveBeenCalled();
-  });
-
-  it('cancels a pending wake activation when Lina closes', async () => {
-    let finishActivation!: () => void;
-    mocks.activate.mockImplementation((keys: readonly string[]) => keys.includes('conversations')
-      ? new Promise<void>(resolve => { finishActivation = resolve; }) : Promise.resolve());
-    const view = render(<ShellProvider><VoiceAssistant /></ShellProvider>);
-    act(() => mocks.wake());
-    fireEvent.click(screen.getByRole('button', { name: 'Close Lina' }));
-    mocks.extraLoaded = true;
-    view.rerender(<ShellProvider><VoiceAssistant /></ShellProvider>);
-    await act(async () => finishActivation());
-    expect(mocks.createConversation).not.toHaveBeenCalled();
-    expect(mocks.runAssistantTurn).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Talk to Lina' })).toBeVisible();
-  });
-
-  it('cancels the provider-readiness wait when account access unmounts Lina', async () => {
-    const view = render(<ShellProvider><VoiceAssistant /></ShellProvider>);
-    await act(async () => mocks.wake());
-    expect(screen.getByRole('status')).toHaveTextContent('Loading Lina account data');
-    await act(async () => view.unmount());
-    expect(mocks.createConversation).not.toHaveBeenCalled();
-    expect(mocks.runAssistantTurn).not.toHaveBeenCalled();
-  });
-  it('reactivates already-loaded data on a later wake and waits before creating a conversation', async () => {
-    mocks.extraLoaded = true;
-    render(<ShellProvider><VoiceAssistant /></ShellProvider>);
-    await act(async () => mocks.wake());
-    await waitFor(() => expect(mocks.createConversation).toHaveBeenCalledOnce());
-    fireEvent.click(screen.getByRole('button', { name: 'Close Lina' }));
-    expect(mocks.release).toHaveBeenCalledWith('assistant');
-    let finish!: () => void;
-    mocks.activate.mockImplementation((keys: readonly string[]) => keys.includes('conversations')
-      ? new Promise<void>(resolve => { finish = resolve; }) : Promise.resolve());
-    act(() => mocks.wake());
-    expect(mocks.createConversation).toHaveBeenCalledOnce();
-    expect(screen.getByRole('status')).toHaveTextContent('Loading Lina account data');
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(mocks.activate).toHaveBeenLastCalledWith(ASSISTANT_PAGE_COLLECTIONS, 'assistant');
-    await act(async () => finish());
-    await waitFor(() => expect(mocks.createConversation).toHaveBeenCalledTimes(2));
-  });
-
-  it('hides manual command controls while already-loaded stale context reactivates on reopen', async () => {
-    mocks.extraLoaded = true;
-    mocks.runAssistantTurn.mockResolvedValue({ assistantMessage: 'Ready', dialogState: { currentSurface: 'dashboard', recentEntities: [], recentPlans: [] } });
-    render(<ShellProvider><VoiceAssistant /></ShellProvider>);
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Talk to Lina' })));
-    expect(await screen.findByRole('textbox')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Close Lina' }));
-    let finish!: () => void;
-    mocks.activate.mockImplementation((keys: readonly string[]) => keys.includes('conversations')
-      ? new Promise<void>(resolve => { finish = resolve; }) : Promise.resolve());
-    fireEvent.click(screen.getByRole('button', { name: 'Talk to Lina' }));
-    expect(screen.getByRole('status')).toHaveTextContent('Loading Lina account data');
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(mocks.runAssistantTurn).not.toHaveBeenCalled();
-    await act(async () => finish());
-    const input = await screen.findByRole('textbox');
-    fireEvent.change(input, { target: { value: 'Show projects' } });
-    await act(async () => fireEvent.keyDown(input, { key: 'Enter' }));
-    expect(mocks.runAssistantTurn).toHaveBeenCalledOnce();
-  });
-
-});

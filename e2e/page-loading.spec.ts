@@ -2,7 +2,7 @@ import type { Page, Request, Route } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import { expect, test, waitForMutation } from './support/helm-fixture';
 import type { HelmMutation } from '../src/store/databaseTypes';
-import type { AssistantActivityEntry, Surface, Trip } from '../src/types/domain';
+import type { Surface, Trip } from '../src/types/domain';
 
 const SNAPSHOT_ROUTE = '**/rest/v1/rpc/get_helm_account_snapshot*';
 const UNRELATED = ['financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals',
@@ -157,87 +157,8 @@ test('failed page loads cannot replace unloaded records and an explicit retry re
   await page.screenshot({ path: testInfo.outputPath('health-after-recovery-390.png') });
 });
 
-test('Activity fetches only one bounded page until more is requested', async ({ page, scenario }, testInfo) => {
-  // The paged Lina audit trail is the only Activity section that reads assistantActivityLog.
-  test.skip(true, 'The Lina assistant is disabled pending removal; see docs/deprecated-features.md');
-  const activity: AssistantActivityEntry[] = Array.from({ length: 120 }, (_, index) => ({
-    id: `activity-${String(index + 1).padStart(3, '0')}`, actor: 'system', domain: 'assistant',
-    action: 'recorded', summary: `Synthetic action ${String(index + 1).padStart(3, '0')}`,
-    details: [], entityRefs: [], status: 'applied', createdAt: timestamp,
-  }));
-  const control = await scenario({ initialSurface: 'activity', stores });
-  // Real assistant prepends can leave many rows at position zero. Server time,
-  // rather than those tied positions or IDs, must choose the newest page.
-  control.applyRemoteMutations(activity.map(entry => ({
-    op: 'create', collection: 'assistantActivityLog', recordId: entry.id,
-    payload: { ...entry }, position: 0,
-  })), timestamp);
-  // A tombstone and unrelated records must not consume page capacity.
-  control.applyRemoteMutations([{ op: 'delete', collection: 'assistantActivityLog', recordId: activity[9].id }]);
-  const newest = { ...activity[0], id: 'zz-newest-action', summary: 'Synthetic newest action', createdAt: '2026-09-22T11:00:00.000Z' };
-  control.applyRemoteMutations([{ op: 'create', collection: 'assistantActivityLog', recordId: newest.id,
-    payload: newest, position: 0 }], newest.createdAt);
-  const reads = observeDataReads(page);
-  await page.setViewportSize({ width: 390, height: 900 });
-  await page.goto('/');
-  const entries = page.locator('.activity-entry');
-  await expect(entries).toHaveCount(50);
-  await expect(entries.first().getByRole('heading')).toHaveText(newest.summary);
-  await expect(page.getByRole('heading', { name: 'Synthetic action 010', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Synthetic action 052', exact: true })).toHaveCount(0);
-  expect(reads.snapshots.flatMap(read => read.collections ?? [])).not.toContain('assistantActivityLog');
-  expect(reads.pages).toHaveLength(1);
-  const first = reads.pages[0].searchParams;
-  expect(first.get('collection')).toBe('eq.assistantActivityLog');
-  expect(first.get('user_id')).toBe('eq.11111111-1111-4111-8111-111111111111');
-  expect(first.get('deleted_at')).toBe('is.null');
-  expect(first.get('order')).toBe('created_at.desc,record_id.asc');
-  expect(first.get('offset')).toBe('0');
-  expect(first.get('limit')).toBe('51');
-  const scroller = page.getByRole('main', { name: 'activity surface', exact: true });
-  const heading = entries.first().getByRole('heading');
-  const before = await heading.boundingBox();
-  await scroller.hover();
-  await page.mouse.wheel(0, 500);
-  await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-  const after = await heading.boundingBox();
-  expect(after!.y).toBeLessThan(before!.y);
-  const wheelScrollTop = await scroller.evaluate(element => element.scrollTop);
-  await scroller.focus();
-  await page.keyboard.press('PageDown');
-  await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(wheelScrollTop);
-  const keyboardScrollTop = await scroller.evaluate(element => element.scrollTop);
-  const more = page.getByRole('button', { name: 'Load more activity', exact: true });
-  await more.focus();
-  await expect(more).toBeInViewport();
-  await page.screenshot({ path: testInfo.outputPath('activity-first-page-390.png') });
-  await page.keyboard.press('Enter');
-  await expect(entries).toHaveCount(100);
-  expect(reads.pages).toHaveLength(2);
-  expect(reads.pages[1].searchParams.get('offset')).toBe('50');
-  await more.click();
-  await expect(entries).toHaveCount(120);
-  await expect(more).toHaveCount(0);
-  expect(reads.pages).toHaveLength(3);
-  expect(reads.pages[2].searchParams.get('offset')).toBe('100');
-  expect(await page.locator('.activity-entry h3').allTextContents()).toEqual([newest.summary, ...activity.filter((_, index) => index !== 9).map(entry => entry.summary)]);
-  await writeFile(testInfo.outputPath('activity-page-evidence.json'), JSON.stringify({
-    requests: reads.pages.map(url => url.pathname + url.search),
-    viewport: { width: 390, height: 900 }, wheelScrollTop, keyboardScrollTop,
-    beforeHeadingY: before!.y, afterHeadingY: after!.y,
-    scroller: await scroller.evaluate(element => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, scrollTop: element.scrollTop })),
-  }, null, 2));
-  for (const width of [768, 1440]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.getByRole('heading', { name: 'Activity', exact: true }).scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath(`activity-confirmed-${width}.png`) });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  }
-  await testInfo.attach('activity-page-requests', { body: JSON.stringify(reads.pages.map(url => url.pathname + url.search)), contentType: 'application/json' });
-});
-
-test('Activity and a stored chat surface read no assistant records while the assistant is disabled', async ({ page, scenario }) => {
-  await scenario({ initialSurface: 'chat', stores });
+test('Activity and a stored chat surface from the removed assistant read no assistant records', async ({ page, scenario }) => {
+  await scenario({ initialSurface: 'chat' as never, stores });
   const reads = observeDataReads(page);
   await page.goto('/');
   await expect(page.getByRole('main', { name: 'dashboard surface', exact: true })).toBeVisible();

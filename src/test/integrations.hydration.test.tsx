@@ -66,8 +66,7 @@ describe('integration hydration from the profile service', () => {
       id: 'int-google', provider: 'google', status: 'error',
       configuredAt: '2026-07-01T12:00:00Z', lastError: 'Reconnect required',
     }));
-    expect(context.integrations.map(integration => integration.provider)).toEqual(['google', 'github']);
-    expect(context.integrations[1]).toEqual(defaultIntegrations[1]);
+    expect(context.integrations.map(integration => integration.provider)).toEqual(['google']);
     expect(persistence.loadStore).not.toHaveBeenCalled();
   });
 
@@ -83,10 +82,6 @@ describe('integration hydration from the profile service', () => {
     expect(profileApi.saveIntegration).toHaveBeenCalledWith('google', {
       status: 'connected', configuredAt: '2026-07-01T12:00:00Z', lastError: null,
     });
-
-    act(() => context.updateIntegration('int-github', { status: 'connected' }));
-    expect(context.integrations[1].status).toBe('connected');
-    expect(profileApi.saveIntegration).toHaveBeenCalledOnce();
     expect(persistence.saveStore).not.toHaveBeenCalled();
   });
 

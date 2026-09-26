@@ -14,7 +14,6 @@ import {
   fetchHelmAccountSnapshot,
   fetchHelmCollections,
   fetchHelmChangedCollections,
-  fetchHelmCollectionPage,
   getCurrentUserId,
   getFreshAccessToken,
   getSupabaseRealtimeSnapshot,
@@ -59,8 +58,6 @@ import { PersistenceRuntimeState } from './runtimeState';
 
 const NAMESPACE = 'helm';
 export const STORE_FRESHNESS_MS = 10 * 60_000;
-export const STORE_PAGE_SIZE = 50;
-const PAGED_COLLECTIONS = new Set(['assistantActivityLog']);
 export const CALENDAR_SYNC_REQUEST_EVENT = 'helm:calendar-sync-requested';
 export { DEVICE_SETTINGS_STORE_KEY };
 
@@ -382,12 +379,10 @@ async function hydrateDatabaseSnapshot(
   userId: string,
   requested = runtime.scoped ? [...runtime.requestedCollections] : undefined,
 ): Promise<string[]> {
-  const paged = requested?.filter(key => PAGED_COLLECTIONS.has(key)) ?? [];
-  const full = requested?.filter(key => !PAGED_COLLECTIONS.has(key));
   const snapshot = await observeOperationalOperation(
     'database',
     'read',
-    () => fetchHelmAccountSnapshot(full),
+    () => fetchHelmAccountSnapshot(requested),
     { freshness: 'fresh' },
   );
   assertCurrentPersistenceSession(epoch, userId);
@@ -421,33 +416,10 @@ async function hydrateDatabaseSnapshot(
     ...snapshot.records.map(record => record.collection),
   ]);
   const staged = new Map<string, { records: HelmRecord[]; complete: boolean; limit: number }>();
-  for (const collection of full ?? collectionKeys) {
+  for (const collection of requested ?? collectionKeys) {
     staged.set(collection, {
       records: snapshot.records.filter(record => record.collection === collection), complete: true, limit: 0,
     });
-  }
-  for (const collection of paged) {
-    // Reconcile only the window the user has requested, never the unseen tail.
-    const limit = recordCache.status(collection)?.limit || STORE_PAGE_SIZE;
-    const records: HelmRecord[] = [];
-    let hasMore = true;
-    while (hasMore && records.length < limit) {
-      const page = await fetchHelmCollectionPage(collection, records.length, Math.min(STORE_PAGE_SIZE, limit - records.length));
-      assertCurrentPersistenceSession(epoch, userId);
-      records.push(...page.records);
-      hasMore = page.hasMore;
-    }
-    staged.set(collection, { records, complete: !hasMore, limit });
-  }
-  // The paged reads span statements. Reject the entire staged result if any
-  // account write occurred, including a local confirmed write while awaiting.
-  if (paged.length > 0) {
-    const versionAfterPages = await probeHelmAccountVersion();
-    assertCurrentPersistenceSession(epoch, userId);
-    if (versionAfterPages !== snapshot.state.accountVersion
-      || runtime.accountVersion > snapshot.state.accountVersion) {
-      throw new Error('Account data changed while loading this page.');
-    }
   }
   const previousValues = new Map(
     [...collectionKeys].map(collection => [collection, recordCache.decoded(collection)]),
@@ -939,39 +911,6 @@ async function ensureStoreCollections(keys: readonly string[]): Promise<void> {
   });
   runtime.collectionLoadPromise = operation;
   await operation;
-}
-
-export async function loadMoreStoreRecords(key: string): Promise<void> {
-  if (runtime.collectionLoadPromise) return runtime.collectionLoadPromise;
-  const userId = getCurrentUserId();
-  const status = recordCache.status(key);
-  if (!PAGED_COLLECTIONS.has(key) || !userId || !status || status.complete) return;
-  if (runtime.syncSession.readOnly || realtimeBoundary.isRecovering()) {
-    throw new Error('Reconnect before loading more activity.');
-  }
-  const epoch = runtime.persistenceEpoch;
-  const operation = (async () => {
-    await flushPendingRemoteMutations();
-    assertCurrentPersistenceSession(epoch, userId);
-    const version = await probeHelmAccountVersion();
-    if (version !== runtime.accountVersion) {
-      throw new Error('Activity changed. Refresh before loading more.');
-    }
-    const page = await fetchHelmCollectionPage(key, recordCache.encoded(key).length, STORE_PAGE_SIZE);
-    const afterVersion = await probeHelmAccountVersion();
-    assertCurrentPersistenceSession(epoch, userId);
-    if (afterVersion !== version || runtime.accountVersion > version) throw new Error('Activity changed while loading. Refresh before loading more.');
-    recordCache.applyChanges(page.records);
-    recordCache.confirm(key, !page.hasMore, status.limit + STORE_PAGE_SIZE, version);
-    publishStoreChanges([key]);
-  })().catch(error => {
-    if (isCurrentPersistenceSession(epoch, userId)) handleDatabaseFailure(error, userId);
-    throw error;
-  }).finally(() => {
-    if (runtime.collectionLoadPromise === operation) runtime.collectionLoadPromise = null;
-  });
-  runtime.collectionLoadPromise = operation;
-  return operation;
 }
 
 export async function loadStore<T>(key: string): Promise<T | null> {

@@ -35,9 +35,6 @@ const DEFAULT_SETTINGS = {
   prayerCountry: 'United Kingdom',
   prayerReminderEnabled: true,
   prayerReminderMinutes: 15,
-  assistantEnabled: false,
-  assistantProvider: 'hosted',
-  assistantLanguage: 'en',
 } as const;
 
 const DEFAULT_TIMINGS = {
@@ -61,10 +58,6 @@ export interface HelmScenarioOptions {
   };
   email?: string;
   initialSurface?: Surface;
-  lifeHero?: {
-    failureStatus?: number;
-    snapshot?: Record<string, unknown>;
-  };
   now?: string;
   prayer?: {
     failureStatus?: number;
@@ -182,11 +175,9 @@ async function installScenario(
   const control = await installDatabaseRoutes(page, {
     email: options.email || TEST_EMAIL,
     analytics: options.analytics,
-    lifeHero: options.lifeHero,
     snapshotStatus: options.snapshotStatus,
     userId,
   }, database);
-  await installAssistantRoute(page);
   return {
     ...control,
     services: database.services,
@@ -214,7 +205,6 @@ function buildStores(options: HelmScenarioOptions): Record<string, unknown> {
 interface DatabaseRouteOptions {
   analytics?: HelmScenarioOptions['analytics'];
   email: string;
-  lifeHero?: HelmScenarioOptions['lifeHero'];
   snapshotStatus?: number;
   userId: string;
 }
@@ -267,43 +257,6 @@ async function installDatabaseRoutes(
     };
     database.listeners.forEach(listener => listener(event));
   };
-
-  await page.route('**/rest/v1/rpc/sync_life_hero_evidence*', async route => {
-    if (options.lifeHero?.failureStatus) {
-      await route.fulfill({
-        status: options.lifeHero.failureStatus,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'Life Hero evidence sync fixture unavailable.' }),
-      });
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        scanned: 0,
-        accepted: 0,
-        duplicates: 0,
-        snapshot: options.lifeHero?.snapshot ?? defaultLifeHeroSnapshot(),
-      }),
-    });
-  });
-
-  await page.route('**/rest/v1/rpc/get_life_hero_snapshot*', async route => {
-    if (options.lifeHero?.failureStatus) {
-      await route.fulfill({
-        status: options.lifeHero.failureStatus,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'Life Hero snapshot fixture unavailable.' }),
-      });
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(options.lifeHero?.snapshot ?? defaultLifeHeroSnapshot()),
-    });
-  });
 
   await page.route('**/rest/v1/rpc/ingest_product_usage_events*', async route => {
     const events = (route.request().postDataJSON() as { p_events?: unknown[] }).p_events ?? [];
@@ -581,71 +534,6 @@ async function installDatabaseRoutes(
       applyMutations(rows, options.userId, database.accountVersion, operations, confirmedAt);
     },
   };
-}
-
-function defaultLifeHeroSnapshot(): Record<string, unknown> {
-  const stat = (
-    name: string,
-    totalXp: number,
-    level: number,
-    condition: 'awaiting_first_step' | 'steady' | 'renewal_due',
-    lastEvidenceLocalDate: string | null,
-    attentionAfterDays: number,
-  ) => ({ name, stat: name, totalXp, level, condition, lastEvidenceLocalDate, attentionAfterDays });
-
-  return {
-    rulesetVersion: 'life-hero-v1',
-    totalXp: 210,
-    overallLevel: 2,
-    updatedAt: SNAPSHOT_TIME,
-    recomputedAt: SNAPSHOT_TIME,
-    stats: [
-      stat('faith', 40, 1, 'steady', '2026-08-01', 1),
-      stat('vitality', 40, 1, 'steady', '2026-08-01', 2),
-      stat('knowledge', 40, 1, 'steady', '2026-08-01', 3),
-      stat('discipline', 30, 1, 'renewal_due', '2026-07-26', 2),
-      stat('finances', 25, 1, 'steady', '2026-08-01', 7),
-      stat('craft', 20, 1, 'steady', '2026-08-01', 7),
-      stat('community', 15, 1, 'awaiting_first_step', null, 7),
-    ],
-    recentActivity: [{
-      evidence: {
-        id: '22222222-2222-4222-8222-222222222222',
-        rulesetVersion: 'life-hero-v1',
-        stat: 'knowledge',
-        evidenceType: 'knowledge_learning',
-        sourceTier: 'verified',
-        sourceReference: 'e2e-learning',
-        idempotencyKey: 'e2e-learning-1',
-        occurredAt: SNAPSHOT_TIME,
-        localDate: '2026-08-01',
-        metadata: {},
-        createdAt: SNAPSHOT_TIME,
-      },
-      award: {
-        id: '33333333-3333-4333-8333-333333333333',
-        evidenceId: '22222222-2222-4222-8222-222222222222',
-        rulesetVersion: 'life-hero-v1',
-        stat: 'knowledge',
-        baseXp: 20,
-        sourceMultiplier: 1,
-        momentumDays: 7,
-        momentumMultiplier: 1.25,
-        awardedXp: 25,
-        awardedAt: SNAPSHOT_TIME,
-      },
-    }],
-  };
-}
-
-async function installAssistantRoute(page: Page): Promise<void> {
-  await page.route('**/functions/v1/assistant-openai*', async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: true, provider: 'openai', model: 'gpt-5.4' }),
-    });
-  });
 }
 
 const APP_PREFERENCE_KEYS = ['theme', 'dataRetentionDays', 'telemetry', 'defaultCalendarTab', 'goalTags'];

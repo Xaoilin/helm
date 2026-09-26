@@ -96,7 +96,7 @@ describe('bounded operational telemetry', () => {
   it.each([
     [{ status: 401 }, 'unauthorized'], [{ status: 403 }, 'forbidden'], [{ status: 503 }, 'server_error'],
     [{ name: 'TimeoutError' }, 'timeout'], [{ status: 429 }, 'rate_limited'],
-    [{ name: 'HostedAssistantPausedError' }, 'paused'], [new TypeError('Failed to fetch SECRET'), 'network'],
+    [new TypeError('Failed to fetch SECRET'), 'network'],
   ])('normalizes failure without retaining its contents', (error, reason) => {
     expect(classifyOperationalFailure(error)).toBe(reason);
   });

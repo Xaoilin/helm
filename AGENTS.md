@@ -15,9 +15,9 @@ HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the lin
 - `src/types/domain.ts` owns app data shapes.
 - Shared app data is signed-in and database-authoritative. Writes require server confirmation; transient failures may retain only the same account's confirmed in-memory data. Invalid authorization and account changes fail closed.
 - Calendar data remains account -> source -> event, with intentional multi-account support.
-- Voice and chat share one assistant runtime and one mutation path. Both, and Life Hero, are disabled pending removal; see `docs/deprecated-features.md`.
-- Secret values belong in the account-owned Supabase Vault path. Never place plaintext in shared records, browser storage, Broadcast payloads, logs, exports, assistant context, or durable memory.
-- Project catalogue records may sync names, links, documentation, and display-only guidance; private credentials never enter shared records or assistant context.
+- The Lina assistant (Chat), voice and Life Hero were removed on 2026-09-26; do not reintroduce them without a new product decision.
+- Secret values belong in the account-owned Supabase Vault path. Never place plaintext in shared records, browser storage, Broadcast payloads, logs, exports, or durable memory.
+- Project catalogue records may sync names, links, documentation, and display-only guidance; private credentials never enter shared records.
 - Prayer reminders use a page-open browser timer and Web Notifications when permitted. The in-app banner is the fallback when notification permission or delivery is unavailable.
 - External AI agents use published Sabah One MCP tools for account reads and mutations. Never substitute direct database access, generic record RPCs, shared-file edits, or UI automation when a domain MCP tool is unavailable.
 - Do not swallow errors. Surface user-actionable failures and preserve diagnostics for opaque integrations.
@@ -42,7 +42,6 @@ HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the lin
 - `docs/project-architecture.md`
 - `docs/feature-status.md`
 - `docs/prayer-tracking-and-reminders.md`
-- `docs/assistant-command-architecture.md`
 - `docs/agent-access.md`
 - `docs/agentic-coding-workflow.md`
 <!-- BEGIN CORTEX ONE -->

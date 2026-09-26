@@ -113,6 +113,26 @@ describe('usePrayerServiceSync', () => {
     expect(api.createPrayerOutcome).toHaveBeenCalledOnce();
   });
 
+  it('never re-sends a refused change that a later push still carries before its revert lands', async () => {
+    api.createPrayerOutcome.mockRejectedValue(notStarted('Fajr'));
+    const hook = render();
+    await load(hook);
+
+    tracking = { ...tracking, records: { [`${TODAY}::Fajr`]: record('Fajr', 'on_time') } };
+    await act(async () => { hook.result.current.push(); });
+    await waitFor(() => expect(onRejected).toHaveBeenCalledOnce());
+
+    // The app has not committed the revert yet, and another change pushes the same state again.
+    await act(async () => { hook.result.current.push(); });
+    await waitFor(() => expect(hook.result.current.state.status).toBe('synced'));
+    expect(api.createPrayerOutcome).toHaveBeenCalledOnce();
+
+    // Completing it again later is a new action with a new key, so it is sent.
+    tracking = { ...tracking, records: { [`${TODAY}::Fajr`]: { ...record('Fajr', 'on_time'), recordedAt: '2026-09-26T09:05:00.000Z' } } };
+    await act(async () => { hook.result.current.push(); });
+    await waitFor(() => expect(api.createPrayerOutcome).toHaveBeenCalledTimes(2));
+  });
+
   it('keeps accepted changes when another change in the same run is refused', async () => {
     api.createPrayerOutcome.mockImplementation(async (request: { prayer: string; status: string }) => {
       if (request.prayer === 'Dhuhr') throw notStarted('Dhuhr');

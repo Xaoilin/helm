@@ -35,8 +35,6 @@ Only Sol can claim the overall change live after protected promotion, GitHub Pag
 
 The required hosted-web checks are policy, database contract, lint, typecheck, unit, browser E2E, and web build. The risk-to-check map, focused-versus-complete gate claims, determinism rules, and known gaps are maintained in [`testing-strategy.md`](testing-strategy.md). Browser E2E covers assembled behavior; the visual path supplies screenshot evidence for surfaces where rendered review matters. The exact commands and workflow details belong to the repository automation and CI logs, not to a second product runtime.
 
-Assistant-planning changes also keep the benchmark corpus, dialog seeds, grounded-ID expectations, and hosted threshold enforcement current. A benchmark result is evidence for its corpus and provider path, not proof of every conversation.
-
 ## Deployment Versioning
 
 - Sabah One versions use semver across `package.json`, `package-lock.json`, and `public/release.json`.
@@ -71,7 +69,7 @@ Rendered components consume owning domain hooks directly. Shell owns navigation 
 
 ### Unit and contract checks
 
-Business rules, account persistence, semantic mutations, assistant validation, and provider error mapping should have focused deterministic coverage. Service checks should exercise success and failure responses without hiding diagnostics.
+Business rules, account persistence, semantic mutations, and provider error mapping should have focused deterministic coverage. Service checks should exercise success and failure responses without hiding diagnostics.
 
 Keep business rules in plain modules that take their inputs (including the current time and time zone) as arguments, so they are tested without rendering. Every context module exports its Context object; render tests supply typed fake values with `provide` and `renderWithContexts` from `src/test/renderWithContexts.tsx` instead of `vi.mock`-ing context hook modules. Reserve `vi.mock` for true infrastructure boundaries such as the Supabase client, network, and browser APIs.
 
@@ -83,7 +81,7 @@ User-facing flows should have Playwright coverage when they change visible behav
 
 ### Browser review
 
-Direct browser review is required for visible user flows and especially for OAuth, microphone input, speech output, wake word, browser notification permission, page-open prayer reminders, and live integrations. Review loading, empty, success, disabled, and error states relevant to the change. Screenshot evidence is useful for layout claims but is not a substitute for behavior or hosted verification.
+Direct browser review is required for visible user flows and especially for OAuth, browser notification permission, page-open prayer reminders, and live integrations. Review loading, empty, success, disabled, and error states relevant to the change. Screenshot evidence is useful for layout claims but is not a substitute for behavior or hosted verification.
 
 ## Error Handling And Resilience
 
@@ -108,8 +106,7 @@ Direct browser review is required for visible user flows and especially for OAut
 - Keep domain types in `src/types/domain.ts` and the account -> source -> event Calendar hierarchy.
 - Shared records are signed-in, account-owned and database-authoritative through Supabase RLS and semantic mutation RPCs. Online server confirmation is required for writes; transient network failures may retain only the current account's confirmed in-memory data.
 - Passive Google Calendar sync stays non-interactive; explicit reconnect or consent is user initiated.
-- Hosted Calendar refresh credentials and Vault secret values never enter browser storage, shared payloads, logs, exports, Broadcast, or assistant context.
-- The assistant keeps one shared path for chat and voice, validates grounded entities, confirms risky actions, and claims success only after verified execution.
+- Hosted Calendar refresh credentials and Vault secret values never enter browser storage, shared payloads, logs, exports, or Broadcast.
 - Project catalogue records may include names, links, documentation, and display-only guidance. They must not include private credentials or machine-specific execution state.
 - Use the established local-date-safe helpers for day-based behavior; never derive local dates by slicing UTC ISO strings.
 
@@ -158,11 +155,7 @@ only when changed, and pending saves cannot dismiss. Successful save closes
 directly. Avoid adding React `autoFocus` to these controls: it runs before the
 hook captures the opener and prevents reliable return focus.
 
-Chat typed and quick sends use one synchronous in-flight guard and `finally`
-recovery. A rejected optimistic transcript entry returns to the draft; explicit
-retry keeps its conversation and adds one completed turn. Rejection does not
-prove that a requested domain action failed, so the recovery message asks the
-user to check changes before retrying. Calendar and Knowledge card open actions
+Calendar and Knowledge card open actions
 use native buttons beside other controls; Health removal requires confirmation.
 
 ## Documentation Rules
@@ -172,30 +165,3 @@ use native buttons beside other controls; Health removal requires confirmation.
 - `README.md`, `AGENTS.md`, `docs/project-architecture.md`, `docs/engineering-guide.md`, and `docs/feature-status.md` are active source-of-truth docs.
 - `docs/agentic-coding-workflow.md` records the current hosted web automation policy.
 - Status language distinguishes real behavior, degraded browser capability, and placeholder or simulated integrations.
-
-## Temporary hosted AI pause
-
-Hosted AI defaults to paused unless the server's `HOSTED_AI_ENABLED` is exactly
-`true`. Authentication, benchmark scope and billing operator checks run before
-the pause response. Verified health returns the deployed SHA and mode without
-calling OpenAI; chat, voice planning and operator billing return HTTP 503 with
-`hosted_ai_paused`. Settings, Debug and Chat show the pause. Use
-normal app controls directly. Codex remains an engineering tool, not an app
-backend; no alternate inference provider is selected automatically for a pause.
-
-Protected deployment takes the repository variable `HOSTED_AI_ENABLED` (default
-false), configures that server flag and passes the exact mode to live acceptance.
-Paused delivery preserves provider secrets without reading or replacing them.
-Synthetic Auth acceptance verifies identity denials, scope, SHA, paused user and
-operator results, and fixture cleanup. The retained benchmark artifact explicitly
-marks paid chat/voice and model-quality acceptance `deferred`, never successful.
-All stable source, database, promotion and handoff checks remain required.
-
-Re-enable only after explicit user authorization: set the repository variable
-`HOSTED_AI_ENABLED=true` and deploy the verified current candidate through the
-protected route with its existing provider and benchmark credentials. Enabled
-acceptance must pass real chat, voice planner and enforced model benchmarks at
-the exact SHA. A failure remains non-acceptance. API-funded engineering review
-has a separate default-off opt-in, `CODEX_API_REVIEW_ENABLED=true`; Codex source
-review in the engineering task supplies the current review. Do not change either
-setting or request API funding while the user-selected pause remains in effect.

@@ -24,13 +24,10 @@ try {
     'supabase/tests/sabah_one_equity_oauth.sql',
     'supabase/tests/sabah_one_finance_oauth.sql',
     'supabase/tests/helm_legacy_migration.sql',
-    'supabase/tests/life_hero_progression.sql',
-    'supabase/tests/life_hero_evidence_sync.sql',
-    'supabase/tests/github_life_hero.sql',
     'supabase/tests/product_usage_analytics.sql',
+    'supabase/tests/remove_deprecated_features.sql',
   ])
   await runConcurrencyScenario()
-  await runLifeHeroRollbackScenario()
   await runProductUsageRollbackScenario()
 } catch (error) {
   failure = error
@@ -215,60 +212,6 @@ async function runConcurrencyScenario() {
   }
 
   console.log('Concurrent database sessions: 9 assertions passed')
-}
-
-async function runLifeHeroRollbackScenario() {
-  runSqlFile('supabase/rollback/20260830070000_pause_life_hero_progression.sql')
-  await runSql(`
-    do $$
-    begin
-      if has_function_privilege(
-        'authenticated',
-        'public.accept_life_hero_evidence(text,text,text,text,timestamptz,date,jsonb)',
-        'execute'
-      ) or has_function_privilege(
-        'authenticated',
-        'public.recompute_life_hero_profile(date)',
-        'execute'
-      ) or has_function_privilege(
-        'authenticated',
-        'public.sync_life_hero_evidence(date)',
-        'execute'
-      ) then
-        raise exception 'Life Hero non-destructive rollback did not pause writes.';
-      end if;
-      if to_regclass('public.life_hero_awards') is null
-        or to_regclass('public.life_hero_evidence') is null
-      then
-        raise exception 'Life Hero non-destructive rollback removed durable history.';
-      end if;
-    end
-    $$;
-  `)
-
-  runSqlFile('supabase/rollback/20260830070000_resume_life_hero_progression.sql')
-  await runSql(`
-    do $$
-    begin
-      if not has_function_privilege(
-        'authenticated',
-        'public.accept_life_hero_evidence(text,text,text,text,timestamptz,date,jsonb)',
-        'execute'
-      ) or not has_function_privilege(
-        'authenticated',
-        'public.recompute_life_hero_profile(date)',
-        'execute'
-      ) or not has_function_privilege(
-        'authenticated',
-        'public.sync_life_hero_evidence(date)',
-        'execute'
-      ) then
-        raise exception 'Life Hero resume did not restore the bounded write interface.';
-      end if;
-    end
-    $$;
-  `)
-  console.log('Life Hero rollback and resume: 4 assertions passed')
 }
 
 async function runProductUsageRollbackScenario() {

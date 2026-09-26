@@ -63,9 +63,10 @@ test('Quran reading stays stable on reload and changes with the prayer date', as
 });
 
 for (const width of [1440, 390]) {
-  test(`the disabled Lina assistant stays out of navigation, Settings and Debug at ${width}px`, async ({ page, scenario }, testInfo) => {
-    // Chat, Lina and hosted AI are disabled pending removal; see docs/deprecated-features.md.
-    await scenario({ initialSurface: 'chat', settings: { assistantEnabled: true, wakeWordEnabled: true, lifeHeroEnabled: true } });
+  test(`the removed Lina assistant stays out of navigation, Settings and Debug at ${width}px`, async ({ page, scenario }, testInfo) => {
+    // Chat, Lina, voice, hosted AI and Life Hero were removed. A stored `chat` surface and old
+    // settings from earlier releases must be tolerated and ignored.
+    await scenario({ initialSurface: 'chat' as never, settings: { assistantEnabled: true, wakeWordEnabled: true, lifeHeroEnabled: true } });
     const deprecatedCalls: string[] = [];
     page.on('request', request => {
       if (/\/functions\/v1\/(assistant-openai|assistant-speech|github-life-hero)|life_hero|:11434\//u.test(request.url())) deprecatedCalls.push(request.url());
@@ -97,7 +98,7 @@ for (const width of [1440, 390]) {
     }
     await expect(page.getByRole('button', { name: /Network \/ APIs/u })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath(`deprecated-assistant-hidden-${width}.png`) });
+    await page.screenshot({ path: testInfo.outputPath(`removed-assistant-absent-${width}.png`) });
     expect(deprecatedCalls).toEqual([]);
   });
 }

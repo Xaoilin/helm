@@ -41,7 +41,7 @@ for (const width of [390, 1440]) {
     await openIntegrations(page, width);
     const surface = page.getByRole('main', { name: 'integrations surface' });
     const googleCard = surface.locator('.card').filter({ has: page.getByRole('heading', { name: /^Google Calendar/ }) });
-    // The GitHub App only feeds Life Hero, which is disabled pending removal (docs/deprecated-features.md).
+    // The GitHub App only fed Life Hero, which was removed with it.
     await expect(surface.locator('.card')).toHaveCount(1);
     await expect(googleCard).toBeVisible();
     await expect(surface.getByRole('heading', { name: /^GitHub/ })).toHaveCount(0);

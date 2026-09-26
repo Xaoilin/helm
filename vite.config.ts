@@ -20,7 +20,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: fileURLToPath(new URL('./index.html', import.meta.url)),
-        lifeHeroConcept: fileURLToPath(new URL('./concepts/life-hero/index.html', import.meta.url)),
       },
     },
   },

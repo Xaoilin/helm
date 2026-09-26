@@ -43,22 +43,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       deploy_sha: ${{ steps.identity.outputs.deploy_sha }}
-      hosted_ai_enabled: ${{ steps.mode.outputs.hosted_ai_enabled }}
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       HELM_DATABASE_BACKUP_SHA256: ${{ secrets.HELM_DATABASE_BACKUP_SHA256 }}
-      HOSTED_AI_ENABLED: ${{ vars.HOSTED_AI_ENABLED == 'true' && 'true' || 'false' }}
-      OPENAI_MODEL: gpt-5.4
-      ASSISTANT_BENCHMARK_SECRET: ${{ secrets.ASSISTANT_BENCHMARK_SECRET }}
       GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
       GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
       GOOGLE_OAUTH_ALLOWED_ORIGINS: ${{ secrets.GOOGLE_OAUTH_ALLOWED_ORIGINS }}
-      GITHUB_APP_CLIENT_ID: ${{ secrets.LIFE_HERO_GITHUB_APP_CLIENT_ID }}
-      GITHUB_APP_CLIENT_SECRET: ${{ secrets.LIFE_HERO_GITHUB_APP_CLIENT_SECRET }}
-      GITHUB_APP_SLUG: ${{ secrets.LIFE_HERO_GITHUB_APP_SLUG }}
-      GITHUB_LIFE_HERO_ALLOWED_ORIGINS: ${{ secrets.LIFE_HERO_GITHUB_ALLOWED_ORIGINS }}
     steps:
       - id: preflight
         name: Check deploy secrets
@@ -73,27 +65,11 @@ jobs:
           fi
           echo "should_deploy=true" >> "$GITHUB_OUTPUT"
           echo "deploy_database=true" >> "$GITHUB_OUTPUT"
-          if [ ${#ASSISTANT_BENCHMARK_SECRET} -lt 32 ]; then
-            echo "ASSISTANT_BENCHMARK_SECRET is required for authenticated acceptance in both modes."
-            exit 1
-          fi
-          echo "deploy_assistant=true" >> "$GITHUB_OUTPUT"
           if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ] && [ -n "$GOOGLE_OAUTH_CLIENT_SECRET" ]; then
             echo "deploy_google_calendar_oauth=true" >> "$GITHUB_OUTPUT"
           else
             echo "deploy_google_calendar_oauth=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ -n "$GITHUB_APP_CLIENT_ID" ] && [ -n "$GITHUB_APP_CLIENT_SECRET" ] && [ -n "$GITHUB_APP_SLUG" ]; then
-            echo "deploy_github_life_hero=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "deploy_github_life_hero=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Require provider credential only for explicitly enabled AI
-        if: env.HOSTED_AI_ENABLED == 'true'
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: test -n "$OPENAI_API_KEY"
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' }}
         uses: actions/checkout@v5
@@ -146,6 +122,22 @@ jobs:
         run: npm run database:verify
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_database == 'true' }}
+        name: Delete retired Edge Functions
+        env:
+          # Space-separated; append further retired functions here.
+          RETIRED_FUNCTIONS: assistant-openai assistant-openai-billing assistant-speech github-life-hero operational-events
+        run: |
+          deployed="$(npx supabase functions list --project-ref "$SUPABASE_PROJECT_REF")"
+          for name in $RETIRED_FUNCTIONS; do
+            if grep -Eq "(^|[|[:space:]])${name}([|[:space:]]|$)" <<<"$deployed"; then
+              echo "Deleting retired Edge Function $name."
+              npx supabase functions delete "$name" --project-ref "$SUPABASE_PROJECT_REF" --yes
+            else
+              echo "Retired Edge Function $name is not deployed."
+            fi
+          done
+
+      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_database == 'true' }}
         name: Deploy Sabah One Inventory MCP
         run: npx supabase functions deploy sabah-one-inventory-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
 
@@ -191,7 +183,7 @@ jobs:
           ' <<<"$oauth_config" >/dev/null
 
       - id: identity
-        name: Stamp verified assistant build identity
+        name: Stamp verified function build identity
         run: node ./scripts/stamp-assistant-deployment.mjs
 
       - name: Deploy Sabah One Employment MCP
@@ -201,28 +193,6 @@ jobs:
         run: npx supabase functions deploy sabah-one-finance-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
       - name: Deploy Sabah One Equity MCP
         run: npx supabase functions deploy sabah-one-equity-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
-
-      - id: mode
-        name: Configure explicit hosted AI operating mode
-        run: |
-          npx supabase secrets set HOSTED_AI_ENABLED="$HOSTED_AI_ENABLED" ASSISTANT_BENCHMARK_SECRET="$ASSISTANT_BENCHMARK_SECRET" --project-ref "$SUPABASE_PROJECT_REF" --yes
-          echo "hosted_ai_enabled=$HOSTED_AI_ENABLED" >> "$GITHUB_OUTPUT"
-
-      - name: Sync provider credential only for explicitly enabled AI
-        if: env.HOSTED_AI_ENABLED == 'true'
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: npx supabase secrets set OPENAI_API_KEY="$OPENAI_API_KEY" OPENAI_MODEL="$OPENAI_MODEL" --project-ref "$SUPABASE_PROJECT_REF" --yes
-
-      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_assistant == 'true' }}
-        name: Deploy assistant-openai
-        run: npx supabase functions deploy assistant-openai --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
-
-      - name: Deploy authenticated operator billing boundary
-        run: npx supabase functions deploy assistant-openai-billing --project-ref "$SUPABASE_PROJECT_REF" --use-api --yes
-
-      - name: Deploy authenticated Vault speech boundary
-        run: npx supabase functions deploy assistant-speech --project-ref "$SUPABASE_PROJECT_REF" --use-api --yes
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_google_calendar_oauth == 'true' }}
         name: Sync Google Calendar OAuth function secrets
@@ -243,25 +213,3 @@ jobs:
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_google_calendar_oauth == 'true' }}
         name: Deploy google-calendar-oauth
         run: npx supabase functions deploy google-calendar-oauth --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
-
-      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_github_life_hero == 'true' }}
-        name: Sync GitHub Life Hero function secrets
-        run: |
-          npx supabase secrets set \
-            GITHUB_APP_CLIENT_ID="$GITHUB_APP_CLIENT_ID" \
-            GITHUB_APP_CLIENT_SECRET="$GITHUB_APP_CLIENT_SECRET" \
-            GITHUB_APP_SLUG="$GITHUB_APP_SLUG" \
-            GITHUB_LIFE_HERO_ALLOWED_ORIGINS="${GITHUB_LIFE_HERO_ALLOWED_ORIGINS:-https://xaoilin.github.io,http://localhost:5173,http://localhost:5174}" \
-            --project-ref "$SUPABASE_PROJECT_REF" --yes
-
-      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_github_life_hero == 'true' }}
-        name: Deploy github-life-hero
-        run: npx supabase functions deploy github-life-hero --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
-
-  benchmark:
-    needs: deploy
-    uses: ./.github/workflows/post-deploy-assistant-benchmark.yml
-    with:
-      deploy_sha: ${{ needs.deploy.outputs.deploy_sha }}
-      hosted_ai_enabled: ${{ needs.deploy.outputs.hosted_ai_enabled }}
-    secrets: inherit

@@ -186,7 +186,7 @@ Additional responsive rules:
 - Prayer completion and Learn/Move level receipts keep their full text meaning when motion is disabled and never intercept the next action.
 - Do not announce decorative celestial geometry.
 - Preserve existing route names and navigation behavior.
-- Do not add a second mutation path; dashboard actions must reuse the established task, prayer, chat, and voice boundaries.
+- Do not add a second mutation path; dashboard actions must reuse the established task and prayer boundaries.
 
 ## Acceptance checks for implementation
 

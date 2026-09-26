@@ -1,11 +1,7 @@
 import type { ReactNode } from 'react';
-import { ASSISTANT_ENABLED } from '../config/deprecatedFeatures';
 import { useShell } from './ShellContext';
 import { useSyncAvailability } from './SyncAvailabilityContext';
-import { useAssistantActivityContext } from './contexts/AssistantActivityContext';
-import { useAssistantContext } from './contexts/AssistantContext';
 import { useCalendar } from './contexts/CalendarContext';
-import { useChatContext } from './contexts/ChatContext';
 import { useClockContext } from './contexts/ClockContext';
 import { useDailyMomentumContext } from './contexts/DailyMomentumContext';
 import { useFinanceContext } from './contexts/FinanceContext';
@@ -31,35 +27,20 @@ export function useSharedPageReady(): boolean {
   return settings && gamification && momentum && tasks && prayer && knowledge && calendar && clock;
 }
 
-export function useAssistantPageReady(): boolean {
-  const shared = useSharedPageReady();
-  const projects = useProjectContext().loaded;
-  const inventory = useInventoryContext().loaded;
-  const finance = useFinanceContext().loaded;
-  const conversations = useChatContext().loaded;
-  const corrections = useAssistantContext().loaded;
-  const activity = useAssistantActivityContext().loaded;
-  return shared && projects && inventory && finance && conversations && corrections && activity;
-}
-
 export function PageReadinessGate({ children }: { children: ReactNode }) {
   const shell = useShell();
   const { readOnly } = useSyncAvailability();
   const shared = useSharedPageReady();
-  const assistant = useAssistantPageReady();
   const projects = useProjectContext().loaded;
   const inventory = useInventoryContext().loaded;
   const trips = useTripContext().loaded;
   const health = useHealthContext().loaded;
   const finance = useFinanceContext().loaded;
-  const activity = useAssistantActivityContext().loaded;
-  const pageReady = shell.surface === 'chat' ? assistant
-    : shell.surface === 'trips' ? trips
+  const pageReady = shell.surface === 'trips' ? trips
     : shell.surface === 'projects' || shell.surface === 'tasks' || shell.surface === 'secrets' ? projects
     : shell.surface === 'inventory' ? inventory && projects
     : shell.surface === 'health' ? health
     : shell.surface === 'finance' ? finance
-    : shell.surface === 'activity' ? !ASSISTANT_ENABLED || (activity && finance)
     : true; // Employment and its confirmed first seed retain their own loading UI.
 
   if ((!shared || !pageReady) && shell.pageLoadError) {

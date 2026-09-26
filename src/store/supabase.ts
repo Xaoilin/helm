@@ -4,7 +4,7 @@
  * The implementation is split by responsibility under `src/store/supabase/`:
  * `client` (client and signed-in session state), `auth`, `records`,
  * `mutations`, `secrets`, `productUsage`, `oauthClients`,
- * `oauthAuthorization`, `realtime` and `lifeHero`. Shared application data
+ * `oauthAuthorization` and `realtime`. Shared application data
  * never falls back to an anonymous or local store.
  *
  * New code imports the specific module it needs. UI code (`src/surfaces`,
@@ -33,17 +33,10 @@ export {
   signOut,
   type AuthStateChange,
 } from './supabase/auth';
-export {
-  acceptLifeHeroEvidence,
-  fetchLifeHeroSnapshot,
-  recomputeLifeHeroProfile,
-  syncLifeHeroEvidence,
-} from './supabase/lifeHero';
 export { getProductUsageEvents, ingestProductUsageEvents } from './supabase/productUsage';
 export {
   fetchHelmAccountSnapshot,
   fetchHelmChangedCollections,
-  fetchHelmCollectionPage,
   fetchHelmCollections,
   probeHelmAccountVersion,
 } from './supabase/records';

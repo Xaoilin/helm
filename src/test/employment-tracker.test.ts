@@ -12,7 +12,6 @@ import {
 } from '../services/employmentTracker';
 import { createRepresentativeEmploymentState } from '../../e2e/support/employment-scenario';
 import { decodeStoreValue, encodeStoreValue } from '../store/recordCodec';
-import { resolveSurfaceReference } from '../assistant/entityResolver';
 
 describe('Employment tracker seeds', () => {
   it('contains only the three confirmed opportunities without invented details', () => {
@@ -156,10 +155,5 @@ describe('Employment tracker rules', () => {
     expect(getEmploymentActivityDate(micro1!.applications[0])).toBe('2026-09-14');
     expect(micro1!.applications[2].createdAt).toBe('2027-01-01T09:00:00.000Z');
     expect(micro1!.applications.at(-1)?.createdAt).toBe('2026-12-30T09:00:00.000Z');
-  });
-
-  it('grounds Employment as an assistant navigation surface', () => {
-    expect(resolveSurfaceReference('Open the employment application tracker').best?.data)
-      .toBe('employment');
   });
 });

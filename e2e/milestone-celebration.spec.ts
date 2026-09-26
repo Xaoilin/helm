@@ -53,7 +53,7 @@ for (const viewport of requestedViewports()) {
     if (width <= 390) await page.emulateMedia({ reducedMotion: 'reduce' });
     await scenario({
       now: '2026-08-29T12:30:00.000Z',
-      settings: { prayerEnabled: true, lifeHeroEnabled: false },
+      settings: { prayerEnabled: true },
     });
     await openApp(page);
 
@@ -102,7 +102,7 @@ test('renders a dignified prayer completion receipt @visual', async ({ page, sce
   await page.setViewportSize({ width: 1440, height: 900 });
   await scenario({
     now: '2026-08-29T12:30:00.000Z',
-    settings: { prayerEnabled: true, lifeHeroEnabled: false },
+    settings: { prayerEnabled: true },
   });
   await openApp(page);
 

@@ -250,15 +250,15 @@ describe('signed-in persistence boundaries', () => {
     expect(supabaseMocks.applyHelmMutations).not.toHaveBeenCalled();
   });
 
-  it('keeps the original legacy settings migration source without copying provider values into new browser records', async () => {
+  it('keeps the original legacy settings source without copying provider or removed-feature values into new browser records', async () => {
     configureSupabase({ authenticated: true });
-    const original = JSON.stringify({ theme: 'dark', telemetry: false, microphoneDeviceId: 'mic-legacy', elevenLabsApiKey: 'legacy-eleven', monzoAccessToken: 'legacy-monzo', unknownLegacyField: 'preserve' });
+    const original = JSON.stringify({ theme: 'dark', telemetry: false, googleOAuthClientId: 'client-legacy', microphoneDeviceId: 'mic-legacy', wakeWordEnabled: true, lifeHeroEnabled: true, elevenLabsApiKey: 'legacy-eleven', monzoAccessToken: 'legacy-monzo', unknownLegacyField: 'preserve' });
     localStorage.setItem('helm:settings', original);
     await bootstrapDatabasePersistence();
     expect(getSyncSessionSnapshot().status).toBe('ready');
     expect(localStorage.getItem('helm:settings')).toBe(original);
-    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toMatchObject({ elevenLabsApiKey: 'legacy-eleven', microphoneDeviceId: 'mic-legacy' });
-    expect(JSON.parse(localStorage.getItem('helm:device:deviceSettings:v2')!)).toEqual({ microphoneDeviceId: 'mic-legacy' });
+    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toEqual({ googleOAuthClientId: 'client-legacy' });
+    expect(JSON.parse(localStorage.getItem('helm:device:deviceSettings:v2')!)).toEqual({ googleOAuthClientId: 'client-legacy' });
     expect(Object.keys(localStorage).filter(key => key.includes('legacy-quarantine'))).toEqual([]);
   });
 
@@ -274,20 +274,20 @@ describe('signed-in persistence boundaries', () => {
     expect(supabaseMocks.applyHelmMutations).not.toHaveBeenCalled();
     expect(localStorage.getItem('helm:settings')).toBe(original);
     expect(localStorage.getItem('helm:meta:settings')).toBeNull();
-    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toMatchObject({ elevenLabsApiKey: 'legacy-eleven' });
+    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toEqual({});
   });
 
   it('does not restore cleared device preferences from v1 or retained shared legacy settings on rebootstrap', async () => {
     configureSupabase({ authenticated: true });
-    const original = JSON.stringify({ microphoneDeviceId: 'old-mic', ollamaEndpoint: 'http://old-host:11434', elevenLabsApiKey: 'legacy-eleven' });
+    const original = JSON.stringify({ googleOAuthClientId: 'old-client', ollamaEndpoint: 'http://old-host:11434', elevenLabsApiKey: 'legacy-eleven' });
     localStorage.setItem('helm:device:deviceSettings', original);
     localStorage.setItem('helm:settings', original);
     await bootstrapDatabasePersistence();
-    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toMatchObject({ microphoneDeviceId: 'old-mic' });
+    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toEqual({ googleOAuthClientId: 'old-client' });
     await saveDeviceStore(DEVICE_SETTINGS_STORE_KEY, {});
     resetDatabasePersistence();
     await bootstrapDatabasePersistence();
-    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toEqual({ elevenLabsApiKey: 'legacy-eleven' });
+    expect(await loadDeviceStore(DEVICE_SETTINGS_STORE_KEY)).toEqual({});
     expect(localStorage.getItem('helm:device:deviceSettings')).toBe(original);
     expect(localStorage.getItem('helm:settings')).toBe(original);
   });

@@ -1,15 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   evaluateCapabilityCompositionSources,
   readCapabilityCompositionSources,
 } from '../../scripts/lib/capabilityCompositionPolicy.mjs';
-import {
-  executeAssistantActivityUndo,
-  type AssistantUndoDependencies,
-} from '../store/contexts/AssistantUndoContext';
-import type { AssistantActivityEntry } from '../types/domain';
 
 const root = resolve(__dirname, '../..');
 
@@ -43,11 +38,10 @@ describe('capability-shaped application composition', () => {
     );
   });
 
-  it('keeps provider order, readiness, Chat, and undo ownership explicit', () => {
+  it('keeps provider order and readiness ownership explicit', () => {
     const providers = readFileSync(resolve(root, 'src/store/AppProviders.tsx'), 'utf8');
     const shell = readFileSync(resolve(root, 'src/store/ShellContext.tsx'), 'utf8');
     const pageGate = readFileSync(resolve(root, 'src/store/PageReadinessGate.tsx'), 'utf8');
-    const sources = readCapabilityCompositionSources(root);
     const providerOrder = [
       '<ShellProvider>',
       '<SettingsProvider>',
@@ -58,10 +52,7 @@ describe('capability-shaped application composition', () => {
       '<PrayerProvider>',
       '<DailyTaskRollover />',
       '<ClockProvider>',
-      '<AssistantProvider>',
-      '<AssistantActivityProvider>',
-      '<ChatBridge>',
-      '<AssistantUndoProvider>',
+      '<MilestoneCelebrationProvider>',
     ].map(marker => providers.indexOf(marker));
 
     expect(providerOrder.every(index => index >= 0)).toBe(true);
@@ -70,58 +61,11 @@ describe('capability-shaped application composition', () => {
     expect(shell).not.toContain('ReadinessGate');
     expect(providers).not.toContain('DashboardFocus');
     expect(shell).not.toContain('DashboardFocus');
-    expect(providers).toContain('<ChatProvider crossDomain={crossDomain}>');
+    // The Lina assistant was removed: no Chat, assistant or undo providers remain.
+    expect(providers).not.toMatch(/Chat|Assistant|Undo/u);
     // Google Calendar sync runs in the calendar service, not in the browser.
     expect(providers).not.toContain('GoogleSync');
     expect(existsSync(resolve(root, 'src/store/AppContext.tsx'))).toBe(false);
-
-    const undoOwners = Object.entries(sources)
-      .filter(([, source]) => source.includes('switch (operation.type)'))
-      .map(([path]) => path);
-    expect(undoOwners).toEqual(['src/store/contexts/AssistantUndoContext.tsx']);
   });
 });
 
-describe('assistant undo workflow coordinator', () => {
-  it('applies one domain inverse and records one successful undo', () => {
-    const removeTask = vi.fn();
-    const markAssistantActivityUndone = vi.fn();
-    const entry: AssistantActivityEntry = {
-      id: 'activity-1',
-      actor: 'chat',
-      domain: 'tasks',
-      action: 'created',
-      summary: 'Created task',
-      details: [],
-      entityRefs: [],
-      status: 'applied',
-      createdAt: '2026-08-29T10:00:00.000Z',
-      undoOperation: { type: 'task.delete', id: 'task-1' },
-    };
-    const dependencies = {
-      activity: {
-        markAssistantActivityUndone,
-        markAssistantActivityUndoFailed: vi.fn(),
-      },
-      calendar: {
-        calendarEvents: [],
-        removeCalendarEvent: vi.fn(),
-        updateCalendarEvent: vi.fn(),
-      },
-      finance: { transactions: [], removeTransaction: vi.fn() },
-      gamification: { updateGamification: vi.fn() },
-      knowledge: { removeKnowledgeEntry: vi.fn() },
-      prayer: { undoPrayerCompletion: vi.fn() },
-      tasks: { tasks: [], removeTask, setTasks: vi.fn() },
-    } as unknown as AssistantUndoDependencies;
-
-    expect(executeAssistantActivityUndo(entry, dependencies)).toEqual({
-      ok: true,
-      message: 'Undid: Created task',
-    });
-    expect(removeTask).toHaveBeenCalledOnce();
-    expect(removeTask).toHaveBeenCalledWith('task-1');
-    expect(markAssistantActivityUndone).toHaveBeenCalledOnce();
-    expect(markAssistantActivityUndone).toHaveBeenCalledWith('activity-1');
-  });
-});

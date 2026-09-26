@@ -5,7 +5,6 @@ export {
   activateStoreCollections,
   releaseStoreCollections,
   getStoreLoadState,
-  loadMoreStoreRecords,
   clearLocalStoreCopy,
   flushPendingRemoteMutations,
   getPersistenceHealthSnapshot,

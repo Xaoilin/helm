@@ -33,16 +33,6 @@ export default defineConfig([
     // service, never through the compatibility barrel, and use the stable
     // `store/persistence` consumer API rather than its internals.
     files: ['src/surfaces/**/*.{ts,tsx}', 'src/components/**/*.{ts,tsx}'],
-    ignores: [
-      // Deprecated features, see docs/deprecated-features.md. They are being
-      // disabled rather than migrated, so they keep their existing imports.
-      'src/surfaces/ChatSurface.tsx',
-      'src/components/VoiceConnectionSettings.tsx',
-      'src/components/AppleHealthMovementImport.tsx',
-      'src/components/knowledge/ElifBManualEvidence.tsx',
-      'src/components/dashboard/LifeHeroCompanion.tsx',
-      'src/components/debug/AiDebug.tsx',
-    ],
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [

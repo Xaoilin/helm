@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ProjectReferenceDrawer } from '../components/projects/ProjectCatalog';
 import { ProjectCatalogueView } from '../components/projects/ProjectCatalogueView';
 import { ProjectEditorDialog } from '../components/projects/ProjectEditorDialog';
 import { ProjectWorkspace } from '../components/projects/ProjectWorkspace';
 import { useProjectCatalogue } from '../components/projects/useProjectCatalogue';
 import { useProjectSelection } from '../components/projects/useProjectSelection';
-import { useShell } from '../store/ShellContext';
 import { useProjectContext } from '../store/contexts/ProjectContext';
 import { useTaskContext } from '../store/contexts/TaskContext';
 import { useProjectRemovalWorkflow } from '../store/workflows/useProjectRemovalWorkflow';
@@ -29,7 +28,6 @@ function focusProjectCard(projectId: string): void {
 }
 
 export default function ProjectsSurface() {
-  const shell = useShell();
   const store = useProjectContext();
   const { tasks } = useTaskContext();
   const removeProject = useProjectRemovalWorkflow();
@@ -55,20 +53,6 @@ export default function ProjectsSurface() {
     returnFocusProjectId.current = null;
     focusProjectCard(projectId);
   }, [managedProjectId]);
-
-  const handleAssistantNavigation = useEffectEvent((requestId: string, revealProjectId?: string) => {
-    if (revealProjectId && store.projects.some(project => project.id === revealProjectId)) {
-      selection.reveal(revealProjectId);
-      catalogue.clearFilters();
-    }
-    shell.dismissAssistantNavigationRequest(requestId);
-  });
-
-  useEffect(() => {
-    const request = shell.assistantNavigationRequest;
-    if (!request || request.surface !== 'projects') return;
-    handleAssistantNavigation(request.id, request.surfaceState?.projects?.revealProjectId);
-  }, [shell.assistantNavigationRequest]);
 
   const closeEditor = useCallback(() => setEditor(null), []);
   const editedProjectId = editor?.project?.id ?? null;

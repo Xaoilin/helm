@@ -12,14 +12,10 @@ const mocks = vi.hoisted(() => ({
   },
   events: [] as ProductUsageEvent[],
   getProductUsageEvents: vi.fn(),
-  assistantActivity: { assistantActivityLog: [], loaded: true },
-  assistantUndo: { undoAssistantActivity: vi.fn() },
 }));
 
 vi.mock('../store/AuthSessionContext', () => ({ useOptionalAuthSession: () => mocks.auth }));
 vi.mock('../store/supabase/productUsage', () => ({ getProductUsageEvents: mocks.getProductUsageEvents }));
-vi.mock('../store/contexts/AssistantActivityContext', () => ({ useAssistantActivityContext: () => mocks.assistantActivity }));
-vi.mock('../store/contexts/AssistantUndoContext', () => ({ useAssistantUndo: () => mocks.assistantUndo }));
 
 function makeEvent(index: number, overrides: Partial<ProductUsageEvent> = {}): ProductUsageEvent {
   return {
@@ -60,7 +56,7 @@ describe('Activity surface', () => {
     expect(mocks.getProductUsageEvents).not.toHaveBeenCalled();
   });
 
-  it('does not show the deprecated Lina audit trail', async () => {
+  it('shows no Lina audit trail', async () => {
     render(<ActivitySurface />);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Usage overview' })).toBeInTheDocument());
 
@@ -68,13 +64,13 @@ describe('Activity surface', () => {
     expect(screen.queryByLabelText('Lina activity summary')).not.toBeInTheDocument();
   });
 
-  it('shows filtered content-free usage states and keeps Life Hero progression separate', async () => {
+  it('shows filtered content-free usage states', async () => {
     render(<ActivitySurface />);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Usage overview' })).toBeInTheDocument());
 
     expect(screen.getByText('Most-used paths')).toBeInTheDocument();
     expect(screen.getByText('Session progression')).toBeInTheDocument();
-    expect(screen.getByText('Private to this signed-in account. Analytics is content-free and separate from Life Hero progression.')).toBeInTheDocument();
+    expect(screen.getByText('Private to this signed-in account. Analytics is content-free.')).toBeInTheDocument();
     expect(screen.queryByText(/XP/i)).not.toBeInTheDocument();
 
     const surface = screen.getByLabelText('Usage surface');

@@ -42,7 +42,7 @@ test('takes a signed-in user from Night Compass through a persisted task and set
 
   await page.getByRole('button', { name: 'Navigate to Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-  // Life Hero is disabled pending removal (docs/deprecated-features.md), so Settings offers no toggle.
+  // Life Hero was removed, so Settings offers no toggle.
   await expect(page.getByRole('checkbox', { name: 'Toggle Life Hero character companion' })).toHaveCount(0);
   // App preferences are owned by the profile service.
   const settingsWrite = page.waitForRequest(request => request.method() === 'PUT'
