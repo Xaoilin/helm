@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/calendar/v1/events"
+  },
+  "status" : 409,
+  "body" : {
+    "code" : "google_reconnect_required",
+    "message" : "Google refresh token expired or was revoked. Reconnect this account."
+  }
+}

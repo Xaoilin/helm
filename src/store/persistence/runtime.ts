@@ -16,6 +16,7 @@ import {
   fetchHelmChangedCollections,
   fetchHelmCollectionPage,
   getCurrentUserId,
+  getFreshAccessToken,
   getSupabaseRealtimeSnapshot,
   isAuthenticated,
   isSupabaseReady,
@@ -83,8 +84,8 @@ const writeQueue = new PersistenceWriteQueue({
   },
   onFailure: async (error, keys) => {
     healthPublisher.recordRemoteWriteFailure(error);
-    if (isAuthorizationFailure(error)) {
-      resetDatabasePersistence('Your account authorization is no longer valid. Sign in again.', 'signed_out');
+    if (isAuthorizationFailure(error) && await renewSessionAfterAuthorizationFailure() === 'signed_out') {
+      resetDatabasePersistence('Your session has ended. Sign in again.', 'signed_out');
       return;
     }
     publishStoreChanges(keys, 'RECONNECT');
@@ -551,18 +552,53 @@ function isAuthorizationFailure(error: unknown): boolean {
     || ['PGRST301', 'PGRST302', 'PGRST303'].includes(failure?.code ?? '');
 }
 
+type SessionRenewal = 'renewed' | 'unreachable' | 'signed_out';
+
+/**
+ * A 401, 403 or 42501 almost always means the access token expired before it was renewed (a
+ * sleeping laptop, a background tab, a network blip), so the database saw an anonymous caller. The
+ * session is renewed and the request recovered; only a session the auth server has ended is
+ * treated as signed out.
+ */
+async function renewSessionAfterAuthorizationFailure(): Promise<SessionRenewal> {
+  const userId = getCurrentUserId();
+  try {
+    const token = await getFreshAccessToken({ forceRefresh: true });
+    return token && getCurrentUserId() === userId ? 'renewed' : 'signed_out';
+  } catch {
+    return 'unreachable';
+  }
+}
+
+function isSessionDenial(error: unknown): boolean {
+  const failure = error as { status?: number; code?: string } | null;
+  return isAuthorizationFailure(error) || failure?.status === 403 || failure?.code === '42501';
+}
+
 function handleDatabaseFailure(error: unknown, userId: string): void {
   if (error instanceof StalePersistenceSessionError) return;
-  const failure = error as { status?: number; code?: string } | null;
   // This boundary is an account-wide read. A denied domain write is handled separately.
-  if (isAuthorizationFailure(error) || failure?.status === 403 || failure?.code === '42501') {
-    resetDatabasePersistence('Your account authorization is no longer valid. Sign in again.', 'signed_out');
+  if (isSessionDenial(error)) {
+    void renewSessionAfterAuthorizationFailure().then(renewal => {
+      if (renewal === 'signed_out') {
+        resetDatabasePersistence('Your session has ended. Sign in again.', 'signed_out');
+        return;
+      }
+      if (getCurrentUserId() !== userId) return;
+      recoverFromDatabaseFailure(error, userId, renewal === 'renewed'
+        ? 'Your session was renewed; reconnecting to your account.'
+        : 'Sabah One could not renew your session; retrying.');
+    });
     return;
   }
   const message = error instanceof Error ? error.message
     : error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error);
+  recoverFromDatabaseFailure(error, userId, message);
+}
+
+function recoverFromDatabaseFailure(error: unknown, userId: string, message: string): void {
   healthPublisher.recordRemoteReadFailure(error);
-  const reason = reasonForDatabaseError(error);
+  const reason = isSessionDenial(error) ? 'database_unavailable' : reasonForDatabaseError(error);
   publishDegraded(userId, reason, message, classifyOperationalFailure(error));
   if (reason !== 'incompatible_schema' && reason !== 'client_update_required') {
     realtimeBoundary.scheduleRecovery();
@@ -1099,8 +1135,8 @@ export function saveStoreRecordFieldsCommitted<T>(
       publishStoreChanges(keys);
     } catch (error) {
       if (!isCurrentPersistenceSession(epoch, userId)) throw new StalePersistenceSessionError();
-      if (isAuthorizationFailure(error)) {
-        resetDatabasePersistence('Your account authorization is no longer valid. Sign in again.', 'signed_out');
+      if (isAuthorizationFailure(error) && await renewSessionAfterAuthorizationFailure() === 'signed_out') {
+        resetDatabasePersistence('Your session has ended. Sign in again.', 'signed_out');
         throw error;
       }
       healthPublisher.recordRemoteWriteFailure(error);

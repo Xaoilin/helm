@@ -1,5 +1,5 @@
 /**
- * Runtime contracts for the Spring Boot prayer and profile services. Every response is parsed
+ * Runtime contracts for the Spring Boot prayer, profile and calendar services. Every response is parsed
  * through these schemas, so a provider change the app cannot handle fails loudly instead of
  * corrupting state. `contracts/<service>/*.json` holds one example per response; the unit tests
  * parse every example here and the services repository verifies its real responses against them.
@@ -105,6 +105,71 @@ export const globalSettingsSchema = z.object({
   updatedAt: instant.nullable(),
 });
 
+const calendarAuthStatus = z.enum(['connected', 'needs_reconnect', 'revoked', 'error']);
+/** An ISO instant for timed events, or a YYYY-MM-DD date for all-day events. */
+const eventTime = z.union([instant, isoDate]);
+
+export const calendarAccountSchema = z.object({
+  id: z.string(),
+  provider: z.enum(['google', 'local']),
+  name: z.string(),
+  email: z.string(),
+  isPrimary: z.boolean(),
+  paletteIndex: z.number().int().nullable(),
+  authStatus: calendarAuthStatus,
+  authError: z.string().nullable(),
+  lastSyncedAt: instant.nullable(),
+  syncError: z.string().nullable(),
+});
+
+export const calendarSourceSchema = z.object({
+  id: z.string(),
+  accountId: z.string(),
+  name: z.string(),
+  color: z.string(),
+  visible: z.boolean(),
+  googleCalendarId: z.string().nullable(),
+  accessRole: z.string().nullable(),
+  writable: z.boolean(),
+});
+
+export const calendarEventSchema = z.object({
+  id: z.string(),
+  sourceId: z.string(),
+  title: z.string(),
+  description: z.string(),
+  location: z.string().nullable(),
+  allDay: z.boolean(),
+  start: eventTime,
+  end: eventTime,
+  googleEventId: z.string().nullable(),
+});
+
+export const calendarEventListSchema = z.array(calendarEventSchema);
+
+export const calendarSchema = z.object({
+  accounts: z.array(calendarAccountSchema),
+  sources: z.array(calendarSourceSchema),
+  events: calendarEventListSchema,
+});
+
+export const calendarSyncSchema = z.object({
+  accounts: z.array(z.object({
+    accountId: z.string(),
+    email: z.string(),
+    status: z.enum(['synced', 'failed', 'needs_reconnect', 'revoked']),
+    message: z.string().nullable(),
+    syncedAt: instant.nullable(),
+    eventCount: z.number().int(),
+  })),
+});
+
+export type ServiceCalendarAccount = z.infer<typeof calendarAccountSchema>;
+export type ServiceCalendarSource = z.infer<typeof calendarSourceSchema>;
+export type ServiceCalendarEvent = z.infer<typeof calendarEventSchema>;
+export type ServiceCalendar = z.infer<typeof calendarSchema>;
+export type ServiceCalendarSync = z.infer<typeof calendarSyncSchema>;
+
 export type ServiceOutcome = z.infer<typeof outcomeSchema>;
 export type ServiceOutcomeChange = z.infer<typeof outcomeChangeSchema>;
 export type ServicePreferences = z.infer<typeof preferencesSchema>;
@@ -127,4 +192,18 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   'profile-service/settings-default': globalSettingsSchema,
   'profile-service/settings-updated': globalSettingsSchema,
   'profile-service/settings-invalid': apiErrorSchema,
+  'calendar-service/calendar': calendarSchema,
+  'calendar-service/events': calendarEventListSchema,
+  'calendar-service/sync': calendarSyncSchema,
+  'calendar-service/sync-needs-reconnect': calendarSyncSchema,
+  'calendar-service/account-connected': calendarAccountSchema,
+  'calendar-service/account-created': calendarAccountSchema,
+  'calendar-service/account-updated': calendarAccountSchema,
+  'calendar-service/source-created': calendarSourceSchema,
+  'calendar-service/source-updated': calendarSourceSchema,
+  'calendar-service/event-created': calendarEventSchema,
+  'calendar-service/event-created-local': calendarEventSchema,
+  'calendar-service/event-updated': calendarEventSchema,
+  'calendar-service/event-invalid': apiErrorSchema,
+  'calendar-service/google-reconnect-required': apiErrorSchema,
 };

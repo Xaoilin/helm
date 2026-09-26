@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import AiDebug from '../components/debug/AiDebug';
-import GoogleCalendarDebug from '../components/debug/GoogleCalendarDebug';
+import CalendarBackendStatus from '../components/dashboard/CalendarBackendStatus';
 import PersistenceDebug from '../components/debug/PersistenceDebug';
 import WakeWordDebug from '../components/debug/WakeWordDebug';
 import PrayerDebug from '../components/debug/PrayerDebug';
@@ -52,7 +52,8 @@ export default function DebugSurface() {
           </div>
         )}
         {tab === 'network' && (
-          <GoogleCalendarDebug />
+          // Google Calendar sync runs in the calendar service; its outcome shows on each account.
+          <CalendarBackendStatus />
         )}
         {tab === 'prayer' && <PrayerDebug />}
         {tab === 'persistence' && <PersistenceDebug />}

@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useCalendar } from "../store/contexts/CalendarContext";
+import { useCallback, useEffect, useState } from 'react';
+import { calendarErrorMessage, useCalendar } from "../store/contexts/CalendarContext";
 import { defaultIntegrations, useSettingsContext } from "../store/contexts/SettingsContext";
 import type { CalendarAccount } from '../types/domain';
-import { useGoogleSync } from '../hooks/useGoogleSync';
 import { GOOGLE_OAUTH_CLIENT_ID } from '../config';
-import { appendGoogleCalendarDiagnosticEvent } from '../services/googleCalendarDiagnosticEvents';
+import { loadGisScript, requestGoogleAuthorizationCode } from '../services/googleAuth';
 import { getAuthSessionSnapshot } from '../store/supabase/client';
 import { getAppDate } from '../services/appTimeZone';
 import { LIFE_HERO_ENABLED } from '../config/deprecatedFeatures';
@@ -22,26 +21,19 @@ import {
   type GithubLifeHeroRepository,
   type GithubLifeHeroStatus,
 } from '../services/githubLifeHero';
-import {
-  GOOGLE_SIGN_IN_REQUIRED_MESSAGE,
-  connectGoogleCalendarOAuthAccount,
-  connectProfileGoogleCalendar,
-  clearGoogleCalendarAuth,
-  GoogleCalendarReconnectRequiredError,
-  getGoogleCalendarCredentialStatusLabel,
-  getGoogleCalendarAuthPatch,
-  getGoogleCalendarStatusLabel,
-  isGoogleCalendarAccount,
-  reconnectGoogleCalendarOAuthAccount,
-  triggerProfileGoogleReconnect,
-} from '../services/googleCalendarAuthManager';
-import {
-  GoogleCalendarOAuthFunctionError,
-  revokeGoogleCalendarCredential,
-} from '../services/googleCalendarServerAuth';
+const GOOGLE_SIGN_IN_REQUIRED_MESSAGE = 'Sign in to Sabah One before connecting Google Calendar.';
 
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
+function googleStatusLabel(account: CalendarAccount): string {
+  switch (account.authStatus) {
+    case 'needs_reconnect':
+      return 'Needs reconnect';
+    case 'revoked':
+      return 'Access revoked';
+    case 'error':
+      return 'Error';
+    default:
+      return 'Connected';
+  }
 }
 
 function getStatusTone(account: CalendarAccount): string {
@@ -60,10 +52,9 @@ function getStatusTone(account: CalendarAccount): string {
 export default function IntegrationsSurface() {
   const calendar = useCalendar();
   const settings = useSettingsContext();
-  const googleSync = useGoogleSync();
   const [configuring, setConfiguring] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
-  const [googleBusyAction, setGoogleBusyAction] = useState<'profile' | 'oauth' | `reconnect:${string}` | null>(null);
+  const [googleBusyAction, setGoogleBusyAction] = useState<'oauth' | `reconnect:${string}` | `disconnect:${string}` | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [githubStatus, setGithubStatus] = useState<GithubLifeHeroStatus | null>(null);
   const [githubRepositories, setGithubRepositories] = useState<GithubLifeHeroRepository[]>([]);
@@ -78,11 +69,10 @@ export default function IntegrationsSurface() {
     name: provider.name,
     description: provider.description,
   }));
-  const googleAccounts = calendar.calendarAccounts.filter(isGoogleCalendarAccount);
+  const googleAccounts = calendar.calendarAccounts.filter(account => account.provider === 'google');
   const clientId = GOOGLE_OAUTH_CLIENT_ID;
   const authSnapshot = getAuthSessionSnapshot();
   const isSignedIn = Boolean(authSnapshot?.userId);
-  const googleIntegrationId = integrations.find(integration => integration.provider === 'google')?.id ?? 'int-google';
   const githubIntegration = integrations.find(integration => integration.provider === 'github');
   const githubIntegrationId = githubIntegration?.id;
   const githubConfiguredAt = githubIntegration?.configuredAt;
@@ -237,277 +227,64 @@ export default function IntegrationsSurface() {
   };
 
   const profileEmail = authSnapshot?.email ?? null;
-  const hostedGoogleIssue = googleSync.serverRuntimeStatus?.lastError ?? null;
-  const linkedProfileAccount = useMemo(() => (
-    profileEmail
-      ? googleAccounts.find(account => normalizeEmail(account.email) === normalizeEmail(profileEmail))
-      : undefined
-  ), [googleAccounts, profileEmail]);
-  const canLinkSignedInGoogle = Boolean(profileEmail && authSnapshot?.provider === 'google' && !linkedProfileAccount);
-  const needsProfileReconnect = Boolean(profileEmail && authSnapshot?.provider === 'google' && !authSnapshot?.providerRefreshToken);
+  const profileAccountConnected = Boolean(profileEmail && googleAccounts.some(
+    account => account.email.toLowerCase() === profileEmail.toLowerCase(),
+  ));
 
-  const isLinkedProfileAccount = (account: CalendarAccount): boolean => {
-    if (account.authProvider === 'profile-google') return true;
-    return Boolean(
-      profileEmail
-      && authSnapshot?.provider === 'google'
-      && normalizeEmail(account.email) === normalizeEmail(profileEmail),
-    );
-  };
-
-  const addSourcesIfMissing = (accountId: string, calendars: Awaited<ReturnType<typeof connectProfileGoogleCalendar>>['calendars']) => {
-    const existingGoogleIds = new Set(
-      calendar.calendarSources
-        .filter(source => source.accountId === accountId && source.googleCalendarId)
-        .map(source => source.googleCalendarId!),
-    );
-    const foreignGoogleIds = new Set(
-      calendar.calendarSources
-        .filter(source => source.accountId !== accountId && source.googleCalendarId)
-        .map(source => source.googleCalendarId!),
-    );
-
-    for (const calendarEntry of calendars) {
-      if (existingGoogleIds.has(calendarEntry.id) || foreignGoogleIds.has(calendarEntry.id)) continue;
-      calendar.addCalendarSource({
-        accountId,
-        name: calendarEntry.summary,
-        color: calendarEntry.backgroundColor || '#4f5bff',
-        visible: true,
-        googleCalendarId: calendarEntry.id,
-        accessRole: calendarEntry.accessRole,
-      });
-    }
-  };
-
-  const handleProfileGoogleConnect = async () => {
-    setGoogleBusyAction('profile');
-    setGoogleError(null);
-
-    try {
-      if (!isSignedIn) {
-        setGoogleError(GOOGLE_SIGN_IN_REQUIRED_MESSAGE);
-        return;
-      }
-
-      if (needsProfileReconnect) {
-        await triggerProfileGoogleReconnect();
-        return;
-      }
-
-      const result = await connectProfileGoogleCalendar();
-      const existing = googleAccounts.find(account => normalizeEmail(account.email) === normalizeEmail(result.email));
-
-      if (existing) {
-        calendar.updateCalendarAccount(existing.id, {
-          name: result.accountName,
-          connected: true,
-          mocked: false,
-          ...getGoogleCalendarAuthPatch({ ...existing, name: result.accountName, connected: true, mocked: false }),
-        });
-        addSourcesIfMissing(existing.id, result.calendars);
-      } else {
-        const accountId = calendar.addCalendarAccount({
-          name: result.accountName,
-          email: result.email,
-          provider: 'google',
-          isPrimary: calendar.calendarAccounts.length === 0,
-          connected: true,
-          mocked: false,
-          authProvider: result.authProvider,
-          authStatus: 'connected',
-          authEmail: result.email,
-          authExpiresAt: result.authExpiresAt,
-          lastAuthError: undefined,
-          lastAuthCheckAt: new Date().toISOString(),
-          syncError: undefined,
-        });
-        addSourcesIfMissing(accountId, result.calendars);
-      }
-
-      settings.updateIntegration(googleIntegrationId, {
-        status: 'connected',
-        configuredAt: new Date().toISOString(),
-        lastError: undefined,
-      });
-      await googleSync.refreshCredentialStatuses();
-      setConfiguring(null);
-    } catch (error) {
-      setGoogleError(error instanceof Error ? error.message : 'Connection failed');
-    } finally {
-      setGoogleBusyAction(null);
-    }
-  };
-
-  const handleGoogleConnect = async () => {
-    if (!isSignedIn) {
-      setGoogleError(GOOGLE_SIGN_IN_REQUIRED_MESSAGE);
-      return;
-    }
-
+  /**
+   * Google's consent popup returns a one-time code, which the calendar service exchanges and keeps.
+   * This never replaces the Sabah One session, whichever Google account the user picks.
+   */
+  const connectWithGooglePopup = async (options: { loginHint?: string; expectedEmail?: string }) => {
+    if (!isSignedIn) throw new Error(GOOGLE_SIGN_IN_REQUIRED_MESSAGE);
     if (!clientId?.trim()) {
-      setGoogleError('Google Calendar setup is unavailable. Ask the site operator to configure Google Calendar, then try again.');
-      return;
+      throw new Error('Google Calendar setup is unavailable. Ask the site operator to configure Google Calendar, then try again.');
     }
+    await loadGisScript();
+    const { code } = await requestGoogleAuthorizationCode(clientId.trim(), {
+      loginHint: options.loginHint,
+      selectAccount: true,
+    });
+    return calendar.connectGoogleAccount(code, window.location.origin, options.expectedEmail);
+  };
 
+  const handleGoogleConnect = async (loginHint?: string) => {
     setGoogleBusyAction('oauth');
     setGoogleError(null);
-
     try {
-      const result = await connectGoogleCalendarOAuthAccount(clientId.trim());
-      const existing = googleAccounts.find(account => normalizeEmail(account.email) === normalizeEmail(result.email));
-      if (existing) {
-        setGoogleError(`Account ${result.email} is already connected. Reconnect it from the account row below or sign in with a different Google account.`);
-        return;
-      }
-
-      const accountId = calendar.addCalendarAccount({
-        name: result.accountName,
-        email: result.email,
-        provider: 'google',
-        isPrimary: calendar.calendarAccounts.length === 0,
-        connected: true,
-        mocked: false,
-        authProvider: result.authProvider,
-        authStatus: 'connected',
-        authEmail: result.email,
-        authExpiresAt: result.authExpiresAt,
-        lastAuthError: undefined,
-        lastAuthCheckAt: new Date().toISOString(),
-        syncError: undefined,
-      });
-
-      addSourcesIfMissing(accountId, result.calendars);
-      settings.updateIntegration(googleIntegrationId, {
-        status: 'connected',
-        configuredAt: new Date().toISOString(),
-        lastError: undefined,
-      });
-      await googleSync.refreshCredentialStatuses();
+      await connectWithGooglePopup({ loginHint });
       setConfiguring(null);
     } catch (error) {
-      setGoogleError(error instanceof Error ? error.message : 'Connection failed');
+      setGoogleError(calendarErrorMessage(error));
     } finally {
       setGoogleBusyAction(null);
     }
   };
 
   const handleGoogleReconnect = async (account: CalendarAccount) => {
-    const reconnectKey = `reconnect:${account.id}` as const;
-    setGoogleBusyAction(reconnectKey);
+    setGoogleBusyAction(`reconnect:${account.id}`);
     setGoogleError(null);
-
     try {
-      if (!isSignedIn) {
-        setGoogleError(GOOGLE_SIGN_IN_REQUIRED_MESSAGE);
-        return;
-      }
-
-      if (!clientId?.trim()) {
-        setGoogleError('Google Calendar setup is unavailable. Ask the site operator to configure Google Calendar, then try again.');
-        return;
-      }
-
-      const result = await reconnectGoogleCalendarOAuthAccount(account, clientId.trim());
-      calendar.updateCalendarAccount(account.id, {
-        name: result.accountName,
-        authProvider: result.authProvider,
-        authStatus: 'connected',
-        authEmail: result.email,
-        authExpiresAt: result.authExpiresAt,
-        lastAuthError: undefined,
-        lastAuthCheckAt: new Date().toISOString(),
-        syncError: undefined,
-      });
-      addSourcesIfMissing(account.id, result.calendars);
-      settings.updateIntegration(googleIntegrationId, {
-        status: 'connected',
-        configuredAt: new Date().toISOString(),
-        lastError: undefined,
-      });
-      await googleSync.refreshCredentialStatuses();
+      await connectWithGooglePopup({ loginHint: account.email, expectedEmail: account.email });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Reconnect failed';
-      setGoogleError(message);
-      calendar.updateCalendarAccount(account.id, {
-        authProvider: error instanceof GoogleCalendarReconnectRequiredError ? error.authProvider : account.authProvider,
-        authStatus: error instanceof GoogleCalendarReconnectRequiredError
-          ? error.authStatus
-          : isLinkedProfileAccount(account) ? 'needs_reconnect' : account.authStatus,
-        lastAuthError: message,
-      });
+      setGoogleError(calendarErrorMessage(error));
     } finally {
       setGoogleBusyAction(null);
     }
   };
 
+  /** The service revokes the stored Google credential and removes the account's calendars. */
   const handleGoogleDisconnect = async (accountId: string) => {
-    const account = googleAccounts.find(candidate => candidate.id === accountId);
-    if (!account) return;
-
-    appendGoogleCalendarDiagnosticEvent({
-      operation: 'disconnect',
-      phase: 'start',
-      outcome: 'info',
-      triggerSource: 'user_action',
-      accountId: account.id,
-      email: account.email,
-      resolvedAuthProvider: account.authProvider,
-      message: `Starting an explicit Google Calendar disconnect for ${account.email}.`,
-    });
-
-    let revokeFailureMessage: string | null = null;
+    setGoogleBusyAction(`disconnect:${accountId}`);
+    setGoogleError(null);
     try {
-      if (isSignedIn) {
-        await revokeGoogleCalendarCredential(account.email);
-      }
+      await calendar.removeCalendarAccount(accountId);
+      setConfirmDisconnect(null);
     } catch (error) {
-      if (!(error instanceof GoogleCalendarOAuthFunctionError) || error.code !== 'missing_credential') {
-        appendGoogleCalendarDiagnosticEvent({
-          operation: 'disconnect',
-          phase: 'failure',
-          outcome: 'failure',
-          triggerSource: 'user_action',
-          accountId: account.id,
-          email: account.email,
-          resolvedAuthProvider: account.authProvider,
-          message: error instanceof Error ? error.message : 'Disconnect failed',
-          code: error instanceof GoogleCalendarOAuthFunctionError ? error.code : undefined,
-          requestId: error instanceof GoogleCalendarOAuthFunctionError ? error.requestId : undefined,
-          readiness: error instanceof GoogleCalendarOAuthFunctionError ? error.readiness : undefined,
-          httpStatus: error instanceof GoogleCalendarOAuthFunctionError ? error.httpStatus : undefined,
-        });
-        revokeFailureMessage = error instanceof Error ? error.message : 'Disconnect failed';
-      }
+      setGoogleError(calendarErrorMessage(error));
+    } finally {
+      setGoogleBusyAction(null);
     }
-
-    clearGoogleCalendarAuth(accountId);
-
-    calendar.removeCalendarAccount(accountId);
-
-    const remaining = googleAccounts.filter(account => account.id !== accountId);
-    if (remaining.length === 0) {
-      settings.updateIntegration(googleIntegrationId, {
-        status: 'disconnected',
-        configuredAt: undefined,
-        lastError: undefined,
-      });
-    }
-
-    await googleSync.refreshCredentialStatuses();
-    appendGoogleCalendarDiagnosticEvent({
-      operation: 'disconnect',
-      phase: 'success',
-      outcome: 'success',
-      triggerSource: 'user_action',
-      accountId: account.id,
-      email: account.email,
-      resolvedAuthProvider: account.authProvider,
-      message: revokeFailureMessage
-        ? `Disconnected Google Calendar account ${account.email} locally, but hosted credential cleanup failed: ${revokeFailureMessage}`
-        : `Disconnected Google Calendar account ${account.email}.`,
-    });
-    setConfirmDisconnect(null);
   };
 
   return (
@@ -524,9 +301,9 @@ export default function IntegrationsSurface() {
           Slack and Linear connections are unavailable.
         </div>
 
-        {hostedGoogleIssue && (
-          <div className="info-box warning" style={{ marginTop: 8 }}>
-            Hosted Google Calendar status is degraded right now: {hostedGoogleIssue}
+        {calendar.syncProblem && (
+          <div className="info-box warning" style={{ marginTop: 8 }} role="status">
+            Google Calendar sync needs attention: {calendar.syncProblem}
           </div>
         )}
 
@@ -571,18 +348,13 @@ export default function IntegrationsSurface() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <strong>{account.email}</strong>
                           <span className={`tag tag-${getStatusTone(account)}`} role="status">
-                            {getGoogleCalendarStatusLabel(account)}
+                            {googleStatusLabel(account)}
                           </span>
-                          {account.authProvider === 'profile-google' && (
-                            <span style={{ fontSize: 11, color: '#8b90a8' }}>Linked to your Sabah One Google sign-in</span>
-                          )}
                         </div>
                         <div style={{ fontSize: 11, color: '#6b6f85', marginTop: 4 }}>
                           {account.lastSyncTime
                             ? `Synced ${new Date(account.lastSyncTime).toLocaleString()}`
                             : 'Not yet synced'}
-                          {account.lastAuthCheckAt && ` · Access checked ${new Date(account.lastAuthCheckAt).toLocaleString()}`}
-                          {` · Credential status ${getGoogleCalendarCredentialStatusLabel(account)}`}
                         </div>
                         {(account.lastAuthError || account.syncError) && (
                           <div style={{ color: account.authStatus === 'error' ? '#f0c040' : '#ff6b6b', marginTop: 4, fontSize: 11 }}>
@@ -603,7 +375,7 @@ export default function IntegrationsSurface() {
                         {confirmDisconnect === account.id ? (
                           <>
                             <span style={{ fontSize: 11, color: '#ff6b6b' }}>Remove this account?</span>
-                            <button className="btn btn-danger btn-sm" onClick={() => handleGoogleDisconnect(account.id)}>Yes</button>
+                            <button className="btn btn-danger btn-sm" onClick={() => handleGoogleDisconnect(account.id)} disabled={googleBusyAction === `disconnect:${account.id}`}>Yes</button>
                             <button className="btn btn-secondary btn-sm" onClick={() => setConfirmDisconnect(null)}>No</button>
                           </>
                         ) : (
@@ -613,6 +385,10 @@ export default function IntegrationsSurface() {
                     </div>
                   ))}
                 </div>
+              )}
+
+              {isGoogle && googleError && configuring !== integration.id && (
+                <div className="info-box warning" style={{ marginTop: 8 }} role="alert">{googleError}</div>
               )}
 
               {isGithub && (
@@ -685,16 +461,8 @@ export default function IntegrationsSurface() {
                     {configuring === integration.id ? (
                       <div style={{ flex: 1 }}>
                         {googleError && (
-                          <div className="info-box warning" style={{ marginBottom: 8 }}>
+                          <div className="info-box warning" style={{ marginBottom: 8 }} role="alert">
                             {googleError}
-                          </div>
-                        )}
-
-                        {canLinkSignedInGoogle && (
-                          <div className="info-box" style={{ marginBottom: 8 }}>
-                            {needsProfileReconnect
-                              ? `You are signed into Sabah One as ${profileEmail}. Reconnect that Google sign-in once so Sabah One can store a durable Calendar credential.`
-                              : `Link your signed-in Google profile (${profileEmail}) without adding a duplicate account.`}
                           </div>
                         )}
 
@@ -712,24 +480,22 @@ export default function IntegrationsSurface() {
                         )}
 
                         <div className="info-box" style={{ marginBottom: 8 }}>
-                          Sabah One keeps refreshable Google Calendar credentials on the server for browser sync. The one-hour Google access token lifetime shown in Debug is transport metadata, not your account connection lifetime.
+                          Google shows a consent popup; Sabah One's calendar service keeps the Google credential and syncs for you. Connecting or reconnecting Google never signs you out of Sabah One.
                         </div>
 
                         <div className="actions-row" style={{ flexWrap: 'wrap' }}>
-                          {canLinkSignedInGoogle && (
+                          {profileEmail && !profileAccountConnected && (
                             <button
                               className="btn btn-primary btn-sm"
-                              onClick={handleProfileGoogleConnect}
-                              disabled={googleBusyAction === 'profile'}
+                              onClick={() => handleGoogleConnect(profileEmail)}
+                              disabled={!clientId?.trim() || !isSignedIn || googleBusyAction === 'oauth'}
                             >
-                              {googleBusyAction === 'profile'
-                                ? <><span className="spinner" /> Working...</>
-                                : needsProfileReconnect ? 'Reconnect Signed-In Google Account' : 'Link Signed-In Google Account'}
+                              Connect {profileEmail}
                             </button>
                           )}
                           <button
                             className="btn btn-secondary btn-sm"
-                            onClick={handleGoogleConnect}
+                            onClick={() => handleGoogleConnect()}
                             disabled={!clientId?.trim() || !isSignedIn || googleBusyAction === 'oauth'}
                           >
                             {googleBusyAction === 'oauth'
@@ -741,7 +507,7 @@ export default function IntegrationsSurface() {
                       </div>
                     ) : (
                       <button className="btn btn-primary btn-sm" onClick={() => { setConfiguring(integration.id); setGoogleError(null); }}>
-                        {googleAccounts.length > 0 || canLinkSignedInGoogle ? '+ Add Account' : 'Configure'}
+                        {googleAccounts.length > 0 ? '+ Add Account' : 'Configure'}
                       </button>
                     )}
                   </>

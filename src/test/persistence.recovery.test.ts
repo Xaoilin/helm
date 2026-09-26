@@ -4,6 +4,8 @@ const database = vi.hoisted(() => ({
   isSupabaseReady: vi.fn(() => true),
   isAuthenticated: vi.fn(() => true),
   getCurrentUserId: vi.fn((): string | null => 'recovery-account'),
+  // The auth server has ended the session: renewal finds none.
+  getFreshAccessToken: vi.fn(async (): Promise<string | null> => null),
   fetchHelmAccountSnapshot: vi.fn(),
   fetchHelmCollections: vi.fn(),
   probeHelmAccountVersion: vi.fn(),
@@ -106,7 +108,7 @@ it('bounds a prolonged outage, suppresses hidden and duplicate work, and resumes
 
   database.probeHelmAccountVersion.mockRejectedValue({ status: 401, message: 'invalid authorization' });
   await refreshDatabasePersistence();
-  expect(await loadStore('settings')).toBeNull();
+  await vi.waitFor(async () => expect(await loadStore('settings')).toBeNull());
   expect(getSyncSessionSnapshot()).toMatchObject({ status: 'blocked', hasUsableSnapshot: false });
   const callsAtInvalidation = database.probeHelmAccountVersion.mock.calls.length;
   await vi.advanceTimersByTimeAsync(120_000);

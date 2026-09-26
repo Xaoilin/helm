@@ -1,0 +1,17 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/calendar/v1/sync"
+  },
+  "status" : 200,
+  "body" : {
+    "accounts" : [ {
+      "accountId" : "7e724593-c457-47b1-8c3b-cff4c8d0431c",
+      "email" : "sabah@example.com",
+      "status" : "synced",
+      "message" : null,
+      "syncedAt" : "2026-09-26T05:49:27.689637Z",
+      "eventCount" : 1
+    } ]
+  }
+}

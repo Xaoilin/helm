@@ -1,12 +1,11 @@
 import { ASSISTANT_ENABLED } from '../config/deprecatedFeatures';
 import type { Surface } from '../types/domain';
 
-// Background reminders, rewards, calendar sync, and running timers remain
-// available on every page. Custom providers hydrate each listed group together.
+// Background reminders, rewards and running timers remain available on every page. Custom
+// providers hydrate each listed group together. Calendar data comes from the calendar service.
 export const SHARED_PAGE_COLLECTIONS = [
   'settings', 'integrations', 'gamification', 'tasks', 'prayerTracking',
-  'knowledgeTopics', 'knowledgeEntries', 'lifestyleItems',
-  'calendarAccounts', 'calendarSources', 'calendarEvents', 'clock',
+  'knowledgeTopics', 'knowledgeEntries', 'lifestyleItems', 'clock',
 ] as const;
 
 const PROJECT_COLLECTIONS = ['projects', 'projectPages', 'workspaces'];

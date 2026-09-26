@@ -1,18 +1,8 @@
-// Google Identity Services integration for browser-based authorization-code flow.
-// Legacy token storage remains for migration diagnostics only.
-
-import { appendGoogleCalendarDiagnosticEvent } from './googleCalendarDiagnosticEvents';
-import { logWarn } from './logger';
+// Google Identity Services: the consent popup that returns a one-time authorization code. The
+// calendar service exchanges the code; no Google token is ever kept in the browser.
 
 const GIS_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
 const SCOPES = 'https://www.googleapis.com/auth/calendar';
-const TOKEN_KEY_PREFIX = 'helm:google-tokens:';
-
-export interface GoogleTokens {
-  accessToken: string;
-  expiresAt: number;
-  scope: string;
-}
 
 export interface GoogleAuthorizationCode {
   code: string;
@@ -39,22 +29,10 @@ export function loadGisScript(): Promise<void> {
     script.async = true;
     script.onload = () => {
       gisLoaded = true;
-      appendGoogleCalendarDiagnosticEvent({
-        operation: 'gis_script',
-        phase: 'success',
-        outcome: 'success',
-        message: 'Google Identity Services script loaded successfully.',
-      });
       resolve();
     };
     script.onerror = () => {
       gisLoading = null;
-      appendGoogleCalendarDiagnosticEvent({
-        operation: 'gis_script',
-        phase: 'failure',
-        outcome: 'failure',
-        message: 'Failed to load Google Identity Services script.',
-      });
       reject(new Error('Failed to load Google Identity Services script'));
     };
     document.head.appendChild(script);
@@ -76,27 +54,9 @@ export function requestGoogleAuthorizationCode(
 ): Promise<GoogleAuthorizationCode> {
   return new Promise((resolve, reject) => {
     if (!window.google?.accounts?.oauth2) {
-      appendGoogleCalendarDiagnosticEvent({
-        operation: 'gis_code_flow',
-        phase: 'failure',
-        outcome: 'failure',
-        message: 'Google Identity Services is not loaded in the browser.',
-        email: options.loginHint,
-      });
       reject(new Error('Google Identity Services not loaded'));
       return;
     }
-
-    appendGoogleCalendarDiagnosticEvent({
-      operation: 'gis_code_flow',
-      phase: 'start',
-      outcome: 'info',
-      triggerSource: 'user_action',
-      message: options.loginHint
-        ? `Starting Google authorization-code flow for ${options.loginHint}.`
-        : 'Starting Google authorization-code flow.',
-      email: options.loginHint,
-    });
 
     const client = window.google.accounts.oauth2.initCodeClient({
       client_id: clientId,
@@ -107,98 +67,26 @@ export function requestGoogleAuthorizationCode(
       select_account: options.selectAccount ?? true,
       callback: (response: GoogleCodeResponse) => {
         if (response.error) {
-          appendGoogleCalendarDiagnosticEvent({
-            operation: 'gis_code_flow',
-            phase: 'failure',
-            outcome: 'failure',
-            triggerSource: 'user_action',
-            message: response.error_description || response.error,
-            code: response.error,
-            email: options.loginHint,
-          });
           reject(new Error(response.error_description || response.error));
           return;
         }
 
         if (!response.code) {
-          appendGoogleCalendarDiagnosticEvent({
-            operation: 'gis_code_flow',
-            phase: 'failure',
-            outcome: 'failure',
-            triggerSource: 'user_action',
-            message: 'Google did not return an authorization code.',
-            email: options.loginHint,
-          });
           reject(new Error('Google did not return an authorization code.'));
           return;
         }
-
-        appendGoogleCalendarDiagnosticEvent({
-          operation: 'gis_code_flow',
-          phase: 'success',
-          outcome: 'success',
-          triggerSource: 'user_action',
-          message: 'Google returned an authorization code successfully.',
-          email: options.loginHint,
-        });
         resolve({
           code: response.code,
           scope: response.scope || SCOPES,
         });
       },
       error_callback: (error: GoogleErrorResponse) => {
-        appendGoogleCalendarDiagnosticEvent({
-          operation: 'gis_code_flow',
-          phase: 'failure',
-          outcome: 'failure',
-          triggerSource: 'user_action',
-          message: error.message || 'OAuth code flow failed',
-          code: error.type,
-          email: options.loginHint,
-        });
         reject(new Error(error.message || 'OAuth code flow failed'));
       },
     });
 
     client.requestCode();
   });
-}
-
-/** Revoke access token at Google. */
-export async function revokeAccess(accessToken: string): Promise<void> {
-  try {
-    if (window.google?.accounts?.oauth2) {
-      window.google.accounts.oauth2.revoke(accessToken, () => {});
-    }
-  } catch {
-    logWarn('GoogleAuth', 'Token revocation failed (best-effort)');
-  }
-}
-
-// ── Legacy token storage for migration diagnostics ──
-
-export function saveGoogleTokens(accountId: string, tokens: GoogleTokens): void {
-  localStorage.setItem(TOKEN_KEY_PREFIX + accountId, JSON.stringify(tokens));
-}
-
-export function loadGoogleTokens(accountId: string): GoogleTokens | null {
-  const raw = localStorage.getItem(TOKEN_KEY_PREFIX + accountId);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as GoogleTokens;
-  } catch {
-    return null;
-  }
-}
-
-export function clearGoogleTokens(accountId: string): void {
-  localStorage.removeItem(TOKEN_KEY_PREFIX + accountId);
-}
-
-/** Check if a legacy token is still fresh (with 60s buffer). */
-export function isTokenValid(tokens: GoogleTokens | null): boolean {
-  if (!tokens) return false;
-  return Date.now() < tokens.expiresAt - 60000;
 }
 
 interface GoogleCodeResponse {
@@ -229,7 +117,6 @@ declare global {
             callback: (response: GoogleCodeResponse) => void;
             error_callback?: (error: GoogleErrorResponse) => void;
           }): { requestCode(): void };
-          revoke(token: string, callback: () => void): void;
         };
       };
     };

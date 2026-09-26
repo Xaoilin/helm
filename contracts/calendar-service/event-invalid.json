@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/calendar/v1/events"
+  },
+  "status" : 400,
+  "body" : {
+    "code" : "invalid_event_time",
+    "message" : "Timed events need start and end as ISO-8601 date-times with an offset."
+  }
+}

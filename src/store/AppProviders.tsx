@@ -1,5 +1,4 @@
 import { useMemo, type ReactNode } from 'react';
-import { GoogleSyncProvider } from '../hooks/useGoogleSync';
 import { AssistantActivityProvider, useAssistantActivityContext } from './contexts/AssistantActivityContext';
 import { AssistantProvider, useAssistantContext } from './contexts/AssistantContext';
 import { CalendarProvider, useCalendar } from './contexts/CalendarContext';
@@ -26,35 +25,6 @@ import { useDailyTaskRollover } from './workflows/useDailyTaskRollover';
 function DailyTaskRollover() {
   useDailyTaskRollover();
   return null;
-}
-
-function GoogleSyncBridge({ children }: { children: ReactNode }) {
-  const calendar = useCalendar();
-  const app = useMemo(() => ({
-    calendarAccounts: calendar.calendarAccounts,
-    calendarSources: calendar.calendarSources,
-    calendarEvents: calendar.calendarEvents,
-    updateCalendarAccount: calendar.updateCalendarAccount,
-    bulkUpsertCalendarSources: calendar.bulkUpsertCalendarSources,
-    bulkUpsertCalendarEvents: calendar.bulkUpsertCalendarEvents,
-    removeCalendarSource: calendar.removeCalendarSource,
-    updateCalendarEvent: calendar.updateCalendarEvent,
-    removeCalendarEvent: calendar.removeCalendarEvent,
-    bulkRemoveCalendarEvents: calendar.bulkRemoveCalendarEvents,
-  }), [
-    calendar.calendarAccounts,
-    calendar.calendarSources,
-    calendar.calendarEvents,
-    calendar.updateCalendarAccount,
-    calendar.bulkUpsertCalendarSources,
-    calendar.bulkUpsertCalendarEvents,
-    calendar.removeCalendarSource,
-    calendar.updateCalendarEvent,
-    calendar.removeCalendarEvent,
-    calendar.bulkRemoveCalendarEvents,
-  ]);
-
-  return <GoogleSyncProvider app={app}>{children}</GoogleSyncProvider>;
 }
 
 /**
@@ -98,8 +68,6 @@ function ChatBridge({ children }: { children: ReactNode }) {
     removeTask: tasks.removeTask,
     upsertAssistantCorrection: assistant.upsertCorrection,
     noteAssistantCorrectionApplied: assistant.noteCorrectionApplied,
-    addCalendarEvent: calendar.addCalendarEvent,
-    updateCalendarEvent: calendar.updateCalendarEvent,
     addTransaction: finance.addTransaction,
     addKnowledgeEntry: knowledge.addKnowledgeEntry,
     addInventoryItem: inventory.addInventoryItem,
@@ -151,7 +119,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
                                       <ChatBridge>
                                         <AssistantUndoProvider>
                                           <MilestoneCelebrationProvider>
-                                            <GoogleSyncBridge>{children}</GoogleSyncBridge>
+                                            {children}
                                           </MilestoneCelebrationProvider>
                                         </AssistantUndoProvider>
                                       </ChatBridge>

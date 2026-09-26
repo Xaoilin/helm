@@ -1,0 +1,18 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/calendar/v1/events"
+  },
+  "status" : 201,
+  "body" : {
+    "id" : "72e98a19-f399-4e54-bbc8-68f16d4305f4",
+    "sourceId" : "cf2214d3-55bc-42e9-8836-aafec4980c5d",
+    "title" : "Lunch",
+    "description" : "",
+    "location" : null,
+    "allDay" : true,
+    "start" : "2026-10-05",
+    "end" : "2026-10-05",
+    "googleEventId" : "g2"
+  }
+}

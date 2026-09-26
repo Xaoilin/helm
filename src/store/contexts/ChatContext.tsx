@@ -67,8 +67,9 @@ export interface ChatCrossDomainData {
     scope: AssistantCorrection['scope'];
   }) => string | null;
   noteAssistantCorrectionApplied: (id: string) => void;
-  addCalendarEvent: (event: Omit<CalendarEvent, 'id'>) => string;
-  updateCalendarEvent: (id: string, updates: Partial<CalendarEvent>) => void;
+  /** Chat no longer changes the calendar: calendar writes go through the calendar service. */
+  addCalendarEvent?: (event: Omit<CalendarEvent, 'id'>) => string;
+  updateCalendarEvent?: (id: string, updates: Partial<CalendarEvent>) => void;
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => string;
   addKnowledgeEntry: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
   addInventoryItem: (item: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>) => string;

@@ -1,5 +1,5 @@
 /**
- * Stateful stand-ins for the Spring Boot prayer and profile services. Every response is parsed
+ * Stateful stand-ins for the Spring Boot prayer, profile and calendar services. Every response is parsed
  * through the app's contract schemas first, so this fake cannot drift from the contract the real
  * services are verified against (contracts/<service>/*.json).
  */
@@ -7,13 +7,23 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Page, Route } from '@playwright/test';
 import type { z } from 'zod';
+import type { CalendarAccount, CalendarEvent, CalendarSource } from '../../src/types/domain';
 import {
   apiErrorSchema,
+  calendarAccountSchema,
+  calendarEventListSchema,
+  calendarEventSchema,
+  calendarSchema,
+  calendarSourceSchema,
+  calendarSyncSchema,
   dashboardSchema,
   globalSettingsSchema,
   outcomeChangeSchema,
   outcomeListSchema,
   preferencesSchema,
+  type ServiceCalendarAccount,
+  type ServiceCalendarEvent,
+  type ServiceCalendarSource,
   type ServiceGlobalSettings,
   type ServiceOutcome,
   type ServicePreferences,
@@ -33,6 +43,14 @@ export interface FakeServicesOptions {
   preferences?: ServicePreferences;
   /** The next write is applied but its response is lost (a 503), like a reply that timed out. */
   loseNextWriteResponse?: boolean;
+  /** The calendar the service holds, in the app's shapes (as scenarios describe it). */
+  calendar?: { accounts?: CalendarAccount[]; sources?: CalendarSource[]; events?: CalendarEvent[] };
+}
+
+export interface FakeCalendar {
+  accounts: ServiceCalendarAccount[];
+  sources: ServiceCalendarSource[];
+  events: ServiceCalendarEvent[];
 }
 
 /** A completed write, kept by its Idempotency-Key like the real service's processed-command table. */
@@ -56,6 +74,45 @@ export interface FakeServices {
   failureStatus?: number;
   rejectCreates?: { code: string; message: string };
   loseNextWriteResponse?: boolean;
+  calendar: FakeCalendar;
+}
+
+function toServiceCalendar(calendar: FakeServicesOptions['calendar'] = {}): FakeCalendar {
+  return {
+    accounts: (calendar.accounts ?? []).map(account => ({
+      id: account.id,
+      provider: account.provider === 'google' ? 'google' : 'local',
+      name: account.name,
+      email: account.email,
+      isPrimary: account.isPrimary,
+      paletteIndex: account.paletteIndex ?? null,
+      authStatus: account.authStatus ?? 'connected',
+      authError: account.lastAuthError ?? null,
+      lastSyncedAt: account.lastSyncTime ?? null,
+      syncError: account.syncError ?? null,
+    })),
+    sources: (calendar.sources ?? []).map(source => ({
+      id: source.id,
+      accountId: source.accountId,
+      name: source.name,
+      color: source.color,
+      visible: source.visible,
+      googleCalendarId: source.googleCalendarId ?? null,
+      accessRole: source.accessRole ?? null,
+      writable: source.writable ?? true,
+    })),
+    events: (calendar.events ?? []).map(event => ({
+      id: event.id,
+      sourceId: event.sourceId,
+      title: event.title,
+      description: event.description,
+      location: event.location ?? null,
+      allDay: event.allDay,
+      start: event.start,
+      end: event.end,
+      googleEventId: event.googleEventId ?? null,
+    })),
+  };
 }
 
 export function createFakeServices(options: FakeServicesOptions = {}): FakeServices {
@@ -73,6 +130,7 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
     failureStatus: options.failureStatus,
     rejectCreates: options.rejectCreates,
     loseNextWriteResponse: options.loseNextWriteResponse,
+    calendar: toServiceCalendar(options.calendar),
   };
 }
 
@@ -89,6 +147,10 @@ export async function installFakeServices(page: Page, services: FakeServices): P
     if (url.pathname === '/api/prayer/health') return reply(route, 200, { status: 'UP', service: 'prayer-service' });
     if (url.pathname === '/api/prayer/health/database') {
       return reply(route, 200, { status: 'UP', service: 'prayer-service', database: 'UP' });
+    }
+    if (url.pathname === '/api/calendar/health') return reply(route, 200, { status: 'UP', service: 'calendar-service' });
+    if (url.pathname === '/api/calendar/health/database') {
+      return reply(route, 200, { status: 'UP', service: 'calendar-service', database: 'UP' });
     }
     services.calls.push(call);
     if (!request.headers().authorization?.startsWith('Bearer ')) {
@@ -171,8 +233,115 @@ async function handle(
       return reply(route, 200, services.profile, globalSettingsSchema);
     }
     default:
+      if (call.startsWith('GET /api/calendar/') || /^\w+ \/api\/calendar\//u.test(call)) {
+        return handleCalendar(route, services.calendar, call, url, body, now);
+      }
       return reply(route, 404, { code: 'not_found', message: `No fake for ${call}.` }, apiErrorSchema);
   }
+}
+
+/** The calendar service: state changes only through its API, like the real one. */
+function handleCalendar(
+  route: Route, calendar: FakeCalendar, call: string, url: URL, body: Record<string, unknown> | null, now: Date,
+): Promise<void> {
+  const [method, path] = call.split(' ');
+  const id = decodeURIComponent(path.split('/').at(-1) ?? '');
+  const notFound = (what: string) => reply(route, 404, { code: `${what}_not_found`, message: `No such ${what}.` },
+    apiErrorSchema);
+  const inRange = (event: ServiceCalendarEvent) => {
+    const from = url.searchParams.get('from') ?? '0000-01-01';
+    const to = url.searchParams.get('to') ?? '9999-12-31';
+    return event.end.slice(0, 10) >= from && event.start.slice(0, 10) <= to;
+  };
+  if (method === 'GET' && path === '/api/calendar/v1/calendar') {
+    return reply(route, 200, { ...calendar, events: calendar.events.filter(inRange) }, calendarSchema);
+  }
+  if (method === 'GET' && path === '/api/calendar/v1/events') {
+    return reply(route, 200, calendar.events.filter(inRange), calendarEventListSchema);
+  }
+  if (method === 'POST' && path === '/api/calendar/v1/sync') {
+    const accounts = calendar.accounts.filter(account => account.provider === 'google').map(account => {
+      const synced = account.authStatus === 'connected';
+      if (synced) account.lastSyncedAt = now.toISOString();
+      return {
+        accountId: account.id, email: account.email,
+        status: synced ? 'synced' as const : account.authStatus === 'revoked' ? 'revoked' as const : 'needs_reconnect' as const,
+        message: synced ? null : account.authError ?? 'Reconnect this account.',
+        syncedAt: account.lastSyncedAt, eventCount: 0,
+      };
+    });
+    return reply(route, 200, { accounts }, calendarSyncSchema);
+  }
+  if (method === 'POST' && path === '/api/calendar/v1/accounts') {
+    const account: ServiceCalendarAccount = {
+      id: crypto.randomUUID(), provider: 'local', name: String(body?.name), email: String(body?.email ?? ''),
+      isPrimary: calendar.accounts.every(existing => !existing.isPrimary), paletteIndex: null,
+      authStatus: 'connected', authError: null, lastSyncedAt: null, syncError: null,
+    };
+    calendar.accounts.push(account);
+    calendar.sources.push({ id: crypto.randomUUID(), accountId: account.id, name: 'Calendar', color: '#4f5bff',
+      visible: true, googleCalendarId: null, accessRole: null, writable: true });
+    return reply(route, 201, account, calendarAccountSchema);
+  }
+  if (method === 'PATCH' && path.startsWith('/api/calendar/v1/accounts/')) {
+    const account = calendar.accounts.find(candidate => candidate.id === id);
+    if (!account) return notFound('account');
+    if (body?.primary === true) calendar.accounts.forEach(other => { other.isPrimary = other.id === id; });
+    if (typeof body?.name === 'string') account.name = body.name;
+    if (typeof body?.paletteIndex === 'number') account.paletteIndex = body.paletteIndex;
+    return reply(route, 200, account, calendarAccountSchema);
+  }
+  if (method === 'DELETE' && path.startsWith('/api/calendar/v1/accounts/')) {
+    if (!calendar.accounts.some(account => account.id === id)) return notFound('account');
+    const sourceIds = new Set(calendar.sources.filter(source => source.accountId === id).map(source => source.id));
+    calendar.accounts = calendar.accounts.filter(account => account.id !== id);
+    calendar.sources = calendar.sources.filter(source => !sourceIds.has(source.id));
+    calendar.events = calendar.events.filter(event => !sourceIds.has(event.sourceId));
+    if (calendar.accounts.length > 0 && !calendar.accounts.some(account => account.isPrimary)) calendar.accounts[0].isPrimary = true;
+    return route.fulfill({ status: 204 });
+  }
+  if (method === 'POST' && path === '/api/calendar/v1/sources') {
+    const source: ServiceCalendarSource = { id: crypto.randomUUID(), accountId: String(body?.accountId),
+      name: String(body?.name), color: String(body?.color), visible: body?.visible !== false,
+      googleCalendarId: null, accessRole: null, writable: true };
+    calendar.sources.push(source);
+    return reply(route, 201, source, calendarSourceSchema);
+  }
+  if (method === 'PATCH' && path.startsWith('/api/calendar/v1/sources/')) {
+    const source = calendar.sources.find(candidate => candidate.id === id);
+    if (!source) return notFound('source');
+    Object.assign(source, Object.fromEntries(Object.entries(body ?? {})
+      .filter(([key]) => ['name', 'color', 'visible', 'accountId'].includes(key))));
+    return reply(route, 200, source, calendarSourceSchema);
+  }
+  if (method === 'DELETE' && path.startsWith('/api/calendar/v1/sources/')) {
+    calendar.sources = calendar.sources.filter(source => source.id !== id);
+    calendar.events = calendar.events.filter(event => event.sourceId !== id);
+    return route.fulfill({ status: 204 });
+  }
+  if ((method === 'POST' && path === '/api/calendar/v1/events') || (method === 'PUT' && path.startsWith('/api/calendar/v1/events/'))) {
+    const source = calendar.sources.find(candidate => candidate.id === body?.sourceId);
+    if (!source) return notFound('source');
+    if (!source.writable) {
+      return reply(route, 409, { code: 'calendar_read_only', message: 'This Google calendar is read-only.' }, apiErrorSchema);
+    }
+    const existing = method === 'PUT' ? calendar.events.find(candidate => candidate.id === id) : undefined;
+    if (method === 'PUT' && !existing) return notFound('event');
+    const event: ServiceCalendarEvent = {
+      id: existing?.id ?? crypto.randomUUID(), sourceId: source.id, title: String(body?.title),
+      description: String(body?.description ?? ''), location: typeof body?.location === 'string' ? body.location : null,
+      allDay: Boolean(body?.allDay), start: String(body?.start), end: String(body?.end),
+      googleEventId: source.googleCalendarId ? existing?.googleEventId ?? crypto.randomUUID() : null,
+    };
+    calendar.events = [...calendar.events.filter(candidate => candidate.id !== event.id), event];
+    return reply(route, existing ? 200 : 201, event, calendarEventSchema);
+  }
+  if (method === 'DELETE' && path.startsWith('/api/calendar/v1/events/')) {
+    if (!calendar.events.some(event => event.id === id)) return notFound('event');
+    calendar.events = calendar.events.filter(event => event.id !== id);
+    return route.fulfill({ status: 204 });
+  }
+  return reply(route, 404, { code: 'not_found', message: `No fake for ${call}.` }, apiErrorSchema);
 }
 
 function trackingFor(services: FakeServices, now: Date): ServiceTracking {

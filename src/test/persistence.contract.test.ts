@@ -6,6 +6,7 @@ const supabaseMocks = vi.hoisted(() => ({
   isSupabaseReady: vi.fn(),
   isAuthenticated: vi.fn(),
   getCurrentUserId: vi.fn(),
+  getFreshAccessToken: vi.fn(),
   fetchHelmAccountSnapshot: vi.fn(),
   fetchHelmCollections: vi.fn(),
   probeHelmAccountVersion: vi.fn(),
@@ -71,6 +72,7 @@ function configureSupabase({ authenticated = false } = {}) {
   supabaseMocks.isSupabaseReady.mockReturnValue(true);
   supabaseMocks.isAuthenticated.mockReturnValue(authenticated);
   supabaseMocks.getCurrentUserId.mockReturnValue(authenticated ? USER_ID : null);
+  supabaseMocks.getFreshAccessToken.mockResolvedValue(authenticated ? 'renewed-token' : null);
   supabaseMocks.getSupabaseRealtimeSnapshot.mockReturnValue({
     state: 'subscribed',
     lastEventAt: null,
@@ -117,7 +119,7 @@ describe('signed-in persistence boundaries', () => {
     expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false, accountVersion: 9 });
   });
 
-  it('retains same-account data on transient HTTPS failure but clears it on invalid authorization', async () => {
+  it('retains same-account data on transient HTTPS failure and on an expired token the session can renew', async () => {
     configureSupabase({ authenticated: true });
     await bootstrapDatabasePersistence();
     supabaseMocks.fetchHelmAccountSnapshot.mockRejectedValueOnce(new TypeError('Failed to fetch'));
@@ -126,9 +128,28 @@ describe('signed-in persistence boundaries', () => {
     expect(await loadStore('settings')).toMatchObject({ theme: 'dark' });
     await refreshDatabasePersistence();
     expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false });
+
+    // A token that expired while the tab slept is renewed; the user is not signed out.
     supabaseMocks.fetchHelmAccountSnapshot.mockRejectedValueOnce({ code: 'PGRST301', message: 'JWT expired' });
     await refreshDatabasePersistence();
-    expect(getSyncSessionSnapshot()).toMatchObject({ status: 'blocked', hasUsableSnapshot: false, readOnly: true });
+    await vi.waitFor(() => expect(getSyncSessionSnapshot()).toMatchObject({
+      status: 'reconnecting', userId: USER_ID, hasUsableSnapshot: true,
+    }));
+    expect(supabaseMocks.getFreshAccessToken).toHaveBeenCalledWith({ forceRefresh: true });
+    expect(await loadStore('settings')).toMatchObject({ theme: 'dark' });
+    await refreshDatabasePersistence();
+    expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false });
+  });
+
+  it('clears account data only when the session can no longer be renewed', async () => {
+    configureSupabase({ authenticated: true });
+    await bootstrapDatabasePersistence();
+    supabaseMocks.getFreshAccessToken.mockResolvedValueOnce(null);
+    supabaseMocks.fetchHelmAccountSnapshot.mockRejectedValueOnce({ code: '42501', status: 403, message: 'Anonymous' });
+    await refreshDatabasePersistence();
+    await vi.waitFor(() => expect(getSyncSessionSnapshot()).toMatchObject({
+      status: 'blocked', hasUsableSnapshot: false, reason: 'signed_out',
+    }));
     expect(await loadStore('settings')).toBeNull();
   });
 

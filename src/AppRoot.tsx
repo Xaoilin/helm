@@ -68,6 +68,18 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
     );
   }
 
+  if (!auth.authUser && auth.sessionUnavailable) {
+    return (
+      <OnlineGate
+        eyebrow="Connection required"
+        title="Reconnecting to Sabah One"
+        detail="Your session is still saved, but Sabah One could not reach its sign-in service to renew it. Check your connection and retry; you do not need to sign in again."
+        actionLabel="Retry"
+        onAction={() => auth.retrySession()}
+      />
+    );
+  }
+
   if (!auth.authUser) {
     return (
       <OnlineGate
@@ -95,13 +107,15 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
     && !fatalSyncReason;
   if (!currentAccountUsable) {
     const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-    const switchingAccount = syncSession.userId !== auth.authUser.id;
+    // Signed in, but the data session was closed: renew and reload rather than signing out.
+    const sessionClosed = syncSession.reason === 'signed_out';
+    const switchingAccount = !sessionClosed && syncSession.userId !== auth.authUser.id;
     const canRetry = !switchingAccount && !fatalSyncReason
-      && (syncSession.reason === 'database_unavailable' || syncSession.reason === 'offline');
+      && (sessionClosed || syncSession.reason === 'database_unavailable' || syncSession.reason === 'offline');
     return (
       <OnlineGate
         eyebrow={offline ? 'Connection required' : 'Database source of truth'}
-        title={syncSession.reason === 'signed_out' ? 'Sign in again to continue' : switchingAccount ? 'Loading Sabah One' : fatalSyncReason ? 'Sabah One needs an update' : 'Connecting to Sabah One'}
+        title={sessionClosed ? 'Reconnecting your session' : switchingAccount ? 'Loading Sabah One' : fatalSyncReason ? 'Sabah One needs an update' : 'Connecting to Sabah One'}
         detail={blockingSyncDetail(syncSession, switchingAccount, offline)}
         actionLabel={canRetry ? retrying ? 'Retrying...' : 'Retry connection' : undefined}
         actionDisabled={retrying}
@@ -140,7 +154,9 @@ function blockingSyncDetail(
   switchingAccount: boolean,
   offline: boolean,
 ): string {
-  if (syncSession.reason === 'signed_out') return syncSession.error || 'Your account authorization is no longer valid. Sign out and sign in again.';
+  if (syncSession.reason === 'signed_out') {
+    return 'You are still signed in, but your account data connection closed. Retry to renew your session and reload your data.';
+  }
   if (switchingAccount) return 'Clearing the previous account and securely loading this account...';
   if (syncSession.reason === 'incompatible_schema') {
     return 'This build cannot safely open the current Sabah One database schema.';

@@ -95,6 +95,8 @@ export interface CalendarSource {
   visible: boolean;
   googleCalendarId?: string;
   accessRole?: string;
+  /** False for Google calendars shared read-only; events cannot be added or changed there. */
+  writable?: boolean;
 }
 
 export interface CalendarEvent {

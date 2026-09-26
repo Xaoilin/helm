@@ -1,43 +1,72 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
-import { v4 as uuid } from 'uuid';
-import type { CalendarAccount, CalendarSource, CalendarEvent } from '../../types/domain';
-import { loadStore, saveStore } from '../persistence';
-import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
+/**
+ * Calendar state, owned by the calendar service. Every change is sent to the service and published
+ * only once the service confirms it; Google-backed changes are confirmed by Google first. Google
+ * credentials never reach the browser, so a Google problem can never affect the Sabah One session.
+ */
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { CalendarAccount, CalendarEvent, CalendarSource } from '../../types/domain';
 import {
-  clearGoogleCalendarAuth,
-  getGoogleCalendarAuthPatch,
-  isGoogleCalendarAccount,
-} from '../../services/googleCalendarAuthManager';
+  connectGoogleAccount as connectGoogleAccountRequest,
+  createEvent,
+  createLocalAccount,
+  createLocalSource,
+  deleteAccount,
+  deleteEvent,
+  deleteSource,
+  getCalendar,
+  isCalendarServiceEnabled,
+  syncCalendar,
+  updateAccount,
+  updateEvent,
+  updateSource,
+  type SourceChanges,
+} from '../../services/backend/calendarServiceApi';
+import type {
+  ServiceCalendarAccount,
+  ServiceCalendarEvent,
+  ServiceCalendarSource,
+} from '../../services/backend/contracts';
+import { ServiceError } from '../../services/backend/serviceClient';
+import { logWarn } from '../../services/logger';
+import { useSettingsContext } from './SettingsContext';
+
+/** Events are loaded for this many days either side of today. */
+const PAST_DAYS = 365;
+const FUTURE_DAYS = 400;
+/** Google accounts not synced for this long are synced when the calendar loads or regains focus. */
+export const CALENDAR_SYNC_STALE_MS = 15 * 60_000;
+const SYNC_CHECK_INTERVAL_MS = 5 * 60_000;
+
+export type NewCalendarEvent = Omit<CalendarEvent, 'id'>;
 
 export interface CalendarContextValue {
   calendarAccounts: CalendarAccount[];
   calendarSources: CalendarSource[];
   calendarEvents: CalendarEvent[];
+  /** True once the first load finished, whether or not it succeeded. */
   loaded: boolean;
-  addCalendarAccount: (account: Omit<CalendarAccount, 'id'>) => string;
-  updateCalendarAccount: (id: string, updates: Partial<CalendarAccount>) => void;
-  removeCalendarAccount: (id: string) => void;
-  setPrimaryCalendarAccount: (id: string) => void;
-  addCalendarSource: (source: Omit<CalendarSource, 'id'>) => string;
-  updateCalendarSource: (id: string, updates: Partial<CalendarSource>) => void;
-  removeCalendarSource: (id: string) => void;
-  addCalendarEvent: (event: Omit<CalendarEvent, 'id'>) => string;
-  updateCalendarEvent: (id: string, updates: Partial<CalendarEvent>) => void;
-  removeCalendarEvent: (id: string) => void;
-  bulkUpsertCalendarSources: (sources: Array<Partial<CalendarSource> & { accountId: string; name: string; color: string; visible: boolean }>) => void;
-  bulkUpsertCalendarEvents: (events: Array<Partial<CalendarEvent> & { sourceId: string; title: string; description: string; start: string; end: string; allDay: boolean }>) => void;
-  bulkRemoveCalendarEvents: (ids: string[]) => void;
+  /** Why the calendar could not be loaded; null while it is current. */
+  loadError: string | null;
+  syncing: boolean;
+  /** What the last Google sync could not do; null when every account synced. */
+  syncProblem: string | null;
+  reload: () => Promise<void>;
+  syncGoogle: (accountId?: string) => Promise<void>;
+  addCalendarAccount: (account: { name: string; email?: string; paletteIndex?: number }) => Promise<CalendarAccount>;
+  updateCalendarAccount: (id: string, changes: { name?: string; paletteIndex?: number }) => Promise<void>;
+  setPrimaryCalendarAccount: (id: string) => Promise<void>;
+  removeCalendarAccount: (id: string) => Promise<void>;
+  connectGoogleAccount: (code: string, redirectUri: string, expectedEmail?: string) => Promise<CalendarAccount>;
+  addCalendarSource: (source: { accountId: string; name: string; color: string; visible?: boolean }) => Promise<CalendarSource>;
+  updateCalendarSource: (id: string, changes: SourceChanges) => Promise<void>;
+  removeCalendarSource: (id: string) => Promise<void>;
+  addCalendarEvent: (event: NewCalendarEvent) => Promise<CalendarEvent>;
+  /** Merges the changes into the event and saves the result. */
+  updateCalendarEvent: (id: string, changes: Partial<NewCalendarEvent>) => Promise<CalendarEvent>;
+  removeCalendarEvent: (id: string) => Promise<void>;
 }
 
 export const CalendarCtx = createContext<CalendarContextValue | null>(null);
-
-function normalizeCalendarAccounts(accounts: CalendarAccount[]): CalendarAccount[] {
-  return accounts.map(account => (
-    isGoogleCalendarAccount(account)
-      ? { ...account, ...getGoogleCalendarAuthPatch(account) }
-      : account
-  ));
-}
 
 export function useCalendar(): CalendarContextValue {
   const ctx = useContext(CalendarCtx);
@@ -45,167 +74,260 @@ export function useCalendar(): CalendarContextValue {
   return ctx;
 }
 
+/** A message the user can act on for a failed calendar request. */
+export function calendarErrorMessage(error: unknown): string {
+  if (error instanceof ServiceError) {
+    switch (error.code) {
+      case 'google_reconnect_required':
+        return `${error.message} Reconnect it in Integrations; your Sabah One session is not affected.`;
+      case 'network':
+      case 'timeout':
+      case 'session_unavailable':
+        return `${error.message} Nothing was changed; try again.`;
+      default:
+        return error.message;
+    }
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+function toAccount(account: ServiceCalendarAccount): CalendarAccount {
+  const google = account.provider === 'google';
+  return {
+    id: account.id,
+    name: account.name,
+    email: account.email,
+    provider: account.provider,
+    isPrimary: account.isPrimary,
+    connected: !google || account.authStatus === 'connected',
+    mocked: false,
+    paletteIndex: account.paletteIndex ?? undefined,
+    lastSyncTime: account.lastSyncedAt ?? undefined,
+    syncError: account.syncError ?? undefined,
+    ...(google ? {
+      authProvider: 'calendar-oauth' as const,
+      authStatus: account.authStatus,
+      authEmail: account.email,
+      lastAuthError: account.authError ?? undefined,
+    } : {}),
+  };
+}
+
+function toSource(source: ServiceCalendarSource): CalendarSource {
+  return {
+    id: source.id,
+    accountId: source.accountId,
+    name: source.name,
+    color: source.color,
+    visible: source.visible,
+    googleCalendarId: source.googleCalendarId ?? undefined,
+    accessRole: source.accessRole ?? undefined,
+    writable: source.writable,
+  };
+}
+
+function toEvent(event: ServiceCalendarEvent, sources: readonly CalendarSource[]): CalendarEvent {
+  return {
+    id: event.id,
+    sourceId: event.sourceId,
+    title: event.title,
+    description: event.description,
+    start: event.start,
+    end: event.end,
+    allDay: event.allDay,
+    location: event.location ?? undefined,
+    googleEventId: event.googleEventId ?? undefined,
+    googleCalendarId: sources.find(source => source.id === event.sourceId)?.googleCalendarId,
+  };
+}
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function loadWindow(now = new Date()): { from: string; to: string } {
+  const day = 24 * 60 * 60_000;
+  return {
+    from: isoDate(new Date(now.getTime() - PAST_DAYS * day)),
+    to: isoDate(new Date(now.getTime() + FUTURE_DAYS * day)),
+  };
+}
+
+/** Google accounts that can sync and have not synced recently. */
+function needsSync(accounts: readonly CalendarAccount[], now = Date.now()): boolean {
+  return accounts.some(account => account.provider === 'google'
+    && account.authStatus === 'connected'
+    && (!account.lastSyncTime || now - new Date(account.lastSyncTime).getTime() > CALENDAR_SYNC_STALE_MS));
+}
+
 export function CalendarProvider({ children }: { children: ReactNode }) {
+  const { appTimeZone } = useSettingsContext();
+  const timeZone = appTimeZone.effectiveTimeZone;
   const [calendarAccounts, setCalendarAccounts] = useState<CalendarAccount[]>([]);
   const [calendarSources, setCalendarSources] = useState<CalendarSource[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncProblem, setSyncProblem] = useState<string | null>(null);
+  const sourcesRef = useRef<CalendarSource[]>([]);
+  const eventsRef = useRef<CalendarEvent[]>([]);
+  const accountsRef = useRef<CalendarAccount[]>([]);
+  const syncInFlight = useRef<Promise<void> | null>(null);
 
-  // Load
-  useEffect(() => {
-    (async () => {
-      const [accounts, sources, events] = await Promise.all([
-        loadStore<CalendarAccount[]>('calendarAccounts'),
-        loadStore<CalendarSource[]>('calendarSources'),
-        loadStore<CalendarEvent[]>('calendarEvents'),
-      ]);
-      setCalendarAccounts(normalizeCalendarAccounts(accounts ?? []));
-      setCalendarSources(sources ?? []);
-      setCalendarEvents(events ?? []);
+  useEffect(() => { sourcesRef.current = calendarSources; }, [calendarSources]);
+  useEffect(() => { eventsRef.current = calendarEvents; }, [calendarEvents]);
+  useEffect(() => { accountsRef.current = calendarAccounts; }, [calendarAccounts]);
+
+  const reload = useCallback(async () => {
+    if (!isCalendarServiceEnabled()) {
+      setLoadError('The calendar service is not configured for this build.');
       setLoaded(true);
-    })();
+      return;
+    }
+    const { from, to } = loadWindow();
+    try {
+      const calendar = await getCalendar(from, to);
+      const sources = calendar.sources.map(toSource);
+      const accounts = calendar.accounts.map(toAccount);
+      accountsRef.current = accounts;
+      setCalendarAccounts(accounts);
+      setCalendarSources(sources);
+      setCalendarEvents(calendar.events.map(event => toEvent(event, sources)));
+      setLoadError(null);
+    } catch (error) {
+      // The last confirmed calendar stays on screen; the page shows why it may be out of date.
+      logWarn('Calendar', `Calendar load failed: ${calendarErrorMessage(error)}`);
+      setLoadError(calendarErrorMessage(error));
+    } finally {
+      setLoaded(true);
+    }
   }, []);
 
-  useRemoteStoreRefresh(['calendarAccounts', 'calendarSources', 'calendarEvents'], async () => {
-    const [accounts, sources, events] = await Promise.all([
-      loadStore<CalendarAccount[]>('calendarAccounts'),
-      loadStore<CalendarSource[]>('calendarSources'),
-      loadStore<CalendarEvent[]>('calendarEvents'),
-    ]);
-    setCalendarAccounts(normalizeCalendarAccounts(accounts ?? []));
-    setCalendarSources(sources ?? []);
-    setCalendarEvents(events ?? []);
-  });
-
-  // Persist
-  useEffect(() => { if (loaded) saveStore('calendarAccounts', calendarAccounts); }, [calendarAccounts, loaded]);
-  useEffect(() => { if (loaded) saveStore('calendarSources', calendarSources); }, [calendarSources, loaded]);
-  useEffect(() => { if (loaded) saveStore('calendarEvents', calendarEvents); }, [calendarEvents, loaded]);
-
-  // ── Accounts ──
-  const addCalendarAccount = useCallback((account: Omit<CalendarAccount, 'id'>): string => {
-    const id = uuid();
-    setCalendarAccounts(prev => {
-      const isPrimary = prev.length === 0 ? true : account.isPrimary;
-      const existing = isPrimary ? prev.map(a => ({ ...a, isPrimary: false })) : prev;
-      const nextAccount: CalendarAccount = { ...account, id, isPrimary };
-      return [...existing, isGoogleCalendarAccount(nextAccount) ? { ...nextAccount, ...getGoogleCalendarAuthPatch(nextAccount) } : nextAccount];
-    });
-    return id;
-  }, []);
-
-  const updateCalendarAccount = useCallback((id: string, updates: Partial<CalendarAccount>) => {
-    setCalendarAccounts(prev => prev.map(account => {
-      if (account.id !== id) return account;
-      const nextAccount = { ...account, ...updates };
-      return isGoogleCalendarAccount(nextAccount)
-        ? { ...nextAccount, ...getGoogleCalendarAuthPatch(nextAccount) }
-        : nextAccount;
-    }));
-  }, []);
-
-  const removeCalendarAccount = useCallback((id: string) => {
-    clearGoogleCalendarAuth(id);
-    setCalendarAccounts(prev => {
-      const remaining = prev.filter(a => a.id !== id);
-      if (remaining.length > 0 && !remaining.some(a => a.isPrimary)) {
-        remaining[0] = { ...remaining[0], isPrimary: true };
+  const syncGoogle = useCallback((accountId?: string): Promise<void> => {
+    syncInFlight.current ??= (async () => {
+      setSyncing(true);
+      try {
+        const result = await syncCalendar(accountId);
+        const problems = result.accounts.filter(account => account.status !== 'synced')
+          .map(account => `${account.email}: ${account.message ?? account.status}`);
+        setSyncProblem(problems.length > 0 ? problems.join(' ') : null);
+      } catch (error) {
+        setSyncProblem(calendarErrorMessage(error));
+      } finally {
+        setSyncing(false);
       }
-      return remaining;
-    });
-    // Cascade: remove orphaned sources and events
-    setCalendarSources(prev => {
-      const removedSourceIds = prev.filter(src => src.accountId === id).map(src => src.id);
-      setCalendarEvents(evts => evts.filter(e => !removedSourceIds.includes(e.sourceId)));
-      return prev.filter(src => src.accountId !== id);
-    });
-  }, []);
+      await reload();
+    })().finally(() => { syncInFlight.current = null; });
+    return syncInFlight.current;
+  }, [reload]);
 
-  const setPrimaryCalendarAccount = useCallback((id: string) => {
-    setCalendarAccounts(prev => prev.map(a => ({ ...a, isPrimary: a.id === id })));
-  }, []);
-
-  // ── Sources ──
-  const addCalendarSource = useCallback((source: Omit<CalendarSource, 'id'>): string => {
-    const id = uuid();
-    setCalendarSources(prev => [...prev, { ...source, id }]);
-    return id;
-  }, []);
-
-  const updateCalendarSource = useCallback((id: string, updates: Partial<CalendarSource>) => {
-    setCalendarSources(prev => prev.map(src => src.id === id ? { ...src, ...updates } : src));
-  }, []);
-
-  const removeCalendarSource = useCallback((id: string) => {
-    setCalendarSources(prev => prev.filter(src => src.id !== id));
-    setCalendarEvents(prev => prev.filter(e => e.sourceId !== id));
-  }, []);
-
-  // ── Events ──
-  const addCalendarEvent = useCallback((event: Omit<CalendarEvent, 'id'>): string => {
-    const id = uuid();
-    setCalendarEvents(prev => [...prev, { ...event, id }]);
-    return id;
-  }, []);
-
-  const updateCalendarEvent = useCallback((id: string, updates: Partial<CalendarEvent>) => {
-    setCalendarEvents(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
-  }, []);
-
-  const removeCalendarEvent = useCallback((id: string) => {
-    setCalendarEvents(prev => prev.filter(e => e.id !== id));
-  }, []);
-
-  // ── Bulk (for sync) ──
-  const bulkUpsertCalendarSources = useCallback((sources: Array<Partial<CalendarSource> & { accountId: string; name: string; color: string; visible: boolean }>) => {
-    setCalendarSources(prev => {
-      const newSources = [...prev];
-      for (const src of sources) {
-        if (src.id) {
-          const idx = newSources.findIndex(x => x.id === src.id);
-          if (idx >= 0) {
-            newSources[idx] = { ...newSources[idx], ...src } as CalendarSource;
-          } else {
-            newSources.push(src as CalendarSource);
-          }
-        } else {
-          newSources.push({ ...src, id: uuid() } as CalendarSource);
-        }
+  // Load, then bring stale Google accounts up to date; repeat while the page is open and visible.
+  useEffect(() => {
+    let cancelled = false;
+    const syncIfStale = () => {
+      if (!cancelled && document.visibilityState === 'visible' && needsSync(accountsRef.current)) {
+        void syncGoogle();
       }
-      return newSources;
-    });
+    };
+    void reload().then(syncIfStale);
+    const interval = window.setInterval(syncIfStale, SYNC_CHECK_INTERVAL_MS);
+    document.addEventListener('visibilitychange', syncIfStale);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', syncIfStale);
+    };
+  }, [reload, syncGoogle]);
+
+  const replaceAccount = useCallback((updated: ServiceCalendarAccount, primary: boolean) => {
+    const account = toAccount(updated);
+    setCalendarAccounts(previous => previous.map(existing => existing.id === account.id
+      ? account
+      : primary ? { ...existing, isPrimary: false } : existing));
   }, []);
 
-  const bulkUpsertCalendarEvents = useCallback((events: Array<Partial<CalendarEvent> & { sourceId: string; title: string; description: string; start: string; end: string; allDay: boolean }>) => {
-    setCalendarEvents(prev => {
-      const newEvents = [...prev];
-      for (const evt of events) {
-        if (evt.id) {
-          const idx = newEvents.findIndex(x => x.id === evt.id);
-          if (idx >= 0) {
-            newEvents[idx] = { ...newEvents[idx], ...evt } as CalendarEvent;
-          } else {
-            newEvents.push(evt as CalendarEvent);
-          }
-        } else {
-          newEvents.push({ ...evt, id: uuid() } as CalendarEvent);
-        }
-      }
-      return newEvents;
-    });
+  const addCalendarAccount = useCallback(async (account: { name: string; email?: string; paletteIndex?: number }) => {
+    const created = await createLocalAccount(account);
+    // The service also creates the account's first calendar.
+    await reload();
+    return toAccount(created);
+  }, [reload]);
+
+  const updateCalendarAccount = useCallback(async (id: string, changes: { name?: string; paletteIndex?: number }) => {
+    replaceAccount(await updateAccount(id, changes), false);
+  }, [replaceAccount]);
+
+  const setPrimaryCalendarAccount = useCallback(async (id: string) => {
+    replaceAccount(await updateAccount(id, { primary: true }), true);
+  }, [replaceAccount]);
+
+  const removeCalendarAccount = useCallback(async (id: string) => {
+    await deleteAccount(id);
+    // Another account may have become primary; the service decides.
+    await reload();
+  }, [reload]);
+
+  const connectGoogleAccount = useCallback(async (code: string, redirectUri: string, expectedEmail?: string) => {
+    const account = await connectGoogleAccountRequest(code, redirectUri, expectedEmail);
+    setSyncProblem(null);
+    await reload();
+    return toAccount(account);
+  }, [reload]);
+
+  const addCalendarSource = useCallback(async (source: { accountId: string; name: string; color: string; visible?: boolean }) => {
+    const created = toSource(await createLocalSource(source));
+    setCalendarSources(previous => [...previous, created]);
+    return created;
   }, []);
 
-  const bulkRemoveCalendarEvents = useCallback((ids: string[]) => {
-    const idSet = new Set(ids);
-    setCalendarEvents(prev => prev.filter(e => !idSet.has(e.id)));
+  const updateCalendarSource = useCallback(async (id: string, changes: SourceChanges) => {
+    const updated = toSource(await updateSource(id, changes));
+    setCalendarSources(previous => previous.map(source => source.id === id ? updated : source));
+  }, []);
+
+  const removeCalendarSource = useCallback(async (id: string) => {
+    await deleteSource(id);
+    setCalendarSources(previous => previous.filter(source => source.id !== id));
+    setCalendarEvents(previous => previous.filter(event => event.sourceId !== id));
+  }, []);
+
+  const toRequest = useCallback((event: NewCalendarEvent) => ({
+    sourceId: event.sourceId,
+    title: event.title,
+    description: event.description,
+    location: event.location,
+    allDay: event.allDay,
+    start: event.start,
+    end: event.end,
+    timeZone,
+  }), [timeZone]);
+
+  const addCalendarEvent = useCallback(async (event: NewCalendarEvent) => {
+    const created = toEvent(await createEvent(toRequest(event)), sourcesRef.current);
+    setCalendarEvents(previous => [...previous, created]);
+    return created;
+  }, [toRequest]);
+
+  const updateCalendarEvent = useCallback(async (id: string, changes: Partial<NewCalendarEvent>) => {
+    const existing = eventsRef.current.find(event => event.id === id);
+    if (!existing) throw new Error('This event is no longer in your calendar.');
+    const updated = toEvent(await updateEvent(id, toRequest({ ...existing, ...changes })), sourcesRef.current);
+    setCalendarEvents(previous => previous.map(event => event.id === id ? updated : event));
+    return updated;
+  }, [toRequest]);
+
+  const removeCalendarEvent = useCallback(async (id: string) => {
+    await deleteEvent(id);
+    setCalendarEvents(previous => previous.filter(event => event.id !== id));
   }, []);
 
   const value: CalendarContextValue = {
-    calendarAccounts, calendarSources, calendarEvents, loaded,
-    addCalendarAccount, updateCalendarAccount, removeCalendarAccount, setPrimaryCalendarAccount,
+    calendarAccounts, calendarSources, calendarEvents, loaded, loadError, syncing, syncProblem,
+    reload, syncGoogle,
+    addCalendarAccount, updateCalendarAccount, setPrimaryCalendarAccount, removeCalendarAccount, connectGoogleAccount,
     addCalendarSource, updateCalendarSource, removeCalendarSource,
     addCalendarEvent, updateCalendarEvent, removeCalendarEvent,
-    bulkUpsertCalendarSources, bulkUpsertCalendarEvents, bulkRemoveCalendarEvents,
   };
 
   return <CalendarCtx.Provider value={value}>{children}</CalendarCtx.Provider>;

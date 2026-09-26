@@ -25,8 +25,10 @@ export {
   type AuthSessionSnapshot,
 } from './supabase/client';
 export {
+  getFreshAccessToken,
   getSessionUser,
   onAuthStateChange,
+  SessionUnavailableError,
   signInWithGoogle,
   signOut,
   type AuthStateChange,

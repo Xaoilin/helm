@@ -1,0 +1,18 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/calendar/v1/events/{eventId}"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "6e7643bf-56b8-4acd-a88d-deef35100fed",
+    "sourceId" : "89f814b4-10c4-4b3e-bb00-715ef8490488",
+    "title" : "Call Ali",
+    "description" : "",
+    "location" : null,
+    "allDay" : false,
+    "start" : "2026-10-06T10:00:00Z",
+    "end" : "2026-10-06T10:30:00Z",
+    "googleEventId" : null
+  }
+}
