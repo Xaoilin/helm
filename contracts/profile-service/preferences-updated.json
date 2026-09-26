@@ -1,0 +1,15 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/profile/v1/preferences"
+  },
+  "status" : 200,
+  "body" : {
+    "theme" : "dark",
+    "dataRetentionDays" : 30,
+    "telemetry" : true,
+    "defaultCalendarTab" : "agenda",
+    "goalTags" : [ "Health", "Work" ],
+    "updatedAt" : "2026-09-26T19:04:49.594923Z"
+  }
+}

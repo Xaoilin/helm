@@ -105,6 +105,32 @@ export const globalSettingsSchema = z.object({
   updatedAt: instant.nullable(),
 });
 
+/** App preferences every device shares; device-only settings stay in the browser. */
+export const appPreferencesSchema = z.object({
+  theme: z.string(),
+  dataRetentionDays: z.number().int(),
+  telemetry: z.boolean(),
+  defaultCalendarTab: z.string().nullable(),
+  goalTags: z.array(z.string()),
+  updatedAt: instant.nullable(),
+});
+
+export const integrationSchema = z.object({
+  provider: z.string(),
+  status: z.enum(['connected', 'disconnected', 'error']),
+  configuredAt: instant.nullable(),
+  lastError: z.string().nullable(),
+  updatedAt: instant,
+});
+
+export const integrationsSchema = z.object({ integrations: z.array(integrationSchema) });
+
+export const operationalReceiptSchema = z.object({
+  ok: z.literal(true),
+  accepted: z.number().int().positive(),
+  schemaVersion: z.literal(1),
+});
+
 const calendarAuthStatus = z.enum(['connected', 'needs_reconnect', 'revoked', 'error']);
 /** An ISO instant for timed events, or a YYYY-MM-DD date for all-day events. */
 const eventTime = z.union([instant, isoDate]);
@@ -177,6 +203,8 @@ export type ServiceDashboard = z.infer<typeof dashboardSchema>;
 export type ServiceTracking = z.infer<typeof trackingSchema>;
 export type ServiceSchedule = z.infer<typeof scheduleSchema>;
 export type ServiceGlobalSettings = z.infer<typeof globalSettingsSchema>;
+export type ServiceAppPreferences = z.infer<typeof appPreferencesSchema>;
+export type ServiceIntegration = z.infer<typeof integrationSchema>;
 
 /** Response schemas keyed by fixture file name in `contracts/<service>/`. */
 export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
@@ -192,6 +220,13 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   'profile-service/settings-default': globalSettingsSchema,
   'profile-service/settings-updated': globalSettingsSchema,
   'profile-service/settings-invalid': apiErrorSchema,
+  'profile-service/preferences-default': appPreferencesSchema,
+  'profile-service/preferences-updated': appPreferencesSchema,
+  'profile-service/preferences-invalid': apiErrorSchema,
+  'profile-service/integrations': integrationsSchema,
+  'profile-service/integration-saved': integrationSchema,
+  'profile-service/operational-events-accepted': operationalReceiptSchema,
+  'profile-service/rate-limited': apiErrorSchema,
   'calendar-service/calendar': calendarSchema,
   'calendar-service/events': calendarEventListSchema,
   'calendar-service/sync': calendarSyncSchema,

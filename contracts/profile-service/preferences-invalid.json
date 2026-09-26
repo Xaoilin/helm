@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/profile/v1/preferences"
+  },
+  "status" : 400,
+  "body" : {
+    "code" : "invalid_data_retention",
+    "message" : "dataRetentionDays must be between 7 and 365."
+  }
+}

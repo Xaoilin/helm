@@ -1,0 +1,12 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/profile/v1/operational-events"
+  },
+  "status" : 200,
+  "body" : {
+    "ok" : true,
+    "accepted" : 1,
+    "schemaVersion" : 1
+  }
+}

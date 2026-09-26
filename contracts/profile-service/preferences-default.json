@@ -1,0 +1,15 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/profile/v1/preferences"
+  },
+  "status" : 200,
+  "body" : {
+    "theme" : "dark",
+    "dataRetentionDays" : 90,
+    "telemetry" : false,
+    "defaultCalendarTab" : null,
+    "goalTags" : [ ],
+    "updatedAt" : null
+  }
+}
