@@ -1,6 +1,6 @@
 import type { CalendarAccount, CalendarEvent, CalendarSource } from '../types/domain';
 import { normalizeCalendarDate } from './calendarEventDates';
-import { isGoogleCalendarAccount } from './googleCalendarAuthManager';
+import { isGoogleCalendarAccount } from './googleCalendarAccountState';
 import { shiftIsoDate } from './timeZone';
 
 function providerCacheId(prefix: string, ...parts: string[]): string {
