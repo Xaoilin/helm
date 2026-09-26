@@ -22,11 +22,12 @@ import {
   loadStore,
   saveDeviceStore,
   saveStore,
-  saveStoreCommitted,
 } from '../persistence';
 import { splitSettings, type DeviceSettings } from '../recordCodec';
 import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
-import { settingsFromLocation, useProfileSettingsSync } from './useProfileSettingsSync';
+import { locationFromSettings, settingsFromLocation, useProfileSettingsSync } from './useProfileSettingsSync';
+import { settingsFromPrayerPreferences, usePrayerPreferencesSync } from './usePrayerPreferencesSync';
+import type { ServicePreferences } from '../../services/backend/contracts';
 
 // ── Defaults ──
 const defaultSettings: Settings = {
@@ -63,6 +64,8 @@ export interface SettingsContextValue {
   loaded: boolean;
   appTimeZone: AppTimeZoneResolution;
   appTimeZoneLoadWarning: string | null;
+  /** Location and prayer preferences have come from their services (or those are not configured). */
+  serviceSettingsReady: boolean;
   updateSettings: (updates: Partial<Settings>) => void;
   saveAppTimeZonePreference: (timeZone?: string) => Promise<void>;
   updateIntegration: (id: string, updates: Partial<Integration>) => void;
@@ -99,10 +102,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setAppTimeZoneLoadWarning(rawTimeZone && !validTimeZone
       ? `The saved time zone “${rawTimeZone}” is invalid. Automatic is active.`
       : null);
+    // Service-owned settings (prayer preferences, location) are not in the account record: keep
+    // the values already loaded from the services.
     return {
       ...defaultSettings,
       ...splitSettings(shared).shared,
       ...(device ?? {}),
+      ...splitSettings(settingsRef.current).service,
     };
   }, []);
 
@@ -148,12 +154,22 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
-  useProfileSettingsSync(loaded, settings, applyServiceLocation);
+  const { ready: locationReady, saveLocation } = useProfileSettingsSync(loaded, settings, applyServiceLocation);
+
+  const applyServicePrayerPreferences = useCallback((preferences: ServicePreferences) => {
+    setSettings(prev => {
+      const next = { ...prev, ...settingsFromPrayerPreferences(preferences) };
+      settingsRef.current = next;
+      return next;
+    });
+  }, []);
+  const prayerPreferencesReady = usePrayerPreferencesSync(loaded, settings, applyServicePrayerPreferences);
+  const serviceSettingsReady = loaded && locationReady && prayerPreferencesReady;
 
   const updateSettings = useCallback((updates: Partial<Settings>) => {
     setSettings(prev => {
       const safe = splitSettings(updates);
-      const next = { ...prev, ...safe.shared, ...safe.device };
+      const next = { ...prev, ...safe.shared, ...safe.device, ...safe.service };
       if ('elevenLabsSecretId' in updates && !updates.elevenLabsSecretId) delete next.elevenLabsSecretId;
       if ('appTimezone' in updates) {
         const timeZone = validateIanaTimeZone(updates.appTimezone);
@@ -175,11 +191,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const next = { ...settingsRef.current };
     if (validTimeZone) next.appTimezone = validTimeZone;
     else delete next.appTimezone;
-    await saveStoreCommitted('settings', next);
+    // The profile service owns the display time zone: confirm it there before showing it.
+    await saveLocation(locationFromSettings(next));
     settingsRef.current = next;
     setSettings(next);
     setAppTimeZoneLoadWarning(null);
-  }, []);
+  }, [saveLocation]);
 
   const updateIntegration = useCallback((id: string, updates: Partial<Integration>) => {
     setIntegrations(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
@@ -192,6 +209,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       loaded,
       appTimeZone,
       appTimeZoneLoadWarning,
+      serviceSettingsReady,
       updateSettings,
       saveAppTimeZonePreference,
       updateIntegration,

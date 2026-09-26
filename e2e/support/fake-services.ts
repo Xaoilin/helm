@@ -11,7 +11,6 @@ import {
   apiErrorSchema,
   dashboardSchema,
   globalSettingsSchema,
-  importResultSchema,
   outcomeChangeSchema,
   outcomeListSchema,
   preferencesSchema,
@@ -23,9 +22,6 @@ import {
 
 export const SERVICES_BASE_URL = 'https://services.helm.test';
 
-const PRAYER_NAMES = new Set(['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']);
-const STATUSES = new Set(['on_time', 'late', 'missed', 'unclassified']);
-
 export interface FakeServicesOptions {
   /** Every data call answers with this status, e.g. 503 for an outage. */
   failureStatus?: number;
@@ -33,6 +29,8 @@ export interface FakeServicesOptions {
   rejectCreates?: { code: string; message: string };
   /** Saved global settings; omitted means the user never saved any. */
   profile?: Pick<ServiceGlobalSettings, 'city' | 'country' | 'timeZone'>;
+  /** Saved prayer preferences; omitted means the service defaults. */
+  preferences?: ServicePreferences;
   /** The next write is applied but its response is lost (a 503), like a reply that timed out. */
   loseNextWriteResponse?: boolean;
 }
@@ -64,7 +62,7 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
   return {
     outcomes: new Map(),
     tracking: null,
-    preferences: { enabled: true, reminderEnabled: true, reminderMinutes: 15 },
+    preferences: options.preferences ?? { enabled: true, reminderEnabled: true, reminderMinutes: 15 },
     profile: options.profile
       ? { ...options.profile, updatedAt: '2026-08-01T12:00:00Z' }
       : { city: 'Bedford', country: 'United Kingdom', timeZone: null, updatedAt: null },
@@ -160,8 +158,6 @@ async function handle(
       return correctOutcome(route, services, decodeURIComponent(outcomeId![2]), body ?? {}, now);
     case outcomeId?.[1] === 'DELETE':
       return deleteOutcome(route, services, decodeURIComponent(outcomeId![2]));
-    case call === 'POST /api/prayer/v1/import':
-      return importTracking(route, services, body ?? {}, now);
     case call === 'GET /api/prayer/v1/preferences':
       return reply(route, 200, services.preferences, preferencesSchema);
     case call === 'PUT /api/prayer/v1/preferences':
@@ -246,39 +242,6 @@ function deleteOutcome(route: Route, services: FakeServices, id: string) {
   if (!entry) return reply(route, 404, { code: 'outcome_not_found', message: 'No such outcome.' }, apiErrorSchema);
   services.outcomes.delete(entry[0]);
   return route.fulfill({ status: 204 });
-}
-
-function importTracking(route: Route, services: FakeServices, body: Record<string, unknown>, now: Date) {
-  const tracking = trackingFor(services, now);
-  if (tracking.importedAt) {
-    return reply(route, 409, { code: 'already_imported', message: 'Prayer tracking was already imported.' }, apiErrorSchema);
-  }
-  const activation = body.activationDayEligibility as { date?: string; prayerNames?: string[] } | undefined;
-  services.tracking = {
-    trackingStartedAt: new Date(String(body.trackingStartedAt)).toISOString(),
-    activationDate: activation?.date ?? null,
-    activationPrayers: (activation?.prayerNames ?? []).filter(name => PRAYER_NAMES.has(name)) as ServiceTracking['activationPrayers'],
-    importedAt: now.toISOString(),
-  };
-  const records = Object.values((body.records ?? {}) as Record<string, Record<string, unknown>>);
-  let imported = 0;
-  for (const record of records) {
-    const key = `${record.date}::${record.prayerName}`;
-    if (!PRAYER_NAMES.has(String(record.prayerName)) || !STATUSES.has(String(record.status)) || services.outcomes.has(key)) continue;
-    services.outcomes.set(key, {
-      id: crypto.randomUUID(),
-      date: String(record.date),
-      prayer: record.prayerName as ServiceOutcome['prayer'],
-      status: record.status as ServiceOutcome['status'],
-      recordedAt: new Date(String(record.recordedAt ?? body.trackingStartedAt)).toISOString(),
-      source: typeof record.source === 'string' ? record.source : null,
-      taskId: typeof record.taskId === 'string' ? record.taskId : null,
-      rewarded: record.rewarded === true,
-      deadlineAt: null,
-    });
-    imported += 1;
-  }
-  return reply(route, 200, { imported, skipped: records.length - imported }, importResultSchema);
 }
 
 function sortedOutcomes(services: FakeServices): ServiceOutcome[] {

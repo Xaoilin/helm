@@ -1,31 +1,19 @@
 /**
- * Prayer Times Service — Shia Ithna-Ashari (Jafari)
+ * Prayer times — Shia Ithna-Ashari (Jafari)
  *
- * Data source: AlAdhan API (https://aladhan.com/prayer-times-api)
- * Method: Shia Ithna-Ashari, Leva Institute, Qum (method=0)
- *   - Fajr angle: 16°
- *   - Isha angle: 14°
- *   - Maghrib: 4° after sunset
- *   - Midnight: Jafari method
- *
- * Source links:
- *   API docs: https://aladhan.com/prayer-times-api
- *   Calculation methods: https://aladhan.com/calculation-methods
- *   Shia method details: Leva Institute, Qum, Iran
+ * The Sabah One prayer service is the only source: it fetches and caches each location's timetable
+ * from AlAdhan (method 0: Leva Institute, Qum — Fajr 16°, Isha 14°, Maghrib 4° after sunset, Jafari
+ * midnight). The app checks every timetable it receives is complete and in order.
  */
 
-import { API_TIMEOUT } from '../config/constants';
-import { prayerTimesBreaker } from './serviceBreakers';
-import { withRetry } from './retry';
+import { getPrayerSchedule } from './backend/prayerServiceApi';
+import type { ServiceSchedule } from './backend/contracts';
 import {
   getPrayerZonedDate,
   prayerZonedDateTimeToInstant,
   shiftPrayerDate,
   validatePrayerTimeZone,
 } from './prayerTimeZone';
-
-const API_BASE = 'https://api.aladhan.com/v1';
-const CACHE_KEY = 'helm:prayer-times-cache';
 
 export interface PrayerTime {
   name: string;
@@ -125,119 +113,36 @@ function isCompletePrayerTimesData(value: unknown): value is PrayerTimesData {
   ));
 }
 
-/** Fetch prayer times from AlAdhan API. */
-export async function fetchPrayerTimes(city: string, country: string): Promise<PrayerTimesData> {
-  const url = `${API_BASE}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=0`;
-  const resp = await prayerTimesBreaker.call(() => withRetry(async () => {
-    const response = await fetch(url, { signal: AbortSignal.timeout(API_TIMEOUT.PRAYER_TIMES) });
-    if (!response.ok) {
-      throw new Error(`Prayer times API error: ${response.status}`);
-    }
-    return response;
-  }, { name: 'PrayerTimes', maxRetries: 2, initialDelayMs: 2000 }));
-  const json = await resp.json();
-  const data = json.data;
-  if (!data || typeof data !== 'object' || !data.timings || typeof data.timings !== 'object') {
-    throw new Error('Prayer times API returned an invalid schedule');
-  }
-
-  const timings = data.timings as Record<string, string>;
-  const missingTimings = REQUIRED_TIMINGS.filter(name =>
-    typeof timings[name] !== 'string' || !CLOCK_TIME_PATTERN.test(timings[name].trim())
-  );
-  if (missingTimings.length > 0) {
-    throw new Error(`Prayer times API omitted required timings: ${missingTimings.join(', ')}`);
-  }
-  if (!hasValidPrayerSequence(timings)) {
-    throw new Error('Prayer times API returned an invalid timing sequence');
-  }
-  const prayers: PrayerTime[] = DISPLAY_ORDER
-    .filter(name => timings[name])
-    .map(name => ({
-      name,
-      nameArabic: PRAYER_NAMES[name]?.arabic || name,
-      time: timings[name].replace(/\s*\(.*\)/, ''), // strip timezone annotations
-      type: PRAYER_NAMES[name]?.type || 'event',
-    }));
-
-  const hijri = data.date?.hijri;
-  const hijriDate = hijri ? `${hijri.day} ${hijri.month?.en || ''} ${hijri.year}` : '';
-  const timezone = validatePrayerTimeZone(
-    typeof data.meta?.timezone === 'string' ? data.meta.timezone : '',
-  );
-  const date = timezone ? getPrayerZonedDate(new Date(), timezone) : null;
-  if (!timezone || !date) {
-    throw new Error('Prayer times API returned an invalid or missing timezone');
-  }
-
-  return {
-    prayers,
-    date,
-    hijriDate,
-    city,
-    country,
+/**
+ * Turns the prayer service's timetable into the app's, refusing one that is incomplete, out of
+ * order, or in an invalid time zone.
+ */
+export function prayerTimesFromSchedule(schedule: ServiceSchedule, fetchedAt = new Date()): PrayerTimesData {
+  const timezone = validatePrayerTimeZone(schedule.timezone);
+  if (!timezone) throw new Error('The prayer service returned an invalid or missing timezone');
+  const data: PrayerTimesData = {
+    prayers: DISPLAY_ORDER.flatMap(name => {
+      const entry = schedule.times.find(time => time.name === name);
+      return entry ? [{ name, nameArabic: entry.nameArabic, time: entry.time, type: entry.type }] : [];
+    }),
+    date: schedule.date,
+    hijriDate: schedule.hijriDate,
+    city: schedule.city,
+    country: schedule.country,
     timezone,
-    method: 'Shia Ithna-Ashari, Leva Institute, Qum',
-    fetchedAt: new Date().toISOString(),
+    method: schedule.method,
+    fetchedAt: fetchedAt.toISOString(),
     source: 'network',
   };
-}
-
-export interface GetPrayerTimesOptions {
-  forceRefresh?: boolean;
-}
-
-function readPrayerTimesCache(
-  city: string,
-  country: string,
-  now: Date,
-): PrayerTimesData | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-
-    const cached = JSON.parse(raw) as unknown;
-    if (
-      !isCompletePrayerTimesData(cached)
-      || cached.city !== city
-      || cached.country !== country
-    ) {
-      return null;
-    }
-
-    const timezone = validatePrayerTimeZone(cached.timezone);
-    if (!timezone || cached.date !== getPrayerZonedDate(now, timezone)) return null;
-
-    return {
-      ...cached,
-      timezone,
-      source: 'cache',
-    };
-  } catch {
-    return null;
+  if (!isCompletePrayerTimesData(data)) {
+    throw new Error('The prayer service returned an incomplete or out-of-order timetable');
   }
+  return data;
 }
 
-/** Load cached prayer times for today, or fetch fresh. */
-export async function getPrayerTimes(
-  city: string,
-  country: string,
-  options: GetPrayerTimesOptions = {},
-): Promise<PrayerTimesData> {
-  const now = new Date();
-  const cached = readPrayerTimesCache(city, country, now);
-
-  if (cached && !options.forceRefresh) return cached;
-
-  try {
-    const data = await fetchPrayerTimes(city, country);
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* ignore */ }
-    return data;
-  } catch (error) {
-    // A matching same-day cache is safe as a truthful degraded fallback.
-    if (cached) return cached;
-    throw error;
-  }
+/** The timetable for a location, today by default, from the prayer service. */
+export async function getPrayerTimes(city: string, country: string, date?: string): Promise<PrayerTimesData> {
+  return prayerTimesFromSchedule(await getPrayerSchedule(city, country, date));
 }
 
 /** Find the next upcoming prayer (wajib only). */
@@ -300,22 +205,3 @@ export function formatTimeUntil(minutes: number): string {
   const m = Math.floor(minutes % 60);
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
-
-/** Data source information for attribution. */
-export const PRAYER_SOURCES = {
-  api: {
-    name: 'AlAdhan Prayer Times API',
-    url: 'https://aladhan.com/prayer-times-api',
-    description: 'Free RESTful API for Islamic prayer times, Hijri calendar, and Qibla direction.',
-  },
-  method: {
-    name: 'Shia Ithna-Ashari (Jafari)',
-    url: 'https://aladhan.com/calculation-methods',
-    description: 'Leva Institute, Qum. Fajr: 16°, Isha: 14°, Maghrib: 4° after sunset, Midnight: Jafari method.',
-  },
-  verification: {
-    name: 'AlAdhan Prayer Times Calendar',
-    url: 'https://aladhan.com/prayer-times',
-    description: 'Verify prayer times directly on the AlAdhan website.',
-  },
-};

@@ -236,9 +236,9 @@ describe('signed-in persistence boundaries', () => {
 
   it('does not restore a cleared account preference from a retained Secrets migration source on rebootstrap', async () => {
     configureSupabase({ authenticated: true });
-    const original = JSON.stringify({ appTimezone: 'America/New_York', elevenLabsApiKey: 'legacy-eleven' });
+    const original = JSON.stringify({ dataRetentionDays: 30, elevenLabsApiKey: 'legacy-eleven' });
     localStorage.setItem('helm:settings', original);
-    const migrated = { theme: 'dark', telemetry: false, appTimezone: 'America/New_York' };
+    const migrated = { theme: 'dark', telemetry: false, dataRetentionDays: 30 };
     supabaseMocks.applyHelmMutations.mockResolvedValue({ requestId: 'migration', accountVersion: 8, changes: [settingsRecord(migrated)] });
     await bootstrapDatabasePersistence();
     expect(await loadStore('settings')).toEqual(migrated);
@@ -275,7 +275,7 @@ describe('signed-in persistence boundaries', () => {
 
   it('keeps shared migration retryable when its database commit fails', async () => {
     configureSupabase({ authenticated: true });
-    const original = JSON.stringify({ appTimezone: 'America/New_York', elevenLabsApiKey: 'legacy-eleven' });
+    const original = JSON.stringify({ dataRetentionDays: 30, elevenLabsApiKey: 'legacy-eleven' });
     localStorage.setItem('helm:settings', original);
     supabaseMocks.applyHelmMutations.mockRejectedValueOnce(new Error('permission denied'));
     await bootstrapDatabasePersistence();
@@ -284,7 +284,7 @@ describe('signed-in persistence boundaries', () => {
     expect(getSyncSessionSnapshot().status).not.toBe('ready');
 
     resetDatabasePersistence();
-    const migrated = { theme: 'dark', telemetry: false, appTimezone: 'America/New_York' };
+    const migrated = { theme: 'dark', telemetry: false, dataRetentionDays: 30 };
     supabaseMocks.applyHelmMutations.mockResolvedValue({ requestId: 'migration-retry', accountVersion: 8, changes: [settingsRecord(migrated)] });
     await bootstrapDatabasePersistence();
     expect(getSyncSessionSnapshot().status).toBe('ready');

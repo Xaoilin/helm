@@ -2,7 +2,13 @@ import { expect, test as base, type Page, type Response } from '@playwright/test
 import { encodeStoreValue } from '../../src/store/recordCodec';
 import { STORAGE_KEYS } from '../../src/config/constants';
 import type { HelmMutation, HelmRealtimeEvent } from '../../src/store/databaseTypes';
-import { createFakeServices, installFakeServices, type FakeServices, type FakeServicesOptions } from './fake-services';
+import {
+  createFakeServices,
+  installFakeServices,
+  SERVICES_BASE_URL,
+  type FakeServices,
+  type FakeServicesOptions,
+} from './fake-services';
 import type { EmploymentApplication, EmploymentHistoryEntry, EquityPosition, EquityPositionDraft, Surface } from '../../src/types/domain';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -157,9 +163,10 @@ async function installScenario(
     surfaceKey: STORAGE_KEYS.SHELL_SURFACE,
   });
 
-  await installPrayerRoute(page, options.prayer);
-  database.services ??= createFakeServices(options.services);
+  database.services ??= createFakeServices(servicesFromScenario(options, stores.settings as Record<string, unknown>));
   await installFakeServices(page, database.services);
+  // Registered after the fake services so it answers timetable requests first.
+  await installPrayerRoute(page, options.prayer);
   const control = await installDatabaseRoutes(page, {
     email: options.email || TEST_EMAIL,
     analytics: options.analytics,
@@ -628,33 +635,71 @@ async function installAssistantRoute(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Prayer preferences and location are owned by the prayer and profile services, so a scenario's
+ * prayer settings become those services' saved values.
+ */
+function servicesFromScenario(options: HelmScenarioOptions, settings: Record<string, unknown>): FakeServicesOptions {
+  const explicit = { ...(options.stores?.settings as Record<string, unknown> | undefined), ...options.settings };
+  const location = ['prayerCity', 'prayerCountry', 'appTimezone'].some(key => key in explicit)
+    ? {
+        city: String(settings.prayerCity ?? 'Bedford'),
+        country: String(settings.prayerCountry ?? 'United Kingdom'),
+        timeZone: typeof settings.appTimezone === 'string' ? settings.appTimezone : null,
+      }
+    : undefined;
+  return {
+    preferences: {
+      enabled: settings.prayerEnabled !== false,
+      reminderEnabled: settings.prayerReminderEnabled !== false,
+      reminderMinutes: typeof settings.prayerReminderMinutes === 'number' ? settings.prayerReminderMinutes : 15,
+    },
+    ...(location ? { profile: location } : {}),
+    ...options.services,
+  };
+}
+
 interface PrayerRouteOptions {
   failureStatus?: number;
   timezone?: string;
   timings?: Partial<Record<PrayerTimingName, string>>;
 }
 
+/** The prayer service's timetable endpoint, with the scenario's timings. */
 async function installPrayerRoute(page: Page, options?: PrayerRouteOptions): Promise<void> {
-  await page.route('**/api.aladhan.com/v1/timingsByCity*', async route => {
+  await page.route(`${SERVICES_BASE_URL}/api/prayer/v1/schedule*`, async route => {
     if (options?.failureStatus) {
       await route.fulfill({
         status: options.failureStatus,
         contentType: 'application/json',
-        body: JSON.stringify({ message: 'Prayer schedule fixture unavailable.' }),
+        body: JSON.stringify({ code: 'schedule_unavailable', message: 'Prayer schedule fixture unavailable.' }),
       });
       return;
     }
 
+    const url = new URL(route.request().url());
+    const timezone = options?.timezone || 'Europe/London';
+    const now = await page.evaluate(() => Date.now()).catch(() => Date.now());
+    const date = url.searchParams.get('date')
+      ?? new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(now));
     const timings = { ...DEFAULT_TIMINGS, ...(options?.timings || {}) };
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        data: {
-          timings,
-          date: { hijri: { day: '7', month: { en: 'Safar' }, year: '1448' } },
-          meta: { timezone: options?.timezone || 'Europe/London' },
-        },
+        date,
+        hijriDate: '7 Safar 1448',
+        city: url.searchParams.get('city') ?? 'Bedford',
+        country: url.searchParams.get('country') ?? 'United Kingdom',
+        timezone,
+        method: 'Shia Ithna-Ashari, Leva Institute, Qum',
+        times: Object.entries(timings).map(([name, time]) => ({
+          name,
+          nameArabic: name,
+          time,
+          type: ['Sunrise', 'Sunset', 'Midnight'].includes(name) ? 'event' : 'prayer',
+        })),
+        windows: [],
       }),
     });
   });

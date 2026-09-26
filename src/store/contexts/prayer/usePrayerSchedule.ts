@@ -20,14 +20,14 @@ export interface PrayerScheduleState {
   reminderSchedules: Record<string, PrayerTimesData>;
   status: PrayerScheduleStatus;
   error: string | null;
-  /** Fetches the timetable again, bypassing the same-day cache. */
+  /** Fetches the timetable again. */
   retry: () => Promise<void>;
   /** The prayer date rolled over: drop today's timetable and fetch the new day's. */
   reloadForNewDay: () => void;
 }
 
 /**
- * Owns the prayer timetable for the chosen location. It refuses a timetable
+ * Owns the prayer timetable for the chosen location, loaded from the prayer service. It refuses a timetable
  * whose zone or date is not current, ignores responses superseded by a newer
  * request, and starts again whenever the location or enablement changes.
  */
@@ -43,7 +43,7 @@ export function usePrayerSchedule({ city, country, prayerEnabled }: PrayerLocati
     refreshSequenceRef.current += 1;
   }, []);
 
-  const refresh = useCallback(async (forceRefresh: boolean) => {
+  const refresh = useCallback(async () => {
     if (!prayerEnabled) {
       setSchedule(null);
       setStatus('idle');
@@ -55,7 +55,7 @@ export function usePrayerSchedule({ city, country, prayerEnabled }: PrayerLocati
     setStatus(current => current === 'ready' ? current : 'loading');
     setError(null);
     try {
-      const data = await getPrayerTimes(city, country, { forceRefresh });
+      const data = await getPrayerTimes(city, country);
       if (sequence !== refreshSequenceRef.current) return;
       assertCurrentPrayerSchedule(data, new Date());
       setSchedule(data);
@@ -70,17 +70,17 @@ export function usePrayerSchedule({ city, country, prayerEnabled }: PrayerLocati
     }
   }, [city, country, prayerEnabled]);
 
-  const retry = useCallback(() => refresh(true), [refresh]);
+  const retry = useCallback(() => refresh(), [refresh]);
 
   const reloadForNewDay = useCallback(() => {
     setSchedule(null);
-    void refresh(true);
+    void refresh();
   }, [refresh]);
 
   useEffect(() => {
     setSchedule(null);
     setReminderSchedules({});
-    void refresh(false);
+    void refresh();
     // Location and enablement own the schedule lifecycle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [city, country, prayerEnabled]);

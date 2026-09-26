@@ -4,7 +4,7 @@ export const PRAYER_TEST_DATE = '2026-09-26';
 export const PRAYER_TEST_ZONE = 'Europe/London';
 
 /**
- * A complete, valid AlAdhan-shaped timetable. London is UTC+1 on the default
+ * A complete, valid timetable (as the prayer service provides it). London is UTC+1 on the default
  * date, so Dhuhr starts at 11:55Z and its deadline (Asr) is 15:20Z.
  */
 export function makePrayerTimesData(

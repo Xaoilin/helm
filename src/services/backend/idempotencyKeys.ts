@@ -3,7 +3,7 @@
  * reuses its key, so the service applies it once; a new action (even with the same content, such as
  * completing a prayer again after undoing it) gets a new key. Keys are visible ASCII, at most 200.
  */
-import type { PrayerTrackingRecord, PrayerTrackingState } from '../../types/domain';
+import type { PrayerTrackingRecord } from '../../types/domain';
 
 /** The completion this record was created by: retries share its `recordedAt`. */
 export function createOutcomeKey(record: PrayerTrackingRecord): string {
@@ -17,11 +17,6 @@ export function correctOutcomeKey(outcomeId: string, record: PrayerTrackingRecor
 
 export function deleteOutcomeKey(outcomeId: string): string {
   return `prayer-outcome:delete:${outcomeId}`;
-}
-
-/** The legacy import happens once per account. */
-export function importTrackingKey(state: Pick<PrayerTrackingState, 'trackingStartedAt'>): string {
-  return `prayer-import:${state.trackingStartedAt}`;
 }
 
 /** A save that replaces a whole value (settings, preferences): repeating it is harmless, so each save is new. */

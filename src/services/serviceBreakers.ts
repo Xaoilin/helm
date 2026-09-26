@@ -49,10 +49,3 @@ export const monzoBreaker = new CircuitBreaker({
   maxFailures: 2,
   cooldownMs: 120_000,
 });
-
-/** AlAdhan Prayer Times API — opens after 3 failures, 300s cooldown (infrequent calls) */
-export const prayerTimesBreaker = new CircuitBreaker({
-  name: 'PrayerTimes',
-  maxFailures: 3,
-  cooldownMs: 300_000,
-});

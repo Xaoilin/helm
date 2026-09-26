@@ -16,8 +16,7 @@ import {
   planOutcomeSync,
   type ConfirmedOutcomes,
 } from '../../services/backend/prayerOutcomeSync';
-import { getPrayerDashboard, importPrayerTracking, isPrayerServiceEnabled } from '../../services/backend/prayerServiceApi';
-import { ServiceError } from '../../services/backend/serviceClient';
+import { getPrayerDashboard, isPrayerServiceEnabled } from '../../services/backend/prayerServiceApi';
 
 export type PrayerServiceSyncStatus = 'disabled' | 'loading' | 'synced' | 'syncing' | 'error';
 
@@ -124,8 +123,8 @@ export function usePrayerServiceSync(
 
   /**
    * Loads the service's outcomes and merges them into the app's current state (read when the
-   * response arrives, so changes made meanwhile are kept). The first time, it imports `local`, this
-   * account's legacy history. On failure it returns the current state and retries in the background.
+   * response arrives, so changes made meanwhile are kept). The service is the only store of
+   * outcomes. On failure it returns the current state and retries in the background.
    */
   const load = useCallback(async (
     local: PrayerTrackingState,
@@ -134,11 +133,7 @@ export function usePrayerServiceSync(
     locationRef.current = location;
     setState({ status: 'loading', error: null });
     try {
-      let dashboard = await getPrayerDashboard(location.city, location.country);
-      if (!dashboard.tracking.importedAt) {
-        await importPrayerTracking(local).catch(ignoreAlreadyImported);
-        dashboard = await getPrayerDashboard(location.city, location.country);
-      }
+      const dashboard = await getPrayerDashboard(location.city, location.country);
       const startDate = historyStartDate(dashboard.tracking.trackingStartedAt, local.records, getTracking().records);
       const confirmed = confirmedFromService(await listAllOutcomes(startDate, dashboard.today));
       const current = getTracking();
@@ -182,8 +177,4 @@ export function usePrayerServiceSync(
   }, [drain, enabled]);
 
   return { state, hydrate, push, rehydrate };
-}
-
-function ignoreAlreadyImported(error: unknown): void {
-  if (!(error instanceof ServiceError) || error.code !== 'already_imported') throw error;
 }

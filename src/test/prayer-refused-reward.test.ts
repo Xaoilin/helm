@@ -55,14 +55,9 @@ function complete(
   });
 }
 
-/** What the app loads on the next page view: tracking rebuilt from both stores. */
-function reload(tracking: PrayerTrackingState, gamification: GamificationProfile, tasks: readonly Task[] = []) {
-  return normalizePrayerTrackingState(tracking, {
-    now: COMPLETED_AT,
-    dailyLog: gamification.dailyLog,
-    prayerCompletionLedger: gamification.prayerCompletionLedger,
-    tasks: tasks as Task[],
-  });
+/** What the app loads on the next page view: outcomes come only from the prayer service. */
+function reload(tracking: PrayerTrackingState) {
+  return normalizePrayerTrackingState(tracking, { now: COMPLETED_AT });
 }
 
 const fajrKey = getPrayerRecordKey(DATE, 'Fajr');
@@ -86,17 +81,13 @@ describe('withdrawRefusedPrayerReward', () => {
       expect(gamificationAfter.prayerCompletionLedger).toEqual({});
     });
 
-    it('stops the refused outcome coming back on the next load (the live bug)', () => {
+    it('a refused outcome never comes back on the next load, even while its reward receipt remains', () => {
       const completed = complete('Fajr', DEFAULT_PROFILE, start);
       const reverted = revertRecord(completed.trackingAfter, fajrKey, undefined);
 
-      // Before the fix: only the outcome was reverted, so the reward receipt rebuilt it.
-      expect(reload(reverted, completed.gamificationAfter).records[fajrKey]).toBeDefined();
-
-      const { gamificationAfter } = withdrawRefusedPrayerReward({
-        prayerDate: DATE, prayerName: 'Fajr', tasks: [], gamification: completed.gamificationAfter,
-      });
-      expect(reload(reverted, gamificationAfter).records[fajrKey]).toBeUndefined();
+      // Outcomes are no longer rebuilt from the XP ledger or daily log (the live bug's cause).
+      expect(completed.gamificationAfter.prayerCompletionLedger?.[fajrKey]).toBeDefined();
+      expect(reload(reverted).records[fajrKey]).toBeUndefined();
     });
 
     it('names the prayer task so today\'s tick can be undone', () => {
@@ -109,8 +100,7 @@ describe('withdrawRefusedPrayerReward', () => {
 
       expect(result.taskId).toBe('task-fajr');
       expect(result.gamificationAfter.dailyLog).toEqual({});
-      expect(reload(revertRecord(completed.trackingAfter, fajrKey, undefined), result.gamificationAfter, [task])
-        .records[fajrKey]).toBeUndefined();
+      expect(reload(revertRecord(completed.trackingAfter, fajrKey, undefined)).records[fajrKey]).toBeUndefined();
     });
   });
 
