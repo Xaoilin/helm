@@ -1,5 +1,6 @@
 import type {
   GamificationProfile,
+  LifestyleItem,
   PrayerCompletionSource,
   PrayerCompletionStatus,
   PrayerCompletionUndoData,
@@ -437,5 +438,24 @@ function returnedXp(
     level: levelFromXp(totalXp),
     totalTasksCompleted: Math.max(0, gamification.totalTasksCompleted - 1),
     habitTallies,
+  };
+}
+
+/** The knowledge totals that completion badges read, counted from the Knowledge owner's lists. */
+export function countPrayerRewardKnowledge(knowledge: {
+  knowledgeEntries: readonly unknown[];
+  knowledgeTopics: readonly unknown[];
+  lifestyleItems: readonly Pick<LifestyleItem, 'type' | 'status'>[];
+}): PrayerKnowledgeCounts {
+  return {
+    knowledgeEntries: knowledge.knowledgeEntries.length,
+    knowledgeTopics: knowledge.knowledgeTopics.length,
+    lifestyleHaramMastered: knowledge.lifestyleItems.filter(
+      item => item.type === 'haram' && item.status === 'mastered',
+    ).length,
+    lifestyleHalalConsistent: knowledge.lifestyleItems.filter(
+      item => item.type === 'halal' && item.status === 'consistent',
+    ).length,
+    lifestyleTotal: knowledge.lifestyleItems.length,
   };
 }

@@ -1,9 +1,11 @@
 import { PRAYER_REMINDERS } from '../config/constants';
 import type {
+  DailyMomentumState,
   PrayerDeadlineBounds,
   PrayerName,
   PrayerTrackingState,
 } from '../types/domain';
+import { buildBoundedReminderPlan, type BoundedReminderPlan } from './boundedReminders';
 import { getPrayerReminderKey as getBrowserReminderKey } from './browserPrayerReminder';
 import { formatPrayerInstantTime, shiftPrayerDate } from './prayerTimeZone';
 import {
@@ -11,6 +13,7 @@ import {
   getPrayerDeadlineBounds,
   getPrayerOutcome,
   getPrayerReminderKey as getTrackingReminderKey,
+  setPrayerReminderReceipt,
 } from './prayerTracking';
 import type { PrayerTimesData } from './prayerTimes';
 
@@ -142,4 +145,61 @@ export function selectActivePrayerReminder(
     return Boolean(tracking.reminderReceipts[receiptKey]?.snoozedUntil);
   });
   return { ...active, canSnooze: active.canSnooze && !alreadySnoozed };
+}
+
+/** When a snooze taken at `now` ends. */
+export function getPrayerSnoozeEnd(now: Date): Date {
+  return new Date(now.getTime() + PRAYER_REMINDERS.SNOOZE_MINUTES * 60_000);
+}
+
+/**
+ * Snoozes every prayer in the active reminder group. Returns null, changing
+ * nothing, when there is no group, it cannot be snoozed, or the snooze would
+ * reach its deadline.
+ */
+export function snoozePrayerReminderGroup(
+  tracking: PrayerTrackingState,
+  reminder: PrayerReminderGroup | null,
+  now: Date,
+): PrayerTrackingState | null {
+  if (!reminder || !reminder.canSnooze) return null;
+  const snoozedUntil = getPrayerSnoozeEnd(now);
+  if (snoozedUntil >= reminder.deadlineAt) return null;
+
+  let next = tracking;
+  for (const prayerName of reminder.prayerNames) {
+    next = setPrayerReminderReceipt(next, {
+      date: reminder.prayerDate,
+      prayerName,
+      deadlineAt: reminder.deadlineAt,
+      snoozedUntil,
+    });
+  }
+  return next;
+}
+
+/**
+ * Today's bounded (one-shot) reminders. Nothing is planned while prayer is
+ * disabled, without a verified timetable, or before Daily Momentum loads
+ * (`momentum` is null); prayer kinds also need deadline reminders switched on,
+ * while momentum kinds follow their own preferences.
+ */
+export function selectBoundedReminderPlans(input: {
+  prayerEnabled: boolean;
+  reminderEnabled: boolean;
+  timetable: PrayerTimesData | null;
+  momentum: DailyMomentumState | null;
+  prayerDate: string;
+  tracking: PrayerTrackingState;
+  reminderMinutes: number;
+}): BoundedReminderPlan[] {
+  if (!input.prayerEnabled || !input.timetable || !input.momentum) return [];
+  return buildBoundedReminderPlan({
+    prayerDate: input.prayerDate,
+    schedule: input.timetable.prayers,
+    timeZone: input.timetable.timezone,
+    tracking: input.tracking,
+    momentum: input.momentum,
+    reminderMinutes: input.reminderMinutes,
+  }).filter(plan => plan.kind === 'momentum' || input.reminderEnabled);
 }

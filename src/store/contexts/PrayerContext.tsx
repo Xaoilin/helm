@@ -2,14 +2,11 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import type {
-  PrayerCompletionSource,
   PrayerCompletionStatus,
   PrayerCompletionUndoData,
   PrayerDeadlineBounds,
@@ -21,127 +18,58 @@ import type {
   PrayerTrackingState,
 } from '../../types/domain';
 import { PRAYER_REMINDERS } from '../../config/constants';
-import type { CompletionResult } from '../../services/gamification';
-import { toLocalDateStr } from '../../services/financeHelpers';
-import {
-  getPrayerZonedDate,
-  shiftPrayerDate,
-  validatePrayerTimeZone,
-} from '../../services/prayerTimeZone';
-import {
-  capturePrayerActivationDayEligibility,
-  createPrayerTrackingState,
-  getPrayerCompletionStatusAt,
-  getPrayerDeadlineBounds,
-  getPrayerOutcome,
-  getPrayerRecordKey,
-  normalizePrayerTrackingState,
-  setPrayerReminderReceipt,
-} from '../../services/prayerTracking';
-import {
-  cancelAllPrayerReminders,
-  cancelPrayerReminder,
-  getPrayerReminderPermission,
-  onPrayerReminderFired,
-  requestPrayerReminderPermission,
-  schedulePrayerReminder,
-  sendPrayerNotification,
-  type PrayerReminderPermissionRequestResult,
-  type PrayerReminderPermissionState,
-} from '../../services/browserPrayerReminder';
-import {
-  getPrayerTimes,
-  isAdhanTime,
-  type PrayerTime,
-  type PrayerTimesData,
-} from '../../services/prayerTimes';
-import type { getNextPrayer } from '../../services/prayerTimes';
-import {
-  applyPrayerCompletionUndo,
-  buildPrayerCompletionTransition,
-  buildPrayerCorrectionTransition,
-  withdrawRefusedPrayerReward,
-} from '../../services/prayerCompletionPolicy';
-import {
-  buildPrayerReminderGroups,
-  buildScheduledPrayerReminderGroup,
-  selectActivePrayerReminder,
-  type PrayerReminderGroup,
-  type ScheduledPrayerReminderGroup,
-} from '../../services/prayerReminderPolicy';
+import { validatePrayerTimeZone } from '../../services/prayerTimeZone';
+import { getPrayerOutcome, normalizePrayerTrackingState } from '../../services/prayerTracking';
+import type { PrayerReminderPermissionRequestResult } from '../../services/browserPrayerReminder';
+import type { getNextPrayer, PrayerTime, PrayerTimesData } from '../../services/prayerTimes';
+import { countPrayerRewardKnowledge } from '../../services/prayerCompletionPolicy';
+import type { PrayerReminderGroup } from '../../services/prayerReminderPolicy';
 import {
   buildPrayerSchedulePolicySnapshot,
-  classifyExpiredPrayerOutcomes,
+  reminderSchedulesHaveValidZones,
 } from '../../services/prayerSchedulePolicy';
+import type { BoundedReminderPlan } from '../../services/boundedReminders';
 import {
-  buildBoundedReminderPlan,
-  canSnoozeBoundedReminder,
-  getActiveBoundedReminder,
-  getAttemptableBoundedReminders,
-  recordBoundedReminderAttempt,
-  snoozeBoundedReminder,
-  type BoundedReminderPlan,
-} from '../../services/boundedReminders';
-import { logError } from '../../services/logger';
-import { loadStore, saveStore, saveStoreCommitted } from '../persistence';
-import { isPrayerServiceEnabled, savePrayerPreferences } from '../../services/backend/prayerServiceApi';
-import { usePrayerServiceSync, type PrayerOutcomeRejection, type PrayerServiceSyncState } from './usePrayerServiceSync';
-import { revertRecord } from '../../services/backend/prayerOutcomeSync';
-import { assertPrayerCompletable, PrayerCompletionRejectedError, prayerCompletionRejection } from '../../services/prayerCompletionRules';
-import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
+  buildPrayerDiagnostics,
+  describeReminderSuppression,
+  findNextReminderAt,
+  type PrayerDiagnostics,
+} from '../../services/prayerDiagnostics';
+import type { PrayerOutcomeRejection, PrayerServiceSyncState } from './usePrayerServiceSync';
 import { useGamificationContext } from './GamificationContext';
 import { useDailyMomentumContext } from './DailyMomentumContext';
 import { useKnowledgeContext } from './KnowledgeContext';
 import { useSettingsContext } from './SettingsContext';
 import { useTaskContext } from './TaskContext';
+import { usePrayerTracking } from './prayer/usePrayerTracking';
+import { usePrayerSchedule } from './prayer/usePrayerSchedule';
+import { usePrayerNotificationPermission } from './prayer/usePrayerNotificationPermission';
+import { usePrayerClock } from './prayer/usePrayerClock';
+import { usePrayerOutcomeUpkeep } from './prayer/usePrayerOutcomeUpkeep';
+import { usePrayerReminderBanners } from './prayer/usePrayerReminderBanners';
+import { usePrayerReminderDiagnostics } from './prayer/usePrayerReminderDiagnostics';
+import { usePrayerDeadlineReminders } from './prayer/usePrayerDeadlineReminders';
+import { usePrayerBoundedReminderNotifications } from './prayer/usePrayerBoundedReminderNotifications';
+import {
+  usePrayerCompletionWorkflow,
+  type CompletePrayerOptions,
+  type PrayerCompletionMutationResult,
+} from './prayer/usePrayerCompletionWorkflow';
+import { usePrayerPersistence } from './prayer/usePrayerPersistence';
+import { usePrayerRewardRecovery } from './prayer/usePrayerRewardRecovery';
+import {
+  usePrayerCompletionPrompt,
+  type PrayerCompletionRequest,
+  type PrayerCompletionRequestOptions,
+} from './prayer/usePrayerCompletionPrompt';
+import { usePrayerAdhan } from './prayer/usePrayerAdhan';
 
-export interface PrayerCompletionMutationResult {
-  undo: PrayerCompletionUndoData;
-  xpEarned: number;
-  status: PrayerCompletionStatus;
-  prayerName: PrayerName;
-  prayerDate: string;
-  gamificationResult?: CompletionResult;
-}
-
-export interface PrayerCompletionRequest {
-  prayerName: PrayerName;
-  taskId?: string;
-  prayerDate?: string;
-  source: PrayerCompletionSource;
-  suggestedStatus: PrayerCompletionStatus | null;
-  onCompleted?: (result: PrayerCompletionMutationResult) => void;
-}
-
+export type { PrayerCompletionMutationResult } from './prayer/usePrayerCompletionWorkflow';
+export type { PrayerCompletionRequest } from './prayer/usePrayerCompletionPrompt';
 export type { PrayerReminderGroup } from '../../services/prayerReminderPolicy';
+export type { PrayerDiagnostics } from '../../services/prayerDiagnostics';
 
-export interface PrayerDiagnostics {
-  scheduleStatus: 'idle' | 'loading' | 'ready' | 'unavailable';
-  scheduleDate: string | null;
-  scheduleSource: PrayerTimesData['source'] | null;
-  fetchedAt: string | null;
-  location: string;
-  method: string | null;
-  scheduleTimezone: string | null;
-  localTimezone: string;
-  timezoneMatches: boolean;
-  scheduleTimezoneValid: boolean;
-  nextReminderAt: string | null;
-  suppressionReason: string | null;
-  permissionState: PrayerReminderPermissionState;
-  lastNotificationKey: string | null;
-  lastError: string | null;
-}
-
-interface CompletePrayerOptions {
-  taskId?: string;
-  prayerDate?: string;
-  source?: PrayerCompletionSource;
-  /** Re-applies an already recorded outcome (reward recovery); skips the prayer-time rule. */
-  recordedAlready?: boolean;
-}
-
-interface PrayerContextValue {
+export interface PrayerContextValue {
   loaded: boolean;
   tracking: PrayerTrackingState;
   schedule: PrayerTimesData | null;
@@ -169,7 +97,7 @@ interface PrayerContextValue {
   dismissCompletionNotice: () => void;
   requestPrayerCompletion: (
     prayerName: PrayerName,
-    options?: Omit<PrayerCompletionRequest, 'prayerName' | 'suggestedStatus'>,
+    options?: PrayerCompletionRequestOptions,
   ) => void;
   cancelPrayerCompletion: () => void;
   confirmPrayerCompletion: (status: PrayerCompletionStatus) => PrayerCompletionMutationResult | null;
@@ -202,963 +130,217 @@ export function usePrayerContext(): PrayerContextValue {
   return ctx;
 }
 
+/**
+ * Composes the prayer domain. Each hook under `./prayer/` owns one side effect
+ * (clock, timetable, persistence, reminders, completion); business rules stay in
+ * the pure `services/prayer*` policy modules. Hook order matters: React runs
+ * their effects in this order.
+ */
 export function PrayerProvider({ children }: { children: ReactNode }) {
-  const taskCtx = useTaskContext();
-  const gamificationCtx = useGamificationContext();
-  const momentumCtx = useDailyMomentumContext();
+  const taskOwner = useTaskContext();
+  const gamificationOwner = useGamificationContext();
+  const momentumOwner = useDailyMomentumContext();
   const knowledge = useKnowledgeContext();
-  const settingsCtx = useSettingsContext();
-  const [tracking, setTracking] = useState<PrayerTrackingState>(() => createPrayerTrackingState());
-  const [loaded, setLoaded] = useState(false);
-  const [schedule, setSchedule] = useState<PrayerTimesData | null>(null);
-  const [reminderSchedules, setReminderSchedules] = useState<Record<string, PrayerTimesData>>({});
-  const [scheduleStatus, setScheduleStatus] = useState<PrayerDiagnostics['scheduleStatus']>('idle');
-  const [scheduleError, setScheduleError] = useState<string | null>(null);
-  const [now, setNow] = useState(() => new Date());
-  const [pendingCompletion, setPendingCompletion] = useState<PrayerCompletionRequest | null>(null);
-  const [permissionState, setPermissionState] = useState<PrayerReminderPermissionState>('unsupported');
-  const [lastReminderError, setLastReminderError] = useState<string | null>(null);
-  const [lastNotificationKey, setLastNotificationKey] = useState<string | null>(null);
-  const [adhanPrayer, setAdhanPrayer] = useState<PrayerTime | null>(null);
-  const trackingRef = useRef(tracking);
-  const gamificationRef = useRef(gamificationCtx.gamification);
-  const taskCtxRef = useRef(taskCtx);
-  const todayRef = useRef(toLocalDateStr(now));
-  const refreshSequenceRef = useRef(0);
-  const reminderReconcileQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const reminderReconcileVersionRef = useRef(0);
-  const reminderInventoryInitializedRef = useRef(false);
-  const recoveringRewardKeysRef = useRef(new Set<string>());
-  const scheduledGroupsRef = useRef(new Map<string, ScheduledPrayerReminderGroup>());
-  const scheduledGroupNamesRef = useRef(new Map<string, PrayerName[]>());
-  const shownAdhanKeysRef = useRef(new Set<string>());
-  const attemptingBoundedKeysRef = useRef(new Set<string>());
-  const permissionDeferredBoundedKeysRef = useRef(new Set<string>());
-  const [reminderListenerReady, setReminderListenerReady] = useState(false);
+  const settingsOwner = useSettingsContext();
 
-  useEffect(() => () => {
-    // Invalidate in-flight schedule requests before React tears down the test/app tree.
-    refreshSequenceRef.current += 1;
-  }, []);
+  const { settings } = settingsOwner;
+  const prayerEnabled = settings.prayerEnabled !== false;
+  const reminderEnabled = settings.prayerReminderEnabled !== false;
+  const reminderMinutes = settings.prayerReminderMinutes ?? PRAYER_REMINDERS.DEFAULT_MINUTES;
+  const city = settings.prayerCity || 'Bedford';
+  const country = settings.prayerCountry || 'United Kingdom';
+  const localTimezone = settingsOwner.appTimeZone.browserTimeZone;
 
-  const prayerEnabled = settingsCtx.settings.prayerEnabled !== false;
-  const reminderEnabled = settingsCtx.settings.prayerReminderEnabled !== false;
-  const reminderMinutes = settingsCtx.settings.prayerReminderMinutes ?? PRAYER_REMINDERS.DEFAULT_MINUTES;
-  const city = settingsCtx.settings.prayerCity || 'Bedford';
-  const country = settingsCtx.settings.prayerCountry || 'United Kingdom';
-  const localTimezone = settingsCtx.appTimeZone.browserTimeZone;
+  // Tracking and timetable.
+  const store = usePrayerTracking();
+  const { tracking, loaded, getTracking, commitTracking } = store;
+  const {
+    schedule,
+    reminderSchedules,
+    status: scheduleStatus,
+    error: scheduleError,
+    retry: retrySchedule,
+    reloadForNewDay,
+  } = usePrayerSchedule({ city, country, prayerEnabled });
   const scheduleTimezone = validatePrayerTimeZone(schedule?.timezone || '');
   const scheduleTimezoneValid = Boolean(scheduleTimezone);
   const timezoneMatches = Boolean(scheduleTimezone && localTimezone && scheduleTimezone === localTimezone);
-  const today = scheduleTimezone
-    ? getPrayerZonedDate(now, scheduleTimezone) ?? toLocalDateStr(now)
-    : toLocalDateStr(now);
-  const reminderScheduleList = useMemo(
-    () => Object.values(reminderSchedules),
-    [reminderSchedules],
-  );
-  const reminderTimezonesValid = reminderScheduleList.length > 0
-    && reminderScheduleList.every(candidate => Boolean(validatePrayerTimeZone(candidate.timezone || '')));
+  const timetable = scheduleTimezoneValid ? schedule : null;
+  const reminderScheduleList = useMemo(() => Object.values(reminderSchedules), [reminderSchedules]);
+  const reminderSchedulesValid = reminderSchedulesHaveValidZones(reminderScheduleList);
 
-  useEffect(() => {
-    todayRef.current = today;
-  }, [today]);
-
-  useEffect(() => {
-    trackingRef.current = tracking;
-  }, [tracking]);
-
-  useEffect(() => {
-    gamificationRef.current = gamificationCtx.gamification;
-  }, [gamificationCtx.gamification]);
-
-  useEffect(() => {
-    taskCtxRef.current = taskCtx;
-  }, [taskCtx]);
-
-  const commitTracking = useCallback((
-    update: PrayerTrackingState | ((current: PrayerTrackingState) => PrayerTrackingState),
-  ): PrayerTrackingState => {
-    const next = typeof update === 'function' ? update(trackingRef.current) : update;
-    trackingRef.current = next;
-    setTracking(next);
-    return next;
-  }, []);
-
-  const withdrawReward = (prayerDate: string, prayerName: PrayerName) => {
-    const tasks = taskCtxRef.current;
-    const { gamificationAfter, taskId } = withdrawRefusedPrayerReward({
-      prayerDate,
-      prayerName,
-      tasks: tasks.tasks,
-      gamification: gamificationRef.current,
-    });
-    if (gamificationAfter !== gamificationRef.current) {
-      gamificationRef.current = gamificationAfter;
-      gamificationCtx.updateGamification(gamificationAfter);
-    }
-    const task = taskId ? tasks.tasks.find(candidate => candidate.id === taskId) : undefined;
-    if (task?.completed && prayerDate === todayRef.current) {
-      tasks.updateTask(task.id, { completed: false, completedAt: undefined });
-    }
-  };
-
-  const [completionNotice, setCompletionNotice] = useState<string | null>(null);
-  const dismissCompletionNotice = useCallback(() => setCompletionNotice(null), []);
-  const getTracking = useCallback(() => trackingRef.current, []);
-  const replaceTracking = useCallback((next: PrayerTrackingState) => { commitTracking(next); }, [commitTracking]);
-  // The service refused an outcome outright: show the service's truth instead and say why.
-  const rejectOutcome = useCallback((rejection: PrayerOutcomeRejection) => {
-    const { date, prayerName } = rejection.record;
-    commitTracking(current => revertRecord(current, rejection.key, rejection.confirmed));
-    // A refused first completion must also give back its reward, or the next load rebuilds it.
-    if (!rejection.confirmed) withdrawReward(date, prayerName);
-    setCompletionNotice(`${prayerName} on ${date} was not saved: ${rejection.message}`);
-    // withdrawReward reads refs only, so it never goes stale.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commitTracking]);
-  const serviceSync = usePrayerServiceSync(getTracking, replaceTracking, rejectOutcome);
-
-  useEffect(() => {
-    if (!taskCtx.loaded || !gamificationCtx.loaded || !settingsCtx.loaded) return;
-    let cancelled = false;
-
-    void loadStore<unknown>('prayerTracking').then(async value => {
-      if (cancelled) return;
-      const normalized = normalizePrayerTrackingState(value, {
-        now: new Date(),
-        dailyLog: gamificationCtx.gamification.dailyLog,
-        prayerCompletionLedger: gamificationCtx.gamification.prayerCompletionLedger,
-        tasks: taskCtx.tasks,
-      });
-      trackingRef.current = normalized;
-      setTracking(normalized);
-      setLoaded(true);
-      // The prayer service is the source of truth for outcomes when configured; its data is
-      // merged in when it arrives, so the page never waits for it.
-      const hydrated = await serviceSync.hydrate(normalized, { city, country });
-      if (!cancelled && hydrated !== trackingRef.current) commitTracking(hydrated);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-    // Initial migration intentionally uses the first fully loaded task/profile snapshots.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gamificationCtx.loaded, settingsCtx.loaded, taskCtx.loaded]);
-
-  useRemoteStoreRefresh(['prayerTracking'], async () => {
-    const value = await loadStore<unknown>('prayerTracking');
-    const normalized = normalizePrayerTrackingState(value, {
-      now: new Date(),
-      dailyLog: gamificationCtx.gamification.dailyLog,
-      prayerCompletionLedger: gamificationCtx.gamification.prayerCompletionLedger,
-      tasks: taskCtx.tasks,
-    });
-    trackingRef.current = normalized;
-    setTracking(normalized);
-    const hydrated = await serviceSync.hydrate(normalized, { city, country });
-    if (hydrated !== trackingRef.current) commitTracking(hydrated);
+  // Clock.
+  const permission = usePrayerNotificationPermission();
+  const { refresh: refreshPermission } = permission;
+  const resume = useCallback(() => {
+    void retrySchedule();
+    void refreshPermission();
+  }, [refreshPermission, retrySchedule]);
+  const { now, today, getToday, touch } = usePrayerClock({
+    scheduleTimeZone: scheduleTimezone,
+    onDayChange: reloadForNewDay,
+    onResume: resume,
   });
 
-  useEffect(() => {
-    if (!loaded) return;
-    void saveStore('prayerTracking', tracking);
-    serviceSync.push(tracking);
-    // serviceSync.push is stable; the service mirrors every tracking change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, tracking]);
+  usePrayerOutcomeUpkeep({
+    loaded,
+    tracking,
+    commitTracking,
+    timetable,
+    reminderSchedules,
+    reminderSchedulesValid,
+    today,
+    now,
+  });
 
-  // Prayer preferences are edited in Settings; mirror them to the prayer service.
-  useEffect(() => {
-    if (!loaded || !isPrayerServiceEnabled()) return;
-    void savePrayerPreferences({ enabled: prayerEnabled, reminderEnabled, reminderMinutes })
-      .catch(error => console.error('Prayer preferences could not be saved to the prayer service', error));
-  }, [loaded, prayerEnabled, reminderEnabled, reminderMinutes]);
-
-  const refreshSchedule = useCallback(async (forceRefresh: boolean) => {
-    if (!prayerEnabled) {
-      setSchedule(null);
-      setScheduleStatus('idle');
-      setScheduleError(null);
-      return;
-    }
-
-    const sequence = ++refreshSequenceRef.current;
-    setScheduleStatus(current => current === 'ready' ? current : 'loading');
-    setScheduleError(null);
-    try {
-      const data = await getPrayerTimes(city, country, { forceRefresh });
-      if (sequence !== refreshSequenceRef.current) return;
-      const timezone = validatePrayerTimeZone(data.timezone);
-      const currentPrayerDate = timezone ? getPrayerZonedDate(new Date(), timezone) : null;
-      if (!timezone || !currentPrayerDate) {
-        throw new Error('Prayer schedule timezone is invalid or missing.');
-      }
-      if (data.date !== currentPrayerDate) {
-        throw new Error(`Prayer schedule is for ${data.date}, not the current schedule date.`);
-      }
-      setSchedule(data);
-      setReminderSchedules(current => {
-        const previousDate = shiftPrayerDate(data.date, -1);
-        return {
-          ...(previousDate && current[previousDate] ? { [previousDate]: current[previousDate] } : {}),
-          [data.date]: data,
-        };
-      });
-      setScheduleStatus('ready');
-    } catch (error) {
-      if (sequence !== refreshSequenceRef.current) return;
-      const message = error instanceof Error ? error.message : String(error);
-      setSchedule(null);
-      setScheduleStatus('unavailable');
-      setScheduleError(message);
-      logError('PrayerSchedule', error);
-    }
-  }, [city, country, prayerEnabled]);
-
-  const retrySchedule = useCallback(
-    () => refreshSchedule(true),
-    [refreshSchedule],
-  );
-
-  useEffect(() => {
-    setSchedule(null);
-    setReminderSchedules({});
-    void refreshSchedule(false);
-    // Location and enablement own the schedule lifecycle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [city, country, prayerEnabled]);
-
-  useEffect(() => {
-    const tick = () => {
-      const nextNow = new Date();
-      const nextToday = scheduleTimezone
-        ? getPrayerZonedDate(nextNow, scheduleTimezone) ?? toLocalDateStr(nextNow)
-        : toLocalDateStr(nextNow);
-      setNow(nextNow);
-      if (todayRef.current !== nextToday) {
-        todayRef.current = nextToday;
-        setSchedule(null);
-        void refreshSchedule(true);
-      }
-    };
-    const interval = window.setInterval(tick, PRAYER_REMINDERS.RUNTIME_TICK_MS);
-    return () => window.clearInterval(interval);
-  }, [refreshSchedule, scheduleTimezone]);
-
-  useEffect(() => {
-    const resume = () => {
-      setNow(new Date());
-      void refreshSchedule(true);
-      void getPrayerReminderPermission().then(setPermissionState);
-    };
-    const visibility = () => {
-      if (document.visibilityState === 'visible') resume();
-    };
-    window.addEventListener('focus', resume);
-    document.addEventListener('visibilitychange', visibility);
-    return () => {
-      window.removeEventListener('focus', resume);
-      document.removeEventListener('visibilitychange', visibility);
-    };
-  }, [refreshSchedule]);
-
-  useEffect(() => {
-    void getPrayerReminderPermission().then(setPermissionState);
-  }, []);
-
-  useEffect(() => {
-    if (!loaded || !schedule || !scheduleTimezoneValid) return;
-    commitTracking(current => {
-      if (current.activationDayEligibility) return current;
-      return capturePrayerActivationDayEligibility(current, {
-        date: schedule.date,
-        timezone: schedule.timezone,
-        prayers: schedule.prayers,
-      });
-    });
-  }, [commitTracking, loaded, schedule, scheduleTimezoneValid]);
-
-  const schedulePolicy = useMemo(() => buildPrayerSchedulePolicySnapshot({
-    schedule: scheduleTimezoneValid ? schedule : null,
+  const { scheduleDays, stats, deadlines, nextPrayer } = useMemo(() => buildPrayerSchedulePolicySnapshot({
+    schedule: timetable,
     tracking,
     today,
     now,
-  }), [now, schedule, scheduleTimezoneValid, today, tracking]);
-  const { scheduleDays, stats, deadlines, nextPrayer } = schedulePolicy;
+  }), [now, timetable, today, tracking]);
 
-  useEffect(() => {
-    if (!loaded || !reminderTimezonesValid) return;
-    const next = classifyExpiredPrayerOutcomes({
-      schedules: reminderSchedules,
-      tracking,
-      today,
-      now,
-    });
-    if (next !== tracking) commitTracking(next);
-  }, [commitTracking, loaded, now, reminderSchedules, reminderTimezonesValid, today, tracking]);
-
-  const cancelScheduledReminderForPrayer = useCallback((
-    prayerDate: string,
-    prayerName: PrayerName,
-  ) => {
-    for (const [groupKey, scheduled] of scheduledGroupsRef.current) {
-      if (scheduled.prayerDate !== prayerDate || !scheduled.prayerNames.includes(prayerName)) continue;
-      scheduledGroupsRef.current.delete(groupKey);
-      scheduledGroupNamesRef.current.delete(scheduled.reminderKey);
-      void cancelPrayerReminder({
-        prayerDate: scheduled.prayerDate,
-        prayerName: scheduled.leader,
-        deadlineIso: scheduled.deadlineIso,
-      }).catch(error => {
-        const message = error instanceof Error ? error.message : String(error);
-        setLastReminderError(message);
-        logError('PrayerReminderCancel', error);
-      });
-    }
-  }, []);
-
-  const completePrayer = useCallback((
-    prayerName: PrayerName,
-    status: PrayerCompletionStatus,
-    options: CompletePrayerOptions = {},
-  ): PrayerCompletionMutationResult => {
-    const completedAt = new Date();
-    const prayerDate = options.prayerDate || today;
-    const source = options.source || 'system';
-    if (!options.recordedAlready) {
-      assertPrayerCompletable({
-        prayerName,
-        prayerDate,
-        today,
-        timetable: schedule && scheduleTimezoneValid ? schedule : null,
-        now: completedAt,
-      });
-    }
-    const transition = buildPrayerCompletionTransition({
-      prayerName,
-      status,
-      prayerDate,
-      source,
-      completedAt,
-      taskId: options.taskId,
-      tasks: taskCtx.tasks,
-      tracking: trackingRef.current,
-      gamification: gamificationRef.current,
-      goalTags: settingsCtx.settings.goalTags,
-      knowledge: {
-        knowledgeEntries: knowledge.knowledgeEntries.length,
-        knowledgeTopics: knowledge.knowledgeTopics.length,
-        lifestyleHaramMastered: knowledge.lifestyleItems.filter(
-          item => item.type === 'haram' && item.status === 'mastered',
-        ).length,
-        lifestyleHalalConsistent: knowledge.lifestyleItems.filter(
-          item => item.type === 'halal' && item.status === 'consistent',
-        ).length,
-        lifestyleTotal: knowledge.lifestyleItems.length,
-      },
-      scheduleTimeZone: scheduleTimezone,
-    });
-
-    // Both stores retain the canonical receipt. Hydration can repair either
-    // side after an interrupted multi-store write without granting XP twice.
-    commitTracking(transition.trackingAfter);
-    gamificationRef.current = transition.gamificationAfter;
-    gamificationCtx.updateGamification(transition.gamificationAfter);
-
-    if (transition.taskCompletion && transition.task) {
-      taskCtx.updateTask(transition.task.id, {
-        completed: transition.taskCompletion.after.completed,
-        completedAt: transition.taskCompletion.after.completedAt,
-        ...(transition.task.recurring
-          ? {
-              recurring: {
-                ...transition.task.recurring,
-                lastReset: transition.taskCompletion.after.recurringLastReset,
-              },
-            }
-          : {}),
-      });
-    }
-
-    cancelScheduledReminderForPrayer(prayerDate, prayerName);
-    return {
-      undo: transition.undo,
-      xpEarned: transition.xpEarned,
-      status,
-      prayerName,
-      prayerDate,
-      gamificationResult: transition.gamificationResult,
-    };
-  }, [
+  // Reminders: in-app banners, browser deadline timers, and bounded notifications.
+  const {
+    reminderGroups,
+    boundedReminderPlans,
+    activeReminder,
+    activeBoundedReminder,
+    canSnoozeActiveBoundedReminder,
+    snoozeActiveReminder,
+    snoozeActiveBoundedReminder,
+  } = usePrayerReminderBanners({
+    prayerEnabled,
+    reminderEnabled,
+    reminderMinutes,
+    reminderSchedules: reminderScheduleList,
+    reminderSchedulesValid,
+    timetable,
+    momentum: momentumOwner.loaded ? momentumOwner.state : null,
+    tracking,
+    getTracking,
     commitTracking,
-    cancelScheduledReminderForPrayer,
-    gamificationCtx,
-    knowledge.knowledgeEntries.length,
-    knowledge.knowledgeTopics.length,
-    knowledge.lifestyleItems,
-    settingsCtx.settings.goalTags,
-    schedule,
-    scheduleTimezone,
-    scheduleTimezoneValid,
-    taskCtx,
     today,
-  ]);
+    now,
+  });
+  const { lastNotificationKey, lastReminderError, reporter } = usePrayerReminderDiagnostics();
+  const { cancelForPrayer, testReminder } = usePrayerDeadlineReminders({
+    enabled: loaded && prayerEnabled && reminderEnabled && reminderSchedulesValid,
+    reminderGroups,
+    tracking,
+    commitTracking,
+    onFired: touch,
+    refreshPermission,
+    scheduleTimeZone: scheduleTimezone,
+    reporter,
+  });
+  usePrayerBoundedReminderNotifications({
+    loaded,
+    plans: boundedReminderPlans,
+    receipts: tracking.boundedReminderReceipts,
+    getTracking,
+    commitTracking,
+    now,
+    permission,
+    reporter,
+  });
 
-  useEffect(() => {
-    if (!loaded) return;
-    for (const record of Object.values(tracking.records)) {
-      if (
-        (record.status !== 'on_time' && record.status !== 'late')
-        || record.rewarded !== true
-      ) {
-        continue;
-      }
-      const rewardKey = getPrayerRecordKey(record.date, record.prayerName);
-      if (
-        gamificationRef.current.prayerCompletionLedger?.[rewardKey]?.rewarded
-        || recoveringRewardKeysRef.current.has(rewardKey)
-      ) {
-        continue;
-      }
+  // Completion across prayer tracking, gamification and prayer tasks.
+  const { knowledgeEntries, knowledgeTopics, lifestyleItems } = knowledge;
+  const knowledgeCounts = useMemo(
+    () => countPrayerRewardKnowledge({ knowledgeEntries, knowledgeTopics, lifestyleItems }),
+    [knowledgeEntries, knowledgeTopics, lifestyleItems],
+  );
+  const {
+    completePrayer,
+    correctPrayerOutcome,
+    undoPrayerCompletion,
+    revertRefusedOutcome,
+    getGamification,
+  } = usePrayerCompletionWorkflow({
+    taskOwner,
+    gamificationOwner,
+    knowledgeCounts,
+    goalTags: settings.goalTags,
+    timetable,
+    scheduleTimeZone: scheduleTimezone,
+    today,
+    getToday,
+    getTracking,
+    commitTracking,
+    cancelReminderForPrayer: cancelForPrayer,
+  });
 
-      recoveringRewardKeysRef.current.add(rewardKey);
-      try {
-        completePrayer(record.prayerName, record.status, {
-          prayerDate: record.date,
-          source: record.source || 'system',
-          recordedAlready: true,
-          ...(record.taskId ? { taskId: record.taskId } : {}),
-        });
-      } finally {
-        recoveringRewardKeysRef.current.delete(rewardKey);
-      }
-    }
-  }, [completePrayer, loaded, tracking.records]);
+  const [completionNotice, setCompletionNotice] = useState<string | null>(null);
+  const dismissCompletionNotice = useCallback(() => setCompletionNotice(null), []);
+  // The service refused an outcome outright: show the service's truth instead and say why.
+  const rejectOutcome = useCallback((rejection: PrayerOutcomeRejection) => {
+    revertRefusedOutcome(rejection);
+    setCompletionNotice(`${rejection.record.prayerName} on ${rejection.record.date} was not saved: ${rejection.message}`);
+  }, [revertRefusedOutcome]);
 
-  const requestPrayerCompletion = useCallback((
-    prayerName: PrayerName,
-    options: Omit<PrayerCompletionRequest, 'prayerName' | 'suggestedStatus'> = {
-      source: 'system',
-    },
-  ) => {
-    const prayerDate = options.prayerDate || today;
-    const rejection = prayerCompletionRejection({
-      prayerName,
-      prayerDate,
-      today,
-      timetable: schedule && scheduleTimezoneValid ? schedule : null,
-      now: new Date(),
-    });
-    if (rejection) {
-      setCompletionNotice(rejection);
-      return;
-    }
-    setCompletionNotice(null);
-    const bounds = schedule && scheduleTimezoneValid
-      ? getPrayerDeadlineBounds(schedule.prayers, prayerDate, prayerName, schedule.timezone)
-      : null;
-    const suggestedStatus = bounds
-      ? getPrayerCompletionStatusAt(bounds.deadlineAt, new Date())
-      : null;
-    setPendingCompletion({
-      ...options,
-      prayerDate,
-      prayerName,
-      suggestedStatus,
-    });
-  }, [schedule, scheduleTimezoneValid, today]);
+  // Persistence: Supabase record and Spring prayer service.
+  const serviceSync = usePrayerPersistence({
+    store,
+    sourcesLoaded: taskOwner.loaded && gamificationOwner.loaded && settingsOwner.loaded,
+    gamification: gamificationOwner.gamification,
+    tasks: taskOwner.tasks,
+    location: { city, country },
+    preferences: { enabled: prayerEnabled, reminderEnabled, reminderMinutes },
+    onRejected: rejectOutcome,
+  });
+  usePrayerRewardRecovery({ loaded, records: tracking.records, getGamification, completePrayer });
 
-  const cancelPrayerCompletion = useCallback(() => {
-    setPendingCompletion(null);
-  }, []);
-
-  const confirmPrayerCompletion = useCallback((status: PrayerCompletionStatus) => {
-    const pending = pendingCompletion;
-    if (!pending) return null;
-    let result: PrayerCompletionMutationResult;
-    try {
-      result = completePrayer(pending.prayerName, status, {
-        taskId: pending.taskId,
-        prayerDate: pending.prayerDate,
-        source: pending.source,
-      });
-    } catch (error) {
-      if (!(error instanceof PrayerCompletionRejectedError)) throw error;
-      setPendingCompletion(null);
-      setCompletionNotice(error.message);
-      return null;
-    }
-    setPendingCompletion(null);
-    pending.onCompleted?.(result);
-    return result;
-  }, [completePrayer, pendingCompletion]);
-
-  const correctPrayerOutcome = useCallback((
-    prayerDate: string,
-    prayerName: PrayerName,
-    status: PrayerOutcomeStatus,
-  ) => {
-    const correctedAt = new Date();
-    const transition = buildPrayerCorrectionTransition({
-      prayerDate,
-      prayerName,
-      status,
-      correctedAt,
-      tasks: taskCtx.tasks,
-      tracking: trackingRef.current,
-      gamification: gamificationRef.current,
-    });
-    commitTracking(transition.trackingAfter);
-    cancelScheduledReminderForPrayer(prayerDate, prayerName);
-    gamificationRef.current = transition.gamificationAfter;
-    gamificationCtx.updateGamification(transition.gamificationAfter);
-
-    if (prayerDate === today && transition.targetTask) {
-      taskCtx.updateTask(transition.targetTask.id, {
-        completed: transition.completed,
-        completedAt: transition.completed
-          ? correctedAt.toISOString()
-          : undefined,
-      });
-    }
-  }, [cancelScheduledReminderForPrayer, commitTracking, gamificationCtx, taskCtx, today]);
+  const {
+    pendingCompletion,
+    requestPrayerCompletion,
+    cancelPrayerCompletion,
+    confirmPrayerCompletion,
+  } = usePrayerCompletionPrompt({ today, timetable, completePrayer, showNotice: setCompletionNotice });
 
   const getOutcome = useCallback(
     (prayerDate: string, prayerName: PrayerName) => getPrayerOutcome(tracking, prayerDate, prayerName),
     [tracking],
   );
 
-  const undoPrayerCompletion = useCallback((inverse: PrayerCompletionUndoData) => {
-    const transition = applyPrayerCompletionUndo(
-      trackingRef.current,
-      gamificationRef.current,
-      inverse,
-    );
-    commitTracking(transition.trackingAfter);
-    gamificationRef.current = transition.gamificationAfter;
-    gamificationCtx.updateGamification(transition.gamificationAfter);
-  }, [commitTracking, gamificationCtx]);
-
   const replacePrayerTracking = useCallback((state: PrayerTrackingState) => {
     commitTracking(normalizePrayerTrackingState(state, { now: new Date() }));
   }, [commitTracking]);
 
-  const reminderGroups = useMemo(
-    () => buildPrayerReminderGroups({
-      schedules: reminderScheduleList,
-      tracking,
-      today,
-      now,
-      reminderMinutes,
-    }),
-    [now, reminderMinutes, reminderScheduleList, today, tracking],
-  );
+  const { adhanPrayer, dismissAdhan } = usePrayerAdhan({ prayerEnabled, timetable, now, today });
 
-  const activeReminder = useMemo(() => {
-    if (!prayerEnabled || !reminderEnabled || !reminderTimezonesValid) return null;
-    return selectActivePrayerReminder(reminderGroups, tracking, now);
-  }, [
-    now,
+  const nextReminderAt = findNextReminderAt(reminderGroups, now);
+  const suppressionReason = describeReminderSuppression({
     prayerEnabled,
     reminderEnabled,
-    reminderGroups,
-    reminderTimezonesValid,
-    tracking,
-  ]);
-
-  const boundedReminderPlans = useMemo(() => {
-    if (!prayerEnabled || !schedule || !scheduleTimezoneValid || !momentumCtx.loaded) return [];
-    return buildBoundedReminderPlan({
-      prayerDate: today,
-      schedule: schedule.prayers,
-      timeZone: schedule.timezone,
-      tracking,
-      momentum: momentumCtx.state,
-      reminderMinutes,
-    }).filter(plan => plan.kind === 'momentum' || reminderEnabled);
-  }, [
-    momentumCtx.loaded,
-    momentumCtx.state,
-    prayerEnabled,
-    reminderEnabled,
-    reminderMinutes,
-    schedule,
-    scheduleTimezoneValid,
-    today,
-    tracking,
-  ]);
-  const boundedReminderPlansRef = useRef<readonly BoundedReminderPlan[]>(boundedReminderPlans);
-  useEffect(() => {
-    boundedReminderPlansRef.current = boundedReminderPlans;
-  }, [boundedReminderPlans]);
-
-  const activeBoundedReminder = useMemo(() => getActiveBoundedReminder(
-    boundedReminderPlans,
-    tracking.boundedReminderReceipts,
-    now,
-  ), [boundedReminderPlans, now, tracking.boundedReminderReceipts]);
-
-  const canSnoozeActiveBoundedReminder = useMemo(() => activeBoundedReminder
-    ? canSnoozeBoundedReminder(
-      tracking,
-      activeBoundedReminder,
-      new Date(now.getTime() + PRAYER_REMINDERS.SNOOZE_MINUTES * 60_000),
-    )
-    : false, [activeBoundedReminder, now, tracking]);
-
-  useEffect(() => {
-    if (!loaded || boundedReminderPlans.length === 0) return;
-    const attemptable = getAttemptableBoundedReminders(
-      boundedReminderPlans,
-      tracking.boundedReminderReceipts,
-      now,
-    ).filter(plan => (
-      !attemptingBoundedKeysRef.current.has(plan.notificationKey)
-      && !(
-        permissionState !== 'granted'
-        && permissionDeferredBoundedKeysRef.current.has(plan.notificationKey)
-      )
-    ));
-    if (attemptable.length === 0) return;
-    for (const plan of attemptable) attemptingBoundedKeysRef.current.add(plan.notificationKey);
-
-    void (async () => {
-      const permission = await getPrayerReminderPermission();
-      setPermissionState(permission);
-      if (permission === 'granted') permissionDeferredBoundedKeysRef.current.clear();
-      for (const plan of attemptable) {
-        let notified = false;
-        try {
-          const currentPlan = boundedReminderPlansRef.current.find(candidate => (
-            candidate.notificationKey === plan.notificationKey
-          ));
-          const attemptedAt = new Date();
-          if (!currentPlan || getAttemptableBoundedReminders(
-            [currentPlan],
-            trackingRef.current.boundedReminderReceipts,
-            attemptedAt,
-          ).length === 0) {
-            continue;
-          }
-          if (permission !== 'granted') {
-            permissionDeferredBoundedKeysRef.current.add(currentPlan.notificationKey);
-            setLastNotificationKey(currentPlan.notificationKey);
-            continue;
-          }
-
-          const attemptedState = recordBoundedReminderAttempt(
-            trackingRef.current,
-            currentPlan,
-            attemptedAt,
-            false,
-          );
-          await saveStoreCommitted('prayerTracking', attemptedState);
-          commitTracking(attemptedState);
-          notified = await sendPrayerNotification({ title: currentPlan.title, body: currentPlan.body });
-          if (notified) {
-            const notifiedState = recordBoundedReminderAttempt(
-              trackingRef.current,
-              currentPlan,
-              attemptedAt,
-              true,
-            );
-            await saveStoreCommitted('prayerTracking', notifiedState);
-            commitTracking(notifiedState);
-          }
-          setLastNotificationKey(currentPlan.notificationKey);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          setLastReminderError(message);
-          logError('BoundedReminder', error);
-        } finally {
-          attemptingBoundedKeysRef.current.delete(plan.notificationKey);
-        }
-      }
-    })();
-  }, [
-    boundedReminderPlans,
-    commitTracking,
-    loaded,
-    now,
-    permissionState,
-    tracking.boundedReminderReceipts,
-  ]);
-
-  useEffect(() => {
-    let disposed = false;
-    let unsubscribe: (() => void) | undefined;
-    setReminderListenerReady(false);
-
-    void onPrayerReminderFired(event => {
-      setLastNotificationKey(event.key);
-      if (event.error) setLastReminderError(event.error);
-      if (event.testOnly) return;
-      const prayerNames = scheduledGroupNamesRef.current.get(event.key) || [event.prayerName];
-      scheduledGroupNamesRef.current.delete(event.key);
-      for (const [groupKey, scheduled] of scheduledGroupsRef.current) {
-        if (scheduled.reminderKey === event.key) {
-          scheduledGroupsRef.current.delete(groupKey);
-        }
-      }
-      commitTracking(current => {
-        let next = current;
-        for (const prayerName of prayerNames) {
-          next = setPrayerReminderReceipt(next, {
-            date: event.prayerDate,
-            prayerName,
-            deadlineAt: event.deadlineIso,
-            notifiedAt: event.firedAtIso,
-          });
-        }
-        return next;
-      });
-      setNow(new Date());
-    }).then(nextUnsubscribe => {
-      if (disposed) {
-        nextUnsubscribe();
-      } else {
-        unsubscribe = nextUnsubscribe;
-        setReminderListenerReady(true);
-      }
-    }).catch(error => {
-      if (disposed) return;
-      const message = error instanceof Error ? error.message : String(error);
-      setLastReminderError(message);
-      logError('PrayerReminderListener', error);
-    });
-
-    return () => {
-      disposed = true;
-      setReminderListenerReady(false);
-      unsubscribe?.();
-    };
-  }, [commitTracking]);
-
-  useEffect(() => {
-    const enabled = loaded
-      && prayerEnabled
-      && reminderEnabled
-      && reminderListenerReady
-      && reminderTimezonesValid;
-    const desired = new Map<string, ScheduledPrayerReminderGroup>();
-    if (enabled) {
-      for (const group of reminderGroups) {
-        const scheduled = buildScheduledPrayerReminderGroup(group, tracking);
-        if (scheduled) desired.set(scheduled.groupKey, scheduled);
-      }
-    }
-
-    const reconcileVersion = ++reminderReconcileVersionRef.current;
-    reminderReconcileQueueRef.current = reminderReconcileQueueRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        if (reconcileVersion !== reminderReconcileVersionRef.current) return;
-
-        if (!reminderInventoryInitializedRef.current) {
-          try {
-            // Clear the in-memory browser timer inventory once, then rebuild it
-            // from persisted outcomes for this page session.
-            await cancelAllPrayerReminders();
-            reminderInventoryInitializedRef.current = true;
-            scheduledGroupsRef.current.clear();
-            scheduledGroupNamesRef.current.clear();
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            setLastReminderError(message);
-            logError('PrayerReminderInventoryReset', error);
-            return;
-          }
-        }
-
-        if (!enabled) {
-          if (scheduledGroupsRef.current.size > 0) {
-            try {
-              await cancelAllPrayerReminders();
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              setLastReminderError(message);
-              logError('PrayerReminderCancelAll', error);
-            }
-          }
-          scheduledGroupsRef.current.clear();
-          scheduledGroupNamesRef.current.clear();
-          return;
-        }
-
-        for (const [groupKey, current] of [...scheduledGroupsRef.current]) {
-          const replacement = desired.get(groupKey);
-          if (replacement?.signature === current.signature) continue;
-
-          scheduledGroupsRef.current.delete(groupKey);
-          scheduledGroupNamesRef.current.delete(current.reminderKey);
-          if (replacement?.reminderKey === current.reminderKey) continue;
-
-          try {
-            await cancelPrayerReminder({
-              prayerDate: current.prayerDate,
-              prayerName: current.leader,
-              deadlineIso: current.deadlineIso,
-            });
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            setLastReminderError(message);
-            logError('PrayerReminderCancel', error);
-          }
-        }
-
-        if (reconcileVersion !== reminderReconcileVersionRef.current) return;
-
-        for (const [groupKey, scheduled] of desired) {
-          const current = scheduledGroupsRef.current.get(groupKey);
-          if (current?.signature === scheduled.signature) continue;
-
-          scheduledGroupsRef.current.set(groupKey, scheduled);
-          scheduledGroupNamesRef.current.set(scheduled.reminderKey, [...scheduled.prayerNames]);
-          try {
-            const result = await schedulePrayerReminder({
-              prayerDate: scheduled.prayerDate,
-              prayerName: scheduled.leader,
-              deadlineIso: scheduled.deadlineIso,
-              fireAtIso: scheduled.fireAtIso,
-              title: scheduled.title,
-              body: scheduled.body,
-            });
-            setLastNotificationKey(result.key);
-            if (result.status === 'expired' && scheduledGroupsRef.current.get(groupKey) === scheduled) {
-              scheduledGroupsRef.current.delete(groupKey);
-              scheduledGroupNamesRef.current.delete(scheduled.reminderKey);
-            }
-          } catch (error) {
-            if (scheduledGroupsRef.current.get(groupKey) === scheduled) {
-              scheduledGroupsRef.current.delete(groupKey);
-              scheduledGroupNamesRef.current.delete(scheduled.reminderKey);
-            }
-            const message = error instanceof Error ? error.message : String(error);
-            setLastReminderError(message);
-            logError('PrayerReminder', error);
-          }
-        }
-      });
-  }, [
-    loaded,
-    prayerEnabled,
-    reminderEnabled,
-    reminderListenerReady,
-    reminderGroups,
-    reminderTimezonesValid,
-    tracking,
-  ]);
-
-  const snoozeActiveReminder = useCallback(() => {
-    if (!activeReminder || !activeReminder.canSnooze) return;
-    const snoozedUntil = new Date(Date.now() + PRAYER_REMINDERS.SNOOZE_MINUTES * 60_000);
-    if (snoozedUntil >= activeReminder.deadlineAt) return;
-
-    let next = trackingRef.current;
-    for (const prayerName of activeReminder.prayerNames) {
-      next = setPrayerReminderReceipt(next, {
-        date: activeReminder.prayerDate,
-        prayerName,
-        deadlineAt: activeReminder.deadlineAt,
-        snoozedUntil,
-      });
-    }
-    commitTracking(next);
-  }, [activeReminder, commitTracking]);
-
-  const snoozeActiveBoundedReminder = useCallback(() => {
-    if (!activeBoundedReminder) return;
-    const snoozedUntil = new Date(now.getTime() + PRAYER_REMINDERS.SNOOZE_MINUTES * 60_000);
-    if (!canSnoozeBoundedReminder(trackingRef.current, activeBoundedReminder, snoozedUntil)) return;
-    commitTracking(current => snoozeBoundedReminder(current, activeBoundedReminder, snoozedUntil));
-  }, [activeBoundedReminder, commitTracking, now]);
-
-  const requestReminderPermission = useCallback(async () => {
-    const result = await requestPrayerReminderPermission();
-    if (result === 'granted') permissionDeferredBoundedKeysRef.current.clear();
-    setPermissionState(result === 'granted' ? 'granted' : result === 'unsupported' ? 'unsupported' : 'not_granted');
-    return result;
-  }, []);
-
-  const testReminder = useCallback(async (prayerName: PrayerName = 'Fajr') => {
-    const permission = await getPrayerReminderPermission();
-    setPermissionState(permission);
-    if (permission !== 'granted') return false;
-
-    const reference = new Date();
-    const fireAt = new Date(reference.getTime() + PRAYER_REMINDERS.TEST_DELAY_MS);
-    const deadline = new Date(reference.getTime() + PRAYER_REMINDERS.TEST_DEADLINE_MS);
-    try {
-      const result = await schedulePrayerReminder({
-        prayerDate: scheduleTimezone
-          ? getPrayerZonedDate(reference, scheduleTimezone) ?? toLocalDateStr(reference)
-          : toLocalDateStr(reference),
-        prayerName,
-        deadlineIso: deadline.toISOString(),
-        fireAtIso: fireAt.toISOString(),
-        title: `TEST — ${prayerName} deadline reminder`,
-        body: 'Minimized-window timer test only. No prayer outcome, receipt, or XP was changed.',
-        testOnly: true,
-      });
-      setLastNotificationKey(result.key);
-      return result.status === 'scheduled';
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setLastReminderError(message);
-      logError('PrayerReminderTest', error);
-      return false;
-    }
-  }, [scheduleTimezone]);
-
-  useEffect(() => {
-    if (!prayerEnabled || !schedule || !scheduleTimezoneValid) return;
-    const adhan = isAdhanTime(schedule.prayers, now, schedule.timezone);
-    if (!adhan) return;
-    const key = `${today}:${adhan.name}`;
-    if (shownAdhanKeysRef.current.has(key)) return;
-    shownAdhanKeysRef.current.add(key);
-    setAdhanPrayer(adhan);
-  }, [now, prayerEnabled, schedule, scheduleTimezoneValid, today]);
-
-  const dismissAdhan = useCallback(() => setAdhanPrayer(null), []);
-
-  const nextReminderGroup = reminderGroups.find(group => group.deadlineAt > now) || null;
-  const suppressionReason = !prayerEnabled
-    ? 'Prayer times are disabled.'
-    : !reminderEnabled
-      ? 'Deadline reminders are disabled.'
-      : scheduleStatus !== 'ready' || !schedule
-        ? 'No matching current-day prayer schedule is available.'
-        : !scheduleTimezone
-          ? 'The schedule timezone could not be verified.'
-          : reminderGroups.length === 0
-              ? 'No incomplete prayer is currently eligible.'
-              : null;
-  const diagnostics = useMemo<PrayerDiagnostics>(() => ({
     scheduleStatus,
-    scheduleDate: schedule?.date || null,
-    scheduleSource: schedule?.source || null,
-    fetchedAt: schedule?.fetchedAt || null,
-    location: `${city}, ${country}`,
-    method: schedule?.method || null,
-    scheduleTimezone: scheduleTimezone || null,
+    schedule,
+    scheduleTimezone,
+    reminderGroupCount: reminderGroups.length,
+  });
+  const permissionState = permission.state;
+  const diagnostics = useMemo(() => buildPrayerDiagnostics({
+    scheduleStatus,
+    schedule,
+    scheduleError,
+    city,
+    country,
+    scheduleTimezone,
+    scheduleTimezoneValid,
     localTimezone,
     timezoneMatches,
-    scheduleTimezoneValid,
-    nextReminderAt: nextReminderGroup?.fireAt.toISOString() || null,
+    nextReminderAt,
     suppressionReason,
     permissionState,
     lastNotificationKey,
-    lastError: lastReminderError || scheduleError,
+    lastReminderError,
   }), [
     city,
     country,
-    localTimezone,
     lastNotificationKey,
     lastReminderError,
-    nextReminderGroup,
+    localTimezone,
+    nextReminderAt,
     permissionState,
     schedule,
     scheduleError,
@@ -1168,6 +350,8 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     suppressionReason,
     timezoneMatches,
   ]);
+
+  const requestReminderPermission = permission.request;
 
   const value = useMemo<PrayerContextValue>(() => ({
     loaded,
@@ -1190,7 +374,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     canSnoozeActiveBoundedReminder,
     adhanPrayer,
     diagnostics,
-    serviceSync: serviceSync.state,
+    serviceSync,
     completionNotice,
     dismissCompletionNotice,
     requestPrayerCompletion,
@@ -1218,12 +402,12 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     confirmPrayerCompletion,
     correctPrayerOutcome,
     deadlines,
-    dismissCompletionNotice,
-    localTimezone,
     diagnostics,
     dismissAdhan,
+    dismissCompletionNotice,
     getOutcome,
     loaded,
+    localTimezone,
     nextPrayer,
     now,
     pendingCompletion,
@@ -1235,13 +419,13 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     scheduleDays,
     scheduleError,
     scheduleStatus,
-    snoozeActiveReminder,
+    scheduleTimezoneValid,
+    serviceSync,
     snoozeActiveBoundedReminder,
+    snoozeActiveReminder,
     stats,
     testReminder,
     timezoneMatches,
-    scheduleTimezoneValid,
-    serviceSync.state,
     today,
     tracking,
     undoPrayerCompletion,
