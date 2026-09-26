@@ -31,6 +31,9 @@ export default defineConfig({
     env: {
       VITE_SUPABASE_PUBLISHABLE_KEY: 'helm-test-publishable-key',
       VITE_SUPABASE_URL: 'https://helm.test.supabase.co',
+      // Every browser test runs against the stateful service fakes in e2e/support/fake-services.ts.
+      VITE_PRAYER_API_BASE_URL: 'https://services.helm.test',
+      VITE_PROFILE_API_BASE_URL: 'https://services.helm.test',
     },
     url: baseURL,
     reuseExistingServer: false,

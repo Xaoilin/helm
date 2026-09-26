@@ -40,6 +40,8 @@ Canonical types live in `src/types/domain.ts`. Pure normalization, deadline, out
 
 Records use `<local date>::<PrayerName>` keys so deletion or recreation of a prayer task cannot erase history. The aggregate is decomposed into account-owned metadata, outcome, eligibility, and reminder-receipt records and changed through the transactional Sabah One mutation RPC.
 
+When the Spring Boot prayer service is configured, it is the source of truth for outcomes, the tracking start and the activation-day snapshot. `usePrayerServiceSync` imports the account's history once, merges the service's outcomes into the state (newest status wins; unchanged records are kept as they are), and sends every later change as a create, correction, or delete in order, retrying after failures. The mutation logic below is unchanged; Supabase keeps a mirror of the aggregate.
+
 All UI, chat, and voice entry points call the same prayer completion mutation. One completion writes the canonical outcome, synchronizes matching prayer-task state and the compatibility daily log, awards one-time XP, and records assistant activity when applicable. Repeated completion and task-ID churn cannot award XP again. Historical correction changes the outcome without granting XP. Assistant undo reverses only the completion-owned task, gamification, and canonical-outcome fields.
 
 When chat or voice asks to complete a prayer without an explicit status, the shared assistant runtime stores a typed pending action and asks `On time or late?`. An in-app follow-up resolves that pending action without a second model call. Explicit status executes immediately.

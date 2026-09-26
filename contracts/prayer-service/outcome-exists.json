@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/prayer/v1/outcomes"
+  },
+  "status" : 409,
+  "body" : {
+    "code" : "outcome_exists",
+    "message" : "Dhuhr on 2026-09-25 is already recorded; correct it with PATCH instead."
+  }
+}

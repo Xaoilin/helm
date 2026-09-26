@@ -1,0 +1,21 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/prayer/v1/outcomes"
+  },
+  "status" : 201,
+  "body" : {
+    "outcome" : {
+      "id" : "1c52385c-3d06-43e5-849f-8c9652ddf677",
+      "date" : "2026-09-25",
+      "prayer" : "Dhuhr",
+      "status" : "on_time",
+      "recordedAt" : "2026-09-25T12:00:00Z",
+      "source" : "tasks",
+      "taskId" : "task-dhuhr",
+      "rewarded" : true,
+      "deadlineAt" : "2026-09-25T15:08:00Z"
+    },
+    "firstReward" : true
+  }
+}

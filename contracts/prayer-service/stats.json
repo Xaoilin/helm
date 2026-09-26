@@ -1,0 +1,102 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/prayer/v1/stats"
+  },
+  "status" : 200,
+  "body" : {
+    "overall" : {
+      "onTime" : 0,
+      "late" : 1,
+      "missed" : 0,
+      "inferredMissed" : 0,
+      "unclassified" : 0,
+      "pending" : 3,
+      "classifiedTotal" : 1,
+      "opportunities" : 4,
+      "percentages" : {
+        "onTime" : 0,
+        "late" : 100,
+        "missed" : 0
+      }
+    },
+    "trackedDays" : 1,
+    "perPrayer" : {
+      "Fajr" : {
+        "onTime" : 0,
+        "late" : 0,
+        "missed" : 0,
+        "inferredMissed" : 0,
+        "unclassified" : 0,
+        "pending" : 0,
+        "classifiedTotal" : 0,
+        "opportunities" : 0,
+        "percentages" : {
+          "onTime" : 0,
+          "late" : 0,
+          "missed" : 0
+        }
+      },
+      "Dhuhr" : {
+        "onTime" : 0,
+        "late" : 1,
+        "missed" : 0,
+        "inferredMissed" : 0,
+        "unclassified" : 0,
+        "pending" : 0,
+        "classifiedTotal" : 1,
+        "opportunities" : 1,
+        "percentages" : {
+          "onTime" : 0,
+          "late" : 100,
+          "missed" : 0
+        }
+      },
+      "Asr" : {
+        "onTime" : 0,
+        "late" : 0,
+        "missed" : 0,
+        "inferredMissed" : 0,
+        "unclassified" : 0,
+        "pending" : 1,
+        "classifiedTotal" : 0,
+        "opportunities" : 1,
+        "percentages" : {
+          "onTime" : 0,
+          "late" : 0,
+          "missed" : 0
+        }
+      },
+      "Maghrib" : {
+        "onTime" : 0,
+        "late" : 0,
+        "missed" : 0,
+        "inferredMissed" : 0,
+        "unclassified" : 0,
+        "pending" : 1,
+        "classifiedTotal" : 0,
+        "opportunities" : 1,
+        "percentages" : {
+          "onTime" : 0,
+          "late" : 0,
+          "missed" : 0
+        }
+      },
+      "Isha" : {
+        "onTime" : 0,
+        "late" : 0,
+        "missed" : 0,
+        "inferredMissed" : 0,
+        "unclassified" : 0,
+        "pending" : 1,
+        "classifiedTotal" : 0,
+        "opportunities" : 1,
+        "percentages" : {
+          "onTime" : 0,
+          "late" : 0,
+          "missed" : 0
+        }
+      }
+    }
+  }
+}

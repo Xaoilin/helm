@@ -1,0 +1,12 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/prayer/v1/preferences"
+  },
+  "status" : 200,
+  "body" : {
+    "enabled" : true,
+    "reminderEnabled" : true,
+    "reminderMinutes" : 15
+  }
+}

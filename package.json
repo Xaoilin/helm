@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "private": true,
-  "version": "0.2.176",
+  "version": "0.2.177",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
@@ -46,7 +46,8 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "three": "^0.185.1",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@emnapi/core": "^2.0.0-alpha.3",

@@ -73,6 +73,7 @@ jobs:
           VITE_HOSTED_ASSISTANT_FUNCTION: assistant-openai
           VITE_HOSTED_ASSISTANT_MODEL: gpt-5.4
           VITE_PRAYER_API_BASE_URL: ${{ vars.PRAYER_BACKEND_URL }}
+          VITE_PROFILE_API_BASE_URL: ${{ vars.PROFILE_BACKEND_URL }}
           VITE_CALENDAR_API_BASE_URL: ${{ vars.CALENDAR_BACKEND_URL }}
       - uses: actions/upload-pages-artifact@v5.0.0
         with:

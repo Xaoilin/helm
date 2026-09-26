@@ -1,0 +1,364 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/prayer/v1/dashboard"
+  },
+  "status" : 200,
+  "body" : {
+    "today" : "2026-09-25",
+    "preferences" : {
+      "enabled" : true,
+      "reminderEnabled" : true,
+      "reminderMinutes" : 15
+    },
+    "schedule" : {
+      "date" : "2026-09-25",
+      "hijriDate" : "14 Rabīʿ al-thānī 1448",
+      "city" : "London",
+      "country" : "United Kingdom",
+      "timezone" : "Europe/London",
+      "method" : "Shia Ithna-Ashari, Leva Institute, Qum",
+      "times" : [ {
+        "name" : "Fajr",
+        "nameArabic" : "الفجر",
+        "time" : "05:12",
+        "type" : "prayer"
+      }, {
+        "name" : "Sunrise",
+        "nameArabic" : "الشروق",
+        "time" : "06:51",
+        "type" : "event"
+      }, {
+        "name" : "Dhuhr",
+        "nameArabic" : "الظهر",
+        "time" : "12:52",
+        "type" : "prayer"
+      }, {
+        "name" : "Asr",
+        "nameArabic" : "العصر",
+        "time" : "16:08",
+        "type" : "prayer"
+      }, {
+        "name" : "Sunset",
+        "nameArabic" : "غروب",
+        "time" : "18:52",
+        "type" : "event"
+      }, {
+        "name" : "Maghrib",
+        "nameArabic" : "المغرب",
+        "time" : "19:12",
+        "type" : "prayer"
+      }, {
+        "name" : "Isha",
+        "nameArabic" : "العشاء",
+        "time" : "20:18",
+        "type" : "prayer"
+      }, {
+        "name" : "Midnight",
+        "nameArabic" : "نصف الليل",
+        "time" : "00:52",
+        "type" : "event"
+      } ],
+      "windows" : [ {
+        "prayer" : "Fajr",
+        "startsAt" : "2026-09-25T04:12:00Z",
+        "deadlineName" : "Sunrise",
+        "deadlineAt" : "2026-09-25T05:51:00Z"
+      }, {
+        "prayer" : "Dhuhr",
+        "startsAt" : "2026-09-25T11:52:00Z",
+        "deadlineName" : "Asr",
+        "deadlineAt" : "2026-09-25T15:08:00Z"
+      }, {
+        "prayer" : "Asr",
+        "startsAt" : "2026-09-25T15:08:00Z",
+        "deadlineName" : "Maghrib",
+        "deadlineAt" : "2026-09-25T18:12:00Z"
+      }, {
+        "prayer" : "Maghrib",
+        "startsAt" : "2026-09-25T18:12:00Z",
+        "deadlineName" : "Isha",
+        "deadlineAt" : "2026-09-25T19:18:00Z"
+      }, {
+        "prayer" : "Isha",
+        "startsAt" : "2026-09-25T19:18:00Z",
+        "deadlineName" : "Midnight",
+        "deadlineAt" : "2026-09-25T23:52:00Z"
+      } ]
+    },
+    "tracking" : {
+      "trackingStartedAt" : "2026-09-25T12:00:00Z",
+      "activationDate" : "2026-09-25",
+      "activationPrayers" : [ "Dhuhr", "Asr", "Maghrib", "Isha" ],
+      "importedAt" : null
+    },
+    "todayOutcomes" : [ {
+      "id" : "1c52385c-3d06-43e5-849f-8c9652ddf677",
+      "date" : "2026-09-25",
+      "prayer" : "Dhuhr",
+      "status" : "late",
+      "recordedAt" : "2026-09-25T12:00:00Z",
+      "source" : "history",
+      "taskId" : "task-dhuhr",
+      "rewarded" : true,
+      "deadlineAt" : "2026-09-25T15:08:00Z"
+    } ],
+    "recentDays" : [ {
+      "date" : "2026-09-19",
+      "prayers" : [ {
+        "prayer" : "Fajr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Dhuhr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Asr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Maghrib",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Isha",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      } ]
+    }, {
+      "date" : "2026-09-20",
+      "prayers" : [ {
+        "prayer" : "Fajr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Dhuhr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Asr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Maghrib",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Isha",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      } ]
+    }, {
+      "date" : "2026-09-21",
+      "prayers" : [ {
+        "prayer" : "Fajr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Dhuhr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Asr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Maghrib",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Isha",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      } ]
+    }, {
+      "date" : "2026-09-22",
+      "prayers" : [ {
+        "prayer" : "Fajr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Dhuhr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Asr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Maghrib",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Isha",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      } ]
+    }, {
+      "date" : "2026-09-23",
+      "prayers" : [ {
+        "prayer" : "Fajr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Dhuhr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Asr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Maghrib",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Isha",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      } ]
+    }, {
+      "date" : "2026-09-24",
+      "prayers" : [ {
+        "prayer" : "Fajr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Dhuhr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Asr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Maghrib",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Isha",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      } ]
+    }, {
+      "date" : "2026-09-25",
+      "prayers" : [ {
+        "prayer" : "Fajr",
+        "status" : "not_tracked",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Dhuhr",
+        "status" : "late",
+        "outcomeId" : "1c52385c-3d06-43e5-849f-8c9652ddf677"
+      }, {
+        "prayer" : "Asr",
+        "status" : "pending",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Maghrib",
+        "status" : "pending",
+        "outcomeId" : null
+      }, {
+        "prayer" : "Isha",
+        "status" : "pending",
+        "outcomeId" : null
+      } ]
+    } ],
+    "monthStats" : {
+      "overall" : {
+        "onTime" : 0,
+        "late" : 1,
+        "missed" : 0,
+        "inferredMissed" : 0,
+        "unclassified" : 0,
+        "pending" : 3,
+        "classifiedTotal" : 1,
+        "opportunities" : 4,
+        "percentages" : {
+          "onTime" : 0,
+          "late" : 100,
+          "missed" : 0
+        }
+      },
+      "trackedDays" : 1,
+      "perPrayer" : {
+        "Fajr" : {
+          "onTime" : 0,
+          "late" : 0,
+          "missed" : 0,
+          "inferredMissed" : 0,
+          "unclassified" : 0,
+          "pending" : 0,
+          "classifiedTotal" : 0,
+          "opportunities" : 0,
+          "percentages" : {
+            "onTime" : 0,
+            "late" : 0,
+            "missed" : 0
+          }
+        },
+        "Dhuhr" : {
+          "onTime" : 0,
+          "late" : 1,
+          "missed" : 0,
+          "inferredMissed" : 0,
+          "unclassified" : 0,
+          "pending" : 0,
+          "classifiedTotal" : 1,
+          "opportunities" : 1,
+          "percentages" : {
+            "onTime" : 0,
+            "late" : 100,
+            "missed" : 0
+          }
+        },
+        "Asr" : {
+          "onTime" : 0,
+          "late" : 0,
+          "missed" : 0,
+          "inferredMissed" : 0,
+          "unclassified" : 0,
+          "pending" : 1,
+          "classifiedTotal" : 0,
+          "opportunities" : 1,
+          "percentages" : {
+            "onTime" : 0,
+            "late" : 0,
+            "missed" : 0
+          }
+        },
+        "Maghrib" : {
+          "onTime" : 0,
+          "late" : 0,
+          "missed" : 0,
+          "inferredMissed" : 0,
+          "unclassified" : 0,
+          "pending" : 1,
+          "classifiedTotal" : 0,
+          "opportunities" : 1,
+          "percentages" : {
+            "onTime" : 0,
+            "late" : 0,
+            "missed" : 0
+          }
+        },
+        "Isha" : {
+          "onTime" : 0,
+          "late" : 0,
+          "missed" : 0,
+          "inferredMissed" : 0,
+          "unclassified" : 0,
+          "pending" : 1,
+          "classifiedTotal" : 0,
+          "opportunities" : 1,
+          "percentages" : {
+            "onTime" : 0,
+            "late" : 0,
+            "missed" : 0
+          }
+        }
+      }
+    }
+  }
+}
