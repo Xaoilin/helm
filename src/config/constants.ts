@@ -229,7 +229,7 @@ export const SERVICE_RETRY = {
   MAX_DELAY_MS: 8_000,
   /** No retry starts after this long since the call began. */
   BUDGET_MS: 20_000,
-  /** Consecutive failed attempts that make every call to that service fail fast... */
+  /** Consecutive failed attempts that make every call to that endpoint fail fast... */
   BREAKER_FAILURES: 5,
   /** ...for this long, after which one attempt is let through to test it. */
   BREAKER_COOLDOWN_MS: 30_000,

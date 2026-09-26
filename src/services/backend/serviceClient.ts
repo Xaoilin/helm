@@ -7,7 +7,7 @@
  *
  * Availability rules (`SERVICE_RETRY`): a transient failure (network, timeout, 429, 502, 503, 504)
  * is retried with exponential backoff and jitter, honouring `Retry-After`. Reads always retry;
- * writes only with an Idempotency-Key. After repeated failures a service's circuit opens and
+ * writes only with an Idempotency-Key. After repeated failures an endpoint's circuit opens and
  * every call to it fails fast until a cool-down passes, so a struggling service is not hammered.
  */
 import type { z } from 'zod';
@@ -42,18 +42,25 @@ export function isTransientServiceError(error: unknown): boolean {
   return error instanceof ServiceError && TRANSIENT_STATUSES.has(error.status);
 }
 
-/** One circuit per service base URL, shared by every caller of that service. */
+/**
+ * One circuit per endpoint (`/api/<service>/v1/<resource>`, IDs and query left out), shared by every
+ * caller: a failing endpoint stops being called without blocking healthy ones on the same server.
+ */
 const breakers = new Map<string, CircuitBreaker>();
 
-function breakerFor(baseUrl: string): CircuitBreaker {
-  let breaker = breakers.get(baseUrl);
+function endpointOf(base: string, path: string): string {
+  return `${base}${path.split('?')[0].split('/').slice(0, 5).join('/')}`;
+}
+
+function breakerFor(endpoint: string): CircuitBreaker {
+  let breaker = breakers.get(endpoint);
   if (!breaker) {
     breaker = new CircuitBreaker({
-      name: baseUrl,
+      name: endpoint,
       maxFailures: SERVICE_RETRY.BREAKER_FAILURES,
       cooldownMs: SERVICE_RETRY.BREAKER_COOLDOWN_MS,
     });
-    breakers.set(baseUrl, breaker);
+    breakers.set(endpoint, breaker);
   }
   return breaker;
 }
@@ -80,7 +87,7 @@ export async function callService<T>(
 ): Promise<T> {
   const base = baseUrl.trim().replace(/\/+$/u, '');
   const url = `${base}${path}`;
-  const breaker = breakerFor(base);
+  const breaker = breakerFor(endpointOf(base, path));
   const retryable = method === 'GET' || Boolean(options.idempotencyKey);
   const startedAt = Date.now();
   for (let retry = 0; ; retry += 1) {
