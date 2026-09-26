@@ -117,6 +117,7 @@ describe('usePrayerPersistence', () => {
     ));
     await waitFor(() => expect(api.createPrayerOutcome).toHaveBeenCalledWith(
       expect.objectContaining({ date: TODAY, prayer: 'Dhuhr', status: 'on_time' }),
+      `prayer-outcome:create:${TODAY}:Dhuhr:on_time:2026-09-26T12:30:00.000Z`,
     ));
     await waitFor(() => expect(result.current.serviceSync).toEqual({ status: 'synced', error: null }));
   });

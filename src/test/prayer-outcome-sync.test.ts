@@ -92,6 +92,32 @@ describe('applyOutcomeOperation', () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
       date: '2026-09-25', prayer: 'Dhuhr', status: 'on_time', source: 'tasks', taskId: 'task-dhuhr',
     });
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
+      'Idempotency-Key': 'prayer-outcome:create:2026-09-25:Dhuhr:on_time:2026-09-25T12:00:00.000Z',
+    });
+  });
+
+  it('names a correction by the outcome and the correction time', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(fixture('outcome-corrected')));
+    const desired = record('2026-09-25', 'Dhuhr', 'late', '2026-09-25T13:00:00.000Z');
+
+    await applyOutcomeOperation({ kind: 'correct', key: '2026-09-25::Dhuhr', id: created.id, record: desired },
+      confirmedFromService([created]));
+
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
+      'Idempotency-Key': `prayer-outcome:correct:${created.id}:late:2026-09-25T13:00:00.000Z`,
+    });
+  });
+
+  it('names a deletion by the outcome it removes', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
+
+    await applyOutcomeOperation({ kind: 'delete', key: '2026-09-25::Dhuhr', id: created.id },
+      confirmedFromService([created]));
+
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
+      'Idempotency-Key': `prayer-outcome:delete:${created.id}`,
+    });
   });
 
   it('turns a create into a correction when the service already has that prayer', async () => {
@@ -106,6 +132,9 @@ describe('applyOutcomeOperation', () => {
 
     expect(fetchMock.mock.calls.map(call => call[1]?.method)).toEqual(['POST', 'GET', 'PATCH']);
     expect(confirmed.records['2026-09-25::Dhuhr'].status).toBe('late');
+    expect(fetchMock.mock.calls[2][1]?.headers).toMatchObject({
+      'Idempotency-Key': `prayer-outcome:correct:${created.id}:late:2026-09-25T12:00:00.000Z`,
+    });
   });
 
   it('treats deleting an already deleted outcome as done', async () => {

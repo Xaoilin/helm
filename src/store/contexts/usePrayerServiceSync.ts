@@ -62,9 +62,13 @@ export function usePrayerServiceSync(
   const rehydrateRef = useRef<() => void>(() => {});
   const hydratingRef = useRef<Promise<PrayerTrackingState> | null>(null);
 
-  useEffect(() => () => {
-    unmountedRef.current = true;
-    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+  // Mounting resets the flag: StrictMode (and React re-mounts) run the cleanup and then mount again.
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
   }, []);
 
   const fail = useCallback((error: unknown, retry: () => void) => {

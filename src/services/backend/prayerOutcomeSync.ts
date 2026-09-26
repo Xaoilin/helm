@@ -7,6 +7,7 @@
 import type { PrayerTrackingRecord, PrayerTrackingState } from '../../types/domain';
 import { getPrayerRecordKey } from '../prayerTracking';
 import type { ServiceOutcome, ServiceTracking } from './contracts';
+import { correctOutcomeKey, createOutcomeKey, deleteOutcomeKey } from './idempotencyKeys';
 import {
   correctPrayerOutcome,
   createPrayerOutcome,
@@ -164,12 +165,13 @@ export async function applyOutcomeOperation(
   confirmed: ConfirmedOutcomes,
 ): Promise<ConfirmedOutcomes> {
   if (operation.kind === 'delete') {
-    await deletePrayerOutcome(operation.id).catch(ignoreNotFound);
+    await deletePrayerOutcome(operation.id, deleteOutcomeKey(operation.id)).catch(ignoreNotFound);
     return withoutKey(confirmed, operation.key);
   }
   const status = writableStatus(operation.record);
   if (operation.kind === 'correct') {
-    const change = await correctPrayerOutcome(operation.id, status, operation.record.source);
+    const change = await correctPrayerOutcome(operation.id, status, operation.record.source,
+      correctOutcomeKey(operation.id, operation.record));
     return withOutcome(confirmed, operation.key, change.outcome);
   }
   try {
@@ -179,7 +181,7 @@ export async function applyOutcomeOperation(
       status,
       ...(operation.record.source ? { source: operation.record.source } : {}),
       ...(operation.record.taskId ? { taskId: operation.record.taskId } : {}),
-    });
+    }, createOutcomeKey(operation.record));
     return withOutcome(confirmed, operation.key, change.outcome);
   } catch (error) {
     if (!(error instanceof ServiceError) || error.code !== 'outcome_exists') throw error;
@@ -222,7 +224,7 @@ async function correctExisting(
     .find(outcome => outcome.prayer === record.prayerName);
   if (!existing) throw new ServiceError(409, 'outcome_exists', `${record.prayerName} is already recorded.`);
   if (existing.status === status) return withOutcome(confirmed, key, existing);
-  const change = await correctPrayerOutcome(existing.id, status, record.source);
+  const change = await correctPrayerOutcome(existing.id, status, record.source, correctOutcomeKey(existing.id, record));
   return withOutcome(confirmed, key, change.outcome);
 }
 

@@ -22,12 +22,18 @@ export class ServiceError extends Error {
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
+export interface CallOptions {
+  /** Names the user action a write performs; the service applies a repeated key once. */
+  idempotencyKey?: string;
+}
+
 export async function callService<T>(
   baseUrl: string,
   method: HttpMethod,
   path: string,
   schema: z.ZodType<T> | null,
   body?: unknown,
+  options: CallOptions = {},
 ): Promise<T> {
   const accessToken = getCurrentAccessToken();
   if (!accessToken) throw new ServiceError(401, 'not_signed_in', 'Sign in to load your prayer data.');
@@ -40,6 +46,7 @@ export async function callService<T>(
         Accept: 'application/json',
         Authorization: `Bearer ${accessToken}`,
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...(options.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(API_TIMEOUT.SERVICE_API),

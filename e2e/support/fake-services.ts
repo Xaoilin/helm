@@ -33,6 +33,15 @@ export interface FakeServicesOptions {
   rejectCreates?: { code: string; message: string };
   /** Saved global settings; omitted means the user never saved any. */
   profile?: Pick<ServiceGlobalSettings, 'city' | 'country' | 'timeZone'>;
+  /** The next write is applied but its response is lost (a 503), like a reply that timed out. */
+  loseNextWriteResponse?: boolean;
+}
+
+/** A completed write, kept by its Idempotency-Key like the real service's processed-command table. */
+interface StoredWrite {
+  request: string;
+  status: number;
+  body: string;
 }
 
 export interface FakeServices {
@@ -43,8 +52,12 @@ export interface FakeServices {
   calls: string[];
   /** Creates refused because the outcome already existed (the app re-sent known data). */
   conflicts: number;
+  /** Writes answered from a stored result because their Idempotency-Key was seen before. */
+  replays: number;
+  processedWrites: Map<string, StoredWrite>;
   failureStatus?: number;
   rejectCreates?: { code: string; message: string };
+  loseNextWriteResponse?: boolean;
 }
 
 export function createFakeServices(options: FakeServicesOptions = {}): FakeServices {
@@ -57,8 +70,11 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
       : { city: 'Bedford', country: 'United Kingdom', timeZone: null, updatedAt: null },
     calls: [],
     conflicts: 0,
+    replays: 0,
+    processedWrites: new Map(),
     failureStatus: options.failureStatus,
     rejectCreates: options.rejectCreates,
+    loseNextWriteResponse: options.loseNextWriteResponse,
   };
 }
 
@@ -84,8 +100,49 @@ export async function installFakeServices(page: Page, services: FakeServices): P
       return reply(route, services.failureStatus, { code: 'unavailable', message: 'Service unavailable.' }, apiErrorSchema);
     }
     const now = new Date(await page.evaluate(() => Date.now()).catch(() => Date.now()));
-    return handle(route, services, call, url, request.postDataJSON?.() ?? null, now);
+    const body = request.postDataJSON?.() ?? null;
+    if (request.method() === 'GET') return handle(route, services, call, url, body, now);
+    return handleWrite(route, services, call, url, body, now, request.headers()['idempotency-key']);
   });
+}
+
+/**
+ * Writes behave like the real service's command queue: a repeated Idempotency-Key replays the stored
+ * result, and the same key with another request is refused. The fake also insists every write is
+ * named, which is the app's side of the contract.
+ */
+async function handleWrite(
+  route: Route, services: FakeServices, call: string, url: URL, body: Record<string, unknown> | null, now: Date,
+  idempotencyKey: string | undefined,
+): Promise<void> {
+  if (!idempotencyKey) {
+    return reply(route, 400, { code: 'missing_idempotency_key', message: `${call} sent no Idempotency-Key.` },
+      apiErrorSchema);
+  }
+  const request = `${call}\n${JSON.stringify(body)}`;
+  const stored = services.processedWrites.get(idempotencyKey);
+  if (stored) {
+    if (stored.request !== request) {
+      return reply(route, 422, { code: 'idempotency_key_reused', message: 'Key used for another request.' },
+        apiErrorSchema);
+    }
+    services.replays += 1;
+    return route.fulfill({ status: stored.status, contentType: 'application/json', body: stored.body,
+      headers: { 'Idempotent-Replayed': 'true' } });
+  }
+  const recording = {
+    fulfill: async (response: { status?: number; body?: string | Buffer }) => {
+      const status = response.status ?? 200;
+      if (status < 400) services.processedWrites.set(idempotencyKey, { request, status, body: String(response.body ?? '') });
+      if (status < 400 && services.loseNextWriteResponse) {
+        services.loseNextWriteResponse = false;
+        return route.fulfill({ status: 503, contentType: 'application/json',
+          body: JSON.stringify({ code: 'write_timeout', message: 'The save was not confirmed in time.' }) });
+      }
+      return route.fulfill(response);
+    },
+  } as unknown as Route;
+  return handle(recording, services, call, url, body, now);
 }
 
 async function handle(

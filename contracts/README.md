@@ -13,3 +13,11 @@ the status, and an example body.
 To change a contract, update the files here and in the services repository in the same change
 (the services' `-Dcontracts.record=true` rewrites them from real responses), then merge the
 consumer side first.
+
+## Writes
+
+Every write (`POST`, `PUT`, `PATCH`, `DELETE`) sends an `Idempotency-Key` header naming the user
+action (`src/services/backend/idempotencyKeys.ts`); retries of that action reuse it. The services
+route writes through RabbitMQ and apply a key once: a repeat returns the stored response with
+`Idempotent-Replayed: true`, and the same key with a different request is refused with
+`422 idempotency_key_reused`. The browser-test fake enforces the same rules.

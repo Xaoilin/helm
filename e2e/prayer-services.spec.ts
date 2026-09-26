@@ -134,6 +134,29 @@ test.describe('prayer and profile services', () => {
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
   });
 
+  test('a completion whose confirmation was lost is saved once when it is retried', async ({ page, scenario }) => {
+    const control = await scenario({ now: NOON, settings: { prayerEnabled: true, lifeHeroEnabled: false } });
+    await openApp(page);
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+
+    // The service saves the next write, but its answer never reaches the app.
+    control.services.loseNextWriteResponse = true;
+    await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
+    await page.getByRole('button', { name: /On time/u }).click();
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toContainText('Not synced');
+    expect(control.services.outcomes.get('2026-08-29::Dhuhr')?.status).toBe('on_time');
+
+    await page.clock.fastForward(31_000);
+
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+    const creates = control.services.calls.filter(call => call === 'POST /api/prayer/v1/outcomes');
+    expect(creates).toHaveLength(2);
+    // The retry carried the same Idempotency-Key, so the service replayed its first result.
+    expect(control.services.replays).toBe(1);
+    expect(control.services.conflicts).toBe(0);
+    expect([...control.services.outcomes.keys()].filter(key => key.endsWith('::Dhuhr'))).toHaveLength(1);
+  });
+
   test('a refused completion stays refused after a reload and is not sent again', async ({ page, scenario }) => {
     const control = await scenario({
       now: NOON,
