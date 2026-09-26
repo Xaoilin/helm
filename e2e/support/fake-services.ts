@@ -39,6 +39,8 @@ export interface FakeServices {
   preferences: ServicePreferences;
   profile: ServiceGlobalSettings;
   calls: string[];
+  /** Creates refused because the outcome already existed (the app re-sent known data). */
+  conflicts: number;
   failureStatus?: number;
 }
 
@@ -51,6 +53,7 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
       ? { ...options.profile, updatedAt: '2026-08-01T12:00:00Z' }
       : { city: 'Bedford', country: 'United Kingdom', timeZone: null, updatedAt: null },
     calls: [],
+    conflicts: 0,
     failureStatus: options.failureStatus,
   };
 }
@@ -140,6 +143,7 @@ function listOutcomes(services: FakeServices, url: URL): ServiceOutcome[] {
 function createOutcome(route: Route, services: FakeServices, body: Record<string, unknown>, now: Date) {
   const key = `${body.date}::${body.prayer}`;
   if (services.outcomes.has(key)) {
+    services.conflicts += 1;
     return reply(route, 409, { code: 'outcome_exists', message: `${body.prayer} is already recorded.` }, apiErrorSchema);
   }
   const completed = body.status === 'on_time' || body.status === 'late';

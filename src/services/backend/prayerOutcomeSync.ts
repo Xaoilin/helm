@@ -165,6 +165,20 @@ export async function applyOutcomeOperation(
   }
 }
 
+/**
+ * The first date whose outcomes must be loaded: the tracking start, or an earlier outcome date.
+ * Imported history can hold outcomes from before tracking started (e.g. legacy completions).
+ */
+export function historyStartDate(trackingStartedAt: string, ...recordSets: Record<string, PrayerTrackingRecord>[]): string {
+  let start = trackingStartedAt.slice(0, 10);
+  for (const records of recordSets) {
+    for (const record of Object.values(records)) {
+      if (record.date < start) start = record.date;
+    }
+  }
+  return start;
+}
+
 /** Every outcome from `from` to `to`, fetched in service-sized pages. */
 export async function listAllOutcomes(from: string, to: string): Promise<ServiceOutcome[]> {
   const outcomes: ServiceOutcome[] = [];

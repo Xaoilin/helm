@@ -9,6 +9,7 @@ import {
   applyOutcomeOperation,
   applyServiceTracking,
   confirmedFromService,
+  historyStartDate,
   listAllOutcomes,
   mergeRecords,
   planOutcomeSync,
@@ -105,7 +106,7 @@ export function usePrayerServiceSync(
         await importPrayerTracking(local).catch(ignoreAlreadyImported);
         dashboard = await getPrayerDashboard(location.city, location.country);
       }
-      const startDate = dashboard.tracking.trackingStartedAt.slice(0, 10);
+      const startDate = historyStartDate(dashboard.tracking.trackingStartedAt, local.records, getTracking().records);
       const confirmed = confirmedFromService(await listAllOutcomes(startDate, dashboard.today));
       const current = getTracking();
       const records = mergeRecords(confirmed.records, current.records);
