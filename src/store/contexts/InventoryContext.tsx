@@ -27,7 +27,7 @@ export interface InventoryContextValue {
   completeInventoryNeed: (needId: string) => void;
 }
 
-const InventoryContext = createContext<InventoryContextValue | null>(null);
+export const InventoryContext = createContext<InventoryContextValue | null>(null);
 
 function InventoryBridge({ children }: { children: ReactNode }) {
   const items = itemCollection.useContext();

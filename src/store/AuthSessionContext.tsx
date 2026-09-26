@@ -19,7 +19,7 @@ interface AuthSessionContextValue {
   signOut: () => Promise<void>;
 }
 
-const AuthSessionCtx = createContext<AuthSessionContextValue | null>(null);
+export const AuthSessionCtx = createContext<AuthSessionContextValue | null>(null);
 const AUTH_SOURCE = 'AuthSession';
 
 export function useAuthSession(): AuthSessionContextValue {

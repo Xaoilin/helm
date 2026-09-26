@@ -14,7 +14,7 @@ export interface AssistantActivityContextValue {
   markAssistantActivityUndoFailed: (id: string, message: string) => void;
 }
 
-const AssistantActivityCtx = createContext<AssistantActivityContextValue | null>(null);
+export const AssistantActivityCtx = createContext<AssistantActivityContextValue | null>(null);
 
 export function normalizeAssistantActivityEntry(entry: AssistantActivityEntry): AssistantActivityEntry {
   const raw = entry as AssistantActivityEntry & {

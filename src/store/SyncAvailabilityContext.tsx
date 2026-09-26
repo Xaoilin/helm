@@ -6,7 +6,7 @@ interface SyncAvailability {
   reason: SyncSessionReason;
 }
 
-const SyncAvailabilityContext = createContext<SyncAvailability>({
+export const SyncAvailabilityContext = createContext<SyncAvailability>({
   readOnly: false,
   reason: null,
 });

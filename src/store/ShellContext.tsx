@@ -29,7 +29,7 @@ interface ShellContextValue {
   dismissAssistantNavigationRequest: (requestId?: string) => void;
 }
 
-const ShellContext = createContext<ShellContextValue | null>(null);
+export const ShellContext = createContext<ShellContextValue | null>(null);
 
 export function useShell(): ShellContextValue {
   const context = useContext(ShellContext);

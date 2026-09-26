@@ -21,7 +21,7 @@ export interface KnowledgeContextValue {
   reorderLifestyleItems: (reorderedIds: string[]) => void;
 }
 
-const KnowledgeCtx = createContext<KnowledgeContextValue | null>(null);
+export const KnowledgeCtx = createContext<KnowledgeContextValue | null>(null);
 
 export function useKnowledgeContext(): KnowledgeContextValue {
   const ctx = useContext(KnowledgeCtx);

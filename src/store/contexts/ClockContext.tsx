@@ -37,7 +37,7 @@ interface ClockContextValue {
   previewTimerSound: (id: string, sound?: ClockTimerSound) => Promise<void>;
 }
 
-const ClockContext = createContext<ClockContextValue | null>(null);
+export const ClockContext = createContext<ClockContextValue | null>(null);
 
 export function useClockContext(): ClockContextValue {
   const ctx = useContext(ClockContext);

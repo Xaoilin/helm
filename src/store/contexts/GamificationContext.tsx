@@ -11,7 +11,7 @@ export interface GamificationContextValue {
   backfillPrayerLog: (taskId: string, dateStr: string, completed: boolean) => void;
 }
 
-const GamificationCtx = createContext<GamificationContextValue | null>(null);
+export const GamificationCtx = createContext<GamificationContextValue | null>(null);
 
 export function useGamificationContext(): GamificationContextValue {
   const ctx = useContext(GamificationCtx);

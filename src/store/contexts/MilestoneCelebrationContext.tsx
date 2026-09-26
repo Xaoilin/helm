@@ -29,7 +29,7 @@ interface MilestoneCelebrationContextValue {
 
 export const MILESTONE_CELEBRATION_DURATION_MS = 3200;
 
-const MilestoneCelebrationContext = createContext<MilestoneCelebrationContextValue | null>(null);
+export const MilestoneCelebrationContext = createContext<MilestoneCelebrationContextValue | null>(null);
 
 export function useMilestoneCelebration(): MilestoneCelebrationContextValue {
   const context = useContext(MilestoneCelebrationContext);
