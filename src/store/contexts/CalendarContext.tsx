@@ -29,7 +29,7 @@ export interface CalendarContextValue {
   bulkRemoveCalendarEvents: (ids: string[]) => void;
 }
 
-const CalendarCtx = createContext<CalendarContextValue | null>(null);
+export const CalendarCtx = createContext<CalendarContextValue | null>(null);
 
 function normalizeCalendarAccounts(accounts: CalendarAccount[]): CalendarAccount[] {
   return accounts.map(account => (

@@ -73,6 +73,8 @@ Rendered components consume owning domain hooks directly. Shell owns navigation 
 
 Business rules, account persistence, semantic mutations, assistant validation, and provider error mapping should have focused deterministic coverage. Service checks should exercise success and failure responses without hiding diagnostics.
 
+Keep business rules in plain modules that take their inputs (including the current time and time zone) as arguments, so they are tested without rendering. Every context module exports its Context object; render tests supply typed fake values with `provide` and `renderWithContexts` from `src/test/renderWithContexts.tsx` instead of `vi.mock`-ing context hook modules. Reserve `vi.mock` for true infrastructure boundaries such as the Supabase client, network, and browser APIs.
+
 Persistence changes should directly prove the affected owner: stale session epochs and account reset, delivered-cache diff policy, queued-write reset and stable retry identity, Broadcast invalidation and recovery, device-key isolation, or health publication. Run the focused persistence contract before the aggregate gate; the database contract remains the authority for RLS, idempotency, revision serialization, tombstones, and account-version behavior.
 
 ### Browser E2E

@@ -106,7 +106,7 @@ export interface ChatContextValue {
   renameConversation: (id: string, title: string) => void;
 }
 
-const ChatCtx = createContext<ChatContextValue | null>(null);
+export const ChatCtx = createContext<ChatContextValue | null>(null);
 
 function buildChatMessage(
   role: ChatMessage['role'],

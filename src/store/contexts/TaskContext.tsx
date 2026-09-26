@@ -20,7 +20,7 @@ export interface TaskContextValue {
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
 }
 
-const TaskCtx = createContext<TaskContextValue | null>(null);
+export const TaskCtx = createContext<TaskContextValue | null>(null);
 
 function normalizeTask(task: Task): Task {
   const prayerName = getPrayerTaskName(task);

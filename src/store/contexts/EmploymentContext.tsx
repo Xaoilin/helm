@@ -81,7 +81,7 @@ const sessionIdentity = () => {
   return JSON.stringify([session.userId, session.status, session.readOnly, session.hasUsableSnapshot]);
 };
 
-const EmploymentContext = createContext<EmploymentContextValue | null>(null);
+export const EmploymentContext = createContext<EmploymentContextValue | null>(null);
 
 export function useEmploymentContext(): EmploymentContextValue {
   const context = useContext(EmploymentContext);

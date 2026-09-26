@@ -194,7 +194,7 @@ interface PrayerContextValue {
   dismissAdhan: () => void;
 }
 
-const PrayerCtx = createContext<PrayerContextValue | null>(null);
+export const PrayerCtx = createContext<PrayerContextValue | null>(null);
 
 export function usePrayerContext(): PrayerContextValue {
   const ctx = useContext(PrayerCtx);

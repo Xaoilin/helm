@@ -39,7 +39,7 @@ export interface ProjectContextValue {
   removeProjectPage: (id: string) => void;
 }
 
-const ProjectCtx = createContext<ProjectContextValue | null>(null);
+export const ProjectCtx = createContext<ProjectContextValue | null>(null);
 
 function buildOverviewContent(project: Project): string {
   const intro = project.summary

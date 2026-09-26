@@ -68,7 +68,7 @@ export interface SettingsContextValue {
   updateIntegration: (id: string, updates: Partial<Integration>) => void;
 }
 
-const SettingsCtx = createContext<SettingsContextValue | null>(null);
+export const SettingsCtx = createContext<SettingsContextValue | null>(null);
 
 export function useSettingsContext(): SettingsContextValue {
   const ctx = useContext(SettingsCtx);

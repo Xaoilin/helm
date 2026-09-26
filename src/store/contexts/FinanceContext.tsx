@@ -24,7 +24,7 @@ export interface FinanceContextValue {
   removeSavingsGoal: (id: string) => void;
 }
 
-const FinanceCtx = createContext<FinanceContextValue | null>(null);
+export const FinanceCtx = createContext<FinanceContextValue | null>(null);
 
 export function useFinanceContext(): FinanceContextValue {
   const ctx = useContext(FinanceCtx);

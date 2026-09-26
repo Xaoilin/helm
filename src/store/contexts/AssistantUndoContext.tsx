@@ -23,7 +23,7 @@ interface AssistantUndoContextValue {
   undoAssistantActivity: (id: string) => AssistantUndoResult;
 }
 
-const AssistantUndoContext = createContext<AssistantUndoContextValue | null>(null);
+export const AssistantUndoContext = createContext<AssistantUndoContextValue | null>(null);
 
 export function useAssistantUndo(): AssistantUndoContextValue {
   const context = useContext(AssistantUndoContext);

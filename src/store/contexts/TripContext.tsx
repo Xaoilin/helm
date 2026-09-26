@@ -42,7 +42,7 @@ interface TripContextValue {
   removeTripBudgetEntry: (id: string) => void;
 }
 
-const TripCtx = createContext<TripContextValue | null>(null);
+export const TripCtx = createContext<TripContextValue | null>(null);
 
 const VALID_TRIP_STATUSES = new Set<TripStatus>(['planning', 'booked', 'in_trip', 'completed', 'archived']);
 const VALID_TRANSPORT_MODES = new Set<TripTransportMode>(['flight', 'train', 'bus', 'ferry', 'car', 'other']);

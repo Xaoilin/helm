@@ -17,7 +17,7 @@ export interface AssistantContextValue {
   noteCorrectionApplied: (id: string) => void;
 }
 
-const AssistantCtx = createContext<AssistantContextValue | null>(null);
+export const AssistantCtx = createContext<AssistantContextValue | null>(null);
 
 function normaliseCorrectionKey(value: string): string {
   return value

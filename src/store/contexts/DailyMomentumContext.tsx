@@ -53,7 +53,7 @@ export interface DailyMomentumContextValue {
   ) => Promise<DailyMomentumState>;
 }
 
-const DailyMomentumCtx = createContext<DailyMomentumContextValue | null>(null);
+export const DailyMomentumCtx = createContext<DailyMomentumContextValue | null>(null);
 
 export function useDailyMomentumContext(): DailyMomentumContextValue {
   const context = useContext(DailyMomentumCtx);
