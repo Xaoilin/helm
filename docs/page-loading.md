@@ -25,27 +25,19 @@ reconciled.
 | Employment | employment (surface retains its confirmed seed/loading path) |
 | Health | healthFastFoodEntries |
 | Finance | financeAccounts, transactions, financeBudgets, savingsGoals, financeReviews, equityPositions |
-| Activity | assistantActivityLog and the four manual Finance collections for undo |
-| Chat | project, inventory, manual Finance groups; conversations, assistantCorrections, assistantActivityLog |
+| Activity | shared collections only (usage insight reads product analytics) |
 | Dashboard, Calendar, Clock, Knowledge, Profile, Integrations, Settings, Debug | shared collections only |
 
-Lina's button, keyboard shortcut, and configured wake-word listener remain
-available after shared data loads. Opening or waking Lina activates the Chat
-collections; hands-free conversation creation and command execution wait for both
-the confirmed load and the providers' updated render. Closing Lina releases its
-collection demand and invalidates a pending activation. Its demand stays active
-across page navigation while open. Voice and Chat keep their existing shared
-assistant runtime.
-Page-specific semantic requests, including secret metadata and Life Hero's
-optional dashboard snapshot, retain their existing access boundaries.
+Page-specific semantic requests, including secret metadata, retain their existing
+access boundaries.
 
 Each confirmed dataset has a ten-minute freshness window. A revisit within that
 window reuses memory; an expired page requests a new scoped snapshot. If that
 read discovers a newer account version, already-loaded collections are reconciled
 before the global checkpoint advances, so a missed or delayed Broadcast cannot
 hide their changes. KAN-319 reconciles metadata for every changed collection from
-the last fully invalidated checkpoint. Only changed collections needed by the current page or
-open Lina panel are fetched; previously visited inactive collections are marked
+the last fully invalidated checkpoint. Only changed collections needed by the current page
+are fetched; previously visited inactive collections are marked
 stale and refreshed on their next activation. A contiguous local mutation receipt
 updates its confirmed cache directly without downloading it again. Delayed,
 duplicate and missed notifications cannot acknowledge omitted changed scopes.

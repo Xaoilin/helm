@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "private": true,
-  "version": "0.2.199",
+  "version": "0.2.200",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
@@ -10,7 +10,6 @@
     "agent:fast": "node ./scripts/run-agent-fast.mjs",
     "agent:local-gate": "npm run agent:fast",
     "agent:policy": "npm run version:check && node ./scripts/verify-agent-policy.mjs && node ./scripts/verify-capability-composition.mjs",
-    "benchmark:assistant": "tsx ./scripts/run-assistant-benchmark.ts",
     "build": "npm run build:web",
     "build:web": "vite build && node ./scripts/copy-spa-fallback.mjs && node ./scripts/verify-public-assets.mjs",
     "check": "node ./scripts/run-check.mjs",
@@ -22,10 +21,9 @@
     "hooks:install": "node ./scripts/install-git-hooks.mjs",
     "lint": "eslint .",
     "lint:changed": "eslint --no-warn-ignored",
-    "llm-compare": "node ./scripts/compare-assistant-models.mjs",
     "postversion": "npm run version:sync",
     "preview": "vite preview",
-    "release:check": "npm run check && npm run benchmark:assistant -- --provider hosted --enforce",
+    "release:check": "npm run check",
     "test": "vitest run",
     "test:database": "node ./scripts/test-helm-database.mjs",
     "test:e2e": "node ./scripts/run-playwright.mjs blocking",
@@ -42,10 +40,8 @@
     "@dnd-kit/helpers": "^0.5.0",
     "@dnd-kit/react": "^0.5.0",
     "@supabase/supabase-js": "^2.100.1",
-    "openwakeword-wasm-browser": "^0.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "three": "^0.185.1",
     "uuid": "^13.0.0",
     "zod": "^4.6.5"
   },
@@ -59,7 +55,6 @@
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@types/three": "0.185.4",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.0.1",

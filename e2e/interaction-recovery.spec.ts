@@ -138,37 +138,4 @@ for (const width of [390, 1440]) {
     }
     await testInfo.attach('editor-scroll-evidence', { body: JSON.stringify(scrollEvidence), contentType: 'application/json' });
   });
-
-  test(`Chat keeps a rejected quick prompt and retries once at ${width}px`, async ({ page, scenario }, testInfo) => {
-    test.skip(true, 'The Lina assistant is disabled pending removal; see docs/deprecated-features.md');
-    await scenario();
-    // Inject a generic rejection at the runtime boundary. No model/provider is used.
-    await page.route('**/src/assistant/runtime.ts*', route => route.fulfill({
-      contentType: 'application/javascript',
-      body: `export async function runAssistantTurn() {
-        window.__kan310Sends = (window.__kan310Sends || 0) + 1;
-        if (window.__kan310Sends === 1) throw new Error('Synthetic interruption');
-        return { source: 'degraded', assistantMessage: 'Synthetic recovered response', dialogState: {} };
-      }
-      export const isOllamaAvailable = () => false;
-      export const resetOllamaAvailability = () => {};`,
-    }));
-    await page.setViewportSize({ width, height: 900 });
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await openApp(page);
-    await page.getByRole('button', { name: 'Navigate to Chat', exact: true }).click();
-    if (width === 390) await page.getByRole('button', { name: 'New conversation', exact: true }).click();
-    await page.getByRole('button', { name: 'Help me plan my week', exact: true }).click();
-    const error = page.locator('.chat-main').getByRole('alert');
-    await expect(error).toContainText('Synthetic interruption');
-    await expect(page.getByPlaceholder('Type a message...')).toBeEnabled();
-    await expect(page.locator('.chat-message.user')).toHaveCount(0);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath(`chat-retry-${width}.png`) });
-    await error.getByRole('button', { name: 'Try again', exact: true }).click();
-    await expect(page.getByText('Synthetic recovered response', { exact: true })).toBeVisible();
-    await expect(page.locator('.chat-message.user')).toHaveCount(1);
-    expect(await page.evaluate(() => Reflect.get(window, '__kan310Sends'))).toBe(2);
-    await expect(error).toBeHidden();
-  });
 }

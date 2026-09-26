@@ -25,7 +25,7 @@ const SAFE_METADATA_KEYS = new Set([
   'retryCount',
 ]);
 const SURFACES = new Set<Surface>([
-  'dashboard', 'chat', 'calendar', 'clock', 'trips', 'projects', 'inventory',
+  'dashboard', 'calendar', 'clock', 'trips', 'projects', 'inventory',
   'secrets', 'tasks', 'employment', 'finance', 'health', 'knowledge', 'profile',
   'integrations', 'activity', 'settings', 'debug',
 ]);

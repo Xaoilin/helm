@@ -1,22 +1,18 @@
-import { useMemo, type ReactNode } from 'react';
-import { AssistantActivityProvider, useAssistantActivityContext } from './contexts/AssistantActivityContext';
-import { AssistantProvider, useAssistantContext } from './contexts/AssistantContext';
-import { CalendarProvider, useCalendar } from './contexts/CalendarContext';
-import { ChatProvider, type ChatCrossDomainData } from './contexts/ChatContext';
+import type { ReactNode } from 'react';
+import { CalendarProvider } from './contexts/CalendarContext';
 import { ClockProvider } from './contexts/ClockContext';
 import { DailyMomentumProvider } from './contexts/DailyMomentumContext';
 import { EmploymentProvider } from './contexts/EmploymentContext';
-import { FinanceProvider, useFinanceContext } from './contexts/FinanceContext';
-import { GamificationProvider, useGamificationContext } from './contexts/GamificationContext';
+import { FinanceProvider } from './contexts/FinanceContext';
+import { GamificationProvider } from './contexts/GamificationContext';
 import { HealthProvider } from './contexts/HealthContext';
-import { InventoryProvider, useInventoryContext } from './contexts/InventoryContext';
-import { KnowledgeProvider, useKnowledgeContext } from './contexts/KnowledgeContext';
-import { PrayerProvider, usePrayerContext } from './contexts/PrayerContext';
-import { ProjectProvider, useProjectContext } from './contexts/ProjectContext';
-import { SettingsProvider, useSettingsContext } from './contexts/SettingsContext';
-import { TaskProvider, useTaskContext } from './contexts/TaskContext';
+import { InventoryProvider } from './contexts/InventoryContext';
+import { KnowledgeProvider } from './contexts/KnowledgeContext';
+import { PrayerProvider } from './contexts/PrayerContext';
+import { ProjectProvider } from './contexts/ProjectContext';
+import { SettingsProvider } from './contexts/SettingsContext';
+import { TaskProvider } from './contexts/TaskContext';
 import { TripProvider } from './contexts/TripContext';
-import { AssistantUndoProvider } from './contexts/AssistantUndoContext';
 import { MilestoneCelebrationProvider } from './contexts/MilestoneCelebrationContext';
 import { ShellProvider } from './ShellContext';
 import { useDailyTaskRollover } from './workflows/useDailyTaskRollover';
@@ -25,75 +21,6 @@ import { useDailyTaskRollover } from './workflows/useDailyTaskRollover';
 function DailyTaskRollover() {
   useDailyTaskRollover();
   return null;
-}
-
-/**
- * @deprecated Disabled 2026-09-26 with the Lina assistant; remove with the feature.
- * Still mounted so readiness hooks keep their context, but nothing sends a turn.
- * See docs/deprecated-features.md.
- */
-function ChatBridge({ children }: { children: ReactNode }) {
-  const calendar = useCalendar();
-  const projects = useProjectContext();
-  const tasks = useTaskContext();
-  const gamification = useGamificationContext();
-  const settings = useSettingsContext();
-  const knowledge = useKnowledgeContext();
-  const inventory = useInventoryContext();
-  const finance = useFinanceContext();
-  const assistant = useAssistantContext();
-  const activity = useAssistantActivityContext();
-  const prayer = usePrayerContext();
-
-  const crossDomain: ChatCrossDomainData = useMemo(() => ({
-    calendarAccounts: calendar.calendarAccounts,
-    calendarSources: calendar.calendarSources,
-    calendarEvents: calendar.calendarEvents,
-    projects: projects.projects,
-    tasks: tasks.tasks,
-    financeAccounts: finance.financeAccounts,
-    transactions: finance.transactions,
-    knowledgeEntries: knowledge.knowledgeEntries,
-    knowledgeTopics: knowledge.knowledgeTopics,
-    inventoryItems: inventory.inventoryItems,
-    inventoryNeeds: inventory.inventoryNeeds,
-    lifestyleItems: knowledge.lifestyleItems,
-    assistantCorrections: assistant.corrections,
-    gamification: gamification.gamification,
-    settings: settings.settings,
-    appTimeZone: settings.appTimeZone.effectiveTimeZone,
-    recordAssistantActivity: activity.recordAssistantActivity,
-    addTask: tasks.addTask,
-    updateTask: tasks.updateTask,
-    removeTask: tasks.removeTask,
-    upsertAssistantCorrection: assistant.upsertCorrection,
-    noteAssistantCorrectionApplied: assistant.noteCorrectionApplied,
-    addTransaction: finance.addTransaction,
-    addKnowledgeEntry: knowledge.addKnowledgeEntry,
-    addInventoryItem: inventory.addInventoryItem,
-    adjustInventoryQuantity: inventory.adjustInventoryQuantity,
-    addInventoryNeed: inventory.addInventoryNeed,
-    completeInventoryNeed: inventory.completeInventoryNeed,
-    updateGamification: gamification.updateGamification,
-    completePrayer: (prayerName, status, taskId, source = 'chat') => (
-      prayer.completePrayer(prayerName, status, { taskId, source })
-    ),
-  }), [
-    calendar,
-    projects.projects,
-    tasks,
-    finance,
-    knowledge,
-    inventory,
-    assistant,
-    activity.recordAssistantActivity,
-    gamification,
-    prayer,
-    settings.settings,
-    settings.appTimeZone.effectiveTimeZone,
-  ]);
-
-  return <ChatProvider crossDomain={crossDomain}>{children}</ChatProvider>;
 }
 
 export function AppProviders({ children }: { children: ReactNode }) {
@@ -114,17 +41,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
                               <PrayerProvider>
                                 <DailyTaskRollover />
                                 <ClockProvider>
-                                  <AssistantProvider>
-                                    <AssistantActivityProvider>
-                                      <ChatBridge>
-                                        <AssistantUndoProvider>
-                                          <MilestoneCelebrationProvider>
-                                            {children}
-                                          </MilestoneCelebrationProvider>
-                                        </AssistantUndoProvider>
-                                      </ChatBridge>
-                                    </AssistantActivityProvider>
-                                  </AssistantProvider>
+                                  <MilestoneCelebrationProvider>
+                                    {children}
+                                  </MilestoneCelebrationProvider>
                                 </ClockProvider>
                               </PrayerProvider>
                             </FinanceProvider>

@@ -1,7 +1,7 @@
 import { logWarn } from '../../services/logger';
 import { SHARED_STORE_KEYS } from '../storeKeys';
 import type { LocalImportCandidate } from './types';
-import { legacyProviderSettings, splitSettings } from '../recordCodec';
+import { splitSettings } from '../recordCodec';
 
 const NAMESPACE = 'helm';
 const META_PREFIX = `${NAMESPACE}:meta:`;
@@ -121,11 +121,7 @@ export class PersistenceDeviceStore {
     if (raw === null && legacy === null && sharedLegacy === null) return null;
     try {
       const oldSettings = legacy === null ? {} : JSON.parse(legacy);
-      return {
-        ...splitSettings(raw === null ? oldSettings : JSON.parse(raw)).device,
-        ...legacyProviderSettings(sharedLegacy === null ? {} : JSON.parse(sharedLegacy)),
-        ...legacyProviderSettings(oldSettings),
-      } as T;
+      return splitSettings(raw === null ? oldSettings : JSON.parse(raw)).device as T;
     } catch {
       logWarn('Persistence', `Device-only cache JSON parse failed for ${key}`);
       return null;

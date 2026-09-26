@@ -154,21 +154,6 @@ export class PersistenceRecordCache {
   }
 
   decoded(collection: string): unknown {
-    if (collection === 'assistantActivityLog') {
-      // Partial Activity appends cannot reorder unseen rows. Use server creation
-      // time instead, matching the page query without mutating stored positions.
-      const subMillisecond = (createdAt: string) => Number(
-        (createdAt.match(/\.(\d+)/)?.[1] ?? '').padEnd(6, '0').slice(3, 6),
-      );
-      const records = [...(this.recordsByCollection.get(collection)?.values() || [])]
-        .filter(record => record.deletedAt === null)
-        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)
-          || subMillisecond(b.createdAt) - subMillisecond(a.createdAt)
-          || a.recordId.localeCompare(b.recordId));
-      return decodeStoreValue(collection, records.map((record, position) => ({
-        recordId: record.recordId, payload: record.payload, position,
-      })));
-    }
     return decodeStoreValue(collection, this.encoded(collection));
   }
 

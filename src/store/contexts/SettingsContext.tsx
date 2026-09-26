@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from 'react';
 import type { Settings, Integration } from '../../types/domain';
-import { DEFAULT_ASSISTANT_PROVIDER } from '../../config';
 import {
   getBrowserTimeZone,
   resolveAppTimeZone,
@@ -38,13 +37,10 @@ const defaultSettings: Settings = {
   prayerCountry: 'United Kingdom',
   prayerReminderEnabled: true,
   prayerReminderMinutes: 15,
-  lifeHeroEnabled: false,
-  assistantProvider: DEFAULT_ASSISTANT_PROVIDER,
 };
 
 const defaultIntegrations: Integration[] = [
   { id: 'int-google', name: 'Google Calendar', provider: 'google', description: 'Sync Google Calendar events', status: 'disconnected', icon: 'calendar' },
-  { id: 'int-github', name: 'GitHub', provider: 'github', description: 'Read-only GitHub App for merged pull request evidence', status: 'disconnected', icon: 'code' },
 ];
 
 export { defaultSettings, defaultIntegrations };
@@ -160,7 +156,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings(prev => {
       const safe = splitSettings(updates);
       const next = { ...prev, ...safe.shared, ...safe.device, ...safe.service };
-      if ('elevenLabsSecretId' in updates && !updates.elevenLabsSecretId) delete next.elevenLabsSecretId;
       if ('appTimezone' in updates) {
         const timeZone = validateIanaTimeZone(updates.appTimezone);
         if (timeZone) next.appTimezone = timeZone;

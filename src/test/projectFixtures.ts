@@ -72,10 +72,10 @@ export function fakeShellContext(overrides: Partial<ShellContextValue> = {}): Sh
     surface: 'projects',
     pageLoadError: null,
     retryPageLoad: vi.fn(),
-    assistantNavigationRequest: null,
+    navigationRequest: null,
     navigate: vi.fn(),
-    requestAssistantNavigation: vi.fn(),
-    dismissAssistantNavigationRequest: vi.fn(),
+    requestNavigation: vi.fn(),
+    dismissNavigationRequest: vi.fn(),
     ...overrides,
   };
 }

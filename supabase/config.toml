@@ -382,19 +382,6 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-[functions.github-life-hero]
-verify_jwt = false
-
-# The handler independently verifies user identity or a short-lived, SHA-scoped benchmark signature.
-[functions.assistant-openai]
-verify_jwt = false
-
-[functions.assistant-openai-billing]
-verify_jwt = true
-
-[functions.assistant-speech]
-verify_jwt = true
-
 # Public OAuth discovery; the handler verifies the OAuth identity and Employment approval.
 [functions.sabah-one-employment-mcp]
 verify_jwt = false

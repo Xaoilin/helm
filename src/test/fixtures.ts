@@ -1,4 +1,3 @@
-import type { AssistantCommandContext } from '../assistant/shared';
 import type {
   CalendarAccount,
   CalendarEvent,
@@ -74,29 +73,6 @@ export function makeGamification(): GamificationProfile {
     habitTallies: {},
     dailyLog: {},
     prayerCompletionLedger: {},
-  };
-}
-
-export function makeAssistantContext(
-  overrides: Partial<AssistantCommandContext> = {},
-): AssistantCommandContext {
-  return {
-    calendarAccounts: [],
-    calendarSources: [],
-    calendarEvents: [],
-    inventoryItems: [],
-    inventoryNeeds: [],
-    tasks: [],
-    financeAccounts: [],
-    transactions: [],
-    knowledgeEntries: [],
-    knowledgeTopics: [],
-    lifestyleItems: [],
-    projects: [],
-    gamification: makeGamification(),
-    now: new Date(TEST_NOW_ISO),
-    timezone: 'UTC',
-    ...overrides,
   };
 }
 

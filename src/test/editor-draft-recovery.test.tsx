@@ -12,13 +12,13 @@ const mocks = vi.hoisted(() => ({
   },
   projects: { projects: [] },
   settings: {
-    settings: { deepgramApiKey: '', elevenLabsApiKey: '', goalTags: [] },
+    settings: { goalTags: [] },
     appTimeZone: { effectiveTimeZone: 'UTC' },
   },
   sync: { readOnly: false },
   shell: {
-    assistantNavigationRequest: null,
-    dismissAssistantNavigationRequest: vi.fn(),
+    navigationRequest: null,
+    dismissNavigationRequest: vi.fn(),
     navigate: vi.fn(),
   },
   trips: {

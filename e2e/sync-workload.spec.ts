@@ -14,7 +14,7 @@ test('measures a bounded comparable account read workload', async ({ page, scena
       completed: false, priority: 'medium', category: 'task', dueDate: '2026-09-22',
       createdAt: now, updatedAt: now,
     })),
-    assistantActivityLog: Array.from({ length: 100 }, (_, index) => ({
+    dashboardFocusFeedback: Array.from({ length: 100 }, (_, index) => ({
       id: `activity-${index}`, title: `Synthetic activity ${index}`, description: 'Controlled workload',
       createdAt: now, updatedAt: now,
     })),

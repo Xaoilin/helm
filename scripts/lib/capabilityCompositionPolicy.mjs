@@ -13,12 +13,10 @@ const FORBIDDEN_IDENTIFIERS = [
   'useServices',
 ];
 
-const WORKFLOW_BOUNDARY_NAME = /(Assistant|Bridge|Chat|GoogleSync|LLM|Navigation|Removal|Sync|Undo|Workflow|Coordinator)/u;
+const WORKFLOW_BOUNDARY_NAME = /(Bridge|GoogleSync|Navigation|Removal|Sync|Workflow|Coordinator)/u;
 const GLOBAL_BAG_NAME = /^(App|Application|Global|Root).*(API|Capabilities|Context|Services|Store)$/u;
 const DOMAIN_PROPERTIES = [
-  ['assistant', /^(assistant|corrections|recordAssistant|upsertAssistant|noteAssistant)/u],
   ['calendar', /^(calendar|addCalendar|updateCalendar|removeCalendar|bulkUpsertCalendar|bulkRemoveCalendar|setPrimaryCalendar)/u],
-  ['chat', /^(conversations|activeConversation|createConversation|sendMessage|deleteConversation|renameConversation)/u],
   ['clock', /^(clock|createStopwatch|createTimer|startStopwatch|startTimer|pauseStopwatch|pauseTimer|resetStopwatch|resetTimer)/u],
   ['finance', /^(finance|transactions|savingsGoals|addTransaction|removeTransaction|addSavings|updateSavings)/u],
   ['gamification', /^(gamification|updateGamification|backfillPrayer)/u],

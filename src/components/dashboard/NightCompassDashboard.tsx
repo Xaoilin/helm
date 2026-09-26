@@ -25,8 +25,6 @@ import { useDailyMomentumContext } from '../../store/contexts/DailyMomentumConte
 import { useMilestoneCelebration } from '../../store/contexts/MilestoneCelebrationContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import PrayerStatsCard from './PrayerStatsCard';
-import LifeHeroCompanion from './LifeHeroCompanion';
-import { LIFE_HERO_ENABLED } from '../../config/deprecatedFeatures';
 import type {
   DailyPillar,
   PrayerName,
@@ -378,7 +376,6 @@ export default function NightCompassDashboard() {
   const motivation = getQuranMotivationForDate(prayer.today);
 
   const prayerEnabled = settings.settings.prayerEnabled !== false;
-  const lifeHeroEnabled = LIFE_HERO_ENABLED && settings.settings.lifeHeroEnabled === true;
   const scheduleRepairNeeded = prayerEnabled && (
     prayer.scheduleStatus === 'unavailable'
     || Boolean(prayer.schedule && !prayer.scheduleTimezoneValid)
@@ -752,7 +749,7 @@ export default function NightCompassDashboard() {
         <button
           type="button"
           className="nc-secondary-action"
-          onClick={() => shell.requestAssistantNavigation({
+          onClick={() => shell.requestNavigation({
             surface: 'tasks',
             surfaceState: { tasks: { tab: 'all', resetFilters: true } },
           })}
@@ -766,8 +763,6 @@ export default function NightCompassDashboard() {
         showPrayerLog={showPrayerLog}
         onTogglePrayerLog={() => setShowPrayerLog(current => !current)}
       />
-
-      {lifeHeroEnabled && <LifeHeroCompanion localDate={prayer.today} />}
     </section>
   );
 }

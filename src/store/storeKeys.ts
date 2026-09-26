@@ -5,7 +5,6 @@ export interface SharedStoreKey {
 }
 
 export const SHARED_STORE_KEYS = [
-  { key: 'conversations', label: 'Chat conversations', description: 'Saved Lina chat threads.' },
   { key: 'calendarAccounts', label: 'Calendar accounts', description: 'Calendar account records.' },
   { key: 'calendarSources', label: 'Calendar sources', description: 'Calendars and source visibility.' },
   { key: 'calendarEvents', label: 'Calendar events', description: 'Local and synced calendar events.' },
@@ -34,17 +33,18 @@ export const SHARED_STORE_KEYS = [
   { key: 'savingsGoals', label: 'Savings goals', description: 'Savings goal records.' },
   { key: 'gamification', label: 'Profile progress', description: 'XP, streak, and achievement progress.' },
   { key: 'prayerTracking', label: 'Prayer outcomes', description: 'Classified prayer outcomes and reminder receipts.' },
-  { key: 'assistantCorrections', label: 'Assistant corrections', description: 'Lina transcript correction memory.' },
-  { key: 'assistantActivityLog', label: 'Assistant activity', description: 'Lina action audit log.' },
 ] as const satisfies SharedStoreKey[];
 
 export const SHARED_STORE_KEY_SET = new Set<string>(SHARED_STORE_KEYS.map(item => item.key));
 
 /**
  * Decode-only compatibility. These collections are never imported, exported, or written. Settings
- * and integrations moved to the profile service.
+ * and integrations moved to the profile service; `conversations`, `assistantCorrections` and
+ * `assistantActivityLog` belonged to the removed Lina assistant.
  */
-export const LEGACY_SHARED_STORE_KEY_SET = new Set<string>(['captureItems', 'settings', 'integrations']);
+export const LEGACY_SHARED_STORE_KEY_SET = new Set<string>([
+  'captureItems', 'settings', 'integrations', 'conversations', 'assistantCorrections', 'assistantActivityLog',
+]);
 
 export const KNOWN_SHARED_STORE_KEY_SET = new Set<string>([
   ...SHARED_STORE_KEY_SET,

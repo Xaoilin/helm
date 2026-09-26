@@ -16,20 +16,19 @@ export interface TaskItemProps extends TaskItemActions {
   appDate: string;
   projectName?: string;
   prayerOutcome?: PrayerOutcomeStatus;
-  highlighted: boolean;
   deleting: boolean;
 }
 
 /** Compact row used in the Today view's "Due Today" list. */
 export default function TaskRow({
-  task, appDate, projectName, prayerOutcome, highlighted, deleting,
+  task, appDate, projectName, prayerOutcome, deleting,
   onToggle, onEdit, onDeleteRequest, onDeleteCancel, onDelete,
 }: TaskItemProps) {
   const overdue = getTaskDueStatus(task, appDate) === 'overdue';
   return (
     <div
       id={`task-item-${task.id}`}
-      className={`task-row ${task.completed ? 'completed' : ''} ${highlighted ? 'assistant-focus' : ''}`}
+      className={`task-row ${task.completed ? 'completed' : ''}`}
     >
       <input
         type="checkbox"

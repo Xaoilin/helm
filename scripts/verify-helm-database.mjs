@@ -30,17 +30,11 @@ const [migrationRows, verificationRows] = await Promise.all([
             'helm_account_state', 'helm_records',
             'helm_mutation_receipts', 'helm_legacy_quarantine',
             'helm_secret_entries', 'helm_secret_mutation_receipts',
-            'life_hero_rulesets', 'life_hero_stat_rules',
-            'life_hero_evidence_rules', 'life_hero_source_tier_rules',
-            'life_hero_momentum_rules', 'life_hero_profiles',
-            'life_hero_stat_profiles', 'life_hero_evidence',
-            'life_hero_awards', 'life_hero_legacy_snapshots',
-            'product_usage_events', 'github_life_hero_connections',
-            'github_life_hero_oauth_states'
+            'product_usage_events'
           ])
       ),
       'allHelmTablesUseRls', (
-        select count(*) = 19 and bool_and(c.relrowsecurity)
+        select count(*) = 7 and bool_and(c.relrowsecurity)
         from pg_class c
         join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public'
@@ -49,13 +43,7 @@ const [migrationRows, verificationRows] = await Promise.all([
             'helm_account_state', 'helm_records',
             'helm_mutation_receipts', 'helm_legacy_quarantine',
             'helm_secret_entries', 'helm_secret_mutation_receipts',
-            'life_hero_rulesets', 'life_hero_stat_rules',
-            'life_hero_evidence_rules', 'life_hero_source_tier_rules',
-            'life_hero_momentum_rules', 'life_hero_profiles',
-            'life_hero_stat_profiles', 'life_hero_evidence',
-            'life_hero_awards', 'life_hero_legacy_snapshots',
-            'product_usage_events', 'github_life_hero_connections',
-            'github_life_hero_oauth_states'
+            'product_usage_events'
           ])
       ),
       'authenticatedRecordsRead', has_table_privilege('authenticated', 'public.helm_records', 'select'),
@@ -208,112 +196,24 @@ const [migrationRows, verificationRows] = await Promise.all([
           and p.proname = 'apply_helm_mutations'
           and pg_get_function_identity_arguments(p.oid) = 'p_request_id uuid, p_operations jsonb'
       ),
-      'lifeHeroRulesetCurrent', (
-        select
-          count(*) = 1
-          and bool_and(version = 'life-hero-v1' and level_curve_factor = 100)
-          and (select count(*) from public.life_hero_stat_rules where ruleset_version = 'life-hero-v1') = 7
-          and (select count(*) from public.life_hero_evidence_rules where ruleset_version = 'life-hero-v1') = 7
-          and not exists (
-            select 1 from public.life_hero_evidence_rules
-            where evidence_type = any(array['app_usage', 'product_usage', 'analytics_event'])
-          )
-        from public.life_hero_rulesets
-        where is_active
-      ),
-      'lifeHeroProfilesInitialized', not exists (
+      'deprecatedFeaturesRemoved', not exists (
         select 1
-        from auth.users account
-        left join public.life_hero_profiles profile on profile.user_id = account.id
-        left join lateral (
-          select count(*) as stat_count
-          from public.life_hero_stat_profiles stat
-          where stat.user_id = account.id
-        ) stats on true
-        where profile.user_id is null or stats.stat_count <> 7
-      ),
-      'lifeHeroOwnerReadPolicies', (
-        select count(*) = 5
-        from pg_policies
-        where schemaname = 'public'
-          and tablename = any(array[
-            'life_hero_profiles', 'life_hero_stat_profiles', 'life_hero_evidence',
-            'life_hero_awards', 'life_hero_legacy_snapshots'
-          ])
-          and cmd = 'SELECT'
-          and roles = array['authenticated']::name[]
-      ),
-      'lifeHeroAuthenticatedRead', (
-        select bool_and(has_table_privilege('authenticated', table_name, 'select'))
-        from unnest(array[
-          'public.life_hero_profiles', 'public.life_hero_stat_profiles',
-          'public.life_hero_evidence', 'public.life_hero_awards',
-          'public.life_hero_legacy_snapshots'
-        ]) as table_name
-      ),
-      'lifeHeroAuthenticatedDirectWrite', (
-        select bool_or(
-          has_table_privilege('authenticated', table_name, 'insert')
-          or has_table_privilege('authenticated', table_name, 'update')
-          or has_table_privilege('authenticated', table_name, 'delete')
-        )
-        from unnest(array[
-          'public.life_hero_profiles', 'public.life_hero_stat_profiles',
-          'public.life_hero_evidence', 'public.life_hero_awards',
-          'public.life_hero_legacy_snapshots'
-        ]) as table_name
-      ),
-      'lifeHeroRpcExecute',
-        has_function_privilege(
-          'authenticated',
-          'public.accept_life_hero_evidence(text,text,text,text,timestamptz,date,jsonb)',
-          'execute'
-        )
-        and has_function_privilege(
-          'authenticated', 'public.get_life_hero_snapshot(date)', 'execute'
-        )
-        and has_function_privilege(
-          'authenticated', 'public.recompute_life_hero_profile(date)', 'execute'
-        )
-        and has_function_privilege(
-          'authenticated', 'public.sync_life_hero_evidence(date)', 'execute'
-        ),
-      'lifeHeroAnonymousAccess',
-        has_table_privilege('anon', 'public.life_hero_profiles', 'select')
-        or has_table_privilege('anon', 'public.life_hero_evidence', 'select')
-        or has_table_privilege('anon', 'public.life_hero_awards', 'select')
-        or has_function_privilege(
-          'anon',
-          'public.accept_life_hero_evidence(text,text,text,text,timestamptz,date,jsonb)',
-          'execute'
-        )
-        or has_function_privilege('anon', 'public.get_life_hero_snapshot(date)', 'execute')
-        or has_function_privilege('anon', 'public.recompute_life_hero_profile(date)', 'execute')
-        or has_function_privilege('anon', 'public.sync_life_hero_evidence(date)', 'execute'),
-      'lifeHeroRpcSecurity', (
-        select
-          count(*) = 4
-          and bool_and(case
-            when p.proname = 'get_life_hero_snapshot' then not p.prosecdef
-            else p.prosecdef
-          end)
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public'
+          and (c.relname like 'life_hero%' or c.relname like 'github_life_hero%')
+      ) and not exists (
+        select 1
         from pg_proc p
         join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public'
-          and p.proname = any(array[
-            'accept_life_hero_evidence', 'get_life_hero_snapshot',
-            'recompute_life_hero_profile', 'sync_life_hero_evidence'
-          ])
-      ),
-      'lifeHeroLegacyBackfillSafe', not exists (
-        select 1
-        from public.life_hero_legacy_snapshots snapshot
-        where snapshot.provenance <> 'legacy_gamification_profile_unallocated'
-          or snapshot.source_collection <> 'gamification'
-          or snapshot.source_record_id <> 'profile'
+        where n.nspname in ('public', 'helm_private')
+          and p.proname like '%life_hero%'
       ) and not exists (
-        select 1 from public.life_hero_evidence
-        where evidence_type like 'legacy_%'
+        select 1 from pg_trigger
+        where tgrelid = 'auth.users'::regclass and tgname = 'life_hero_initialize_profile'
+      ) and not exists (
+        select 1 from public.helm_records
+        where collection = any(array['conversations', 'assistantCorrections', 'assistantActivityLog'])
       ),
       'productUsageOwnerReadPolicy', (
         select count(*) = 1
@@ -348,20 +248,6 @@ const [migrationRows, verificationRows] = await Promise.all([
           or event.feature !~ '^[a-z][a-z0-9_]{0,63}$'
           or event.action !~ '^[a-z][a-z0-9_]{0,63}$'
       ),
-      'productUsageCannotGrantXp',
-        not exists (
-          select 1 from public.life_hero_evidence_rules
-          where evidence_type = any(array['app_usage', 'product_usage', 'analytics_event'])
-        )
-        and not exists (
-          select 1
-          from pg_constraint
-          where conrelid = 'public.product_usage_events'::regclass
-            and confrelid in (
-              'public.life_hero_evidence'::regclass,
-              'public.life_hero_awards'::regclass
-            )
-        ),
       'accountReadPolicies', (
         select count(*)
         from pg_policies
@@ -482,14 +368,13 @@ const [migrationRows, verificationRows] = await Promise.all([
         where kv.namespace = 'helm'
           and jsonb_typeof(kv.value) = 'array'
           and kv.key = any(array[
-            'integrations', 'conversations',
+            'integrations',
             'calendarAccounts', 'calendarSources', 'calendarEvents',
             'captureItems',
             'trips', 'tripLegs', 'tripItineraryItems', 'tripBookings', 'tripBudgetEntries',
             'projects', 'projectPages', 'tasks', 'dashboardFocusFeedback',
             'knowledgeTopics', 'knowledgeEntries', 'lifestyleItems', 'healthFastFoodEntries',
-            'financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals',
-            'assistantCorrections', 'assistantActivityLog'
+            'financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals'
           ])
           and (expected.record_count, expected.payload_sha256)
             is distinct from (actual.record_count, actual.payload_sha256)
@@ -528,13 +413,12 @@ const [migrationRows, verificationRows] = await Promise.all([
           count(*) filter (where record.collection = 'financeAccounts') = 2
           and count(*) filter (where record.collection = 'transactions') = 58
           and count(*) filter (where record.collection = 'tasks') = 11
-          and count(*) filter (where record.collection = 'conversations') = 1
         from public.helm_records record
         join auth.users account on account.id = record.user_id
         where (lower(account.email) = 'xaoilin'
             or lower(split_part(account.email, '@', 1)) = 'xaoilin')
           and record.deleted_at is null
-          and record.collection = any(array['financeAccounts','transactions','tasks','conversations'])
+          and record.collection = any(array['financeAccounts','transactions','tasks'])
       ), false),
       'unownedLegacyRowsStayUnattached', not exists (
         select 1
@@ -573,7 +457,7 @@ if (!verification || typeof verification !== 'object') {
 }
 
 const expected = {
-  helmTableCount: 19,
+  helmTableCount: 7,
   allHelmTablesUseRls: true,
   authenticatedRecordsRead: true,
   employmentTablesPrivate: true,
@@ -597,20 +481,11 @@ const expected = {
   vaultInstalled: true,
   authenticatedVaultUsage: false,
   rpcIsSecurityDefiner: true,
-  lifeHeroRulesetCurrent: true,
-  lifeHeroProfilesInitialized: true,
-  lifeHeroOwnerReadPolicies: true,
-  lifeHeroAuthenticatedRead: true,
-  lifeHeroAuthenticatedDirectWrite: false,
-  lifeHeroRpcExecute: true,
-  lifeHeroAnonymousAccess: false,
-  lifeHeroRpcSecurity: true,
-  lifeHeroLegacyBackfillSafe: true,
+  deprecatedFeaturesRemoved: true,
   productUsageOwnerReadPolicy: true,
   productUsagePrivileges: true,
   productUsageRpcSecurity: true,
   productUsageRowsContentFree: true,
-  productUsageCannotGrantXp: true,
   accountReadPolicies: 2,
   privateBroadcastPolicy: true,
   legacyKvPublished: false,

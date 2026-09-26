@@ -12,7 +12,7 @@ The initial production instrumentation records session start, application readin
 
 Analytics is private and owner-only. It is active only for signed-in Sabah One sessions and is stored in Supabase under the authenticated account. It is not ad analytics or cross-site tracking.
 
-The browser accepts only stable snake-case taxonomy keys. Optional metadata has a five-key allowlist and scalar values only. The database repeats these constraints and rejects unsupported top-level fields. Chat or assistant content, tokens, secrets, credentials, prayer details, learning content, exact finance values, balances, transaction descriptions, names, emails, locations, notes, and provider payloads have no accepted field.
+The browser accepts only stable snake-case taxonomy keys. Optional metadata has a five-key allowlist and scalar values only. The database repeats these constraints and rejects unsupported top-level fields. Tokens, secrets, credentials, prayer details, learning content, exact finance values, balances, transaction descriptions, names, emails, locations, notes, and provider payloads have no accepted field.
 
 The historical `settings.telemetry` value remains readable for compatibility, but no external anonymous telemetry sender exists and it does not control this private account history. The Settings surface now describes the actual private behaviour without adding a pause control, matching the approved product decision.
 
@@ -22,6 +22,3 @@ The browser queue batches at most 25 events per RPC. Event IDs and session seque
 
 `product_usage_events` has owner-only read RLS. Authenticated browsers cannot write the table directly; the bounded `ingest_product_usage_events(jsonb)` security-definer RPC derives ownership from `auth.uid()`. Anonymous access is denied. The non-destructive rollback revokes ingest permission while preserving event history.
 
-## Life Hero separation
-
-Product events have no foreign key, trigger, evidence rule, or API path into Life Hero evidence or awards. Real-world evidence remains the only way to gain Life Hero XP.

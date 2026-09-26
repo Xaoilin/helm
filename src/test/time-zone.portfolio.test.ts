@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { extractTemporalReference } from '../assistant/temporalResolver';
 import { resolveAppTimeZone } from '../services/appTimeZone';
 import {
   buildPrayerScheduleDays,
@@ -15,7 +14,7 @@ import {
   instantToDateTimeLocal,
   zonedDateTimeToInstant,
 } from '../services/timeZone';
-import { makeAssistantContext, makePrayerScheduleEntries } from './fixtures';
+import { makePrayerScheduleEntries } from './fixtures';
 
 const root = resolve(__dirname, '../..');
 
@@ -106,55 +105,11 @@ describe('effective app time-zone policy', () => {
     expect(snapshot.deadlines.Isha?.deadlineAt.toISOString()).toBe('2026-08-29T23:00:00.000Z');
   });
 
-  it('resolves assistant generic wall time in the app zone across the DST boundary', () => {
-    const now = new Date('2026-03-28T23:30:00.000Z');
-    const london = extractTemporalReference('tomorrow at 9', makeAssistantContext({
-      now,
-      timezone: 'Europe/London',
-    })).resolution;
-    const newYork = extractTemporalReference('tomorrow at 9', makeAssistantContext({
-      now,
-      timezone: 'America/New_York',
-    })).resolution;
-    expect(london?.start).toBe('2026-03-29T08:00:00.000Z');
-    expect(newYork?.start).toBe('2026-03-29T13:00:00.000Z');
-    expect(extractTemporalReference('2026-03-29 at 1:30', makeAssistantContext({
-      now,
-      timezone: 'Europe/London',
-    })).resolution).toBeNull();
-  });
-
-  it('uses the supplied current prayer schedule date across an app-zone day boundary', () => {
-    const resolution = extractTemporalReference('after Dhuhr', makeAssistantContext({
-      now: new Date('2026-08-29T02:00:00.000Z'),
-      timezone: 'America/New_York',
-      prayerDate: '2026-08-29',
-      prayerTimezone: 'Europe/London',
-      prayerTimes: [{ name: 'Dhuhr', time: '12:00' }],
-    })).resolution;
-    expect(resolution?.date).toBe('2026-08-29');
-    expect(resolution?.start).toBe('2026-08-29T11:30:00.000Z');
-  });
-
-  it('applies tomorrow to the supplied prayer schedule date during an app-zone mismatch', () => {
-    const resolution = extractTemporalReference('tomorrow after Dhuhr', makeAssistantContext({
-      now: new Date('2026-08-29T02:00:00.000Z'),
-      timezone: 'America/New_York',
-      prayerDate: '2026-08-29',
-      prayerTimezone: 'Europe/London',
-      prayerTimes: [{ name: 'Dhuhr', time: '12:00' }],
-    })).resolution;
-    expect(resolution?.date).toBe('2026-08-30');
-    expect(resolution?.start).toBe('2026-08-30T11:30:00.000Z');
-  });
-
   it('keeps direct browser time-zone discovery behind one resolver', () => {
     const resolver = readFileSync(resolve(root, 'src/services/appTimeZone.ts'), 'utf8');
     const prayerContext = readFileSync(resolve(root, 'src/store/contexts/PrayerContext.tsx'), 'utf8');
-    const planner = readFileSync(resolve(root, 'src/assistant/planner.ts'), 'utf8');
     expect(resolver).toContain('Intl.DateTimeFormat().resolvedOptions().timeZone');
     expect(prayerContext).not.toContain('Intl.DateTimeFormat().resolvedOptions().timeZone');
-    expect(planner).not.toContain('Intl.DateTimeFormat().resolvedOptions().timeZone');
   });
 
   it('keeps React prayer orchestration dependent on cohesive policy boundaries', () => {

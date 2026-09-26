@@ -219,8 +219,6 @@ export function classifyOperationalFailure(error: unknown): OperationalReason {
   if (status === 400 || row.code === 'invalid_response') return 'invalid_response';
   if (status >= 500 && status <= 599) return 'server_error';
   if (row.name === 'TimeoutError' || row.name === 'AbortError') return 'timeout';
-  if (row.name === 'HostedAssistantSignInRequiredError') return 'unauthorized';
-  if (row.name === 'HostedAssistantPausedError' || row.code === 'hosted_ai_paused') return 'paused';
   if (row.name === 'CircuitOpenError') return 'circuit_open';
   // Inspect text only for categories; never retain or export it.
   const message = typeof row.message === 'string' ? row.message.toLowerCase() : '';

@@ -17,13 +17,7 @@ const SINGLETON_STORE_KEYS = new Set(['settings', 'employment']);
 const COMPLEX_STORE_KEYS = new Set(['clock', 'employment', 'gamification', 'prayerTracking']);
 
 export const DEVICE_SETTING_FIELDS = [
-  'deepgramApiKey',
-  'elevenLabsApiKey',
-  'elevenLabsSecretId',
   'googleOAuthClientId',
-  'microphoneDeviceId',
-  'ollamaEndpoint',
-  'ollamaModel',
   'supabaseAnonKey',
   'supabaseUrl',
 ] as const satisfies readonly (keyof Settings)[];
@@ -56,25 +50,30 @@ const SERVICE_SETTING_FIELD_SET = new Set<string>(SERVICE_SETTING_FIELDS);
 const DEVICE_SETTING_FIELD_SET = new Set<string>(DEVICE_SETTING_FIELDS);
 const LEGACY_PROVIDER_FIELDS = new Set(['deepgramApiKey', 'elevenLabsApiKey', 'monzoAccessToken']);
 
-/** Existing values are migration inputs only, never new settings writes. */
+/** Plaintext provider keys from old builds: never written, and their original browser source is left untouched. */
 export function hasLegacyProviderSettings(value: unknown): boolean {
   return isRecord(value) && [...LEGACY_PROVIDER_FIELDS].some(key => typeof value[key] === 'string' && Boolean(value[key]));
 }
 
-export function legacyProviderSettings(value: unknown): Partial<Settings> {
-  if (!isRecord(value)) return {};
-  return Object.fromEntries(['deepgramApiKey', 'elevenLabsApiKey']
-    .filter(key => typeof value[key] === 'string' && Boolean(value[key]))
-    .map(key => [key, value[key]]));
-}
-const SHARED_SETTING_FIELDS = new Set<string>([
+/** No setting is stored in the account record any more: app preferences moved to the profile service. */
+const SHARED_SETTING_FIELDS = new Set<string>();
+
+/**
+ * Settings of the removed Life Hero, Lina assistant and voice features. Stored records and browser
+ * copies may still carry them; they are recognised and dropped, never read or written.
+ */
+const RETIRED_SETTING_FIELDS = new Set<string>([
   'lifeHeroEnabled',
   'assistantEnabled',
-  'elevenLabsVoiceId',
-  'wakeWordEnabled',
   'assistantLanguage',
   'assistantProvider',
   'hostedModel',
+  'elevenLabsVoiceId',
+  'elevenLabsSecretId',
+  'wakeWordEnabled',
+  'microphoneDeviceId',
+  'ollamaEndpoint',
+  'ollamaModel',
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -111,10 +110,8 @@ export function splitSettings(value: unknown): {
   if (!isRecord(value)) return { shared, device, service };
 
   for (const [key, entry] of Object.entries(value)) {
-    if (LEGACY_PROVIDER_FIELDS.has(key)) continue;
-    if (key === 'elevenLabsSecretId') {
-      if (typeof entry === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(entry)) device.elevenLabsSecretId = entry;
-    } else if (DEVICE_SETTING_FIELD_SET.has(key)) {
+    if (LEGACY_PROVIDER_FIELDS.has(key) || RETIRED_SETTING_FIELDS.has(key)) continue;
+    if (DEVICE_SETTING_FIELD_SET.has(key)) {
       (device as Record<string, unknown>)[key] = entry;
     } else if (key === 'appTimezone') {
       const timeZone = validateIanaTimeZone(entry);
@@ -142,6 +139,7 @@ export function sanitizeLegacyStoreValue(collection: string, value: unknown): {
     if (!isRecord(value)) return { value: {}, ambiguous: value != null };
     const known = new Set([
       ...SHARED_SETTING_FIELDS, ...DEVICE_SETTING_FIELD_SET, ...SERVICE_SETTING_FIELD_SET, ...LEGACY_PROVIDER_FIELDS,
+      ...RETIRED_SETTING_FIELDS,
     ]);
     return {
       value,

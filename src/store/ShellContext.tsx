@@ -9,25 +9,33 @@ import {
   type ReactNode,
 } from 'react';
 import { STORAGE_KEYS } from '../config/constants';
-import { isSurfaceAvailable } from '../config/deprecatedFeatures';
-import {
-  normalizeAssistantNavigationRequest,
-  subscribeAssistantNavigation,
-  type AssistantNavigationHandler,
-  type AssistantNavigationRequest,
-} from '../services/assistantNavigation';
 import type { Surface } from '../types/domain';
 import { activateStoreCollections, refreshDatabasePersistence } from './persistence';
 import { getPageCollections } from './pageCollections';
+
+/** Initial Tasks view a navigation request asks for. */
+export interface TasksNavigationState {
+  tab?: 'today' | 'all' | 'goals';
+  resetFilters?: boolean;
+}
+
+/** A one-shot request to open a surface in a given state; the surface dismisses it once applied. */
+export interface NavigationRequest {
+  id: string;
+  surface: Surface;
+  surfaceState?: { tasks?: TasksNavigationState };
+}
+
+export type NavigationTarget = Omit<NavigationRequest, 'id'>;
 
 interface ShellContextValue {
   surface: Surface;
   pageLoadError: string | null;
   retryPageLoad: () => void;
-  assistantNavigationRequest: AssistantNavigationRequest | null;
+  navigationRequest: NavigationRequest | null;
   navigate: (surface: Surface) => void;
-  requestAssistantNavigation: AssistantNavigationHandler;
-  dismissAssistantNavigationRequest: (requestId?: string) => void;
+  requestNavigation: (target: NavigationTarget) => void;
+  dismissNavigationRequest: (requestId?: string) => void;
 }
 
 export const ShellContext = createContext<ShellContextValue | null>(null);
@@ -38,14 +46,11 @@ export function useShell(): ShellContextValue {
   return context;
 }
 
-function isShellSurface(value: string | null): value is Surface {
-  return isKnownSurface(value) && isSurfaceAvailable(value);
-}
+let navigationSequence = 0;
 
-function isKnownSurface(value: string | null): value is Surface {
+function isShellSurface(value: string | null): value is Surface {
   switch (value) {
     case 'dashboard':
-    case 'chat':
     case 'calendar':
     case 'clock':
     case 'trips':
@@ -82,30 +87,29 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const [pageLoadError, setPageLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const loadGeneration = useRef(0);
-  const [assistantNavigationRequest, setAssistantNavigationRequest] = useState<AssistantNavigationRequest | null>(null);
+  const [navigationRequest, setNavigationRequest] = useState<NavigationRequest | null>(null);
 
   const navigate = useCallback((nextSurface: Surface) => {
     loadGeneration.current += 1;
     setSurface(isShellSurface(nextSurface) ? nextSurface : 'dashboard');
     setPageLoadError(null);
-    setAssistantNavigationRequest(null);
+    setNavigationRequest(null);
   }, []);
 
-  const requestAssistantNavigation = useCallback<AssistantNavigationHandler>((target) => {
-    const request = normalizeAssistantNavigationRequest(target);
+  const requestNavigation = useCallback((target: NavigationTarget) => {
     loadGeneration.current += 1;
     setPageLoadError(null);
-    if (!isShellSurface(request.surface)) {
+    if (!isShellSurface(target.surface)) {
       setSurface('dashboard');
-      setAssistantNavigationRequest(null);
+      setNavigationRequest(null);
       return;
     }
-    setSurface(request.surface);
-    setAssistantNavigationRequest(request);
+    setSurface(target.surface);
+    setNavigationRequest({ ...target, id: `nav-${Date.now()}-${navigationSequence++}` });
   }, []);
 
-  const dismissAssistantNavigationRequest = useCallback((requestId?: string) => {
-    setAssistantNavigationRequest(current => {
+  const dismissNavigationRequest = useCallback((requestId?: string) => {
+    setNavigationRequest(current => {
       if (!current || (requestId && current.id !== requestId)) return current;
       return null;
     });
@@ -129,8 +133,6 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     return () => { active = false; };
   }, [surface, loadAttempt]);
 
-  useEffect(() => subscribeAssistantNavigation(requestAssistantNavigation), [requestAssistantNavigation]);
-
   useEffect(() => {
     try {
       window.sessionStorage.setItem(STORAGE_KEYS.SHELL_SURFACE, surface);
@@ -143,17 +145,17 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     surface,
     pageLoadError,
     retryPageLoad,
-    assistantNavigationRequest,
+    navigationRequest,
     navigate,
-    requestAssistantNavigation,
-    dismissAssistantNavigationRequest,
+    requestNavigation,
+    dismissNavigationRequest,
   }), [
-    assistantNavigationRequest,
+    navigationRequest,
     pageLoadError,
     retryPageLoad,
-    dismissAssistantNavigationRequest,
+    dismissNavigationRequest,
     navigate,
-    requestAssistantNavigation,
+    requestNavigation,
     surface,
   ]);
 

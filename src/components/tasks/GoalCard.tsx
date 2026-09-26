@@ -4,16 +4,15 @@ import type { TaskItemActions } from './TaskRow';
 interface GoalCardProps extends TaskItemActions {
   goal: Task;
   projectName?: string;
-  highlighted: boolean;
   deleting: boolean;
 }
 
 /** An open long-term goal with complete, edit, and remove actions. */
 export function ActiveGoalCard({
-  goal, projectName, highlighted, deleting, onToggle, onEdit, onDeleteRequest, onDeleteCancel, onDelete,
+  goal, projectName, deleting, onToggle, onEdit, onDeleteRequest, onDeleteCancel, onDelete,
 }: GoalCardProps) {
   return (
-    <div id={`task-item-${goal.id}`} className={`goal-card ${highlighted ? 'assistant-focus' : ''}`}>
+    <div id={`task-item-${goal.id}`} className="goal-card">
       <div className="goal-title">
         {goal.title}
         <span className={`tag tag-${goal.priority}`}>{goal.priority}</span>
@@ -44,12 +43,12 @@ export function ActiveGoalCard({
 
 /** A completed goal that can be reopened or removed with a second confirming click. */
 export function CompletedGoalCard({
-  goal, highlighted, deleting, onToggle, onDeleteRequest, onDelete,
+  goal, deleting, onToggle, onDeleteRequest, onDelete,
 }: GoalCardProps) {
   return (
     <div
       id={`task-item-${goal.id}`}
-      className={`goal-card completed ${highlighted ? 'assistant-focus' : ''}`}
+      className="goal-card completed"
       style={{ marginTop: 8 }}
     >
       <div className="goal-title" style={{ textDecoration: 'line-through' }}>

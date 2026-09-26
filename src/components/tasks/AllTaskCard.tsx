@@ -37,7 +37,7 @@ function kindLabel(task: Task): string {
 
 /** Card used in the All Tasks view. */
 export default function AllTaskCard({
-  task, appDate, appTimeZone, projectName, prayerOutcome, highlighted, deleting,
+  task, appDate, appTimeZone, projectName, prayerOutcome, deleting,
   onToggle, onEdit, onDeleteRequest, onDeleteCancel, onDelete,
 }: TaskItemProps & { appTimeZone: string }) {
   const outcomeLabel = prayerOutcome ? prayerOutcomeLabel(prayerOutcome) : undefined;
@@ -47,7 +47,7 @@ export default function AllTaskCard({
   return (
     <div
       id={`task-item-${task.id}`}
-      className={`all-task-card ${task.completed ? 'completed' : ''} ${highlighted ? 'assistant-focus' : ''}`}
+      className={`all-task-card ${task.completed ? 'completed' : ''}`}
     >
       <div className="all-task-card-header">
         <div className="all-task-card-main">

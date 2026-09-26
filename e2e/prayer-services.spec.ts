@@ -4,7 +4,7 @@ const NOON = '2026-08-29T12:30:00.000Z'; // 13:30 in London: Dhuhr is the curren
 
 test.describe('prayer and profile services', () => {
   test('prayer outcomes come from the prayer service and completions are saved there', async ({ page, scenario }) => {
-    const control = await scenario({ now: NOON, settings: { prayerEnabled: true, lifeHeroEnabled: false } });
+    const control = await scenario({ now: NOON, settings: { prayerEnabled: true } });
     control.services.outcomes.set('2026-08-29::Fajr', {
       id: '0d7b7c1e-6a0a-4b1e-9d0e-3c2f1a4b5c6d',
       date: '2026-08-29',
@@ -33,7 +33,7 @@ test.describe('prayer and profile services', () => {
   test('shows only the prayer service outcomes, never the account record copy, and re-sends nothing', async ({ page, scenario }) => {
     const control = await scenario({
       now: NOON,
-      settings: { prayerEnabled: true, lifeHeroEnabled: false },
+      settings: { prayerEnabled: true },
       stores: {
         // An outcome the old Supabase mirror still holds; the service never had it.
         prayerTracking: {
@@ -77,7 +77,7 @@ test.describe('prayer and profile services', () => {
 
   test('loading, reminders, reloads and focus never delete the service outcomes', async ({ page, scenario }) => {
     // Noon: Dhuhr is current, so its reminder saves receipts while outcomes load (the live bug's setting).
-    const control = await scenario({ now: NOON, settings: { prayerEnabled: true, lifeHeroEnabled: false } });
+    const control = await scenario({ now: NOON, settings: { prayerEnabled: true } });
     control.services.tracking = {
       trackingStartedAt: '2026-08-01T00:00:00Z', activationDate: null, activationPrayers: [], importedAt: null,
     };
@@ -104,7 +104,7 @@ test.describe('prayer and profile services', () => {
   test('uses the location saved in the profile service', async ({ page, scenario }) => {
     await scenario({
       now: NOON,
-      settings: { prayerEnabled: true, lifeHeroEnabled: false, prayerCity: 'Bedford' },
+      settings: { prayerEnabled: true, prayerCity: 'Bedford' },
       services: { profile: { city: 'London', country: 'United Kingdom', timeZone: null } },
     });
     const londonTimetable = page.waitForRequest(request =>
@@ -118,7 +118,7 @@ test.describe('prayer and profile services', () => {
   test('keeps working and says so when the prayer service is down', async ({ page, scenario }) => {
     const control = await scenario({
       now: NOON,
-      settings: { prayerEnabled: true, lifeHeroEnabled: false },
+      settings: { prayerEnabled: true },
       services: { failureStatus: 503 },
     });
     await openApp(page);
@@ -137,7 +137,7 @@ test.describe('prayer and profile services', () => {
 
   test('refuses to complete a prayer before it starts and sends nothing', async ({ page, scenario }) => {
     // 02:10 in London: Fajr (05:00) and Dhuhr (13:00) have not started.
-    const control = await scenario({ now: '2026-08-29T01:10:00.000Z', settings: { prayerEnabled: true, lifeHeroEnabled: false } });
+    const control = await scenario({ now: '2026-08-29T01:10:00.000Z', settings: { prayerEnabled: true } });
     await openApp(page);
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
 
@@ -156,7 +156,7 @@ test.describe('prayer and profile services', () => {
   test('reverts and explains a completion the prayer service refuses', async ({ page, scenario }) => {
     await scenario({
       now: NOON,
-      settings: { prayerEnabled: true, lifeHeroEnabled: false },
+      settings: { prayerEnabled: true },
       services: { rejectCreates: { code: 'prayer_not_started', message: 'Dhuhr has not started yet.' } },
     });
     await openApp(page);
@@ -171,7 +171,7 @@ test.describe('prayer and profile services', () => {
   });
 
   test('a completion whose confirmation was lost is retried by the client and saved once', async ({ page, scenario }) => {
-    const control = await scenario({ now: NOON, settings: { prayerEnabled: true, lifeHeroEnabled: false } });
+    const control = await scenario({ now: NOON, settings: { prayerEnabled: true } });
     await openApp(page);
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
 
@@ -196,7 +196,7 @@ test.describe('prayer and profile services', () => {
   test('a refused completion stays refused after a reload and is not sent again', async ({ page, scenario }) => {
     const control = await scenario({
       now: NOON,
-      settings: { prayerEnabled: true, lifeHeroEnabled: false },
+      settings: { prayerEnabled: true },
       services: { rejectCreates: { code: 'prayer_not_started', message: 'Dhuhr has not started yet.' } },
     });
     const creates = () => control.services.calls.filter(call => call === 'POST /api/prayer/v1/outcomes').length;

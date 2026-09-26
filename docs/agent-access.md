@@ -6,7 +6,7 @@ Sabah One uses MCP as the external AI-agent interface. MCP fits the hosted brows
 
 A repository CLI may validate code, fixtures, or exported test data, but it is not an account-data interface. Agents must not bypass MCP with Supabase credentials, direct table or generic record RPC access, browser automation, shared-file edits, or copied session tokens.
 
-Lina remains the in-app conversational interface. Chat and Voice use the same grounded capability registry and mutation path. That internal path does not make a feature externally agent-accessible; external agents still require a published MCP capability.
+Sabah One has no in-app conversational assistant (Lina was removed on 2026-09-26). External agents require a published MCP capability.
 
 ## Agent Contract
 
@@ -32,20 +32,19 @@ Every new or materially changed account-data feature must define one narrow agen
 - account isolation, per-client approval, least-privilege RPCs, and redacted diagnostics;
 - focused contract tests, denial tests, and documentation of unsupported actions.
 
-An internal Lina capability may share the same domain service, but it does not replace the external MCP contract. A feature without the required interface is an explicit acceptance gap, never permission to use a lower-level data path.
+A first-party UI path may share the same domain service, but it does not replace the external MCP contract. A feature without the required interface is an explicit acceptance gap, never permission to use a lower-level data path.
 
 ## Current Capability Matrix
 
-| Domain | In-app Lina | External agent access | Current rule |
+| Domain | In-app use | External agent access | Current rule |
 | --- | --- | --- | --- |
-| Inventory | Grounded read/write capabilities | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. |
-| Employment | Navigation | `sabah-one-employment-mcp` | Use its six narrow application/history tools with a separate Employment OAuth approval. Inventory approval does not grant Employment access. |
-| Life Hero | Dashboard reads, account-evidence reconciliation, and hosted GitHub evidence sync | Not yet published | KAN-264 keeps GitHub credentials and provider sync first-party/server-only; external agents cannot read snapshots or submit evidence until a dedicated Life Hero OAuth/MCP contract is published. This missing MCP surface is an explicit acceptance gap, not permission to use the GitHub function or database RPC directly. |
+| Inventory | Inventory surface | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. |
+| Employment | Employment surface | `sabah-one-employment-mcp` | Use its six narrow application/history tools with a separate Employment OAuth approval. Inventory approval does not grant Employment access. |
 | Finance equity | `Navigation and editor` | `sabah-one-equity-mcp` (requires deployment and Equity OAuth approval) | Five semantic position tools; isolated from cash/banking and other MCP domains. See `finance-equity.md`. |
 | Finance banking review and loans | Dated review and loan records | `sabah-one-finance-mcp` (requires deployment and Finance OAuth approval) | Two semantic review tools; independent of Equity and existing manual accounts. See `finance-banking-review.md`. |
-| Tasks, Calendar, Knowledge, Prayer | Grounded capabilities vary by operation | Not yet published | Use Lina in the app; external agents stop at the missing MCP boundary. |
+| Tasks, Calendar, Knowledge, Prayer | Their surfaces | Not yet published | External agents stop at the missing MCP boundary. |
 | Other Sabah One features | Surface-dependent | Not yet published | Treat external access as unavailable until a domain MCP contract is delivered and listed here. |
-| Secrets | Intentionally unavailable | Intentionally unavailable | Secret plaintext remains outside assistant context and agent tools. |
+| Secrets | Intentionally unavailable | Intentionally unavailable | Secret plaintext remains outside agent tools. |
 
 ## Employment MCP Requirement
 
@@ -70,10 +69,6 @@ Connect the remote MCP URL `<Supabase project URL>/functions/v1/sabah-one-employ
 Operational diagnostics add no account-owned database records or business-data API. The browser keeps a redacted memory-only timeline, cleared on account change, and sends fixed metadata envelopes to the profile service's `/api/profile/v1/operational-events` collector with the user's bearer token; OAuth client tokens cannot use it as a new domain capability. Envelopes carry no account identifiers, record contents, credentials, arbitrary messages or URLs.
 
 Operators inspect retained events through the existing authenticated Supabase operational Logs interface. External agents must use that governed operator interface for operational logs; this does not authorize account SQL, copied user tokens, or business-data UI access. Debug export is a local diagnostic convenience, not an external account-data interface. The existing domain MCP approvals and missing capabilities remain unchanged.
-
-## Voice connection boundary
-
-The ElevenLabs connection reference is a device preference, not new shared account data. Its selected Vault entry remains account-owned and is checked on every enabled synthesis request. The existing shared public voice ID behavior is unchanged. Secret management and plaintext remain intentionally outside agent tools; Inventory approval grants no voice or Settings access. External agents must not call Secrets RPCs or automate its UI. The narrow first-party speech endpoint returns audio only and respects the hosted AI pause.
 
 ## Daily goal progress controls
 

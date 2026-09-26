@@ -39,7 +39,7 @@ test.describe('private Activity usage viewer', () => {
     await expect(page.getByRole('heading', { name: 'Usage overview' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Most-used paths' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Session progression' })).toBeVisible();
-    await expect(page.getByText('Private to this signed-in account. Analytics is content-free and separate from Life Hero progression.')).toBeVisible();
+    await expect(page.getByText('Private to this signed-in account. Analytics is content-free.')).toBeVisible();
     await expect(page.getByLabel('Usage event type')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Refresh' })).toBeEnabled();
 

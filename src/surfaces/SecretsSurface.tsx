@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { useProjectContext } from "../store/contexts/ProjectContext";
-import { useSettingsContext } from "../store/contexts/SettingsContext";
 import { subscribeHelmSecretChanges, subscribeSyncSession } from '../store/persistence';
 import {
   listHelmSecrets,
@@ -84,7 +83,6 @@ function areSecretFormsEqual(left: SecretFormState, right: SecretFormState): boo
 
 export default function SecretsSurface() {
   const projects = useProjectContext();
-  const settings = useSettingsContext();
   const syncAvailability = useSyncAvailability();
   const [secrets, setSecrets] = useState<HelmSecretSummary[]>([]);
   const [revealed, setRevealed] = useState<Record<string, HelmSecretDetail>>({});
@@ -99,7 +97,6 @@ export default function SecretsSurface() {
   const [projectFilter, setProjectFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
   const [form, setForm] = useState<SecretFormState | null>(null);
-  const importedDeviceSecrets = useRef(false);
   const [initialForm, setInitialForm] = useState<SecretFormState | null>(null);
 
   function closeForm(): void {
@@ -183,58 +180,6 @@ export default function SecretsSurface() {
       window.removeEventListener('pagehide', hideSensitiveState);
     };
   }, [clearRevealed]);
-
-  useEffect(() => {
-    if (loading || importedDeviceSecrets.current) return;
-    importedDeviceSecrets.current = true;
-    const helmProjectKey = projects.projects.find(project => project.name.trim().toLowerCase() === 'helm')?.catalogKey
-      || 'catalog:helm';
-    const candidates: Array<{ sourceRef: string; label: string; value: string | undefined; kind: SecretKind }> = [
-      {
-        sourceRef: 'device-settings:deepgramApiKey:v1',
-        label: 'Sabah One Deepgram API key',
-        value: settings.settings.deepgramApiKey,
-        kind: 'api_key',
-      },
-      {
-        sourceRef: 'device-settings:elevenLabsApiKey:v1',
-        label: 'Sabah One ElevenLabs API key',
-        value: settings.settings.elevenLabsApiKey,
-        kind: 'api_key',
-      },
-    ];
-    const existingSources = new Set(secrets.map(secret => secret.sourceRef).filter(Boolean));
-    const pending = candidates.filter(candidate => (
-      Boolean(candidate.value?.trim()) && !existingSources.has(candidate.sourceRef)
-    ));
-    if (pending.length === 0) return;
-
-    void (async () => {
-      let importedCount = 0;
-      for (const candidate of pending) {
-        try {
-          await saveHelmSecret(uuid(), {
-            label: candidate.label,
-            kind: candidate.kind,
-            environment: 'production',
-            projectCatalogKeys: [helmProjectKey],
-            value: candidate.value!,
-            sourceRef: candidate.sourceRef,
-          });
-          importedCount += 1;
-        } catch {
-          // A concurrent device may have imported this stable source first.
-          // The database copy wins and the original device value is preserved.
-        }
-      }
-      await fetchSummaries();
-      if (importedCount > 0) {
-        setNotice(`${importedCount} device secret${importedCount === 1 ? '' : 's'} securely imported.`);
-      }
-    })().catch(importError => {
-      setError(importError instanceof Error ? importError.message : String(importError));
-    });
-  }, [projects.projects, settings.settings.deepgramApiKey, settings.settings.elevenLabsApiKey, fetchSummaries, loading, secrets]);
 
   const environments = useMemo(() => [...new Set(
     secrets.map(secret => secret.environment).filter((value): value is string => Boolean(value)),

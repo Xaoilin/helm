@@ -7,14 +7,11 @@ import * as barrel from '../store/supabase';
  * were replaced by the generic `store/supabase/oauthClients` gateway.
  */
 const PUBLIC_NAMES = [
-  'acceptLifeHeroEvidence',
   'applyHelmInventoryMutations',
   'applyHelmMutations',
   'fetchHelmAccountSnapshot',
   'fetchHelmChangedCollections',
-  'fetchHelmCollectionPage',
   'fetchHelmCollections',
-  'fetchLifeHeroSnapshot',
   'getAuthSessionSnapshot',
   'getClient',
   'getCurrentAccessToken',
@@ -33,7 +30,6 @@ const PUBLIC_NAMES = [
   'listHelmSecrets',
   'onAuthStateChange',
   'probeHelmAccountVersion',
-  'recomputeLifeHeroProfile',
   'revealHelmSecret',
   'saveHelmSecret',
   'setCurrentUserId',
@@ -42,7 +38,6 @@ const PUBLIC_NAMES = [
   'signOut',
   'subscribeHelmBroadcast',
   'subscribeSupabaseRealtimeSnapshot',
-  'syncLifeHeroEvidence',
 ];
 
 describe('store/supabase compatibility barrel', () => {

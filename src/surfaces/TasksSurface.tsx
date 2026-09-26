@@ -14,7 +14,6 @@ import { RewardToasts } from '../components/tasks/RewardToasts';
 import { useRewardToasts } from '../components/tasks/useRewardToasts';
 import TaskEditorDialog from '../components/tasks/TaskEditorDialog';
 import TaskRow, { type TaskItemActions } from '../components/tasks/TaskRow';
-import { TIMING } from '../config/constants';
 import type { PrayerOutcomeStatus, Task, TaskCategory } from '../types/domain';
 import { getPrayerTaskName } from '../services/prayerTasks';
 import {
@@ -26,7 +25,6 @@ import {
   filterAllTasks,
   filterByProject,
   filterGoals,
-  getAllTaskSectionId,
   getTaskAppDate,
   groupAllTaskSections,
   isCompletionLocked,
@@ -63,7 +61,6 @@ export default function TasksSurface() {
   const [expandedAllTaskSections, setExpandedAllTaskSections] = useState<Partial<Record<AllTaskAccordionSectionId, boolean>>>({
     completed: false,
   });
-  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [filterGoalTag, setFilterGoalTag] = useState<string>('all');
   const [filterProjectId, setFilterProjectId] = useState<string>('all');
   const [allTaskFilters, setAllTaskFilters] = useState<AllTaskFilters>(DEFAULT_ALL_TASK_FILTERS);
@@ -71,19 +68,15 @@ export default function TasksSurface() {
 
   const appTimeZone = settings.appTimeZone.effectiveTimeZone;
   const appDate = getTaskAppDate(new Date(), appTimeZone);
-  const assistantNavigationRequest = shell.assistantNavigationRequest;
-  const dismissAssistantNavigationRequest = shell.dismissAssistantNavigationRequest;
+  const navigationRequest = shell.navigationRequest;
+  const dismissNavigationRequest = shell.dismissNavigationRequest;
   const tasks = taskContext.tasks;
 
   useEffect(() => {
-    const request = assistantNavigationRequest;
+    const request = navigationRequest;
     if (!request || request.surface !== 'tasks') return;
 
     const tasksState = request.surfaceState?.tasks;
-    const revealTaskId = tasksState?.revealTaskId;
-    const highlightTaskId = tasksState?.highlightTaskId;
-    const targetTask = revealTaskId ? tasks.find(task => task.id === revealTaskId) : undefined;
-
     if (tasksState?.tab) {
       setTab(tasksState.tab);
     }
@@ -92,35 +85,9 @@ export default function TasksSurface() {
       setFilterGoalTag('all');
       setFilterProjectId('all');
     }
-    if (targetTask?.category === 'goal' && targetTask.completed) {
-      setShowCompletedGoals(true);
-    }
-    if (highlightTaskId) {
-      setHighlightedTaskId(highlightTaskId);
-    }
 
-    dismissAssistantNavigationRequest(request.id);
-  }, [assistantNavigationRequest, dismissAssistantNavigationRequest, tasks]);
-
-  useEffect(() => {
-    if (!highlightedTaskId) return;
-
-    const scrollTimer = window.setTimeout(() => {
-      document.getElementById(`task-item-${highlightedTaskId}`)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    }, TIMING.ASSISTANT_TASK_REVEAL_SCROLL_DELAY);
-
-    const clearTimer = window.setTimeout(() => {
-      setHighlightedTaskId(current => current === highlightedTaskId ? null : current);
-    }, TIMING.ASSISTANT_TASK_REVEAL_HIGHLIGHT);
-
-    return () => {
-      window.clearTimeout(scrollTimer);
-      window.clearTimeout(clearTimer);
-    };
-  }, [highlightedTaskId]);
+    dismissNavigationRequest(request.id);
+  }, [navigationRequest, dismissNavigationRequest]);
 
   // ── Derived data ──
   const projectFilteredTasks = useMemo(() => filterByProject(tasks, filterProjectId), [tasks, filterProjectId]);
@@ -168,21 +135,6 @@ export default function TasksSurface() {
       prev.completed ? prev : { ...prev, completed: true }
     ));
   }, [completedAllTasks.length, filterStatus]);
-
-  useEffect(() => {
-    if (!highlightedTaskId) return;
-
-    const highlightedTask = allTasks.find(task => task.id === highlightedTaskId);
-    if (!highlightedTask) return;
-
-    const targetSectionId: AllTaskAccordionSectionId = highlightedTask.completed
-      ? 'completed'
-      : getAllTaskSectionId(highlightedTask, appDate);
-
-    setExpandedAllTaskSections(prev => (
-      prev[targetSectionId] === false ? { ...prev, [targetSectionId]: true } : prev
-    ));
-  }, [allTasks, highlightedTaskId, appDate]);
 
   const hasAllTaskFilters = filterProjectId !== 'all'
     || allTaskFilters.category !== 'all'
@@ -294,7 +246,6 @@ export default function TasksSurface() {
     appDate,
     projectName: projectNameFor(task),
     prayerOutcome: prayerOutcomeFor(task),
-    highlighted: highlightedTaskId === task.id,
     deleting: deletingId === task.id,
   });
   const renderAllTaskCard = (task: Task) => {
