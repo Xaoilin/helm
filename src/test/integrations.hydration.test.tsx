@@ -1,14 +1,25 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SettingsProvider, useSettingsContext } from '../store/contexts/SettingsContext';
-import type { Integration } from '../types/domain';
+import { defaultIntegrations, SettingsProvider, useSettingsContext } from '../store/contexts/SettingsContext';
+import type { ServiceIntegration } from '../services/backend/contracts';
 
 const persistence = vi.hoisted(() => ({
   loadStore: vi.fn(), loadDeviceStore: vi.fn(), saveStore: vi.fn(),
   saveDeviceStore: vi.fn(), saveStoreCommitted: vi.fn(), subscribeStoreKey: vi.fn(),
 }));
 vi.mock('../store/persistence', () => ({ DEVICE_SETTINGS_STORE_KEY: 'deviceSettings', ...persistence }));
+
+const profileApi = vi.hoisted(() => ({
+  isProfileServiceEnabled: vi.fn(() => true),
+  getGlobalSettings: vi.fn(),
+  saveGlobalSettings: vi.fn(),
+  getAppPreferences: vi.fn(),
+  saveAppPreferences: vi.fn(),
+  getIntegrations: vi.fn(),
+  saveIntegration: vi.fn(),
+}));
+vi.mock('../services/backend/profileServiceApi', () => profileApi);
 
 let context: ReturnType<typeof useSettingsContext>;
 function Probe() {
@@ -17,70 +28,77 @@ function Probe() {
   return <div>{current.loaded ? 'ready' : 'loading'}</div>;
 }
 
-const google: Integration = {
-  id: 'existing-google', provider: 'google', name: 'My calendar', description: 'Saved choice',
-  icon: 'calendar', status: 'error', configuredAt: '2026-07-01T12:00:00Z', lastError: 'Reconnect required',
+const savedGoogle: ServiceIntegration = {
+  provider: 'google', status: 'error', configuredAt: '2026-07-01T12:00:00Z',
+  lastError: 'Reconnect required', updatedAt: '2026-07-01T12:00:00Z',
 };
-const historical: Integration[] = [
-  { ...google, id: 'other-google', status: 'disconnected' },
-  { ...google, id: 'old-slack', provider: 'slack', status: 'mocked' },
-  { ...google, id: 'old-linear', provider: 'linear', status: 'connected' },
-  { ...google, id: 'unknown-provider', provider: 'historical' },
-];
 
-describe('integration catalogue hydration', () => {
-  let records: Integration[] | null;
-  const refresh = new Map<string, () => void>();
+describe('integration hydration from the profile service', () => {
+  let records: ServiceIntegration[];
   beforeEach(() => {
     vi.clearAllMocks();
-    refresh.clear();
     records = [];
-    persistence.loadStore.mockImplementation(async (key: string) => key === 'integrations' ? records : null);
+    profileApi.isProfileServiceEnabled.mockReturnValue(true);
+    profileApi.getIntegrations.mockImplementation(async () => records);
+    profileApi.getGlobalSettings.mockRejectedValue(new Error('not under test'));
+    profileApi.getAppPreferences.mockRejectedValue(new Error('not under test'));
+    profileApi.saveGlobalSettings.mockRejectedValue(new Error('not under test'));
+    profileApi.saveIntegration.mockImplementation(async (provider: string, integration: object) => ({
+      provider, ...integration, updatedAt: '2026-09-26T00:00:00Z',
+    }));
     persistence.loadDeviceStore.mockResolvedValue(null);
-    persistence.subscribeStoreKey.mockImplementation((key, callback) => {
-      refresh.set(key, callback);
-      return () => refresh.delete(key);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  it('keeps supported setup discoverable when the service has no records', async () => {
+    render(<SettingsProvider><Probe /></SettingsProvider>);
+    await screen.findByText('ready');
+    await waitFor(() => expect(profileApi.getIntegrations).toHaveBeenCalledOnce());
+    expect(context.integrations).toEqual(defaultIntegrations);
+  });
+
+  it('applies each saved connection record to its offered integration and never reads the account record', async () => {
+    records = [savedGoogle, { ...savedGoogle, provider: 'historical', status: 'connected' }];
+    render(<SettingsProvider><Probe /></SettingsProvider>);
+    await screen.findByText('ready');
+
+    await waitFor(() => expect(context.integrations[0]).toMatchObject({
+      id: 'int-google', provider: 'google', status: 'error',
+      configuredAt: '2026-07-01T12:00:00Z', lastError: 'Reconnect required',
+    }));
+    expect(context.integrations.map(integration => integration.provider)).toEqual(['google', 'github']);
+    expect(context.integrations[1]).toEqual(defaultIntegrations[1]);
+    expect(persistence.loadStore).not.toHaveBeenCalled();
+  });
+
+  it('saves a Google connection change to the profile service, not to the account record', async () => {
+    records = [savedGoogle];
+    render(<SettingsProvider><Probe /></SettingsProvider>);
+    await screen.findByText('ready');
+    await waitFor(() => expect(context.integrations[0].status).toBe('error'));
+
+    act(() => context.updateIntegration('int-google', { status: 'connected', lastError: undefined }));
+    expect(context.integrations[0]).toMatchObject({ status: 'connected', lastError: undefined });
+    expect(profileApi.saveIntegration).toHaveBeenCalledOnce();
+    expect(profileApi.saveIntegration).toHaveBeenCalledWith('google', {
+      status: 'connected', configuredAt: '2026-07-01T12:00:00Z', lastError: null,
     });
+
+    act(() => context.updateIntegration('int-github', { status: 'connected' }));
+    expect(context.integrations[1].status).toBe('connected');
+    expect(profileApi.saveIntegration).toHaveBeenCalledOnce();
+    expect(persistence.saveStore).not.toHaveBeenCalled();
   });
 
-  it.each([null, []])('keeps supported setup discoverable for an empty collection (%j)', async initial => {
-    records = initial;
+  it('keeps the offered integrations and saves nothing when the profile service is not configured', async () => {
+    profileApi.isProfileServiceEnabled.mockReturnValue(false);
     render(<SettingsProvider><Probe /></SettingsProvider>);
     await screen.findByText('ready');
-    expect(context.integrations.map(record => record.provider)).toEqual(['google', 'github']);
-    expect(context.integrations.every(record => record.status === 'disconnected')).toBe(true);
-  });
 
-  it('fills a partial collection without replacing IDs, choices or historical records in autosave', async () => {
-    records = [google, ...historical];
-    render(<SettingsProvider><Probe /></SettingsProvider>);
-    await screen.findByText('ready');
-    expect(context.integrations.slice(0, records.length)).toEqual(records);
-    expect(context.integrations.filter(record => record.provider === 'google')).toHaveLength(2);
-    expect(context.integrations.filter(record => record.provider === 'github')).toHaveLength(1);
-    expect(context.integrations).not.toContainEqual(expect.objectContaining({ id: 'int-google' }));
-    expect(persistence.saveStore).toHaveBeenCalledWith('integrations', context.integrations);
-
-    act(() => context.updateIntegration(google.id, { status: 'connected' }));
-    expect(context.integrations[0]).toEqual({ ...google, status: 'connected' });
-    expect(context.integrations.slice(1, 1 + historical.length)).toEqual(historical);
-  });
-
-  it('applies the same merge on remote refresh and keeps complete provider records unchanged', async () => {
-    records = [google, { ...google, id: 'existing-github', provider: 'github', status: 'connected' }, ...historical];
-    render(<SettingsProvider><Probe /></SettingsProvider>);
-    await screen.findByText('ready');
-    expect(context.integrations).toEqual(records);
-
-    records = [{ ...google, lastError: 'Remote reconnect required' }, ...historical];
-    await act(async () => refresh.get('integrations')?.());
-    await waitFor(() => expect(context.integrations[0]).toEqual(records![0]));
-    expect(context.integrations.slice(0, records.length)).toEqual(records);
-    expect(context.integrations.filter(record => record.provider === 'github')).toHaveLength(1);
-    expect(persistence.saveStore).toHaveBeenLastCalledWith('integrations', context.integrations);
-
-    records = [];
-    await act(async () => refresh.get('integrations')?.());
-    await waitFor(() => expect(context.integrations.map(record => record.provider)).toEqual(['google', 'github']));
+    act(() => context.updateIntegration('int-google', { status: 'connected' }));
+    expect(context.integrations[0].status).toBe('connected');
+    expect(profileApi.getIntegrations).not.toHaveBeenCalled();
+    expect(profileApi.saveIntegration).not.toHaveBeenCalled();
+    expect(persistence.saveStore).not.toHaveBeenCalled();
   });
 });

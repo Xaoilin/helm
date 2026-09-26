@@ -156,6 +156,12 @@ function validateConfiguration(config) {
     failures.push('supabase_url_invalid')
   }
   if (!config.supabasePublicKey) failures.push('supabase_public_key_missing')
+  try {
+    const profile = new URL(config.profileBaseUrl)
+    if (profile.protocol !== 'https:') failures.push('profile_url_invalid')
+  } catch {
+    failures.push('profile_url_invalid')
+  }
   if (!RELEASE_VERSION.test(config.expectedVersion)) failures.push('expected_version_invalid')
   if (!RELEASE_SHA.test(config.expectedSourceSha)) failures.push('expected_source_sha_invalid')
   if (!ALLOWED_FAULTS.has(config.faultMode)) failures.push('fault_mode_invalid')
@@ -174,6 +180,7 @@ export async function runAvailabilityMonitor(input) {
     pagesBaseUrl: input.pagesBaseUrl,
     supabaseUrl: input.supabaseUrl,
     supabasePublicKey: input.supabasePublicKey,
+    profileBaseUrl: input.profileBaseUrl,
     expectedVersion: input.expectedVersion,
     expectedSourceSha: input.expectedSourceSha,
     faultMode: input.faultMode ?? 'none',
@@ -203,6 +210,7 @@ export async function runAvailabilityMonitor(input) {
 
   const pagesBase = new URL(config.pagesBaseUrl)
   const supabaseBase = config.supabaseUrl.replace(/\/+$/u, '')
+  const profileBase = config.profileBaseUrl.replace(/\/+$/u, '')
   const cacheKey = encodeURIComponent(correlationId)
   const common = { fetchImpl, timeoutMs, now }
   const [releaseResponse, indexResponse, authResponse, collectorResponse] = await Promise.all([
@@ -224,9 +232,10 @@ export async function runAvailabilityMonitor(input) {
       headers: { Accept: 'application/json', apikey: config.supabasePublicKey },
       maxBytes: MAX_JSON_BYTES,
     }),
+    // Operational events are collected by the profile service; its liveness is the collector's.
     requestBounded({
       ...common,
-      url: `${supabaseBase}/functions/v1/operational-events/availability-${cacheKey}`,
+      url: `${profileBase}/api/profile/health?availability=${cacheKey}`,
       headers: { Accept: 'application/json', 'X-Correlation-Id': correlationId },
       maxBytes: MAX_JSON_BYTES,
     }),
@@ -319,24 +328,14 @@ export async function runAvailabilityMonitor(input) {
     probes.push(responseFailure('operational-collector', collectorResponse))
   } else {
     const health = parseJson(collectorResponse.text)
-    const releaseSha = typeof health?.releaseSha === 'string' && RELEASE_SHA.test(health.releaseSha)
-      ? health.releaseSha
-      : null
-    let code = null
-    if (health?.ok !== true || health?.schemaVersion !== 1 || !releaseSha) code = 'invalid_collector_health'
-    else if (health.enabled !== true) code = 'collector_disabled'
-    else if (releaseSha !== config.expectedSourceSha) code = 'release_sha_mismatch'
+    const up = health?.status === 'UP' && health?.service === 'profile-service'
     probes.push({
       id: 'operational-collector',
-      outcome: code ? 'failed' : 'passed',
-      ...(code ? { code } : {}),
+      outcome: up ? 'passed' : 'failed',
+      ...(up ? {} : { code: 'invalid_collector_health' }),
       httpStatus: collectorResponse.status,
       durationMs: collectorResponse.durationMs,
       responseBytes: collectorResponse.responseBytes,
-      schemaVersion: health?.schemaVersion === 1 ? 1 : null,
-      enabled: health?.enabled === true,
-      expectedReleaseSha: config.expectedSourceSha,
-      observedReleaseSha: releaseSha,
     })
   }
 
@@ -354,7 +353,6 @@ export async function runAvailabilityMonitor(input) {
     protectedSource: { version: config.expectedVersion, releaseSha: config.expectedSourceSha },
     observed: {
       pagesVersion: observedVersion,
-      collectorReleaseSha: probes.find(probe => probe.id === 'operational-collector')?.observedReleaseSha ?? null,
     },
     probes,
     failures,
@@ -394,6 +392,7 @@ async function main() {
     pagesBaseUrl: process.env.PAGES_BASE_URL || 'https://xaoilin.github.io/helm/',
     supabaseUrl: process.env.SUPABASE_URL || '',
     supabasePublicKey: process.env.SUPABASE_PUBLIC_KEY || '',
+    profileBaseUrl: process.env.PROFILE_BASE_URL || '',
     expectedVersion: process.env.EXPECTED_VERSION || await loadPackageVersion(),
     expectedSourceSha: process.env.EXPECTED_SOURCE_SHA || '',
     faultMode: process.env.SYNTHETIC_FAULT || 'none',

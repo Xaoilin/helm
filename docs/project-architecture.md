@@ -57,6 +57,8 @@ The supported browser wake-word consumers are `useWakeWord` and `WakeWordDebug`.
 - encrypted secret metadata and one-at-a-time revealed secret details
 - Clock timers and stopwatches, knowledge entries, health logs, finance records, trips, integrations, and settings
 
+Settings shared across devices and integration records are owned by the Spring profile service (`src/services/backend/profileServiceApi.ts`, synced by `useAppPreferencesSync`, `useProfileSettingsSync` and `SettingsContext`); prayer preferences by the prayer service. The old `settings` and `integrations` account collections are decode-only legacy keys, and device-only settings stay in the browser's device store. Operational telemetry is posted to the profile service's `/api/profile/v1/operational-events`.
+
 ## Persistence And Sync
 
 ### Database-authoritative shared state

@@ -32,10 +32,15 @@ export type DeviceSettings = Pick<Settings, (typeof DEVICE_SETTING_FIELDS)[numbe
 
 /**
  * Settings owned by the Spring services, never stored in the account record: prayer preferences
- * (prayer service) and location and display time zone (profile service). They live in memory and
- * are loaded from, and saved to, their service.
+ * (prayer service), and location, display time zone and app preferences (profile service). They
+ * live in memory and are loaded from, and saved to, their service.
  */
 export const SERVICE_SETTING_FIELDS = [
+  'theme',
+  'dataRetentionDays',
+  'telemetry',
+  'defaultCalendarTab',
+  'goalTags',
   'prayerEnabled',
   'prayerReminderEnabled',
   'prayerReminderMinutes',
@@ -63,11 +68,6 @@ export function legacyProviderSettings(value: unknown): Partial<Settings> {
     .map(key => [key, value[key]]));
 }
 const SHARED_SETTING_FIELDS = new Set<string>([
-  'theme',
-  'dataRetentionDays',
-  'telemetry',
-  'defaultCalendarTab',
-  'goalTags',
   'lifeHeroEnabled',
   'assistantEnabled',
   'elevenLabsVoiceId',
@@ -103,11 +103,11 @@ function assertRecordId(value: unknown, collection: string, index: number): stri
 export function splitSettings(value: unknown): {
   shared: Partial<Settings>;
   device: DeviceSettings;
-  service: ServiceSettings;
+  service: Partial<ServiceSettings>;
 } {
   const shared: Partial<Settings> = {};
   const device: DeviceSettings = {};
-  const service: ServiceSettings = {};
+  const service: Partial<ServiceSettings> = {};
   if (!isRecord(value)) return { shared, device, service };
 
   for (const [key, entry] of Object.entries(value)) {

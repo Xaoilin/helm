@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { classifyOperationalFailure, configureOperationalTransport, exportOperationalDiagnostics, flushOperationalEvents, flushOperationalEventsForReload, getOperationalSnapshot, observeOperationalOperation, recordOperationalEvent, setOperationalAccount } from '../services/operationalTelemetry';
-import { parseOperationalBatch } from '../../supabase/functions/_shared/operationalEvents';
+import { parseOperationalBatch } from '../services/operationalEvents';
 
 const failure = () => recordOperationalEvent({ domain: 'realtime', operation: 'subscription', outcome: 'failed', reason: 'closed' });
 

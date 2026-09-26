@@ -1,6 +1,6 @@
 import { APP_VERSION } from '../config/release';
 import type { OperationalDomain, OperationalEvent, OperationalOperation, OperationalReason } from '../types/domain';
-import { OPERATIONAL_MAX_AGE_MS, OPERATIONAL_MAX_BATCH, parseOperationalEvent } from '../../supabase/functions/_shared/operationalEvents';
+import { OPERATIONAL_MAX_AGE_MS, OPERATIONAL_MAX_BATCH, parseOperationalEvent } from './operationalEvents';
 
 export type OperationalInput = Pick<OperationalEvent, 'domain' | 'operation' | 'outcome'> & Partial<Pick<OperationalEvent, 'reason' | 'durationMs' | 'attempt' | 'freshness' | 'correlationId'>>;
 type Sender = (events: OperationalEvent[], signal: AbortSignal) => Promise<void>;

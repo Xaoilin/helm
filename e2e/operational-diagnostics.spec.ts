@@ -8,7 +8,7 @@ test('diagnostics classify a disconnect and recovery while a failed sink leaves 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const control = await scenario({ now: TASK.createdAt, stores: { tasks: [TASK] } });
   const sent: unknown[] = [];
-  await page.route('**/functions/v1/operational-events', async route => {
+  await page.route('**/api/profile/v1/operational-events', async route => {
     sent.push(route.request().postDataJSON());
     await route.fulfill({ status: 503, json: { code: 'collection_unavailable' } });
   });

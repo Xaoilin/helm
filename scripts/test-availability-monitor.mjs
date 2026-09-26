@@ -6,6 +6,7 @@ import { runAvailabilityMonitor } from './monitor-availability.mjs'
 const pagesBaseUrl = 'https://xaoilin.github.io/helm/'
 const supabaseUrl = 'https://project.supabase.co'
 const supabasePublicKey = 'public-key-must-never-enter-report'
+const profileBaseUrl = 'https://profile.sabah.test'
 const expectedVersion = '1.2.3'
 const expectedSourceSha = 'a'.repeat(40)
 
@@ -31,13 +32,8 @@ function healthyFetch(overrides = {}) {
       assert.equal(headers.get('authorization'), null)
       return Response.json({ name: 'GoTrue' })
     }
-    if (url.pathname === '/functions/v1/operational-events/availability-11111111-1111-4111-8111-111111111111') {
-      return Response.json({
-        ok: true,
-        releaseSha: expectedSourceSha,
-        schemaVersion: 1,
-        enabled: true,
-      })
+    if (url.origin === profileBaseUrl && url.pathname === '/api/profile/health') {
+      return Response.json({ status: 'UP', service: 'profile-service' })
     }
     throw new Error(`Unexpected test request: ${key}`)
   }
@@ -48,6 +44,7 @@ function run(fetchImpl, extra = {}) {
     pagesBaseUrl,
     supabaseUrl,
     supabasePublicKey,
+    profileBaseUrl,
     expectedVersion,
     expectedSourceSha,
     fetchImpl,
@@ -70,7 +67,7 @@ test('fails a timed-out probe within the injected deadline', async () => {
 test('reports an injected 503 without retaining its response body', async () => {
   const privateBody = `provider failure ${supabasePublicKey}`
   const fetchImpl = healthyFetch({
-    'GET /functions/v1/operational-events/availability-11111111-1111-4111-8111-111111111111': () => new Response(privateBody, { status: 503 }),
+    'GET /api/profile/health': () => new Response(privateBody, { status: 503 }),
   })
   const report = await run(fetchImpl)
   assert.equal(report.status, 'failed')

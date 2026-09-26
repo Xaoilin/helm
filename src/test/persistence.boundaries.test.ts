@@ -135,17 +135,17 @@ describe('persistence cache boundary', () => {
 
   it('resets both authoritative and delivered cache state', () => {
     const cache = new PersistenceRecordCache();
-    cache.replaceAll([record('settings', 'singleton', { theme: 'dark' }, null)]);
-    cache.markDeliveredFromCache('settings');
+    cache.replaceAll([record('employment', 'singleton', { stage: 'searching' }, null)]);
+    cache.markDeliveredFromCache('employment');
 
     cache.reset();
 
-    expect(cache.decoded('settings')).toBeNull();
-    expect(cache.buildMutations('settings', { theme: 'light' })).toEqual([{
+    expect(cache.decoded('employment')).toBeNull();
+    expect(cache.buildMutations('employment', { stage: 'interviewing' })).toEqual([{
       op: 'create',
-      collection: 'settings',
+      collection: 'employment',
       recordId: 'singleton',
-      payload: { theme: 'light' },
+      payload: { stage: 'interviewing' },
       position: null,
     }]);
   });
@@ -221,14 +221,16 @@ describe('device and runtime ownership boundaries', () => {
   it('keeps device settings under the device-only key and shared legacy data separate', () => {
     const store = new PersistenceDeviceStore();
     store.save(DEVICE_SETTINGS_STORE_KEY, { microphoneDeviceId: 'mic-1' });
+    localStorage.setItem('helm:tasks', JSON.stringify([{ id: 'task-legacy', title: 'Legacy' }]));
+    // Settings are owned by the profile service: a legacy browser copy is never offered for import.
     localStorage.setItem('helm:settings', JSON.stringify({ theme: 'dark' }));
 
     expect(isDeviceStoreKey('deviceSettings')).toBe(true);
     expect(store.load(DEVICE_SETTINGS_STORE_KEY)).toEqual({ microphoneDeviceId: 'mic-1' });
     expect(localStorage.getItem('helm:device:deviceSettings:v2')).toContain('mic-1');
-    expect(store.readLegacySharedValue('settings').value).toEqual({ theme: 'dark' });
+    expect(store.readLegacySharedValue('tasks').value).toEqual([{ id: 'task-legacy', title: 'Legacy' }]);
     expect(store.listLegacyCandidates(() => false)).toEqual([
-      expect.objectContaining({ key: 'settings', localStorage: true, remoteExists: false }),
+      expect.objectContaining({ key: 'tasks', localStorage: true, remoteExists: false }),
     ]);
   });
 

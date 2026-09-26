@@ -5,8 +5,6 @@ export interface SharedStoreKey {
 }
 
 export const SHARED_STORE_KEYS = [
-  { key: 'settings', label: 'Settings', description: 'Theme, assistant, voice, and provider settings.' },
-  { key: 'integrations', label: 'Integrations', description: 'Integration connection status and metadata.' },
   { key: 'conversations', label: 'Chat conversations', description: 'Saved Lina chat threads.' },
   { key: 'calendarAccounts', label: 'Calendar accounts', description: 'Calendar account records.' },
   { key: 'calendarSources', label: 'Calendar sources', description: 'Calendars and source visibility.' },
@@ -42,8 +40,11 @@ export const SHARED_STORE_KEYS = [
 
 export const SHARED_STORE_KEY_SET = new Set<string>(SHARED_STORE_KEYS.map(item => item.key));
 
-/** Decode-only compatibility. These collections are never imported, exported, or written. */
-export const LEGACY_SHARED_STORE_KEY_SET = new Set<string>(['captureItems']);
+/**
+ * Decode-only compatibility. These collections are never imported, exported, or written. Settings
+ * and integrations moved to the profile service.
+ */
+export const LEGACY_SHARED_STORE_KEY_SET = new Set<string>(['captureItems', 'settings', 'integrations']);
 
 export const KNOWN_SHARED_STORE_KEY_SET = new Set<string>([
   ...SHARED_STORE_KEY_SET,

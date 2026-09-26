@@ -206,7 +206,10 @@ test('persists an account setting through reload', async ({ page, scenario }) =>
   const theme = page.getByLabel('Theme');
   await expect(theme).toHaveValue('dark');
 
-  const settingsWrite = waitForMutation(page, 'settings');
+  // App preferences are owned by the profile service.
+  const settingsWrite = page.waitForRequest(request => request.method() === 'PUT'
+    && request.url().endsWith('/api/profile/v1/preferences')
+    && (request.postDataJSON() as { theme: string }).theme === 'light');
   await theme.selectOption('light');
   await settingsWrite;
   await expect(page.getByText('Light theme is not yet available.')).toBeVisible();

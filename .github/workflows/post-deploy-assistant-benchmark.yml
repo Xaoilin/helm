@@ -98,12 +98,6 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: npx tsx scripts/verify-hosted-employment-access.ts
 
-      - name: Prove live operational collection and redaction boundaries
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-        run: npx tsx scripts/verify-hosted-operational-events.ts
-
       - name: Prove live user and public access boundaries
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -141,7 +135,6 @@ jobs:
             test-results/equity-access-post-deploy.json
             test-results/finance-access-post-deploy.json
             test-results/employment-access-post-deploy.json
-            test-results/operational-events-post-deploy.json
             test-results/frontend-sync-post-deploy.json
             test-results/frontend-sync-same-account.png
           if-no-files-found: warn

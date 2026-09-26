@@ -17,8 +17,10 @@ import type {
   EmploymentHistoryEntry,
   EquityPosition,
   EquityPositionDraft,
+  Integration,
   Surface,
 } from '../../src/types/domain';
+import type { ServiceIntegration } from '../../src/services/backend/contracts';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
 const TEST_EMAIL = 'e2e@example.test';
@@ -136,6 +138,7 @@ async function installScenario(
 
   const userId = options.userId || TEST_USER_ID;
   const stores = buildStores(options);
+  const settings = scenarioSettings(options);
   const database = sharedDatabase ?? createMockDatabase(stores, userId);
   const authenticated = options.authenticated !== false;
 
@@ -172,7 +175,7 @@ async function installScenario(
     surfaceKey: STORAGE_KEYS.SHELL_SURFACE,
   });
 
-  database.services ??= createFakeServices(servicesFromScenario(options, stores.settings as Record<string, unknown>));
+  database.services ??= createFakeServices(servicesFromScenario(options, settings));
   await installFakeServices(page, database.services);
   // Registered after the fake services so it answers timetable requests first.
   await installPrayerRoute(page, options.prayer);
@@ -191,20 +194,21 @@ async function installScenario(
   };
 }
 
-function buildStores(options: HelmScenarioOptions): Record<string, unknown> {
+function scenarioSettings(options: HelmScenarioOptions): Record<string, unknown> {
   const suppliedSettings = options.stores?.settings;
-  const settings = {
+  return {
     ...DEFAULT_SETTINGS,
     ...(suppliedSettings && typeof suppliedSettings === 'object' ? suppliedSettings : {}),
     ...(options.settings || {}),
   };
+}
 
-  return {
-    integrations: [],
-    tasks: [],
-    ...options.stores,
-    settings,
-  };
+/** Account-record collections. Settings and integrations belong to the profile service fake. */
+function buildStores(options: HelmScenarioOptions): Record<string, unknown> {
+  const stores: Record<string, unknown> = { tasks: [], ...options.stores };
+  delete stores.settings;
+  delete stores.integrations;
+  return stores;
 }
 
 interface DatabaseRouteOptions {
@@ -644,9 +648,28 @@ async function installAssistantRoute(page: Page): Promise<void> {
   });
 }
 
+const APP_PREFERENCE_KEYS = ['theme', 'dataRetentionDays', 'telemetry', 'defaultCalendarTab', 'goalTags'];
+
+/** A scenario's integrations (app shape) become the profile service's saved connection records. */
+function serviceIntegrations(stored: unknown): ServiceIntegration[] | undefined {
+  if (!Array.isArray(stored)) return undefined;
+  const byProvider = new Map<string, ServiceIntegration>();
+  for (const integration of stored as Integration[]) {
+    if (byProvider.has(integration.provider) || integration.status === 'mocked') continue;
+    byProvider.set(integration.provider, {
+      provider: integration.provider,
+      status: integration.status,
+      configuredAt: integration.configuredAt ?? null,
+      lastError: integration.lastError ?? null,
+      updatedAt: SNAPSHOT_TIME,
+    });
+  }
+  return [...byProvider.values()];
+}
+
 /**
- * Prayer preferences and location are owned by the prayer and profile services, so a scenario's
- * prayer settings become those services' saved values.
+ * Prayer preferences, location, app preferences and integrations are owned by the prayer and
+ * profile services, so a scenario's settings become those services' saved values.
  */
 function servicesFromScenario(options: HelmScenarioOptions, settings: Record<string, unknown>): FakeServicesOptions {
   const explicit = { ...(options.stores?.settings as Record<string, unknown> | undefined), ...options.settings };
@@ -664,6 +687,18 @@ function servicesFromScenario(options: HelmScenarioOptions, settings: Record<str
       reminderMinutes: typeof settings.prayerReminderMinutes === 'number' ? settings.prayerReminderMinutes : 15,
     },
     ...(location ? { profile: location } : {}),
+    ...(APP_PREFERENCE_KEYS.some(key => key in explicit)
+      ? {
+          appPreferences: {
+            theme: String(settings.theme),
+            dataRetentionDays: Number(settings.dataRetentionDays),
+            telemetry: settings.telemetry === true,
+            defaultCalendarTab: typeof settings.defaultCalendarTab === 'string' ? settings.defaultCalendarTab : null,
+            goalTags: Array.isArray(settings.goalTags) ? settings.goalTags.map(String) : [],
+          },
+        }
+      : {}),
+    integrations: serviceIntegrations(options.stores?.integrations),
     calendar: {
       accounts: options.stores?.calendarAccounts as CalendarAccount[] | undefined,
       sources: options.stores?.calendarSources as CalendarSource[] | undefined,

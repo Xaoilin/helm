@@ -4,7 +4,6 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings, SettingsProvider, useSettingsContext } from '../store/contexts/SettingsContext';
 import { splitSettings } from '../store/recordCodec';
-import type { Settings } from '../types/domain';
 
 const persistenceMocks = vi.hoisted(() => ({
   loadDeviceStore: vi.fn(),
@@ -24,7 +23,16 @@ const profileApi = vi.hoisted(() => ({
   isProfileServiceEnabled: vi.fn(() => false),
   getGlobalSettings: vi.fn(),
   saveGlobalSettings: vi.fn(),
+  getAppPreferences: vi.fn(),
+  saveAppPreferences: vi.fn(),
+  getIntegrations: vi.fn(),
+  saveIntegration: vi.fn(),
 }));
+
+const servicePreferences = {
+  theme: 'light', dataRetentionDays: 90, telemetry: true, defaultCalendarTab: 'week', goalTags: ['health'],
+  updatedAt: '2026-09-01T00:00:00Z',
+};
 vi.mock('../services/backend/profileServiceApi', () => profileApi);
 
 const prayerApi = vi.hoisted(() => ({
@@ -86,6 +94,15 @@ describe('settings shared/device partition', () => {
     persistenceMocks.saveStoreCommitted.mockResolvedValue(undefined);
     persistenceMocks.saveDeviceStore.mockResolvedValue(undefined);
     persistenceMocks.subscribeStoreKey.mockReturnValue(() => undefined);
+    profileApi.isProfileServiceEnabled.mockReturnValue(false);
+    profileApi.getGlobalSettings.mockResolvedValue({
+      city: 'Bedford', country: 'United Kingdom', timeZone: null, updatedAt: '2026-09-01T00:00:00Z',
+    });
+    profileApi.getAppPreferences.mockResolvedValue(servicePreferences);
+    profileApi.saveAppPreferences.mockImplementation(async (preferences: object) => ({
+      ...preferences, updatedAt: '2026-09-26T00:00:00Z',
+    }));
+    profileApi.getIntegrations.mockResolvedValue([]);
   });
 
   it('proves codec partition discards provider values from new shared and device writes', () => {
@@ -97,11 +114,11 @@ describe('settings shared/device partition', () => {
       supabaseUrl: 'https://device.example.test',
       unknownField: 'discarded',
     })).toEqual({
-      shared: { theme: 'light', telemetry: true, lifeHeroEnabled: true },
+      shared: { lifeHeroEnabled: true },
       device: {
         supabaseUrl: 'https://device.example.test',
       },
-      service: {},
+      service: { theme: 'light', telemetry: true },
     });
   });
 
@@ -127,7 +144,7 @@ describe('settings shared/device partition', () => {
     expect(splitSettings({ appTimezone: 'Not/AZone' })).toEqual({ shared: {}, device: {}, service: {} });
   });
 
-  it('keeps prayer preferences and location out of the account record', () => {
+  it('keeps app preferences, prayer preferences and location out of the account record', () => {
     expect(splitSettings({
       theme: 'light',
       prayerEnabled: false,
@@ -136,9 +153,10 @@ describe('settings shared/device partition', () => {
       prayerCity: 'Leeds',
       prayerCountry: 'United Kingdom',
     })).toEqual({
-      shared: { theme: 'light' },
+      shared: {},
       device: {},
       service: {
+        theme: 'light',
         prayerEnabled: false,
         prayerReminderEnabled: false,
         prayerReminderMinutes: 30,
@@ -148,29 +166,28 @@ describe('settings shared/device partition', () => {
     });
   });
 
-  it('proves SettingsContext hydrates both stores and writes device fields through the device path', async () => {
+  it('proves SettingsContext hydrates app preferences from the profile service and device fields from the device store', async () => {
+    profileApi.isProfileServiceEnabled.mockReturnValue(true);
     render(
       <SettingsProvider>
         <SettingsProbe />
       </SettingsProvider>,
     );
 
-    // The account record's stale city is ignored: location comes from the profile service.
-    const button = await screen.findByRole('button', { name: 'light|Bedford|device-token' });
+    // The retired account record is never read: the theme comes from the profile service.
+    const button = await screen.findByRole('button', { name: 'light|Bedford|undefined' });
     await act(async () => {
       fireEvent.click(button);
     });
 
-    expect(button.textContent).toBe('dark|Bedford|device-token');
-    const savedSettings = persistenceMocks.saveStore.mock.calls
-      .filter(([key]) => key === 'settings')
-      .at(-1)?.[1] as Settings;
-    const savedDevice = persistenceMocks.saveDeviceStore.mock.calls.at(-1);
-    expect(splitSettings(savedSettings).device).toEqual({
-      elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001',
-      supabaseUrl: 'https://device.example.test',
+    expect(button.textContent).toBe('dark|Bedford|undefined');
+    expect(persistenceMocks.loadStore).not.toHaveBeenCalled();
+    expect(persistenceMocks.saveStore).not.toHaveBeenCalled();
+    expect(profileApi.saveAppPreferences).toHaveBeenCalledTimes(1);
+    expect(profileApi.saveAppPreferences).toHaveBeenCalledWith({
+      theme: 'dark', dataRetentionDays: 90, telemetry: true, defaultCalendarTab: 'week', goalTags: ['health'],
     });
-    expect(savedDevice).toEqual([
+    expect(persistenceMocks.saveDeviceStore.mock.calls.at(-1)).toEqual([
       'deviceSettings',
       {
         elevenLabsSecretId: 'a0000000-0000-4000-8000-000000000001',
@@ -179,13 +196,36 @@ describe('settings shared/device partition', () => {
     ]);
   });
 
+  it('never saves app preferences before the profile service has loaded them', async () => {
+    profileApi.isProfileServiceEnabled.mockReturnValue(true);
+    profileApi.getAppPreferences.mockRejectedValue(new Error('profile service unavailable'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    render(
+      <SettingsProvider>
+        <SettingsProbe />
+      </SettingsProvider>,
+    );
+
+    const button = await screen.findByRole('button', { name: 'dark|Bedford|undefined' });
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(profileApi.getAppPreferences).toHaveBeenCalledTimes(1);
+    expect(profileApi.saveAppPreferences).not.toHaveBeenCalled();
+    expect(persistenceMocks.saveStore).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it('proves the provider source keeps device hydration and writes separate from shared settings', () => {
     const root = resolve(__dirname, '../..');
     const source = readFileSync(resolve(root, 'src/store/contexts/SettingsContext.tsx'), 'utf8');
 
     expect(source).toContain('loadDeviceStore<DeviceSettings>');
     expect(source).toContain('saveDeviceStore(DEVICE_SETTINGS_STORE_KEY, splitSettings(settings).device)');
-    expect(source).toContain("saveStore('settings', settings)");
+    expect(source).toContain('useAppPreferencesSync(loaded, settings, applyServiceAppPreferences)');
+    expect(source).not.toContain("saveStore('settings'");
+    expect(source).not.toContain("loadStore<Settings>('settings')");
   });
 
   it('commits a preferred app time zone before publishing it and clears back to Automatic', async () => {
@@ -239,16 +279,12 @@ describe('settings shared/device partition', () => {
       city: 'London', country: 'United Kingdom', timeZone: 'America/New_York',
     });
     expect(screen.getByText('preference|America/New_York')).toBeInTheDocument();
-    profileApi.isProfileServiceEnabled.mockReturnValue(false);
   });
 
   it('loads prayer preferences from the prayer service and saves only real edits back', async () => {
     prayerApi.isPrayerServiceEnabled.mockReturnValue(true);
     prayerApi.getPrayerPreferences.mockResolvedValue({ enabled: true, reminderEnabled: false, reminderMinutes: 30 });
     prayerApi.savePrayerPreferences.mockImplementation(async (preferences: object) => preferences);
-    persistenceMocks.loadStore.mockImplementation(async (key: string) => (
-      key === 'settings' ? { prayerEnabled: false, prayerReminderMinutes: 5 } : []
-    ));
     render(
       <SettingsProvider>
         <PrayerPreferencesProbe />
@@ -266,12 +302,7 @@ describe('settings shared/device partition', () => {
     expect(prayerApi.savePrayerPreferences).toHaveBeenCalledWith({
       enabled: true, reminderEnabled: false, reminderMinutes: 10,
     });
-    for (const [key, value] of persistenceMocks.saveStore.mock.calls) {
-      if (key === 'settings') {
-        expect(splitSettings(value).shared).not.toHaveProperty('prayerReminderMinutes');
-        expect(splitSettings(value).shared).not.toHaveProperty('prayerEnabled');
-      }
-    }
+    expect(persistenceMocks.saveStore).not.toHaveBeenCalled();
     prayerApi.isPrayerServiceEnabled.mockReturnValue(false);
   });
 });
