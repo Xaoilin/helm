@@ -1,0 +1,111 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/profile/v1/activity/insights"
+  },
+  "status" : 200,
+  "body" : {
+    "rangeDays" : 30,
+    "totalEventCount" : 13,
+    "features" : [ "application", "calendar", "navigation", "tasks" ],
+    "summary" : {
+      "eventCount" : 12,
+      "sessionCount" : 4,
+      "activeSurfaceCount" : 3,
+      "errorCount" : 4,
+      "failureRate" : 80
+    },
+    "trends" : [ {
+      "key" : "application:session_started",
+      "feature" : "application",
+      "action" : "session_started",
+      "currentCount" : 3,
+      "previousCount" : 0,
+      "changePercent" : null
+    }, {
+      "key" : "navigation:viewed",
+      "feature" : "navigation",
+      "action" : "viewed",
+      "currentCount" : 3,
+      "previousCount" : 0,
+      "changePercent" : null
+    }, {
+      "key" : "tasks:save_failed",
+      "feature" : "tasks",
+      "action" : "save_failed",
+      "currentCount" : 2,
+      "previousCount" : 0,
+      "changePercent" : null
+    }, {
+      "key" : "calendar:render_failed",
+      "feature" : "calendar",
+      "action" : "render_failed",
+      "currentCount" : 1,
+      "previousCount" : 0,
+      "changePercent" : null
+    }, {
+      "key" : "calendar:sync_finished",
+      "feature" : "calendar",
+      "action" : "sync_finished",
+      "currentCount" : 1,
+      "previousCount" : 0,
+      "changePercent" : null
+    }, {
+      "key" : "navigation:surface_opened",
+      "feature" : "navigation",
+      "action" : "surface_opened",
+      "currentCount" : 1,
+      "previousCount" : 0,
+      "changePercent" : null
+    }, {
+      "key" : "tasks:created",
+      "feature" : "tasks",
+      "action" : "created",
+      "currentCount" : 1,
+      "previousCount" : 1,
+      "changePercent" : 0
+    } ],
+    "funnel" : [ {
+      "id" : "sessions",
+      "label" : "Sessions started",
+      "sessionCount" : 3,
+      "conversionPercent" : 100
+    }, {
+      "id" : "surface_views",
+      "label" : "Sessions with a surface view",
+      "sessionCount" : 3,
+      "conversionPercent" : 100
+    }, {
+      "id" : "successful_opens",
+      "label" : "Sessions with a successful surface open",
+      "sessionCount" : 1,
+      "conversionPercent" : 33
+    } ],
+    "errors" : [ {
+      "code" : "calendar_render",
+      "count" : 1,
+      "surface" : "calendar"
+    }, {
+      "code" : "calendar_sync",
+      "count" : 1,
+      "surface" : "calendar"
+    }, {
+      "code" : "save_failed",
+      "count" : 1,
+      "surface" : "application"
+    }, {
+      "code" : "tasks_save",
+      "count" : 1,
+      "surface" : "tasks"
+    } ],
+    "recommendations" : [ {
+      "id" : "reliability-review",
+      "title" : "Review the highest-frequency failure path",
+      "summary" : "Failures are a meaningful share of the selected activity window.",
+      "evidence" : "4 error events across 12 events (80% failure outcomes). The most frequent code is calendar render.",
+      "confidence" : "medium",
+      "suggestedAction" : "Suggested action: inspect the affected surface and reproduce the coded failure before changing product behavior."
+    } ],
+    "coldStart" : false
+  }
+}

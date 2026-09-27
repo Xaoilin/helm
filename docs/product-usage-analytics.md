@@ -10,7 +10,7 @@ The initial production instrumentation records session start, application readin
 
 ## Privacy boundary
 
-Analytics is private and owner-only. It is active only for signed-in Sabah One sessions and is stored in Supabase under the authenticated account. It is not ad analytics or cross-site tracking.
+Analytics is private and owner-only. It is active only for signed-in Sabah One sessions and is stored by the Sabah One profile service under the authenticated account. It is not ad analytics or cross-site tracking.
 
 The browser accepts only stable snake-case taxonomy keys. Optional metadata has a five-key allowlist and scalar values only. The database repeats these constraints and rejects unsupported top-level fields. Tokens, secrets, credentials, prayer details, learning content, exact finance values, balances, transaction descriptions, names, emails, locations, notes, and provider payloads have no accepted field.
 
@@ -18,7 +18,8 @@ The historical `settings.telemetry` value remains readable for compatibility, bu
 
 ## Reliability and ownership
 
-The browser queue batches at most 25 events per RPC. Event IDs and session sequence numbers make retries idempotent. A failed analytics batch is retained within a bounded in-memory queue and never blocks navigation, authentication, or another primary action.
+Since the Phase 3 migration the profile service owns this history (`activity` schema). The browser queue posts at most 25 events per batch to `POST /api/profile/v1/activity/events`, with an `Idempotency-Key` derived from the batch's event IDs; event IDs and session sequence numbers make retries idempotent (a repeat is a duplicate, never an error). A failed analytics batch is retained within a bounded in-memory queue and never blocks navigation, authentication, or another primary action.
 
-`product_usage_events` has owner-only read RLS. Authenticated browsers cannot write the table directly; the bounded `ingest_product_usage_events(jsonb)` security-definer RPC derives ownership from `auth.uid()`. Anonymous access is denied. The non-destructive rollback revokes ingest permission while preserving event history.
+The Activity page reads `GET /api/profile/v1/activity/insights` for its filters; the service computes the summary, trends, funnel, coded errors, recommendations and cold start, and the browser only displays them.
 
+Supabase's `product_usage_events` is read-only history (owner-only read RLS, no writes). Its `ingest_product_usage_events(jsonb)` RPC was dropped by migration `20260927090000_retire_product_usage_ingest.sql` after the profile service copied the table once.

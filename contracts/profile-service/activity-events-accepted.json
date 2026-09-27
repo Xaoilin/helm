@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/profile/v1/activity/events"
+  },
+  "status" : 200,
+  "body" : {
+    "accepted" : 13,
+    "duplicates" : 0
+  }
+}

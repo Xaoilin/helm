@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MetricCard } from '../components/common/MetricCard';
 import { logError } from '../services/logger';
-import { getProductUsageEvents } from '../store/supabase/productUsage';
+import { getActivityInsights, isProfileServiceEnabled } from '../services/backend/profileServiceApi';
 import { useOptionalAuthSession } from '../store/AuthSessionContext';
 import {
-  buildProductUsageInsights,
   DEFAULT_PRODUCT_USAGE_FILTERS,
   USAGE_RANGES,
   type ProductUsageFilters,
@@ -163,50 +162,51 @@ function UsageSection() {
   const authSession = useOptionalAuthSession();
   const authUserId = authSession?.authUser?.id ?? null;
   const supabaseReady = authSession?.supabaseReady ?? false;
-  const [events, setEvents] = useState<Awaited<ReturnType<typeof getProductUsageEvents>>>([]);
+  const serviceReady = isProfileServiceEnabled();
+  const [insights, setInsights] = useState<ProductUsageInsights | null>(null);
   const [filters, setFilters] = useState<ProductUsageFilters>(DEFAULT_PRODUCT_USAGE_FILTERS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const ready = Boolean(authUserId && supabaseReady && serviceReady);
 
   useEffect(() => {
-    if (!authUserId || !supabaseReady || authSession?.loading) {
-      setEvents([]); setError(null); setLoading(false); return;
+    if (!ready || authSession?.loading) {
+      setInsights(null); setError(null); setLoading(false); return;
     }
     let cancelled = false;
     setLoading(true); setError(null);
-    getProductUsageEvents()
-      .then(nextEvents => { if (!cancelled) setEvents(nextEvents); })
+    getActivityInsights(filters)
+      .then(next => { if (!cancelled) setInsights(next); })
       .catch(reason => {
         if (cancelled) return;
         logError('Activity', reason);
-        setEvents([]);
+        setInsights(null);
         setError('Private usage activity could not be loaded. Check the connection and try again.');
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [authSession?.loading, authUserId, refreshNonce, supabaseReady]);
-
-  const features = useMemo(() => [...new Set(events.map(event => event.feature))].sort(), [events]);
-  const insights = useMemo(() => buildProductUsageInsights(events, filters), [events, filters]);
+  }, [authSession?.loading, authUserId, filters, ready, refreshNonce]);
 
   return (
     <section className="activity-usage" aria-labelledby="activity-usage-title">
-      <div className="activity-section-heading activity-usage-heading"><div><span className="activity-eyebrow">Private product usage</span><h2 id="activity-usage-title">Usage overview</h2><p>Recent content-free activity, trends, funnels, and coded errors for this account.</p></div>{authUserId && supabaseReady && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setRefreshNonce(value => value + 1)} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button>}</div>
+      <div className="activity-section-heading activity-usage-heading"><div><span className="activity-eyebrow">Private product usage</span><h2 id="activity-usage-title">Usage overview</h2><p>Recent content-free activity, trends, funnels, and coded errors for this account.</p></div>{ready && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setRefreshNonce(value => value + 1)} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button>}</div>
       {!authSession || !authSession.bootstrapped || authSession.loading ? (
         <div className="activity-panel activity-state" role="status" aria-live="polite">Checking private account access…</div>
       ) : !authUserId ? (
         <div className="activity-panel activity-state" role="status"><strong>Sign in to view private usage activity.</strong><span>Usage records are never shown in signed-out mode.</span></div>
       ) : !supabaseReady ? (
         <div className="activity-panel activity-state" role="alert"><strong>Account database unavailable.</strong><span>Private usage activity is hidden until the account database is ready.</span></div>
-      ) : loading ? (
-        <div className="activity-panel activity-state" role="status" aria-live="polite">Loading private usage activity…</div>
+      ) : !serviceReady ? (
+        <div className="activity-panel activity-state" role="alert"><strong>Activity service unavailable.</strong><span>Private usage activity is hidden until the profile service is configured.</span></div>
       ) : error ? (
         <div className="activity-panel activity-state activity-state-error" role="alert"><strong>{error}</strong><button type="button" className="btn btn-secondary btn-sm" onClick={() => setRefreshNonce(value => value + 1)}>Try again</button></div>
-      ) : events.length === 0 ? (
+      ) : !insights ? (
+        <div className="activity-panel activity-state" role="status" aria-live="polite">Loading private usage activity…</div>
+      ) : insights.totalEventCount === 0 ? (
         <div className="activity-panel activity-state"><strong>No private usage activity yet.</strong><span>Once this signed-in account uses Sabah One, content-free activity will appear here.</span></div>
       ) : (
-        <><FilterControls filters={filters} features={features} onChange={next => setFilters(current => ({ ...current, ...next }))} />{insights.filteredEvents.length === 0 ? <div className="activity-panel activity-state"><strong>No activity matches these filters.</strong><button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilters(DEFAULT_PRODUCT_USAGE_FILTERS)}>Clear filters</button></div> : <UsageInsights insights={insights} />}</>
+        <><FilterControls filters={filters} features={insights.features} onChange={next => setFilters(current => ({ ...current, ...next }))} />{insights.summary.eventCount === 0 ? <div className="activity-panel activity-state"><strong>No activity matches these filters.</strong><button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilters(DEFAULT_PRODUCT_USAGE_FILTERS)}>Clear filters</button></div> : <UsageInsights insights={insights} />}</>
       )}
     </section>
   );
