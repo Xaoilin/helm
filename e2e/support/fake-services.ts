@@ -59,7 +59,7 @@ export interface FakeServicesOptions {
   appPreferences?: Omit<ServiceAppPreferences, 'updatedAt'>;
   /** Saved integration connection records (profile service); omitted means none. */
   integrations?: ServiceIntegration[];
-  /** The next write is applied but its response is lost (a 503), like a reply that timed out. */
+  /** The next prayer-service write is applied but its response is lost (a 503), like a reply that timed out. */
   loseNextWriteResponse?: boolean;
   /** The calendar the service holds, in the app's shapes (as scenarios describe it). */
   calendar?: { accounts?: CalendarAccount[]; sources?: CalendarSource[]; events?: CalendarEvent[] };
@@ -108,6 +108,8 @@ export interface FakeServices {
   life: FakeLife;
   knowledge: FakeKnowledge;
   planner: FakePlanner;
+  /** Live-update events waiting for the app's next stream connection. */
+  liveEvents: unknown[];
   /** Product-usage events the app sent to the profile service, by event ID. */
   activityEvents: Map<string, unknown>;
   activity: { failureStatus?: number };
@@ -175,6 +177,7 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
     life: createFakeLife(options.life),
     knowledge: createFakeKnowledge(options.knowledge),
     planner: createFakePlanner(options.planner),
+    liveEvents: [],
     activityEvents: new Map(),
     activity: options.activity ?? {},
   };
@@ -200,9 +203,15 @@ export async function installFakeServices(page: Page, services: FakeServices): P
     if (url.pathname === '/api/life/health') return reply(route, 200, { status: 'UP', service: 'life-service' });
     if (url.pathname === '/api/knowledge/health') return reply(route, 200, { status: 'UP', service: 'knowledge-service' });
     if (url.pathname === '/api/planner/health') return reply(route, 200, { status: 'UP', service: 'planner-service' });
-    // The live-update stream: one ready event, then the stream ends and the app reconnects later.
+    // The live-update stream: queued events arrive on the next connection, which then ends; with nothing
+    // queued there is no stream (204), so the app backs off without reloading anything.
     if (url.pathname === '/api/live/v1/events') {
-      return route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'event:ready\ndata:connected\n\n' });
+      if (services.failureStatus || services.liveEvents.length === 0) {
+        return route.fulfill({ status: services.failureStatus ?? 204 });
+      }
+      const events = services.liveEvents.splice(0).map(event => `event:change\ndata:${JSON.stringify(event)}\n\n`);
+      return route.fulfill({ status: 200, contentType: 'text/event-stream',
+        body: `event:ready\ndata:connected\n\n${events.join('')}` });
     }
     if (url.pathname === '/api/calendar/health/database') {
       return reply(route, 200, { status: 'UP', service: 'calendar-service', database: 'UP' });
@@ -255,7 +264,7 @@ async function handleWrite(
     fulfill: async (response: { status?: number; body?: string | Buffer }) => {
       const status = response.status ?? 200;
       if (status < 400) services.processedWrites.set(idempotencyKey, { request, status, body: String(response.body ?? '') });
-      if (status < 400 && services.loseNextWriteResponse) {
+      if (status < 400 && services.loseNextWriteResponse && call.includes(' /api/prayer/')) {
         services.loseNextWriteResponse = false;
         return route.fulfill({ status: 503, contentType: 'application/json',
           body: JSON.stringify({ code: 'write_timeout', message: 'The save was not confirmed in time.' }) });

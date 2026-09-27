@@ -78,10 +78,11 @@ test('measures a bounded comparable account read workload', async ({ page, scena
     await settle();
   }
 
-  // Tasks come from the planner service: a change made elsewhere arrives when the live-update stream
-  // reconnects (the fake stream ends at once, so it reconnects within the backoff's minute).
-  trigger = 'missed-change-live-reconnect';
+  // Tasks come from the planner service: a change made elsewhere arrives as a live-update event on the
+  // app's next stream connection, and the Tasks page reloads.
+  trigger = 'missed-change-live-event';
   Object.assign(control.services.planner.tasks[0], { title: 'Recovered task' });
+  control.services.liveEvents.push({ type: 'tasks.save-task', domain: 'tasks', at: now, data: null });
   const recovered = page.getByRole('checkbox', { name: 'Mark "Recovered task" as complete', exact: true });
   await expect.poll(async () => {
     await page.clock.fastForward(2_000);
@@ -100,7 +101,7 @@ test('measures a bounded comparable account read workload', async ({ page, scena
     sourceCommit: process.env.HELM_WORKLOAD_SOURCE_COMMIT ?? null,
     observedAt: new Date().toISOString(),
     environment: 'Actual application in Chromium; identical mocked HTTP/Broadcast fixtures and fake browser clock. No live database or personal account.',
-    denominator: 'One client; startup and Tasks navigation; fresh Dashboard/Tasks revisit; 600 simulated visible-idle seconds; one missed planner task update recovered on a live-stream reconnect.',
+    denominator: 'One client; startup and Tasks navigation; fresh Dashboard/Tasks revisit; 600 simulated visible-idle seconds; one planner task update delivered as a live-update event.',
     fixtureSha256: createHash('sha256').update(JSON.stringify(stores)).digest('hex'),
     fixture: { tasks: 20, inactiveActivityRecords: 100 },
     responseBytesMeaning: 'Uncompressed mocked HTTP response bodies; excludes headers, TLS, and other application domains.',
