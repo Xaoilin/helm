@@ -1,9 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PrayerTrackingState } from '../types/domain';
-import { decodeStoreValue, encodeStoreValue } from '../store/recordCodec';
-import { LEGACY_SHARED_STORE_KEY_SET, SHARED_STORE_KEY_SET } from '../store/storeKeys';
-import { SHARED_PAGE_COLLECTIONS } from '../store/pageCollections';
 import { createPrayerTrackingState, getPrayerRecordKey } from '../services/prayerTracking';
 import { settingsFromPrayerPreferences } from '../store/contexts/usePrayerPreferencesSync';
 import { usePrayerOutcomeUpkeep } from '../store/contexts/prayer/usePrayerOutcomeUpkeep';
@@ -64,33 +61,6 @@ describe('prayer times from the prayer service', () => {
 
     expect(api.getPrayerSchedule).toHaveBeenNthCalledWith(1, 'Bedford', 'United Kingdom', undefined);
     expect(api.getPrayerSchedule).toHaveBeenNthCalledWith(2, 'Bedford', 'United Kingdom', '2026-09-25');
-  });
-});
-
-describe('the retired account prayerTracking record', () => {
-  const fajrKey = getPrayerRecordKey(PRAYER_TEST_DATE, 'Fajr');
-  const reminderKey = `${PRAYER_TEST_DATE}::Dhuhr::2026-09-26T15:20:00.000Z`;
-
-  it('is decode-only: never written, and no page loads it', () => {
-    expect(LEGACY_SHARED_STORE_KEY_SET.has('prayerTracking')).toBe(true);
-    expect(SHARED_STORE_KEY_SET.has('prayerTracking')).toBe(false);
-    expect(SHARED_PAGE_COLLECTIONS).not.toContain('prayerTracking');
-    expect(() => encodeStoreValue('prayerTracking', { schemaVersion: 1 })).toThrow();
-  });
-
-  it('decodes only the old reminder receipts, never outcome or activation rows', () => {
-    const decoded = decodeStoreValue('prayerTracking', [
-      { recordId: 'meta', payload: { schemaVersion: 1, trackingStartedAt: '2026-04-01T00:00:00.000Z' }, position: null },
-      { recordId: 'activation', payload: { date: '2026-04-01', prayerNames: ['Isha'] }, position: null },
-      { recordId: `record:${fajrKey}`, payload: { date: PRAYER_TEST_DATE, prayerName: 'Fajr' }, position: null },
-      { recordId: `reminder:${reminderKey}`, payload: { date: PRAYER_TEST_DATE, prayerName: 'Dhuhr' }, position: null },
-    ]);
-
-    expect(decoded).toEqual({
-      schemaVersion: 1,
-      reminderReceipts: { [reminderKey]: { date: PRAYER_TEST_DATE, prayerName: 'Dhuhr' } },
-      boundedReminderReceipts: {},
-    });
   });
 });
 

@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.1
 import { createMcpHandler, McpServer, type AuthInfo } from 'npm:@modelcontextprotocol/server@2.0.0';
 import { z } from 'npm:zod@4.4.3';
 import { ASSISTANT_DEPLOY_SHA } from '../_shared/assistantDeployment.ts';
+import { probeServiceAccess } from '../_shared/serviceAccess.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
@@ -146,16 +147,12 @@ async function verifyAccess(request: Request): Promise<AuthInfo | Response> {
   }
   if (expiresAt <= Math.floor(Date.now() / 1_000)) return oauthChallenge(401, 'The Sabah One OAuth access token has expired.');
 
-  // An Inventory approval never authorizes Employment. Recheck the independent
-  // account/client approval through the same guarded RPC used by each tool.
-  const { error: approvalError } = await client.rpc('employment_list_applications', {
-    p_query: '', p_status: null, p_limit: 1, p_offset: 0, p_work_type: null, p_remote_status: null,
-  });
-  if (approvalError) {
-    return approvalError.code === '42501'
-      ? oauthChallenge(403, 'This OAuth client is not approved for Sabah One Employment.')
-      : jsonResponse({ error: 'Sabah One Employment could not verify access.' }, 503);
-  }
+  // An Inventory approval never authorizes Employment. The life service rechecks this agent's own
+  // Employment approval; a one-application read of the job list asks it.
+  const access = await probeServiceAccess(lifeUrl('/applications', { limit: 1 }), token);
+  if (access === 'not_approved') return oauthChallenge(403, 'This OAuth client is not approved for Sabah One Employment.');
+  if (access === 'invalid_token') return oauthChallenge(401, 'The Sabah One OAuth access token is invalid.');
+  if (access === 'unavailable') return jsonResponse({ error: 'Sabah One Employment could not verify access.' }, 503);
   return {
     token, clientId, expiresAt,
     scopes: typeof claims.scope === 'string' ? claims.scope.split(/\s+/).filter(Boolean) : [],

@@ -6,10 +6,11 @@ Sabah One is a hosted web product for a solo operator. The supported product is 
 
 - GitHub Pages for the hosted web application
 - React 19 with TypeScript 5 and Vite 8
-- Supabase Auth, database-authoritative records, Realtime Broadcast, and Edge Functions
+- Spring Boot services (`sabah-one-services`) for every account domain, with a live-update stream
+- Supabase Auth, Vault secrets, agent OAuth approvals, and the MCP Edge Functions
 - Web Notifications and an in-app reminder banner while the page remains open
 
-The browser is the complete Sabah One runtime. Account data and account-owned secrets remain online and database-authoritative; browser-only session state is limited to transient UI, permission, and diagnostic state.
+The browser is the complete Sabah One runtime. Account data stays online in the Spring services and account-owned secrets in Supabase Vault; browser-only session state is limited to transient UI, permission, and diagnostic state.
 
 ## Using Sabah One
 
@@ -29,7 +30,7 @@ Open the deployed GitHub Pages URL in a supported browser and sign in with Supab
 ## Current Product Reality
 
 - Google Calendar OAuth and sync use hosted authorization and account-owned refresh credentials.
-- Supabase sign-in and database-authoritative persistence are required for shared data. Signed-out, expired, or offline sessions cannot view or change shared records, and there is no durable offline mutation queue.
+- Supabase sign-in is required for account data, which the Spring services hold. Signed-out sessions cannot view or change it, offline pages are read-only, and there is no durable offline mutation queue.
 - The Secrets surface stores account-owned credentials through constrained RPCs backed by Supabase Vault. Values are masked by default, fetched one at a time for Reveal/Copy, and cleared from the UI on hide, navigation, page backgrounding, sign-out, or account switch.
 - The Lina assistant (Chat), voice, Life Hero and the GitHub Life Hero integration were removed on 2026-09-26.
 - Clock, Inventory, Finance, Health, Knowledge, Projects, Calendar, Prayer, and the Night Compass dashboard use account-backed records where marked real in [feature status](docs/feature-status.md).
@@ -48,5 +49,5 @@ Employment has a separate `sabah-one-employment-mcp` endpoint and explicit Emplo
 - GitHub Actions is the validation authority for the hosted website. Required checks cover policy, database contracts, lint, typecheck, unit tests, browser E2E, and the web build.
 - GitHub Pages and the required Supabase Edge Function deployments publish only from the protected `master` path after the required checks pass.
 - The deployed website and `public/release.json` must identify the same version. Open tabs use the manifest to move onto a newer deployed bundle after a one-time browser reload.
-- Keep shared state and secrets account-owned, online-only, and database-authoritative.
+- Keep account data and secrets account-owned, online-only, and held by their services (secrets in Supabase Vault).
 - Do not describe placeholder behavior as real, and do not call a branch-only change deployed or live.

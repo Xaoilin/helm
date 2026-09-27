@@ -4,7 +4,7 @@
 
 Sabah One uses MCP as the external AI-agent interface. MCP fits the hosted browser product because it provides discoverable semantic tools, typed inputs, OAuth-backed account identity, and explicit per-domain approval without creating a second product runtime.
 
-A repository CLI may validate code, fixtures, or exported test data, but it is not an account-data interface. Agents must not bypass MCP with Supabase credentials, direct table or generic record RPC access, browser automation, shared-file edits, or copied session tokens.
+A repository CLI may validate code, fixtures, or exported test data, but it is not an account-data interface. Agents must not bypass MCP with Supabase credentials, direct table or service access, browser automation, shared-file edits, or copied session tokens. (The generic record RPCs were retired in v0.2.206.)
 
 Sabah One has no in-app conversational assistant (Lina was removed on 2026-09-26). External agents require a published MCP capability.
 
@@ -14,7 +14,7 @@ When an AI agent accesses Sabah One, it must:
 
 1. discover and use the published Sabah One MCP server for the target domain;
 2. use semantic tools such as list, inspect, add, update, record activity, or remove rather than generic record patches;
-3. derive account identity from the OAuth token and remain inside RLS and dedicated RPC boundaries;
+3. derive account identity from the OAuth token and remain inside the domain's approval boundary;
 4. request explicit user confirmation for destructive, bulk, ambiguous, or materially consequential writes;
 5. claim success only from a confirmed tool receipt and re-read when the postcondition matters;
 6. stop and report an unavailable capability when no published domain tool exists.
@@ -38,8 +38,8 @@ A first-party UI path may share the same domain service, but it does not replace
 
 | Domain | In-app use | External agent access | Current rule |
 | --- | --- | --- | --- |
-| Inventory | Inventory surface | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. The function forwards the agent's token to the life admin service (`/api/life/v1/inventory`), which holds the records and re-checks the approval; `inventory_resolve_project` resolves projects in the knowledge service (`/api/knowledge/v1/projects/resolve`), which re-checks the same approval. |
-| Employment | Employment surface | `sabah-one-employment-mcp` | Use its six narrow application/history tools with a separate Employment OAuth approval. Inventory approval does not grant Employment access. The function forwards the agent's token to the life admin service (`/api/life/v1/jobs`), which holds the records and re-checks the approval. |
+| Inventory | Inventory surface | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. The function forwards the agent's token to the life admin service (`/api/life/v1/inventory`), which holds the records and re-checks the approval (the function first asks it whether the agent is approved: a refusal is the OAuth 403 challenge); `inventory_resolve_project` resolves projects in the knowledge service (`/api/knowledge/v1/projects/resolve`), which re-checks the same approval. |
+| Employment | Employment surface | `sabah-one-employment-mcp` | Use its six narrow application/history tools with a separate Employment OAuth approval. Inventory approval does not grant Employment access. The function checks the approval with a one-application read of the job list, then forwards the agent's token to the life admin service (`/api/life/v1/jobs`), which holds the records and re-checks the approval. |
 | Finance equity | `Navigation and editor` | `sabah-one-equity-mcp` (requires deployment and Equity OAuth approval) | Five semantic position tools; isolated from cash/banking and other MCP domains. The function forwards the agent's token to the finance service (`/api/finance/v1/equity/positions`), which holds the positions and re-checks the Equity approval. See `finance-equity.md`. |
 | Finance banking review and loans | Dated review and loan records | `sabah-one-finance-mcp` (requires deployment and Finance OAuth approval) | Two semantic review tools; independent of Equity and existing manual accounts. The function forwards the agent's token to the finance service (`/api/finance/v1/review`), which holds the review and re-checks the Finance approval. See `finance-banking-review.md`. |
 | Finance manual accounts, transactions, budgets, savings goals | Finance surface | Not yet published | The finance service refuses agent tokens on these paths (403 `agent_not_approved`); external agents stop at the missing MCP boundary. |
@@ -59,7 +59,7 @@ The `sabah-one-employment-mcp` function exposes semantic tools for:
 
 The endpoint uses Supabase OAuth with PKCE and a separate account-owned Employment approval. The consent page requires an explicit choice of Inventory or Employment; client names and ordinary OAuth identity scopes never choose or broaden the data domain. Settings can revoke Employment access independently. Every tool checks that approval, and revoked, anonymous, direct browser, and other-account credentials fail closed at the MCP boundary.
 
-Mutations use stable request IDs and narrow SQL operations on the existing Employment store. Retries preserve their original payload and ID; a changed payload cannot reuse a receipt. Browser edits use the same semantic operations, so an edit cannot replace the whole application list and discard a concurrent agent update. History additions preserve earlier evidence. Record only verified application and message facts; unknown roles, dates, remote eligibility, and compensation remain unknown.
+Mutations carry stable request IDs, sent to the life admin service as the `Idempotency-Key`. Retries preserve their original payload and ID; a changed payload cannot reuse a key. Browser edits use the same semantic operations, so an edit cannot replace the whole application list and discard a concurrent agent update. History additions preserve earlier evidence. Record only verified application and message facts; unknown roles, dates, remote eligibility, and compensation remain unknown.
 
 The scheduled Codex jobs agent owns inbox reconciliation. It reads connected recruiting sources, lists existing applications, matches source evidence, adds missing applications or history, and reads back each change. It must not mark an email processed until the record is confirmed. A job advert is a lead, an interview update is not an offer, and an unlabelled platform update must not be assigned to a specific role by guesswork. Sabah One does not ingest Gmail itself or operate a second agent scheduler.
 
@@ -73,7 +73,7 @@ Operators inspect retained events through the existing authenticated Supabase op
 
 ## Daily goal progress controls
 
-The Learn and Move switches only choose the amount passed to the existing first-party progress operation: the gap to the displayed level target by default, or one unit when “Add individual steps” is on. They are independent view-local controls, reset when the dashboard remounts, and add no shared data, schema, or new account operation. Progress continues through the established signed-in mutation path. This UI convenience does not change external agent access: Daily Learn and Move still have no published domain MCP, so external account reads and progress writes remain unavailable.
+The Learn and Move switches only choose the amount passed to the existing first-party progress operation: the gap to the displayed level target by default, or one unit when “Add individual steps” is on. They are independent view-local controls, reset when the dashboard remounts, and add no shared data, schema, or new account operation. Progress continues through the planner service. This UI convenience does not change external agent access: Daily Learn and Move still have no published domain MCP, so external account reads and progress writes remain unavailable.
 
 ## Equity MCP requirement
 
@@ -91,17 +91,6 @@ consent never grants equity or banking access. Personal data is not seeded from
 source code. Deployment, consent and private record readback are required for
 acceptance; see [`finance-equity.md`](finance-equity.md).
 
-## Page-scoped browser loading
+## Browser page loading
 
-`get_helm_account_snapshot_for_collections` is a first-party browser hydration
-operation, with the same account, anonymous-session and OAuth-client denials as
-the existing snapshot. It does not grant external agents a generic read API.
-Activity pagination reads through the same first-party RLS boundary and changes
-no business mutation or external MCP contract. Existing narrow domain MCPs and
-listed missing-capability boundaries remain unchanged.
-
-The first-party `get_helm_changed_collections` RPC returns only changed collection
-names, the atomic account version, and a secret invalidation flag. It denies
-anonymous and external OAuth-client sessions; the guarded definer read is needed
-for protected Vault metadata and grants no secret-table access. This transport
-optimization changes no business operation or external domain MCP contract.
+Pages load from the Spring services with the user's session; the first-party generic record store (`get_helm_account_snapshot_for_collections`, `get_helm_changed_collections`, `apply_helm_mutations`) and its Broadcast were retired in v0.2.206. No external domain MCP contract changed.

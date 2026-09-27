@@ -30,8 +30,7 @@ export default defineConfig([
   {
     // UI import boundary: surfaces and components reach Supabase through a
     // specific gateway module (for example `store/supabase/secrets`) or a
-    // service, never through the compatibility barrel, and use the stable
-    // `store/persistence` consumer API rather than its internals.
+    // service, never through the compatibility barrel.
     files: ['src/surfaces/**/*.{ts,tsx}', 'src/components/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', {
@@ -39,10 +38,6 @@ export default defineConfig([
           {
             regex: '(^|/)store/supabase$',
             message: 'Import the specific gateway module under store/supabase/ (or a service); the store/supabase barrel is for existing non-UI code only.',
-          },
-          {
-            regex: '(^|/)store/persistence/',
-            message: 'Use the store/persistence consumer API; its internal modules are not a UI dependency.',
           },
         ],
       }],

@@ -13,10 +13,10 @@ HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the lin
 ## Product Invariants
 
 - `src/types/domain.ts` owns app data shapes.
-- Shared app data is signed-in and database-authoritative. Writes require server confirmation; transient failures may retain only the same account's confirmed in-memory data. Invalid authorization and account changes fail closed.
+- Account data is signed-in and owned by the Spring services; each page loads and saves through its service. Writes require server confirmation; transient failures may retain only the same account's confirmed in-memory data. Invalid authorization and account changes fail closed. The generic Supabase record store and its Realtime Broadcast are retired; do not reintroduce them.
 - Calendar data remains account -> source -> event, with intentional multi-account support.
 - The Lina assistant (Chat), voice and Life Hero were removed on 2026-09-26; do not reintroduce them without a new product decision.
-- Secret values belong in the account-owned Supabase Vault path. Never place plaintext in shared records, browser storage, Broadcast payloads, logs, exports, or durable memory.
+- Secret values belong in the account-owned Supabase Vault path. Never place plaintext in account records, browser storage, live-update events, logs, exports, or durable memory.
 - Project catalogue records may sync names, links, documentation, and display-only guidance; private credentials never enter shared records.
 - The prayer service decides when every prayer reminder (deadline, prayer opportunity, Learn/Move) is due and sends it to open tabs over the live-update stream (server-sent events); tabs show it as a Web Notification when permitted, with the in-app banner as the fallback, and snooze through the service. No tab keeps its own reminder timer or reminder receipts.
 - Tasks, habits, goals, XP, streaks, daily momentum and the clock belong to the planner service: XP and the daily reset are worked out there, and the app only shows them.

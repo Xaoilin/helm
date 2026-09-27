@@ -1,15 +1,13 @@
 import { useState } from 'react';
 import CalendarBackendStatus from '../components/dashboard/CalendarBackendStatus';
-import PersistenceDebug from '../components/debug/PersistenceDebug';
 import PrayerDebug from '../components/debug/PrayerDebug';
 import OperationalDebug from '../components/debug/OperationalDebug';
 
-type DebugTab = 'network' | 'prayer' | 'persistence' | 'operations';
+type DebugTab = 'network' | 'prayer' | 'operations';
 
 const DEBUG_TABS: { id: DebugTab; label: string; icon: string }[] = [
   { id: 'network', label: 'Network / APIs', icon: '🌐' },
   { id: 'prayer', label: 'Prayer', icon: '🕌' },
-  { id: 'persistence', label: 'Persistence', icon: '💾' },
   { id: 'operations', label: 'Operations', icon: '📊' },
 ];
 
@@ -42,7 +40,6 @@ export default function DebugSurface() {
           <CalendarBackendStatus />
         )}
         {tab === 'prayer' && <PrayerDebug />}
-        {tab === 'persistence' && <PersistenceDebug />}
         {tab === 'operations' && <OperationalDebug />}
       </div>
     </>

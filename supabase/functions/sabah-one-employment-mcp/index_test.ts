@@ -14,7 +14,8 @@ function token(overrides: Record<string, unknown> = {}): string {
   return `header.${btoa(JSON.stringify(claims)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')}.signature`;
 }
 
-interface RpcCall { name: string; body: Record<string, unknown>; authorization: string | null }
+/** An approval check: the one-application job-list read the handler makes before every MCP request. */
+interface ProbeCall { search: string; authorization: string | null }
 interface LifeCall {
   method: string;
   path: string;
@@ -25,10 +26,11 @@ interface LifeCall {
   contentType: string | null;
 }
 interface Backend {
-  calls: RpcCall[];
+  calls: ProbeCall[];
   lifeCalls: LifeCall[];
   userError?: boolean;
-  approvalError?: { code: string; message: string };
+  /** The life service's answer to the approval check, when it refuses. */
+  approvalStatus?: number;
   toolError?: { status: number; body: unknown };
 }
 
@@ -40,6 +42,13 @@ async function withBackend(run: (backend: Backend) => Promise<void>) {
     const url = new URL(request.url);
     if (url.origin === 'https://life-test.example') {
       assert.match(url.pathname, /^\/api\/life\/v1\/jobs\/applications/);
+      if (request.method === 'GET' && url.pathname === '/api/life/v1/jobs/applications' && url.search === '?limit=1') {
+        backend.calls.push({ search: url.search, authorization: request.headers.get('authorization') });
+        if (backend.approvalStatus) {
+          return Response.json({ code: 'agent_not_approved', message: 'Refused.' }, { status: backend.approvalStatus });
+        }
+        return Response.json({ applications: [], total: 0, limit: 1, offset: 0 });
+      }
       const text = await request.text();
       backend.lifeCalls.push({
         method: request.method, path: url.pathname, search: url.search, body: text ? JSON.parse(text) : undefined,
@@ -59,13 +68,7 @@ async function withBackend(run: (backend: Backend) => Promise<void>) {
         status: backend.userError ? 401 : 200,
       });
     }
-    assert.equal(url.pathname, '/rest/v1/rpc/employment_list_applications', 'only the approval gate still uses an RPC');
-    const body = await request.json();
-    backend.calls.push({ name: 'employment_list_applications', body, authorization: request.headers.get('authorization') });
-    if (backend.approvalError) {
-      return Response.json(backend.approvalError, { status: backend.approvalError.code === '42501' ? 403 : 400 });
-    }
-    return Response.json({ applications: [], total: 0, limit: 1, offset: 0 });
+    assert.fail(`Unexpected Supabase request: ${url.pathname}`);
   };
   try {
     await run(backend);
@@ -122,12 +125,16 @@ Deno.test('requires OAuth user identity, valid expiry, and trusted origin before
 
 Deno.test('checks independent Employment approval every request and fails closed on unavailable approval', async () => {
   await withBackend(async backend => {
-    backend.approvalError = { code: '42501', message: 'Employment approval required' };
-    assert.equal((await mcp('tools/list', {})).response.status, 403);
-    backend.approvalError = { code: '08006', message: 'Database unavailable' };
+    backend.approvalStatus = 403;
+    const refused = (await mcp('tools/list', {})).response;
+    assert.equal(refused.status, 403);
+    assert.match(refused.headers.get('www-authenticate')!, /oauth-protected-resource/);
+    backend.approvalStatus = 401;
+    assert.equal((await mcp('tools/list', {})).response.status, 401);
+    backend.approvalStatus = 500;
     assert.equal((await mcp('tools/list', {})).response.status, 503);
-    assert.equal(backend.calls.length, 2);
-    assert(backend.calls.every(call => call.name === 'employment_list_applications' && call.body.p_limit === 1));
+    assert.equal(backend.calls.length, 3);
+    assert(backend.calls.every(call => call.authorization?.startsWith('Bearer header.')), 'the agent token is forwarded');
     assert.deepEqual(backend.lifeCalls, []);
   });
 });

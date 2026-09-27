@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { TIMING } from '../config/constants';
 import { checkForPublishedRelease } from '../services/releaseRefresh';
-import { getPersistenceHealthSnapshot } from '../store/persistence';
 
 type UseReleaseRefreshOptions = {
   enabled?: boolean;
@@ -35,7 +34,6 @@ export function useReleaseRefresh({
     const canReload = () => (
       !disposed
       && document.visibilityState !== 'hidden'
-      && getPersistenceHealthSnapshot().supabaseQueue.queuedCount === 0
       && document.querySelector('[role="dialog"][aria-modal="true"]') === null
       && !hasVisibleEditableDraft()
     );

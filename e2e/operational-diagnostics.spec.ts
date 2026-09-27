@@ -3,33 +3,40 @@ import { expect, openApp, test, waitForMutation } from './support/helm-fixture';
 
 const TASK = { id: 'synthetic-private-task', title: 'KAN314_PRIVATE_TITLE', dueDate: '2026-09-22', description: 'Synthetic task', completed: false, priority: 'medium', category: 'task', createdAt: '2026-09-22T00:00:00.000Z', updatedAt: '2026-09-22T00:00:00.000Z' };
 
-test('diagnostics classify a disconnect and recovery while a failed sink leaves confirmed writes usable', async ({ page, scenario }, testInfo) => {
+test('diagnostics classify a failure and its recovery while a failed sink leaves confirmed writes usable', async ({ page, scenario }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  const control = await scenario({ now: TASK.createdAt, stores: { tasks: [TASK] } });
+  await scenario({ now: TASK.createdAt, stores: { tasks: [TASK] } });
+  // The deployed release manifest is unreachable at first, then answers again.
+  let manifestAvailable = false;
+  await page.route('**/release.json?*', async route => {
+    if (manifestAvailable) await route.fallback();
+    else await route.fulfill({ status: 503, body: 'unavailable' });
+  });
+  const failedCheck = page.waitForResponse(response => response.url().includes('/release.json?') && response.status() === 503);
   const sent: unknown[] = [];
   await page.route('**/api/profile/v1/operational-events', async route => {
     sent.push(route.request().postDataJSON());
     await route.fulfill({ status: 503, json: { code: 'collection_unavailable' } });
   });
   await openApp(page);
-  control.setRealtimeAvailable(false);
-  await expect(page.getByTestId('sync-status-banner')).toContainText('Live updates delayed');
+  await failedCheck;
   await page.clock.fastForward(10_000);
   await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
   const write = waitForMutation(page, 'tasks');
   await page.getByRole('checkbox', { name: 'Mark "KAN314_PRIVATE_TITLE" as complete' }).click();
   expect((await write).ok()).toBe(true);
   await expect(page.getByRole('checkbox', { name: 'Mark "KAN314_PRIVATE_TITLE" as incomplete' })).toBeChecked();
-  control.setRealtimeAvailable(true);
-  await page.clock.fastForward(31_000);
-  await expect(page.getByTestId('sync-status-banner')).toHaveCount(0);
+  manifestAvailable = true;
+  const recoveredCheck = page.waitForResponse(response => response.url().includes('/release.json?') && response.ok());
+  await page.clock.fastForward(61_000);
+  await recoveredCheck;
   await page.getByRole('button', { name: 'Navigate to Debug' }).click();
   const operations = page.getByRole('button', { name: 'Operations', exact: false });
   await operations.focus();
   await operations.press('Enter');
   const diagnostics = page.getByRole('region', { name: 'Operational diagnostics' });
-  await expect(diagnostics).toContainText('realtime · subscription · recovered');
+  await expect(diagnostics).toContainText('release · manifest · recovered');
   await expect(diagnostics).toContainText('Diagnostic collection is unavailable');
   const evidence = [];
   for (const width of [390, 768, 1440]) {

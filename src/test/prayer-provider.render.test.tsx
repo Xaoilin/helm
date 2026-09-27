@@ -12,14 +12,6 @@ import { provide, renderWithContexts } from './renderWithContexts';
 import { makeGamification, makeMomentumState, makeTask } from './fixtures';
 import { makePrayerTimesData, PRAYER_TEST_DATE } from './prayerFixtures';
 
-const persistence = vi.hoisted(() => ({
-  loadStore: vi.fn(),
-  saveStore: vi.fn(async () => undefined),
-  saveStoreCommitted: vi.fn(async () => undefined),
-  subscribeStoreKey: vi.fn(() => () => undefined),
-}));
-vi.mock('../store/persistence', () => persistence);
-
 const prayerService = vi.hoisted(() => ({
   isPrayerServiceEnabled: vi.fn(() => true),
   getPrayerSchedule: vi.fn(),
@@ -142,7 +134,6 @@ beforeEach(() => {
   }));
   prayerService.getPrayerReminders.mockResolvedValue({ active: [dhuhrOpportunity], momentum: savedMomentum });
   prayerService.saveMomentumReminders.mockImplementation(async (pillars: unknown) => pillars);
-  persistence.loadStore.mockResolvedValue(null);
   planner.syncPrayerRewards.mockResolvedValue({
     reward: { xpEarned: 25, level: 1, leveledUp: false, title: 'Beginner', newBadges: [], currentStreak: 1,
       streakMilestone: false },
@@ -179,10 +170,7 @@ describe('PrayerProvider', () => {
     await waitFor(() => expect(prayer.activeBoundedReminder?.title).toBe('Dhuhr prayer opportunity'));
     expect(prayer.diagnostics.activeReminders.map(reminder => reminder.key)).toEqual([dhuhrOpportunity.key]);
     expect(prayer.activeReminder).toBeNull();
-    // Nothing reads or writes the retired account record, and unchanged momentum preferences are not re-sent.
-    expect(persistence.loadStore).not.toHaveBeenCalledWith('prayerTracking');
-    expect(persistence.saveStore).not.toHaveBeenCalled();
-    expect(persistence.saveStoreCommitted).not.toHaveBeenCalled();
+    // Unchanged momentum preferences are not re-sent.
     expect(prayerService.saveMomentumReminders).not.toHaveBeenCalled();
   });
 

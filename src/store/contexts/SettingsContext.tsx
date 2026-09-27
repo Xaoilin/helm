@@ -15,12 +15,7 @@ import {
   type AppTimeZoneResolution,
 } from '../../services/appTimeZone';
 import { validateIanaTimeZone } from '../../services/timeZone';
-import {
-  DEVICE_SETTINGS_STORE_KEY,
-  loadDeviceStore,
-  saveDeviceStore,
-} from '../persistence';
-import { splitSettings, type DeviceSettings } from '../recordCodec';
+import { loadDeviceSettings, saveDeviceSettings, splitSettings } from '../deviceSettings';
 import { locationFromSettings, settingsFromLocation, useProfileSettingsSync } from './useProfileSettingsSync';
 import { settingsFromPrayerPreferences, usePrayerPreferencesSync } from './usePrayerPreferencesSync';
 import { settingsFromAppPreferences, useAppPreferencesSync } from './useAppPreferencesSync';
@@ -99,19 +94,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // Settings shared across devices are owned by the services (profile and prayer); only
   // device-only settings are stored here, in the browser.
   useEffect(() => {
-    (async () => {
-      const device = await loadDeviceStore<DeviceSettings>(DEVICE_SETTINGS_STORE_KEY);
-      setSettings(prev => {
-        const next = { ...prev, ...splitSettings(device).device };
-        settingsRef.current = next;
-        return next;
-      });
-      setLoaded(true);
-    })();
+    const device = loadDeviceSettings();
+    setSettings(prev => {
+      const next = { ...prev, ...device };
+      settingsRef.current = next;
+      return next;
+    });
+    setLoaded(true);
   }, []);
 
   useEffect(() => {
-    if (loaded) void saveDeviceStore(DEVICE_SETTINGS_STORE_KEY, splitSettings(settings).device);
+    if (loaded) saveDeviceSettings(settings);
   }, [settings, loaded]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
@@ -155,7 +148,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const updateSettings = useCallback((updates: Partial<Settings>) => {
     setSettings(prev => {
       const safe = splitSettings(updates);
-      const next = { ...prev, ...safe.shared, ...safe.device, ...safe.service };
+      const next = { ...prev, ...safe.device, ...safe.service };
       if ('appTimezone' in updates) {
         const timeZone = validateIanaTimeZone(updates.appTimezone);
         if (timeZone) next.appTimezone = timeZone;

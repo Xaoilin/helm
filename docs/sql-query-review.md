@@ -29,6 +29,9 @@ describes plan inspection.
 
 ## KAN-320 review — 23 September 2026
 
+Historical: the generic record store these read paths served was retired in
+v0.2.206 (27 September 2026). Account data is read from the Spring services.
+
 Reviewed the final KAN-318/319 read paths at `9006d210de276a37e9f8201295c8da4ce0eb99a7`
 (v0.2.169). Production catalogue readback at 2026-09-22 23:37 UTC confirmed
 PostgreSQL 17.6 and these B-tree indexes:

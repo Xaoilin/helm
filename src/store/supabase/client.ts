@@ -8,7 +8,6 @@
 import { createClient, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
 import {
   configureOperationalTransport,
-  recordOperationalEvent,
   setOperationalAccount,
 } from '../../services/operationalTelemetry';
 import { operationalEventsUrl } from '../../services/backend/profileServiceApi';
@@ -17,10 +16,9 @@ import { operationalReceiptSchema } from '../../services/backend/contracts';
 let client: SupabaseClient | null = null;
 let currentUserId: string | null = null;
 let currentSession: Session | null = null;
-let authSessionBootstrapped = false;
 let authSessionRevision = 0;
 
-export interface AuthSessionSnapshot {
+interface AuthSessionSnapshot {
   userId: string;
   email: string | null;
   accessTokenPresent: boolean;
@@ -36,7 +34,6 @@ export function initSupabase(url: string, publishableKey: string): void {
     client = null;
     currentUserId = null;
     currentSession = null;
-    authSessionBootstrapped = false;
     configureOperationalTransport(null);
     setOperationalAccount(null);
     return;
@@ -74,34 +71,7 @@ export function initSupabase(url: string, publishableKey: string): void {
       throw Object.assign(new Error('Operational collection returned an invalid receipt.'), { code: 'invalid_response' });
     }
   } : null);
-  client = createClient(url, publishableKey, {
-    realtime: {
-      // Removing an exhausted subscription must also stop socket retries when
-      // no other channel owns the connection (the SDK otherwise waits 50s).
-      disconnectOnEmptyChannelsAfterMs: 0,
-      heartbeatCallback: (status, latency) => {
-        if (status === 'sent') {
-          recordOperationalEvent({ domain: 'realtime', operation: 'heartbeat', outcome: 'pending', reason: 'heartbeat_sent' });
-        } else if (status === 'ok') {
-          recordOperationalEvent({ domain: 'realtime', operation: 'heartbeat', outcome: 'ok', reason: 'heartbeat_ok', durationMs: latency });
-        } else {
-          recordOperationalEvent({
-            domain: 'realtime',
-            operation: 'heartbeat',
-            outcome: 'failed',
-            reason: status === 'timeout' ? 'heartbeat_timeout' : 'heartbeat_error',
-          });
-        }
-      },
-    },
-  });
-  authSessionBootstrapped = false;
-}
-
-export function initFromEnv(): void {
-  const url = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || '';
-  const key = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || '';
-  if (url && key) initSupabase(url, key);
+  client = createClient(url, publishableKey);
 }
 
 export function isSupabaseReady(): boolean {
@@ -119,16 +89,6 @@ export function requireClient(): SupabaseClient {
   return client;
 }
 
-export function getCurrentUserId(): string | null {
-  return currentUserId;
-}
-
-export function setCurrentUserId(userId: string | null): void {
-  if (currentUserId !== userId) authSessionRevision += 1;
-  currentUserId = userId;
-  setOperationalAccount(userId);
-}
-
 export function getAuthSessionSnapshot(): AuthSessionSnapshot | null {
   if (!currentSession?.user) return null;
   return {
@@ -140,18 +100,6 @@ export function getAuthSessionSnapshot(): AuthSessionSnapshot | null {
     provider: currentSession.user.app_metadata?.provider ?? null,
     expiresAt: currentSession.expires_at ?? null,
   };
-}
-
-export function getCurrentAccessToken(): string | null {
-  return currentSession?.access_token ?? null;
-}
-
-export function isAuthSessionBootstrapped(): boolean {
-  return authSessionBootstrapped;
-}
-
-export function isAuthenticated(): boolean {
-  return currentUserId !== null;
 }
 
 /** Monotonic counter that lets an in-flight session read detect a newer auth event. */
@@ -170,12 +118,11 @@ export function getCurrentSessionUser(): User | null {
 }
 
 /**
- * Record the session the SDK reported (or `null` when signed out) and mark the
- * session as bootstrapped. Used by `auth.ts` only.
+ * Record the session the SDK reported (or `null` when signed out). Used by
+ * `auth.ts` only.
  */
 export function recordAuthSession(session: Session | null): void {
   currentUserId = session?.user?.id || null;
   currentSession = session;
-  authSessionBootstrapped = true;
   setOperationalAccount(currentUserId);
 }

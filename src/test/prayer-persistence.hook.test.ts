@@ -5,13 +5,6 @@ import { ServiceError } from '../services/backend/serviceClient';
 import { usePrayerTracking } from '../store/contexts/prayer/usePrayerTracking';
 import { usePrayerPersistence } from '../store/contexts/prayer/usePrayerPersistence';
 
-const persistence = vi.hoisted(() => ({
-  loadStore: vi.fn(),
-  saveStore: vi.fn(async () => undefined),
-  subscribeStoreKey: vi.fn(() => () => undefined),
-}));
-vi.mock('../store/persistence', () => persistence);
-
 const api = vi.hoisted(() => ({
   isPrayerServiceEnabled: vi.fn(() => true),
   getPrayerDashboard: vi.fn(),
@@ -24,14 +17,9 @@ vi.mock('../services/backend/prayerServiceApi', () => api);
 
 const TODAY = '2026-09-26';
 const FAJR_KEY = `${TODAY}::Fajr`;
-const ASR_KEY = `${TODAY}::Asr`;
 const serviceFajr = {
   id: '1c52385c-3d06-43e5-849f-8c9652ddf677', date: TODAY, prayer: 'Fajr', status: 'on_time',
   recordedAt: '2026-09-26T05:30:00Z', source: 'dashboard', taskId: null, rewarded: true, deadlineAt: null,
-};
-/** An outcome only the old Supabase mirror still holds. */
-const mirroredAsr: PrayerTrackingRecord = {
-  date: TODAY, prayerName: 'Asr', status: 'late', recordedAt: '2026-09-26T16:30:00.000Z', source: 'dashboard',
 };
 
 function usePersistenceHarness({ sourcesLoaded, locationReady = true }: { sourcesLoaded: boolean; locationReady?: boolean }) {
@@ -52,12 +40,6 @@ function renderPersistence(sourcesLoaded = true, locationReady = true) {
 
 beforeEach(() => {
   api.isPrayerServiceEnabled.mockReturnValue(true);
-  persistence.loadStore.mockResolvedValue({
-    trackingStartedAt: '2026-04-01T00:00:00.000Z',
-    records: { [ASR_KEY]: mirroredAsr },
-    reminderReceipts: {},
-    boundedReminderReceipts: {},
-  });
   api.getPrayerDashboard.mockResolvedValue({
     today: TODAY,
     tracking: {
@@ -80,7 +62,6 @@ describe('usePrayerPersistence', () => {
   it('waits for settings and rewards before loading anything', async () => {
     const { result, rerender } = renderPersistence(false);
     await act(async () => { await Promise.resolve(); });
-    expect(persistence.loadStore).not.toHaveBeenCalled();
     expect(api.getPrayerDashboard).not.toHaveBeenCalled();
 
     rerender({ sourcesLoaded: true, locationReady: true });
@@ -127,19 +108,8 @@ describe('usePrayerPersistence', () => {
 
     await waitFor(() => expect(result.current.store.tracking.records[FAJR_KEY]).toMatchObject({ status: 'on_time' }));
     expect(result.current.store.tracking.trackingStartedAt).toBe('2026-09-01T00:00:00Z');
-    // The old mirror's outcome is neither shown nor sent to the service.
-    expect(result.current.store.tracking.records[ASR_KEY]).toBeUndefined();
     await waitFor(() => expect(result.current.serviceSync.status).toBe('synced'));
     expect(api.createPrayerOutcome).not.toHaveBeenCalled();
-  });
-
-  it('never reads or writes the account prayerTracking record: reminders are the prayer service\'s', async () => {
-    const { result } = renderPersistence();
-
-    await waitFor(() => expect(result.current.serviceSync.status).toBe('synced'));
-    expect(persistence.loadStore).not.toHaveBeenCalled();
-    expect(persistence.saveStore).not.toHaveBeenCalled();
-    expect(persistence.subscribeStoreKey).not.toHaveBeenCalled();
   });
 
   it('sends every change to the prayer service under its idempotency key', async () => {
@@ -160,7 +130,6 @@ describe('usePrayerPersistence', () => {
       expect.objectContaining({ date: TODAY, prayer: 'Dhuhr', status: 'on_time' }),
       `prayer-outcome:create:${TODAY}:Dhuhr:on_time:2026-09-26T12:30:00.000Z`,
     ));
-    expect(persistence.saveStore).not.toHaveBeenCalled();
     await waitFor(() => expect(result.current.serviceSync).toEqual({ status: 'synced', error: null }));
   });
 

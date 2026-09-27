@@ -34,7 +34,7 @@ returns the saved position.
 with the last `updatedAt`; a stale edit is rejected. Every request derives the
 owner from OAuth identity and requires an independent Equity client approval.
 Inventory and Employment approvals grant no Equity access. Settings can revoke
-Equity access independently. OAuth clients cannot read generic shared records.
+Equity access independently.
 
 Private source reconciliation must use this published MCP after deployment and
 OAuth consent, then re-read the resulting record. A prepared local import is not

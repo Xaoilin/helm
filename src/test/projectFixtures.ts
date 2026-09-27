@@ -70,8 +70,6 @@ export function fakeTaskContext(overrides: Partial<TaskContextValue> = {}): Task
 export function fakeShellContext(overrides: Partial<ShellContextValue> = {}): ShellContextValue {
   return {
     surface: 'projects',
-    pageLoadError: null,
-    retryPageLoad: vi.fn(),
     navigationRequest: null,
     navigate: vi.fn(),
     requestNavigation: vi.fn(),

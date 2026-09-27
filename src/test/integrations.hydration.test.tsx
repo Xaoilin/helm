@@ -4,11 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultIntegrations, SettingsProvider, useSettingsContext } from '../store/contexts/SettingsContext';
 import type { ServiceIntegration } from '../services/backend/contracts';
 
-const persistence = vi.hoisted(() => ({
-  loadStore: vi.fn(), loadDeviceStore: vi.fn(), saveStore: vi.fn(),
-  saveDeviceStore: vi.fn(), saveStoreCommitted: vi.fn(), subscribeStoreKey: vi.fn(),
+const deviceSettings = vi.hoisted(() => ({ loadDeviceSettings: vi.fn(() => ({})), saveDeviceSettings: vi.fn() }));
+vi.mock('../store/deviceSettings', async importOriginal => ({
+  ...await importOriginal<typeof import('../store/deviceSettings')>(),
+  ...deviceSettings,
 }));
-vi.mock('../store/persistence', () => ({ DEVICE_SETTINGS_STORE_KEY: 'deviceSettings', ...persistence }));
 
 const profileApi = vi.hoisted(() => ({
   isProfileServiceEnabled: vi.fn(() => true),
@@ -46,7 +46,7 @@ describe('integration hydration from the profile service', () => {
     profileApi.saveIntegration.mockImplementation(async (provider: string, integration: object) => ({
       provider, ...integration, updatedAt: '2026-09-26T00:00:00Z',
     }));
-    persistence.loadDeviceStore.mockResolvedValue(null);
+    deviceSettings.loadDeviceSettings.mockReturnValue({});
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -57,7 +57,7 @@ describe('integration hydration from the profile service', () => {
     expect(context.integrations).toEqual(defaultIntegrations);
   });
 
-  it('applies each saved connection record to its offered integration and never reads the account record', async () => {
+  it('applies each saved connection record to its offered integration', async () => {
     records = [savedGoogle, { ...savedGoogle, provider: 'historical', status: 'connected' }];
     render(<SettingsProvider><Probe /></SettingsProvider>);
     await screen.findByText('ready');
@@ -67,10 +67,9 @@ describe('integration hydration from the profile service', () => {
       configuredAt: '2026-07-01T12:00:00Z', lastError: 'Reconnect required',
     }));
     expect(context.integrations.map(integration => integration.provider)).toEqual(['google']);
-    expect(persistence.loadStore).not.toHaveBeenCalled();
   });
 
-  it('saves a Google connection change to the profile service, not to the account record', async () => {
+  it('saves a Google connection change to the profile service', async () => {
     records = [savedGoogle];
     render(<SettingsProvider><Probe /></SettingsProvider>);
     await screen.findByText('ready');
@@ -82,7 +81,6 @@ describe('integration hydration from the profile service', () => {
     expect(profileApi.saveIntegration).toHaveBeenCalledWith('google', {
       status: 'connected', configuredAt: '2026-07-01T12:00:00Z', lastError: null,
     });
-    expect(persistence.saveStore).not.toHaveBeenCalled();
   });
 
   it('keeps the offered integrations and saves nothing when the profile service is not configured', async () => {
@@ -94,6 +92,5 @@ describe('integration hydration from the profile service', () => {
     expect(context.integrations[0].status).toBe('connected');
     expect(profileApi.getIntegrations).not.toHaveBeenCalled();
     expect(profileApi.saveIntegration).not.toHaveBeenCalled();
-    expect(persistence.saveStore).not.toHaveBeenCalled();
   });
 });

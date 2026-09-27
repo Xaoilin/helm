@@ -1,56 +1,20 @@
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import App from './App';
 import { useReleaseRefresh } from './hooks/useReleaseRefresh';
-import { getSupabaseRealtimeSnapshot, subscribeSupabaseRealtimeSnapshot } from './store/supabase';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { AppProviders } from './store/AppProviders';
-import { getInitialShellSurface } from './store/ShellContext';
-import { getPageCollections } from './store/pageCollections';
 import { AuthSessionProvider, useAuthSession } from './store/AuthSessionContext';
 import { SyncAvailabilityProvider } from './store/SyncAvailabilityContext';
 import { checkPrayerDatabaseHealth } from './services/prayerApi';
-import {
-  bootstrapDatabasePersistence,
-  getSyncSessionSnapshot,
-  refreshDatabasePersistence,
-  resetDatabasePersistence,
-  subscribeSyncSession,
-  type SyncSessionSnapshot,
-} from './store/persistence';
 
 export function BootstrappedApp({ children }: { children?: ReactNode }) {
   const auth = useAuthSession();
-  const [syncSession, setSyncSession] = useState(() => getSyncSessionSnapshot());
+  const online = useOnlineStatus();
   const [actionError, setActionError] = useState<string | null>(null);
-  const [retrying, setRetrying] = useState(false);
 
-  // A failed account bootstrap must not prevent an available release updating.
-  // The hook keeps the same pending-write, editor, and visibility guards.
+  // A sign-in or session problem must not prevent an available release updating.
+  // The hook keeps the same editor, dialog, and visibility guards.
   useReleaseRefresh();
-
-  useEffect(() => subscribeSyncSession(setSyncSession), []);
-
-  useEffect(() => {
-    if (!auth.supabaseReady || !auth.authUser) {
-      resetDatabasePersistence(auth.supabaseReady
-        ? 'Sign in to load Sabah One data.'
-        : 'Sabah One database configuration is unavailable.', auth.supabaseReady ? 'signed_out' : 'configuration');
-      return;
-    }
-    void bootstrapDatabasePersistence(getPageCollections(getInitialShellSurface())).catch(() => {
-      // The persistence session exposes the actionable failure state.
-    });
-  }, [auth.authUser, auth.sessionKey, auth.supabaseReady]);
-
-  useEffect(() => {
-    function reloadAppData() {
-      void refreshDatabasePersistence();
-    }
-
-    window.addEventListener('helm:app-data-refresh', reloadAppData);
-    return () => {
-      window.removeEventListener('helm:app-data-refresh', reloadAppData);
-    };
-  }, []);
 
   if (!auth.bootstrapped) {
     return (
@@ -61,9 +25,9 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
   if (!auth.supabaseReady) {
     return (
       <OnlineGate
-        eyebrow="Database required"
+        eyebrow="Sign-in required"
         title="Sabah One cannot open account data"
-        detail="This build is missing its Supabase project configuration. Shared data is never opened from a device fallback."
+        detail="This build is missing its Supabase sign-in configuration. Account data is never opened from a device fallback."
       />
     );
   }
@@ -85,7 +49,7 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
       <OnlineGate
         eyebrow="Your Sabah One account"
         title="Sign in to continue"
-        detail="Sabah One stores shared data in your signed-in database account. Offline and anonymous data changes are not supported."
+        detail="Sabah One keeps your data in your signed-in account. Offline and anonymous data changes are not supported."
         actionLabel="Continue with Google"
         onAction={async () => {
           setActionError(null);
@@ -100,48 +64,13 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
     );
   }
 
-  const fatalSyncReason = syncSession.reason === 'incompatible_schema'
-    || syncSession.reason === 'client_update_required';
-  const currentAccountUsable = syncSession.hasUsableSnapshot
-    && syncSession.userId === auth.authUser.id
-    && !fatalSyncReason;
-  if (!currentAccountUsable) {
-    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-    // Signed in, but the data session was closed: renew and reload rather than signing out.
-    const sessionClosed = syncSession.reason === 'signed_out';
-    const switchingAccount = !sessionClosed && syncSession.userId !== auth.authUser.id;
-    const canRetry = !switchingAccount && !fatalSyncReason
-      && (sessionClosed || syncSession.reason === 'database_unavailable' || syncSession.reason === 'offline');
-    return (
-      <OnlineGate
-        eyebrow={offline ? 'Connection required' : 'Database source of truth'}
-        title={sessionClosed ? 'Reconnecting your session' : switchingAccount ? 'Loading Sabah One' : fatalSyncReason ? 'Sabah One needs an update' : 'Connecting to Sabah One'}
-        detail={blockingSyncDetail(syncSession, switchingAccount, offline)}
-        actionLabel={canRetry ? retrying ? 'Retrying...' : 'Retry connection' : undefined}
-        actionDisabled={retrying}
-        onAction={async () => {
-          setRetrying(true);
-          setActionError(null);
-          try {
-            await refreshDatabasePersistence();
-          } catch (error) {
-            setActionError(error instanceof Error ? error.message : String(error));
-          } finally {
-            setRetrying(false);
-          }
-        }}
-        secondaryActionLabel="Sign out"
-        onSecondaryAction={() => auth.signOut()}
-        error={actionError || (canRetry ? syncSession.error : null)}
-      />
-    );
-  }
-
+  // Remounting the providers for each signed-in session clears the previous account's data before
+  // the next account's pages load theirs from the services.
   return (
-    <SyncAvailabilityProvider readOnly={syncSession.readOnly} reason={syncSession.reason}>
-      <AppProviders key={auth.authUser.id}>
+    <SyncAvailabilityProvider readOnly={!online}>
+      <AppProviders key={auth.sessionKey}>
         <div className="account-workspace">
-          <SyncStatusBanner syncSession={syncSession} />
+          {!online && <OfflineBanner />}
           {children ?? <App />}
         </div>
       </AppProviders>
@@ -149,41 +78,9 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
   );
 }
 
-function blockingSyncDetail(
-  syncSession: SyncSessionSnapshot,
-  switchingAccount: boolean,
-  offline: boolean,
-): string {
-  if (syncSession.reason === 'signed_out') {
-    return 'You are still signed in, but your account data connection closed. Retry to renew your session and reload your data.';
-  }
-  if (switchingAccount) return 'Clearing the previous account and securely loading this account...';
-  if (syncSession.reason === 'incompatible_schema') {
-    return 'This build cannot safely open the current Sabah One database schema.';
-  }
-  if (syncSession.reason === 'client_update_required') {
-    return 'Install the latest Sabah One release to open this account safely.';
-  }
-  if (offline) return 'Reconnect to the internet, then use Retry connection to load your account.';
-  if (syncSession.reason === 'database_unavailable') {
-    return 'Your account could not be loaded. Automatic retries are limited. Use Retry connection to try again.';
-  }
-  return 'Loading your account from the database.';
-}
-
-function SyncStatusBanner({ syncSession }: { syncSession: SyncSessionSnapshot }) {
-  const realtimeState = useSyncExternalStore(subscribeSupabaseRealtimeSnapshot, () => getSupabaseRealtimeSnapshot().state);
-  const [retrying, setRetrying] = useState(false);
-  const [retryError, setRetryError] = useState<string | null>(null);
-  const liveUpdatesDelayed = realtimeState !== 'subscribed';
-  if (!syncSession.hasUsableSnapshot || (!syncSession.readOnly && !liveUpdatesDelayed)) return null;
-  const offline = syncSession.reason === 'offline';
-  const label = !syncSession.readOnly ? 'Live updates delayed' : offline ? 'Offline' : 'Read-only';
-  const detail = !syncSession.readOnly
-    ? 'Your saved data remains available. Checking for changes automatically.'
-    : offline
-    ? 'Showing your last confirmed data. Sabah One will reconnect automatically.'
-    : 'Showing your last confirmed data while Sabah One reconnects.';
+function OfflineBanner() {
+  const label = 'Offline';
+  const detail = 'Showing your last confirmed data. Sabah One will reconnect automatically.';
   return (
     <div
       className="sync-status-banner"
@@ -193,16 +90,6 @@ function SyncStatusBanner({ syncSession }: { syncSession: SyncSessionSnapshot })
     >
       <strong>{label}</strong>
       <span>{detail}</span>
-      {syncSession.readOnly && (
-        <button type="button" className="btn btn-secondary btn-sm" disabled={retrying} onClick={() => {
-          setRetrying(true);
-          setRetryError(null);
-          void refreshDatabasePersistence().catch(error => {
-            setRetryError(error instanceof Error ? error.message : String(error));
-          }).finally(() => setRetrying(false));
-        }}>{retrying ? 'Retrying...' : 'Retry connection'}</button>
-      )}
-      {retryError && <span role="alert">{retryError}</span>}
     </div>
   );
 }
@@ -212,24 +99,11 @@ interface OnlineGateProps {
   title: string;
   detail: string;
   actionLabel?: string;
-  actionDisabled?: boolean;
   onAction?: () => Promise<void> | void;
-  secondaryActionLabel?: string;
-  onSecondaryAction?: () => Promise<void> | void;
   error?: string | null;
 }
 
-function OnlineGate({
-  eyebrow,
-  title,
-  detail,
-  actionLabel,
-  actionDisabled,
-  onAction,
-  secondaryActionLabel,
-  onSecondaryAction,
-  error,
-}: OnlineGateProps) {
+function OnlineGate({ eyebrow, title, detail, actionLabel, onAction, error }: OnlineGateProps) {
   return (
     <main className="online-gate">
       <section className="online-gate-card" aria-live="polite">
@@ -238,14 +112,9 @@ function OnlineGate({
         <h1>{title}</h1>
         <p>{detail}</p>
         {error && <div className="online-gate-error" role="alert">{error}</div>}
-        {(actionLabel || secondaryActionLabel) && (
+        {actionLabel && onAction && (
           <div className="online-gate-actions">
-            {actionLabel && onAction && (
-              <button className="btn btn-primary" type="button" disabled={actionDisabled} onClick={() => void onAction()}>{actionLabel}</button>
-            )}
-            {secondaryActionLabel && onSecondaryAction && (
-              <button className="btn btn-secondary" type="button" onClick={() => void onSecondaryAction()}>{secondaryActionLabel}</button>
-            )}
+            <button className="btn btn-primary" type="button" onClick={() => void onAction()}>{actionLabel}</button>
           </div>
         )}
       </section>

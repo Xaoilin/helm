@@ -2,39 +2,19 @@ import { describe, expect, it } from 'vitest';
 import * as barrel from '../store/supabase';
 
 /**
- * Existing store, service and test code imports these names from the
- * `store/supabase` compatibility barrel. The per-domain OAuth client helpers
- * were replaced by the generic `store/supabase/oauthClients` gateway.
+ * Existing store and service code imports these names from the `store/supabase`
+ * compatibility barrel. Secrets and OAuth approvals have their own gateway
+ * modules; the generic record store and its Realtime Broadcast are retired.
  */
 const PUBLIC_NAMES = [
-  'applyHelmMutations',
-  'fetchHelmAccountSnapshot',
-  'fetchHelmChangedCollections',
-  'fetchHelmCollections',
-  'getAuthSessionSnapshot',
-  'getClient',
-  'getCurrentAccessToken',
   'getFreshAccessToken',
-  'getCurrentUserId',
   'getSessionUser',
-  'SessionUnavailableError',
-  'getSupabaseRealtimeSnapshot',
-  'initFromEnv',
   'initSupabase',
-  'isAuthSessionBootstrapped',
-  'isAuthenticated',
   'isSupabaseReady',
-  'listHelmSecrets',
   'onAuthStateChange',
-  'probeHelmAccountVersion',
-  'revealHelmSecret',
-  'saveHelmSecret',
-  'setCurrentUserId',
-  'setHelmSecretArchived',
+  'SessionUnavailableError',
   'signInWithGoogle',
   'signOut',
-  'subscribeHelmBroadcast',
-  'subscribeSupabaseRealtimeSnapshot',
 ];
 
 describe('store/supabase compatibility barrel', () => {

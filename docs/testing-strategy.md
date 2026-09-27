@@ -11,18 +11,13 @@ Sabah One uses a small portfolio selected by consequence and boundary fidelity, 
 
 The focused and complete gates are intentionally different claims. A green focused gate does not prove the complete web candidate, and a green mocked/unit check does not prove Postgres, browser, deployment, or live behavior.
 
-KAN-321's [workload verification](sync-workload-verification.md) keeps the identical
-mocked before/after scenario separate from the protected deployed-frontend proof.
-The latter requires matching Pages JavaScript and disposable fixture cleanup in
-the existing post-deploy acceptance workflow.
-
 ## Risk To Check Map
 
 | Consequence protected | Cheapest faithful check | What it proves | What it does not prove |
 | --- | --- | --- | --- |
-| Signed-in data must fail closed | Focused boot/persistence checks plus a browser boot failure | Shared providers and writes remain unavailable without a valid online account session. | Hosted auth expiry, reconnect timing, or production availability. |
-| Accounts and revisions must not cross | Transactional local Postgres contract | RLS ownership, account-scoped records, atomic revision/conflict handling, and idempotent mutation identity. | Current remote schema identity; that is release/deployment evidence. |
-| Scheduled job updates stay within the approved account | Employment SQL contract, actual MCP SDK runtime checks, consent browser journeys, and a synthetic hosted OAuth fixture | Separate domain approval, application/history persistence, retries, stale editor protection and revocation. The hosted fixture accepts JSON and SSE replies and matches the requested JSON-RPC ID. | Recruiting source truth or the user's own connector approval; those require source reconciliation and authenticated account readback. |
+| Signed-in data must fail closed | Focused auth-session checks plus the browser sign-in gate | Shared providers and writes remain unavailable without a valid online account session. | Hosted auth expiry, reconnect timing, or production availability. |
+| Accounts and approvals must not cross | Transactional local Postgres contract | Secret RLS ownership and idempotent mutation identity, per-domain agent OAuth approvals, and the retired record store staying retired. | Current remote schema identity; that is release/deployment evidence. |
+| Scheduled job updates stay within the approved account | Approval SQL contract, actual MCP SDK runtime checks, consent browser journeys, and a synthetic hosted OAuth fixture | Separate domain approval, application/history persistence, retries, stale editor protection and revocation. The hosted fixture accepts JSON and SSE replies and matches the requested JSON-RPC ID. | Recruiting source truth or the user's own connector approval; those require source reconciliation and authenticated account readback. |
 | Product usage must be rich without collecting private content | Pure queue/sanitizer tests plus transactional local Postgres contracts | Typed session/navigation/action/outcome/error/performance events, metadata minimisation, batching failure isolation, duplicate suppression, owner-only RLS, direct-write denial, no anonymous access, and non-destructive rollback. | Whether every future feature emits the ideal taxonomy or whether product recommendations are useful; those require later instrumentation and the Activity viewer. |
 | Calendar identity remains account -> source -> event | Focused domain/provider identity examples | Account-scoped source keys and event identity cannot collapse across providers. | Live Google OAuth or provider sync. |
 | Prayer dates, deadlines, and reminders use schedule time | Pure policy checks with explicit instants and fake time, plus one browser prayer state | Timetable validation, IANA conversion, exclusive deadlines, overnight Isha, reminder expiry, and visible schedule rendering. | Closed-page delivery, browser throttling, or third-party timetable availability. |

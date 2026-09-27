@@ -3,21 +3,17 @@ import { resolve } from 'node:path';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings, SettingsProvider, useSettingsContext } from '../store/contexts/SettingsContext';
-import { splitSettings } from '../store/recordCodec';
+import { splitSettings } from '../store/deviceSettings';
 import type { Settings } from '../types/domain';
 
-const persistenceMocks = vi.hoisted(() => ({
-  loadDeviceStore: vi.fn(),
-  loadStore: vi.fn(),
-  saveDeviceStore: vi.fn(),
-  saveStore: vi.fn(),
-  saveStoreCommitted: vi.fn(),
-  subscribeStoreKey: vi.fn(),
+const deviceMocks = vi.hoisted(() => ({
+  loadDeviceSettings: vi.fn(),
+  saveDeviceSettings: vi.fn(),
 }));
 
-vi.mock('../store/persistence', () => ({
-  DEVICE_SETTINGS_STORE_KEY: 'deviceSettings',
-  ...persistenceMocks,
+vi.mock('../store/deviceSettings', async importOriginal => ({
+  ...await importOriginal<typeof import('../store/deviceSettings')>(),
+  ...deviceMocks,
 }));
 
 const profileApi = vi.hoisted(() => ({
@@ -84,17 +80,7 @@ function TimeZoneProbe() {
 describe('settings shared/device partition', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    persistenceMocks.loadStore.mockImplementation(async (key: string) => (
-      key === 'settings' ? { theme: 'light', prayerCity: 'Leeds' } : []
-    ));
-    persistenceMocks.loadDeviceStore.mockResolvedValue({
-      deepgramApiKey: 'device-token',
-      supabaseUrl: 'https://device.example.test',
-    });
-    persistenceMocks.saveStore.mockResolvedValue(undefined);
-    persistenceMocks.saveStoreCommitted.mockResolvedValue(undefined);
-    persistenceMocks.saveDeviceStore.mockResolvedValue(undefined);
-    persistenceMocks.subscribeStoreKey.mockReturnValue(() => undefined);
+    deviceMocks.loadDeviceSettings.mockReturnValue({ supabaseUrl: 'https://device.example.test' });
     profileApi.isProfileServiceEnabled.mockReturnValue(false);
     profileApi.getGlobalSettings.mockResolvedValue({
       city: 'Bedford', country: 'United Kingdom', timeZone: null, updatedAt: '2026-09-01T00:00:00Z',
@@ -114,7 +100,6 @@ describe('settings shared/device partition', () => {
       supabaseUrl: 'https://device.example.test',
       unknownField: 'discarded',
     })).toEqual({
-      shared: {},
       device: {
         supabaseUrl: 'https://device.example.test',
       },
@@ -137,18 +122,17 @@ describe('settings shared/device partition', () => {
       ollamaEndpoint: 'http://localhost:11434',
       ollamaModel: 'llama3',
       monzoAccessToken: 'plaintext',
-    })).toEqual({ shared: {}, device: {}, service: { theme: 'dark' } });
+    })).toEqual({ device: {}, service: { theme: 'dark' } });
     expect(Object.keys(defaultSettings)).not.toContain('lifeHeroEnabled');
     expect(Object.keys(defaultSettings)).not.toContain('assistantProvider');
   });
 
   it('allows only validated IANA app time zones, owned by the profile service', () => {
     expect(splitSettings({ appTimezone: 'America/New_York' })).toEqual({
-      shared: {},
       device: {},
       service: { appTimezone: 'America/New_York' },
     });
-    expect(splitSettings({ appTimezone: 'Not/AZone' })).toEqual({ shared: {}, device: {}, service: {} });
+    expect(splitSettings({ appTimezone: 'Not/AZone' })).toEqual({ device: {}, service: {} });
   });
 
   it('keeps app preferences, prayer preferences and location out of the account record', () => {
@@ -160,7 +144,6 @@ describe('settings shared/device partition', () => {
       prayerCity: 'Leeds',
       prayerCountry: 'United Kingdom',
     })).toEqual({
-      shared: {},
       device: {},
       service: {
         theme: 'light',
@@ -188,19 +171,14 @@ describe('settings shared/device partition', () => {
     });
 
     expect(button.textContent).toBe('dark|Bedford|undefined');
-    expect(persistenceMocks.loadStore).not.toHaveBeenCalled();
-    expect(persistenceMocks.saveStore).not.toHaveBeenCalled();
     expect(profileApi.saveAppPreferences).toHaveBeenCalledTimes(1);
     expect(profileApi.saveAppPreferences).toHaveBeenCalledWith({
       theme: 'dark', dataRetentionDays: 90, telemetry: true, defaultCalendarTab: 'week', goalTags: ['health'],
     });
-    expect(persistenceMocks.saveDeviceStore.mock.calls.at(-1)).toEqual([
-      'deviceSettings',
-      {
-        googleOAuthClientId: 'changed-client',
-        supabaseUrl: 'https://device.example.test',
-      },
-    ]);
+    expect(splitSettings(deviceMocks.saveDeviceSettings.mock.calls.at(-1)?.[0]).device).toEqual({
+      googleOAuthClientId: 'changed-client',
+      supabaseUrl: 'https://device.example.test',
+    });
   });
 
   it('never saves app preferences before the profile service has loaded them', async () => {
@@ -220,7 +198,6 @@ describe('settings shared/device partition', () => {
 
     expect(profileApi.getAppPreferences).toHaveBeenCalledTimes(1);
     expect(profileApi.saveAppPreferences).not.toHaveBeenCalled();
-    expect(persistenceMocks.saveStore).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });
 
@@ -228,17 +205,14 @@ describe('settings shared/device partition', () => {
     const root = resolve(__dirname, '../..');
     const source = readFileSync(resolve(root, 'src/store/contexts/SettingsContext.tsx'), 'utf8');
 
-    expect(source).toContain('loadDeviceStore<DeviceSettings>');
-    expect(source).toContain('saveDeviceStore(DEVICE_SETTINGS_STORE_KEY, splitSettings(settings).device)');
+    expect(source).toContain('loadDeviceSettings()');
+    expect(source).toContain('saveDeviceSettings(settings)');
     expect(source).toContain('useAppPreferencesSync(loaded, settings, applyServiceAppPreferences)');
     expect(source).not.toContain("saveStore('settings'");
     expect(source).not.toContain("loadStore<Settings>('settings')");
   });
 
   it('commits a preferred app time zone before publishing it and clears back to Automatic', async () => {
-    persistenceMocks.loadStore.mockImplementation(async (key: string) => (
-      key === 'settings' ? { appTimezone: 'Europe/London' } : []
-    ));
     render(
       <SettingsProvider>
         <TimeZoneProbe />
@@ -256,10 +230,6 @@ describe('settings shared/device partition', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Use Automatic' }));
     });
     expect(screen.getByText(/automatic\||utc-fallback\|/)).toBeInTheDocument();
-    expect(persistenceMocks.saveStoreCommitted).not.toHaveBeenCalled();
-    for (const [key, value] of persistenceMocks.saveStore.mock.calls) {
-      if (key === 'settings') expect(splitSettings(value).shared).not.toHaveProperty('appTimezone');
-    }
   });
 
   it('confirms a preferred time zone with the profile service before showing it', async () => {
@@ -309,7 +279,6 @@ describe('settings shared/device partition', () => {
     expect(prayerApi.savePrayerPreferences).toHaveBeenCalledWith({
       enabled: true, reminderEnabled: false, reminderMinutes: 10,
     });
-    expect(persistenceMocks.saveStore).not.toHaveBeenCalled();
     prayerApi.isPrayerServiceEnabled.mockReturnValue(false);
   });
 });
