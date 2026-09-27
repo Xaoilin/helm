@@ -7,28 +7,16 @@
  * Dates:
  * - Generic task dates (due dates, "today", habit resets) use the app time
  *   zone (`settings.appTimeZone.effectiveTimeZone`).
- * - Prayer tasks reset against the prayer timetable's date, because prayer
- *   completions stamp `recurring.lastReset` with that date.
- * - Streaks keep the device-local dates that `updateStreak` stamps.
+ * - The daily reset, completion stamps, XP and streaks belong to the planner
+ *   service; prayer habits reopen by the prayer timetable's date there.
  */
 import type {
-  GamificationProfile,
-  KnowledgeEntry,
-  KnowledgeTopic,
-  LifestyleItem,
   PrayerName,
   Task,
   TaskCategory,
   TaskPriority,
 } from '../types/domain';
 import { getAppDate } from './appTimeZone';
-import {
-  buildCompletionContext,
-  checkStreakBroken,
-  processTaskCompletion,
-  recordHabitCompletion,
-  type CompletionResult,
-} from './gamification';
 import { addLocalDays } from './localDate';
 import {
   comparePrayerTasks,
@@ -78,138 +66,28 @@ export function getTaskDueStatus(task: Pick<Task, 'dueDate' | 'completed'>, appD
 
 // ── Daily rollover ──
 
-export interface RolloverDates {
-  /** Today in the app time zone; daily habits reset against it. */
-  appDate: string;
-  /** Today in the prayer timetable zone, or null while that zone is not yet known. */
-  prayerDate: string | null;
-}
-
 /**
- * The date prayer tasks reset against.
+ * The time zone prayer habits reopen in, for the planner service's daily reset.
  *
- * While prayer times are on but the timetable zone is still unknown (loading or
- * unavailable), prayer tasks wait rather than reset against a guessed date.
- * With prayer times switched off there is no timetable, so the app date is used.
+ * While prayer times are on but the timetable zone is still unknown (loading or unavailable), prayer
+ * habits wait (null) rather than reopen by a guessed date. With prayer times switched off there is no
+ * timetable, so the app's zone is used.
  */
-export function resolvePrayerRolloverDate(input: {
+export function resolvePrayerRolloverZone(input: {
   prayerEnabled: boolean;
   scheduleTimezoneValid: boolean;
-  prayerToday: string;
-  appDate: string;
+  scheduleTimeZone: string | null;
+  appTimeZone: string;
 }): string | null {
-  if (!input.prayerEnabled) return input.appDate;
-  return input.scheduleTimezoneValid ? input.prayerToday : null;
-}
-
-function rolloverDateFor(task: Task, dates: RolloverDates): string | null {
-  return isPrayerTask(task) ? dates.prayerDate : dates.appDate;
-}
-
-/**
- * Completed habits (daily and prayer tasks) that are due to reset for the day.
- *
- * A habit already reset (or completed) on this date or later is left alone, so
- * applying the result twice cannot reset a habit twice. Weekday-only habits do
- * not reset on Saturday or Sunday.
- */
-export function selectHabitsToReset(tasks: readonly Task[], dates: RolloverDates): Task[] {
-  return tasks.filter(task => {
-    if (!isHabitTask(task) || !task.recurring || !task.completed) return false;
-    const date = rolloverDateFor(task, dates);
-    if (!date) return false;
-    if (task.recurring.lastReset && task.recurring.lastReset >= date) return false;
-    if (task.recurring.frequency === 'weekdays' && !isWeekdayDate(date)) return false;
-    return true;
-  });
-}
-
-export function buildHabitResetUpdate(task: Task, dates: RolloverDates): Partial<Task> {
-  const date = rolloverDateFor(task, dates);
-  if (!task.recurring || !date) throw new Error(`Task ${task.id} is not a habit that can reset.`);
-  return {
-    completed: false,
-    completedAt: undefined,
-    recurring: { ...task.recurring, lastReset: date },
-  };
-}
-
-/** The profile with its streak zeroed when the streak was missed, or null when nothing changes. */
-export function buildStreakBreakUpdate(profile: GamificationProfile, now: Date): GamificationProfile | null {
-  if (profile.currentStreak <= 0 || !checkStreakBroken(profile, now)) return null;
-  return { ...profile, currentStreak: 0 };
+  if (!input.prayerEnabled) return input.appTimeZone;
+  return input.scheduleTimezoneValid && input.scheduleTimeZone ? input.scheduleTimeZone : null;
 }
 
 // ── Completion ──
 
-/** Habits stay completed for the rest of their day; only the rollover reopens them. */
+/** Habits stay completed for the rest of their day; only the daily reset reopens them. */
 export function isCompletionLocked(task: Pick<Task, 'category' | 'completed'>): boolean {
   return isHabitTask(task) && task.completed;
-}
-
-export function buildTaskToggleUpdate(task: Task, now: Date, appDate: string): Partial<Task> {
-  const completing = !task.completed;
-  return {
-    completed: completing,
-    completedAt: completing ? now.toISOString() : undefined,
-    ...(task.recurring && completing ? { recurring: { ...task.recurring, lastReset: appDate } } : {}),
-  };
-}
-
-export interface KnowledgeProgress {
-  knowledgeEntries: number;
-  knowledgeTopics: number;
-  lifestyleHaramMastered: number;
-  lifestyleHalalConsistent: number;
-  lifestyleTotal: number;
-}
-
-export function countKnowledgeProgress(input: {
-  knowledgeEntries: readonly KnowledgeEntry[];
-  knowledgeTopics: readonly KnowledgeTopic[];
-  lifestyleItems: readonly LifestyleItem[];
-}): KnowledgeProgress {
-  return {
-    knowledgeEntries: input.knowledgeEntries.length,
-    knowledgeTopics: input.knowledgeTopics.length,
-    lifestyleHaramMastered: input.lifestyleItems.filter(item => item.type === 'haram' && item.status === 'mastered').length,
-    lifestyleHalalConsistent: input.lifestyleItems.filter(item => item.type === 'halal' && item.status === 'consistent').length,
-    lifestyleTotal: input.lifestyleItems.length,
-  };
-}
-
-export interface CompletionRewardInput {
-  task: Task;
-  tasks: readonly Task[];
-  profile: GamificationProfile;
-  goalTags: string[] | undefined;
-  knowledge: KnowledgeProgress;
-  now: Date;
-  appDate: string;
-  appTimeZone: string;
-}
-
-export interface CompletionReward {
-  profile: GamificationProfile;
-  result: CompletionResult;
-}
-
-/**
- * XP, streak, and badges for completing a non-prayer task, or null when the
- * completion earns nothing because this habit was already rewarded today.
- */
-export function buildCompletionReward(input: CompletionRewardInput): CompletionReward | null {
-  const { task, profile, appDate } = input;
-  const habit = isHabitTask(task);
-  if (habit && (profile.dailyLog?.[appDate] || []).includes(task.id)) return null;
-
-  const completionsToday = input.tasks
-    .filter(candidate => candidate.completed && getCompletionAppDate(candidate, input.appTimeZone) === appDate)
-    .length;
-  const context = buildCompletionContext(input.tasks as Task[], input.goalTags, appDate, profile, input.knowledge);
-  const result = processTaskCompletion(profile, task, completionsToday, input.now, context);
-  const rewarded = habit ? recordHabitCompletion(result.updatedProfile, task.id, appDate) : result.updatedProfile;
-  return { profile: rewarded, result };
 }
 
 // ── Today view ──

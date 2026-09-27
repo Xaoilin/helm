@@ -22,7 +22,6 @@ import { validatePrayerTimeZone } from '../../services/prayerTimeZone';
 import { getPrayerOutcome, normalizePrayerTrackingState } from '../../services/prayerTracking';
 import type { PrayerReminderPermissionRequestResult } from '../../services/browserPrayerReminder';
 import type { getNextPrayer, PrayerTime, PrayerTimesData } from '../../services/prayerTimes';
-import { countPrayerRewardKnowledge } from '../../services/prayerCompletionPolicy';
 import type { PrayerReminderGroup } from '../../services/prayerReminderPolicy';
 import {
   buildPrayerSchedulePolicySnapshot,
@@ -38,7 +37,6 @@ import {
 import type { PrayerOutcomeRejection, PrayerServiceSyncState } from './usePrayerServiceSync';
 import { useGamificationContext } from './GamificationContext';
 import { useDailyMomentumContext } from './DailyMomentumContext';
-import { useKnowledgeContext } from './KnowledgeContext';
 import { useSettingsContext } from './SettingsContext';
 import { useTaskContext } from './TaskContext';
 import { usePrayerTracking } from './prayer/usePrayerTracking';
@@ -56,7 +54,7 @@ import {
   type PrayerCompletionMutationResult,
 } from './prayer/usePrayerCompletionWorkflow';
 import { usePrayerPersistence } from './prayer/usePrayerPersistence';
-import { usePrayerRewardRecovery } from './prayer/usePrayerRewardRecovery';
+import { usePrayerRewards } from './prayer/usePrayerRewards';
 import {
   usePrayerCompletionPrompt,
   type PrayerCompletionRequest,
@@ -100,7 +98,8 @@ export interface PrayerContextValue {
     options?: PrayerCompletionRequestOptions,
   ) => void;
   cancelPrayerCompletion: () => void;
-  confirmPrayerCompletion: (status: PrayerCompletionStatus) => PrayerCompletionMutationResult | null;
+  /** Records the prayer; resolves with the result and its XP once the planner has rewarded it. */
+  confirmPrayerCompletion: (status: PrayerCompletionStatus) => Promise<PrayerCompletionMutationResult> | null;
   completePrayer: (
     prayerName: PrayerName,
     status: PrayerCompletionStatus,
@@ -140,7 +139,6 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const taskOwner = useTaskContext();
   const gamificationOwner = useGamificationContext();
   const momentumOwner = useDailyMomentumContext();
-  const knowledge = useKnowledgeContext();
   const settingsOwner = useSettingsContext();
 
   const { settings } = settingsOwner;
@@ -217,10 +215,8 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   });
   const { lastNotificationKey, lastReminderError, reporter } = usePrayerReminderDiagnostics();
   const { cancelForPrayer, testReminder } = usePrayerDeadlineReminders({
-    enabled: loaded && prayerEnabled && reminderEnabled && reminderSchedulesValid,
-    reminderGroups,
-    tracking,
-    commitTracking,
+    enabled: loaded && prayerEnabled && reminderEnabled,
+    getTracking,
     onFired: touch,
     refreshPermission,
     scheduleTimeZone: scheduleTimezone,
@@ -237,23 +233,14 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     reporter,
   });
 
-  // Completion across prayer tracking, gamification and prayer tasks.
-  const { knowledgeEntries, knowledgeTopics, lifestyleItems } = knowledge;
-  const knowledgeCounts = useMemo(
-    () => countPrayerRewardKnowledge({ knowledgeEntries, knowledgeTopics, lifestyleItems }),
-    [knowledgeEntries, knowledgeTopics, lifestyleItems],
-  );
+  // Completion: prayer tracking and today's habit here; the planner rewards the recorded prayer.
   const {
     completePrayer,
     correctPrayerOutcome,
     undoPrayerCompletion,
     revertRefusedOutcome,
-    getGamification,
   } = usePrayerCompletionWorkflow({
     taskOwner,
-    gamificationOwner,
-    knowledgeCounts,
-    goalTags: settings.goalTags,
     timetable,
     scheduleTimeZone: scheduleTimezone,
     today,
@@ -262,23 +249,26 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     commitTracking,
     cancelReminderForPrayer: cancelForPrayer,
   });
+  const { awaitReward, onOutcomeConfirmed, onOutcomeRefused } = usePrayerRewards(taskOwner, gamificationOwner);
 
   const [completionNotice, setCompletionNotice] = useState<string | null>(null);
   const dismissCompletionNotice = useCallback(() => setCompletionNotice(null), []);
   // The service refused an outcome outright: show the service's truth instead and say why.
   const rejectOutcome = useCallback((rejection: PrayerOutcomeRejection) => {
     revertRefusedOutcome(rejection);
+    onOutcomeRefused(rejection.key);
     setCompletionNotice(`${rejection.record.prayerName} on ${rejection.record.date} was not saved: ${rejection.message}`);
-  }, [revertRefusedOutcome]);
+  }, [onOutcomeRefused, revertRefusedOutcome]);
 
-  // Persistence: the prayer service for outcomes, the account record for reminder receipts.
-  // Rewards and tasks load first, so reward recovery never mistakes a missing receipt.
+  // Persistence: the prayer service for outcomes, the account record for reminder receipts. Each
+  // outcome change the service confirms brings its planner reward up to date.
   const { serviceSync, reload: reloadOutcomes, allowBulkDelete } = usePrayerPersistence({
     store,
-    sourcesLoaded: taskOwner.loaded && gamificationOwner.loaded && settingsOwner.loaded,
+    sourcesLoaded: taskOwner.loaded && settingsOwner.loaded,
     locationReady: serviceSettingsReady,
     location: { city, country },
     onRejected: rejectOutcome,
+    onConfirmed: onOutcomeConfirmed,
   });
   usePrayerOutcomeUpkeep({
     loaded,
@@ -289,14 +279,13 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     now,
     reload: reloadOutcomes,
   });
-  usePrayerRewardRecovery({ loaded, records: tracking.records, getGamification, completePrayer });
 
   const {
     pendingCompletion,
     requestPrayerCompletion,
     cancelPrayerCompletion,
     confirmPrayerCompletion,
-  } = usePrayerCompletionPrompt({ today, timetable, completePrayer, showNotice: setCompletionNotice });
+  } = usePrayerCompletionPrompt({ today, timetable, completePrayer, awaitReward, showNotice: setCompletionNotice });
 
   const getOutcome = useCallback(
     (prayerDate: string, prayerName: PrayerName) => getPrayerOutcome(tracking, prayerDate, prayerName),

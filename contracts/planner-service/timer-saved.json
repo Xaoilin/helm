@@ -1,0 +1,36 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/planner/v1/clock/timers/t1"
+  },
+  "status" : 200,
+  "body" : {
+    "stopwatches" : [
+      {
+        "id" : "s1",
+        "label" : "Tea",
+        "accumulatedMs" : 1200,
+        "startedAt" : 1790000000000,
+        "laps" : [
+          400,
+          800
+        ]
+      }
+    ],
+    "timers" : [
+      {
+        "id" : "t1",
+        "label" : "Pasta",
+        "durationMs" : 600000,
+        "remainingMs" : 600000,
+        "endsAt" : 1790000600000,
+        "status" : "running",
+        "sound" : "bell",
+        "alerting" : false,
+        "completedAt" : null
+      }
+    ],
+    "nextStopwatchNumber" : 2,
+    "nextTimerNumber" : 2
+  }
+}

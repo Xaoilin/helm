@@ -4,7 +4,6 @@ import { useGamificationContext } from "../store/contexts/GamificationContext";
 import { useAuthSession } from '../store/AuthSessionContext';
 import { OAuthClientApprovalsSection } from '../components/settings/OAuthClientApprovalsSection';
 import { OAUTH_CLIENT_DOMAINS } from '../store/supabase/oauthClients';
-import { DEFAULT_PROFILE } from '../services/gamification';
 import { APP_RELEASE_VERSION } from '../config/release';
 import {
   getSyncSessionSnapshot,
@@ -503,16 +502,11 @@ export default function SettingsSurface() {
               <button
                 className="btn btn-danger btn-sm"
                 onClick={() => {
-                  gamification.updateGamification({
-                    ...DEFAULT_PROFILE,
-                    ...(gamification.gamification.dailyMomentumLearn
-                      ? { dailyMomentumLearn: gamification.gamification.dailyMomentumLearn }
-                      : {}),
-                    ...(gamification.gamification.dailyMomentumMove
-                      ? { dailyMomentumMove: gamification.gamification.dailyMomentumMove }
-                      : {}),
-                  });
-                  prayer.replacePrayerTracking(createPrayerTrackingState());
+                  // The planner resets XP and keeps prayer receipts as history (daily momentum stays), so
+                  // clearing prayer tracking afterwards never takes XP back or rewards anything again.
+                  void gamification.resetProgress().then(() => {
+                    prayer.replacePrayerTracking(createPrayerTrackingState());
+                  }, () => undefined);
                   setConfirmReset(false);
                 }}
               >

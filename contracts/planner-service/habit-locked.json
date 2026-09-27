@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/planner/v1/tasks/water/reopen"
+  },
+  "status" : 409,
+  "body" : {
+    "code" : "habit_locked",
+    "message" : "A habit stays done until the next day."
+  }
+}

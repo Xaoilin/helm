@@ -1,0 +1,72 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/planner/v1/rewards/prayers/sync"
+  },
+  "status" : 200,
+  "body" : {
+    "reward" : {
+      "xpEarned" : 25,
+      "level" : 1,
+      "leveledUp" : false,
+      "title" : "Beginner",
+      "newBadges" : [
+        "first-blood",
+        "early-bird",
+        "habit-starter",
+        "high-priority",
+        "weekend-warrior",
+        "early-week",
+        "dawn-warrior"
+      ],
+      "currentStreak" : 1,
+      "streakMilestone" : false
+    },
+    "task" : {
+      "id" : "fajr",
+      "title" : "Fajr Prayer",
+      "description" : "",
+      "completed" : true,
+      "completedAt" : "2026-09-27T05:10:00Z",
+      "completedLocalDate" : "2026-09-27",
+      "completionTimeZone" : "Z",
+      "priority" : "high",
+      "category" : "prayer",
+      "dueDate" : null,
+      "recurring" : {
+        "frequency" : "daily",
+        "lastReset" : "2026-09-27"
+      },
+      "prayerName" : "Fajr",
+      "goalTag" : null,
+      "emoji" : null,
+      "projectId" : null,
+      "workflowState" : null,
+      "blockedReason" : null,
+      "boardOrder" : null,
+      "createdAt" : "2026-09-27T06:00:00Z",
+      "updatedAt" : "2026-09-27T06:00:00Z"
+    },
+    "profile" : {
+      "totalXp" : 25,
+      "level" : 1,
+      "title" : "Beginner",
+      "currentStreak" : 1,
+      "longestStreak" : 1,
+      "lastCompletionDate" : "2026-09-27",
+      "totalTasksCompleted" : 1,
+      "badges" : [
+        "first-blood",
+        "early-bird",
+        "habit-starter",
+        "high-priority",
+        "weekend-warrior",
+        "early-week",
+        "dawn-warrior"
+      ],
+      "habitTallies" : {
+        "fajr" : 1
+      }
+    }
+  }
+}

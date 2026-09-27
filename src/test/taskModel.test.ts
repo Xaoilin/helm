@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { toLocalDateStr } from '../services/localDate';
 import {
   areTaskFormsEqual,
-  buildCompletionReward,
-  buildHabitResetUpdate,
-  buildStreakBreakUpdate,
   buildTaskFromForm,
-  buildTaskToggleUpdate,
   canSaveTaskForm,
-  countKnowledgeProgress,
   createTaskForm,
   filterAllTasks,
   filterByProject,
@@ -20,31 +14,17 @@ import {
   groupAllTaskSections,
   isCompletionLocked,
   isWeekdayDate,
-  resolvePrayerRolloverDate,
-  selectHabitsToReset,
+  resolvePrayerRolloverZone,
   selectTodayTasks,
   summarizeAllTasks,
   taskToForm,
   weekdayOfDate,
-  type CompletionRewardInput,
 } from '../services/taskModel';
-import type { GamificationProfile, Task } from '../types/domain';
-import { makeGamification, makeTask } from './fixtures';
+import type { Task } from '../types/domain';
+import { makeTask } from './fixtures';
 
 // 12:30 UTC on Saturday 26 September 2026: 13:30 in London, 00:30 on Sunday 27th in Auckland.
 const NEAR_AUCKLAND_MIDNIGHT = new Date('2026-09-26T12:30:00.000Z');
-
-function habit(overrides: Partial<Task> = {}): Task {
-  return makeTask({
-    id: 'habit-read',
-    title: 'Read',
-    category: 'daily',
-    completed: true,
-    completedAt: '2026-09-25T08:00:00.000Z',
-    recurring: { frequency: 'daily', lastReset: '2026-09-25' },
-    ...overrides,
-  });
-}
 
 function prayerTask(overrides: Partial<Task> = {}): Task {
   return makeTask({
@@ -58,21 +38,16 @@ function prayerTask(overrides: Partial<Task> = {}): Task {
   });
 }
 
-const NO_KNOWLEDGE = countKnowledgeProgress({ knowledgeEntries: [], knowledgeTopics: [], lifestyleItems: [] });
-
-function rewardInput(overrides: Partial<CompletionRewardInput> = {}): CompletionRewardInput {
-  const task = overrides.task ?? makeTask();
-  return {
-    task,
-    tasks: [task],
-    profile: makeGamification(),
-    goalTags: [],
-    knowledge: NO_KNOWLEDGE,
-    now: NEAR_AUCKLAND_MIDNIGHT,
-    appDate: '2026-09-26',
-    appTimeZone: 'Europe/London',
+function habit(overrides: Partial<Task> = {}): Task {
+  return makeTask({
+    id: 'habit-read',
+    title: 'Read',
+    category: 'daily',
+    completed: true,
+    completedAt: '2026-09-25T08:00:00.000Z',
+    recurring: { frequency: 'daily', lastReset: '2026-09-25' },
     ...overrides,
-  };
+  });
 }
 
 describe('task app dates', () => {
@@ -120,80 +95,11 @@ describe('due status', () => {
 });
 
 describe('daily habit rollover', () => {
-  const dates = { appDate: '2026-09-28', prayerDate: '2026-09-28' };
-
-  it('resets a completed habit last reset on an earlier day', () => {
-    expect(selectHabitsToReset([habit()], dates).map(task => task.id)).toEqual(['habit-read']);
-  });
-
-  it('leaves habits already reset or completed today, open habits, and one-off tasks alone', () => {
-    const tasks = [
-      habit({ id: 'reset-today', recurring: { frequency: 'daily', lastReset: '2026-09-28' } }),
-      habit({ id: 'stamped-later', recurring: { frequency: 'daily', lastReset: '2026-09-29' } }),
-      habit({ id: 'open', completed: false }),
-      makeTask({ id: 'one-off', completed: true }),
-    ];
-    expect(selectHabitsToReset(tasks, dates)).toEqual([]);
-  });
-
-  it('resets a habit that was never stamped', () => {
-    expect(selectHabitsToReset([habit({ recurring: { frequency: 'daily' } })], dates)).toHaveLength(1);
-  });
-
-  it('keeps weekday-only habits completed over the weekend and resets them on Monday', () => {
-    const weekdayHabit = habit({ recurring: { frequency: 'weekdays', lastReset: '2026-09-25' } });
-    expect(selectHabitsToReset([weekdayHabit], { appDate: '2026-09-26', prayerDate: null })).toEqual([]);
-    expect(selectHabitsToReset([weekdayHabit], { appDate: '2026-09-27', prayerDate: null })).toEqual([]);
-    expect(selectHabitsToReset([weekdayHabit], { appDate: '2026-09-28', prayerDate: null })).toHaveLength(1);
-  });
-
-  it('resets prayer tasks against the prayer date and waits while it is unknown', () => {
-    const fajr = prayerTask({ recurring: { frequency: 'daily', lastReset: '2026-09-27' } });
-    expect(selectHabitsToReset([fajr], { appDate: '2026-09-28', prayerDate: '2026-09-27' })).toEqual([]);
-    expect(selectHabitsToReset([fajr], { appDate: '2026-09-28', prayerDate: null })).toEqual([]);
-    expect(selectHabitsToReset([fajr], { appDate: '2026-09-27', prayerDate: '2026-09-28' })).toHaveLength(1);
-  });
-
-  it('reopens a habit and stamps the reset date so a second pass selects nothing', () => {
-    const update = buildHabitResetUpdate(habit(), dates);
-    expect(update).toEqual({
-      completed: false,
-      completedAt: undefined,
-      recurring: { frequency: 'daily', lastReset: '2026-09-28' },
-    });
-    expect(selectHabitsToReset([{ ...habit(), ...update }], dates)).toEqual([]);
-  });
-
-  it('stamps prayer tasks with the prayer date', () => {
-    expect(buildHabitResetUpdate(prayerTask(), { appDate: '2026-09-29', prayerDate: '2026-09-28' }).recurring?.lastReset).toBe('2026-09-28');
-  });
-
-  it('refuses to build a reset for a task that is not a resettable habit', () => {
-    expect(() => buildHabitResetUpdate(makeTask(), dates)).toThrow();
-    expect(() => buildHabitResetUpdate(prayerTask(), { appDate: '2026-09-28', prayerDate: null })).toThrow();
-  });
-
-  it('chooses the prayer rollover date from the timetable, or the app date when prayer times are off', () => {
-    const base = { prayerToday: '2026-09-27', appDate: '2026-09-28' };
-    expect(resolvePrayerRolloverDate({ ...base, prayerEnabled: true, scheduleTimezoneValid: true })).toBe('2026-09-27');
-    expect(resolvePrayerRolloverDate({ ...base, prayerEnabled: true, scheduleTimezoneValid: false })).toBeNull();
-    expect(resolvePrayerRolloverDate({ ...base, prayerEnabled: false, scheduleTimezoneValid: false })).toBe('2026-09-28');
-  });
-});
-
-describe('streak break', () => {
-  const now = new Date(2026, 8, 26, 12);
-  const daysAgo = (days: number) => toLocalDateStr(new Date(2026, 8, 26 - days, 12));
-  const profile = (overrides: Partial<GamificationProfile>) => ({ ...makeGamification(), currentStreak: 4, ...overrides });
-
-  it('zeroes a streak whose last completion was before yesterday', () => {
-    expect(buildStreakBreakUpdate(profile({ lastCompletionDate: daysAgo(2) }), now)?.currentStreak).toBe(0);
-  });
-
-  it('keeps a streak completed today or yesterday, and ignores an empty streak', () => {
-    expect(buildStreakBreakUpdate(profile({ lastCompletionDate: daysAgo(1) }), now)).toBeNull();
-    expect(buildStreakBreakUpdate(profile({ lastCompletionDate: daysAgo(0) }), now)).toBeNull();
-    expect(buildStreakBreakUpdate(profile({ currentStreak: 0, lastCompletionDate: daysAgo(5) }), now)).toBeNull();
+  it('reopens prayer habits in the timetable zone, or the app zone when prayer times are off', () => {
+    const base = { scheduleTimeZone: 'Asia/Riyadh', appTimeZone: 'Europe/London' };
+    expect(resolvePrayerRolloverZone({ ...base, prayerEnabled: true, scheduleTimezoneValid: true })).toBe('Asia/Riyadh');
+    expect(resolvePrayerRolloverZone({ ...base, prayerEnabled: true, scheduleTimezoneValid: false })).toBeNull();
+    expect(resolvePrayerRolloverZone({ ...base, prayerEnabled: false, scheduleTimezoneValid: false })).toBe('Europe/London');
   });
 });
 
@@ -202,62 +108,6 @@ describe('task completion', () => {
     expect(isCompletionLocked(habit())).toBe(true);
     expect(isCompletionLocked(habit({ completed: false }))).toBe(false);
     expect(isCompletionLocked(makeTask({ completed: true }))).toBe(false);
-  });
-
-  it('stamps a completed habit as reset for the app date', () => {
-    expect(buildTaskToggleUpdate(habit({ completed: false }), NEAR_AUCKLAND_MIDNIGHT, '2026-09-27')).toEqual({
-      completed: true,
-      completedAt: '2026-09-26T12:30:00.000Z',
-      recurring: { frequency: 'daily', lastReset: '2026-09-27' },
-    });
-  });
-
-  it('reopens a one-off task without a reset stamp', () => {
-    expect(buildTaskToggleUpdate(makeTask({ completed: true }), NEAR_AUCKLAND_MIDNIGHT, '2026-09-26')).toEqual({
-      completed: false,
-      completedAt: undefined,
-    });
-  });
-
-  it('awards XP for a first habit completion and logs it under the app date', () => {
-    const task = habit({ completed: false });
-    const reward = buildCompletionReward(rewardInput({ task, tasks: [task], appDate: '2026-09-27', appTimeZone: 'Pacific/Auckland' }));
-    expect(reward?.result.xpEarned).toBeGreaterThan(0);
-    expect(reward?.profile.totalXp).toBe(reward?.result.xpEarned);
-    expect(reward?.profile.dailyLog).toEqual({ '2026-09-27': ['habit-read'] });
-  });
-
-  it('refuses a second reward for the same habit on the same app date', () => {
-    const task = habit({ completed: false });
-    const profile = { ...makeGamification(), dailyLog: { '2026-09-26': ['habit-read'] } };
-    expect(buildCompletionReward(rewardInput({ task, profile }))).toBeNull();
-    expect(buildCompletionReward(rewardInput({ task, profile, appDate: '2026-09-27' }))).not.toBeNull();
-  });
-
-  it('rewards one-off tasks without logging them as habits', () => {
-    const task = makeTask({ id: 'report' });
-    const profile = { ...makeGamification(), dailyLog: { '2026-09-26': ['report'] } };
-    const reward = buildCompletionReward(rewardInput({ task, profile }));
-    expect(reward?.result.xpEarned).toBeGreaterThan(0);
-    expect(reward?.profile.dailyLog).toEqual({ '2026-09-26': ['report'] });
-  });
-
-  it('counts knowledge progress for badge checks', () => {
-    expect(countKnowledgeProgress({
-      knowledgeEntries: [{}, {}] as never[],
-      knowledgeTopics: [{}] as never[],
-      lifestyleItems: [
-        { type: 'haram', status: 'mastered' },
-        { type: 'halal', status: 'consistent' },
-        { type: 'halal', status: 'learning' },
-      ] as never[],
-    })).toEqual({
-      knowledgeEntries: 2,
-      knowledgeTopics: 1,
-      lifestyleHaramMastered: 1,
-      lifestyleHalalConsistent: 1,
-      lifestyleTotal: 3,
-    });
   });
 });
 

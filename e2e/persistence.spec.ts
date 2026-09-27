@@ -28,7 +28,7 @@ const EQUITY: EquityPosition = {
   createdAt: FINANCE_REVIEW.createdAt, updatedAt: FINANCE_REVIEW.updatedAt,
 };
 
-test('keeps saved Finance data, drafts and confirmed writes usable without Realtime and reconciles missed changes', async ({ page, scenario }, testInfo) => {
+test('keeps saved Finance data, drafts and confirmed writes usable without Realtime', async ({ page, scenario }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const control = await scenario({
@@ -104,12 +104,10 @@ test('keeps saved Finance data, drafts and confirmed writes usable without Realt
     evidence.push({ width, headingOverlap, ...dimensions, scrolling });
   }
 
+  // Tasks are the planner service's: completing one is one service write, whatever Realtime is doing.
   let taskMutationCount = 0;
   page.on('request', request => {
-    if (request.url().includes('/rpc/apply_helm_mutations')
-      && request.postDataJSON().p_operations?.some((operation: { collection: string }) => operation.collection === 'tasks')) {
-      taskMutationCount += 1;
-    }
+    if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/complete')) taskMutationCount += 1;
   });
   await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
   const taskWrite = waitForMutation(page, 'tasks');
@@ -117,21 +115,11 @@ test('keeps saved Finance data, drafts and confirmed writes usable without Realt
   expect((await taskWrite).ok()).toBe(true);
   await expect(page.getByRole('checkbox', { name: 'Mark "Review notes" as incomplete' })).toBeChecked();
   expect(taskMutationCount).toBe(1);
-
-  control.applyRemoteMutations([{ op: 'patch', collection: 'tasks', recordId: TASK.id, set: { title: 'Remote update without Broadcast' } }]);
-  await page.clock.fastForward(10 * 60_000);
-  await expect(page.getByRole('checkbox', { name: 'Mark "Remote update without Broadcast" as incomplete' })).toBeChecked();
-  await expect(banner).toContainText('Live updates delayed');
-  expect(taskMutationCount).toBe(1);
-
-  control.applyRemoteMutations([{ op: 'patch', collection: 'tasks', recordId: TASK.id, set: { title: 'Remote update on foreground' } }]);
-  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await expect(page.getByRole('checkbox', { name: 'Mark "Remote update on foreground" as incomplete' })).toBeChecked();
-  expect(taskMutationCount).toBe(1);
+  expect(control.services.planner.tasks.find(task => task.id === TASK.id)?.completed).toBe(true);
   const evidencePath = testInfo.outputPath('synthetic-availability-evidence.json');
   await writeFile(evidencePath, JSON.stringify({
     environment: 'Synthetic Playwright account and mocked HTTPS/WebSocket services; not live-account acceptance.',
-    taskMutationCount, missedChangesReconciledBy: ['ten-minute version safety check', 'foreground visibility event'], dimensions: evidence,
+    taskMutationCount, dimensions: evidence,
   }, null, 2));
   await testInfo.attach('synthetic-availability-evidence', { path: evidencePath, contentType: 'application/json' });
 });

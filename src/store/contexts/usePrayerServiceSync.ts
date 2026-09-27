@@ -55,6 +55,8 @@ export function usePrayerServiceSync(
   getTracking: () => PrayerTrackingState,
   commitTracking: (next: PrayerTrackingState) => void,
   onRejected: (rejection: PrayerOutcomeRejection) => void,
+  /** The service confirmed a change to this outcome (`date::prayer`), e.g. so its reward catches up. */
+  onConfirmed: (key: string) => void = () => undefined,
 ) {
   const enabled = isPrayerServiceEnabled();
   const [state, setState] = useState<PrayerServiceSyncState>({
@@ -124,6 +126,7 @@ export function usePrayerServiceSync(
         for (const operation of operations) {
           try {
             confirmedRef.current = await applyOutcomeOperation(operation, confirmedRef.current);
+            onConfirmed(operation.key);
           } catch (error) {
             if (!isPermanentRejection(error)) throw error;
             refusedRef.current.add(refusalKey(operation));
@@ -149,7 +152,7 @@ export function usePrayerServiceSync(
       desiredRef.current = desired;
       if (record) onRejected({ key, record, confirmed, message });
     }
-  }, [fail, onRejected]);
+  }, [fail, onConfirmed, onRejected]);
 
   /**
    * Loads the service's outcomes and merges them into the app's current state (read when the

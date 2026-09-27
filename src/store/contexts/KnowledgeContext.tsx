@@ -22,6 +22,7 @@ import {
   type LifestyleItemInput,
   type TopicInput,
 } from '../../services/backend/knowledgeServiceApi';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
 import { useServiceLoad } from './useServiceLoad';
 
 export interface KnowledgeContextValue {
@@ -97,7 +98,7 @@ export function KnowledgeProvider({ children }: { children: ReactNode }) {
     publishEntries(knowledge.entries);
     publishLifestyle(items);
   }, [publishEntries, publishLifestyle, publishTopics]);
-  const { loaded, error, reload, reportFailure } = useServiceLoad('Knowledge', isKnowledgeServiceEnabled(), load);
+  const { loaded, error, reload, reportFailure } = useServiceLoad('Knowledge', isKnowledgeServiceEnabled(), load, LIVE_DOMAINS.knowledge);
 
   // ── Topics ──
   const addKnowledgeTopic = useCallback((topic: Omit<KnowledgeTopic, 'id' | 'createdAt' | 'updatedAt'>): string => {

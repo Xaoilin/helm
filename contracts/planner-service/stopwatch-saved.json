@@ -1,0 +1,24 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/planner/v1/clock/stopwatches/s1"
+  },
+  "status" : 200,
+  "body" : {
+    "stopwatches" : [
+      {
+        "id" : "s1",
+        "label" : "Tea",
+        "accumulatedMs" : 1200,
+        "startedAt" : 1790000000000,
+        "laps" : [
+          400,
+          800
+        ]
+      }
+    ],
+    "timers" : [],
+    "nextStopwatchNumber" : 2,
+    "nextTimerNumber" : 1
+  }
+}

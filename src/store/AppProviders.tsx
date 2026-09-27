@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import { startLiveEvents } from '../services/backend/liveEvents';
 import { CalendarProvider } from './contexts/CalendarContext';
 import { ClockProvider } from './contexts/ClockContext';
 import { DailyMomentumProvider } from './contexts/DailyMomentumContext';
@@ -17,6 +18,12 @@ import { MilestoneCelebrationProvider } from './contexts/MilestoneCelebrationCon
 import { ShellProvider } from './ShellContext';
 import { useDailyTaskRollover } from './workflows/useDailyTaskRollover';
 
+/** Keeps the signed-in user's live-update streams open while the app runs, whichever page is open. */
+function LiveEvents() {
+  useEffect(() => startLiveEvents(), []);
+  return null;
+}
+
 /** Runs the daily habit and streak rollover once for the whole app, whichever page is open. */
 function DailyTaskRollover() {
   useDailyTaskRollover();
@@ -26,6 +33,7 @@ function DailyTaskRollover() {
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <ShellProvider>
+      <LiveEvents />
       <SettingsProvider>
         <GamificationProvider>
           <DailyMomentumProvider>

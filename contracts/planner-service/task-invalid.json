@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/planner/v1/tasks/bad"
+  },
+  "status" : 400,
+  "body" : {
+    "code" : "invalid_priority",
+    "message" : "priority must be one of [low, medium, high]."
+  }
+}

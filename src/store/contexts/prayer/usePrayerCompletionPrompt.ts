@@ -13,6 +13,8 @@ import {
   PrayerCompletionRejectedError,
   prayerCompletionRejection,
 } from '../../../services/prayerCompletionRules';
+import type { PlannerReward } from '../../../services/backend/plannerContracts';
+import { toCompletionResult } from '../../../services/plannerRewards';
 import type {
   PrayerCompletionMutationResult,
   PrayerCompletionWorkflow,
@@ -34,6 +36,8 @@ export interface PrayerCompletionPromptInput {
   /** Today's timetable, only when its zone is verified. */
   timetable: PrayerTimesData | null;
   completePrayer: PrayerCompletionWorkflow['completePrayer'];
+  /** Resolves with what the prayer earned once the planner has rewarded it. */
+  awaitReward: (prayerDate: string, prayerName: PrayerName) => Promise<PlannerReward | null>;
   /** Shows why a completion was refused, or clears the notice with null. */
   showNotice: (notice: string | null) => void;
 }
@@ -42,7 +46,8 @@ export interface PrayerCompletionPrompt {
   pendingCompletion: PrayerCompletionRequest | null;
   requestPrayerCompletion: (prayerName: PrayerName, options?: PrayerCompletionRequestOptions) => void;
   cancelPrayerCompletion: () => void;
-  confirmPrayerCompletion: (status: PrayerCompletionStatus) => PrayerCompletionMutationResult | null;
+  /** Records the prayer; resolves with the result and what it earned once the planner has rewarded it. */
+  confirmPrayerCompletion: (status: PrayerCompletionStatus) => Promise<PrayerCompletionMutationResult> | null;
 }
 
 /**
@@ -54,6 +59,7 @@ export function usePrayerCompletionPrompt({
   today,
   timetable,
   completePrayer,
+  awaitReward,
   showNotice,
 }: PrayerCompletionPromptInput): PrayerCompletionPrompt {
   const [pendingCompletion, setPendingCompletion] = useState<PrayerCompletionRequest | null>(null);
@@ -110,9 +116,14 @@ export function usePrayerCompletionPrompt({
       return null;
     }
     setPendingCompletion(null);
-    pending.onCompleted?.(result);
-    return result;
-  }, [completePrayer, pendingCompletion, showNotice]);
+    const rewarded = awaitReward(result.prayerDate, result.prayerName).then(reward => ({
+      ...result,
+      xpEarned: reward?.xpEarned ?? 0,
+      ...(reward ? { gamificationResult: toCompletionResult(reward) } : {}),
+    }));
+    if (pending.onCompleted) void rewarded.then(pending.onCompleted);
+    return rewarded;
+  }, [awaitReward, completePrayer, pendingCompletion, showNotice]);
 
   return { pendingCompletion, requestPrayerCompletion, cancelPrayerCompletion, confirmPrayerCompletion };
 }

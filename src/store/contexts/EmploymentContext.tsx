@@ -20,6 +20,7 @@ import {
 } from '../../services/employmentTracker';
 import { observeOperationalOperation } from '../../services/operationalTelemetry';
 import type { EmploymentApplication, EmploymentHistoryEntry } from '../../types/domain';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
 import { errorMessage, useServiceLoad } from './useServiceLoad';
 
 export interface EmploymentContextValue {
@@ -73,7 +74,7 @@ export function EmploymentProvider({ children }: { children: ReactNode }) {
     setApplications(next);
   }, []);
   const load = useCallback(async () => publish(await getJobApplications()), [publish]);
-  const { loaded, error: loadError, reload } = useServiceLoad('Employment', isLifeServiceEnabled(), load);
+  const { loaded, error: loadError, reload } = useServiceLoad('Employment', isLifeServiceEnabled(), load, LIVE_DOMAINS.employment);
 
   const confirm = useCallback((saved: EmploymentApplication | null, id: string) => {
     const current = applicationsRef.current;

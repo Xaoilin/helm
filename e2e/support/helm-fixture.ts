@@ -13,15 +13,19 @@ import type {
   CalendarAccount,
   CalendarEvent,
   CalendarSource,
+  ClockState,
   EmploymentApplication,
   EquityPosition,
   EquityPositionDraft,
+  GamificationProfile,
   Integration,
   Surface,
+  Task,
 } from '../../src/types/domain';
 import type { ServiceIntegration } from '../../src/services/backend/contracts';
 import type { FakeKnowledgeSeed } from './fake-knowledge-service';
 import type { FakeLifeSeed } from './fake-life-service';
+import type { FakePlannerSeed } from './fake-planner-service';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
 const TEST_EMAIL = 'e2e@example.test';
@@ -113,6 +117,10 @@ const LIFE_WRITE_PATHS: Record<string, string> = {
   lifestyleItems: '/api/knowledge/v1/lifestyle',
   projects: '/api/knowledge/v1/projects',
   projectPages: '/api/knowledge/v1/projects/pages/',
+  tasks: '/api/planner/v1/tasks',
+  // Daily momentum, kept in the progress record before, saves per pillar to the planner.
+  gamification: '/api/planner/v1/momentum/',
+  clock: '/api/planner/v1/clock/',
 };
 
 export function waitForMutation(page: Page, collection: string): Promise<Response> {
@@ -215,11 +223,22 @@ const LIFE_COLLECTIONS = ['employment', 'healthFastFoodEntries', 'inventoryItems
 
 /** Account-record collections. Settings and integrations belong to the profile service fake. */
 function buildStores(options: HelmScenarioOptions): Record<string, unknown> {
-  const stores: Record<string, unknown> = { tasks: [], ...options.stores };
+  const stores: Record<string, unknown> = { ...options.stores };
   delete stores.settings;
   delete stores.integrations;
-  for (const collection of [...LIFE_COLLECTIONS, ...KNOWLEDGE_COLLECTIONS]) delete stores[collection];
+  for (const collection of [...LIFE_COLLECTIONS, ...KNOWLEDGE_COLLECTIONS, ...PLANNER_COLLECTIONS]) delete stores[collection];
   return stores;
+}
+
+/** Collections the planner service owns; a scenario's copy seeds its fake instead of the database. */
+const PLANNER_COLLECTIONS = ['tasks', 'gamification', 'clock', 'dashboardFocusFeedback'];
+
+function plannerFromScenario(stores: Record<string, unknown> | undefined): FakePlannerSeed {
+  return {
+    tasks: stores?.tasks as Task[] | undefined,
+    gamification: stores?.gamification as GamificationProfile | undefined,
+    clock: stores?.clock as ClockState | undefined,
+  };
 }
 
 /** Collections the knowledge service owns; a scenario's copy seeds its fake instead of the database. */
@@ -554,6 +573,7 @@ function servicesFromScenario(options: HelmScenarioOptions, settings: Record<str
     integrations: serviceIntegrations(options.stores?.integrations),
     life: lifeFromScenario(options.stores),
     knowledge: knowledgeFromScenario(options.stores),
+    planner: plannerFromScenario(options.stores),
     calendar: {
       accounts: options.stores?.calendarAccounts as CalendarAccount[] | undefined,
       sources: options.stores?.calendarSources as CalendarSource[] | undefined,

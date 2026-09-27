@@ -182,7 +182,8 @@ export function snoozePrayerReminderGroup(
  * Today's bounded (one-shot) reminders. Nothing is planned while prayer is
  * disabled, without a verified timetable, or before Daily Momentum loads
  * (`momentum` is null); prayer kinds also need deadline reminders switched on,
- * while momentum kinds follow their own preferences.
+ * while momentum kinds follow their own preferences. Deadline reminders are the
+ * prayer service's (sent over the live-update stream), so none is planned here.
  */
 export function selectBoundedReminderPlans(input: {
   prayerEnabled: boolean;
@@ -201,5 +202,6 @@ export function selectBoundedReminderPlans(input: {
     tracking: input.tracking,
     momentum: input.momentum,
     reminderMinutes: input.reminderMinutes,
-  }).filter(plan => plan.kind === 'momentum' || input.reminderEnabled);
+  }).filter(plan => plan.kind !== 'prayer-deadline')
+    .filter(plan => plan.kind === 'momentum' || input.reminderEnabled);
 }

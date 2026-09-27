@@ -25,6 +25,7 @@ import {
   withoutKeys,
   type NeedInput,
 } from '../../services/backend/lifeServiceApi';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
 import { useServiceLoad } from './useServiceLoad';
 
 export interface InventoryContextValue {
@@ -68,7 +69,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     publishItems(inventory.items);
     publishNeeds(inventory.needs);
   }, [publishItems, publishNeeds]);
-  const { loaded, error, reload, reportFailure } = useServiceLoad('Inventory', isLifeServiceEnabled(), load);
+  const { loaded, error, reload, reportFailure } = useServiceLoad('Inventory', isLifeServiceEnabled(), load, LIVE_DOMAINS.inventory);
 
   const confirmItem = useCallback((saved: InventoryItem) => publishItems(replaceById(itemsRef.current, saved)),
     [publishItems]);

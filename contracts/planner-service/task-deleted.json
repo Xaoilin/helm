@@ -1,0 +1,8 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/planner/v1/tasks/rent"
+  },
+  "status" : 204,
+  "body" : null
+}

@@ -1,0 +1,25 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/planner/v1/clock/stopwatches/s1"
+  },
+  "status" : 200,
+  "body" : {
+    "stopwatches" : [],
+    "timers" : [
+      {
+        "id" : "t1",
+        "label" : "Pasta",
+        "durationMs" : 600000,
+        "remainingMs" : 600000,
+        "endsAt" : 1790000600000,
+        "status" : "running",
+        "sound" : "bell",
+        "alerting" : false,
+        "completedAt" : null
+      }
+    ],
+    "nextStopwatchNumber" : 2,
+    "nextTimerNumber" : 2
+  }
+}

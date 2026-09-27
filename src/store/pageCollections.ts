@@ -1,11 +1,11 @@
 import type { Surface } from '../types/domain';
 
-// Background reminders, rewards and running timers remain available on every page. Custom
-// providers hydrate each listed group together. Calendar data comes from the calendar service;
-// settings and integrations from the profile service; trips, inventory, jobs and health from the
-// life admin service; knowledge, lifestyle and projects from the knowledge service.
+// Prayer reminder receipts remain available on every page. Custom providers hydrate each listed
+// group together. Calendar data comes from the calendar service; settings and integrations from the
+// profile service; trips, inventory, jobs and health from the life admin service; knowledge, lifestyle
+// and projects from the knowledge service; tasks, progress and the clock from the planner service.
 export const SHARED_PAGE_COLLECTIONS = [
-  'gamification', 'tasks', 'prayerTracking', 'clock',
+  'prayerTracking',
 ] as const;
 
 const FINANCE_COLLECTIONS = ['financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals'];

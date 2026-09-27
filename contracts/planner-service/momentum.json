@@ -1,0 +1,22 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/planner/v1/momentum"
+  },
+  "status" : 200,
+  "body" : {
+    "pillars" : [
+      {
+        "pillar" : "learn",
+        "state" : {
+          "logs" : {},
+          "templates" : [],
+          "schemaVersion" : 2,
+          "reminderPreferences" : {}
+        },
+        "version" : 0,
+        "updatedAt" : "2026-09-27T06:00:00Z"
+      }
+    ]
+  }
+}

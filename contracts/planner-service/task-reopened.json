@@ -1,0 +1,29 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/planner/v1/tasks/rent/reopen"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "rent",
+    "title" : "Pay rent",
+    "description" : "",
+    "completed" : false,
+    "completedAt" : null,
+    "completedLocalDate" : null,
+    "completionTimeZone" : null,
+    "priority" : "medium",
+    "category" : "task",
+    "dueDate" : null,
+    "recurring" : null,
+    "prayerName" : null,
+    "goalTag" : null,
+    "emoji" : null,
+    "projectId" : null,
+    "workflowState" : null,
+    "blockedReason" : null,
+    "boardOrder" : null,
+    "createdAt" : "2026-09-27T06:00:00Z",
+    "updatedAt" : "2026-09-27T06:00:00Z"
+  }
+}

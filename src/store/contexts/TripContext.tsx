@@ -35,6 +35,7 @@ import {
   type TripInput,
 } from '../../services/backend/lifeServiceApi';
 import type { ServiceTripBudget, ServiceTripBundle } from '../../services/backend/lifeContracts';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
 import { useServiceLoad } from './useServiceLoad';
 
 export type NewTrip = Omit<Trip, 'id' | 'createdAt' | 'updatedAt'>;
@@ -146,7 +147,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
       budgets: Object.fromEntries(all.trips.map(entry => [entry.trip.id, entry.budget])),
     });
   }, [publish]);
-  const { loaded, error, reload, reportFailure } = useServiceLoad('Trips', isLifeServiceEnabled(), load);
+  const { loaded, error, reload, reportFailure } = useServiceLoad('Trips', isLifeServiceEnabled(), load, LIVE_DOMAINS.trips);
 
   const save = useCallback((write: Promise<ServiceTripBundle>) => {
     write.then(bundle => change(current => withBundle(current, bundle)), reportFailure);

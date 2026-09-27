@@ -10,7 +10,6 @@ import {
 } from 'react';
 import type {
   DailyActivityTemplate,
-  GamificationProfile,
   DailyMomentumReminderPreference,
   DailyMomentumState,
   DailyPillar,
@@ -27,9 +26,27 @@ import {
   setDailyMomentumReminderPreference,
   upsertDailyActivityTemplate,
 } from '../../services/dailyMomentum';
-import { DEFAULT_PROFILE } from '../../services/gamification';
-import { loadStore, saveStoreRecordFieldsCommitted } from '../persistence';
-import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
+import type { PlannerMomentumPillar } from '../../services/backend/plannerContracts';
+import { getMomentum, saveMomentumPillar } from '../../services/backend/plannerServiceApi';
+import { ServiceError } from '../../services/backend/serviceClient';
+import { useLiveRefresh } from './useLiveRefresh';
+
+/** A save refused because another tab changed the pillar is retried once from the latest state. */
+const SAVE_ATTEMPTS = 2;
+const MOMENTUM_CHANGED = 'momentum_changed';
+
+function pillarState(pillars: readonly PlannerMomentumPillar[], pillar: DailyPillar): DailyMomentumState | undefined {
+  return pillars.find(saved => saved.pillar === pillar)?.state as DailyMomentumState | undefined;
+}
+
+function pillarVersion(pillars: readonly PlannerMomentumPillar[], pillar: DailyPillar): number | null {
+  return pillars.find(saved => saved.pillar === pillar)?.version ?? null;
+}
+
+function combined(pillars: readonly PlannerMomentumPillar[]): DailyMomentumState {
+  return combineDailyMomentumPillarStates(pillarState(pillars, 'learn'), pillarState(pillars, 'move'));
+}
 
 export interface DailyMomentumContextValue {
   state: DailyMomentumState;
@@ -67,18 +84,13 @@ export function DailyMomentumProvider({ children }: { children: ReactNode }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stateRef = useRef(state);
-  const profileRef = useRef<GamificationProfile>(DEFAULT_PROFILE);
   const storageValidRef = useRef(false);
   const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingMutationsRef = useRef(0);
 
-  const publishStoredProfile = useCallback((value: GamificationProfile | null) => {
-    const profile = value ?? DEFAULT_PROFILE;
-    const normalized = combineDailyMomentumPillarStates(
-      profile.dailyMomentumLearn,
-      profile.dailyMomentumMove,
-    );
-    profileRef.current = profile;
+  /** Shows what the planner service holds for both pillars. */
+  const publishStored = useCallback((pillars: readonly PlannerMomentumPillar[]) => {
+    const normalized = combined(pillars);
     stateRef.current = normalized;
     storageValidRef.current = true;
     setState(normalized);
@@ -89,8 +101,8 @@ export function DailyMomentumProvider({ children }: { children: ReactNode }) {
     let active = true;
     void (async () => {
       try {
-        const stored = await loadStore<GamificationProfile>('gamification');
-        if (active) publishStoredProfile(stored);
+        const stored = await getMomentum();
+        if (active) publishStored(stored);
       } catch (loadError) {
         if (active) {
           storageValidRef.current = false;
@@ -101,17 +113,23 @@ export function DailyMomentumProvider({ children }: { children: ReactNode }) {
       }
     })();
     return () => { active = false; };
-  }, [publishStoredProfile]);
+  }, [publishStored]);
 
-  useRemoteStoreRefresh(['gamification'], async () => {
+  // Progress saved in another tab or device (a live-update event) reloads, after this tab's own saves.
+  const refresh = useCallback(async () => {
     await mutationQueueRef.current;
     try {
-      publishStoredProfile(await loadStore<GamificationProfile>('gamification'));
+      publishStored(await getMomentum());
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
     }
-  });
+  }, [publishStored]);
+  useLiveRefresh(LIVE_DOMAINS.momentum, refresh);
 
+  /**
+   * Applies a change to the latest stored state and saves each changed pillar whole, naming the version it
+   * changed; a pillar another tab changed meanwhile is refused, and the change is applied again once.
+   */
   const mutate = useCallback((
     pillars: DailyPillar[],
     transform: (current: DailyMomentumState) => DailyMomentumState,
@@ -123,28 +141,25 @@ export function DailyMomentumProvider({ children }: { children: ReactNode }) {
       pendingMutationsRef.current += 1;
       setSaving(true);
       try {
-        const latestProfile = await loadStore<GamificationProfile>('gamification') ?? profileRef.current;
-        const current = combineDailyMomentumPillarStates(
-          latestProfile.dailyMomentumLearn,
-          latestProfile.dailyMomentumMove,
-        );
-        const next = transform(current);
-        const nextLearn = getDailyMomentumPillarState(next, 'learn');
-        const nextMove = getDailyMomentumPillarState(next, 'move');
-        const fields = Object.fromEntries(pillars.map(pillar => [
-          pillar === 'learn' ? 'dailyMomentumLearn' : 'dailyMomentumMove',
-          pillar === 'learn' ? nextLearn : nextMove,
-        ]));
-        await saveStoreRecordFieldsCommitted('gamification', 'profile', fields, {
-          ...latestProfile,
-          dailyMomentumLearn: nextLearn,
-          dailyMomentumMove: nextMove,
-        });
-        const confirmedProfile = await loadStore<GamificationProfile>('gamification');
-        if (!confirmedProfile) throw new Error('The database did not return the confirmed daily momentum profile.');
-        publishStoredProfile(confirmedProfile);
-        setError(null);
-        return stateRef.current;
+        for (let attempt = 1; ; attempt += 1) {
+          const latest = await getMomentum();
+          const next = transform(combined(latest));
+          try {
+            const saved = [...latest];
+            for (const pillar of pillars) {
+              const result = await saveMomentumPillar(pillar, getDailyMomentumPillarState(next, pillar),
+                pillarVersion(saved, pillar));
+              const index = saved.findIndex(existing => existing.pillar === pillar);
+              if (index >= 0) saved[index] = result;
+              else saved.push(result);
+            }
+            publishStored(saved);
+            return stateRef.current;
+          } catch (saveError) {
+            const changedMeanwhile = saveError instanceof ServiceError && saveError.code === MOMENTUM_CHANGED;
+            if (!changedMeanwhile || attempt >= SAVE_ATTEMPTS) throw saveError;
+          }
+        }
       } catch (mutationError) {
         const message = mutationError instanceof Error ? mutationError.message : String(mutationError);
         setError(message);
@@ -156,7 +171,7 @@ export function DailyMomentumProvider({ children }: { children: ReactNode }) {
     });
     mutationQueueRef.current = operation.then(() => undefined, () => undefined);
     return operation;
-  }, [publishStoredProfile]);
+  }, [publishStored]);
 
   const getDay = useCallback((date = getDailyMomentumLocalDate()) => (
     getDailyMomentumDay(stateRef.current, date)

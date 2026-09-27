@@ -5,7 +5,6 @@ import { PrayerProvider, usePrayerContext, type PrayerContextValue } from '../st
 import { TaskCtx, type TaskContextValue } from '../store/contexts/TaskContext';
 import { GamificationCtx, type GamificationContextValue } from '../store/contexts/GamificationContext';
 import { DailyMomentumCtx, type DailyMomentumContextValue } from '../store/contexts/DailyMomentumContext';
-import { KnowledgeCtx, type KnowledgeContextValue } from '../store/contexts/KnowledgeContext';
 import { SettingsCtx, defaultSettings, type SettingsContextValue } from '../store/contexts/SettingsContext';
 import { getPrayerRecordKey } from '../services/prayerTracking';
 import { provide, renderWithContexts } from './renderWithContexts';
@@ -30,6 +29,12 @@ const prayerService = vi.hoisted(() => ({
   deletePrayerOutcome: vi.fn(),
 }));
 vi.mock('../services/backend/prayerServiceApi', () => prayerService);
+
+const planner = vi.hoisted(() => ({
+  isPlannerServiceEnabled: vi.fn(() => true),
+  syncPrayerRewards: vi.fn(),
+}));
+vi.mock('../services/backend/plannerServiceApi', () => planner);
 
 const FAJR_KEY = getPrayerRecordKey(PRAYER_TEST_DATE, 'Fajr');
 const DHUHR_KEY = getPrayerRecordKey(PRAYER_TEST_DATE, 'Dhuhr');
@@ -69,18 +74,15 @@ function PrayerProbe() {
 }
 
 function fakeOwners() {
-  const tasks: TaskContextValue = {
-    tasks: [dhuhrTask], loaded: true, addTask: vi.fn(() => 'task'), updateTask: vi.fn(), removeTask: vi.fn(), setTasks: vi.fn(),
-  };
-  const gamification: GamificationContextValue = {
-    gamification: makeGamification(), loaded: true, updateGamification: vi.fn(), backfillPrayerLog: vi.fn(),
-  };
+  const tasks = {
+    tasks: [dhuhrTask], loaded: true, showPrayerHabit: vi.fn(), applyTask: vi.fn(),
+  } as unknown as TaskContextValue;
+  const gamification = {
+    gamification: makeGamification(), loaded: true, applyProfile: vi.fn(),
+  } as unknown as GamificationContextValue;
   const momentum = {
     state: makeMomentumState(), loaded: true, saving: false, error: null,
   } as unknown as DailyMomentumContextValue;
-  const knowledge = {
-    knowledgeTopics: [], knowledgeEntries: [], lifestyleItems: [], loaded: true,
-  } as unknown as KnowledgeContextValue;
   const settings = {
     settings: defaultSettings,
     integrations: [],
@@ -92,7 +94,7 @@ function fakeOwners() {
     saveAppTimeZonePreference: vi.fn(),
     updateIntegration: vi.fn(),
   } as SettingsContextValue;
-  return { tasks, gamification, momentum, knowledge, settings };
+  return { tasks, gamification, momentum, settings };
 }
 
 function renderPrayerProvider(owners = fakeOwners()) {
@@ -100,7 +102,6 @@ function renderPrayerProvider(owners = fakeOwners()) {
     provide(SettingsCtx, owners.settings),
     provide(GamificationCtx, owners.gamification),
     provide(DailyMomentumCtx, owners.momentum),
-    provide(KnowledgeCtx, owners.knowledge),
     provide(TaskCtx, owners.tasks),
   ]);
   return owners;
@@ -126,6 +127,12 @@ beforeEach(() => {
   }));
   // The account record holds only reminder receipts.
   persistence.loadStore.mockResolvedValue(null);
+  planner.syncPrayerRewards.mockResolvedValue({
+    reward: { xpEarned: 25, level: 1, leveledUp: false, title: 'Beginner', newBadges: [], currentStreak: 1,
+      streakMilestone: false },
+    task: { ...dhuhrTask, completed: true },
+    profile: { ...makeGamification(), totalXp: 25 },
+  });
 });
 
 describe('PrayerProvider', () => {
@@ -157,7 +164,7 @@ describe('PrayerProvider', () => {
     expect(prayer.activeBoundedReminder?.title).toBe('Dhuhr prayer opportunity');
   });
 
-  it('completes a prayer across tracking, gamification and its task, then saves it to the prayer service', async () => {
+  it('completes a prayer, saves it to the prayer service, then shows the XP the planner granted', async () => {
     const owners = renderPrayerProvider();
     await waitFor(() => expect(prayer.scheduleStatus).toBe('ready'));
     await waitFor(() => expect(prayer.serviceSync.status).toBe('synced'));
@@ -165,20 +172,21 @@ describe('PrayerProvider', () => {
     act(() => { prayer.requestPrayerCompletion('Dhuhr', { source: 'dashboard' }); });
     await waitFor(() => expect(prayer.pendingCompletion).toMatchObject({ prayerName: 'Dhuhr', suggestedStatus: 'on_time' }));
 
-    let result: ReturnType<PrayerContextValue['confirmPrayerCompletion']> = null;
-    act(() => { result = prayer.confirmPrayerCompletion('on_time'); });
+    let rewarded: ReturnType<PrayerContextValue['confirmPrayerCompletion']> = null;
+    act(() => { rewarded = prayer.confirmPrayerCompletion('on_time'); });
 
-    expect(result).toMatchObject({ prayerName: 'Dhuhr', status: 'on_time', prayerDate: PRAYER_TEST_DATE });
     await waitFor(() => expect(prayer.tracking.records[DHUHR_KEY]).toMatchObject({ status: 'on_time' }));
     expect(prayer.pendingCompletion).toBeNull();
-    expect(owners.gamification.updateGamification).toHaveBeenCalledWith(expect.objectContaining({
-      prayerCompletionLedger: expect.objectContaining({ [DHUHR_KEY]: expect.objectContaining({ rewarded: true }) }),
-    }));
-    expect(owners.tasks.updateTask).toHaveBeenCalledWith('task-dhuhr', expect.objectContaining({ completed: true }));
+    expect(owners.tasks.showPrayerHabit).toHaveBeenCalledWith('task-dhuhr', true);
     await waitFor(() => expect(prayerService.createPrayerOutcome).toHaveBeenCalledWith(
       expect.objectContaining({ date: PRAYER_TEST_DATE, prayer: 'Dhuhr', status: 'on_time' }),
       expect.stringMatching(/^prayer-outcome:create:/u),
     ));
+    // Once the prayer service confirmed it, the planner rewards it once and says what it earned.
+    await expect(rewarded).resolves.toMatchObject({ prayerName: 'Dhuhr', status: 'on_time', xpEarned: 25 });
+    expect(planner.syncPrayerRewards).toHaveBeenCalledWith(PRAYER_TEST_DATE, 'Dhuhr');
+    expect(owners.gamification.applyProfile).toHaveBeenCalledWith(expect.objectContaining({ totalXp: 25 }));
+    expect(owners.tasks.applyTask).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-dhuhr', completed: true }));
   });
 
   it('starts nothing until prayer preferences and location come from their services', async () => {

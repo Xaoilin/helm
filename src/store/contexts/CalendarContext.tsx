@@ -4,6 +4,8 @@
  * credentials never reach the browser, so a Google problem can never affect the Sabah One session.
  */
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
+import { useLiveRefresh } from './useLiveRefresh';
 import type { CalendarAccount, CalendarEvent, CalendarSource } from '../../types/domain';
 import {
   connectGoogleAccount as connectGoogleAccountRequest,
@@ -227,6 +229,9 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     })().finally(() => { syncInFlight.current = null; });
     return syncInFlight.current;
   }, [reload]);
+
+  // A change saved in another tab or device (a live-update event) reloads the calendar.
+  useLiveRefresh(isCalendarServiceEnabled() ? LIVE_DOMAINS.calendar : [], reload);
 
   // A failed load retries by itself a few times, then whenever the page is shown again.
   useEffect(() => {

@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import type { PrayerTrackingState } from '../../../types/domain';
 import { normalizePrayerTrackingState } from '../../../services/prayerTracking';
 import { loadStore, saveStore } from '../../persistence';
+import { LIVE_DOMAINS } from '../../../services/backend/liveDomains';
+import { useLiveRefresh } from '../useLiveRefresh';
 import { useRemoteStoreRefresh } from '../useRemoteStoreRefresh';
 import {
   usePrayerServiceSync,
@@ -20,6 +22,8 @@ export interface PrayerPersistenceInput {
   location: PrayerLocation;
   /** The prayer service refused an outcome for good. */
   onRejected: (rejection: PrayerOutcomeRejection) => void;
+  /** The prayer service confirmed a change to this outcome (`date::prayer`). */
+  onConfirmed: (key: string) => void;
 }
 
 export interface PrayerPersistence {
@@ -53,10 +57,13 @@ export function usePrayerPersistence({
   locationReady,
   location,
   onRejected,
+  onConfirmed,
 }: PrayerPersistenceInput): PrayerPersistence {
   const { tracking, loaded, markLoaded, getTracking, commitTracking } = store;
   const { city, country } = location;
-  const serviceSync = usePrayerServiceSync(getTracking, commitTracking, onRejected);
+  const serviceSync = usePrayerServiceSync(getTracking, commitTracking, onRejected, onConfirmed);
+  // An outcome saved in another tab or device (a live-update event) reloads outcomes.
+  useLiveRefresh(loaded ? LIVE_DOMAINS.prayer : [], serviceSync.rehydrate);
 
   useEffect(() => {
     if (!sourcesLoaded) return;

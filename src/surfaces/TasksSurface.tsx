@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useShell } from "../store/ShellContext";
 import { useTaskContext } from "../store/contexts/TaskContext";
 import { useGamificationContext } from "../store/contexts/GamificationContext";
-import { useKnowledgeContext } from "../store/contexts/KnowledgeContext";
 import { useProjectContext } from "../store/contexts/ProjectContext";
 import { useSettingsContext } from "../store/contexts/SettingsContext";
 import { usePrayerContext } from '../store/contexts/PrayerContext';
@@ -16,11 +15,9 @@ import TaskEditorDialog from '../components/tasks/TaskEditorDialog';
 import TaskRow, { type TaskItemActions } from '../components/tasks/TaskRow';
 import type { PrayerOutcomeStatus, Task, TaskCategory } from '../types/domain';
 import { getPrayerTaskName } from '../services/prayerTasks';
+import { toCompletionResult } from '../services/plannerRewards';
 import {
-  buildCompletionReward,
   buildTaskFromForm,
-  buildTaskToggleUpdate,
-  countKnowledgeProgress,
   createTaskForm,
   filterAllTasks,
   filterByProject,
@@ -50,7 +47,6 @@ export default function TasksSurface() {
   const shell = useShell();
   const taskContext = useTaskContext();
   const gamification = useGamificationContext();
-  const knowledge = useKnowledgeContext();
   const projects = useProjectContext();
   const settings = useSettingsContext();
   const prayer = usePrayerContext();
@@ -186,23 +182,14 @@ export default function TasksSurface() {
       return;
     }
 
-    const now = new Date();
-    taskContext.updateTask(task.id, buildTaskToggleUpdate(task, now, appDate));
-    if (!completing) return;
-
-    const reward = buildCompletionReward({
-      task,
-      tasks,
-      profile: gamification.gamification,
-      goalTags: settings.settings.goalTags,
-      knowledge: countKnowledgeProgress(knowledge),
-      now,
-      appDate,
-      appTimeZone,
+    if (!completing) {
+      taskContext.reopenTask(task.id);
+      return;
+    }
+    // The planner service completes it, awards the XP and says what it earned.
+    void taskContext.completeTask(task.id).then(reward => {
+      if (reward) celebrate(reward.xpEarned, toCompletionResult(reward));
     });
-    if (!reward) return;
-    gamification.updateGamification(reward.profile);
-    celebrate(reward.result.xpEarned, reward.result);
   };
 
   const handleDelete = (id: string) => {

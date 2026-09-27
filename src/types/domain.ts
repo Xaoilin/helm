@@ -706,8 +706,6 @@ export interface PrayerCompletionUndoData {
   };
   outcomeBefore?: PrayerTrackingRecord;
   outcomeAfter: PrayerTrackingRecord;
-  gamificationBefore: GamificationProfile;
-  gamificationAfter: GamificationProfile;
 }
 
 export type PrayerDeadlineName = 'Sunrise' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha' | 'Sunset' | 'Midnight';

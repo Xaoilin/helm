@@ -11,9 +11,18 @@ import {
   sanitizeClockLabel,
 } from '../../services/clock';
 import { playTimerAlarm, primeTimerAlarmAudio, stopTimerAlarm } from '../../services/clockAudio';
-import { loadStore, saveStore } from '../persistence';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
+import {
+  deleteStopwatch,
+  deleteTimer,
+  getClock,
+  isPlannerServiceEnabled,
+  saveStopwatch,
+  saveTimer,
+} from '../../services/backend/plannerServiceApi';
+import { logWarn } from '../../services/logger';
 import type { ClockState, ClockTimerSound, ClockTimerStatus } from '../../types/domain';
-import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
+import { useLiveRefresh } from './useLiveRefresh';
 
 interface ClockContextValue {
   clock: ClockState;
@@ -50,30 +59,78 @@ export function ClockProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const previousTimerStatuses = useRef<Record<string, ClockTimerStatus>>({});
 
+  // What the planner service last confirmed; only what differs from it is saved, one record at a time.
+  const confirmedRef = useRef<ClockState>(DEFAULT_CLOCK_STATE);
+  // Deletions are sent only for items removed here, never inferred from a missing item.
+  const removedRef = useRef({ stopwatches: new Set<string>(), timers: new Set<string>() });
+  const writesRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingWritesRef = useRef(0);
+  const reloadAfterWritesRef = useRef(false);
+
+  const showConfirmed = useCallback((confirmed: ClockState) => {
+    const normalised = normaliseClockState(confirmed);
+    confirmedRef.current = normalised;
+    setClock(normalised);
+  }, []);
+
+  const reload = useCallback(async () => {
+    if (!isPlannerServiceEnabled()) return;
+    // A reload while this tab's own saves are in flight would show them undone; it waits for them.
+    if (pendingWritesRef.current > 0) {
+      reloadAfterWritesRef.current = true;
+      return;
+    }
+    try {
+      showConfirmed(await getClock());
+    } catch (error) {
+      logWarn('Clock', `Clock load failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [showConfirmed]);
+
   useEffect(() => {
     let mounted = true;
-
-    (async () => {
-      const stored = await loadStore<ClockState>('clock');
-      if (!mounted) return;
-      setClock(normaliseClockState(stored));
-      setLoaded(true);
+    void (async () => {
+      await reload();
+      if (mounted) setLoaded(true);
     })();
-
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [reload]);
 
-  useRemoteStoreRefresh(['clock'], async () => {
-    const stored = await loadStore<ClockState>('clock');
-    setClock(normaliseClockState(stored));
-  });
+  // A stopwatch or timer changed in another tab or device (a live-update event) reloads the clock.
+  useLiveRefresh(LIVE_DOMAINS.clock, reload);
+
+  const enqueue = useCallback((write: () => Promise<unknown>) => {
+    pendingWritesRef.current += 1;
+    writesRef.current = writesRef.current.then(write).then(() => undefined, error => {
+      logWarn('Clock', `A clock change was not saved: ${error instanceof Error ? error.message : String(error)}`);
+      reloadAfterWritesRef.current = true;
+    }).finally(() => {
+      pendingWritesRef.current -= 1;
+      if (pendingWritesRef.current === 0 && reloadAfterWritesRef.current) {
+        reloadAfterWritesRef.current = false;
+        void reload();
+      }
+    });
+  }, [reload]);
 
   useEffect(() => {
-    if (!loaded) return;
-    void saveStore('clock', clock);
-  }, [clock, loaded]);
+    if (!loaded || !isPlannerServiceEnabled()) return;
+    const confirmed = confirmedRef.current;
+    for (const stopwatch of clock.stopwatches) {
+      const before = confirmed.stopwatches.find(candidate => candidate.id === stopwatch.id);
+      if (JSON.stringify(before) !== JSON.stringify(stopwatch)) enqueue(() => saveStopwatch(stopwatch));
+    }
+    for (const timer of clock.timers) {
+      const before = confirmed.timers.find(candidate => candidate.id === timer.id);
+      if (JSON.stringify(before) !== JSON.stringify(timer)) enqueue(() => saveTimer(timer));
+    }
+    for (const id of removedRef.current.stopwatches) enqueue(() => deleteStopwatch(id));
+    for (const id of removedRef.current.timers) enqueue(() => deleteTimer(id));
+    removedRef.current = { stopwatches: new Set(), timers: new Set() };
+    confirmedRef.current = clock;
+  }, [clock, enqueue, loaded]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -138,6 +195,7 @@ export function ClockProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const removeStopwatch = useCallback((id: string) => {
+    removedRef.current.stopwatches.add(id);
     setClock(current => {
       const nextStopwatches = current.stopwatches.filter(stopwatch => stopwatch.id !== id);
       if (nextStopwatches.length === current.stopwatches.length) return current;
@@ -240,6 +298,7 @@ export function ClockProvider({ children }: { children: ReactNode }) {
 
   const removeTimer = useCallback((id: string) => {
     stopTimerAlarm();
+    removedRef.current.timers.add(id);
 
     setClock(current => {
       const nextTimers = current.timers.filter(timer => timer.id !== id);

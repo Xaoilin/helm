@@ -1,0 +1,18 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/planner/v1/gamification/reset?confirm=true"
+  },
+  "status" : 200,
+  "body" : {
+    "totalXp" : 0,
+    "level" : 1,
+    "title" : "Beginner",
+    "currentStreak" : 0,
+    "longestStreak" : 0,
+    "lastCompletionDate" : null,
+    "totalTasksCompleted" : 0,
+    "badges" : [],
+    "habitTallies" : {}
+  }
+}

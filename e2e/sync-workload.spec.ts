@@ -78,10 +78,15 @@ test('measures a bounded comparable account read workload', async ({ page, scena
     await settle();
   }
 
-  trigger = 'missed-change-foreground';
-  control.applyRemoteMutations([{ op: 'patch', collection: 'tasks', recordId: 'task-0', set: { title: 'Recovered task' } }]);
-  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await expect(page.getByRole('checkbox', { name: 'Mark "Recovered task" as complete', exact: true })).toBeVisible();
+  // Tasks come from the planner service: a change made elsewhere arrives when the live-update stream
+  // reconnects (the fake stream ends at once, so it reconnects within the backoff's minute).
+  trigger = 'missed-change-live-reconnect';
+  Object.assign(control.services.planner.tasks[0], { title: 'Recovered task' });
+  const recovered = page.getByRole('checkbox', { name: 'Mark "Recovered task" as complete', exact: true });
+  await expect.poll(async () => {
+    await page.clock.fastForward(2_000);
+    return recovered.isVisible();
+  }, { timeout: 30_000, intervals: [50] }).toBe(true);
   await settle();
 
   expect(requests.length).toBeGreaterThan(0);
@@ -95,7 +100,7 @@ test('measures a bounded comparable account read workload', async ({ page, scena
     sourceCommit: process.env.HELM_WORKLOAD_SOURCE_COMMIT ?? null,
     observedAt: new Date().toISOString(),
     environment: 'Actual application in Chromium; identical mocked HTTP/Broadcast fixtures and fake browser clock. No live database or personal account.',
-    denominator: 'One client; startup and Tasks navigation; fresh Dashboard/Tasks revisit; 600 simulated visible-idle seconds; one missed remote task update and foreground event.',
+    denominator: 'One client; startup and Tasks navigation; fresh Dashboard/Tasks revisit; 600 simulated visible-idle seconds; one missed planner task update recovered on a live-stream reconnect.',
     fixtureSha256: createHash('sha256').update(JSON.stringify(stores)).digest('hex'),
     fixture: { tasks: 20, inactiveActivityRecords: 100 },
     responseBytesMeaning: 'Uncompressed mocked HTTP response bodies; excludes headers, TLS, and other application domains.',

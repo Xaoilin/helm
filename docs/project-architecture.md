@@ -31,7 +31,7 @@ Provider order remains explicit because several providers consume earlier owners
 Cross-domain behavior is retained only where one domain cannot own the invariant:
 
 - `useProjectRemovalWorkflow` removes a Project and clears its Task references as one named workflow.
-- `useDailyTaskRollover` reopens completed habits once per app day (prayer tasks once per prayer-timetable day) and zeroes a missed streak, using the rules in `src/services/taskModel.ts`.
+- `useDailyTaskRollover` tells the planner service the user's app and prayer time zones on load and at each new day; the service reopens completed habits once per app day (prayer habits once per prayer-timetable day), zeroes a missed streak and rewards recorded prayers, and the app shows its answer.
 
 The selected design reuses existing domain contexts. A dependency-injection container, Redux migration, generic service locator, and replacement all-app context were rejected because they would add another global contract without hiding new knowledge. `scripts/verify-capability-composition.mjs` rejects the retired façade identifiers, generic service-locator names, and non-workflow contracts spanning four or more recognized domains. Revisit this decision only when a concrete workflow cannot preserve its invariant within one owner or one explicitly named coordinator.
 
@@ -49,6 +49,8 @@ Night Compass reads its owning domains directly. The retired Dashboard Focus pro
 - projects, project wiki pages, Inventory items, acquisition needs, and Employment applications with contact/evidence history
 - encrypted secret metadata and one-at-a-time revealed secret details
 - Clock timers and stopwatches, knowledge entries, health logs, finance records, trips, integrations, and settings
+
+Tasks, habits, goals, XP, streaks, badges, daily momentum and the clock are owned by the Spring planner service (`src/services/backend/plannerServiceApi.ts`); their `tasks`, `gamification`, `clock` and `dashboardFocusFeedback` account collections are decode-only legacy keys. Change events from every service reach open tabs through the live-update gateway (`src/services/backend/liveEvents.ts`, `useLiveRefresh`).
 
 Settings shared across devices and integration records are owned by the Spring profile service (`src/services/backend/profileServiceApi.ts`, synced by `useAppPreferencesSync`, `useProfileSettingsSync` and `SettingsContext`); prayer preferences by the prayer service. The old `settings` and `integrations` account collections are decode-only legacy keys, and device-only settings stay in the browser's device store. Operational telemetry is posted to the profile service's `/api/profile/v1/operational-events`.
 
