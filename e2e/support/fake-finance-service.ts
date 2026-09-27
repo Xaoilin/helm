@@ -61,14 +61,47 @@ function withNulls(record: object, fields: string[]): Json {
 const serviceTransaction = (transaction: object) => ({ tags: [], ...withNulls(transaction, ['toAccountId']) });
 const serviceGoal = (goal: object) => withNulls(goal, ['linkedAccountId', 'deadline', 'completedAt']);
 
+const LOAN_OPTIONAL_FIELDS = [
+  'monthlyPaymentPence', 'userSharePence', 'balancePence', 'balanceAsOf', 'settlementPence', 'settlementAsOf',
+  'nextPaymentDate', 'paymentsRemaining', 'originalPrincipalPence', 'startDate', 'endDate', 'aprPercent',
+];
+
+/** Each optional value of a list's items as JSON null. */
+const listWithNulls = (items: unknown, fields: string[]) => ((items as object[] | undefined) ?? [])
+  .map(item => withNulls(item, fields));
+
+/** A banking review with every absent optional value (loans, opportunity caps) as JSON null. */
+function serviceReview(review: object): Json {
+  const record = review as Json;
+  return {
+    ...record,
+    opportunities: listWithNulls(record.opportunities, ['suggestedCapPence']),
+    loans: listWithNulls(record.loans, LOAN_OPTIONAL_FIELDS),
+  };
+}
+
+/** An equity position with every absent optional value (plans, grants, next vest, actions) as JSON null. */
+function servicePosition(position: object): Json {
+  const record = position as Json;
+  const grants = listWithNulls(record.grants, ['postEmploymentExpiry', 'nextVest'])
+    .map(grant => ({ ...grant, nextVest: grant.nextVest ? withNulls(grant.nextVest as object, ['alternateDate']) : null }));
+  return {
+    ...record,
+    stockPlan: withNulls(record.stockPlan as object, ['reviewMonth']),
+    optionPlan: withNulls(record.optionPlan as object, ['reviewMonth']),
+    grants,
+    actions: listWithNulls(record.actions, ['dueDate']),
+  };
+}
+
 export function createFakeFinance(seed: FakeFinanceSeed = {}): FakeFinance {
   return {
     accounts: (seed.accounts ?? []).map(account => ({ ...account })),
     transactions: (seed.transactions ?? []).map(serviceTransaction),
     budgets: (seed.budgets ?? []).map(budget => ({ ...budget })),
     goals: (seed.savingsGoals ?? []).map(serviceGoal),
-    review: seed.review ? { ...seed.review } : null,
-    positions: (seed.equityPositions ?? []).map(position => ({ ...position })),
+    review: seed.review ? serviceReview(seed.review) : null,
+    positions: (seed.equityPositions ?? []).map(servicePosition),
   };
 }
 
@@ -194,11 +227,13 @@ function handleReview(route: Route, finance: FakeFinance, method: string, body: 
   stamp: string): Promise<void> {
   if (method === 'GET') return reply(route, 200, { review: finance.review }, reviewEnvelopeSchema);
   const expected = body?.expectedUpdatedAt ?? null;
-  if (expected === null && finance.review) return refuse(route, 409, 'review_exists', 'A banking review already exists.');
-  if (expected !== null && finance.review?.updatedAt !== expected) {
-    return refuse(route, 409, 'review_changed', 'The banking review changed since it was read; reload it and try again.');
+  if (expected === null && finance.review) {
+    return refuse(route, 409, 'review_exists', 'A banking review already exists; reload it and save with its updatedAt.');
   }
-  finance.review = { ...(body?.review as Json), id: 'current', createdAt: finance.review?.createdAt ?? stamp, updatedAt: stamp };
+  if (expected !== null && finance.review?.updatedAt !== expected) {
+    return refuse(route, 409, 'review_changed', 'The banking review changed since it was read; reload and try again.');
+  }
+  finance.review = { ...serviceReview(body?.review as Json), id: 'current', createdAt: finance.review?.createdAt ?? stamp, updatedAt: stamp };
   return reply(route, 200, { review: finance.review }, reviewEnvelopeSchema);
 }
 
@@ -216,21 +251,21 @@ function handleEquity(route: Route, finance: FakeFinance, method: string, path: 
   const existing = finance.positions.find(position => position.id === id);
   if (method === 'GET') {
     return existing ? reply(route, 200, existing, equityPositionSchema)
-      : refuse(route, 404, 'position_not_found', 'No such equity position.');
+      : refuse(route, 404, 'position_not_found', 'This equity position does not exist.');
   }
   const expected = method === 'DELETE' ? url.searchParams.get('expectedUpdatedAt') : body?.expectedUpdatedAt ?? null;
   if (method === 'PUT' && expected === null) {
-    if (existing) return refuse(route, 409, 'position_exists', 'This equity position already exists.');
+    if (existing) return refuse(route, 409, 'position_exists', 'This position already exists; update it with its updatedAt.');
   } else if (!existing) {
-    return refuse(route, 404, 'position_not_found', 'No such equity position.');
+    return refuse(route, 404, 'position_not_found', 'This equity position does not exist.');
   } else if (existing.updatedAt !== expected) {
-    return refuse(route, 409, 'position_changed', 'The equity position changed since it was read; reload it and try again.');
+    return refuse(route, 409, 'position_changed', 'This position changed since it was read; reload and try again.');
   }
   if (method === 'DELETE') {
     finance.positions = finance.positions.filter(position => position.id !== id);
     return reply(route, 200, { id }, deletedSchema);
   }
-  const position = { ...(body?.position as Json), id, createdAt: existing?.createdAt ?? stamp, updatedAt: stamp };
+  const position = { ...servicePosition(body?.position as Json), id, createdAt: existing?.createdAt ?? stamp, updatedAt: stamp };
   upsert(finance.positions, position);
   return reply(route, 200, position, equityPositionSchema);
 }

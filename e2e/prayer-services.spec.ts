@@ -7,7 +7,7 @@ const NOON = '2026-08-29T12:30:00.000Z'; // 13:30 in London: Dhuhr is the curren
 function dhuhrReminder(overrides: Partial<ServicePrayerReminder>): ServicePrayerReminder {
   return {
     key: 'opportunity:2026-08-29:Dhuhr', kind: 'prayer-opportunity', date: '2026-08-29', prayer: 'Dhuhr', pillars: [],
-    firesAt: '2026-08-29T12:00:00Z', expiresAt: '2026-08-29T12:30:00Z', deadline: null, timeZone: 'Europe/London',
+    firesAt: '2026-08-29T12:00:00Z', expiresAt: '2026-08-29T12:30:00Z', deadlineAt: null, deadline: null, timeZone: 'Europe/London',
     reminderMinutes: 15, snoozedUntil: null, snoozeCount: 0, ...overrides,
   };
 }
@@ -241,7 +241,7 @@ test.describe('prayer and profile services', () => {
 
     const deadline = dhuhrReminder({
       key: 'deadline:2026-08-29:Dhuhr', kind: 'deadline', firesAt: '2026-08-29T15:15:00Z',
-      expiresAt: '2026-08-29T15:30:00Z', deadline: 'Asr',
+      expiresAt: '2026-08-29T15:30:00Z', deadlineAt: '2026-08-29T15:30:00Z', deadline: 'Asr',
     });
     control.services.reminders.set(deadline.key, deadline);
     control.services.liveEvents.push({ type: 'prayer.notice', domain: 'prayer', at: now, data: deadline });

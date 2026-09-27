@@ -77,7 +77,7 @@ describe('prayer reminder API', () => {
   });
 
   it('reports the service refusing a second snooze in its own words', async () => {
-    const used = fixture<{ code: string; message: string }>('reminder-snooze-used');
+    const used = fixture<{ code: string; message: string }>('snooze-used');
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(used.body, { status: used.status }));
 
     const refusal = await snoozePrayerReminder(opportunity.key).catch((error: unknown) => error);

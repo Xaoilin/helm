@@ -1,10 +1,10 @@
 {
   "request" : {
     "method" : "DELETE",
-    "path" : "/api/finance/v1/budgets/example-groceries"
+    "path" : "/api/finance/v1/budgets/groceries"
   },
   "status" : 200,
   "body" : {
-    "id" : "example-groceries"
+    "id" : "groceries"
   }
 }

@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/prayer/v1/reminders/{key}/snooze"
+  },
+  "status" : 409,
+  "body" : {
+    "code" : "snooze_too_late",
+    "message" : "This reminder ends before the snooze would."
+  }
+}

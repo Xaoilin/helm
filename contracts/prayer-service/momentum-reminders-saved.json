@@ -5,27 +5,16 @@
   },
   "status" : 200,
   "body" : {
-    "pillars" : [
-      {
-        "pillar" : "learn",
-        "enabled" : true,
-        "afterPrayers" : [
-          "Dhuhr",
-          "Maghrib",
-          "Isha"
-        ],
-        "completedOn" : "2026-09-26"
-      },
-      {
-        "pillar" : "move",
-        "enabled" : true,
-        "afterPrayers" : [
-          "Asr",
-          "Maghrib",
-          "Isha"
-        ],
-        "completedOn" : null
-      }
-    ]
+    "pillars" : [ {
+      "pillar" : "learn",
+      "enabled" : true,
+      "afterPrayers" : [ "Dhuhr", "Maghrib", "Isha" ],
+      "completedOn" : null
+    }, {
+      "pillar" : "move",
+      "enabled" : true,
+      "afterPrayers" : [ "Asr", "Isha" ],
+      "completedOn" : "2026-09-24"
+    } ]
   }
 }

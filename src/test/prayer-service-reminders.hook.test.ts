@@ -43,7 +43,7 @@ function fixture<T>(name: string): T {
 const reminders = fixture<ServicePrayerReminders>('reminders');
 const [opportunity, momentumReminder] = reminders.active;
 /** A minute after Dhuhr began, while both fixture reminders are active. */
-const NOW = new Date('2026-09-27T11:53:00Z');
+const NOW = new Date('2026-09-25T11:53:00Z');
 
 const shown: { title: string; body?: string; tag?: string }[] = [];
 
@@ -113,6 +113,13 @@ afterEach(() => {
 });
 
 describe('usePrayerServiceReminders', () => {
+  // A notification is checked against the wall clock, so pin it to NOW (timers stay real for waitFor).
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+
   it('shows the reminders the service already sent, without notifying them again', async () => {
     api.getPrayerReminders.mockResolvedValue(reminders);
     const { result } = renderReminders();
@@ -180,7 +187,7 @@ describe('usePrayerServiceReminders', () => {
     expect(result.current.notice).toBeNull();
 
     shown.length = 0;
-    emit(notice({ ...opportunity, key: 'opportunity:2026-09-27:Dhuhr:again' }));
+    emit(notice({ ...opportunity, key: 'opportunity:2026-09-25:Dhuhr:again' }));
     await act(async () => { await Promise.resolve(); });
     expect(shown).toEqual([]);
   });
@@ -208,7 +215,7 @@ describe('usePrayerServiceReminders', () => {
   it('snoozes through the service and hides the reminder until the snooze ends', async () => {
     api.getPrayerReminders.mockResolvedValue({ active: [opportunity], momentum: reminders.momentum });
     api.snoozePrayerReminder.mockResolvedValue({
-      ...opportunity, snoozedUntil: '2026-09-27T11:58:00Z', snoozeCount: 1,
+      ...opportunity, snoozedUntil: '2026-09-25T11:58:00Z', snoozeCount: 1,
     });
     const { result, rerender, props } = renderReminders();
     await waitFor(() => expect(result.current.notice?.key).toBe(opportunity.key));
@@ -217,7 +224,7 @@ describe('usePrayerServiceReminders', () => {
 
     expect(api.snoozePrayerReminder).toHaveBeenCalledWith(opportunity.key);
     expect(result.current.notice).toBeNull();
-    rerender({ ...props, now: new Date('2026-09-27T11:58:00Z') });
+    rerender({ ...props, now: new Date('2026-09-25T11:58:00Z') });
     expect(result.current.notice).toMatchObject({ key: opportunity.key, canSnooze: false });
   });
 

@@ -160,6 +160,15 @@ export const projectMatchesSchema = z.object({
   projects: z.array(z.object({ id: z.string(), catalogKey: z.string(), name: z.string() })),
 });
 
+/** Knowledge counts the planner service reads for gamification (`GET /progress`); the app does not call it. */
+export const knowledgeProgressSchema = z.object({
+  entries: z.number().int(),
+  topics: z.number().int(),
+  haramMastered: z.number().int(),
+  halalConsistent: z.number().int(),
+  lifestyleItems: z.number().int(),
+});
+
 export type ServiceKnowledge = z.infer<typeof knowledgeSchema>;
 export type ServiceProjectCatalogue = z.infer<typeof projectCatalogueSchema>;
 
@@ -192,4 +201,5 @@ export const KNOWLEDGE_CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   'knowledge-service/projects-resolved': projectMatchesSchema,
   'knowledge-service/agent-not-approved': apiErrorSchema,
   'knowledge-service/rate-limited': apiErrorSchema,
+  'knowledge-service/progress': knowledgeProgressSchema,
 };

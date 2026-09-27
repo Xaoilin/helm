@@ -7,114 +7,109 @@
   "body" : {
     "review" : {
       "id" : "current",
-      "asOf" : "2026-09-21",
+      "asOf" : "2026-09-20",
       "currency" : "GBP",
       "coverage" : {
-        "from" : "2025-09-01",
-        "to" : "2026-09-21",
+        "from" : "2026-06-01",
+        "to" : "2026-08-31",
         "completeThrough" : "2026-08",
-        "transactionCount" : 20,
+        "transactionCount" : 120,
         "accountCount" : 2,
-        "note" : "Synthetic data"
+        "note" : "Example statements"
       },
-      "accounts" : [
-        {
-          "id" : "example-bank",
-          "label" : "Example Bank",
-          "ownership" : "personal",
-          "balancePence" : 12345,
-          "asOf" : "2026-09-21"
-        }
-      ],
-      "months" : [
-        {
-          "month" : "2026-08",
-          "incomePence" : 500000,
-          "outflowPence" : 450000,
-          "netPence" : 50000,
-          "salaryPence" : 400000,
-          "categories" : [
-            {
-              "label" : "Refund",
-              "amountPence" : -100
-            }
-          ]
-        }
-      ],
+      "accounts" : [ {
+        "id" : "example-current",
+        "label" : "Example Bank current",
+        "ownership" : "personal",
+        "balancePence" : 12345,
+        "asOf" : "2026-09-20"
+      } ],
+      "months" : [ {
+        "month" : "2026-08",
+        "incomePence" : 250000,
+        "outflowPence" : 200000,
+        "netPence" : 50000,
+        "salaryPence" : 240000,
+        "categories" : [ {
+          "label" : "Groceries",
+          "amountPence" : -30000
+        } ]
+      } ],
       "budget" : {
-        "incomePence" : 400000,
-        "incomeBasis" : "Synthetic salary",
-        "essentials" : [
-          {
-            "label" : "Housing",
-            "amountPence" : 150000,
-            "note" : "Full share"
-          }
-        ],
-        "workCostsPence" : 20000,
-        "workCostsNote" : "Dated average",
-        "scenarios" : [
-          {
-            "label" : "Planned change",
-            "status" : "planned",
-            "monthlyAdjustmentPence" : -10000,
-            "note" : "Unconfirmed"
-          }
-        ]
+        "incomePence" : 250000,
+        "incomeBasis" : "Example salary",
+        "essentials" : [ {
+          "label" : "Rent",
+          "amountPence" : 100000,
+          "note" : ""
+        } ],
+        "workCostsPence" : 5000,
+        "workCostsNote" : "Travel",
+        "scenarios" : [ {
+          "label" : "Cheaper phone plan",
+          "status" : "planned",
+          "monthlyAdjustmentPence" : -1000,
+          "note" : ""
+        } ]
       },
-      "opportunities" : [
-        {
-          "label" : "Shopping",
-          "monthlyPence" : 60000,
-          "note" : "Review actual purchases",
-          "suggestedCapPence" : 40000
-        }
-      ],
-      "loans" : [
-        {
-          "id" : "example-loan",
-          "lender" : "Example Lender",
-          "purpose" : "House repairs",
-          "status" : "active",
-          "monthlyPaymentPence" : 20000,
-          "balancePence" : 700000,
-          "balanceAsOf" : "2026-09-21",
-          "balanceKind" : "statement",
-          "settlementPence" : 650000,
-          "settlementAsOf" : "2026-09-21",
-          "nextPaymentDate" : "2026-10-01",
-          "paymentsRemaining" : 35,
-          "originalPrincipalPence" : 1000000,
-          "rateNote" : "Verify terms",
-          "notes" : "Synthetic loan",
-          "sourceIds" : [
-            "example-statement"
-          ]
-        },
-        {
-          "id" : "example-repaid",
-          "lender" : "Example Lender",
-          "purpose" : "Car",
-          "status" : "repaid",
-          "balanceKind" : "unknown",
-          "rateNote" : "",
-          "notes" : "Repayments completed.",
-          "sourceIds" : []
-        }
-      ],
-      "notes" : [
-        "Dated synthetic review"
-      ],
-      "sources" : [
-        {
-          "id" : "example-statement",
-          "label" : "Example statement",
-          "url" : "https://example.com/statement",
-          "asOf" : "2026-09-21"
-        }
-      ],
-      "createdAt" : "2026-09-27T06:00:00Z",
-      "updatedAt" : "2026-09-27T06:00:00Z"
+      "opportunities" : [ {
+        "label" : "Streaming",
+        "monthlyPence" : 1500,
+        "note" : "Two services",
+        "suggestedCapPence" : null
+      } ],
+      "loans" : [ {
+        "id" : "loan-1",
+        "lender" : "Example Lender",
+        "purpose" : "Car",
+        "status" : "active",
+        "monthlyPaymentPence" : null,
+        "userSharePence" : null,
+        "balancePence" : null,
+        "balanceAsOf" : null,
+        "balanceKind" : "unknown",
+        "startDate" : null,
+        "endDate" : null,
+        "aprPercent" : null,
+        "settlementPence" : null,
+        "settlementAsOf" : null,
+        "nextPaymentDate" : null,
+        "paymentsRemaining" : null,
+        "originalPrincipalPence" : null,
+        "rateNote" : "",
+        "notes" : "",
+        "sourceIds" : [ ]
+      }, {
+        "id" : "loan-2",
+        "lender" : "Example Credit",
+        "purpose" : "Laptop",
+        "status" : "repaid",
+        "monthlyPaymentPence" : 5000,
+        "userSharePence" : 5000,
+        "balancePence" : 0,
+        "balanceAsOf" : "2026-09-01",
+        "balanceKind" : "statement",
+        "startDate" : "2025-01-01",
+        "endDate" : "2026-09-01",
+        "aprPercent" : 9.9,
+        "settlementPence" : 0,
+        "settlementAsOf" : "2026-09-01",
+        "nextPaymentDate" : "2026-10-01",
+        "paymentsRemaining" : 0,
+        "originalPrincipalPence" : 60000,
+        "rateNote" : "Fixed",
+        "notes" : "",
+        "sourceIds" : [ "statement-1" ]
+      } ],
+      "notes" : [ "Example note" ],
+      "sources" : [ {
+        "id" : "statement-1",
+        "label" : "Example statement",
+        "url" : "https://example.com/statement",
+        "asOf" : "2026-09-01"
+      } ],
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
     }
   }
 }

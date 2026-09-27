@@ -1,20 +1,20 @@
 {
   "request" : {
     "method" : "PUT",
-    "path" : "/api/finance/v1/savings-goals/example-emergency"
+    "path" : "/api/finance/v1/savings-goals/fund"
   },
   "status" : 200,
   "body" : {
-    "id" : "example-emergency",
-    "name" : "Emergency fund",
+    "id" : "fund",
+    "name" : "Example fund",
     "targetAmount" : 100000,
-    "currentAmount" : 50000,
-    "linkedAccountId" : "example-savings",
-    "icon" : "£",
-    "deadline" : "2027-06-30",
+    "currentAmount" : 2500,
+    "linkedAccountId" : null,
+    "icon" : "star",
+    "deadline" : null,
     "completed" : false,
     "completedAt" : null,
-    "createdAt" : "2026-09-27T06:00:00Z",
-    "updatedAt" : "2026-09-27T06:00:00Z"
+    "createdAt" : "2026-09-27T12:00:00Z",
+    "updatedAt" : "2026-09-27T12:00:00Z"
   }
 }

@@ -61,6 +61,7 @@ export function reminderFromDeadlineEvent(data: PrayerReminderData, sentAt: stri
     pillars: [],
     firesAt: sentAt,
     expiresAt: data.deadlineAt,
+    deadlineAt: data.deadlineAt,
     deadline: data.deadline,
     timeZone: data.timeZone,
     reminderMinutes: data.reminderMinutes,

@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/prayer/v1/reminders/{key}/snooze"
+  },
+  "status" : 404,
+  "body" : {
+    "code" : "reminder_not_found",
+    "message" : "No such reminder is active."
+  }
+}

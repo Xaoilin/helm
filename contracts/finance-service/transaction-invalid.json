@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/finance/v1/transactions/bad"
+  },
+  "status" : 400,
+  "body" : {
+    "code" : "invalid_to_account",
+    "message" : "A transfer needs a toAccountId other than its accountId."
+  }
+}

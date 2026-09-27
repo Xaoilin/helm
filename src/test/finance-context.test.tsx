@@ -18,7 +18,7 @@ function example<T>(name: string, schema: { parse: (value: unknown) => T }): T {
 }
 
 const LEDGER = example('ledger', ledgerSchema);
-const TRANSFER_SAVED = example('transaction-saved', transactionChangeSchema);
+const PAYMENT_SAVED = example('transaction-saved', transactionChangeSchema);
 
 let context: FinanceContextValue;
 
@@ -31,7 +31,7 @@ function Probe() {
 
 async function renderLoaded() {
   render(<FinanceProvider><Probe /></FinanceProvider>);
-  await screen.findByText('loaded|12345,50000|');
+  await screen.findByText('loaded|110401,60000|');
 }
 
 beforeEach(() => {
@@ -42,47 +42,47 @@ beforeEach(() => {
 describe('FinanceContext', () => {
   it('loads the ledger the service holds', async () => {
     await renderLoaded();
-    expect(context.transactions.map(transaction => transaction.id)).toEqual(['example-transfer', 'example-salary']);
+    expect(context.transactions.map(transaction => transaction.id)).toEqual(['food', 'move']);
     expect(context.financeBudgets).toHaveLength(1);
-    expect(context.savingsGoals).toHaveLength(1);
+    expect(context.savingsGoals).toHaveLength(2);
   });
 
   it('shows a new transaction at once but takes balances only from the service', async () => {
     await renderLoaded();
-    let resolveSave!: (value: typeof TRANSFER_SAVED) => void;
+    let resolveSave!: (value: typeof PAYMENT_SAVED) => void;
     api.saveTransaction.mockReturnValue(new Promise(resolve => { resolveSave = resolve; }));
 
     let id = '';
     act(() => {
-      id = context.addTransaction({ type: 'transfer', amount: 12345, category: 'transfer', accountId: 'example-current',
-        toAccountId: 'example-savings', description: 'Monthly saving', date: '2026-09-26' });
+      id = context.addTransaction({ type: 'income', amount: 250000, category: 'salary', accountId: 'current',
+        description: 'Example payment', date: '2026-09-25' });
     });
     expect(context.transactions[0].id).toBe(id);
-    expect(screen.getByText('loaded|12345,50000|')).toBeInTheDocument();
-    expect(api.saveTransaction).toHaveBeenCalledWith(id, expect.objectContaining({ amount: 12345 }));
+    expect(screen.getByText('loaded|110401,60000|')).toBeInTheDocument();
+    expect(api.saveTransaction).toHaveBeenCalledWith(id, expect.objectContaining({ amount: 250000 }));
 
-    await act(async () => { resolveSave({ ...TRANSFER_SAVED, transaction: { ...TRANSFER_SAVED.transaction, id } }); });
-    expect(screen.getByText('loaded|0,62345|')).toBeInTheDocument();
+    await act(async () => { resolveSave({ ...PAYMENT_SAVED, transaction: { ...PAYMENT_SAVED.transaction, id } }); });
+    expect(screen.getByText('loaded|360401,60000|')).toBeInTheDocument();
   });
 
   it('applies the balances the service returns when a transaction is removed', async () => {
     await renderLoaded();
     api.deleteTransaction.mockResolvedValue({
-      id: 'example-transfer',
-      accounts: [{ ...LEDGER.accounts[0], balance: 24690 }, { ...LEDGER.accounts[1], balance: 37655 }],
+      id: 'move',
+      accounts: [{ ...LEDGER.accounts[0], balance: 120401 }, { ...LEDGER.accounts[1], balance: 50000 }],
     });
-    await act(async () => { context.removeTransaction('example-transfer'); });
-    expect(context.transactions.map(transaction => transaction.id)).toEqual(['example-salary']);
-    expect(screen.getByText('loaded|24690,37655|')).toBeInTheDocument();
+    await act(async () => { context.removeTransaction('move'); });
+    expect(context.transactions.map(transaction => transaction.id)).toEqual(['food']);
+    expect(screen.getByText('loaded|120401,50000|')).toBeInTheDocument();
   });
 
   it('removes the transactions the service removed with an account and unlinks its goals', async () => {
     await renderLoaded();
-    api.deleteAccount.mockResolvedValue({ id: 'example-savings', removedTransactionIds: ['example-transfer'] });
-    await act(async () => { context.removeFinanceAccount('example-savings'); });
-    expect(context.financeAccounts.map(account => account.id)).toEqual(['example-current']);
-    expect(context.transactions.map(transaction => transaction.id)).toEqual(['example-salary']);
-    expect(context.savingsGoals[0].linkedAccountId).toBeUndefined();
+    api.deleteAccount.mockResolvedValue({ id: 'savings', removedTransactionIds: ['move'] });
+    await act(async () => { context.removeFinanceAccount('savings'); });
+    expect(context.financeAccounts.map(account => account.id)).toEqual(['current']);
+    expect(context.transactions.map(transaction => transaction.id)).toEqual(['food']);
+    expect(context.savingsGoals.find(goal => goal.id === 'holiday')?.linkedAccountId).toBeUndefined();
   });
 
   it('shows why a refused save failed and reloads what the service holds', async () => {

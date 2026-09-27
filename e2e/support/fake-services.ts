@@ -313,15 +313,15 @@ function activeReminders(services: FakeServices, now: Date): ServicePrayerRemind
 function snoozeReminder(route: Route, services: FakeServices, key: string, now: Date): Promise<void> {
   const reminder = services.reminders.get(key);
   if (!reminder || Date.parse(reminder.expiresAt) <= now.getTime()) {
-    return reply(route, 404, { code: 'reminder_not_found', message: 'No active reminder has this key.' }, apiErrorSchema);
+    return reply(route, 404, { code: 'reminder_not_found', message: 'No such reminder is active.' }, apiErrorSchema);
   }
   if (reminder.snoozeCount >= 1) {
-    return reply(route, 409, { code: 'snooze_used', message: 'This reminder has already been snoozed once.' },
+    return reply(route, 409, { code: 'snooze_used', message: 'This reminder has already used its one snooze.' },
       apiErrorSchema);
   }
   const snoozedUntil = new Date(now.getTime() + SNOOZE_MS);
   if (snoozedUntil.getTime() >= Date.parse(reminder.expiresAt)) {
-    return reply(route, 409, { code: 'snooze_too_late', message: 'This reminder ends before a snooze would.' },
+    return reply(route, 409, { code: 'snooze_too_late', message: 'This reminder ends before the snooze would.' },
       apiErrorSchema);
   }
   const snoozed = { ...reminder, snoozedUntil: snoozedUntil.toISOString(), snoozeCount: 1 };

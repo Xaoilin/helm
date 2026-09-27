@@ -39,5 +39,6 @@ export type PrayerReminderData = z.infer<typeof prayerReminderDataSchema>;
 export const LIVE_CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   'live-service/change-event': liveEventSchema,
   'live-service/prayer-reminder-event': liveEventSchema.extend({ data: prayerReminderDataSchema }),
+  'live-service/prayer-notice-event': liveEventSchema.extend({ data: prayerNoticeDataSchema }),
   'live-service/rate-limited': apiErrorSchema,
 };

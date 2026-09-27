@@ -5,87 +5,87 @@
   },
   "status" : 200,
   "body" : {
-    "accounts" : [
-      {
-        "id" : "example-current",
-        "name" : "Example Bank",
-        "type" : "current",
-        "balance" : 12345,
-        "currency" : "GBP",
-        "color" : "#4f5bff",
-        "icon" : "£",
-        "includeInNetWorth" : true,
-        "sortOrder" : 0,
-        "createdAt" : "2026-09-27T06:00:00Z",
-        "updatedAt" : "2026-09-27T06:00:00Z"
-      },
-      {
-        "id" : "example-savings",
-        "name" : "Example Savings",
-        "type" : "savings",
-        "balance" : 50000,
-        "currency" : "GBP",
-        "color" : "#4f5bff",
-        "icon" : "£",
-        "includeInNetWorth" : true,
-        "sortOrder" : 1,
-        "createdAt" : "2026-09-27T06:00:00Z",
-        "updatedAt" : "2026-09-27T06:00:00Z"
-      }
-    ],
-    "transactions" : [
-      {
-        "id" : "example-transfer",
-        "type" : "transfer",
-        "amount" : 12345,
-        "category" : "transfer",
-        "accountId" : "example-current",
-        "toAccountId" : "example-savings",
-        "description" : "Monthly saving",
-        "date" : "2026-09-26",
-        "tags" : [
-          "saving"
-        ],
-        "createdAt" : "2026-09-27T06:00:00Z",
-        "updatedAt" : "2026-09-27T06:00:00Z"
-      },
-      {
-        "id" : "example-salary",
-        "type" : "income",
-        "amount" : 200000,
-        "category" : "salary",
-        "accountId" : "example-current",
-        "toAccountId" : null,
-        "description" : "Example Co salary",
-        "date" : "2026-09-25",
-        "tags" : [],
-        "createdAt" : "2026-09-27T06:00:00Z",
-        "updatedAt" : "2026-09-27T06:00:00Z"
-      }
-    ],
-    "budgets" : [
-      {
-        "id" : "example-groceries",
-        "category" : "groceries",
-        "monthlyLimit" : 30000,
-        "createdAt" : "2026-09-27T06:00:00Z",
-        "updatedAt" : "2026-09-27T06:00:00Z"
-      }
-    ],
-    "savingsGoals" : [
-      {
-        "id" : "example-emergency",
-        "name" : "Emergency fund",
-        "targetAmount" : 100000,
-        "currentAmount" : 50000,
-        "linkedAccountId" : "example-savings",
-        "icon" : "£",
-        "deadline" : "2027-06-30",
-        "completed" : false,
-        "completedAt" : null,
-        "createdAt" : "2026-09-27T06:00:00Z",
-        "updatedAt" : "2026-09-27T06:00:00Z"
-      }
-    ]
+    "accounts" : [ {
+      "id" : "current",
+      "name" : "Example Bank",
+      "type" : "current",
+      "balance" : 110401,
+      "currency" : "GBP",
+      "color" : "#22c55e",
+      "icon" : "bank",
+      "includeInNetWorth" : true,
+      "sortOrder" : 0,
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
+    }, {
+      "id" : "savings",
+      "name" : "Example Savings",
+      "type" : "current",
+      "balance" : 60000,
+      "currency" : "GBP",
+      "color" : "#22c55e",
+      "icon" : "bank",
+      "includeInNetWorth" : true,
+      "sortOrder" : 1,
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
+    } ],
+    "transactions" : [ {
+      "id" : "food",
+      "type" : "expense",
+      "amount" : 4599,
+      "category" : "groceries",
+      "accountId" : "current",
+      "toAccountId" : null,
+      "description" : "Example payment",
+      "date" : "2026-09-20",
+      "tags" : [ "example" ],
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
+    }, {
+      "id" : "move",
+      "type" : "transfer",
+      "amount" : 10000,
+      "category" : "transfer",
+      "accountId" : "current",
+      "toAccountId" : "savings",
+      "description" : "Example payment",
+      "date" : "2026-09-01",
+      "tags" : [ "example" ],
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
+    } ],
+    "budgets" : [ {
+      "id" : "groceries",
+      "category" : "groceries",
+      "monthlyLimit" : 30000,
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
+    } ],
+    "savingsGoals" : [ {
+      "id" : "fund",
+      "name" : "Example fund",
+      "targetAmount" : 100000,
+      "currentAmount" : 2500,
+      "linkedAccountId" : null,
+      "icon" : "star",
+      "deadline" : null,
+      "completed" : false,
+      "completedAt" : null,
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
+    }, {
+      "id" : "holiday",
+      "name" : "Example holiday",
+      "targetAmount" : 50000,
+      "currentAmount" : 50000,
+      "linkedAccountId" : "savings",
+      "icon" : "plane",
+      "deadline" : "2027-06-01",
+      "completed" : true,
+      "completedAt" : "2026-09-27T12:00:00Z",
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
+    } ]
   }
 }

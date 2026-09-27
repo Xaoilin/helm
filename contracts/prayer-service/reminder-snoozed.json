@@ -1,21 +1,22 @@
 {
   "request" : {
     "method" : "POST",
-    "path" : "/api/prayer/v1/reminders/opportunity:2026-09-27:Dhuhr/snooze"
+    "path" : "/api/prayer/v1/reminders/{key}/snooze"
   },
   "status" : 200,
   "body" : {
-    "key" : "opportunity:2026-09-27:Dhuhr",
+    "key" : "opportunity:2026-09-25:Dhuhr",
     "kind" : "prayer-opportunity",
-    "date" : "2026-09-27",
+    "date" : "2026-09-25",
     "prayer" : "Dhuhr",
-    "pillars" : [],
-    "firesAt" : "2026-09-27T11:52:00Z",
-    "expiresAt" : "2026-09-27T12:22:00Z",
+    "pillars" : [ ],
+    "firesAt" : "2026-09-25T11:52:00Z",
+    "expiresAt" : "2026-09-25T12:22:00Z",
+    "deadlineAt" : null,
     "deadline" : null,
     "timeZone" : "Europe/London",
     "reminderMinutes" : 15,
-    "snoozedUntil" : "2026-09-27T11:59:00Z",
+    "snoozedUntil" : "2026-09-25T11:59:00Z",
     "snoozeCount" : 1
   }
 }

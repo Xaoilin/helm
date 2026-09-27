@@ -64,8 +64,9 @@ describe('finance service ledger', () => {
     expect(sent().url).toBe('https://finance.example.test/api/finance/v1/ledger');
     expect(sent().method).toBe('GET');
     expect(ledger.accounts.map(account => account.name)).toEqual(['Example Bank', 'Example Savings']);
-    const salary = ledger.transactions.find(transaction => transaction.id === 'example-salary');
-    expect(salary?.toAccountId).toBeUndefined();
+    const food = ledger.transactions.find(transaction => transaction.id === 'food');
+    expect(food).toBeDefined();
+    expect(food?.toAccountId).toBeUndefined();
     expect(ledger.savingsGoals[0].completedAt).toBeUndefined();
     expect(ledger.budgets[0]).toMatchObject({ category: 'groceries', monthlyLimit: 30000 });
   });
@@ -73,34 +74,35 @@ describe('finance service ledger', () => {
   it('saves a transaction under its own ID with an Idempotency-Key and returns the changed accounts', async () => {
     fetchMock.mockResolvedValue(answer('transaction-saved'));
 
-    const change = await saveTransaction('example-transfer', {
+    const change = await saveTransaction('pay', {
       type: 'transfer', amount: 12345, category: 'transfer', accountId: 'example-current',
       toAccountId: 'example-savings', description: 'Monthly saving', date: '2026-09-26', tags: undefined,
     });
 
     const request = sent();
-    expect(request.url).toBe('https://finance.example.test/api/finance/v1/transactions/example-transfer');
+    expect(request.url).toBe('https://finance.example.test/api/finance/v1/transactions/pay');
     expect(request.method).toBe('PUT');
     expect(request.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/u);
     expect(request.body).toEqual({
       type: 'transfer', amount: 12345, category: 'transfer', accountId: 'example-current',
       toAccountId: 'example-savings', description: 'Monthly saving', date: '2026-09-26',
     });
-    expect(change.transaction.id).toBe('example-transfer');
-    expect(change.accounts.map(account => account.balance)).toEqual([0, 62345]);
+    expect(change.transaction.id).toBe('pay');
+    expect(change.transaction.toAccountId).toBeUndefined();
+    expect(change.accounts.map(account => account.balance)).toEqual([360401]);
   });
 
   it('removes a transaction and an account with their own write keys', async () => {
     fetchMock.mockResolvedValueOnce(answer('transaction-deleted')).mockResolvedValueOnce(answer('account-deleted'));
 
-    const removed = await deleteTransaction('example-transfer');
-    const account = await deleteAccount('example-savings');
+    const removed = await deleteTransaction('pay');
+    const account = await deleteAccount('savings');
 
-    expect(sent(0)).toMatchObject({ method: 'DELETE', url: expect.stringContaining('/transactions/example-transfer') });
-    expect(sent(1)).toMatchObject({ method: 'DELETE', url: expect.stringContaining('/accounts/example-savings') });
+    expect(sent(0)).toMatchObject({ method: 'DELETE', url: expect.stringContaining('/transactions/pay') });
+    expect(sent(1)).toMatchObject({ method: 'DELETE', url: expect.stringContaining('/accounts/savings') });
     expect(sent(0).headers['Idempotency-Key']).not.toBe(sent(1).headers['Idempotency-Key']);
-    expect(removed.accounts).toHaveLength(2);
-    expect(account.removedTransactionIds).toEqual(['example-transfer']);
+    expect(removed.accounts.map(changed => changed.balance)).toEqual([110401]);
+    expect(account.removedTransactionIds).toEqual(['move']);
   });
 
   it('never sends the completion stamp of a savings goal', async () => {
@@ -118,6 +120,16 @@ describe('finance service ledger', () => {
     });
   });
 
+  it('refuses a transfer into its own account in the service\'s words', async () => {
+    const invalid = fixture('transaction-invalid') as { status: number; body: { code: string; message: string } };
+    fetchMock.mockResolvedValue(answer('transaction-invalid'));
+
+    await expect(saveTransaction('bad', {
+      type: 'transfer', amount: 100, category: 'transfer', accountId: 'current', toAccountId: 'current',
+      description: 'Loop', date: '2026-09-26', tags: undefined,
+    })).rejects.toMatchObject({ status: 400, code: 'invalid_to_account', message: invalid.body.message });
+  });
+
   it('reports a refusal as a service error with its code', async () => {
     fetchMock.mockImplementation(async () => answer('agent-not-approved'));
 
@@ -126,11 +138,18 @@ describe('finance service ledger', () => {
 });
 
 describe('finance service banking review', () => {
+  it('reads no review before the first save', async () => {
+    fetchMock.mockResolvedValue(answer('review-empty'));
+
+    await expect(getReview()).resolves.toBeNull();
+  });
+
   it('reads the review and sends the expected revision when saving it', async () => {
     fetchMock.mockResolvedValueOnce(answer('review')).mockResolvedValueOnce(answer('review-saved'));
 
     const review = await getReview();
-    expect(review?.loans[1].balancePence).toBeUndefined();
+    expect(review?.loans[0].balancePence).toBeUndefined();
+    expect(review?.loans[1].balancePence).toBe(0);
     const { updatedAt } = review!;
     const draft = Object.fromEntries(Object.entries(review!)
       .filter(([key]) => !['id', 'createdAt', 'updatedAt'].includes(key))) as FinanceReviewDraft;
@@ -139,7 +158,7 @@ describe('finance service banking review', () => {
     expect(sent(1)).toMatchObject({ method: 'PUT', url: 'https://finance.example.test/api/finance/v1/review' });
     expect(sent(1).headers['Idempotency-Key']).toBe('review-request-1');
     expect(sent(1).body).toMatchObject({ expectedUpdatedAt: updatedAt, review: { asOf: draft.asOf } });
-    expect(saved.updatedAt).not.toBe(updatedAt);
+    expect(saved.id).toBe(review!.id);
   });
 
   it('refuses a review changed since it was read', async () => {
@@ -167,9 +186,9 @@ describe('finance service equity', () => {
   });
 
   it('creates with a null revision, edits with the stored one and removes with it as a query parameter', async () => {
-    fetchMock.mockResolvedValueOnce(answer('equity-position-saved'))
-      .mockResolvedValueOnce(answer('equity-position-saved'))
-      .mockResolvedValueOnce(answer('equity-position-deleted'));
+    fetchMock.mockResolvedValueOnce(answer('position-saved'))
+      .mockResolvedValueOnce(answer('position-saved'))
+      .mockResolvedValueOnce(answer('position-deleted'));
     const draft = { company: 'Example Co' } as EquityPositionDraft;
 
     await saveEquityPosition('example-equity', draft, null, 'create-1');
@@ -185,7 +204,7 @@ describe('finance service equity', () => {
   });
 
   it('refuses a stale edit with position_changed', async () => {
-    fetchMock.mockResolvedValue(answer('equity-position-changed'));
+    fetchMock.mockResolvedValue(answer('position-changed'));
 
     await expect(saveEquityPosition('example-equity', {} as EquityPositionDraft, '2026-01-01T00:00:00Z'))
       .rejects.toMatchObject({ status: 409, code: 'position_changed' });

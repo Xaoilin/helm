@@ -30,6 +30,11 @@ export const outcomeListSchema = z.array(outcomeSchema);
 
 export const outcomeChangeSchema = z.object({ outcome: outcomeSchema, firstReward: z.boolean() });
 
+/** The planner service's read of rewarded outcomes (`GET /outcomes/rewarded`); the app does not call it. */
+export const rewardedOutcomesSchema = z.object({
+  outcomes: z.array(z.object({ date: isoDate, prayer: prayerName, recordedAt: instant, taskId: z.string().nullable() })),
+});
+
 export const preferencesSchema = z.object({
   enabled: z.boolean(),
   reminderEnabled: z.boolean(),
@@ -112,6 +117,7 @@ export const prayerReminderSchema = z.object({
   pillars: z.array(pillarName),
   firesAt: instant,
   expiresAt: instant,
+  deadlineAt: instant.nullable(),
   deadline: z.string().nullable(),
   timeZone: z.string(),
   reminderMinutes: z.number().int().nullable(),
@@ -258,7 +264,10 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   'prayer-service/preferences-updated': preferencesSchema,
   'prayer-service/reminders': prayerRemindersSchema,
   'prayer-service/reminder-snoozed': prayerReminderSchema,
-  'prayer-service/reminder-snooze-used': apiErrorSchema,
+  'prayer-service/snooze-used': apiErrorSchema,
+  'prayer-service/snooze-too-late': apiErrorSchema,
+  'prayer-service/reminder-not-found': apiErrorSchema,
+  'prayer-service/rewarded-outcomes': rewardedOutcomesSchema,
   'prayer-service/momentum-reminders-saved': momentumRemindersSchema,
   'profile-service/settings-default': globalSettingsSchema,
   'profile-service/settings-updated': globalSettingsSchema,

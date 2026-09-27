@@ -1,7 +1,7 @@
 {
   "request" : {
     "method" : "GET",
-    "path" : "/api/finance/v1/ledger"
+    "path" : "/api/finance/v1/review"
   },
   "status" : 429,
   "body" : {
