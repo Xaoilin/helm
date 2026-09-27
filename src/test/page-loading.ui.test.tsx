@@ -60,8 +60,9 @@ describe('page demand and readiness', () => {
   });
 
   it('reports a page load error and reserves recovery reset for explicit retry', async () => {
-    mocks.activate.mockImplementation((keys: readonly string[]) => keys.includes('transactions')
-      ? Promise.reject(new Error('Database temporarily unavailable')) : Promise.resolve());
+    // The dashboard's activation succeeds; the next page's fails.
+    mocks.activate.mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('Database temporarily unavailable'));
     render(<ShellProvider><PageProbe /></ShellProvider>);
     fireEvent.click(screen.getByText('Inventory navigation'));
     expect(await screen.findByRole('alert')).toHaveTextContent('Database temporarily unavailable');

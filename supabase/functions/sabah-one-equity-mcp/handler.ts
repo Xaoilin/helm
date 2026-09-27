@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.1
 import { createMcpHandler, McpServer, type AuthInfo } from 'npm:@modelcontextprotocol/server@2.0.0';
 import { z } from 'npm:zod@4.4.3';
 import { ASSISTANT_DEPLOY_SHA } from '../_shared/assistantDeployment.ts';
+import { callFinance, probeFinanceAccess, segment, toolFailure, toolResult, type FinanceCall } from '../_shared/financeService.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
@@ -120,14 +121,12 @@ async function verifyAccess(request: Request): Promise<AuthInfo | Response> {
   }
   if (expiresAt <= Math.floor(Date.now() / 1_000)) return oauthChallenge(401, 'The Sabah One OAuth access token has expired.');
 
-  // Inventory and Employment approval never authorize Equity. Recheck the independent
-  // account/client approval through the same guarded RPC used by each tool.
-  const { error: approvalError } = await client.rpc('equity_list_positions', { p_query: '', p_limit: 1, p_offset: 0 });
-  if (approvalError) {
-    return approvalError.code === '42501'
-      ? oauthChallenge(403, 'This OAuth client is not approved for Sabah One Equity.')
-      : jsonResponse({ error: 'Sabah One Equity could not verify access.' }, 503);
-  }
+  // Inventory, Employment and Finance approval never authorize Equity. The finance service rechecks
+  // this client's independent Equity approval on every request; one cheap read asks it now.
+  const access = await probeFinanceAccess(token, { method: 'GET', path: '/equity/positions', query: { limit: 1 } });
+  if (access === 'not_approved') return oauthChallenge(403, 'This OAuth client is not approved for Sabah One Equity.');
+  if (access === 'invalid_token') return oauthChallenge(401, 'The Sabah One OAuth access token is invalid.');
+  if (access === 'unavailable') return jsonResponse({ error: 'Sabah One Equity could not verify access.' }, 503);
   return {
     token, clientId, expiresAt,
     scopes: typeof claims.scope === 'string' ? claims.scope.split(/\s+/).filter(Boolean) : [],
@@ -136,18 +135,25 @@ async function verifyAccess(request: Request): Promise<AuthInfo | Response> {
   };
 }
 
-async function callRpc(client: SupabaseClient, name: string, parameters: Record<string, unknown>) {
-  const { data, error } = await client.rpc(name, parameters);
-  if (error) {
-    return { isError: true, content: [{ type: 'text' as const, text: error.message || `Sabah One Equity rejected ${name}.` }] };
+type Shape = (body: unknown) => unknown;
+
+async function forward(token: string, tool: string, call: FinanceCall, shape: Shape = body => body) {
+  try {
+    return toolResult(shape(await callFinance(token, `Sabah One Equity rejected ${tool}.`, call)));
+  } catch (error) {
+    return toolFailure(error, `Sabah One Equity rejected ${tool}.`);
   }
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(data) }],
-    structuredContent: { result: data },
-  };
 }
 
-function registerEquityTools(server: McpServer, client: SupabaseClient): void {
+const positionPath = (positionId: string) => `/equity/positions/${segment(positionId)}`;
+
+// Tool results keep the receipts agents already rely on: a position read is `{ position }`, and a
+// write answers with the position's ID and its saved state (null once removed).
+const readReceipt: Shape = position => ({ position });
+const writeReceipt: Shape = position => ({ positionId: (position as { id: string }).id, position });
+const removalReceipt: Shape = removed => ({ positionId: (removed as { id: string }).id, position: null });
+
+function registerEquityTools(server: McpServer, token: string): void {
   const readAnnotations = { readOnlyHint: true, idempotentHint: true, openWorldHint: false };
   const writeAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
   server.registerTool('equity_list_positions', {
@@ -155,35 +161,50 @@ function registerEquityTools(server: McpServer, client: SupabaseClient): void {
     description: 'List this account’s private stock and option planning records. Search by company before adding a position. These are dated records, not live quotes or cash balances.',
     inputSchema: z.object({ query: z.string().trim().max(160).default(''), limit: z.number().int().min(1).max(100).default(50), offset: z.number().int().min(0).max(10_000).default(0) }).strict(),
     annotations: readAnnotations,
-  }, input => callRpc(client, 'equity_list_positions', { p_query: input.query, p_limit: input.limit, p_offset: input.offset }));
+  }, input => forward(token, 'equity_list_positions', {
+    method: 'GET', path: '/equity/positions', query: { query: input.query, limit: input.limit, offset: input.offset },
+  }, page => ({ ...(page as object), limit: input.limit, offset: input.offset })));
   server.registerTool('equity_get_position', {
     title: 'Get Sabah One Equity Position',
     description: 'Read one account-owned position, distinct stock/option plans, grant details, dated scenarios and sources. Use the returned updatedAt when editing.',
     inputSchema: z.object({ positionId: idSchema }).strict(), annotations: readAnnotations,
-  }, input => callRpc(client, 'equity_get_position', { p_position_id: input.positionId }));
+  }, input => forward(token, 'equity_get_position', { method: 'GET', path: positionPath(input.positionId) }, readReceipt));
   server.registerTool('equity_add_position', {
     title: 'Add Sabah One Equity Position',
     description: 'Record verified holdings and the user’s plan. Keep owned shares separate from unexercised grants. Never auto-vest, infer a departure deadline, treat scenarios as cash, or place trades. Reuse requestId only for the exact same retry.',
     inputSchema: z.object({ requestId: requestIdSchema, position: addSchema }).strict(), annotations: writeAnnotations,
-  }, input => callRpc(client, 'equity_add_position', { p_request_id: input.requestId, p_position: input.position }));
+  }, input => {
+    // Without an ID the requestId names the new position, so an exact retry targets the same record.
+    const { id, ...position } = input.position;
+    return forward(token, 'equity_add_position', {
+      method: 'PUT', path: positionPath(id ?? input.requestId), requestId: input.requestId,
+      body: { position, expectedUpdatedAt: null },
+    }, writeReceipt);
+  });
   server.registerTool('equity_update_position', {
     title: 'Update Sabah One Equity Position',
     description: 'Replace one position’s editable details after reading it. Supply the complete draft and exact latest updatedAt, preserving other grants, plans, sources and uncertainties. A stale edit is rejected. No trade or exercise is performed.',
     inputSchema: z.object({ requestId: requestIdSchema, positionId: idSchema, position: draftSchema, expectedUpdatedAt: expectedUpdatedAtSchema }).strict(), annotations: writeAnnotations,
-  }, input => callRpc(client, 'equity_update_position', { p_request_id: input.requestId, p_position_id: input.positionId, p_position: input.position, p_expected_updated_at: input.expectedUpdatedAt }));
+  }, input => forward(token, 'equity_update_position', {
+    method: 'PUT', path: positionPath(input.positionId), requestId: input.requestId,
+    body: { position: input.position, expectedUpdatedAt: input.expectedUpdatedAt },
+  }, writeReceipt));
   server.registerTool('equity_remove_position', {
     title: 'Remove Sabah One Equity Position',
     description: 'Remove this exact planning record only after explicit user confirmation. This does not sell holdings or exercise options.',
     inputSchema: z.object({ requestId: requestIdSchema, positionId: idSchema, expectedUpdatedAt: expectedUpdatedAtSchema,
       confirmed: z.literal(true).describe('Must reflect explicit user confirmation to remove this exact record.') }).strict(),
     annotations: { ...writeAnnotations, destructiveHint: true },
-  }, input => callRpc(client, 'equity_remove_position', { p_request_id: input.requestId, p_position_id: input.positionId, p_confirm: input.confirmed, p_expected_updated_at: input.expectedUpdatedAt }));
+  }, input => forward(token, 'equity_remove_position', {
+    method: 'DELETE', path: positionPath(input.positionId), requestId: input.requestId,
+    query: { expectedUpdatedAt: input.expectedUpdatedAt },
+  }, removalReceipt));
 }
 
 const mcpHandler = createMcpHandler(({ authInfo }) => {
   if (!authInfo) throw new Error('A verified Sabah One OAuth access token is required.');
   const server = new McpServer({ name: 'sabah-one-equity', version: '0.1.0' });
-  registerEquityTools(server, createUserClient(authInfo.token));
+  registerEquityTools(server, authInfo.token);
   return server;
 }, { responseMode: 'json' });
 

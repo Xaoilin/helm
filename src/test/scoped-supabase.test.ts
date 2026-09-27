@@ -60,7 +60,7 @@ describe('scoped Supabase account reads', () => {
   });
 
   it('rejects unrelated collections and account records from a scoped response', async () => {
-    const abortSignal = vi.fn().mockResolvedValue({ data: { state, records: [{ ...record, collection: 'transactions' }] }, error: null });
+    const abortSignal = vi.fn().mockResolvedValue({ data: { state, records: [{ ...record, collection: 'calendarEvents' }] }, error: null });
     mocks.rpc.mockReturnValue({ abortSignal });
     await expect(fetchHelmAccountSnapshot(['tasks'])).rejects.toThrow('invalid record');
     abortSignal.mockResolvedValue({ data: { state, records: [{ ...record, userId: 'other-account' }] }, error: null });

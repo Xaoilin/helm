@@ -24,7 +24,7 @@ reconciled.
 | Trips | trips, tripLegs, tripItineraryItems, tripBookings, tripBudgetEntries |
 | Employment | employment (surface retains its confirmed seed/loading path) |
 | Health | healthFastFoodEntries |
-| Finance | financeAccounts, transactions, financeBudgets, savingsGoals, financeReviews, equityPositions |
+| Finance | shared collections only (the ledger, banking review and equity come from the finance service) |
 | Activity | shared collections only (usage insight reads product analytics) |
 | Dashboard, Calendar, Clock, Knowledge, Profile, Integrations, Settings, Debug | shared collections only |
 

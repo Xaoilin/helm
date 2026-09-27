@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.1
 import { createMcpHandler, McpServer, type AuthInfo } from 'npm:@modelcontextprotocol/server@2.0.0';
 import { z } from 'npm:zod@4.4.3';
 import { ASSISTANT_DEPLOY_SHA } from '../_shared/assistantDeployment.ts';
+import { callFinance, probeFinanceAccess, toolFailure, toolResult } from '../_shared/financeService.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
@@ -131,14 +132,12 @@ async function verifyAccess(request: Request): Promise<AuthInfo | Response> {
   }
   if (expiresAt <= Math.floor(Date.now() / 1_000)) return oauthChallenge(401, 'The Sabah One OAuth access token has expired.');
 
-  // Inventory, Employment and Equity approval never authorize Finance. Recheck the independent
-  // account/client approval through the same guarded RPC used by each tool.
-  const { error: approvalError } = await client.rpc('finance_get_review');
-  if (approvalError) {
-    return approvalError.code === '42501'
-      ? oauthChallenge(403, 'This OAuth client is not approved for Sabah One Finance.')
-      : jsonResponse({ error: 'Sabah One Finance could not verify access.' }, 503);
-  }
+  // Inventory, Employment and Equity approval never authorize Finance. The finance service rechecks
+  // this client's independent Finance approval on every request; one cheap read asks it now.
+  const access = await probeFinanceAccess(token, { method: 'GET', path: '/review' });
+  if (access === 'not_approved') return oauthChallenge(403, 'This OAuth client is not approved for Sabah One Finance.');
+  if (access === 'invalid_token') return oauthChallenge(401, 'The Sabah One OAuth access token is invalid.');
+  if (access === 'unavailable') return jsonResponse({ error: 'Sabah One Finance could not verify access.' }, 503);
   return {
     token, clientId, expiresAt,
     scopes: typeof claims.scope === 'string' ? claims.scope.split(/\s+/).filter(Boolean) : [],
@@ -147,36 +146,39 @@ async function verifyAccess(request: Request): Promise<AuthInfo | Response> {
   };
 }
 
-async function callRpc(client: SupabaseClient, name: string, parameters: Record<string, unknown>) {
-  const { data, error } = await client.rpc(name, parameters);
-  if (error) {
-    return { isError: true, content: [{ type: 'text' as const, text: error.message || `Sabah One Finance rejected ${name}.` }] };
+async function forward(tool: string, run: () => Promise<unknown>) {
+  try {
+    return toolResult(await run());
+  } catch (error) {
+    return toolFailure(error, `Sabah One Finance rejected ${tool}.`);
   }
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(data) }],
-    structuredContent: { result: data },
-  };
 }
 
-function registerFinanceTools(server: McpServer, client: SupabaseClient): void {
+function registerFinanceTools(server: McpServer, token: string): void {
   server.registerTool('finance_get_review', {
     title: 'Get Sabah One Banking Review and Loans',
     description: 'Read this account’s current dated banking review, monthly cash flow, budget assumptions, spending opportunities and loans, or null when none exists. Dated information is not a live bank balance. Read before replacing the review.',
     inputSchema: z.object({}).strict(),
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  }, () => callRpc(client, 'finance_get_review', {}));
+  }, () => forward('finance_get_review', async () => {
+    const body = await callFinance(token, 'Sabah One Finance rejected finance_get_review.', { method: 'GET', path: '/review' });
+    return (body as { review?: unknown } | null)?.review ?? null;
+  }));
   server.registerTool('finance_save_review', {
     title: 'Save Sabah One Banking Review and Loans',
     description: 'Replace the complete current private review with source-dated verified information and explicit uncertainty. Amounts are integer pence. Preserve loans and sources; keep household transfers separate to prevent double counting and loan balances separate from settlement quotes. Supply the exact updatedAt from the latest read, or null for the first save. Reuse requestId only for an exact retry. This cannot access banks, move money, change borrowing or make payments.',
     inputSchema: z.object({ requestId: requestIdSchema, review: draftSchema, expectedUpdatedAt: expectedUpdatedAtSchema }).strict(),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  }, input => callRpc(client, 'finance_save_review', { p_request_id: input.requestId, p_review: input.review, p_expected_updated_at: input.expectedUpdatedAt }));
+  }, input => forward('finance_save_review', () => callFinance(token, 'Sabah One Finance rejected finance_save_review.', {
+    method: 'PUT', path: '/review', requestId: input.requestId,
+    body: { review: input.review, expectedUpdatedAt: input.expectedUpdatedAt },
+  })));
 }
 
 const mcpHandler = createMcpHandler(({ authInfo }) => {
   if (!authInfo) throw new Error('A verified Sabah One OAuth access token is required.');
   const server = new McpServer({ name: 'sabah-one-finance', version: '0.1.0' });
-  registerFinanceTools(server, createUserClient(authInfo.token));
+  registerFinanceTools(server, authInfo.token);
   return server;
 }, { responseMode: 'json' });
 

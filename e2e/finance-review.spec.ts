@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import type { FinanceAccount } from '../src/types/domain';
 import { FINANCE_REVIEW } from '../src/test/finance-review-fixture';
-import { expect, openApp, test } from './support/helm-fixture';
+import { expect, openApp, test, waitForMutation } from './support/helm-fixture';
 
 const BANK: FinanceAccount = {
   id: 'example-manual-bank', name: 'Example manual account', type: 'current', balance: 500_000,
@@ -102,4 +102,26 @@ test('shows the private banking budget, twelve month review and separate dated l
   const evidencePath = testInfo.outputPath('banking-layout-evidence.json');
   await writeFile(evidencePath, JSON.stringify(evidence, null, 2));
   await testInfo.attach('banking-layout-evidence', { path: evidencePath, contentType: 'application/json' });
+});
+
+test('logs a manual expense and shows the balance the finance service works out, through reload', async ({ page, scenario }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const control = await scenario({ now: FINANCE_REVIEW.updatedAt, stores: { financeAccounts: [BANK] } });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await expect(page.locator('.finance-net-worth')).toHaveText('£5,000.00');
+  await page.getByRole('button', { name: /^Transactions/ }).click();
+  const write = waitForMutation(page, 'transactions');
+  await page.locator('.finance-amount-input').fill('12.34');
+  await page.locator('.finance-amount-input').press('Enter');
+  const response = await write;
+  expect(response.request().method()).toBe('PUT');
+  const sent = response.request().postDataJSON() as Record<string, unknown>;
+  expect(sent).toMatchObject({ type: 'expense', amount: 1234, accountId: BANK.id });
+  expect(sent).not.toHaveProperty('balance');
+  await expect(page.locator('.surface-header .subtitle')).toHaveText('Net worth: £4,987.66');
+  expect(control.services.finance.accounts[0].balance).toBe(498_766);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Finance', exact: true })).toBeVisible();
+  await expect(page.locator('.surface-header .subtitle')).toHaveText('Net worth: £4,987.66');
 });

@@ -40,6 +40,7 @@ import {
   activityReceiptSchema,
   type ServiceActivityInsights,
 } from '../../src/services/backend/activityContracts';
+import { createFakeFinance, handleFinance, type FakeFinance, type FakeFinanceSeed } from './fake-finance-service';
 import { createFakeKnowledge, handleKnowledge, type FakeKnowledge, type FakeKnowledgeSeed } from './fake-knowledge-service';
 import { createFakeLife, handleLife, type FakeLife, type FakeLifeSeed } from './fake-life-service';
 import { createFakePlanner, handlePlanner, type FakePlanner, type FakePlannerSeed } from './fake-planner-service';
@@ -69,6 +70,8 @@ export interface FakeServicesOptions {
   knowledge?: FakeKnowledgeSeed;
   /** What the planner service holds (tasks, progress, the clock), in the app's shapes. */
   planner?: FakePlannerSeed;
+  /** What the finance service holds (ledger, banking review, equity), in the app's shapes. */
+  finance?: FakeFinanceSeed;
   /** Product usage (profile service): insights reads fail with this status, e.g. 400. */
   activity?: { failureStatus?: number };
 }
@@ -108,6 +111,7 @@ export interface FakeServices {
   life: FakeLife;
   knowledge: FakeKnowledge;
   planner: FakePlanner;
+  finance: FakeFinance;
   /** Live-update events waiting for the app's next stream connection. */
   liveEvents: unknown[];
   /** Product-usage events the app sent to the profile service, by event ID. */
@@ -177,6 +181,7 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
     life: createFakeLife(options.life),
     knowledge: createFakeKnowledge(options.knowledge),
     planner: createFakePlanner(options.planner),
+    finance: createFakeFinance(options.finance),
     liveEvents: [],
     activityEvents: new Map(),
     activity: options.activity ?? {},
@@ -338,6 +343,10 @@ async function handle(
       if (/^\w+ \/api\/planner\/v1\//u.test(call)) {
         const [method, path] = call.split(' ');
         return handlePlanner(route, services.planner, method, path, body, now, services.outcomes);
+      }
+      if (/^\w+ \/api\/finance\/v1\//u.test(call)) {
+        const [method, path] = call.split(' ');
+        return handleFinance(route, services.finance, method, path, url, body, now);
       }
       return reply(route, 404, { code: 'not_found', message: `No fake for ${call}.` }, apiErrorSchema);
   }

@@ -109,25 +109,25 @@ function readySession(): SyncSessionSnapshot {
 describe('persistence cache boundary', () => {
   it('diffs against the delivered view so a concurrent remote addition is not deleted', () => {
     const cache = new PersistenceRecordCache();
-    cache.replaceAll([record('transactions', 'task-a', { id: 'task-a', title: 'A' }, 0)]);
-    cache.markDeliveredFromCache('transactions');
-    cache.applyChanges([record('transactions', 'task-b', { id: 'task-b', title: 'B' }, 1)]);
+    cache.replaceAll([record('calendarEvents', 'task-a', { id: 'task-a', title: 'A' }, 0)]);
+    cache.markDeliveredFromCache('calendarEvents');
+    cache.applyChanges([record('calendarEvents', 'task-b', { id: 'task-b', title: 'B' }, 1)]);
 
-    const operations = cache.buildMutations('transactions', [{ id: 'task-a', title: 'A edited' }]);
+    const operations = cache.buildMutations('calendarEvents', [{ id: 'task-a', title: 'A edited' }]);
 
     expect(operations).toContainEqual({
       op: 'patch',
-      collection: 'transactions',
+      collection: 'calendarEvents',
       recordId: 'task-a',
       set: { title: 'A edited' },
       unset: [],
     });
     expect(operations).not.toContainEqual({
       op: 'delete',
-      collection: 'transactions',
+      collection: 'calendarEvents',
       recordId: 'task-b',
     });
-    expect(cache.decoded('transactions')).toEqual([
+    expect(cache.decoded('calendarEvents')).toEqual([
       { id: 'task-a', title: 'A' },
       { id: 'task-b', title: 'B' },
     ]);
@@ -135,19 +135,19 @@ describe('persistence cache boundary', () => {
 
   it('resets both authoritative and delivered cache state', () => {
     const cache = new PersistenceRecordCache();
-    cache.replaceAll([record('transactions', 'item-1', { id: 'item-1', stage: 'searching' }, 0)]);
-    cache.markDeliveredFromCache('transactions');
+    cache.replaceAll([record('calendarEvents', 'item-1', { id: 'item-1', stage: 'searching' }, 0)]);
+    cache.markDeliveredFromCache('calendarEvents');
 
     cache.reset();
 
-    expect(cache.decoded('transactions')).toEqual([]);
-    expect(cache.buildMutations('transactions', [{ id: 'item-1', stage: 'interviewing' }])).toEqual([{
+    expect(cache.decoded('calendarEvents')).toEqual([]);
+    expect(cache.buildMutations('calendarEvents', [{ id: 'item-1', stage: 'interviewing' }])).toEqual([{
       op: 'create',
-      collection: 'transactions',
+      collection: 'calendarEvents',
       recordId: 'item-1',
       payload: { id: 'item-1', stage: 'interviewing' },
       position: 0,
-    }, { op: 'reorder', collection: 'transactions', orderedRecordIds: ['item-1'] }]);
+    }, { op: 'reorder', collection: 'calendarEvents', orderedRecordIds: ['item-1'] }]);
   });
 });
 
@@ -220,16 +220,16 @@ describe('device and runtime ownership boundaries', () => {
   it('keeps device settings under the device-only key and shared legacy data separate', () => {
     const store = new PersistenceDeviceStore();
     store.save(DEVICE_SETTINGS_STORE_KEY, { googleOAuthClientId: 'client-1' });
-    localStorage.setItem('helm:transactions', JSON.stringify([{ id: 'task-legacy', title: 'Legacy' }]));
+    localStorage.setItem('helm:calendarEvents', JSON.stringify([{ id: 'task-legacy', title: 'Legacy' }]));
     // Settings are owned by the profile service: a legacy browser copy is never offered for import.
     localStorage.setItem('helm:settings', JSON.stringify({ theme: 'dark' }));
 
     expect(isDeviceStoreKey('deviceSettings')).toBe(true);
     expect(store.load(DEVICE_SETTINGS_STORE_KEY)).toEqual({ googleOAuthClientId: 'client-1' });
     expect(localStorage.getItem('helm:device:deviceSettings:v2')).toContain('client-1');
-    expect(store.readLegacySharedValue('transactions').value).toEqual([{ id: 'task-legacy', title: 'Legacy' }]);
+    expect(store.readLegacySharedValue('calendarEvents').value).toEqual([{ id: 'task-legacy', title: 'Legacy' }]);
     expect(store.listLegacyCandidates(() => false)).toEqual([
-      expect.objectContaining({ key: 'transactions', localStorage: true, remoteExists: false }),
+      expect.objectContaining({ key: 'calendarEvents', localStorage: true, remoteExists: false }),
     ]);
   });
 
@@ -239,7 +239,7 @@ describe('device and runtime ownership boundaries', () => {
     runtime.accountVersion = 7;
     runtime.bootstrappedUserId = 'user-a';
     runtime.refreshQueued = true;
-    runtime.refreshNeedsCollections.add('transactions');
+    runtime.refreshNeedsCollections.add('calendarEvents');
     runtime.syncSessionSubscribers.add(vi.fn());
 
     runtime.resetCoordination();
@@ -323,7 +323,7 @@ describe('persistence health and realtime boundaries', () => {
     boundary.register();
     await boundary.ensureSubscription(4, currentUserId);
 
-    realtimeMocks.dataListener?.({ accountVersion: 8, changes: [{ collection: 'transactions' }] });
+    realtimeMocks.dataListener?.({ accountVersion: 8, changes: [{ collection: 'calendarEvents' }] });
     realtimeMocks.secretListener?.({
       requestId: 'secret-change',
       accountVersion: 9,
@@ -333,7 +333,7 @@ describe('persistence health and realtime boundaries', () => {
     });
     await vi.waitFor(() => expect(publishSecretChange).toHaveBeenCalledTimes(1));
     expect(refresh).toHaveBeenCalledWith({
-      collections: ['transactions'],
+      collections: ['calendarEvents'],
       snapshot: false,
       targetVersion: 8,
     });

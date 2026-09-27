@@ -74,6 +74,7 @@ jobs:
           VITE_LIFE_API_BASE_URL: ${{ vars.LIFE_BACKEND_URL }}
           VITE_KNOWLEDGE_API_BASE_URL: ${{ vars.KNOWLEDGE_BACKEND_URL }}
           VITE_PLANNER_API_BASE_URL: ${{ vars.PLANNER_BACKEND_URL }}
+          VITE_FINANCE_API_BASE_URL: ${{ vars.FINANCE_BACKEND_URL }}
       - uses: actions/upload-pages-artifact@v5.0.0
         with:
           path: dist

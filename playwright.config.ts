@@ -38,6 +38,7 @@ export default defineConfig({
       VITE_LIFE_API_BASE_URL: 'https://services.helm.test',
       VITE_KNOWLEDGE_API_BASE_URL: 'https://services.helm.test',
       VITE_PLANNER_API_BASE_URL: 'https://services.helm.test',
+      VITE_FINANCE_API_BASE_URL: 'https://services.helm.test',
     },
     url: baseURL,
     reuseExistingServer: false,

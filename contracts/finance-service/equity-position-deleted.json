@@ -1,0 +1,10 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/finance/v1/equity/positions/example-equity"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "example-equity"
+  }
+}

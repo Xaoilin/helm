@@ -50,8 +50,10 @@ Review balances do not modify existing account net worth or Equity holdings.
 
 ## Private persistence and external access
 
-The authenticated `financeReviews` collection holds one current review. The
-`sabah-one-finance-mcp/mcp` endpoint exposes `finance_get_review` and
+The Spring finance service (`/api/finance/v1/review`) holds one current review
+per account; the old `financeReviews` collection is decode-only and was imported
+once. The `sabah-one-finance-mcp/mcp` endpoint forwards the agent's OAuth token
+to that service and exposes `finance_get_review` and
 `finance_save_review`. Save requires a stable idempotency request ID and the
 previous record's exact revision, or a null revision for the first save.
 Reusing a request ID is permitted only for the same payload. Conflicting edits

@@ -15,14 +15,14 @@ import type {
   CalendarSource,
   ClockState,
   EmploymentApplication,
-  EquityPosition,
-  EquityPositionDraft,
+  FinanceReview,
   GamificationProfile,
   Integration,
   Surface,
   Task,
 } from '../../src/types/domain';
 import type { ServiceIntegration } from '../../src/services/backend/contracts';
+import type { FakeFinanceSeed } from './fake-finance-service';
 import type { FakeKnowledgeSeed } from './fake-knowledge-service';
 import type { FakeLifeSeed } from './fake-life-service';
 import type { FakePlannerSeed } from './fake-planner-service';
@@ -121,6 +121,12 @@ const LIFE_WRITE_PATHS: Record<string, string> = {
   // Daily momentum, kept in the progress record before, saves per pillar to the planner.
   gamification: '/api/planner/v1/momentum/',
   clock: '/api/planner/v1/clock/',
+  financeAccounts: '/api/finance/v1/accounts/',
+  transactions: '/api/finance/v1/transactions/',
+  financeBudgets: '/api/finance/v1/budgets/',
+  savingsGoals: '/api/finance/v1/savings-goals/',
+  financeReviews: '/api/finance/v1/review',
+  equityPositions: '/api/finance/v1/equity/',
 };
 
 export function waitForMutation(page: Page, collection: string): Promise<Response> {
@@ -130,9 +136,6 @@ export function waitForMutation(page: Page, collection: string): Promise<Respons
       return response.request().method() !== 'GET' && new URL(response.url()).pathname.startsWith(lifePath);
     }
     if (response.request().method() !== 'POST') return false;
-    if (collection === 'equityPositions' && /\/rpc\/equity_(add_position|update_position|remove_position)/u.test(response.url())) {
-      return true;
-    }
     if (!response.url().includes('/rest/v1/rpc/apply_helm_mutations')) return false;
 
     try {
@@ -226,8 +229,26 @@ function buildStores(options: HelmScenarioOptions): Record<string, unknown> {
   const stores: Record<string, unknown> = { ...options.stores };
   delete stores.settings;
   delete stores.integrations;
-  for (const collection of [...LIFE_COLLECTIONS, ...KNOWLEDGE_COLLECTIONS, ...PLANNER_COLLECTIONS]) delete stores[collection];
+  for (const collection of [...LIFE_COLLECTIONS, ...KNOWLEDGE_COLLECTIONS, ...PLANNER_COLLECTIONS, ...FINANCE_COLLECTIONS]) {
+    delete stores[collection];
+  }
   return stores;
+}
+
+/** Collections the finance service owns; a scenario's copy seeds its fake instead of the database. */
+const FINANCE_COLLECTIONS = ['financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals', 'financeReviews',
+  'equityPositions'];
+
+function financeFromScenario(stores: Record<string, unknown> | undefined): FakeFinanceSeed {
+  const list = <T,>(key: string) => stores?.[key] as T[] | undefined;
+  return {
+    accounts: list('financeAccounts'),
+    transactions: list('transactions'),
+    budgets: list('financeBudgets'),
+    savingsGoals: list('savingsGoals'),
+    review: list<FinanceReview>('financeReviews')?.find(review => review.id === 'current') ?? null,
+    equityPositions: list('equityPositions'),
+  };
 }
 
 /** Collections the planner service owns; a scenario's copy seeds its fake instead of the database. */
@@ -439,57 +460,6 @@ async function installDatabaseRoutes(
     publishChanges(changes, request.p_request_id);
   });
 
-  await page.route(/\/rest\/v1\/rpc\/equity_(add_position|update_position|remove_position)(\?|$)/u, async route => {
-    const name = new URL(route.request().url()).pathname.split('/').at(-1);
-    const request = route.request().postDataJSON() as {
-      p_position?: EquityPositionDraft & { id?: string };
-      p_position_id?: string;
-      p_expected_updated_at?: string;
-      p_confirm?: boolean;
-    };
-    const positionId = request.p_position_id ?? request.p_position?.id;
-    if (!positionId) {
-      await route.fulfill({ status: 400, json: { message: 'Equity position ID is required.' } });
-      return;
-    }
-    const key = rowKey('equityPositions', positionId);
-    let row = rows.get(key);
-    const now = new Date().toISOString();
-    if (name === 'equity_add_position' && request.p_position) {
-      if (row && !row.deletedAt) {
-        await route.fulfill({ status: 409, json: { message: 'Equity position already exists.' } });
-        return;
-      }
-      const position: EquityPosition = { ...request.p_position, id: positionId, createdAt: now, updatedAt: now };
-      row = {
-        userId: options.userId, collection: 'equityPositions', recordId: positionId,
-        payload: { ...position }, position: null, revision: 1, accountVersion: database.accountVersion + 1,
-        createdAt: now, updatedAt: now, deletedAt: null,
-      };
-      rows.set(key, row);
-    } else if (!row || row.deletedAt) {
-      await route.fulfill({ status: 404, json: { message: 'Equity position not found.' } });
-      return;
-    } else if (request.p_expected_updated_at !== row.payload.updatedAt) {
-      await route.fulfill({ status: 409, json: { message: 'Equity position changed; reload before saving.' } });
-      return;
-    } else if (name === 'equity_remove_position') {
-      if (!request.p_confirm) {
-        await route.fulfill({ status: 400, json: { message: 'Equity removal requires explicit confirmation.' } });
-        return;
-      }
-      row.deletedAt = now;
-    } else if (request.p_position) {
-      row.payload = { ...request.p_position, id: positionId, createdAt: row.payload.createdAt, updatedAt: now };
-    }
-    database.accountVersion += 1;
-    row.revision += 1;
-    row.accountVersion = database.accountVersion;
-    row.updatedAt = now;
-    await route.fulfill({ json: { positionId, position: row.deletedAt ? null : row.payload, accountVersion: database.accountVersion } });
-    publishChanges([row]);
-  });
-
   await page.route('**/rest/v1/rpc/list_equity_oauth_clients*', async route => {
     await route.fulfill({ json: [] });
   });
@@ -574,6 +544,7 @@ function servicesFromScenario(options: HelmScenarioOptions, settings: Record<str
     life: lifeFromScenario(options.stores),
     knowledge: knowledgeFromScenario(options.stores),
     planner: plannerFromScenario(options.stores),
+    finance: financeFromScenario(options.stores),
     calendar: {
       accounts: options.stores?.calendarAccounts as CalendarAccount[] | undefined,
       sources: options.stores?.calendarSources as CalendarSource[] | undefined,

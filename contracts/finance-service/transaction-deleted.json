@@ -1,0 +1,38 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/finance/v1/transactions/example-transfer"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "example-transfer",
+    "accounts" : [
+      {
+        "id" : "example-current",
+        "name" : "Example Bank",
+        "type" : "current",
+        "balance" : 12345,
+        "currency" : "GBP",
+        "color" : "#4f5bff",
+        "icon" : "£",
+        "includeInNetWorth" : true,
+        "sortOrder" : 0,
+        "createdAt" : "2026-09-27T06:00:00Z",
+        "updatedAt" : "2026-09-27T06:05:00Z"
+      },
+      {
+        "id" : "example-savings",
+        "name" : "Example Savings",
+        "type" : "savings",
+        "balance" : 50000,
+        "currency" : "GBP",
+        "color" : "#4f5bff",
+        "icon" : "£",
+        "includeInNetWorth" : true,
+        "sortOrder" : 1,
+        "createdAt" : "2026-09-27T06:00:00Z",
+        "updatedAt" : "2026-09-27T06:05:00Z"
+      }
+    ]
+  }
+}

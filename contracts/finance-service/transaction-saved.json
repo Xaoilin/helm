@@ -1,0 +1,52 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/finance/v1/transactions/example-transfer"
+  },
+  "status" : 200,
+  "body" : {
+    "transaction" : {
+      "id" : "example-transfer",
+      "type" : "transfer",
+      "amount" : 12345,
+      "category" : "transfer",
+      "accountId" : "example-current",
+      "toAccountId" : "example-savings",
+      "description" : "Monthly saving",
+      "date" : "2026-09-26",
+      "tags" : [
+        "saving"
+      ],
+      "createdAt" : "2026-09-27T06:00:00Z",
+      "updatedAt" : "2026-09-27T06:00:00Z"
+    },
+    "accounts" : [
+      {
+        "id" : "example-current",
+        "name" : "Example Bank",
+        "type" : "current",
+        "balance" : 0,
+        "currency" : "GBP",
+        "color" : "#4f5bff",
+        "icon" : "£",
+        "includeInNetWorth" : true,
+        "sortOrder" : 0,
+        "createdAt" : "2026-09-27T06:00:00Z",
+        "updatedAt" : "2026-09-27T06:05:00Z"
+      },
+      {
+        "id" : "example-savings",
+        "name" : "Example Savings",
+        "type" : "savings",
+        "balance" : 62345,
+        "currency" : "GBP",
+        "color" : "#4f5bff",
+        "icon" : "£",
+        "includeInNetWorth" : true,
+        "sortOrder" : 1,
+        "createdAt" : "2026-09-27T06:00:00Z",
+        "updatedAt" : "2026-09-27T06:05:00Z"
+      }
+    ]
+  }
+}

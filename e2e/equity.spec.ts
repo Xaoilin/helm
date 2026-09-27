@@ -119,7 +119,7 @@ test('separates stocks, options, illustrative proceeds and existing cash balance
   await expect(page.getByText('Example bank account', { exact: false })).toBeVisible();
 });
 
-test('saves owned shares and an options plan through the semantic account API and reload', async ({ page, scenario }) => {
+test('saves owned shares and an options plan through the finance service and reload', async ({ page, scenario }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await scenario({ now: NOW, stores: { equityPositions: [POSITION], financeAccounts: [BANK] } });
   await openApp(page);
@@ -133,7 +133,10 @@ test('saves owned shares and an options plan through the semantic account API an
   const write = waitForMutation(page, 'equityPositions');
   await dialog.getByRole('button', { name: 'Save equity' }).click();
   const response = await write;
-  expect(response.url()).toContain('/rpc/equity_update_position');
+  expect(response.request().method()).toBe('PUT');
+  expect(new URL(response.url()).pathname).toBe('/api/finance/v1/equity/positions/example-equity');
+  expect(response.request().postDataJSON()).toMatchObject({ expectedUpdatedAt: NOW });
+  expect(response.request().headers()['idempotency-key']).toBeTruthy();
   expect(response.ok()).toBe(true);
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Example Co Stocks' })).toContainText('135 owned shares');

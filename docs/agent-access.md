@@ -40,8 +40,9 @@ A first-party UI path may share the same domain service, but it does not replace
 | --- | --- | --- | --- |
 | Inventory | Inventory surface | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. The function forwards the agent's token to the life admin service (`/api/life/v1/inventory`), which holds the records and re-checks the approval; `inventory_resolve_project` resolves projects in the knowledge service (`/api/knowledge/v1/projects/resolve`), which re-checks the same approval. |
 | Employment | Employment surface | `sabah-one-employment-mcp` | Use its six narrow application/history tools with a separate Employment OAuth approval. Inventory approval does not grant Employment access. The function forwards the agent's token to the life admin service (`/api/life/v1/jobs`), which holds the records and re-checks the approval. |
-| Finance equity | `Navigation and editor` | `sabah-one-equity-mcp` (requires deployment and Equity OAuth approval) | Five semantic position tools; isolated from cash/banking and other MCP domains. See `finance-equity.md`. |
-| Finance banking review and loans | Dated review and loan records | `sabah-one-finance-mcp` (requires deployment and Finance OAuth approval) | Two semantic review tools; independent of Equity and existing manual accounts. See `finance-banking-review.md`. |
+| Finance equity | `Navigation and editor` | `sabah-one-equity-mcp` (requires deployment and Equity OAuth approval) | Five semantic position tools; isolated from cash/banking and other MCP domains. The function forwards the agent's token to the finance service (`/api/finance/v1/equity/positions`), which holds the positions and re-checks the Equity approval. See `finance-equity.md`. |
+| Finance banking review and loans | Dated review and loan records | `sabah-one-finance-mcp` (requires deployment and Finance OAuth approval) | Two semantic review tools; independent of Equity and existing manual accounts. The function forwards the agent's token to the finance service (`/api/finance/v1/review`), which holds the review and re-checks the Finance approval. See `finance-banking-review.md`. |
+| Finance manual accounts, transactions, budgets, savings goals | Finance surface | Not yet published | The finance service refuses agent tokens on these paths (403 `agent_not_approved`); external agents stop at the missing MCP boundary. |
 | Tasks, Calendar, Knowledge, Prayer | Their surfaces | Not yet published | External agents stop at the missing MCP boundary. |
 | Other Sabah One features | Surface-dependent | Not yet published | Treat external access as unavailable until a domain MCP contract is delivered and listed here. |
 | Secrets | Intentionally unavailable | Intentionally unavailable | Secret plaintext remains outside agent tools. |
@@ -79,7 +80,12 @@ The Learn and Move switches only choose the amount passed to the existing first-
 The independent Equity domain exposes bounded list/get/add/update/remove position
 tools at `sabah-one-equity-mcp/mcp`. Updates require the current `updatedAt`;
 removal requires explicit confirmation; retryable writes carry stable UUID request
-IDs. The browser uses the same semantic mutation RPCs. Complete separate Equity
+IDs, sent to the finance service as the `Idempotency-Key`. An add without a
+position ID uses its request ID as the ID, so an exact retry names the same
+record. The function forwards the agent's OAuth token to the finance service,
+which is the system of record and refuses an unapproved client with
+`403 agent_not_approved` (shown to the agent as the OAuth challenge); the browser
+uses the same service endpoints with the user's session. Complete separate Equity
 OAuth approval before importing any private holdings. Inventory or Employment
 consent never grants equity or banking access. Personal data is not seeded from
 source code. Deployment, consent and private record readback are required for

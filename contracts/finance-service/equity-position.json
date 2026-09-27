@@ -1,0 +1,81 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/finance/v1/equity/positions/example-equity"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "example-equity",
+    "company" : "Example Co",
+    "asOf" : "2026-09-21",
+    "ownedShares" : 100,
+    "stockPlan" : {
+      "summary" : "Keep under review",
+      "status" : "tentative",
+      "waitingFor" : "Verified information",
+      "nextAction" : "Review plan",
+      "reviewMonth" : null
+    },
+    "optionPlan" : {
+      "summary" : "Keep under review",
+      "status" : "tentative",
+      "waitingFor" : "Verified information",
+      "nextAction" : "Review plan",
+      "reviewMonth" : "2027-09"
+    },
+    "employmentNote" : "Active employee",
+    "grants" : [
+      {
+        "id" : "grant-a",
+        "grantDate" : "2025-01-01",
+        "vested" : 10,
+        "unvested" : 20,
+        "strikeUsd" : 5,
+        "originalExpiry" : "2035-01-01",
+        "postEmploymentExpiry" : null,
+        "nextVest" : {
+          "date" : "2026-11-15",
+          "alternateDate" : "2026-11-14",
+          "quantity" : 5,
+          "condition" : "Subject to employment"
+        }
+      }
+    ],
+    "actions" : [
+      {
+        "id" : "action-a",
+        "title" : "Review terms",
+        "timing" : "Before departure",
+        "dueDate" : null,
+        "done" : false
+      }
+    ],
+    "details" : [
+      {
+        "id" : "detail-a",
+        "title" : "Policy",
+        "body" : "Verify grant terms."
+      }
+    ],
+    "sources" : [
+      {
+        "id" : "source-a",
+        "label" : "Grant document",
+        "url" : "https://example.com/grant",
+        "asOf" : "2026-09-21"
+      }
+    ],
+    "scenario" : {
+      "pricesUsd" : [
+        4,
+        10
+      ],
+      "withholdingRate" : 0.4,
+      "usdToGbp" : 0.75,
+      "asOf" : "2026-09-21",
+      "notes" : "Illustrative before fees"
+    },
+    "createdAt" : "2026-09-27T06:00:00Z",
+    "updatedAt" : "2026-09-27T06:00:00Z"
+  }
+}
