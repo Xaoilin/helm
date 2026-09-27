@@ -5,12 +5,9 @@
  * Nothing here reads React state, the clock, or the browser. Callers pass the
  * current instant or local date key so every rule is testable on its own.
  */
-import {
-  compareProjectCatalogueOrder,
-  getOrderedProjectsInSection,
-} from '../store/projectOrdering';
 import type {
   Project,
+  ProjectCatalogueSection,
   ProjectKind,
   ProjectPage,
   ProjectPreviewStyle,
@@ -210,6 +207,23 @@ export interface GroupedProjects {
   blocked: Project[];
 }
 
+/** The catalogue section a project is shown in; the knowledge service keeps each section numbered. */
+export function getProjectCatalogueSection(project: Project): ProjectCatalogueSection {
+  if (project.status === 'archived') return 'archived';
+  return project.isPinned ? 'pinned' : 'projects';
+}
+
+/** Display order within a section: the service's positions, then any not yet numbered by name. */
+function compareCatalogueOrder(left: Project, right: Project): number {
+  const leftOrder = left.sortOrder ?? Number.MAX_SAFE_INTEGER;
+  const rightOrder = right.sortOrder ?? Number.MAX_SAFE_INTEGER;
+  return leftOrder - rightOrder || left.name.localeCompare(right.name) || left.id.localeCompare(right.id);
+}
+
+export function getOrderedProjectsInSection(projects: readonly Project[], section: ProjectCatalogueSection): Project[] {
+  return projects.filter(project => getProjectCatalogueSection(project) === section).sort(compareCatalogueOrder);
+}
+
 export function groupProjects(projects: Project[]): GroupedProjects {
   return {
     pinned: getOrderedProjectsInSection(projects, 'pinned'),
@@ -217,10 +231,10 @@ export function groupProjects(projects: Project[]): GroupedProjects {
     active: projects.filter(project => (
       !project.isPinned
       && (project.status === 'planning' || project.status === 'active' || project.status === 'completed')
-    )).sort(compareProjectCatalogueOrder),
+    )).sort(compareCatalogueOrder),
     blocked: projects.filter(project => (
       !project.isPinned && project.status === 'blocked'
-    )).sort(compareProjectCatalogueOrder),
+    )).sort(compareCatalogueOrder),
     archived: getOrderedProjectsInSection(projects, 'archived'),
   };
 }

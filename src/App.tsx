@@ -8,10 +8,10 @@ import { PageReadinessGate, useSharedPageReady } from './store/PageReadinessGate
 import ErrorBoundary from './components/ErrorBoundary';
 import {
   isSupabaseReady,
-  ingestProductUsageEvents,
   signInWithGoogle as startGoogleSignIn,
   signOut as endSupabaseSession,
 } from './store/supabase';
+import { ingestProductUsageEvents, isProfileServiceEnabled } from './services/backend/profileServiceApi';
 import type { Surface } from './types/domain';
 import { APP_RELEASE_LABEL, APP_RELEASE_VERSION } from './config/release';
 import { useDialog } from './hooks/useDialog';
@@ -78,7 +78,7 @@ function AppInner() {
 
   useEffect(() => {
     configureProductUsageAnalytics({
-      enabled: Boolean(authUserId && supabaseReady),
+      enabled: Boolean(authUserId && supabaseReady && isProfileServiceEnabled()),
       accountId: authUserId,
       releaseVersion: APP_RELEASE_VERSION,
       sink: ingestProductUsageEvents,

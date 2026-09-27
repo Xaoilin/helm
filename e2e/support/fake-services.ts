@@ -35,6 +35,12 @@ import {
   type ServicePreferences,
   type ServiceTracking,
 } from '../../src/services/backend/contracts';
+import {
+  activityInsightsSchema,
+  activityReceiptSchema,
+  type ServiceActivityInsights,
+} from '../../src/services/backend/activityContracts';
+import { createFakeKnowledge, handleKnowledge, type FakeKnowledge, type FakeKnowledgeSeed } from './fake-knowledge-service';
 import { createFakeLife, handleLife, type FakeLife, type FakeLifeSeed } from './fake-life-service';
 
 export const SERVICES_BASE_URL = 'https://services.helm.test';
@@ -58,6 +64,10 @@ export interface FakeServicesOptions {
   calendar?: { accounts?: CalendarAccount[]; sources?: CalendarSource[]; events?: CalendarEvent[] };
   /** What the life admin service holds (inventory, trips, health, jobs), in the app's shapes. */
   life?: FakeLifeSeed;
+  /** What the knowledge service holds (knowledge base, lifestyle, projects), in the app's shapes. */
+  knowledge?: FakeKnowledgeSeed;
+  /** Product usage (profile service): insights reads fail with this status, e.g. 400. */
+  activity?: { failureStatus?: number };
 }
 
 export interface FakeCalendar {
@@ -93,6 +103,10 @@ export interface FakeServices {
   loseNextWriteResponse?: boolean;
   calendar: FakeCalendar;
   life: FakeLife;
+  knowledge: FakeKnowledge;
+  /** Product-usage events the app sent to the profile service, by event ID. */
+  activityEvents: Map<string, unknown>;
+  activity: { failureStatus?: number };
 }
 
 function toServiceCalendar(calendar: FakeServicesOptions['calendar'] = {}): FakeCalendar {
@@ -155,11 +169,16 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
     loseNextWriteResponse: options.loseNextWriteResponse,
     calendar: toServiceCalendar(options.calendar),
     life: createFakeLife(options.life),
+    knowledge: createFakeKnowledge(options.knowledge),
+    activityEvents: new Map(),
+    activity: options.activity ?? {},
   };
 }
 
 const dashboardExample = JSON.parse(readFileSync(
   join(process.cwd(), 'contracts', 'prayer-service', 'dashboard.json'), 'utf8')).body as z.infer<typeof dashboardSchema>;
+const activityInsightsExample = JSON.parse(readFileSync(
+  join(process.cwd(), 'contracts', 'profile-service', 'activity-insights.json'), 'utf8')).body as ServiceActivityInsights;
 
 export async function installFakeServices(page: Page, services: FakeServices): Promise<void> {
   await page.route(`${SERVICES_BASE_URL}/api/**`, async route => {
@@ -174,6 +193,7 @@ export async function installFakeServices(page: Page, services: FakeServices): P
     }
     if (url.pathname === '/api/calendar/health') return reply(route, 200, { status: 'UP', service: 'calendar-service' });
     if (url.pathname === '/api/life/health') return reply(route, 200, { status: 'UP', service: 'life-service' });
+    if (url.pathname === '/api/knowledge/health') return reply(route, 200, { status: 'UP', service: 'knowledge-service' });
     if (url.pathname === '/api/calendar/health/database') {
       return reply(route, 200, { status: 'UP', service: 'calendar-service', database: 'UP' });
     }
@@ -270,6 +290,10 @@ async function handle(
       return reply(route, 200, services.appPreferences, appPreferencesSchema);
     case call === 'GET /api/profile/v1/integrations':
       return reply(route, 200, { integrations: services.integrations }, integrationsSchema);
+    case call === 'POST /api/profile/v1/activity/events':
+      return ingestActivity(route, services, body);
+    case call === 'GET /api/profile/v1/activity/insights':
+      return activityInsights(route, services, url);
     case /^PUT \/api\/profile\/v1\/integrations\/[^/]+$/u.test(call): {
       const provider = decodeURIComponent(call.split('/').at(-1) ?? '');
       if (provider !== 'google') {
@@ -287,6 +311,10 @@ async function handle(
       if (/^\w+ \/api\/life\/v1\//u.test(call)) {
         const [method, path] = call.split(' ');
         return handleLife(route, services.life, method, path, body, now);
+      }
+      if (/^\w+ \/api\/knowledge\/v1\//u.test(call)) {
+        const [method, path] = call.split(' ');
+        return handleKnowledge(route, services.knowledge, method, path, url, body, now);
       }
       return reply(route, 404, { code: 'not_found', message: `No fake for ${call}.` }, apiErrorSchema);
   }
@@ -394,6 +422,42 @@ function handleCalendar(
     return route.fulfill({ status: 204 });
   }
   return reply(route, 404, { code: 'not_found', message: `No fake for ${call}.` }, apiErrorSchema);
+}
+
+/** Like the real service: an event already stored is a duplicate, never an error. */
+function ingestActivity(route: Route, services: FakeServices, body: Record<string, unknown> | null): Promise<void> {
+  const events = Array.isArray(body?.events) ? body.events as Array<{ eventId?: string }> : [];
+  let accepted = 0;
+  for (const event of events) {
+    const id = String(event.eventId);
+    if (services.activityEvents.has(id)) continue;
+    services.activityEvents.set(id, event);
+    accepted += 1;
+  }
+  return reply(route, 200, { accepted, duplicates: events.length - accepted }, activityReceiptSchema);
+}
+
+/**
+ * The contract example stands in for the service's computed insights; any filter other than "all"
+ * matches nothing, so the page's empty-filter state can be exercised.
+ */
+function activityInsights(route: Route, services: FakeServices, url: URL): Promise<void> {
+  if (services.activity.failureStatus) {
+    return reply(route, services.activity.failureStatus,
+      { code: 'invalid_filter', message: 'Activity insights are unavailable.' }, apiErrorSchema);
+  }
+  const filtered = ['kind', 'surface', 'outcome', 'feature']
+    .some(name => (url.searchParams.get(name) ?? 'all') !== 'all');
+  const rangeDays = Number(url.searchParams.get('rangeDays') ?? activityInsightsExample.rangeDays);
+  const insights: ServiceActivityInsights = filtered
+    ? {
+        ...activityInsightsExample,
+        rangeDays,
+        summary: { eventCount: 0, sessionCount: 0, activeSurfaceCount: 0, errorCount: 0, failureRate: null },
+        trends: [], funnel: [], errors: [], recommendations: [], coldStart: true,
+      }
+    : { ...activityInsightsExample, rangeDays };
+  return reply(route, 200, insights, activityInsightsSchema);
 }
 
 function trackingFor(services: FakeServices, now: Date): ServiceTracking {

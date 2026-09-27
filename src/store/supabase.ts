@@ -33,7 +33,6 @@ export {
   signOut,
   type AuthStateChange,
 } from './supabase/auth';
-export { getProductUsageEvents, ingestProductUsageEvents } from './supabase/productUsage';
 export {
   fetchHelmAccountSnapshot,
   fetchHelmChangedCollections,

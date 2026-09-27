@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/knowledge/v1/projects/pages/agentboard-overview"
+  },
+  "status" : 409,
+  "body" : {
+    "code" : "overview_page_required",
+    "message" : "A project's overview page cannot be deleted."
+  }
+}

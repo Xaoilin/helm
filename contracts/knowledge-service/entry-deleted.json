@@ -1,0 +1,8 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/knowledge/v1/knowledge/entries/on-time"
+  },
+  "status" : 204,
+  "body" : null
+}

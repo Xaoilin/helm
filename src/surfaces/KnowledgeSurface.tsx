@@ -225,8 +225,7 @@ export default function KnowledgeSurface() {
       knowledge.updateLifestyleItem(editingLifestyle.id, { type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined });
     }
     else {
-      const existing = knowledge.lifestyleItems.filter(i => i.type === lsType);
-      knowledge.addLifestyleItem({ type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined, sortOrder: existing.length });
+      knowledge.addLifestyleItem({ type: lsType, title: lsTitle.trim(), notes: lsNotes.trim(), status: lsStatus, sources: allSources.length > 0 ? allSources : undefined });
     }
     setShowLifestyleForm(false);
   };
@@ -234,66 +233,39 @@ export default function KnowledgeSurface() {
   const handleDragStart = (id: string) => { setDragId(id); };
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
 
-  // Drop onto a specific item (reorder within column or move between columns)
+  // Drop onto a specific item: reorder within the column, or move into another column at that place.
+  // The service works out positions and resets the status when the item changes family.
   const handleDrop = (targetId: string, targetType: LifestyleType) => {
     if (!dragId || dragId === targetId) { setDragId(null); return; }
     const draggedItem = knowledge.lifestyleItems.find(i => i.id === dragId);
     if (!draggedItem) { setDragId(null); return; }
 
-    const movingBetweenColumns = draggedItem.type !== targetType;
-
-    if (movingBetweenColumns) {
-      // Change type + reset status if moving between halal and avoid columns
-      const targetIsPractice = PRACTICE_TYPES.includes(targetType);
-      const sourceIsPractice = PRACTICE_TYPES.includes(draggedItem.type);
-      const newStatus = targetIsPractice === sourceIsPractice
-        ? draggedItem.status  // same category family, keep status
-        : targetIsPractice
-          ? 'want-to-start' as LifestyleStatus
-          : 'struggling' as LifestyleStatus;
-      const targetItems = itemsByType[targetType];
-      const toIdx = targetItems.findIndex(i => i.id === targetId);
-      knowledge.updateLifestyleItem(dragId, { type: targetType, status: newStatus, sortOrder: toIdx >= 0 ? toIdx : targetItems.length });
-      // Re-sort the target column
-      const newIds = targetItems.map(i => i.id);
-      newIds.splice(toIdx >= 0 ? toIdx : newIds.length, 0, dragId);
-      knowledge.reorderLifestyleItems(newIds);
+    if (draggedItem.type !== targetType) {
+      const toIdx = itemsByType[targetType].findIndex(i => i.id === targetId);
+      knowledge.moveLifestyleItem(dragId, targetType, toIdx >= 0 ? toIdx : undefined);
     } else {
-      // Same column reorder
-      const items = itemsByType[targetType];
-      const ids = items.map(i => i.id);
+      const ids = itemsByType[targetType].map(i => i.id);
       const fromIdx = ids.indexOf(dragId);
       const toIdx = ids.indexOf(targetId);
       if (fromIdx < 0 || toIdx < 0) { setDragId(null); return; }
       ids.splice(fromIdx, 1);
       ids.splice(toIdx, 0, dragId);
-      knowledge.reorderLifestyleItems(ids);
+      knowledge.reorderLifestyleItems(targetType, ids);
     }
     setDragId(null);
   };
 
-  // Drop onto column itself (empty area) — moves item to end of that column
+  // Drop onto the column itself (empty area): moves the item to the end of that column.
   const handleColumnDrop = (targetType: LifestyleType, e: React.DragEvent) => {
     e.preventDefault();
     if (!dragId) return;
     const draggedItem = knowledge.lifestyleItems.find(i => i.id === dragId);
-    if (!draggedItem) { setDragId(null); return; }
-
-    if (draggedItem.type !== targetType) {
-      const targetIsPractice = PRACTICE_TYPES.includes(targetType);
-      const sourceIsPractice = PRACTICE_TYPES.includes(draggedItem.type);
-      const newStatus = targetIsPractice === sourceIsPractice
-        ? draggedItem.status  // same category family, keep status
-        : targetIsPractice
-          ? 'want-to-start' as LifestyleStatus
-          : 'struggling' as LifestyleStatus;
-      knowledge.updateLifestyleItem(dragId, { type: targetType, status: newStatus, sortOrder: itemsByType[targetType].length });
-    }
+    if (draggedItem && draggedItem.type !== targetType) knowledge.moveLifestyleItem(dragId, targetType);
     setDragId(null);
   };
 
   const cycleStatus = (item: LifestyleItem) => {
-    const statuses = item.type === 'haram' ? HARAM_STATUSES : HALAL_STATUSES;
+    const statuses = PRACTICE_TYPES.includes(item.type) ? HALAL_STATUSES : HARAM_STATUSES;
     const idx = statuses.findIndex(s => s.value === item.status);
     const next = statuses[(idx + 1) % statuses.length];
     knowledge.updateLifestyleItem(item.id, { status: next.value });

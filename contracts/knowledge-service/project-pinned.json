@@ -1,0 +1,42 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/knowledge/v1/projects/agentboard/pinned"
+  },
+  "status" : 200,
+  "body" : {
+    "projects" : [ {
+      "id" : "agentboard",
+      "catalogKey" : "catalog:agentboard",
+      "name" : "Agent Board",
+      "kind" : "web_app",
+      "links" : [ ],
+      "setupSteps" : [ ],
+      "runRecipes" : [ ],
+      "preview" : {
+        "icon" : "AB",
+        "accentColor" : "#4f9cff",
+        "backgroundColor" : "#112033",
+        "coverImageUrl" : null
+      },
+      "verifiedAt" : null,
+      "summary" : "Whiteboards for AI agents",
+      "status" : "blocked",
+      "statusBeforeArchive" : null,
+      "tags" : [ "whiteboarding" ],
+      "isPinned" : false,
+      "sortOrder" : 0,
+      "createdAt" : "2026-09-27T00:43:24.263Z",
+      "updatedAt" : "2026-09-27T00:43:24.340Z"
+    } ],
+    "pages" : [ {
+      "id" : "agentboard-overview",
+      "projectId" : "agentboard",
+      "title" : "Overview",
+      "content" : "# Agent Board\n\nWhiteboards for agents\n\n## Goals\n\n- Add milestones for this project.\n\n## Notes\n\n- Keep architecture decisions and links here.\n\n## Next Steps\n\n- Capture the next 1-3 actions on the board.",
+      "isOverview" : true,
+      "createdAt" : "2026-09-27T00:43:24.263Z",
+      "updatedAt" : "2026-09-27T00:43:24.263Z"
+    } ]
+  }
+}

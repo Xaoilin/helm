@@ -1,0 +1,42 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/knowledge/v1/knowledge/entries/on-time"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "on-time",
+    "topicId" : "prayer",
+    "title" : "Praying on time",
+    "content" : "Pray each prayer in its window.",
+    "sources" : [
+      {
+        "type" : "quran",
+        "surah" : null,
+        "ayahStart" : null,
+        "ayahEnd" : null,
+        "collection" : null,
+        "hadithNumber" : null,
+        "author" : null,
+        "title" : null,
+        "url" : null
+      },
+      {
+        "type" : "hadith",
+        "surah" : null,
+        "ayahStart" : null,
+        "ayahEnd" : null,
+        "collection" : "Bukhari",
+        "hadithNumber" : "527",
+        "author" : null,
+        "title" : null,
+        "url" : null
+      }
+    ],
+    "tags" : [
+      "salah"
+    ],
+    "createdAt" : "2026-09-27T00:43:23.990Z",
+    "updatedAt" : "2026-09-27T00:43:23.990Z"
+  }
+}

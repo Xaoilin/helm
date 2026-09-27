@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/knowledge/v1/projects/agentboard"
+  },
+  "status" : 200,
+  "body" : {
+    "projects" : [ ],
+    "pages" : [ ]
+  }
+}

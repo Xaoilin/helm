@@ -1,0 +1,17 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/knowledge/v1/knowledge/topics/prayer"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "prayer",
+    "name" : "Prayer",
+    "description" : "Salah and its conditions",
+    "icon" : "🕌",
+    "color" : "#22c55e",
+    "sortOrder" : 0,
+    "createdAt" : "2026-09-27T00:43:23.965Z",
+    "updatedAt" : "2026-09-27T00:43:23.965Z"
+  }
+}

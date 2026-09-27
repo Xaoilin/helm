@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/profile/v1/activity/events"
+  },
+  "status" : 400,
+  "body" : {
+    "code" : "invalid_metadata",
+    "message" : "Product usage metadata must use the content-free allowlist."
+  }
+}

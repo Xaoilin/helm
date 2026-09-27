@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/knowledge/v1/projects/order"
+  },
+  "status" : 409,
+  "body" : {
+    "code" : "project_order_changed",
+    "message" : "The catalogue changed since it was shown; reload and try again."
+  }
+}

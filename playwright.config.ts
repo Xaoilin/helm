@@ -36,6 +36,7 @@ export default defineConfig({
       VITE_PROFILE_API_BASE_URL: 'https://services.helm.test',
       VITE_CALENDAR_API_BASE_URL: 'https://services.helm.test',
       VITE_LIFE_API_BASE_URL: 'https://services.helm.test',
+      VITE_KNOWLEDGE_API_BASE_URL: 'https://services.helm.test',
     },
     url: baseURL,
     reuseExistingServer: false,

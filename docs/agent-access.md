@@ -38,7 +38,7 @@ A first-party UI path may share the same domain service, but it does not replace
 
 | Domain | In-app use | External agent access | Current rule |
 | --- | --- | --- | --- |
-| Inventory | Inventory surface | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. The function forwards the agent's token to the life admin service (`/api/life/v1/inventory`), which holds the records and re-checks the approval. |
+| Inventory | Inventory surface | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. The function forwards the agent's token to the life admin service (`/api/life/v1/inventory`), which holds the records and re-checks the approval; `inventory_resolve_project` resolves projects in the knowledge service (`/api/knowledge/v1/projects/resolve`), which re-checks the same approval. |
 | Employment | Employment surface | `sabah-one-employment-mcp` | Use its six narrow application/history tools with a separate Employment OAuth approval. Inventory approval does not grant Employment access. The function forwards the agent's token to the life admin service (`/api/life/v1/jobs`), which holds the records and re-checks the approval. |
 | Finance equity | `Navigation and editor` | `sabah-one-equity-mcp` (requires deployment and Equity OAuth approval) | Five semantic position tools; isolated from cash/banking and other MCP domains. See `finance-equity.md`. |
 | Finance banking review and loans | Dated review and loan records | `sabah-one-finance-mcp` (requires deployment and Finance OAuth approval) | Two semantic review tools; independent of Equity and existing manual accounts. See `finance-banking-review.md`. |

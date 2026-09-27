@@ -15,6 +15,8 @@ const AUTHORIZATION_SERVER_URL = `${SUPABASE_URL}/auth/v1`;
 const LIFE_API_URL = (Deno.env.get('SABAH_ONE_LIFE_API_URL') || 'https://51.38.83.48').replace(/\/+$/, '');
 const LIFE_INVENTORY_URL = `${LIFE_API_URL}/api/life/v1/inventory`;
 const LIFE_TIMEOUT_MS = 15_000;
+const KNOWLEDGE_API_URL = (Deno.env.get('SABAH_ONE_KNOWLEDGE_API_URL') || 'https://57.129.161.248').replace(/\/+$/, '');
+const KNOWLEDGE_RESOLVE_URL = `${KNOWLEDGE_API_URL}/api/knowledge/v1/projects/resolve`;
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://xaoilin.github.io',
   'http://localhost:5173',
@@ -277,16 +279,6 @@ async function verifyAccess(request: Request): Promise<VerifiedAccess | Response
   };
 }
 
-async function callRpc(
-  client: SupabaseClient,
-  name: string,
-  parameters: Record<string, unknown>,
-): Promise<unknown> {
-  const { data, error } = await client.rpc(name, parameters);
-  if (error) throw new Error(error.message || `Sabah One Inventory rejected ${name}.`);
-  return data;
-}
-
 type QueryValue = string | number | undefined;
 
 interface LifeCall {
@@ -338,6 +330,25 @@ async function callLife(token: string, tool: string, call: LifeCall): Promise<un
   return response.status === 204 ? null : await response.json();
 }
 
+// Projects live in the knowledge service. It re-checks the agent's Inventory approval for this lookup.
+async function resolveProject(token: string, query: string): Promise<unknown> {
+  const rejected = 'Sabah One Inventory rejected inventory_resolve_project.';
+  const url = new URL(KNOWLEDGE_RESOLVE_URL);
+  url.searchParams.set('query', query);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(LIFE_TIMEOUT_MS),
+    });
+  } catch {
+    throw new Error(rejected);
+  }
+  if (!response.ok) throw new Error((await readErrorMessage(response)) ?? rejected);
+  const body = await response.json();
+  return Array.isArray(body?.projects) ? body.projects : [];
+}
+
 const segment = (value: string) => encodeURIComponent(value);
 
 function result(value: unknown) {
@@ -356,7 +367,7 @@ function failure(error: unknown) {
   };
 }
 
-function registerInventoryTools(server: McpServer, client: SupabaseClient, token: string): void {
+function registerInventoryTools(server: McpServer, token: string): void {
   server.registerTool(
     'inventory_search',
     {
@@ -425,7 +436,7 @@ function registerInventoryTools(server: McpServer, client: SupabaseClient, token
     },
     async input => {
       try {
-        return result(await callRpc(client, 'inventory_resolve_project', { p_query: input.query }));
+        return result(await resolveProject(token, input.query));
       } catch (error) {
         return failure(error);
       }
@@ -544,7 +555,7 @@ const mcpHandler = createMcpHandler(
     const token = requestInfo ? readBearerToken(requestInfo) : null;
     if (!token) throw new Error('A Sabah One OAuth access token is required.');
     const server = new McpServer({ name: 'sabah-one-inventory', version: '0.1.0' });
-    registerInventoryTools(server, createUserClient(token), token);
+    registerInventoryTools(server, token);
     return server;
   },
   { responseMode: 'json' },

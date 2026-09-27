@@ -1,38 +1,12 @@
 import { expect, openApp, test } from './support/helm-fixture';
 
+// The fake profile service answers insights with contracts/profile-service/activity-insights.json.
+
 const NOW = '2026-08-30T12:00:00.000Z';
-
-function usageEvent(index: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  const sessionId = `bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb${index % 3}`;
-  return {
-    event_id: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaa${String(index).padStart(3, '0')}`,
-    schema_version: 1,
-    session_id: sessionId,
-    sequence: index + 1,
-    event_kind: index < 3 ? 'session' : 'navigation',
-    occurred_at: `2026-08-${28 + (index % 3)}T10:00:00.000Z`,
-    surface: 'dashboard',
-    feature: index < 3 ? 'application' : 'navigation',
-    action: index < 3 ? 'session_started' : 'surface_viewed',
-    outcome: index < 3 ? 'success' : null,
-    duration_ms: null,
-    error_code: null,
-    target: 'dashboard',
-    release_version: '0.2.129',
-    device_class: 'desktop',
-    input_kind: 'system',
-    online: true,
-    reduced_motion: false,
-    metadata: {},
-    ...overrides,
-  };
-}
-
-const EVENTS = Array.from({ length: 12 }, (_, index) => usageEvent(index));
 
 test.describe('private Activity usage viewer', () => {
   test('renders trends, filters, funnel, privacy boundary, and keyboard labels', async ({ page, scenario }) => {
-    await scenario({ now: NOW, analytics: { events: EVENTS } });
+    await scenario({ now: NOW });
     await openApp(page);
     await page.getByRole('button', { name: 'Navigate to Activity' }).click();
 
@@ -49,8 +23,17 @@ test.describe('private Activity usage viewer', () => {
     await expect(page.getByRole('heading', { name: 'Most-used paths' })).toBeVisible();
   });
 
+  test('sends content-free usage events to the profile service', async ({ page, scenario }) => {
+    const control = await scenario({});
+    await openApp(page);
+    await page.getByRole('button', { name: 'Navigate to Activity' }).click();
+
+    await expect.poll(() => control.services.activityEvents.size, { timeout: 10_000 }).toBeGreaterThan(0);
+    expect(control.services.calls).toContain('POST /api/profile/v1/activity/events');
+  });
+
   test('shows the read error and an explicit retry action', async ({ page, scenario }) => {
-    await scenario({ now: NOW, analytics: { failureStatus: 400 } });
+    await scenario({ now: NOW, services: { activity: { failureStatus: 400 } } });
     await openApp(page);
     await page.getByRole('button', { name: 'Navigate to Activity' }).click();
 
@@ -59,7 +42,7 @@ test.describe('private Activity usage viewer', () => {
   });
 
   test('does not expose usage records when signed out', async ({ page, scenario }) => {
-    await scenario({ authenticated: false, now: NOW, analytics: { events: EVENTS } });
+    await scenario({ authenticated: false, now: NOW });
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Sign in to continue' })).toBeVisible();
     await expect(page.getByText('Usage overview')).not.toBeVisible();
@@ -69,7 +52,7 @@ test.describe('private Activity usage viewer', () => {
     test.use({ viewport: { width: 390, height: 844 } });
 
     test('keeps the filters and evidence panels usable at mobile width', async ({ page, scenario }) => {
-      await scenario({ now: NOW, analytics: { events: EVENTS } });
+      await scenario({ now: NOW });
       await openApp(page);
       await page.getByRole('button', { name: 'Open more navigation' }).click();
       await page.getByRole('button', { name: 'Activity', exact: true }).click();

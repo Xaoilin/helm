@@ -229,18 +229,8 @@ const [migrationRows, verificationRows] = await Promise.all([
         and not has_table_privilege('authenticated', 'public.product_usage_events', 'update')
         and not has_table_privilege('authenticated', 'public.product_usage_events', 'delete')
         and not has_table_privilege('anon', 'public.product_usage_events', 'select'),
-      'productUsageRpcSecurity',
-        has_function_privilege(
-          'authenticated', 'public.ingest_product_usage_events(jsonb)', 'execute'
-        )
-        and not has_function_privilege(
-          'anon', 'public.ingest_product_usage_events(jsonb)', 'execute'
-        )
-        and (
-          select prosecdef
-          from pg_proc
-          where oid = 'public.ingest_product_usage_events(jsonb)'::regprocedure
-        ),
+      'productUsageIngestRetired',
+        to_regprocedure('public.ingest_product_usage_events(jsonb)') is null,
       'productUsageRowsContentFree', not exists (
         select 1
         from public.product_usage_events event
@@ -484,7 +474,7 @@ const expected = {
   deprecatedFeaturesRemoved: true,
   productUsageOwnerReadPolicy: true,
   productUsagePrivileges: true,
-  productUsageRpcSecurity: true,
+  productUsageIngestRetired: true,
   productUsageRowsContentFree: true,
   accountReadPolicies: 2,
   privateBroadcastPolicy: true,

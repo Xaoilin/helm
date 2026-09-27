@@ -50,7 +50,7 @@ test('creates, edits, and manages a project from the Projects catalogue', async 
 
   await lampCard.getByRole('button', { name: 'View details' }).click();
   const drawer = page.getByRole('dialog', { name: 'Desk lamp' });
-  await expect(drawer.getByRole('link', { name: /Live project/ })).toHaveAttribute('href', 'https://lamp.example/');
+  await expect(drawer.getByRole('link', { name: /Live project/ })).toHaveAttribute('href', 'https://lamp.example');
   await drawer.getByRole('button', { name: 'Edit project' }).click();
 
   const editDialog = page.getByRole('dialog', { name: 'Edit Project' });

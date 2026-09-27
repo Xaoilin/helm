@@ -26,9 +26,9 @@ try {
     'supabase/tests/helm_legacy_migration.sql',
     'supabase/tests/product_usage_analytics.sql',
     'supabase/tests/remove_deprecated_features.sql',
+    'supabase/tests/retire_google_broker_and_project_resolve.sql',
   ])
   await runConcurrencyScenario()
-  await runProductUsageRollbackScenario()
 } catch (error) {
   failure = error
 } finally {
@@ -212,42 +212,6 @@ async function runConcurrencyScenario() {
   }
 
   console.log('Concurrent database sessions: 9 assertions passed')
-}
-
-async function runProductUsageRollbackScenario() {
-  runSqlFile('supabase/rollback/20260830073000_pause_product_usage_analytics.sql')
-  await runSql(`
-    do $$
-    begin
-      if has_function_privilege(
-        'authenticated',
-        'public.ingest_product_usage_events(jsonb)',
-        'execute'
-      ) then
-        raise exception 'Product usage rollback did not pause ingestion.';
-      end if;
-      if to_regclass('public.product_usage_events') is null then
-        raise exception 'Product usage rollback removed durable history.';
-      end if;
-    end
-    $$;
-  `)
-
-  runSqlFile('supabase/rollback/20260830073000_resume_product_usage_analytics.sql')
-  await runSql(`
-    do $$
-    begin
-      if not has_function_privilege(
-        'authenticated',
-        'public.ingest_product_usage_events(jsonb)',
-        'execute'
-      ) then
-        raise exception 'Product usage resume did not restore ingestion.';
-      end if;
-    end
-    $$;
-  `)
-  console.log('Product usage rollback and resume: 3 assertions passed')
 }
 
 async function runGatedPair(claims, statements) {
