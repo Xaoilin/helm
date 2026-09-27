@@ -13,37 +13,35 @@ export default function PrayerReminderBanner() {
   const reminder = prayer.activeReminder;
   if (!reminder) return null;
 
-  const names = reminder.prayerNames.join(' and ');
-  const deadlineClock = formatPrayerInstantTime(reminder.deadlineAt, reminder.timezone);
+  const name = reminder.prayerName;
+  const deadlineClock = formatPrayerInstantTime(reminder.expiresAt, reminder.timeZone);
 
   return (
     <aside className="prayer-deadline-reminder" role="alert" aria-live="assertive">
       <div className="prayer-deadline-pulse" aria-hidden="true" />
       <div className="prayer-deadline-icon" aria-hidden="true">🕌</div>
       <div className="prayer-deadline-copy">
-        <strong>Pray {names} before it is too late</strong>
+        <strong>Pray {name} before it is too late</strong>
         <span>
-          On time until {reminder.deadlineName} at {deadlineClock}
+          On time until {reminder.deadlineName ?? 'its deadline'} at {deadlineClock}
           {' · '}
           <span className="prayer-deadline-countdown" aria-hidden="true">
-            {formatRemaining(reminder.deadlineAt.getTime() - prayer.now.getTime())} remaining
+            {formatRemaining(reminder.expiresAt.getTime() - prayer.now.getTime())} remaining
           </span>
         </span>
+        {prayer.reminderSnoozeError && <span role="status">{prayer.reminderSnoozeError}</span>}
       </div>
       <div className="prayer-deadline-actions">
-        {reminder.prayerNames.map(prayerName => (
-          <button
-            key={prayerName}
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => prayer.requestPrayerCompletion(prayerName, {
-              prayerDate: reminder.prayerDate,
-              source: 'reminder',
-            })}
-          >
-            Mark {prayerName} prayed
-          </button>
-        ))}
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => prayer.requestPrayerCompletion(name, {
+            prayerDate: reminder.date,
+            source: 'reminder',
+          })}
+        >
+          Mark {name} prayed
+        </button>
         {reminder.canSnooze && (
           <button type="button" className="btn btn-secondary btn-sm" onClick={prayer.snoozeActiveReminder}>
             Snooze 5 min

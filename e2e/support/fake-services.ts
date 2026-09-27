@@ -22,16 +22,21 @@ import {
   calendarSyncSchema,
   dashboardSchema,
   globalSettingsSchema,
+  momentumRemindersSchema,
   outcomeChangeSchema,
   outcomeListSchema,
   preferencesSchema,
+  prayerReminderSchema,
+  prayerRemindersSchema,
   type ServiceCalendarAccount,
   type ServiceCalendarEvent,
   type ServiceCalendarSource,
   type ServiceAppPreferences,
   type ServiceGlobalSettings,
   type ServiceIntegration,
+  type ServiceMomentumReminderPillar,
   type ServiceOutcome,
+  type ServicePrayerReminder,
   type ServicePreferences,
   type ServiceTracking,
 } from '../../src/services/backend/contracts';
@@ -71,6 +76,8 @@ export interface FakeServicesOptions {
   planner?: FakePlannerSeed;
   /** Product usage (profile service): insights reads fail with this status, e.g. 400. */
   activity?: { failureStatus?: number };
+  /** Reminders the prayer service already sent (it decides and times every reminder). */
+  reminders?: ServicePrayerReminder[];
 }
 
 export interface FakeCalendar {
@@ -113,7 +120,18 @@ export interface FakeServices {
   /** Product-usage events the app sent to the profile service, by event ID. */
   activityEvents: Map<string, unknown>;
   activity: { failureStatus?: number };
+  /** Reminders the prayer service sent, by key, with their snoozes. */
+  reminders: Map<string, ServicePrayerReminder>;
+  /** The Learn/Move reminder preferences the prayer service holds. */
+  momentumReminders: ServiceMomentumReminderPillar[];
 }
+
+/** The prayer service's momentum reminder defaults for a user who never saved any. */
+const DEFAULT_MOMENTUM_REMINDERS: ServiceMomentumReminderPillar[] = [
+  { pillar: 'learn', enabled: true, afterPrayers: ['Dhuhr', 'Maghrib', 'Isha'], completedOn: null },
+  { pillar: 'move', enabled: true, afterPrayers: ['Asr', 'Maghrib', 'Isha'], completedOn: null },
+];
+const SNOOZE_MS = 5 * 60_000;
 
 function toServiceCalendar(calendar: FakeServicesOptions['calendar'] = {}): FakeCalendar {
   return {
@@ -180,6 +198,8 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
     liveEvents: [],
     activityEvents: new Map(),
     activity: options.activity ?? {},
+    reminders: new Map((options.reminders ?? []).map(reminder => [reminder.key, reminder])),
+    momentumReminders: DEFAULT_MOMENTUM_REMINDERS,
   };
 }
 
@@ -275,6 +295,35 @@ async function handleWrite(
   return handle(recording, services, call, url, body, now);
 }
 
+/** Reminders already sent that are still active: not expired, not snoozed into the future, prayer not recorded. */
+function activeReminders(services: FakeServices, now: Date): ServicePrayerReminder[] {
+  return [...services.reminders.values()]
+    .filter(reminder => Date.parse(reminder.expiresAt) > now.getTime())
+    .filter(reminder => !reminder.snoozedUntil || Date.parse(reminder.snoozedUntil) <= now.getTime())
+    .filter(reminder => reminder.kind === 'momentum' || !services.outcomes.has(`${reminder.date}::${reminder.prayer}`))
+    .sort((left, right) => Date.parse(right.firesAt) - Date.parse(left.firesAt));
+}
+
+/** One snooze per reminder, ending before it does, like the real service. */
+function snoozeReminder(route: Route, services: FakeServices, key: string, now: Date): Promise<void> {
+  const reminder = services.reminders.get(key);
+  if (!reminder || Date.parse(reminder.expiresAt) <= now.getTime()) {
+    return reply(route, 404, { code: 'reminder_not_found', message: 'No active reminder has this key.' }, apiErrorSchema);
+  }
+  if (reminder.snoozeCount >= 1) {
+    return reply(route, 409, { code: 'snooze_used', message: 'This reminder has already been snoozed once.' },
+      apiErrorSchema);
+  }
+  const snoozedUntil = new Date(now.getTime() + SNOOZE_MS);
+  if (snoozedUntil.getTime() >= Date.parse(reminder.expiresAt)) {
+    return reply(route, 409, { code: 'snooze_too_late', message: 'This reminder ends before a snooze would.' },
+      apiErrorSchema);
+  }
+  const snoozed = { ...reminder, snoozedUntil: snoozedUntil.toISOString(), snoozeCount: 1 };
+  services.reminders.set(key, snoozed);
+  return reply(route, 200, snoozed, prayerReminderSchema);
+}
+
 async function handle(
   route: Route, services: FakeServices, call: string, url: URL, body: Record<string, unknown> | null, now: Date,
 ): Promise<void> {
@@ -290,6 +339,14 @@ async function handle(
       return correctOutcome(route, services, decodeURIComponent(outcomeId![2]), body ?? {}, now);
     case outcomeId?.[1] === 'DELETE':
       return deleteOutcome(route, services, decodeURIComponent(outcomeId![2]));
+    case call === 'GET /api/prayer/v1/reminders':
+      return reply(route, 200, { active: activeReminders(services, now), momentum: services.momentumReminders },
+        prayerRemindersSchema);
+    case /^POST \/api\/prayer\/v1\/reminders\/[^/]+\/snooze$/u.test(call):
+      return snoozeReminder(route, services, decodeURIComponent(url.pathname.split('/').at(-2) ?? ''), now);
+    case call === 'PUT /api/prayer/v1/reminders/momentum':
+      services.momentumReminders = momentumRemindersSchema.parse(body).pillars;
+      return reply(route, 200, { pillars: services.momentumReminders }, momentumRemindersSchema);
     case call === 'GET /api/prayer/v1/preferences':
       return reply(route, 200, services.preferences, preferencesSchema);
     case call === 'PUT /api/prayer/v1/preferences':

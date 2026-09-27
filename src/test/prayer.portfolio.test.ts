@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildBoundedReminderPlan,
-  canSnoozeBoundedReminder,
-  getAttemptableBoundedReminders,
-  recordBoundedReminderAttempt,
-  snoozeBoundedReminder,
-} from '../services/boundedReminders';
-import {
   calculatePrayerOutcomeStats,
   createPrayerTrackingState,
   getPrayerCompletionStatusAt,
@@ -25,7 +18,7 @@ import {
   prayerZonedDateTimeToInstant,
   validatePrayerTimeZone,
 } from '../services/prayerTimeZone';
-import { makeMomentumState, makePrayerScheduleDay, makePrayerScheduleEntries } from './fixtures';
+import { makePrayerScheduleDay, makePrayerScheduleEntries } from './fixtures';
 
 const TIMEZONE = 'Europe/London';
 const DATE = '2026-08-29';
@@ -115,39 +108,5 @@ describe('prayer schedule, deadline, and reminder semantics', () => {
       recordedAt: '2026-08-29T04:30:00.000Z',
       source: 'history',
     });
-  });
-
-  it('proves bounded reminders have one attempt and one snooze with deadline plans excluded from immediate display', () => {
-    const tracking = createPrayerTrackingState(new Date('2026-08-29T03:30:00.000Z'));
-    const plans = buildBoundedReminderPlan({
-      prayerDate: DATE,
-      schedule: makePrayerScheduleEntries(),
-      timeZone: TIMEZONE,
-      tracking,
-      momentum: makeMomentumState(),
-      reminderMinutes: 15,
-    });
-    const fajrOpportunity = plans.find(plan => (
-      plan.kind === 'prayer-opportunity' && plan.prayerNames[0] === 'Fajr'
-    ));
-    if (!fajrOpportunity) throw new Error('The Fajr opportunity plan should exist.');
-
-    const justAfterFire = new Date(fajrOpportunity.fireAt.getTime() + 1_000);
-    expect(plans.filter(plan => plan.kind === 'prayer-opportunity')).toHaveLength(5);
-    expect(plans.filter(plan => plan.kind === 'prayer-deadline')).toHaveLength(5);
-    expect(getAttemptableBoundedReminders(plans, {}, justAfterFire)).toEqual([fajrOpportunity]);
-
-    const attempted = recordBoundedReminderAttempt(tracking, fajrOpportunity, justAfterFire, true);
-    expect(getAttemptableBoundedReminders(plans, attempted.boundedReminderReceipts, justAfterFire)).toEqual([]);
-    const snoozedUntil = new Date(fajrOpportunity.fireAt.getTime() + 5 * 60_000);
-    expect(canSnoozeBoundedReminder(attempted, fajrOpportunity, snoozedUntil)).toBe(true);
-    const snoozed = snoozeBoundedReminder(attempted, fajrOpportunity, snoozedUntil);
-    expect(snoozed.boundedReminderReceipts[fajrOpportunity.receiptKeys[0]]).toMatchObject({
-      snoozedUntil: snoozedUntil.toISOString(),
-      snoozeCount: 1,
-    });
-    expect(() => snoozeBoundedReminder(snoozed, fajrOpportunity, snoozedUntil)).toThrow(
-      'one snooze',
-    );
   });
 });

@@ -1,4 +1,4 @@
-import { act, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrayerProvider, usePrayerContext, type PrayerContextValue } from '../store/contexts/PrayerContext';
@@ -6,6 +6,7 @@ import { TaskCtx, type TaskContextValue } from '../store/contexts/TaskContext';
 import { GamificationCtx, type GamificationContextValue } from '../store/contexts/GamificationContext';
 import { DailyMomentumCtx, type DailyMomentumContextValue } from '../store/contexts/DailyMomentumContext';
 import { SettingsCtx, defaultSettings, type SettingsContextValue } from '../store/contexts/SettingsContext';
+import { ServiceError } from '../services/backend/serviceClient';
 import { getPrayerRecordKey } from '../services/prayerTracking';
 import { provide, renderWithContexts } from './renderWithContexts';
 import { makeGamification, makeMomentumState, makeTask } from './fixtures';
@@ -27,6 +28,9 @@ const prayerService = vi.hoisted(() => ({
   createPrayerOutcome: vi.fn(),
   correctPrayerOutcome: vi.fn(),
   deletePrayerOutcome: vi.fn(),
+  getPrayerReminders: vi.fn(),
+  snoozePrayerReminder: vi.fn(),
+  saveMomentumReminders: vi.fn(),
 }));
 vi.mock('../services/backend/prayerServiceApi', () => prayerService);
 
@@ -53,12 +57,23 @@ function serviceSchedule() {
     windows: [],
   };
 }
+/** The Dhuhr opportunity reminder the prayer service sent at 11:55Z; it runs until 12:25Z. */
+const dhuhrOpportunity = {
+  key: `opportunity:${PRAYER_TEST_DATE}:Dhuhr`, kind: 'prayer-opportunity', date: PRAYER_TEST_DATE, prayer: 'Dhuhr',
+  pillars: [], firesAt: '2026-09-26T11:55:00Z', expiresAt: '2026-09-26T12:25:00Z', deadline: null,
+  timeZone: 'Europe/London', reminderMinutes: 15, snoozedUntil: null, snoozeCount: 0,
+};
+/** What the prayer service holds for the fixture's Daily Momentum (both pillars off). */
+const savedMomentum = [
+  { pillar: 'learn', enabled: false, afterPrayers: [], completedOn: null },
+  { pillar: 'move', enabled: false, afterPrayers: [], completedOn: null },
+];
 const dhuhrTask = makeTask({ id: 'task-dhuhr', title: 'Dhuhr Prayer', category: 'prayer', prayerName: 'Dhuhr' });
 
 const VALUE_KEYS: (keyof PrayerContextValue)[] = [
   'loaded', 'tracking', 'schedule', 'scheduleStatus', 'scheduleError', 'now', 'today', 'localTimezone',
   'timezoneMatches', 'scheduleTimezoneValid', 'scheduleDays', 'stats', 'deadlines', 'nextPrayer',
-  'pendingCompletion', 'activeReminder', 'activeBoundedReminder', 'canSnoozeActiveBoundedReminder', 'adhanPrayer',
+  'pendingCompletion', 'activeReminder', 'activeBoundedReminder', 'reminderSnoozeError', 'adhanPrayer',
   'diagnostics', 'serviceSync', 'completionNotice', 'dismissCompletionNotice', 'requestPrayerCompletion',
   'cancelPrayerCompletion', 'confirmPrayerCompletion', 'completePrayer', 'correctPrayerOutcome', 'getOutcome',
   'undoPrayerCompletion', 'replacePrayerTracking', 'snoozeActiveReminder', 'snoozeActiveBoundedReminder',
@@ -125,7 +140,8 @@ beforeEach(() => {
     outcome: { ...serviceFajr, id: crypto.randomUUID(), prayer: request.prayer, status: request.status },
     firstReward: true,
   }));
-  // The account record holds only reminder receipts.
+  prayerService.getPrayerReminders.mockResolvedValue({ active: [dhuhrOpportunity], momentum: savedMomentum });
+  prayerService.saveMomentumReminders.mockImplementation(async (pillars: unknown) => pillars);
   persistence.loadStore.mockResolvedValue(null);
   planner.syncPrayerRewards.mockResolvedValue({
     reward: { xpEarned: 25, level: 1, leveledUp: false, title: 'Beginner', newBadges: [], currentStreak: 1,
@@ -157,11 +173,17 @@ describe('PrayerProvider', () => {
       location: 'Bedford, United Kingdom',
       scheduleTimezone: 'Europe/London',
       permissionState: 'unsupported',
-      nextReminderAt: '2026-09-26T15:05:00.000Z',
       suppressionReason: null,
     });
-    // Bounded reminders fall back to the in-app banner without notification support.
-    expect(prayer.activeBoundedReminder?.title).toBe('Dhuhr prayer opportunity');
+    // The prayer service's reminders fall back to the in-app banner without notification support.
+    await waitFor(() => expect(prayer.activeBoundedReminder?.title).toBe('Dhuhr prayer opportunity'));
+    expect(prayer.diagnostics.activeReminders.map(reminder => reminder.key)).toEqual([dhuhrOpportunity.key]);
+    expect(prayer.activeReminder).toBeNull();
+    // Nothing reads or writes the retired account record, and unchanged momentum preferences are not re-sent.
+    expect(persistence.loadStore).not.toHaveBeenCalledWith('prayerTracking');
+    expect(persistence.saveStore).not.toHaveBeenCalled();
+    expect(persistence.saveStoreCommitted).not.toHaveBeenCalled();
+    expect(prayerService.saveMomentumReminders).not.toHaveBeenCalled();
   });
 
   it('completes a prayer, saves it to the prayer service, then shows the XP the planner granted', async () => {
@@ -177,6 +199,8 @@ describe('PrayerProvider', () => {
 
     await waitFor(() => expect(prayer.tracking.records[DHUHR_KEY]).toMatchObject({ status: 'on_time' }));
     expect(prayer.pendingCompletion).toBeNull();
+    // Recording the prayer hides its reminder.
+    expect(prayer.activeBoundedReminder).toBeNull();
     expect(owners.tasks.showPrayerHabit).toHaveBeenCalledWith('task-dhuhr', true);
     await waitFor(() => expect(prayerService.createPrayerOutcome).toHaveBeenCalledWith(
       expect.objectContaining({ date: PRAYER_TEST_DATE, prayer: 'Dhuhr', status: 'on_time' }),
@@ -187,6 +211,41 @@ describe('PrayerProvider', () => {
     expect(planner.syncPrayerRewards).toHaveBeenCalledWith(PRAYER_TEST_DATE, 'Dhuhr');
     expect(owners.gamification.applyProfile).toHaveBeenCalledWith(expect.objectContaining({ totalXp: 25 }));
     expect(owners.tasks.applyTask).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-dhuhr', completed: true }));
+  });
+
+  it('snoozes the reminder through the prayer service, and shows why it refused a second snooze', async () => {
+    prayerService.snoozePrayerReminder.mockResolvedValueOnce({
+      ...dhuhrOpportunity, snoozedUntil: '2026-09-26T12:05:00Z', snoozeCount: 1,
+    });
+    renderPrayerProvider();
+    await waitFor(() => expect(prayer.activeBoundedReminder?.canSnooze).toBe(true));
+
+    act(() => prayer.snoozeActiveBoundedReminder());
+
+    await waitFor(() => expect(prayer.activeBoundedReminder).toBeNull());
+    expect(prayerService.snoozePrayerReminder).toHaveBeenCalledWith(dhuhrOpportunity.key);
+
+    // Another tab still shows it unsnoozed; the service refuses the second snooze.
+    cleanup();
+    prayerService.getPrayerReminders.mockResolvedValue({ active: [dhuhrOpportunity], momentum: savedMomentum });
+    prayerService.snoozePrayerReminder.mockRejectedValueOnce(
+      new ServiceError(409, 'snooze_used', 'This reminder has already been snoozed once.'));
+    renderPrayerProvider();
+    await waitFor(() => expect(prayer.activeBoundedReminder?.canSnooze).toBe(true));
+    act(() => prayer.snoozeActiveBoundedReminder());
+    await waitFor(() => expect(prayer.reminderSnoozeError).toBe('This reminder has already been snoozed once.'));
+  });
+
+  it('tells the prayer service when the Learn/Move reminder preferences differ from what it holds', async () => {
+    const owners = fakeOwners();
+    const state = makeMomentumState();
+    state.reminderPreferences.learn = { enabled: true, afterPrayers: ['Dhuhr', 'Maghrib', 'Isha'] };
+    renderPrayerProvider({ ...owners, momentum: { ...owners.momentum, state } });
+
+    await waitFor(() => expect(prayerService.saveMomentumReminders).toHaveBeenCalledWith([
+      { pillar: 'learn', enabled: true, afterPrayers: ['Dhuhr', 'Maghrib', 'Isha'], completedOn: null },
+      { pillar: 'move', enabled: false, afterPrayers: [], completedOn: null },
+    ]), { timeout: 3_000 });
   });
 
   it('starts nothing until prayer preferences and location come from their services', async () => {

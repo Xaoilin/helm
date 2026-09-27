@@ -115,7 +115,7 @@ describe('effective app time-zone policy', () => {
   it('keeps React prayer orchestration dependent on cohesive policy boundaries', () => {
     const source = readFileSync(resolve(root, 'src/store/contexts/PrayerContext.tsx'), 'utf8');
     expect(source).toContain("from '../../services/prayerSchedulePolicy'");
-    expect(source).toContain("from '../../services/prayerReminderPolicy'");
+    expect(source).toContain("from './prayer/usePrayerServiceReminders'");
     expect(source).toContain("from './prayer/usePrayerCompletionWorkflow'");
     expect(source).not.toContain('function buildScheduleDays(');
     expect(source).not.toContain('function reversePrayerGamification(');

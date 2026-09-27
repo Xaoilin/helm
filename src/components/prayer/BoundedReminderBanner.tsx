@@ -23,27 +23,27 @@ export default function BoundedReminderBanner() {
             Browser notifications are unavailable; this in-app reminder remains active.
           </span>
         )}
+        {prayer.reminderSnoozeError && <span role="status">{prayer.reminderSnoozeError}</span>}
       </div>
       <div className="prayer-deadline-actions">
-        {isPrayer && reminder.prayerNames.map(prayerName => (
+        {isPrayer && (
           <button
-            key={prayerName}
             type="button"
             className="btn btn-primary btn-sm"
-            onClick={() => prayer.requestPrayerCompletion(prayerName, {
+            onClick={() => prayer.requestPrayerCompletion(reminder.prayerName, {
               prayerDate: reminder.date,
               source: 'reminder',
             })}
           >
-            Mark {prayerName} prayed
+            Mark {reminder.prayerName} prayed
           </button>
-        ))}
+        )}
         {!isPrayer && (
           <button type="button" className="btn btn-primary btn-sm" onClick={() => shell.navigate('dashboard')}>
             Open dashboard
           </button>
         )}
-        {prayer.canSnoozeActiveBoundedReminder && (
+        {reminder.canSnooze && (
           <button type="button" className="btn btn-secondary btn-sm" onClick={prayer.snoozeActiveBoundedReminder}>
             Snooze once
           </button>

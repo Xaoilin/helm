@@ -22,7 +22,6 @@ const REWARD: PlannerReward = {
 
 const spies = {
   showPrayerHabit: vi.fn(),
-  cancelReminderForPrayer: vi.fn(),
   showNotice: vi.fn(),
   awaitReward: vi.fn(async (): Promise<PlannerReward | null> => REWARD),
 };
@@ -47,7 +46,6 @@ function useCompletionHarness() {
     getToday: () => PRAYER_TEST_DATE,
     getTracking: store.getTracking,
     commitTracking: store.commitTracking,
-    cancelReminderForPrayer: spies.cancelReminderForPrayer,
   });
   const prompt = usePrayerCompletionPrompt({
     today: PRAYER_TEST_DATE,
@@ -80,7 +78,6 @@ describe('prayer completion workflow', () => {
     expect(completion).toMatchObject({ prayerName: 'Dhuhr', prayerDate: PRAYER_TEST_DATE, status: 'on_time', xpEarned: 0 });
     expect(result.current.tracking.records[DHUHR_KEY]).toMatchObject({ status: 'on_time', source: 'dashboard' });
     expect(result.current.tasks[0].completed).toBe(true);
-    expect(spies.cancelReminderForPrayer).toHaveBeenCalledWith(PRAYER_TEST_DATE, 'Dhuhr');
   });
 
   it('refuses a prayer that has not started and changes nothing', () => {
@@ -91,7 +88,6 @@ describe('prayer completion workflow', () => {
       .toThrow(PrayerCompletionRejectedError);
     expect(result.current.tracking.records).toEqual({});
     expect(spies.showPrayerHabit).not.toHaveBeenCalled();
-    expect(spies.cancelReminderForPrayer).not.toHaveBeenCalled();
   });
 
   it('undoes a completion: the outcome goes and the habit shows as it was', () => {

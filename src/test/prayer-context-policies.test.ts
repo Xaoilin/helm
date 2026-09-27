@@ -6,22 +6,11 @@ import {
   retainReminderSchedules,
 } from '../services/prayerSchedulePolicy';
 import {
-  getPrayerSnoozeEnd,
-  selectBoundedReminderPlans,
-  snoozePrayerReminderGroup,
-  type PrayerReminderGroup,
-} from '../services/prayerReminderPolicy';
-import {
   buildPrayerDiagnostics,
   describeError,
   describeReminderSuppression,
-  findNextReminderAt,
 } from '../services/prayerDiagnostics';
-import { createPrayerTrackingState, getPrayerReminderKey, setPrayerOutcome } from '../services/prayerTracking';
-import { makeMomentumState } from './fixtures';
 import { makePrayerTimesData, PRAYER_TEST_DATE } from './prayerFixtures';
-
-const tracking = createPrayerTrackingState(new Date('2026-09-01T00:00:00Z'));
 
 describe('getPrayerDateAt', () => {
   it('uses the schedule zone date, which can differ from UTC near midnight', () => {
@@ -85,110 +74,24 @@ describe('reminderSchedulesHaveValidZones', () => {
   });
 });
 
-describe('snoozePrayerReminderGroup', () => {
-  const deadlineAt = new Date('2026-09-26T15:20:00Z');
-  const group: PrayerReminderGroup = {
-    prayerDate: PRAYER_TEST_DATE,
-    prayerNames: ['Dhuhr'],
-    deadlineName: 'Asr',
-    deadlineAt,
-    fireAt: new Date('2026-09-26T15:05:00Z'),
-    minutesRemaining: 15,
-    canSnooze: true,
-    timezone: 'Europe/London',
-  };
-
-  it('records a snooze receipt five minutes out for each prayer in the group', () => {
-    const now = new Date('2026-09-26T15:06:00Z');
-    const next = snoozePrayerReminderGroup(tracking, group, now);
-    const receipt = next?.reminderReceipts[getPrayerReminderKey(PRAYER_TEST_DATE, 'Dhuhr', deadlineAt)];
-    expect(receipt?.snoozedUntil).toBe(getPrayerSnoozeEnd(now).toISOString());
-    expect(getPrayerSnoozeEnd(now).toISOString()).toBe('2026-09-26T15:11:00.000Z');
-  });
-
-  it('changes nothing without a group or when the group cannot be snoozed', () => {
-    const now = new Date('2026-09-26T15:06:00Z');
-    expect(snoozePrayerReminderGroup(tracking, null, now)).toBeNull();
-    expect(snoozePrayerReminderGroup(tracking, { ...group, canSnooze: false }, now)).toBeNull();
-  });
-
-  it('refuses a snooze that would reach the deadline', () => {
-    expect(snoozePrayerReminderGroup(tracking, group, new Date('2026-09-26T15:15:00Z'))).toBeNull();
-  });
-});
-
-describe('selectBoundedReminderPlans', () => {
-  const input = {
-    prayerEnabled: true,
-    reminderEnabled: true,
-    timetable: makePrayerTimesData(),
-    momentum: makeMomentumState(),
-    prayerDate: PRAYER_TEST_DATE,
-    tracking,
-    reminderMinutes: 15,
-  };
-
-  it('plans an opportunity reminder for each open prayer; deadline reminders come from the prayer service', () => {
-    const plans = selectBoundedReminderPlans(input);
-    expect(plans.filter(plan => plan.prayerNames.includes('Dhuhr')).map(plan => plan.kind))
-      .toEqual(['prayer-opportunity']);
-    expect(plans.some(plan => plan.kind === 'prayer-deadline')).toBe(false);
-  });
-
-  it('skips prayers that already have an outcome', () => {
-    const done = setPrayerOutcome(tracking, {
-      date: PRAYER_TEST_DATE,
-      prayerName: 'Dhuhr',
-      status: 'on_time',
-      recordedAt: new Date('2026-09-26T12:00:00Z'),
-      source: 'dashboard',
-    });
-    expect(selectBoundedReminderPlans({ ...input, tracking: done }).some(plan => plan.prayerNames.includes('Dhuhr')))
-      .toBe(false);
-  });
-
-  it('plans nothing while prayer is off, without a timetable, or before momentum loads', () => {
-    expect(selectBoundedReminderPlans({ ...input, prayerEnabled: false })).toEqual([]);
-    expect(selectBoundedReminderPlans({ ...input, timetable: null })).toEqual([]);
-    expect(selectBoundedReminderPlans({ ...input, momentum: null })).toEqual([]);
-  });
-
-  it('keeps only momentum reminders when deadline reminders are off', () => {
-    const plans = selectBoundedReminderPlans({ ...input, reminderEnabled: false });
-    expect(plans.every(plan => plan.kind === 'momentum')).toBe(true);
-  });
-});
-
 describe('prayer diagnostics', () => {
   const ready = {
     prayerEnabled: true,
     reminderEnabled: true,
-    scheduleStatus: 'ready' as const,
-    schedule: makePrayerTimesData(),
-    scheduleTimezone: 'Europe/London',
-    reminderGroupCount: 2,
+    serviceEnabled: true,
+    reminderLoadError: null,
   };
 
   it('explains the first reason reminders cannot run', () => {
     expect(describeReminderSuppression(ready)).toBeNull();
     expect(describeReminderSuppression({ ...ready, prayerEnabled: false, reminderEnabled: false }))
       .toBe('Prayer times are disabled.');
-    expect(describeReminderSuppression({ ...ready, reminderEnabled: false })).toBe('Deadline reminders are disabled.');
-    expect(describeReminderSuppression({ ...ready, scheduleStatus: 'loading' }))
-      .toBe('No matching current-day prayer schedule is available.');
-    expect(describeReminderSuppression({ ...ready, scheduleTimezone: '' }))
-      .toBe('The schedule timezone could not be verified.');
-    expect(describeReminderSuppression({ ...ready, reminderGroupCount: 0 }))
-      .toBe('No incomplete prayer is currently eligible.');
-  });
-
-  it('finds the fire time of the first group whose deadline is still ahead', () => {
-    const groups = [
-      { deadlineAt: new Date('2026-09-26T06:00:00Z'), fireAt: new Date('2026-09-26T05:45:00Z') },
-      { deadlineAt: new Date('2026-09-26T15:20:00Z'), fireAt: new Date('2026-09-26T15:05:00Z') },
-    ] as PrayerReminderGroup[];
-    expect(findNextReminderAt(groups, new Date('2026-09-26T12:00:00Z'))).toBe('2026-09-26T15:05:00.000Z');
-    expect(findNextReminderAt(groups, new Date('2026-09-26T16:00:00Z'))).toBeNull();
+    expect(describeReminderSuppression({ ...ready, reminderEnabled: false }))
+      .toBe('Prayer reminders are disabled; Learn/Move reminders follow their own settings.');
+    expect(describeReminderSuppression({ ...ready, serviceEnabled: false }))
+      .toBe('The prayer service is not configured for this build.');
+    expect(describeReminderSuppression({ ...ready, reminderLoadError: 'HTTP 503.' }))
+      .toBe('The prayer service reminders could not be loaded: HTTP 503.');
   });
 
   it('prefers the reminder error over the schedule error', () => {
@@ -202,7 +105,7 @@ describe('prayer diagnostics', () => {
       scheduleTimezoneValid: true,
       localTimezone: 'UTC',
       timezoneMatches: false,
-      nextReminderAt: null,
+      activeReminders: [],
       suppressionReason: null,
       permissionState: 'granted' as const,
       lastNotificationKey: null,

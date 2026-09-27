@@ -14,7 +14,6 @@ export const SHARED_STORE_KEYS = [
   { key: 'transactions', label: 'Transactions', description: 'Finance transaction ledger.' },
   { key: 'financeBudgets', label: 'Finance budgets', description: 'Budget records.' },
   { key: 'savingsGoals', label: 'Savings goals', description: 'Savings goal records.' },
-  { key: 'prayerTracking', label: 'Prayer outcomes', description: 'Classified prayer outcomes and reminder receipts.' },
 ] as const satisfies SharedStoreKey[];
 
 export const SHARED_STORE_KEY_SET = new Set<string>(SHARED_STORE_KEYS.map(item => item.key));
@@ -24,7 +23,8 @@ export const SHARED_STORE_KEY_SET = new Set<string>(SHARED_STORE_KEYS.map(item =
  * and integrations moved to the profile service; trips, inventory, the job tracker and the fast-food
  * journal to the life admin service; the knowledge base, lifestyle tracker and projects (with their
  * pages and the older `workspaces`) to the knowledge service; tasks, progress (with daily momentum) and
- * the clock to the planner service; `conversations`, `assistantCorrections` and `assistantActivityLog`
+ * the clock to the planner service; `prayerTracking` (reminder receipts) to the prayer service, which decides
+ * reminders; `conversations`, `assistantCorrections` and `assistantActivityLog`
  * belonged to the removed Lina assistant, and `dashboardFocusFeedback` to the removed Up Next feedback.
  */
 export const LEGACY_SHARED_STORE_KEY_SET = new Set<string>([
@@ -32,7 +32,7 @@ export const LEGACY_SHARED_STORE_KEY_SET = new Set<string>([
   'trips', 'tripLegs', 'tripItineraryItems', 'tripBookings', 'tripBudgetEntries',
   'inventoryItems', 'inventoryNeeds', 'employment', 'healthFastFoodEntries',
   'knowledgeTopics', 'knowledgeEntries', 'lifestyleItems', 'projects', 'projectPages', 'workspaces',
-  'tasks', 'gamification', 'clock', 'dashboardFocusFeedback',
+  'tasks', 'gamification', 'clock', 'dashboardFocusFeedback', 'prayerTracking',
 ]);
 
 export const KNOWN_SHARED_STORE_KEY_SET = new Set<string>([

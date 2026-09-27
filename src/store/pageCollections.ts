@@ -1,12 +1,11 @@
 import type { Surface } from '../types/domain';
 
-// Prayer reminder receipts remain available on every page. Custom providers hydrate each listed
-// group together. Calendar data comes from the calendar service; settings and integrations from the
-// profile service; trips, inventory, jobs and health from the life admin service; knowledge, lifestyle
-// and projects from the knowledge service; tasks, progress and the clock from the planner service.
-export const SHARED_PAGE_COLLECTIONS = [
-  'prayerTracking',
-] as const;
+// Collections every page needs; custom providers hydrate each listed group together. None is left:
+// calendar data comes from the calendar service; settings and integrations from the profile service;
+// trips, inventory, jobs and health from the life admin service; knowledge, lifestyle and projects from
+// the knowledge service; tasks, progress and the clock from the planner service; prayer outcomes and
+// reminders from the prayer service.
+export const SHARED_PAGE_COLLECTIONS: readonly string[] = [];
 
 const FINANCE_COLLECTIONS = ['financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals'];
 
