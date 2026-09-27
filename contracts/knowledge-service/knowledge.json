@@ -1,0 +1,58 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/knowledge/v1/knowledge"
+  },
+  "status" : 200,
+  "body" : {
+    "topics" : [
+      {
+        "id" : "prayer",
+        "name" : "Prayer",
+        "description" : "Salah and its conditions",
+        "icon" : "🕌",
+        "color" : "#22c55e",
+        "sortOrder" : 0,
+        "createdAt" : "2026-09-27T00:43:23.965Z",
+        "updatedAt" : "2026-09-27T00:43:23.965Z"
+      }
+    ],
+    "entries" : [
+      {
+        "id" : "on-time",
+        "topicId" : "prayer",
+        "title" : "Praying on time",
+        "content" : "Pray each prayer in its window.",
+        "sources" : [
+          {
+            "type" : "quran",
+            "surah" : null,
+            "ayahStart" : null,
+            "ayahEnd" : null,
+            "collection" : null,
+            "hadithNumber" : null,
+            "author" : null,
+            "title" : null,
+            "url" : null
+          },
+          {
+            "type" : "hadith",
+            "surah" : null,
+            "ayahStart" : null,
+            "ayahEnd" : null,
+            "collection" : "Bukhari",
+            "hadithNumber" : "527",
+            "author" : null,
+            "title" : null,
+            "url" : null
+          }
+        ],
+        "tags" : [
+          "salah"
+        ],
+        "createdAt" : "2026-09-27T00:43:23.990Z",
+        "updatedAt" : "2026-09-27T00:43:23.990Z"
+      }
+    ]
+  }
+}

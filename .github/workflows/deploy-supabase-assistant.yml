@@ -48,9 +48,6 @@ jobs:
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       HELM_DATABASE_BACKUP_SHA256: ${{ secrets.HELM_DATABASE_BACKUP_SHA256 }}
-      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-      GOOGLE_OAUTH_ALLOWED_ORIGINS: ${{ secrets.GOOGLE_OAUTH_ALLOWED_ORIGINS }}
     steps:
       - id: preflight
         name: Check deploy secrets
@@ -65,11 +62,6 @@ jobs:
           fi
           echo "should_deploy=true" >> "$GITHUB_OUTPUT"
           echo "deploy_database=true" >> "$GITHUB_OUTPUT"
-          if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ] && [ -n "$GOOGLE_OAUTH_CLIENT_SECRET" ]; then
-            echo "deploy_google_calendar_oauth=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "deploy_google_calendar_oauth=false" >> "$GITHUB_OUTPUT"
-          fi
 
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' }}
         uses: actions/checkout@v5
@@ -125,7 +117,7 @@ jobs:
         name: Delete retired Edge Functions
         env:
           # Space-separated; append further retired functions here.
-          RETIRED_FUNCTIONS: assistant-openai assistant-openai-billing assistant-speech github-life-hero operational-events
+          RETIRED_FUNCTIONS: assistant-openai assistant-openai-billing assistant-speech github-life-hero operational-events google-calendar-oauth
         run: |
           deployed="$(npx supabase functions list --project-ref "$SUPABASE_PROJECT_REF")"
           for name in $RETIRED_FUNCTIONS; do
@@ -193,23 +185,3 @@ jobs:
         run: npx supabase functions deploy sabah-one-finance-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
       - name: Deploy Sabah One Equity MCP
         run: npx supabase functions deploy sabah-one-equity-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
-
-      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_google_calendar_oauth == 'true' }}
-        name: Sync Google Calendar OAuth function secrets
-        run: |
-          if [ -n "$GOOGLE_OAUTH_ALLOWED_ORIGINS" ]; then
-            npx supabase secrets set \
-              GOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID" \
-              GOOGLE_OAUTH_CLIENT_SECRET="$GOOGLE_OAUTH_CLIENT_SECRET" \
-              GOOGLE_OAUTH_ALLOWED_ORIGINS="$GOOGLE_OAUTH_ALLOWED_ORIGINS" \
-              --project-ref "$SUPABASE_PROJECT_REF" --yes
-          else
-            npx supabase secrets set \
-              GOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID" \
-              GOOGLE_OAUTH_CLIENT_SECRET="$GOOGLE_OAUTH_CLIENT_SECRET" \
-              --project-ref "$SUPABASE_PROJECT_REF" --yes
-          fi
-
-      - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_google_calendar_oauth == 'true' }}
-        name: Deploy google-calendar-oauth
-        run: npx supabase functions deploy google-calendar-oauth --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes

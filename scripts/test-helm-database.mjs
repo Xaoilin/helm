@@ -26,6 +26,7 @@ try {
     'supabase/tests/helm_legacy_migration.sql',
     'supabase/tests/product_usage_analytics.sql',
     'supabase/tests/remove_deprecated_features.sql',
+    'supabase/tests/retire_google_broker_and_project_resolve.sql',
   ])
   await runConcurrencyScenario()
 } catch (error) {

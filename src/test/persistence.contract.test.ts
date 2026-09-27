@@ -37,7 +37,7 @@ const SNAPSHOT_TIME = '2026-08-29T10:00:00.000Z';
 
 // The lifestyle tracker is a real account collection kept in the account record; settings moved to
 // the profile service and the job tracker to the life admin service.
-const COLLECTION = 'lifestyleItems';
+const COLLECTION = 'tasks';
 const RECORD_ID = 'lifestyle-1';
 
 /** The collection's value as the app reads and saves it: one lifestyle item. */

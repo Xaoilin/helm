@@ -1,0 +1,8 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/knowledge/v1/knowledge/topics/prayer"
+  },
+  "status" : 204,
+  "body" : null
+}

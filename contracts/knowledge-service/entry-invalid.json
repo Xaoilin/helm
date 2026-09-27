@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/knowledge/v1/knowledge/entries/bad"
+  },
+  "status" : 400,
+  "body" : {
+    "code" : "invalid_source_type",
+    "message" : "sourceType must be one of [quran, hadith, scholarly, other]."
+  }
+}

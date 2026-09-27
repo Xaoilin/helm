@@ -1,0 +1,8 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/knowledge/v1/projects/pages/notes"
+  },
+  "status" : 204,
+  "body" : null
+}

@@ -29,7 +29,7 @@ vi.mock('../store/contexts/HealthContext', () => ({ useHealthContext: () => ({ l
 function PageProbe() {
   const shell = useShell();
   return <>
-    <button onClick={() => shell.navigate('inventory')}>Inventory navigation</button>
+    <button onClick={() => shell.navigate('finance')}>Inventory navigation</button>
     <button onClick={() => shell.navigate('dashboard')}>Dashboard navigation</button>
     <PageReadinessGate><output>{shell.surface} data</output></PageReadinessGate>
   </>;
@@ -49,18 +49,18 @@ describe('page demand and readiness', () => {
     expect(mocks.activate).toHaveBeenLastCalledWith(getPageCollections('dashboard'));
     fireEvent.click(screen.getByText('Inventory navigation'));
     expect(screen.getByRole('status')).toHaveTextContent('Loading page data');
-    expect(screen.queryByText('inventory data')).not.toBeInTheDocument();
+    expect(screen.queryByText('finance data')).not.toBeInTheDocument();
     expect(screen.getByText('Dashboard navigation')).toBeEnabled();
-    expect(mocks.activate).toHaveBeenLastCalledWith(getPageCollections('inventory'));
+    expect(mocks.activate).toHaveBeenLastCalledWith(getPageCollections('finance'));
     mocks.extraLoaded = true;
     view.rerender(<ShellProvider><PageProbe /></ShellProvider>);
-    expect(screen.getByText('inventory data')).toBeVisible();
+    expect(screen.getByText('finance data')).toBeVisible();
     expect(mocks.activate).toHaveBeenCalledTimes(2);
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it('reports a page load error and reserves recovery reset for explicit retry', async () => {
-    mocks.activate.mockImplementation((keys: readonly string[]) => keys.includes('projects')
+    mocks.activate.mockImplementation((keys: readonly string[]) => keys.includes('transactions')
       ? Promise.reject(new Error('Database temporarily unavailable')) : Promise.resolve());
     render(<ShellProvider><PageProbe /></ShellProvider>);
     fireEvent.click(screen.getByText('Inventory navigation'));

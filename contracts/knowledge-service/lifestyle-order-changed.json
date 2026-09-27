@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/knowledge/v1/lifestyle/order"
+  },
+  "status" : 409,
+  "body" : {
+    "code" : "lifestyle_order_changed",
+    "message" : "The column changed since it was shown; reload and try again."
+  }
+}

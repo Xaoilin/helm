@@ -20,6 +20,7 @@ import type {
   Surface,
 } from '../../src/types/domain';
 import type { ServiceIntegration } from '../../src/services/backend/contracts';
+import type { FakeKnowledgeSeed } from './fake-knowledge-service';
 import type { FakeLifeSeed } from './fake-life-service';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -107,6 +108,11 @@ const LIFE_WRITE_PATHS: Record<string, string> = {
   tripItineraryItems: '/api/life/v1/trips/',
   tripBookings: '/api/life/v1/trips/',
   tripBudgetEntries: '/api/life/v1/trips/',
+  knowledgeTopics: '/api/knowledge/v1/knowledge/',
+  knowledgeEntries: '/api/knowledge/v1/knowledge/',
+  lifestyleItems: '/api/knowledge/v1/lifestyle',
+  projects: '/api/knowledge/v1/projects',
+  projectPages: '/api/knowledge/v1/projects/pages/',
 };
 
 export function waitForMutation(page: Page, collection: string): Promise<Response> {
@@ -212,8 +218,22 @@ function buildStores(options: HelmScenarioOptions): Record<string, unknown> {
   const stores: Record<string, unknown> = { tasks: [], ...options.stores };
   delete stores.settings;
   delete stores.integrations;
-  for (const collection of LIFE_COLLECTIONS) delete stores[collection];
+  for (const collection of [...LIFE_COLLECTIONS, ...KNOWLEDGE_COLLECTIONS]) delete stores[collection];
   return stores;
+}
+
+/** Collections the knowledge service owns; a scenario's copy seeds its fake instead of the database. */
+const KNOWLEDGE_COLLECTIONS = ['knowledgeTopics', 'knowledgeEntries', 'lifestyleItems', 'projects', 'projectPages', 'workspaces'];
+
+function knowledgeFromScenario(stores: Record<string, unknown> | undefined): FakeKnowledgeSeed {
+  const list = <T,>(key: string) => stores?.[key] as T[] | undefined;
+  return {
+    knowledgeTopics: list('knowledgeTopics'),
+    knowledgeEntries: list('knowledgeEntries'),
+    lifestyleItems: list('lifestyleItems'),
+    projects: list('projects'),
+    projectPages: list('projectPages'),
+  };
 }
 
 function lifeFromScenario(stores: Record<string, unknown> | undefined): FakeLifeSeed {
@@ -533,6 +553,7 @@ function servicesFromScenario(options: HelmScenarioOptions, settings: Record<str
       : {}),
     integrations: serviceIntegrations(options.stores?.integrations),
     life: lifeFromScenario(options.stores),
+    knowledge: knowledgeFromScenario(options.stores),
     calendar: {
       accounts: options.stores?.calendarAccounts as CalendarAccount[] | undefined,
       sources: options.stores?.calendarSources as CalendarSource[] | undefined,

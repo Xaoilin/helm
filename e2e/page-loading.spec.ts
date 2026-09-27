@@ -1,11 +1,12 @@
 import type { Page, Request, Route } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
-import { expect, test, waitForMutation } from './support/helm-fixture';
+import { expect, test } from './support/helm-fixture';
 import type { HelmMutation } from '../src/store/databaseTypes';
 import type { FinanceAccount, Project, ProjectPage, Surface, Trip } from '../src/types/domain';
 
 const SNAPSHOT_ROUTE = '**/rest/v1/rpc/get_helm_account_snapshot*';
-const PROJECT_SCOPE = ['projects', 'projectPages', 'workspaces'];
+/** Collections the knowledge service now owns; Supabase must never be asked for them. */
+const PROJECT_SCOPE = ['projects', 'projectPages', 'workspaces', 'knowledgeTopics', 'knowledgeEntries', 'lifestyleItems'];
 const FINANCE_SCOPE = ['financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals', 'financeReviews', 'equityPositions'];
 /** Collections the life admin service now owns; Supabase must never be asked for them. */
 const LIFE_LEGACY = ['trips', 'tripLegs', 'tripItineraryItems', 'tripBookings', 'tripBudgetEntries',
@@ -93,8 +94,8 @@ async function expectSurfaceData(page: Page, surface: 'projects' | 'finance') {
 }
 
 for (const width of [390, 768, 1440]) {
-  test(`Projects loads its scope and reuses confirmed navigation data at ${width}px`, async ({ page, scenario }, testInfo) => {
-    await scenario({ initialSurface: 'projects', stores });
+  test(`Projects loads from the knowledge service and reuses confirmed navigation data at ${width}px`, async ({ page, scenario }, testInfo) => {
+    const control = await scenario({ initialSurface: 'projects', stores });
     await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const reads = observeDataReads(page);
@@ -103,10 +104,10 @@ for (const width of [390, 768, 1440]) {
     expect(reads.snapshots.length).toBeGreaterThan(0);
     expect(reads.snapshots.every(read => read.collections !== undefined)).toBe(true);
     const coldCollections = reads.snapshots.flatMap(read => read.collections ?? []);
-    expect(coldCollections).toContain('projects');
-    expect(coldCollections.filter(key => [...FINANCE_SCOPE, ...LIFE_LEGACY].includes(key))).toEqual([]);
+    expect(control.services.calls).toContain('GET /api/knowledge/v1/projects');
+    expect(coldCollections.filter(key => [...PROJECT_SCOPE, ...FINANCE_SCOPE, ...LIFE_LEGACY].includes(key))).toEqual([]);
     expect(reads.pages).toHaveLength(0);
-    expect(reads.mutations.filter(operation => [...FINANCE_SCOPE, ...LIFE_LEGACY].includes(operation.collection))).toEqual([]);
+    expect(reads.mutations.filter(operation => [...PROJECT_SCOPE, ...FINANCE_SCOPE, ...LIFE_LEGACY].includes(operation.collection))).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`projects-confirmed-${width}.png`) });
 
     let releaseFinance!: () => void;
@@ -213,100 +214,3 @@ test('Activity and a stored chat surface from the removed assistant read no assi
   expect(reads.pages.filter(url => assistantCollections.some(key => url.searchParams.get('collection') === `eq.${key}`))).toEqual([]);
 });
 
-
-test('two clients selectively refresh active data, defer inactive data, and catch up after missed Broadcast', async ({ page, browser, scenario }, testInfo) => {
-  const clientA = await scenario({ now: timestamp, initialSurface: 'projects', stores });
-  const clientBPage = await browser.newPage({ baseURL: testInfo.project.use.baseURL, viewport: { width: 1440, height: 900 } });
-  try {
-    const clientB = await clientA.addClient(clientBPage);
-    const reads = observeDataReads(clientBPage);
-    await page.goto('/');
-    await clientBPage.goto('/');
-    await expectSurfaceData(page, 'projects');
-    await expectSurfaceData(clientBPage, 'projects');
-    const projectCard = (name: string) => page.getByRole('listitem')
-      .filter({ has: page.getByRole('heading', { name, exact: true }) });
-    const renameProject = async (oldName: string, newName: string) => {
-      await projectCard(oldName).getByRole('button', { name: 'View details' }).click();
-      await page.getByRole('dialog', { name: oldName }).getByRole('button', { name: 'Edit project' }).click();
-      const editor = page.getByRole('dialog', { name: 'Edit Project' });
-      await editor.getByLabel('Name').fill(newName);
-      const confirmed = waitForMutation(page, 'projects');
-      await editor.getByRole('button', { name: 'Save Project' }).click();
-      expect((await confirmed).ok()).toBe(true);
-      await expect(page.getByRole('heading', { name: newName, exact: true })).toBeVisible();
-    };
-    const expectOnlyProjectReads = (start: number, collections = ['projects']) => {
-      const added = reads.snapshots.slice(start);
-      expect(added).toHaveLength(1);
-      expect([...added[0].collections ?? []].sort()).toEqual(collections);
-      expect(reads.pages).toHaveLength(0);
-    };
-
-    // Hold B's authoritative response to prove a Broadcast payload cannot publish data.
-    const activeStart = reads.snapshots.length;
-    let releaseSnapshot!: () => void;
-    const snapshotHeld = new Promise<void>(resolve => { releaseSnapshot = resolve; });
-    const holdProjects = async (route: Route) => {
-      if (requestedCollections(route.request())?.includes('projects')) await snapshotHeld;
-      await route.fallback();
-    };
-    await clientBPage.route(SNAPSHOT_ROUTE, holdProjects);
-    await renameProject(project.name, 'Confirmed active client change');
-    await expect.poll(() => reads.snapshots.length).toBe(activeStart + 1);
-    await expect(clientBPage.getByRole('heading', { name: project.name, exact: true })).toBeVisible();
-    await expect(clientBPage.getByRole('heading', { name: 'Confirmed active client change', exact: true })).toHaveCount(0);
-    releaseSnapshot();
-    await expect(clientBPage.getByRole('heading', { name: 'Confirmed active client change', exact: true })).toBeVisible();
-    await clientBPage.unroute(SNAPSHOT_ROUTE, holdProjects);
-    expectOnlyProjectReads(activeStart);
-    await clientBPage.screenshot({ path: testInfo.outputPath('two-client-active-confirmed.png') });
-
-    // The Projects cache remains visited but stops requiring network reads while Finance is active.
-    await navigate(clientBPage, 'finance');
-    await expectSurfaceData(clientBPage, 'finance');
-    const inactiveStart = reads.snapshots.length;
-    const broadcastsBeforeInactive = clientB.getDeliveredBroadcastCount();
-    await renameProject('Confirmed active client change', 'Confirmed inactive client change');
-    await expect.poll(() => clientB.getDeliveredBroadcastCount()).toBeGreaterThan(broadcastsBeforeInactive);
-    await clientBPage.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-    expect(reads.snapshots).toHaveLength(inactiveStart);
-    await expectSurfaceData(clientBPage, 'finance');
-    await navigate(clientBPage, 'projects');
-    await expect(clientBPage.getByRole('heading', { name: 'Confirmed inactive client change', exact: true })).toBeVisible();
-    expectOnlyProjectReads(inactiveStart);
-
-    // A missing event including a tombstone must be recovered by metadata on reconnect.
-    const reconnectStart = reads.snapshots.length;
-    const deltasBeforeReconnect = reads.deltas.length;
-    clientB.setBroadcastDelivery(false);
-    clientB.setRealtimeAvailable(false);
-    await expect(clientBPage.getByTestId('sync-status-banner')).toContainText('Live updates delayed');
-    await projectCard('Confirmed inactive client change').getByRole('button', { name: 'View details' }).click();
-    await page.getByRole('dialog', { name: 'Confirmed inactive client change' }).getByRole('button', { name: 'Manage project' }).click();
-    page.once('dialog', dialog => dialog.accept());
-    const removed = waitForMutation(page, 'projects');
-    await page.getByRole('button', { name: 'Remove', exact: true }).click();
-    expect((await removed).ok()).toBe(true);
-    await expect(page.getByRole('heading', { name: 'Confirmed inactive client change', exact: true })).toHaveCount(0);
-    await expect(clientBPage.getByRole('heading', { name: 'Confirmed inactive client change', exact: true })).toBeVisible();
-    clientB.setRealtimeAvailable(true);
-    await clientBPage.clock.fastForward(31_000);
-    await expect(clientBPage.getByTestId('sync-status-banner')).toHaveCount(0);
-    await expect(clientBPage.getByRole('heading', { name: 'Confirmed inactive client change', exact: true })).toHaveCount(0);
-    expect(reads.deltas.length).toBeGreaterThan(deltasBeforeReconnect);
-    // Removing a project also removes its overview page; only those changed scopes are read.
-    expectOnlyProjectReads(reconnectStart, ['projectPages', 'projects']);
-    expect(reads.snapshots.every(read => read.collections !== undefined)).toBe(true);
-    expect(reads.snapshots.flatMap(read => read.collections ?? []).filter(key => LIFE_LEGACY.includes(key))).toEqual([]);
-    await clientBPage.screenshot({ path: testInfo.outputPath('two-client-reconnect-confirmed.png') });
-    const evidencePath = testInfo.outputPath('two-client-selective-requests.json');
-    await writeFile(evidencePath, JSON.stringify({
-      environment: 'Two separate browser contexts with shared synthetic HTTPS state and private mocked WebSocket Broadcast; not live-account acceptance.',
-      snapshots: reads.snapshots, deltaSinceVersions: reads.deltas, deliveredBroadcasts: clientB.getDeliveredBroadcastCount(),
-    }, null, 2));
-    await testInfo.attach('two-client-selective-requests', { path: evidencePath, contentType: 'application/json' });
-  } finally {
-    await clientBPage.close();
-  }
-});

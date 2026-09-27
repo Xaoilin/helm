@@ -122,10 +122,10 @@ Provider failures remain visible and leave setup available for an explicit retry
 Slack and Linear are unavailable; there are no simulated connection actions.
 
 Google deployment configuration belongs to the site operator, not an end-user
-Settings field. The Pages build uses `VITE_GOOGLE_OAUTH_CLIENT_ID`; the hosted
-`google-calendar-oauth` function uses the matching `GOOGLE_OAUTH_CLIENT_ID` and
-server-only `GOOGLE_OAUTH_CLIENT_SECRET`, and serves only the calendar service,
-which calls it on the user's behalf. Use the existing protected deployment
+Settings field. The Pages build uses `VITE_GOOGLE_OAUTH_CLIENT_ID`; the calendar
+service holds the matching client and the server-only client secret (the
+`sabah-one-services` production environment) and each user's refresh token,
+encrypted. Use the existing protected deployment
 workflow and authorized website configuration. Missing build configuration
 disables adding another Google account and explains who can restore setup.
 

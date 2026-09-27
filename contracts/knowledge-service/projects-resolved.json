@@ -1,0 +1,14 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/knowledge/v1/projects/resolve"
+  },
+  "status" : 200,
+  "body" : {
+    "projects" : [ {
+      "id" : "agentboard",
+      "catalogKey" : "catalog:agentboard",
+      "name" : "Agent Board"
+    } ]
+  }
+}

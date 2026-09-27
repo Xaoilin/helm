@@ -1,0 +1,16 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/knowledge/v1/projects/pages/notes"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "notes",
+    "projectId" : "agentboard",
+    "title" : "Notes",
+    "content" : "# Notes",
+    "isOverview" : false,
+    "createdAt" : "2026-09-27T00:43:24.419Z",
+    "updatedAt" : "2026-09-27T00:43:24.419Z"
+  }
+}

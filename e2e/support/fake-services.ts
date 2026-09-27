@@ -40,6 +40,7 @@ import {
   activityReceiptSchema,
   type ServiceActivityInsights,
 } from '../../src/services/backend/activityContracts';
+import { createFakeKnowledge, handleKnowledge, type FakeKnowledge, type FakeKnowledgeSeed } from './fake-knowledge-service';
 import { createFakeLife, handleLife, type FakeLife, type FakeLifeSeed } from './fake-life-service';
 
 export const SERVICES_BASE_URL = 'https://services.helm.test';
@@ -63,6 +64,8 @@ export interface FakeServicesOptions {
   calendar?: { accounts?: CalendarAccount[]; sources?: CalendarSource[]; events?: CalendarEvent[] };
   /** What the life admin service holds (inventory, trips, health, jobs), in the app's shapes. */
   life?: FakeLifeSeed;
+  /** What the knowledge service holds (knowledge base, lifestyle, projects), in the app's shapes. */
+  knowledge?: FakeKnowledgeSeed;
   /** Product usage (profile service): insights reads fail with this status, e.g. 400. */
   activity?: { failureStatus?: number };
 }
@@ -100,6 +103,7 @@ export interface FakeServices {
   loseNextWriteResponse?: boolean;
   calendar: FakeCalendar;
   life: FakeLife;
+  knowledge: FakeKnowledge;
   /** Product-usage events the app sent to the profile service, by event ID. */
   activityEvents: Map<string, unknown>;
   activity: { failureStatus?: number };
@@ -165,6 +169,7 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
     loseNextWriteResponse: options.loseNextWriteResponse,
     calendar: toServiceCalendar(options.calendar),
     life: createFakeLife(options.life),
+    knowledge: createFakeKnowledge(options.knowledge),
     activityEvents: new Map(),
     activity: options.activity ?? {},
   };
@@ -188,6 +193,7 @@ export async function installFakeServices(page: Page, services: FakeServices): P
     }
     if (url.pathname === '/api/calendar/health') return reply(route, 200, { status: 'UP', service: 'calendar-service' });
     if (url.pathname === '/api/life/health') return reply(route, 200, { status: 'UP', service: 'life-service' });
+    if (url.pathname === '/api/knowledge/health') return reply(route, 200, { status: 'UP', service: 'knowledge-service' });
     if (url.pathname === '/api/calendar/health/database') {
       return reply(route, 200, { status: 'UP', service: 'calendar-service', database: 'UP' });
     }
@@ -305,6 +311,10 @@ async function handle(
       if (/^\w+ \/api\/life\/v1\//u.test(call)) {
         const [method, path] = call.split(' ');
         return handleLife(route, services.life, method, path, body, now);
+      }
+      if (/^\w+ \/api\/knowledge\/v1\//u.test(call)) {
+        const [method, path] = call.split(' ');
+        return handleKnowledge(route, services.knowledge, method, path, url, body, now);
       }
       return reply(route, 404, { code: 'not_found', message: `No fake for ${call}.` }, apiErrorSchema);
   }

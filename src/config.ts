@@ -34,8 +34,9 @@ export const CALENDAR_BACKEND_URL = import.meta.env.VITE_CALENDAR_API_BASE_URL |
 /** Optional Spring Boot life admin service base URL (inventory, trips, health and jobs). */
 export const LIFE_BACKEND_URL = import.meta.env.VITE_LIFE_API_BASE_URL || '';
 
+/** Optional Spring Boot knowledge service base URL (knowledge base, lifestyle tracker and projects). */
+export const KNOWLEDGE_BACKEND_URL = import.meta.env.VITE_KNOWLEDGE_API_BASE_URL || '';
+
 /** Google OAuth Client ID for Calendar integration. */
 export const GOOGLE_OAUTH_CLIENT_ID = (import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || '') || getSettingsValue('googleOAuthClientId');
 
-/** Hosted Google Calendar OAuth function name (Supabase Edge Function). */
-export const GOOGLE_CALENDAR_OAUTH_FUNCTION = (import.meta.env.VITE_GOOGLE_CALENDAR_OAUTH_FUNCTION || '') || 'google-calendar-oauth';

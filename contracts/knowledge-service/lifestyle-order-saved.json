@@ -1,0 +1,20 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/knowledge/v1/lifestyle/order"
+  },
+  "status" : 200,
+  "body" : {
+    "items" : [ {
+      "id" : "backbiting",
+      "type" : "major-sin",
+      "title" : "Backbiting",
+      "notes" : "Guard the tongue",
+      "status" : "avoiding",
+      "sources" : [ "https://quran.com/49/12" ],
+      "sortOrder" : 0,
+      "createdAt" : "2026-09-27T00:43:24.135Z",
+      "updatedAt" : "2026-09-27T00:43:24.163Z"
+    } ]
+  }
+}

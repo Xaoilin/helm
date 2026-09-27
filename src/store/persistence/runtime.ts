@@ -7,10 +7,6 @@ import {
 } from '../../services/operationalTelemetry';
 import type { OperationalReason } from '../../types/domain';
 import {
-  normalizeProjectRecords,
-  serializeSharedProjects,
-} from '../projectPersistence';
-import {
   fetchHelmAccountSnapshot,
   fetchHelmCollections,
   fetchHelmChangedCollections,
@@ -160,9 +156,8 @@ function assertSharedStoreKeyIsNotDeviceOnly(key: string): void {
   }
 }
 
-async function prepareSharedStoreValue(key: string, value: unknown): Promise<unknown> {
-  if (key !== 'projects') return value;
-  return serializeSharedProjects(normalizeProjectRecords(value, new Date().toISOString()));
+async function prepareSharedStoreValue(_key: string, value: unknown): Promise<unknown> {
+  return value;
 }
 
 function publishSyncSession(patch: Partial<SyncSessionSnapshot>): void {
