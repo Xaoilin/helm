@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { listScheduledPrayerReminders } from '../services/browserPrayerReminder';
+import type { LiveEvent } from '../services/backend/liveContracts';
+import { setPrayerOutcome } from '../services/prayerTracking';
 import { usePrayerTracking } from '../store/contexts/prayer/usePrayerTracking';
 import { usePrayerNotificationPermission } from '../store/contexts/prayer/usePrayerNotificationPermission';
 import { usePrayerReminderBanners } from '../store/contexts/prayer/usePrayerReminderBanners';
@@ -15,13 +16,26 @@ const persistence = vi.hoisted(() => ({
 }));
 vi.mock('../store/persistence', () => persistence);
 
-const shown: { title: string; body?: string }[] = [];
+const live = vi.hoisted(() => ({ listeners: new Set<(event: LiveEvent) => void>() }));
+vi.mock('../services/backend/liveEvents', () => ({
+  subscribeLiveEvents: (listener: (event: LiveEvent) => void) => {
+    live.listeners.add(listener);
+    return () => live.listeners.delete(listener);
+  },
+}));
+
+/** The live-update stream delivering an event, as the gateway does. */
+function emit(event: LiveEvent) {
+  act(() => { for (const listener of [...live.listeners]) listener(event); });
+}
+
+const shown: { title: string; body?: string; tag?: string }[] = [];
 
 class FakeNotification {
   static permission: NotificationPermission = 'granted';
   static requestPermission = vi.fn(async () => FakeNotification.permission);
   constructor(title: string, options?: NotificationOptions) {
-    shown.push({ title, body: options?.body });
+    shown.push({ title, body: options?.body, ...(options?.tag ? { tag: options.tag } : {}) });
   }
 }
 
@@ -55,9 +69,7 @@ function useReminderHarness({ now, reporter, onFired }: {
   });
   const deadline = usePrayerDeadlineReminders({
     enabled: true,
-    reminderGroups: banners.reminderGroups,
-    tracking,
-    commitTracking,
+    getTracking,
     onFired,
     refreshPermission: permission.refresh,
     scheduleTimeZone: PRAYER_TEST_ZONE,
@@ -73,7 +85,7 @@ function useReminderHarness({ now, reporter, onFired }: {
     permission,
     reporter,
   });
-  return { tracking, permission, banners, deadline };
+  return { tracking, commitTracking, permission, banners, deadline };
 }
 
 beforeEach(() => {
@@ -168,82 +180,70 @@ describe('bounded reminder notifications', () => {
 });
 
 describe('deadline reminder notifications', () => {
-  // Dhuhr's deadline (Asr) is 15:20Z, so its reminder fires at 15:05Z.
-  const beforeReminder = new Date('2026-09-26T15:00:00Z');
+  // Dhuhr's deadline (Asr) is 15:20Z; the prayer service sends its reminder at 15:05Z.
+  const reminderTime = new Date('2026-09-26T15:05:00Z');
+  const reminder: LiveEvent = {
+    type: 'prayer.reminder',
+    domain: 'prayer',
+    at: reminderTime.toISOString(),
+    data: {
+      date: PRAYER_TEST_DATE,
+      prayer: 'Dhuhr',
+      deadlineAt: '2026-09-26T15:20:00Z',
+      deadline: 'Asr',
+      timeZone: PRAYER_TEST_ZONE,
+      reminderMinutes: 15,
+    },
+  };
 
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(beforeReminder);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(reminderTime);
   });
 
-  async function flush() {
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-  }
-
-  it('fires a browser notification before the deadline and receipts it so it never repeats', async () => {
+  it('shows the reminder the prayer service sends as one notification shared by every open tab', async () => {
     const reporter = makeReporter();
     const onFired = vi.fn();
-    const { result } = renderHook(props => useReminderHarness(props), {
-      initialProps: { now: beforeReminder, reporter, onFired },
-    });
-    await flush();
-    const scheduled = await listScheduledPrayerReminders();
-    expect(scheduled.map(reminder => reminder.prayerName)).toContain('Dhuhr');
+    renderHook(props => useReminderHarness(props), { initialProps: { now: reminderTime, reporter, onFired } });
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60_000); });
-    await flush();
+    emit(reminder);
 
-    expect(shown).toEqual([
-      { title: 'Dhuhr prayer due soon', body: expect.stringContaining('Pray Dhuhr before Asr') },
-    ]);
-    expect(onFired).toHaveBeenCalledTimes(1);
-    const receipts = Object.values(result.current.tracking.reminderReceipts);
-    expect(receipts).toEqual([expect.objectContaining({ prayerName: 'Dhuhr', notifiedAt: expect.any(String) })]);
-    expect((await listScheduledPrayerReminders()).map(reminder => reminder.prayerName)).not.toContain('Dhuhr');
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(30 * 60_000); });
-    expect(shown.filter(notification => notification.title.startsWith('Dhuhr'))).toHaveLength(1);
+    await waitFor(() => expect(shown.filter(notification => notification.title === 'Dhuhr prayer due soon')).toEqual([
+      { title: 'Dhuhr prayer due soon', body: expect.stringContaining('Pray Dhuhr before Asr'), tag: expect.any(String) },
+    ]));
+    expect(onFired).toHaveBeenCalledOnce();
+    expect(reporter.fail).not.toHaveBeenCalled();
   });
 
-  it('still receipts the reminder without permission; the in-app banner shows it instead', async () => {
-    FakeNotification.permission = 'denied';
+  it('shows nothing for a prayer recorded meanwhile, or once its deadline has passed', async () => {
+    const { result } = renderHook(props => useReminderHarness(props), {
+      initialProps: { now: reminderTime, reporter: makeReporter(), onFired: vi.fn() },
+    });
+    act(() => result.current.commitTracking(current => setPrayerOutcome(current, {
+      date: PRAYER_TEST_DATE,
+      prayerName: 'Dhuhr',
+      status: 'on_time',
+      recordedAt: reminderTime,
+      source: 'dashboard',
+    })));
+
+    emit(reminder);
+    vi.setSystemTime(new Date('2026-09-26T15:21:00Z'));
+    emit({ ...reminder, data: { ...(reminder.data as object), prayer: 'Asr' } });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(shown.some(notification => notification.title.includes('due soon'))).toBe(false);
+  });
+
+  it('ignores other live events and reminders in an unexpected shape', async () => {
     const reporter = makeReporter();
-    const { result, rerender } = renderHook(props => useReminderHarness(props), {
-      initialProps: { now: beforeReminder, reporter, onFired: vi.fn() },
-    });
-    await flush();
+    renderHook(props => useReminderHarness(props), { initialProps: { now: reminderTime, reporter, onFired: vi.fn() } });
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60_000); });
-    await flush();
-    expect(shown).toHaveLength(0);
-    expect(Object.values(result.current.tracking.reminderReceipts)).toHaveLength(1);
+    emit({ ...reminder, type: 'tasks.save-task', domain: 'tasks' });
+    emit({ ...reminder, data: { prayer: 'Dhuhr' } });
+    await act(async () => { await Promise.resolve(); });
 
-    rerender({ now: new Date(), reporter, onFired: vi.fn() });
-    expect(result.current.banners.activeReminder?.prayerNames).toEqual(['Dhuhr']);
-  });
-
-  it('cancels the pending reminder of a prayer that is settled', async () => {
-    const { result } = renderHook(props => useReminderHarness(props), {
-      initialProps: { now: beforeReminder, reporter: makeReporter(), onFired: vi.fn() },
-    });
-    await flush();
-
-    act(() => result.current.deadline.cancelForPrayer(PRAYER_TEST_DATE, 'Dhuhr'));
-    await flush();
-    expect((await listScheduledPrayerReminders()).map(reminder => reminder.prayerName)).not.toContain('Dhuhr');
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000); });
-    expect(shown).toHaveLength(0);
-  });
-
-  it('schedules a test reminder only with permission', async () => {
-    const { result } = renderHook(props => useReminderHarness(props), {
-      initialProps: { now: beforeReminder, reporter: makeReporter(), onFired: vi.fn() },
-    });
-    await flush();
-
-    await expect(result.current.deadline.testReminder('Isha')).resolves.toBe(true);
-    FakeNotification.permission = 'denied';
-    await expect(result.current.deadline.testReminder('Isha')).resolves.toBe(false);
+    expect(shown.some(notification => notification.title.includes('due soon'))).toBe(false);
+    expect(reporter.noteError).toHaveBeenCalledOnce();
   });
 });

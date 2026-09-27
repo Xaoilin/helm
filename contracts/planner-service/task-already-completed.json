@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/planner/v1/tasks/water/complete"
+  },
+  "status" : 409,
+  "body" : {
+    "code" : "task_already_completed",
+    "message" : "This task is already done."
+  }
+}

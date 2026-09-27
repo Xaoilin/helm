@@ -1,14 +1,29 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+/**
+ * XP, level, streaks and badges, owned by the planner service: the app only shows them. Completing a task,
+ * a prayer reward or the daily reset answers with the new profile, which is shown at once; a change made in
+ * another tab or device arrives as a live update.
+ */
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import type { GamificationProfile } from '../../types/domain';
-import { loadStore, saveStore } from '../persistence';
-import { DEFAULT_PROFILE, backfillPrayerLog as backfillPrayerLogFn } from '../../services/gamification';
-import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
+import { DEFAULT_PROFILE } from '../../services/gamification';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
+import {
+  getGamification,
+  isPlannerServiceEnabled,
+  resetGamification,
+} from '../../services/backend/plannerServiceApi';
+import { useServiceLoad } from './useServiceLoad';
 
 export interface GamificationContextValue {
   gamification: GamificationProfile;
   loaded: boolean;
-  updateGamification: (profile: GamificationProfile) => void;
-  backfillPrayerLog: (taskId: string, dateStr: string, completed: boolean) => void;
+  /** Why progress may be out of date; null while it is current. */
+  error: string | null;
+  reload: () => Promise<void>;
+  /** Shows the profile the planner service answered with. */
+  applyProfile: (profile: GamificationProfile) => void;
+  /** Starts progress again from nothing (daily momentum is kept). */
+  resetProgress: () => Promise<void>;
 }
 
 export const GamificationCtx = createContext<GamificationContextValue | null>(null);
@@ -21,34 +36,27 @@ export function useGamificationContext(): GamificationContextValue {
 
 export function GamificationProvider({ children }: { children: ReactNode }) {
   const [gamification, setGamification] = useState<GamificationProfile>(DEFAULT_PROFILE);
-  const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const data = await loadStore<GamificationProfile>('gamification');
-      setGamification(data ?? DEFAULT_PROFILE);
-      setLoaded(true);
-    })();
+  const load = useCallback(async () => {
+    setGamification(await getGamification());
   }, []);
+  const { loaded, error, reload, reportFailure } = useServiceLoad('Progress', isPlannerServiceEnabled(), load,
+    LIVE_DOMAINS.gamification);
 
-  useRemoteStoreRefresh(['gamification'], async () => {
-    const data = await loadStore<GamificationProfile>('gamification');
-    setGamification(data ?? DEFAULT_PROFILE);
-  });
+  const applyProfile = useCallback((profile: GamificationProfile) => setGamification(profile), []);
 
-  useEffect(() => { if (loaded) saveStore('gamification', gamification); }, [gamification, loaded]);
+  const resetProgress = useCallback(async () => {
+    try {
+      setGamification(await resetGamification());
+    } catch (resetError) {
+      reportFailure(resetError);
+      throw resetError;
+    }
+  }, [reportFailure]);
 
-  const updateGamification = useCallback((profile: GamificationProfile) => {
-    setGamification(profile);
-  }, []);
+  const value = useMemo<GamificationContextValue>(() => ({
+    gamification, loaded, error, reload, applyProfile, resetProgress,
+  }), [gamification, loaded, error, reload, applyProfile, resetProgress]);
 
-  const backfillPrayerLog = useCallback((taskId: string, dateStr: string, completed: boolean) => {
-    setGamification(prev => backfillPrayerLogFn(prev, taskId, dateStr, completed));
-  }, []);
-
-  return (
-    <GamificationCtx.Provider value={{ gamification, loaded, updateGamification, backfillPrayerLog }}>
-      {children}
-    </GamificationCtx.Provider>
-  );
+  return <GamificationCtx.Provider value={value}>{children}</GamificationCtx.Provider>;
 }

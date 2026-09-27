@@ -27,6 +27,7 @@ import {
 } from '../../services/backend/knowledgeServiceApi';
 import type { ServiceProjectCatalogue } from '../../services/backend/knowledgeContracts';
 import { getProjectCatalogueSection } from '../../services/projectModel';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
 import { useServiceLoad } from './useServiceLoad';
 
 export interface ProjectContextValue {
@@ -107,7 +108,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   }, [publishPages, publishProjects]);
 
   const load = useCallback(async () => publishCatalogue(await getProjectCatalogue()), [publishCatalogue]);
-  const { loaded, error, reload, reportFailure } = useServiceLoad('Projects', isKnowledgeServiceEnabled(), load);
+  const { loaded, error, reload, reportFailure } = useServiceLoad('Projects', isKnowledgeServiceEnabled(), load, LIVE_DOMAINS.projects);
 
   /** Shows a change at once; the service's catalogue replaces it when the write is confirmed. */
   const change = useCallback((id: string, update: (project: Project) => Project,

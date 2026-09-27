@@ -32,7 +32,7 @@ it('checks idle visible accounts every ten minutes while preserving prompt coale
   const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
   const record = {
-    userId: 'polling-account', collection: 'tasks', recordId: 'item-1',
+    userId: 'polling-account', collection: 'transactions', recordId: 'item-1',
     payload: { id: 'item-1', stage: 'searching' }, position: 0, revision: 1, accountVersion: 7,
     createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z', deletedAt: null,
   };
@@ -65,7 +65,7 @@ it('checks idle visible accounts every ten minutes while preserving prompt coale
   await vi.advanceTimersByTimeAsync(600_000);
   expect(database.probeHelmAccountVersion).toHaveBeenCalledTimes(2);
   expect(database.fetchHelmAccountSnapshot).not.toHaveBeenCalled();
-  expect(await loadStore('tasks')).toEqual([{ id: 'item-1', stage: 'searching' }]);
+  expect(await loadStore('transactions')).toEqual([{ id: 'item-1', stage: 'searching' }]);
 
   database.probeHelmAccountVersion.mockClear();
   visible.mockReturnValue('hidden');
@@ -86,15 +86,15 @@ it('checks idle visible accounts every ten minutes while preserving prompt coale
   database.probeHelmAccountVersion.mockClear();
   database.probeHelmAccountVersion.mockResolvedValue(8);
   database.fetchHelmCollections.mockResolvedValue([{ ...record, payload: { id: 'item-1', stage: 'interviewing' }, accountVersion: 8 }]);
-  broadcast({ accountVersion: 8, changes: [{ collection: 'tasks' }] });
-  broadcast({ accountVersion: 8, changes: [{ collection: 'tasks' }] });
+  broadcast({ accountVersion: 8, changes: [{ collection: 'transactions' }] });
+  broadcast({ accountVersion: 8, changes: [{ collection: 'transactions' }] });
   document.dispatchEvent(new Event('visibilitychange'));
   window.dispatchEvent(new Event('online'));
   await vi.advanceTimersByTimeAsync(0);
-  expect(database.fetchHelmCollections).toHaveBeenCalledExactlyOnceWith(['tasks']);
+  expect(database.fetchHelmCollections).toHaveBeenCalledExactlyOnceWith(['transactions']);
   expect(database.probeHelmAccountVersion).toHaveBeenCalledTimes(1);
   expect(database.fetchHelmAccountSnapshot).not.toHaveBeenCalled();
-  expect(await loadStore('tasks')).toEqual([{ id: 'item-1', stage: 'interviewing' }]);
+  expect(await loadStore('transactions')).toEqual([{ id: 'item-1', stage: 'interviewing' }]);
   expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', accountVersion: 8 });
 
   database.probeHelmAccountVersion.mockClear();
@@ -103,5 +103,5 @@ it('checks idle visible accounts every ten minutes while preserving prompt coale
   resetDatabasePersistence();
   await vi.advanceTimersByTimeAsync(600_000);
   expect(database.probeHelmAccountVersion).not.toHaveBeenCalled();
-  expect(await loadStore('tasks')).toBeNull();
+  expect(await loadStore('transactions')).toBeNull();
 });

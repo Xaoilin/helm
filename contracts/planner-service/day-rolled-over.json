@@ -1,0 +1,99 @@
+{
+  "request" : {
+    "method" : "POST",
+    "path" : "/api/planner/v1/day/rollover"
+  },
+  "status" : 200,
+  "body" : {
+    "tasks" : [
+      {
+        "id" : "fajr",
+        "title" : "Fajr Prayer",
+        "description" : "",
+        "completed" : false,
+        "completedAt" : null,
+        "completedLocalDate" : null,
+        "completionTimeZone" : null,
+        "priority" : "high",
+        "category" : "prayer",
+        "dueDate" : null,
+        "recurring" : null,
+        "prayerName" : null,
+        "goalTag" : null,
+        "emoji" : null,
+        "projectId" : null,
+        "workflowState" : null,
+        "blockedReason" : null,
+        "boardOrder" : null,
+        "createdAt" : "2026-09-27T06:00:00Z",
+        "updatedAt" : "2026-09-27T06:00:00Z"
+      },
+      {
+        "id" : "rent",
+        "title" : "Pay rent",
+        "description" : "",
+        "completed" : false,
+        "completedAt" : null,
+        "completedLocalDate" : null,
+        "completionTimeZone" : null,
+        "priority" : "medium",
+        "category" : "task",
+        "dueDate" : null,
+        "recurring" : null,
+        "prayerName" : null,
+        "goalTag" : null,
+        "emoji" : null,
+        "projectId" : null,
+        "workflowState" : null,
+        "blockedReason" : null,
+        "boardOrder" : null,
+        "createdAt" : "2026-09-27T06:00:00Z",
+        "updatedAt" : "2026-09-27T06:00:00Z"
+      },
+      {
+        "id" : "water",
+        "title" : "Drink 1L water",
+        "description" : "",
+        "completed" : true,
+        "completedAt" : "2026-09-27T06:00:00Z",
+        "completedLocalDate" : "2026-09-27",
+        "completionTimeZone" : "Europe/London",
+        "priority" : "high",
+        "category" : "daily",
+        "dueDate" : null,
+        "recurring" : {
+          "frequency" : "daily",
+          "lastReset" : "2026-09-27"
+        },
+        "prayerName" : null,
+        "goalTag" : null,
+        "emoji" : "💧",
+        "projectId" : null,
+        "workflowState" : null,
+        "blockedReason" : null,
+        "boardOrder" : null,
+        "createdAt" : "2026-09-27T06:00:00Z",
+        "updatedAt" : "2026-09-27T06:00:00Z"
+      }
+    ],
+    "profile" : {
+      "totalXp" : 25,
+      "level" : 1,
+      "title" : "Beginner",
+      "currentStreak" : 1,
+      "longestStreak" : 1,
+      "lastCompletionDate" : "2026-09-27",
+      "totalTasksCompleted" : 1,
+      "badges" : [
+        "first-blood",
+        "early-bird",
+        "habit-starter",
+        "high-priority",
+        "weekend-warrior"
+      ],
+      "habitTallies" : {
+        "water" : 1
+      }
+    }
+  }
+}

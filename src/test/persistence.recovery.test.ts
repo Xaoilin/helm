@@ -22,7 +22,7 @@ import {
 } from '../store/persistence';
 
 const record = {
-  userId: 'recovery-account', collection: 'tasks', recordId: 'item-1',
+  userId: 'recovery-account', collection: 'transactions', recordId: 'item-1',
   payload: { id: 'item-1', stage: 'searching' }, position: 0, revision: 1, accountVersion: 7,
   createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z', deletedAt: null,
 };
@@ -62,8 +62,8 @@ it('bounds a prolonged outage, suppresses hidden and duplicate work, and resumes
   expect(database.probeHelmAccountVersion).toHaveBeenCalledTimes(6);
   expect(database.fetchHelmAccountSnapshot).not.toHaveBeenCalled();
   expect(getSyncSessionSnapshot()).toMatchObject({ readOnly: true, hasUsableSnapshot: true });
-  expect(await loadStore('tasks')).toEqual([{ id: 'item-1', stage: 'searching' }]);
-  broadcast({ accountVersion: 8, changes: [{ collection: 'tasks' }] });
+  expect(await loadStore('transactions')).toEqual([{ id: 'item-1', stage: 'searching' }]);
+  broadcast({ accountVersion: 8, changes: [{ collection: 'transactions' }] });
   await bootstrapDatabasePersistence(); // Repeated same-account auth notification.
   await vi.advanceTimersByTimeAsync(60 * 60_000);
   expect(database.probeHelmAccountVersion).toHaveBeenCalledTimes(6);
@@ -102,12 +102,12 @@ it('bounds a prolonged outage, suppresses hidden and duplicate work, and resumes
   resolveProbe(8);
   await explicit;
   expect(database.fetchHelmAccountSnapshot).toHaveBeenCalledTimes(1);
-  expect(await loadStore('tasks')).toEqual([{ id: 'item-1', stage: 'interviewing' }]);
+  expect(await loadStore('transactions')).toEqual([{ id: 'item-1', stage: 'interviewing' }]);
   expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', readOnly: false, accountVersion: 8 });
 
   database.probeHelmAccountVersion.mockRejectedValue({ status: 401, message: 'invalid authorization' });
   await refreshDatabasePersistence();
-  await vi.waitFor(async () => expect(await loadStore('tasks')).toBeNull());
+  await vi.waitFor(async () => expect(await loadStore('transactions')).toBeNull());
   expect(getSyncSessionSnapshot()).toMatchObject({ status: 'blocked', hasUsableSnapshot: false });
   const callsAtInvalidation = database.probeHelmAccountVersion.mock.calls.length;
   await vi.advanceTimersByTimeAsync(120_000);
@@ -161,10 +161,10 @@ it('preserves a newer Broadcast invalidation received during an active recovery 
   await vi.advanceTimersByTimeAsync(1_000);
   database.probeHelmAccountVersion.mockResolvedValue(8);
   database.fetchHelmCollections.mockResolvedValue([{ ...record, accountVersion: 8, payload: { id: 'item-1', stage: 'interviewing' } }]);
-  broadcast({ accountVersion: 8, changes: [{ collection: 'tasks' }] });
+  broadcast({ accountVersion: 8, changes: [{ collection: 'transactions' }] });
   resolveProbe(7); // This response was sampled before the Broadcast arrived.
   await vi.advanceTimersByTimeAsync(0);
-  expect(await loadStore('tasks')).toEqual([{ id: 'item-1', stage: 'interviewing' }]);
+  expect(await loadStore('transactions')).toEqual([{ id: 'item-1', stage: 'interviewing' }]);
   expect(getSyncSessionSnapshot()).toMatchObject({ status: 'ready', accountVersion: 8 });
   expect(database.fetchHelmAccountSnapshot).toHaveBeenCalledTimes(1);
 });

@@ -1,0 +1,13 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/live/v1/events"
+  },
+  "status" : 200,
+  "body" : {
+    "type" : "lifestyle.save-item",
+    "domain" : "lifestyle",
+    "at" : "2026-09-27T02:38:26.055911Z",
+    "data" : null
+  }
+}

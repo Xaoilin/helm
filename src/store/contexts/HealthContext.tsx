@@ -13,6 +13,7 @@ import {
   withoutKeys,
   type FastFoodEntryInput,
 } from '../../services/backend/lifeServiceApi';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
 import { useServiceLoad } from './useServiceLoad';
 
 export interface HealthContextValue {
@@ -40,7 +41,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     setEntries(next);
   }, []);
   const load = useCallback(async () => publish(await getFastFoodEntries()), [publish]);
-  const { loaded, error, reload, reportFailure } = useServiceLoad('Health', isLifeServiceEnabled(), load);
+  const { loaded, error, reload, reportFailure } = useServiceLoad('Health', isLifeServiceEnabled(), load, LIVE_DOMAINS.health);
 
   const confirm = useCallback((saved: FastFoodLogEntry) => {
     publish(entriesRef.current.map(entry => (entry.id === saved.id ? saved : entry)));

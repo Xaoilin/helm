@@ -1,4 +1,4 @@
-# Prayer Tracking And Page-Open Reminders
+# Prayer Tracking And Reminders
 
 ## Scope
 
@@ -36,7 +36,7 @@ The raw validated schedule timezone is the authoritative prayer clock. Night Com
 
 ## State And Mutations
 
-Canonical types live in `src/types/domain.ts`. Pure normalization, deadline, outcome, reminder-key, and percentage logic lives in `src/services/prayerTracking.ts`. Cohesive schedule, reminder, and completion/undo transitions live in `prayerSchedulePolicy.ts`, `prayerReminderPolicy.ts`, and `prayerCompletionPolicy.ts`. `PrayerProvider` composes one hook per side effect from `src/store/contexts/prayer/`: `usePrayerTracking` (state), `usePrayerSchedule` (timetable refresh), `usePrayerClock` (15-second tick, date rollover, focus and visibility resume), `usePrayerPersistence` (Supabase load, save and remote refresh, prayer-service sync, and preference mirror), `usePrayerReminderBanners`, `usePrayerDeadlineReminders` and `usePrayerBoundedReminderNotifications` (in-app banners, browser timers, and Web Notifications with receipts), `usePrayerCompletionWorkflow` (the cross-store completion transaction), `usePrayerRewardRecovery`, `usePrayerCompletionPrompt` (completion dialog), and `usePrayerAdhan`. Diagnostics are built by `src/services/prayerDiagnostics.ts`.
+Canonical types live in `src/types/domain.ts`. Pure normalization, deadline, outcome, reminder-key, and percentage logic lives in `src/services/prayerTracking.ts`. Cohesive schedule, reminder, and completion/undo transitions live in `prayerSchedulePolicy.ts`, `prayerReminderPolicy.ts`, and `prayerCompletionPolicy.ts`. `PrayerProvider` composes one hook per side effect from `src/store/contexts/prayer/`: `usePrayerTracking` (state), `usePrayerSchedule` (timetable refresh), `usePrayerClock` (15-second tick, date rollover, focus and visibility resume), `usePrayerPersistence` (Supabase load, save and remote refresh, prayer-service sync, and preference mirror), `usePrayerReminderBanners` (in-app banners), `usePrayerDeadlineReminders` (the prayer service's deadline reminders from the live-update stream, shown as Web Notifications), `usePrayerBoundedReminderNotifications` (opportunity and Learn/Move prompts with receipts), `usePrayerCompletionWorkflow` (outcome and today's habit), `usePrayerRewards` (the planner's prayer XP once the prayer service confirmed an outcome), `usePrayerCompletionPrompt` (completion dialog), and `usePrayerAdhan`. Diagnostics are built by `src/services/prayerDiagnostics.ts`.
 
 Records use `<local date>::<PrayerName>` keys so deletion or recreation of a prayer task cannot erase history. The aggregate is decomposed into account-owned metadata, outcome, eligibility, and reminder-receipt records and changed through the transactional Sabah One mutation RPC.
 
@@ -67,7 +67,9 @@ Eligible prayers produce one global warning per prayer across every Sabah One su
 
 The same `PrayerProvider` builds the prayer-relative Learn and Move plan; there is no second scheduler. Learn defaults to Dhuhr, Maghrib, and Isha anchors, while Move defaults to Asr, Maghrib, and Isha. Account-owned preferences can disable a pillar or edit its allowed anchors without hiding the Dashboard pillar. Simultaneous Learn/Move prompts coalesce, each logical pillar/anchor keeps its own stable receipt, Level 1 completion cancels future prompts, and schedule-zone 22:00-08:00 quiet hours suppress non-prayer prompts only. Each logical reminder has a hard one-snooze bound.
 
-The browser page owns the in-page reminder timer. When the user grants permission, Web Notifications provide an additional browser notification while the page remains open. If permission is denied, unavailable, or delivery cannot be observed, the reminder stays visible in-app with a Settings repair action. Closing the page ends reminder observation; Sabah One does not promise background delivery after the page is closed.
+The prayer service decides when a deadline reminder is due: every 30 seconds it finds prayers not yet recorded whose on-time window closes within the user's reminder minutes, records each reminder once (`prayer.reminder`) and sends it as a `prayer.reminder` event over the live-update stream. Open tabs show it as a Web Notification when permitted (tabs share one: the notification tag names the reminder); if permission is denied or unavailable, the in-app banner shows it with a Settings repair action. Reminders reach open tabs only; Sabah One does not promise delivery when no tab is open.
+
+Prayer XP comes from the planner service: after the prayer service confirms an outcome change, the app asks the planner to bring prayer rewards in line; it rewards each recorded prayer exactly once (and takes back a reward whose outcome was undone), and the completion celebration shows what it earned.
 
 Browser notification delivery is deduplicated by local prayer date, canonical prayer, and deadline. Permission is requested only after an explicit user action. `prefers-reduced-motion` replaces the gentle pulse with a static high-contrast warning.
 

@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/planner/v1/momentum/learn"
+  },
+  "status" : 409,
+  "body" : {
+    "code" : "momentum_changed",
+    "message" : "Daily momentum changed since it was shown; reload and try again."
+  }
+}

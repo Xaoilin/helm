@@ -86,25 +86,27 @@ export default function PrayerCompletionDialog() {
     : 'The current schedule is unavailable, so choose the outcome you know is correct.';
 
   const confirmCompletion = (status: PrayerCompletionStatus) => {
-    const result = prayer.confirmPrayerCompletion(status);
-    if (!result) return;
-
-    const levelUp = result.gamificationResult?.leveledUp
-      ? result.gamificationResult
-      : null;
-    celebrate({
-      tone: levelUp ? 'achievement' : 'prayer',
-      eyebrow: levelUp
-        ? 'Prayer · Overall level up'
-        : status === 'on_time'
-          ? 'Prayer kept on time'
-          : 'Prayer completed',
-      title: levelUp ? `Level ${levelUp.newLevel} reached` : `${result.prayerName} complete`,
-      message: levelUp
-        ? `${result.prayerName} moved you forward · ${levelUp.newTitle}`
-        : status === 'on_time'
-          ? `A meaningful daily win${result.xpEarned > 0 ? ` · +${result.xpEarned} XP` : '.'}`
-          : `Recorded with honesty${result.xpEarned > 0 ? ` · +${result.xpEarned} XP` : '.'}`,
+    const rewarded = prayer.confirmPrayerCompletion(status);
+    if (!rewarded) return;
+    // The celebration shows the XP the planner granted once it has rewarded the prayer.
+    void rewarded.then(result => {
+      const levelUp = result.gamificationResult?.leveledUp
+        ? result.gamificationResult
+        : null;
+      celebrate({
+        tone: levelUp ? 'achievement' : 'prayer',
+        eyebrow: levelUp
+          ? 'Prayer · Overall level up'
+          : status === 'on_time'
+            ? 'Prayer kept on time'
+            : 'Prayer completed',
+        title: levelUp ? `Level ${levelUp.newLevel} reached` : `${result.prayerName} complete`,
+        message: levelUp
+          ? `${result.prayerName} moved you forward · ${levelUp.newTitle}`
+          : status === 'on_time'
+            ? `A meaningful daily win${result.xpEarned > 0 ? ` · +${result.xpEarned} XP` : '.'}`
+            : `Recorded with honesty${result.xpEarned > 0 ? ` · +${result.xpEarned} XP` : '.'}`,
+      });
     });
   };
 

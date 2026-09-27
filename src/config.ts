@@ -37,6 +37,27 @@ export const LIFE_BACKEND_URL = import.meta.env.VITE_LIFE_API_BASE_URL || '';
 /** Optional Spring Boot knowledge service base URL (knowledge base, lifestyle tracker and projects). */
 export const KNOWLEDGE_BACKEND_URL = import.meta.env.VITE_KNOWLEDGE_API_BASE_URL || '';
 
+/** Optional Spring Boot planner service base URL (tasks, habits, goals, XP, daily momentum and the clock). */
+export const PLANNER_BACKEND_URL = import.meta.env.VITE_PLANNER_API_BASE_URL || '';
+
+/**
+ * Where the live-update gateway runs: on every server that hosts a service, each streaming its own
+ * services' changes. One stream per distinct origin of the configured service URLs.
+ */
+export function liveGatewayOrigins(): string[] {
+  const urls = [PRAYER_BACKEND_URL, PROFILE_BACKEND_URL, CALENDAR_BACKEND_URL, LIFE_BACKEND_URL,
+    KNOWLEDGE_BACKEND_URL, PLANNER_BACKEND_URL];
+  const origins = new Set<string>();
+  for (const url of urls) {
+    try {
+      if (url.trim()) origins.add(new URL(url.trim()).origin);
+    } catch {
+      // A malformed URL has no gateway to reach; its service reports its own error.
+    }
+  }
+  return [...origins];
+}
+
 /** Google OAuth Client ID for Calendar integration. */
 export const GOOGLE_OAUTH_CLIENT_ID = (import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || '') || getSettingsValue('googleOAuthClientId');
 

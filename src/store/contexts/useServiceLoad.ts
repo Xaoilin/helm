@@ -1,10 +1,12 @@
 /**
  * Loading one domain from its Spring service: load on mount, keep the last confirmed data on screen
  * when a load fails, retry by itself a few times, then whenever the page is shown again. Writes report
- * failures through `reportFailure`, which reloads the confirmed state from the service.
+ * failures through `reportFailure`, which reloads the confirmed state from the service. A change another
+ * tab or device saves in one of `liveDomains` reloads it too (the live-update stream).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { logWarn } from '../../services/logger';
+import { useLiveRefresh } from './useLiveRefresh';
 
 const LOAD_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 60_000];
 
@@ -21,7 +23,12 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function useServiceLoad(source: string, enabled: boolean, load: () => Promise<void>): ServiceLoad {
+export function useServiceLoad(
+  source: string,
+  enabled: boolean,
+  load: () => Promise<void>,
+  liveDomains: readonly string[] = [],
+): ServiceLoad {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [failures, setFailures] = useState(0);
@@ -54,6 +61,7 @@ export function useServiceLoad(source: string, enabled: boolean, load: () => Pro
   }, [source]);
 
   useEffect(() => { void reload(); }, [reload]);
+  useLiveRefresh(enabled ? liveDomains : [], reload);
 
   useEffect(() => {
     if (failures === 0 || !enabled) return undefined;

@@ -1,0 +1,13 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/planner/v1/clock/timers/t1"
+  },
+  "status" : 200,
+  "body" : {
+    "stopwatches" : [],
+    "timers" : [],
+    "nextStopwatchNumber" : 2,
+    "nextTimerNumber" : 2
+  }
+}

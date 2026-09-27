@@ -188,8 +188,9 @@ export async function getPrayerReminderPermission(): Promise<PrayerReminderPermi
   return window.Notification.permission === 'granted' ? 'granted' : 'not_granted';
 }
 
+/** Shows a notification now; tabs showing one with the same `tag` show it once. */
 export async function sendPrayerNotification(
-  notification: { title: string; body: string },
+  notification: { title: string; body: string; tag?: string },
 ): Promise<boolean> {
   if (
     typeof window === 'undefined'
@@ -199,7 +200,10 @@ export async function sendPrayerNotification(
     return false;
   }
   try {
-    new window.Notification(notification.title, { body: notification.body });
+    new window.Notification(notification.title, {
+      body: notification.body,
+      ...(notification.tag ? { tag: notification.tag } : {}),
+    });
     return true;
   } catch {
     return false;

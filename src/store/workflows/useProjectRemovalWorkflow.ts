@@ -2,23 +2,13 @@ import { useCallback } from 'react';
 import { useProjectContext } from '../contexts/ProjectContext';
 import { useTaskContext } from '../contexts/TaskContext';
 
+/** Removes a project and takes its tasks off its board; the planner service works out which from what it stores. */
 export function useProjectRemovalWorkflow(): (projectId: string) => void {
   const projects = useProjectContext();
   const tasks = useTaskContext();
 
   return useCallback((projectId: string) => {
     projects.removeProject(projectId);
-    tasks.setTasks(current => current.map(task => (
-      task.projectId === projectId
-        ? {
-          ...task,
-          projectId: undefined,
-          workflowState: undefined,
-          blockedReason: undefined,
-          boardOrder: undefined,
-          updatedAt: new Date().toISOString(),
-        }
-        : task
-    )));
+    tasks.unlinkProject(projectId);
   }, [projects, tasks]);
 }

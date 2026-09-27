@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PrayerCompletionDialog from '../components/prayer/PrayerCompletionDialog';
 
@@ -28,26 +28,27 @@ vi.mock('../store/contexts/PrayerContext', () => ({
 describe('prayer completion celebration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.prayer.confirmPrayerCompletion.mockReturnValue({
+    // Resolves once the planner has rewarded the recorded prayer.
+    mocks.prayer.confirmPrayerCompletion.mockReturnValue(Promise.resolve({
       prayerName: 'Dhuhr',
       prayerDate: '2026-08-29',
       status: 'on_time',
       xpEarned: 15,
       undo: {},
-    });
+    }));
   });
 
-  it('turns a confirmed prayer click into a dignified visible achievement', () => {
+  it('turns a confirmed prayer click into a dignified visible achievement with the planner\'s XP', async () => {
     render(<PrayerCompletionDialog />);
 
     fireEvent.click(screen.getByRole('button', { name: /On time/i }));
 
     expect(mocks.prayer.confirmPrayerCompletion).toHaveBeenCalledWith('on_time');
-    expect(mocks.celebration.celebrate).toHaveBeenCalledWith({
+    await waitFor(() => expect(mocks.celebration.celebrate).toHaveBeenCalledWith({
       tone: 'prayer',
       eyebrow: 'Prayer kept on time',
       title: 'Dhuhr complete',
       message: 'A meaningful daily win · +15 XP',
-    });
+    }));
   });
 });

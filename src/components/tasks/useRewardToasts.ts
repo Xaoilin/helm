@@ -30,7 +30,7 @@ export function useRewardToasts() {
       setTimeout(() => setShowLevelFlash(false), LEVEL_FLASH_MS);
     }
     if (result?.isStreakMilestone) {
-      addToast({ type: 'streak', text: `${result.streakUpdate.currentStreak}-day streak!`, emoji: '\u{1F525}' });
+      addToast({ type: 'streak', text: `${result.streakCurrent}-day streak!`, emoji: '\u{1F525}' });
     }
     for (const badge of result?.newBadges || []) {
       addToast({ type: 'badge', text: `${badge.name} unlocked!`, emoji: badge.emoji });

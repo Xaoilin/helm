@@ -11,7 +11,6 @@ import {
   snoozePrayerReminderGroup,
   type PrayerReminderGroup,
 } from '../services/prayerReminderPolicy';
-import { countPrayerRewardKnowledge } from '../services/prayerCompletionPolicy';
 import {
   buildPrayerDiagnostics,
   describeError,
@@ -129,10 +128,11 @@ describe('selectBoundedReminderPlans', () => {
     reminderMinutes: 15,
   };
 
-  it('plans an opportunity and a deadline reminder for each open prayer', () => {
+  it('plans an opportunity reminder for each open prayer; deadline reminders come from the prayer service', () => {
     const plans = selectBoundedReminderPlans(input);
     expect(plans.filter(plan => plan.prayerNames.includes('Dhuhr')).map(plan => plan.kind))
-      .toEqual(['prayer-opportunity', 'prayer-deadline']);
+      .toEqual(['prayer-opportunity']);
+    expect(plans.some(plan => plan.kind === 'prayer-deadline')).toBe(false);
   });
 
   it('skips prayers that already have an outcome', () => {
@@ -156,26 +156,6 @@ describe('selectBoundedReminderPlans', () => {
   it('keeps only momentum reminders when deadline reminders are off', () => {
     const plans = selectBoundedReminderPlans({ ...input, reminderEnabled: false });
     expect(plans.every(plan => plan.kind === 'momentum')).toBe(true);
-  });
-});
-
-describe('countPrayerRewardKnowledge', () => {
-  it('counts entries, topics and lifestyle progress', () => {
-    expect(countPrayerRewardKnowledge({
-      knowledgeEntries: [{}, {}],
-      knowledgeTopics: [{}],
-      lifestyleItems: [
-        { type: 'haram', status: 'mastered' },
-        { type: 'haram', status: 'struggling' },
-        { type: 'halal', status: 'consistent' },
-      ] as never,
-    })).toEqual({
-      knowledgeEntries: 2,
-      knowledgeTopics: 1,
-      lifestyleHaramMastered: 1,
-      lifestyleHalalConsistent: 1,
-      lifestyleTotal: 3,
-    });
   });
 });
 
