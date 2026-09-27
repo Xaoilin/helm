@@ -162,11 +162,12 @@ export const STORAGE_KEYS = {
 export const PRAYER_REMINDERS = {
   DEFAULT_MINUTES: 15,
   OPTIONS_MINUTES: [5, 10, 15, 30] as const,
+  /** The prayer service's snooze length; the app only uses it to offer the snooze button. */
   SNOOZE_MINUTES: 5,
-  SNOOZE_CUTOFF_MINUTES: 5,
   RUNTIME_TICK_MS: 15_000,
   TEST_DELAY_MS: 5_000,
-  TEST_DEADLINE_MS: 60_000,
+  /** Momentum changes arriving together send the prayer service one reminder-preference update. */
+  MOMENTUM_SYNC_DEBOUNCE_MS: 1_000,
 } as const;
 
 // ── Environment ──

@@ -26,9 +26,7 @@ export default function PrayerDebug() {
     ['Prayer clock basis', diagnostics.scheduleTimezoneValid ? diagnostics.scheduleTimezone : null],
     ['Local browser timezone', diagnostics.localTimezone],
     ['Timezone matches', diagnostics.timezoneMatches],
-    ['Next reminder fire', diagnostics.nextReminderAt && diagnostics.scheduleTimezone
-      ? new Date(diagnostics.nextReminderAt).toLocaleString([], { timeZone: diagnostics.scheduleTimezone })
-      : null],
+    ['Active service reminders', diagnostics.activeReminders.length],
     ['Suppression reason', diagnostics.suppressionReason],
     ['Notification permission', diagnostics.permissionState],
     ['Last notification key', diagnostics.lastNotificationKey],
@@ -74,10 +72,34 @@ export default function PrayerDebug() {
       </section>
 
       <section className="card debug-prayer-card">
+        <div className="dash-card-header"><span>Reminders from the prayer service</span></div>
+        <p className="debug-prayer-help">
+          The prayer service decides and sends every reminder; these are the ones it sent that show now.
+        </p>
+        {diagnostics.activeReminders.length === 0
+          ? <p className="debug-prayer-help">None active.</p>
+          : (
+            <div className="debug-prayer-deadlines">
+              {diagnostics.activeReminders.map(reminder => (
+                <div key={reminder.key}>
+                  <strong>{reminder.key}</strong>
+                  <span>
+                    {`${reminder.kind} · ${reminder.prayer}`}
+                    {reminder.pillars.length > 0 ? ` · ${reminder.pillars.join('+')}` : ''}
+                    {` · until ${formatPrayerInstantTime(new Date(reminder.expiresAt), reminder.timeZone)}`}
+                    {` · snoozes used ${reminder.snoozeCount}/1`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+      </section>
+
+      <section className="card debug-prayer-card">
         <div className="dash-card-header"><span>Safe notification test</span></div>
         <p className="debug-prayer-help">
-          Schedules a clearly labelled test for five seconds from now. Keep this page open after clicking to
-          verify the browser timer; no prayer outcome, reminder receipt, or XP changes.
+          Shows a clearly labelled test notification five seconds from now. Keep this page open after clicking;
+          no prayer outcome, reminder, or XP changes.
         </p>
         <div className="actions-row">
           <button

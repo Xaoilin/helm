@@ -648,32 +648,6 @@ export interface PrayerCompletionLedgerEntry {
   xpEarned?: number;
 }
 
-export interface PrayerReminderReceipt {
-  date: string; // local YYYY-MM-DD
-  prayerName: PrayerName;
-  deadlineAt: string;
-  notificationKey: string;
-  notifiedAt?: string;
-  snoozedUntil?: string;
-}
-
-export type BoundedReminderKind = 'prayer-opportunity' | 'prayer-deadline' | 'momentum';
-
-/**
- * Account-owned receipt for one logical reminder obligation. Coalesced
- * notifications write one receipt per pillar so later completion cannot
- * recreate a duplicate notification with a different presentation group.
- */
-export interface BoundedReminderReceipt {
-  notificationKey: string;
-  date: string; // local YYYY-MM-DD
-  kind: BoundedReminderKind;
-  attemptedAt?: string;
-  notifiedAt?: string;
-  snoozedUntil?: string;
-  snoozeCount: 0 | 1;
-}
-
 export interface PrayerActivationDayEligibility {
   date: string; // local YYYY-MM-DD captured from actual activation-day schedule
   prayerNames: PrayerName[];
@@ -684,8 +658,6 @@ export interface PrayerTrackingState {
   trackingStartedAt: string;
   activationDayEligibility?: PrayerActivationDayEligibility;
   records: Record<string, PrayerTrackingRecord>;
-  reminderReceipts: Record<string, PrayerReminderReceipt>;
-  boundedReminderReceipts: Record<string, BoundedReminderReceipt>;
 }
 
 export interface PrayerCompletionUndoData {

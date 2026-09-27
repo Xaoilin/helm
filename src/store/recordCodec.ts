@@ -1,7 +1,6 @@
 import type {
   ClockState,
   GamificationProfile,
-  PrayerTrackingState,
   Settings,
 } from '../types/domain';
 import { validateIanaTimeZone } from '../services/timeZone';
@@ -217,28 +216,6 @@ function encodeGamification(value: unknown): EncodedStoreRecord[] {
   return records;
 }
 
-/**
- * The account's `prayerTracking` record holds only reminder receipts: outcomes, the tracking start
- * and activation belong to the prayer service. Older outcome and activation rows are left out, so
- * the next save tombstones them.
- */
-function encodePrayerTracking(value: unknown): EncodedStoreRecord[] {
-  if (!isRecord(value)) return [];
-  const tracking = value as unknown as PrayerTrackingState;
-  const records: EncodedStoreRecord[] = [{
-    recordId: 'meta',
-    payload: { schemaVersion: tracking.schemaVersion },
-    position: null,
-  }];
-  for (const [id, entry] of Object.entries(tracking.reminderReceipts || {})) {
-    records.push({ recordId: `reminder:${id}`, payload: entry as unknown as Record<string, unknown>, position: null });
-  }
-  for (const [id, entry] of Object.entries(tracking.boundedReminderReceipts || {})) {
-    records.push({ recordId: `bounded:${id}`, payload: entry as unknown as Record<string, unknown>, position: null });
-  }
-  return records;
-}
-
 export function encodeStoreValue(collection: string, value: unknown): EncodedStoreRecord[] {
   assertWritableCollection(collection);
   const sanitized = sanitizeSharedStoreValue(collection, value);
@@ -248,7 +225,6 @@ export function encodeStoreValue(collection: string, value: unknown): EncodedSto
   }
   if (collection === 'clock') return encodeClock(sanitized);
   if (collection === 'gamification') return encodeGamification(sanitized);
-  if (collection === 'prayerTracking') return encodePrayerTracking(sanitized);
   return encodeArrayStore(collection, sanitized);
 }
 
@@ -296,24 +272,32 @@ function decodeGamification(records: EncodedStoreRecord[]): GamificationProfile 
   };
 }
 
-function decodePrayerTracking(records: EncodedStoreRecord[]): PrayerTrackingState | null {
+/**
+ * The retired `prayerTracking` record (decode-only): the reminder receipts the browser kept before the prayer
+ * service decided reminders. The prayer service imported them; the app never reads or writes them.
+ */
+interface LegacyPrayerTrackingRecord {
+  schemaVersion: number;
+  reminderReceipts: Record<string, unknown>;
+  boundedReminderReceipts: Record<string, unknown>;
+}
+
+function decodePrayerTracking(records: EncodedStoreRecord[]): LegacyPrayerTrackingRecord | null {
   if (records.length === 0) return null;
   const meta = records.find(record => record.recordId === 'meta')?.payload ?? {};
-  const reminders: PrayerTrackingState['reminderReceipts'] = {};
-  const boundedReminders: PrayerTrackingState['boundedReminderReceipts'] = {};
+  const reminderReceipts: Record<string, unknown> = {};
+  const boundedReminderReceipts: Record<string, unknown> = {};
   for (const record of records) {
     if (record.recordId.startsWith('reminder:')) {
-      reminders[record.recordId.slice('reminder:'.length)] = record.payload as never;
+      reminderReceipts[record.recordId.slice('reminder:'.length)] = record.payload;
     } else if (record.recordId.startsWith('bounded:')) {
-      boundedReminders[record.recordId.slice('bounded:'.length)] = record.payload as never;
+      boundedReminderReceipts[record.recordId.slice('bounded:'.length)] = record.payload;
     }
   }
   return {
     schemaVersion: typeof meta.schemaVersion === 'number' ? meta.schemaVersion : 1,
-    trackingStartedAt: typeof meta.trackingStartedAt === 'string' ? meta.trackingStartedAt : new Date().toISOString(),
-    records: {},
-    reminderReceipts: reminders,
-    boundedReminderReceipts: boundedReminders,
+    reminderReceipts,
+    boundedReminderReceipts,
   };
 }
 
@@ -388,13 +372,6 @@ function mergeComplexLegacyStore(
     merged.prayerCompletionLedger = mergeRecordMap(
       database.prayerCompletionLedger,
       local.prayerCompletionLedger,
-    );
-  } else if (collection === 'prayerTracking') {
-    merged.records = mergeRecordMap(database.records, local.records);
-    merged.reminderReceipts = mergeRecordMap(database.reminderReceipts, local.reminderReceipts);
-    merged.boundedReminderReceipts = mergeRecordMap(
-      database.boundedReminderReceipts,
-      local.boundedReminderReceipts,
     );
   }
   return merged;

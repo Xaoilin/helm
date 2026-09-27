@@ -1,8 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PrayerReminderReceipt, PrayerTrackingRecord } from '../types/domain';
+import type { PrayerTrackingRecord } from '../types/domain';
 import { ServiceError } from '../services/backend/serviceClient';
-import { getPrayerReminderKey } from '../services/prayerTracking';
 import { usePrayerTracking } from '../store/contexts/prayer/usePrayerTracking';
 import { usePrayerPersistence } from '../store/contexts/prayer/usePrayerPersistence';
 
@@ -34,11 +33,6 @@ const serviceFajr = {
 const mirroredAsr: PrayerTrackingRecord = {
   date: TODAY, prayerName: 'Asr', status: 'late', recordedAt: '2026-09-26T16:30:00.000Z', source: 'dashboard',
 };
-const reminder: PrayerReminderReceipt = {
-  date: TODAY, prayerName: 'Dhuhr', deadlineAt: '2026-09-26T15:08:00.000Z',
-  notificationKey: getPrayerReminderKey(TODAY, 'Dhuhr', '2026-09-26T15:08:00.000Z'),
-  notifiedAt: '2026-09-26T14:53:00.000Z',
-};
 
 function usePersistenceHarness({ sourcesLoaded, locationReady = true }: { sourcesLoaded: boolean; locationReady?: boolean }) {
   const store = usePrayerTracking();
@@ -61,7 +55,7 @@ beforeEach(() => {
   persistence.loadStore.mockResolvedValue({
     trackingStartedAt: '2026-04-01T00:00:00.000Z',
     records: { [ASR_KEY]: mirroredAsr },
-    reminderReceipts: { [reminder.notificationKey]: reminder },
+    reminderReceipts: {},
     boundedReminderReceipts: {},
   });
   api.getPrayerDashboard.mockResolvedValue({
@@ -118,9 +112,9 @@ describe('usePrayerPersistence', () => {
     rerender({ sourcesLoaded: true, locationReady: true });
     await act(async () => { resolveOutcomes([serviceFajr]); });
 
-    // A routine change afterwards, such as a reminder receipt, is saved and pushed.
+    // A routine change afterwards (a new state object with the same outcomes) is pushed.
     act(() => {
-      result.current.store.commitTracking(current => ({ ...current, reminderReceipts: { ...current.reminderReceipts } }));
+      result.current.store.commitTracking(current => ({ ...current, records: { ...current.records } }));
     });
 
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
@@ -139,11 +133,13 @@ describe('usePrayerPersistence', () => {
     expect(api.createPrayerOutcome).not.toHaveBeenCalled();
   });
 
-  it('keeps reminder receipts from the account record, which the service does not hold', async () => {
+  it('never reads or writes the account prayerTracking record: reminders are the prayer service\'s', async () => {
     const { result } = renderPersistence();
 
-    await waitFor(() => expect(result.current.store.loaded).toBe(true));
-    expect(result.current.store.tracking.reminderReceipts[reminder.notificationKey]).toEqual(reminder);
+    await waitFor(() => expect(result.current.serviceSync.status).toBe('synced'));
+    expect(persistence.loadStore).not.toHaveBeenCalled();
+    expect(persistence.saveStore).not.toHaveBeenCalled();
+    expect(persistence.subscribeStoreKey).not.toHaveBeenCalled();
   });
 
   it('sends every change to the prayer service under its idempotency key', async () => {
@@ -164,8 +160,7 @@ describe('usePrayerPersistence', () => {
       expect.objectContaining({ date: TODAY, prayer: 'Dhuhr', status: 'on_time' }),
       `prayer-outcome:create:${TODAY}:Dhuhr:on_time:2026-09-26T12:30:00.000Z`,
     ));
-    // The account record is saved too, but its codec keeps only reminder receipts.
-    expect(persistence.saveStore).toHaveBeenCalledWith('prayerTracking', expect.anything());
+    expect(persistence.saveStore).not.toHaveBeenCalled();
     await waitFor(() => expect(result.current.serviceSync).toEqual({ status: 'synced', error: null }));
   });
 

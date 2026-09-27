@@ -72,7 +72,7 @@ export function mergeRecords(
 
 /**
  * Adopts the service's tracking timeline. The activation-day snapshot is kept from this device
- * when the service has none yet; reminder receipts always stay local. Returns `local` itself
+ * when the service has none yet. Returns `local` itself
  * when nothing changes, so an unchanged load causes no save.
  */
 export function applyServiceTracking(
