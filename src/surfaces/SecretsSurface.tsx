@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { useProjectContext } from "../store/contexts/ProjectContext";
-import { subscribeHelmSecretChanges, subscribeSyncSession } from '../store/persistence';
 import {
   listHelmSecrets,
   revealHelmSecret,
@@ -123,10 +122,6 @@ export default function SecretsSurface() {
     setInitialForm(current => current ? { ...current, value: '' } : current);
   }, []);
 
-  useEffect(() => subscribeSyncSession(snapshot => {
-    if (snapshot.readOnly || !snapshot.hasUsableSnapshot) clearRevealed();
-  }), [clearRevealed]);
-
   useEffect(() => {
     if (syncAvailability.readOnly) clearRevealed();
   }, [clearRevealed, syncAvailability.readOnly]);
@@ -153,18 +148,25 @@ export default function SecretsSurface() {
     };
   }, [clearRevealed, fetchSummaries]);
 
-  useEffect(() => subscribeHelmSecretChanges(event => {
-    setRevealed(current => {
-      if ('reconciliation' in event) return {};
-      if (!current[event.secretId]) return current;
-      const next = { ...current };
-      delete next[event.secretId];
-      return next;
-    });
+  // Another tab or device may have changed a secret: reload the summaries (never values) whenever
+  // this page is focused or shown again, and after each of this page's own writes.
+  const refreshSummaries = useCallback(() => {
     void fetchSummaries().catch(fetchError => {
       setError(fetchError instanceof Error ? fetchError.message : String(fetchError));
     });
-  }), [fetchSummaries]);
+  }, [fetchSummaries]);
+
+  useEffect(() => {
+    const refreshWhenShown = () => {
+      if (document.visibilityState === 'visible') refreshSummaries();
+    };
+    window.addEventListener('focus', refreshSummaries);
+    document.addEventListener('visibilitychange', refreshWhenShown);
+    return () => {
+      window.removeEventListener('focus', refreshSummaries);
+      document.removeEventListener('visibilitychange', refreshWhenShown);
+    };
+  }, [refreshSummaries]);
 
   useEffect(() => {
     const hideSensitiveState = () => clearRevealed();
@@ -292,6 +294,7 @@ export default function SecretsSurface() {
       });
       closeForm();
       setNotice(`${saved.label} saved securely.`);
+      refreshSummaries();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : String(saveError));
     } finally {
@@ -311,6 +314,7 @@ export default function SecretsSurface() {
         return next;
       });
       setNotice(`${secret.label} ${archived ? 'archived' : 'restored'}.`);
+      refreshSummaries();
     } catch (archiveError) {
       setError(archiveError instanceof Error ? archiveError.message : String(archiveError));
     } finally {

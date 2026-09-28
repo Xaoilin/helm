@@ -71,15 +71,14 @@ describe('mergeRecords', () => {
   });
 });
 
-it('adopts the service tracking timeline and keeps reminder receipts local', () => {
-  const local = { ...createPrayerTrackingState(new Date('2026-09-25T12:00:00Z')), reminderReceipts: { key: {} as never } };
+it('adopts the service tracking timeline', () => {
+  const local = createPrayerTrackingState(new Date('2026-09-25T12:00:00Z'));
   const tracking = fixture<{ tracking: Parameters<typeof applyServiceTracking>[1] }>('dashboard').tracking;
 
   const next = applyServiceTracking(local, tracking, {});
 
   expect(Date.parse(next.trackingStartedAt)).toBe(Date.parse(tracking.trackingStartedAt));
   expect(next.activationDayEligibility).toEqual({ date: tracking.activationDate, prayerNames: tracking.activationPrayers });
-  expect(next.reminderReceipts).toBe(local.reminderReceipts);
 });
 
 describe('applyOutcomeOperation', () => {

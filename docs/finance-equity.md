@@ -20,12 +20,13 @@ no executable bid, tax assessment, open tender or future liquidity is implied.
 
 ## Private persistence and agent boundary
 
-The existing authenticated `helm_records` store owns the `equityPositions`
-collection. No personal holdings, employer policy, private source links or seed
+The Spring finance service (`/api/finance/v1/equity/positions`) owns the
+positions; the old `equityPositions` collection is decode-only and was imported
+once. No personal holdings, employer policy, private source links or seed
 records ship in the repository or public bundle. Empty accounts start empty.
-The editor and remote MCP share narrow semantic operations, optimistic record
-revisions and idempotent request IDs. Saving completes after a confirmed database
-receipt and refreshed account state. Account changes discard prior views.
+The editor and remote MCP use the same service endpoints, optimistic record
+revisions (`updatedAt`) and Idempotency-Keys. Saving completes when the service
+returns the saved position.
 
 `sabah-one-equity-mcp/mcp` exposes `equity_list_positions`, `equity_get_position`,
 `equity_add_position`, `equity_update_position` and explicitly confirmed
@@ -33,7 +34,7 @@ receipt and refreshed account state. Account changes discard prior views.
 with the last `updatedAt`; a stale edit is rejected. Every request derives the
 owner from OAuth identity and requires an independent Equity client approval.
 Inventory and Employment approvals grant no Equity access. Settings can revoke
-Equity access independently. OAuth clients cannot read generic shared records.
+Equity access independently.
 
 Private source reconciliation must use this published MCP after deployment and
 OAuth consent, then re-read the resulting record. A prepared local import is not

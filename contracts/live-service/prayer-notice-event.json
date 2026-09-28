@@ -1,0 +1,27 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/live/v1/events"
+  },
+  "status" : 200,
+  "body" : {
+    "type" : "prayer.notice",
+    "domain" : "prayer",
+    "at" : "2026-09-25T11:53:00Z",
+    "data" : {
+      "key" : "momentum:2026-09-25:1790337120000:learn",
+      "kind" : "momentum",
+      "date" : "2026-09-25",
+      "prayer" : "Dhuhr",
+      "pillars" : [ "learn" ],
+      "firesAt" : "2026-09-25T11:52:00Z",
+      "expiresAt" : "2026-09-25T18:12:00Z",
+      "deadlineAt" : null,
+      "deadline" : null,
+      "timeZone" : "Europe/London",
+      "reminderMinutes" : 15,
+      "snoozedUntil" : null,
+      "snoozeCount" : 0
+    }
+  }
+}

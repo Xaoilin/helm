@@ -16,4 +16,6 @@ export const LIVE_DOMAINS = {
   gamification: ['tasks', 'rewards', 'gamification'],
   momentum: ['momentum'],
   clock: ['clock'],
+  finance: ['finance'],
+  equity: ['equity'],
 } as const satisfies Record<string, readonly string[]>;

@@ -11,7 +11,6 @@ import {
   type EmploymentFilters,
 } from '../services/employmentTracker';
 import { createRepresentativeEmploymentState } from '../../e2e/support/employment-scenario';
-import { decodeStoreValue, encodeStoreValue } from '../store/recordCodec';
 
 describe('Employment tracker seeds', () => {
   it('contains only the three confirmed opportunities without invented details', () => {
@@ -59,14 +58,6 @@ describe('Employment tracker seeds', () => {
     expect(chainalysis.applicationDate).toBeUndefined();
     expect(chainalysis.compensation).toBeUndefined();
     expect(chainalysis.url).toBeUndefined();
-  });
-
-  it('still decodes a legacy singleton record but is never written, now that the life admin service owns it', () => {
-    const state = createDefaultEmploymentTrackerState();
-
-    expect(() => encodeStoreValue('employment', state)).toThrow('retired or unknown: employment');
-    const legacyRecord = { recordId: 'singleton', payload: { ...state }, position: null };
-    expect(decodeStoreValue('employment', [legacyRecord])).toEqual(state);
   });
 });
 

@@ -1,0 +1,10 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/finance/v1/review"
+  },
+  "status" : 200,
+  "body" : {
+    "review" : null
+  }
+}

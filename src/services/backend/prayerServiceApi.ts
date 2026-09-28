@@ -1,17 +1,23 @@
 /** Typed calls to the prayer service (`/api/prayer/v1`). */
 import { PRAYER_BACKEND_URL } from '../../config';
 import type { PrayerCompletionSource, PrayerName, PrayerOutcomeStatus } from '../../types/domain';
-import { newWriteKey } from './idempotencyKeys';
+import { newWriteKey, snoozeReminderKey } from './idempotencyKeys';
 import { callService } from './serviceClient';
 import {
   dashboardSchema,
+  momentumRemindersSchema,
   outcomeChangeSchema,
   outcomeListSchema,
   preferencesSchema,
+  prayerReminderSchema,
+  prayerRemindersSchema,
   scheduleSchema,
   type ServiceDashboard,
+  type ServiceMomentumReminderPillar,
   type ServiceOutcome,
   type ServiceOutcomeChange,
+  type ServicePrayerReminder,
+  type ServicePrayerReminders,
   type ServicePreferences,
   type ServiceSchedule,
 } from './contracts';
@@ -72,4 +78,23 @@ export function getPrayerPreferences(): Promise<ServicePreferences> {
 export function savePrayerPreferences(preferences: ServicePreferences): Promise<ServicePreferences> {
   return callService(PRAYER_BACKEND_URL, 'PUT', `${BASE}/preferences`, preferencesSchema, preferences,
     { idempotencyKey: newWriteKey() });
+}
+
+/** The reminders already sent that are still active, and the Learn/Move reminder preferences the service holds. */
+export function getPrayerReminders(): Promise<ServicePrayerReminders> {
+  return callService(PRAYER_BACKEND_URL, 'GET', `${BASE}/reminders`, prayerRemindersSchema);
+}
+
+/** Snoozes a reminder once; the service refuses a second snooze (409 `snooze_used`) or one too near its end. */
+export function snoozePrayerReminder(key: string): Promise<ServicePrayerReminder> {
+  return callService(PRAYER_BACKEND_URL, 'POST', `${BASE}/reminders/${encodeURIComponent(key)}/snooze`,
+    prayerReminderSchema, undefined, { idempotencyKey: snoozeReminderKey(key) });
+}
+
+/** Replaces the Learn/Move reminder preferences the service plans momentum reminders from. */
+export function saveMomentumReminders(
+  pillars: ServiceMomentumReminderPillar[],
+): Promise<ServiceMomentumReminderPillar[]> {
+  return callService(PRAYER_BACKEND_URL, 'PUT', `${BASE}/reminders/momentum`, momentumRemindersSchema, { pillars },
+    { idempotencyKey: newWriteKey() }).then(saved => saved.pillars);
 }

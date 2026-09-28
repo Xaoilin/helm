@@ -1,6 +1,16 @@
+import type { ServicePrayerReminder } from '../src/services/backend/contracts';
 import { expect, openApp, test } from './support/helm-fixture';
 
 const NOON = '2026-08-29T12:30:00.000Z'; // 13:30 in London: Dhuhr is the current prayer.
+
+/** A reminder as the prayer service sends it (Dhuhr starts 12:00Z and is on time until Asr, 15:30Z). */
+function dhuhrReminder(overrides: Partial<ServicePrayerReminder>): ServicePrayerReminder {
+  return {
+    key: 'opportunity:2026-08-29:Dhuhr', kind: 'prayer-opportunity', date: '2026-08-29', prayer: 'Dhuhr', pillars: [],
+    firesAt: '2026-08-29T12:00:00Z', expiresAt: '2026-08-29T12:30:00Z', deadlineAt: null, deadline: null, timeZone: 'Europe/London',
+    reminderMinutes: 15, snoozedUntil: null, snoozeCount: 0, ...overrides,
+  };
+}
 
 test.describe('prayer and profile services', () => {
   test('prayer outcomes come from the prayer service and completions are saved there', async ({ page, scenario }) => {
@@ -30,25 +40,10 @@ test.describe('prayer and profile services', () => {
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
   });
 
-  test('shows only the prayer service outcomes, never the account record copy, and re-sends nothing', async ({ page, scenario }) => {
+  test('shows only the prayer service outcomes and re-sends nothing', async ({ page, scenario }) => {
     const control = await scenario({
       now: NOON,
       settings: { prayerEnabled: true },
-      stores: {
-        // An outcome the old Supabase mirror still holds; the service never had it.
-        prayerTracking: {
-          schemaVersion: 1,
-          trackingStartedAt: '2026-08-20T08:00:00.000Z',
-          records: {
-            '2026-08-29::Fajr': {
-              date: '2026-08-29', prayerName: 'Fajr', status: 'late',
-              recordedAt: '2026-08-29T06:00:00.000Z', rewarded: true, source: 'dashboard',
-            },
-          },
-          reminderReceipts: {},
-          boundedReminderReceipts: {},
-        },
-      },
     });
     control.services.tracking = {
       trackingStartedAt: '2026-08-20T08:00:00Z', activationDate: null, activationPrayers: [], importedAt: null,
@@ -76,7 +71,7 @@ test.describe('prayer and profile services', () => {
   });
 
   test('loading, reminders, reloads and focus never delete the service outcomes', async ({ page, scenario }) => {
-    // Noon: Dhuhr is current, so its reminder saves receipts while outcomes load (the live bug's setting).
+    // Noon: Dhuhr is current while outcomes load (the live bug's setting).
     const control = await scenario({ now: NOON, settings: { prayerEnabled: true } });
     control.services.tracking = {
       trackingStartedAt: '2026-08-01T00:00:00Z', activationDate: null, activationPrayers: [], importedAt: null,
@@ -212,5 +207,53 @@ test.describe('prayer and profile services', () => {
     await expect(page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u })).toBeVisible();
     await expect(page.getByRole('alert').filter({ hasText: 'was not saved' })).toHaveCount(0);
     expect(creates()).toBe(1);
+  });
+
+  test('shows the reminder the prayer service sent and snoozes it there, once', async ({ page, scenario }) => {
+    const control = await scenario({
+      now: '2026-08-29T12:10:00.000Z',
+      settings: { prayerEnabled: true },
+      services: { reminders: [dhuhrReminder({})] },
+    });
+    await openApp(page);
+
+    const banner = page.getByRole('alert').filter({ hasText: 'Dhuhr prayer opportunity' });
+    await expect(banner).toBeVisible();
+    await banner.getByRole('button', { name: 'Snooze once' }).click();
+    await expect(banner).toHaveCount(0);
+    expect(control.services.calls).toContain('POST /api/prayer/v1/reminders/opportunity%3A2026-08-29%3ADhuhr/snooze');
+    expect(control.services.reminders.get('opportunity:2026-08-29:Dhuhr')?.snoozeCount).toBe(1);
+
+    // Once the snooze ends the service shows it again, with no second snooze on offer.
+    await page.clock.fastForward(5 * 60_000 + 1_000);
+    await page.reload();
+    await expect(banner).toBeVisible();
+    await expect(banner.getByRole('button', { name: 'Snooze once' })).toHaveCount(0);
+    // The browser keeps no reminder state: nothing is written to the account record, nor momentum re-sent.
+    expect(control.services.calls).not.toContain('PUT /api/prayer/v1/reminders/momentum');
+  });
+
+  test('a reminder arriving on the live stream shows at once, and recording the prayer hides it', async ({ page, scenario }) => {
+    const now = '2026-08-29T15:16:00.000Z'; // 16:16 in London: Dhuhr is on time until Asr at 16:30.
+    const control = await scenario({ now, settings: { prayerEnabled: true } });
+    await openApp(page);
+    await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+
+    const deadline = dhuhrReminder({
+      key: 'deadline:2026-08-29:Dhuhr', kind: 'deadline', firesAt: '2026-08-29T15:15:00Z',
+      expiresAt: '2026-08-29T15:30:00Z', deadlineAt: '2026-08-29T15:30:00Z', deadline: 'Asr',
+    });
+    control.services.reminders.set(deadline.key, deadline);
+    control.services.liveEvents.push({ type: 'prayer.notice', domain: 'prayer', at: now, data: deadline });
+    const banner = page.getByRole('alert').filter({ hasText: 'Pray Dhuhr before it is too late' });
+    await expect.poll(async () => {
+      await page.clock.fastForward(2_000);
+      return banner.isVisible();
+    }, { timeout: 30_000, intervals: [50] }).toBe(true);
+
+    await banner.getByRole('button', { name: 'Mark Dhuhr prayed' }).click();
+    await page.getByRole('button', { name: /On time/u }).click();
+    await expect(banner).toHaveCount(0);
+    await expect.poll(() => control.services.outcomes.get('2026-08-29::Dhuhr')?.status).toBe('on_time');
   });
 });

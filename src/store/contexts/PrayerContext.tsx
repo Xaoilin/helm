@@ -17,21 +17,19 @@ import type {
   PrayerTrackingRecord,
   PrayerTrackingState,
 } from '../../types/domain';
-import { PRAYER_REMINDERS } from '../../config/constants';
 import { validatePrayerTimeZone } from '../../services/prayerTimeZone';
 import { getPrayerOutcome, normalizePrayerTrackingState } from '../../services/prayerTracking';
 import type { PrayerReminderPermissionRequestResult } from '../../services/browserPrayerReminder';
 import type { getNextPrayer, PrayerTime, PrayerTimesData } from '../../services/prayerTimes';
-import type { PrayerReminderGroup } from '../../services/prayerReminderPolicy';
+import type { PrayerReminderView } from '../../services/prayerServiceReminders';
+import { isPrayerServiceEnabled } from '../../services/backend/prayerServiceApi';
 import {
   buildPrayerSchedulePolicySnapshot,
   reminderSchedulesHaveValidZones,
 } from '../../services/prayerSchedulePolicy';
-import type { BoundedReminderPlan } from '../../services/boundedReminders';
 import {
   buildPrayerDiagnostics,
   describeReminderSuppression,
-  findNextReminderAt,
   type PrayerDiagnostics,
 } from '../../services/prayerDiagnostics';
 import type { PrayerOutcomeRejection, PrayerServiceSyncState } from './usePrayerServiceSync';
@@ -44,10 +42,9 @@ import { usePrayerSchedule } from './prayer/usePrayerSchedule';
 import { usePrayerNotificationPermission } from './prayer/usePrayerNotificationPermission';
 import { usePrayerClock } from './prayer/usePrayerClock';
 import { usePrayerOutcomeUpkeep } from './prayer/usePrayerOutcomeUpkeep';
-import { usePrayerReminderBanners } from './prayer/usePrayerReminderBanners';
 import { usePrayerReminderDiagnostics } from './prayer/usePrayerReminderDiagnostics';
-import { usePrayerDeadlineReminders } from './prayer/usePrayerDeadlineReminders';
-import { usePrayerBoundedReminderNotifications } from './prayer/usePrayerBoundedReminderNotifications';
+import { usePrayerServiceReminders } from './prayer/usePrayerServiceReminders';
+import { usePrayerMomentumReminderSync } from './prayer/usePrayerMomentumReminderSync';
 import {
   usePrayerCompletionWorkflow,
   type CompletePrayerOptions,
@@ -64,7 +61,7 @@ import { usePrayerAdhan } from './prayer/usePrayerAdhan';
 
 export type { PrayerCompletionMutationResult } from './prayer/usePrayerCompletionWorkflow';
 export type { PrayerCompletionRequest } from './prayer/usePrayerCompletionPrompt';
-export type { PrayerReminderGroup } from '../../services/prayerReminderPolicy';
+export type { PrayerReminderView } from '../../services/prayerServiceReminders';
 export type { PrayerDiagnostics } from '../../services/prayerDiagnostics';
 
 export interface PrayerContextValue {
@@ -83,9 +80,12 @@ export interface PrayerContextValue {
   deadlines: Record<PrayerName, PrayerDeadlineBounds | null>;
   nextPrayer: ReturnType<typeof getNextPrayer>;
   pendingCompletion: PrayerCompletionRequest | null;
-  activeReminder: PrayerReminderGroup | null;
-  activeBoundedReminder: BoundedReminderPlan | null;
-  canSnoozeActiveBoundedReminder: boolean;
+  /** The prayer service's deadline reminder the in-app banner shows now. */
+  activeReminder: PrayerReminderView | null;
+  /** The prayer service's opportunity or Learn/Move reminder the in-app banner shows now. */
+  activeBoundedReminder: PrayerReminderView | null;
+  /** Why the last snooze was refused, in the prayer service's words. */
+  reminderSnoozeError: string | null;
   adhanPrayer: PrayerTime | null;
   diagnostics: PrayerDiagnostics;
   /** Sync with the Spring Boot prayer service; `disabled` when it is not configured. */
@@ -147,7 +147,6 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
   const serviceSettingsReady = settingsOwner.serviceSettingsReady;
   const prayerEnabled = serviceSettingsReady && settings.prayerEnabled !== false;
   const reminderEnabled = settings.prayerReminderEnabled !== false;
-  const reminderMinutes = settings.prayerReminderMinutes ?? PRAYER_REMINDERS.DEFAULT_MINUTES;
   const city = settings.prayerCity || 'Bedford';
   const country = settings.prayerCountry || 'United Kingdom';
   const localTimezone = settingsOwner.appTimeZone.browserTimeZone;
@@ -190,46 +189,32 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     now,
   }), [now, timetable, today, tracking]);
 
-  // Reminders: in-app banners, browser deadline timers, and bounded notifications.
-  const {
-    reminderGroups,
-    boundedReminderPlans,
-    activeReminder,
-    activeBoundedReminder,
-    canSnoozeActiveBoundedReminder,
-    snoozeActiveReminder,
-    snoozeActiveBoundedReminder,
-  } = usePrayerReminderBanners({
-    prayerEnabled,
-    reminderEnabled,
-    reminderMinutes,
-    reminderSchedules: reminderScheduleList,
-    reminderSchedulesValid,
-    timetable,
-    momentum: momentumOwner.loaded ? momentumOwner.state : null,
+  // Reminders: the prayer service decides and sends them; this shows them and tells it about momentum.
+  const momentumState = momentumOwner.loaded && !momentumOwner.error ? momentumOwner.state : null;
+  const { lastNotificationKey, lastReminderError, reporter } = usePrayerReminderDiagnostics();
+  const reminders = usePrayerServiceReminders({
+    enabled: loaded && prayerEnabled,
+    prayerRemindersEnabled: reminderEnabled,
     tracking,
     getTracking,
-    commitTracking,
-    today,
+    momentum: momentumState,
     now,
-  });
-  const { lastNotificationKey, lastReminderError, reporter } = usePrayerReminderDiagnostics();
-  const { cancelForPrayer, testReminder } = usePrayerDeadlineReminders({
-    enabled: loaded && prayerEnabled && reminderEnabled,
-    getTracking,
-    onFired: touch,
     refreshPermission,
-    scheduleTimeZone: scheduleTimezone,
+    onArrived: touch,
     reporter,
   });
-  usePrayerBoundedReminderNotifications({
-    loaded,
-    plans: boundedReminderPlans,
-    receipts: tracking.boundedReminderReceipts,
-    getTracking,
-    commitTracking,
-    now,
-    permission,
+  const { snooze: snoozeReminder, testReminder } = reminders;
+  const activeReminder = reminders.deadline;
+  const activeBoundedReminder = reminders.notice;
+  const snoozeActiveReminder = useCallback(() => {
+    if (activeReminder?.canSnooze) void snoozeReminder(activeReminder.key);
+  }, [activeReminder, snoozeReminder]);
+  const snoozeActiveBoundedReminder = useCallback(() => {
+    if (activeBoundedReminder?.canSnooze) void snoozeReminder(activeBoundedReminder.key);
+  }, [activeBoundedReminder, snoozeReminder]);
+  usePrayerMomentumReminderSync({
+    momentum: loaded && prayerEnabled ? momentumState : null,
+    saved: reminders.momentumPreferences,
     reporter,
   });
 
@@ -247,7 +232,6 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     getToday,
     getTracking,
     commitTracking,
-    cancelReminderForPrayer: cancelForPrayer,
   });
   const { awaitReward, onOutcomeConfirmed, onOutcomeRefused } = usePrayerRewards(taskOwner, gamificationOwner);
 
@@ -260,8 +244,8 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     setCompletionNotice(`${rejection.record.prayerName} on ${rejection.record.date} was not saved: ${rejection.message}`);
   }, [onOutcomeRefused, revertRefusedOutcome]);
 
-  // Persistence: the prayer service for outcomes, the account record for reminder receipts. Each
-  // outcome change the service confirms brings its planner reward up to date.
+  // Persistence: the prayer service for outcomes. Each outcome change the service confirms brings its
+  // planner reward up to date.
   const { serviceSync, reload: reloadOutcomes, allowBulkDelete } = usePrayerPersistence({
     store,
     sourcesLoaded: taskOwner.loaded && settingsOwner.loaded,
@@ -300,15 +284,13 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
 
   const { adhanPrayer, dismissAdhan } = usePrayerAdhan({ prayerEnabled, timetable, now, today });
 
-  const nextReminderAt = findNextReminderAt(reminderGroups, now);
   const suppressionReason = describeReminderSuppression({
     prayerEnabled,
     reminderEnabled,
-    scheduleStatus,
-    schedule,
-    scheduleTimezone,
-    reminderGroupCount: reminderGroups.length,
+    serviceEnabled: isPrayerServiceEnabled(),
+    reminderLoadError: reminders.loadError,
   });
+  const activeReminders = reminders.showing;
   const permissionState = permission.state;
   const diagnostics = useMemo(() => buildPrayerDiagnostics({
     scheduleStatus,
@@ -320,18 +302,18 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     scheduleTimezoneValid,
     localTimezone,
     timezoneMatches,
-    nextReminderAt,
+    activeReminders,
     suppressionReason,
     permissionState,
     lastNotificationKey,
     lastReminderError,
   }), [
+    activeReminders,
     city,
     country,
     lastNotificationKey,
     lastReminderError,
     localTimezone,
-    nextReminderAt,
     permissionState,
     schedule,
     scheduleError,
@@ -362,7 +344,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     pendingCompletion,
     activeReminder,
     activeBoundedReminder,
-    canSnoozeActiveBoundedReminder,
+    reminderSnoozeError: reminders.snoozeError,
     adhanPrayer,
     diagnostics,
     serviceSync,
@@ -387,7 +369,6 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     activeBoundedReminder,
     adhanPrayer,
     cancelPrayerCompletion,
-    canSnoozeActiveBoundedReminder,
     completePrayer,
     completionNotice,
     confirmPrayerCompletion,
@@ -402,6 +383,7 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     nextPrayer,
     now,
     pendingCompletion,
+    reminders.snoozeError,
     replacePrayerTracking,
     requestPrayerCompletion,
     requestReminderPermission,

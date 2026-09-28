@@ -1,0 +1,49 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/prayer/v1/reminders"
+  },
+  "status" : 200,
+  "body" : {
+    "active" : [ {
+      "key" : "opportunity:2026-09-25:Dhuhr",
+      "kind" : "prayer-opportunity",
+      "date" : "2026-09-25",
+      "prayer" : "Dhuhr",
+      "pillars" : [ ],
+      "firesAt" : "2026-09-25T11:52:00Z",
+      "expiresAt" : "2026-09-25T12:22:00Z",
+      "deadlineAt" : null,
+      "deadline" : null,
+      "timeZone" : "Europe/London",
+      "reminderMinutes" : 15,
+      "snoozedUntil" : null,
+      "snoozeCount" : 0
+    }, {
+      "key" : "momentum:2026-09-25:1790337120000:learn",
+      "kind" : "momentum",
+      "date" : "2026-09-25",
+      "prayer" : "Dhuhr",
+      "pillars" : [ "learn" ],
+      "firesAt" : "2026-09-25T11:52:00Z",
+      "expiresAt" : "2026-09-25T18:12:00Z",
+      "deadlineAt" : null,
+      "deadline" : null,
+      "timeZone" : "Europe/London",
+      "reminderMinutes" : 15,
+      "snoozedUntil" : null,
+      "snoozeCount" : 0
+    } ],
+    "momentum" : [ {
+      "pillar" : "learn",
+      "enabled" : true,
+      "afterPrayers" : [ "Dhuhr", "Maghrib", "Isha" ],
+      "completedOn" : null
+    }, {
+      "pillar" : "move",
+      "enabled" : true,
+      "afterPrayers" : [ "Asr", "Isha" ],
+      "completedOn" : "2026-09-24"
+    } ]
+  }
+}

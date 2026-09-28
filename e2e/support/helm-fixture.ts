@@ -1,7 +1,5 @@
 import { expect, test as base, type Page, type Response } from '@playwright/test';
-import { encodeStoreValue } from '../../src/store/recordCodec';
 import { STORAGE_KEYS } from '../../src/config/constants';
-import type { HelmMutation, HelmRealtimeEvent } from '../../src/store/databaseTypes';
 import {
   createFakeServices,
   installFakeServices,
@@ -15,21 +13,21 @@ import type {
   CalendarSource,
   ClockState,
   EmploymentApplication,
-  EquityPosition,
-  EquityPositionDraft,
+  FinanceReview,
   GamificationProfile,
   Integration,
   Surface,
   Task,
 } from '../../src/types/domain';
 import type { ServiceIntegration } from '../../src/services/backend/contracts';
+import type { FakeFinanceSeed } from './fake-finance-service';
 import type { FakeKnowledgeSeed } from './fake-knowledge-service';
 import type { FakeLifeSeed } from './fake-life-service';
 import type { FakePlannerSeed } from './fake-planner-service';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
 const TEST_EMAIL = 'e2e@example.test';
-const SNAPSHOT_TIME = '2026-08-01T12:00:00.000Z';
+const FIXTURE_TIME = '2026-08-01T12:00:00.000Z';
 
 const DEFAULT_SETTINGS = {
   theme: 'dark',
@@ -65,20 +63,15 @@ export interface HelmScenarioOptions {
     timezone?: string;
     timings?: Partial<Record<PrayerTimingName, string>>;
   };
-  /** The Spring Boot prayer and profile services (always installed, stateful per scenario). */
+  /** The Spring Boot services (always installed, stateful per scenario). */
   services?: FakeServicesOptions;
   settings?: Record<string, unknown>;
+  /** Account data in the app's shapes, keyed by the old collection names; each seeds its owning service. */
   stores?: Record<string, unknown>;
-  snapshotStatus?: number;
   userId?: string;
 }
 
 export interface HelmScenarioControl {
-  setRealtimeAvailable: (available: boolean) => void;
-  setBroadcastDelivery: (enabled: boolean) => void;
-  getDeliveredBroadcastCount: () => number;
-  addClient: (page: Page, options?: Pick<HelmScenarioOptions, 'initialSurface'>) => Promise<HelmScenarioControl>;
-  applyRemoteMutations: (operations: HelmMutation[], confirmedAt?: string) => void;
   services: FakeServices;
 }
 
@@ -101,8 +94,8 @@ export async function openApp(page: Page): Promise<void> {
   await expect(page.getByRole('main', { name: 'dashboard surface' })).toBeVisible();
 }
 
-/** Life admin service write paths, by the collection the scenario names. */
-const LIFE_WRITE_PATHS: Record<string, string> = {
+/** Service write paths, by the collection the scenario names. */
+const SERVICE_WRITE_PATHS: Record<string, string> = {
   employment: '/api/life/v1/jobs',
   healthFastFoodEntries: '/api/life/v1/health/',
   inventoryItems: '/api/life/v1/inventory/',
@@ -121,42 +114,29 @@ const LIFE_WRITE_PATHS: Record<string, string> = {
   // Daily momentum, kept in the progress record before, saves per pillar to the planner.
   gamification: '/api/planner/v1/momentum/',
   clock: '/api/planner/v1/clock/',
+  financeAccounts: '/api/finance/v1/accounts/',
+  transactions: '/api/finance/v1/transactions/',
+  financeBudgets: '/api/finance/v1/budgets/',
+  savingsGoals: '/api/finance/v1/savings-goals/',
+  financeReviews: '/api/finance/v1/review',
+  equityPositions: '/api/finance/v1/equity/',
 };
 
 export function waitForMutation(page: Page, collection: string): Promise<Response> {
   return page.waitForResponse(response => {
-    const lifePath = LIFE_WRITE_PATHS[collection];
-    if (lifePath) {
-      return response.request().method() !== 'GET' && new URL(response.url()).pathname.startsWith(lifePath);
-    }
-    if (response.request().method() !== 'POST') return false;
-    if (collection === 'equityPositions' && /\/rpc\/equity_(add_position|update_position|remove_position)/u.test(response.url())) {
-      return true;
-    }
-    if (!response.url().includes('/rest/v1/rpc/apply_helm_mutations')) return false;
-
-    try {
-      const body = response.request().postDataJSON() as { p_operations?: HelmMutation[] };
-      return body.p_operations?.some(operation => operation.collection === collection) ?? false;
-    } catch {
-      return false;
-    }
+    const path = SERVICE_WRITE_PATHS[collection];
+    if (!path) throw new Error(`No service owns the ${collection} collection.`);
+    return response.request().method() !== 'GET' && new URL(response.url()).pathname.startsWith(path);
   });
 }
 
-async function installScenario(
-  page: Page,
-  options: HelmScenarioOptions = {},
-  sharedDatabase?: MockDatabase,
-): Promise<HelmScenarioControl> {
+async function installScenario(page: Page, options: HelmScenarioOptions = {}): Promise<HelmScenarioControl> {
   if (options.now) {
     await page.clock.install({ time: new Date(options.now) });
   }
 
   const userId = options.userId || TEST_USER_ID;
-  const stores = buildStores(options);
   const settings = scenarioSettings(options);
-  const database = sharedDatabase ?? createMockDatabase(stores, userId);
   const authenticated = options.authenticated !== false;
 
   await page.addInitScript(({ authenticated: shouldAuthenticate, email, marker, user, initialSurface, surfaceKey }) => {
@@ -192,20 +172,12 @@ async function installScenario(
     surfaceKey: STORAGE_KEYS.SHELL_SURFACE,
   });
 
-  database.services ??= createFakeServices(servicesFromScenario(options, settings));
-  await installFakeServices(page, database.services);
+  const services = createFakeServices(servicesFromScenario(options, settings));
+  await installFakeServices(page, services);
   // Registered after the fake services so it answers timetable requests first.
   await installPrayerRoute(page, options.prayer);
-  const control = await installDatabaseRoutes(page, {
-    email: options.email || TEST_EMAIL,
-    snapshotStatus: options.snapshotStatus,
-    userId,
-  }, database);
-  return {
-    ...control,
-    services: database.services,
-    addClient: (clientPage, clientOptions) => installScenario(clientPage, { ...options, ...clientOptions }, database),
-  };
+  await installSupabaseRoutes(page);
+  return { services };
 }
 
 function scenarioSettings(options: HelmScenarioOptions): Record<string, unknown> {
@@ -217,21 +189,17 @@ function scenarioSettings(options: HelmScenarioOptions): Record<string, unknown>
   };
 }
 
-/** Collections the life admin service owns; a scenario's copy seeds its fake instead of the database. */
-const LIFE_COLLECTIONS = ['employment', 'healthFastFoodEntries', 'inventoryItems', 'inventoryNeeds', 'trips', 'tripLegs',
-  'tripItineraryItems', 'tripBookings', 'tripBudgetEntries'];
-
-/** Account-record collections. Settings and integrations belong to the profile service fake. */
-function buildStores(options: HelmScenarioOptions): Record<string, unknown> {
-  const stores: Record<string, unknown> = { ...options.stores };
-  delete stores.settings;
-  delete stores.integrations;
-  for (const collection of [...LIFE_COLLECTIONS, ...KNOWLEDGE_COLLECTIONS, ...PLANNER_COLLECTIONS]) delete stores[collection];
-  return stores;
+function financeFromScenario(stores: Record<string, unknown> | undefined): FakeFinanceSeed {
+  const list = <T,>(key: string) => stores?.[key] as T[] | undefined;
+  return {
+    accounts: list('financeAccounts'),
+    transactions: list('transactions'),
+    budgets: list('financeBudgets'),
+    savingsGoals: list('savingsGoals'),
+    review: list<FinanceReview>('financeReviews')?.find(review => review.id === 'current') ?? null,
+    equityPositions: list('equityPositions'),
+  };
 }
-
-/** Collections the planner service owns; a scenario's copy seeds its fake instead of the database. */
-const PLANNER_COLLECTIONS = ['tasks', 'gamification', 'clock', 'dashboardFocusFeedback'];
 
 function plannerFromScenario(stores: Record<string, unknown> | undefined): FakePlannerSeed {
   return {
@@ -240,9 +208,6 @@ function plannerFromScenario(stores: Record<string, unknown> | undefined): FakeP
     clock: stores?.clock as ClockState | undefined,
   };
 }
-
-/** Collections the knowledge service owns; a scenario's copy seeds its fake instead of the database. */
-const KNOWLEDGE_COLLECTIONS = ['knowledgeTopics', 'knowledgeEntries', 'lifestyleItems', 'projects', 'projectPages', 'workspaces'];
 
 function knowledgeFromScenario(stores: Record<string, unknown> | undefined): FakeKnowledgeSeed {
   const list = <T,>(key: string) => stores?.[key] as T[] | undefined;
@@ -271,253 +236,14 @@ function lifeFromScenario(stores: Record<string, unknown> | undefined): FakeLife
   };
 }
 
-interface DatabaseRouteOptions {
-  email: string;
-  snapshotStatus?: number;
-  userId: string;
-}
-
-interface MockRow {
-  userId: string;
-  collection: string;
-  recordId: string;
-  payload: Record<string, unknown>;
-  position: number | null;
-  revision: number;
-  accountVersion: number;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt: string | null;
-}
-
-interface MockDatabase {
-  services?: FakeServices;
-  rows: Map<string, MockRow>;
-  accountVersion: number;
-  listeners: Set<(event: HelmRealtimeEvent) => void>;
-}
-
-function createMockDatabase(stores: Record<string, unknown>, userId: string): MockDatabase {
-  const database: MockDatabase = { rows: new Map(), accountVersion: 1, listeners: new Set() };
-  for (const [collection, value] of Object.entries(stores)) {
-    for (const record of encodeStoreValue(collection, value)) {
-      database.rows.set(rowKey(collection, record.recordId), {
-        userId, collection, recordId: record.recordId, payload: record.payload,
-        position: record.position, revision: 1, accountVersion: 1,
-        createdAt: SNAPSHOT_TIME, updatedAt: SNAPSHOT_TIME, deletedAt: null,
-      });
-    }
+/** The Supabase calls the app still makes: agent OAuth approvals and Vault secret summaries. */
+async function installSupabaseRoutes(page: Page): Promise<void> {
+  for (const domain of ['inventory', 'employment', 'equity', 'finance']) {
+    await page.route(`**/rest/v1/rpc/list_${domain}_oauth_clients*`, route => route.fulfill({ json: [] }));
   }
-  return database;
-}
-
-async function installDatabaseRoutes(
-  page: Page,
-  options: DatabaseRouteOptions,
-  database: MockDatabase,
-): Promise<Omit<HelmScenarioControl, 'addClient'>> {
-  const { rows } = database;
-  const realtime = await mockRealtime(page, database, options.userId);
-  const publishChanges = (changes: MockRow[], requestId = 'e2e-request') => {
-    const event: HelmRealtimeEvent = {
-      requestId, accountVersion: database.accountVersion,
-      changes: changes.map(({ collection, recordId, revision, deletedAt }) => ({ collection, recordId, revision, deletedAt })),
-    };
-    database.listeners.forEach(listener => listener(event));
-  };
-
-  await page.route('**/rest/v1/rpc/get_helm_account_snapshot*', async route => {
-    if (options.snapshotStatus) {
-      await route.fulfill({
-        status: options.snapshotStatus,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'Snapshot fixture unavailable.' }),
-      });
-      return;
-    }
-
-    const scoped = new URL(route.request().url()).pathname.endsWith('/get_helm_account_snapshot_for_collections');
-    const collections = scoped
-      ? (route.request().postDataJSON() as { p_collections?: string[] }).p_collections ?? []
-      : undefined;
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        state: {
-          userId: options.userId,
-          schemaVersion: 1,
-          accountVersion: database.accountVersion,
-          minimumClientVersion: '0.2.83',
-          migratedAt: SNAPSHOT_TIME,
-          updatedAt: SNAPSHOT_TIME,
-        },
-        records: [...rows.values()]
-          .filter(row => collections === undefined || collections.includes(row.collection))
-          .map(toSnapshotRow),
-      }),
-    });
-  });
-
-  await page.route('**/rest/v1/rpc/get_helm_changed_collections*', async route => {
-    const { p_since_version: sinceVersion } = route.request().postDataJSON() as { p_since_version: number };
-    await route.fulfill({ json: {
-      accountVersion: database.accountVersion,
-      collections: [...new Set([...rows.values()].filter(row => row.accountVersion > sinceVersion).map(row => row.collection))].sort(),
-      secretsChanged: false,
-    } });
-  });
-
-  await page.route('**/rest/v1/helm_account_state*', async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        user_id: options.userId,
-        schema_version: 1,
-        account_version: database.accountVersion,
-        minimum_client_version: '0.2.83',
-        migrated_at: SNAPSHOT_TIME,
-        updated_at: SNAPSHOT_TIME,
-      }),
-    });
-  });
-
-  await page.route('**/rest/v1/helm_records*', async route => {
-    const query = new URL(route.request().url()).searchParams;
-    let selected = [...rows.values()].map(toDatabaseRow);
-    for (const [field, filter] of query) {
-      if (filter.startsWith('eq.')) {
-        selected = selected.filter(row => String(row[field as keyof typeof row]) === filter.slice(3));
-      } else if (filter === 'is.null') {
-        selected = selected.filter(row => row[field as keyof typeof row] === null);
-      }
-    }
-    const order = (query.get('order') ?? '').split(',').filter(Boolean);
-    selected.sort((left, right) => {
-      for (const term of order) {
-        const [field, direction, nulls] = term.split('.');
-        const a = left[field as keyof typeof left];
-        const b = right[field as keyof typeof right];
-        if (a === b) continue;
-        if (a === null) return nulls === 'nullsfirst' ? -1 : 1;
-        if (b === null) return nulls === 'nullsfirst' ? 1 : -1;
-        const comparison = typeof a === 'number' && typeof b === 'number'
-          ? a - b : String(a).localeCompare(String(b));
-        if (comparison) return direction === 'desc' ? -comparison : comparison;
-      }
-      return 0;
-    });
-    const range = route.request().headers().range?.match(/^(\d+)-(\d+)$/u);
-    const offset = Number(query.get('offset') ?? range?.[1] ?? 0);
-    const limit = query.has('limit') ? Number(query.get('limit'))
-      : range ? Number(range[2]) - offset + 1 : selected.length;
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(selected.slice(offset, offset + limit)),
-    });
-  });
-
-  await page.route('**/rest/v1/rpc/apply_helm_mutations*', async route => {
-    const request = route.request().postDataJSON() as {
-      p_operations?: HelmMutation[];
-      p_request_id?: string;
-    };
-    database.accountVersion += 1;
-    const changes = applyMutations(rows, options.userId, database.accountVersion, request.p_operations || []);
-
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        requestId: request.p_request_id || 'e2e-request',
-        accountVersion: database.accountVersion,
-        changes: changes.map(toSnapshotRow),
-      }),
-    });
-    publishChanges(changes, request.p_request_id);
-  });
-
-  await page.route(/\/rest\/v1\/rpc\/equity_(add_position|update_position|remove_position)(\?|$)/u, async route => {
-    const name = new URL(route.request().url()).pathname.split('/').at(-1);
-    const request = route.request().postDataJSON() as {
-      p_position?: EquityPositionDraft & { id?: string };
-      p_position_id?: string;
-      p_expected_updated_at?: string;
-      p_confirm?: boolean;
-    };
-    const positionId = request.p_position_id ?? request.p_position?.id;
-    if (!positionId) {
-      await route.fulfill({ status: 400, json: { message: 'Equity position ID is required.' } });
-      return;
-    }
-    const key = rowKey('equityPositions', positionId);
-    let row = rows.get(key);
-    const now = new Date().toISOString();
-    if (name === 'equity_add_position' && request.p_position) {
-      if (row && !row.deletedAt) {
-        await route.fulfill({ status: 409, json: { message: 'Equity position already exists.' } });
-        return;
-      }
-      const position: EquityPosition = { ...request.p_position, id: positionId, createdAt: now, updatedAt: now };
-      row = {
-        userId: options.userId, collection: 'equityPositions', recordId: positionId,
-        payload: { ...position }, position: null, revision: 1, accountVersion: database.accountVersion + 1,
-        createdAt: now, updatedAt: now, deletedAt: null,
-      };
-      rows.set(key, row);
-    } else if (!row || row.deletedAt) {
-      await route.fulfill({ status: 404, json: { message: 'Equity position not found.' } });
-      return;
-    } else if (request.p_expected_updated_at !== row.payload.updatedAt) {
-      await route.fulfill({ status: 409, json: { message: 'Equity position changed; reload before saving.' } });
-      return;
-    } else if (name === 'equity_remove_position') {
-      if (!request.p_confirm) {
-        await route.fulfill({ status: 400, json: { message: 'Equity removal requires explicit confirmation.' } });
-        return;
-      }
-      row.deletedAt = now;
-    } else if (request.p_position) {
-      row.payload = { ...request.p_position, id: positionId, createdAt: row.payload.createdAt, updatedAt: now };
-    }
-    database.accountVersion += 1;
-    row.revision += 1;
-    row.accountVersion = database.accountVersion;
-    row.updatedAt = now;
-    await route.fulfill({ json: { positionId, position: row.deletedAt ? null : row.payload, accountVersion: database.accountVersion } });
-    publishChanges([row]);
-  });
-
-  await page.route('**/rest/v1/rpc/list_equity_oauth_clients*', async route => {
-    await route.fulfill({ json: [] });
-  });
-
-  await page.route('**/rest/v1/rpc/list_inventory_oauth_clients*', async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: '[]',
-    });
-  });
-
-  await page.route('**/rest/v1/rpc/list_employment_oauth_clients*', async route => {
-    await route.fulfill({ json: [] });
-  });
-
   await page.route('**/rest/v1/rpc/list_helm_secrets*', route => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ accountVersion: database.accountVersion, secrets: [] }),
+    json: { accountVersion: 1, secrets: [] },
   }));
-
-  return {
-    ...realtime,
-    applyRemoteMutations(operations, confirmedAt) {
-      // Simulate a separate client's confirmed write without delivering Broadcast.
-      database.accountVersion += 1;
-      applyMutations(rows, options.userId, database.accountVersion, operations, confirmedAt);
-    },
-  };
 }
 
 const APP_PREFERENCE_KEYS = ['theme', 'dataRetentionDays', 'telemetry', 'defaultCalendarTab', 'goalTags'];
@@ -533,7 +259,7 @@ function serviceIntegrations(stored: unknown): ServiceIntegration[] | undefined 
       status: integration.status,
       configuredAt: integration.configuredAt ?? null,
       lastError: integration.lastError ?? null,
-      updatedAt: SNAPSHOT_TIME,
+      updatedAt: FIXTURE_TIME,
     });
   }
   return [...byProvider.values()];
@@ -574,6 +300,7 @@ function servicesFromScenario(options: HelmScenarioOptions, settings: Record<str
     life: lifeFromScenario(options.stores),
     knowledge: knowledgeFromScenario(options.stores),
     planner: plannerFromScenario(options.stores),
+    finance: financeFromScenario(options.stores),
     calendar: {
       accounts: options.stores?.calendarAccounts as CalendarAccount[] | undefined,
       sources: options.stores?.calendarSources as CalendarSource[] | undefined,
@@ -627,181 +354,4 @@ async function installPrayerRoute(page: Page, options?: PrayerRouteOptions): Pro
       }),
     });
   });
-}
-
-async function mockRealtime(
-  page: Page,
-  database: MockDatabase,
-  userId: string,
-): Promise<Pick<HelmScenarioControl, 'setRealtimeAvailable' | 'setBroadcastDelivery' | 'getDeliveredBroadcastCount'>> {
-  let available = true;
-  let deliverBroadcast = true;
-  let deliveredBroadcasts = 0;
-  const interruptChannels = new Set<() => void>();
-  await page.routeWebSocket('wss://helm.test.supabase.co/realtime/v1/websocket**', socket => {
-    let joined = false;
-    let interrupt = () => {};
-    let sendBroadcast: (event: HelmRealtimeEvent) => void = () => {};
-    const deliver = (event: HelmRealtimeEvent) => {
-      if (available && deliverBroadcast && joined) {
-        sendBroadcast(event);
-        deliveredBroadcasts += 1;
-      }
-    };
-    database.listeners.add(deliver);
-    const cleanup = () => {
-      joined = false;
-      interruptChannels.delete(interrupt);
-      database.listeners.delete(deliver);
-    };
-    socket.onClose(async (code, reason) => {
-      cleanup();
-      // onClose disables Playwright's default closure forwarding. Complete
-      // the handshake so the SDK can leave its disconnecting state.
-      await socket.close({ code, reason });
-    });
-    page.once('close', cleanup);
-    socket.onMessage(message => {
-      let frame: unknown;
-      try {
-        frame = JSON.parse(message);
-      } catch {
-        return;
-      }
-      if (!frame || typeof frame !== 'object') return;
-      const envelope = Array.isArray(frame)
-        ? { join_ref: frame[0], ref: frame[1], topic: frame[2], event: frame[3], payload: frame[4] }
-        : frame as Record<string, unknown>;
-      const send = (event: string, payload: unknown, ref: unknown = null) => socket.send(JSON.stringify(
-        Array.isArray(frame)
-          ? [envelope.join_ref, ref, envelope.topic, event, payload]
-          : { topic: envelope.topic, event, payload, ref, join_ref: envelope.join_ref },
-      ));
-      if (envelope.event === 'phx_join') {
-        const payload = envelope.payload as { config?: { private?: boolean } };
-        joined = available && envelope.topic === `realtime:helm:account:${userId}` && payload.config?.private === true;
-        interruptChannels.delete(interrupt);
-        interrupt = () => {
-          joined = false;
-          send('phx_error', {});
-        };
-        interruptChannels.add(interrupt);
-        sendBroadcast = event => send('broadcast', { type: 'broadcast', event: 'helm_records_changed', payload: event });
-      } else if (envelope.event === 'phx_leave') {
-        joined = false;
-        interruptChannels.delete(interrupt);
-      }
-      if (['phx_join', 'phx_leave', 'heartbeat', 'access_token'].includes(String(envelope.event))) {
-        send('phx_reply', {
-          status: envelope.event === 'phx_join' && !available ? 'error' : 'ok', response: {},
-        }, envelope.ref);
-      }
-    });
-  });
-  return {
-    setRealtimeAvailable(nextAvailable) {
-      available = nextAvailable;
-      if (!available) interruptChannels.forEach(interrupt => interrupt());
-    },
-    setBroadcastDelivery(enabled) { deliverBroadcast = enabled; },
-    getDeliveredBroadcastCount: () => deliveredBroadcasts,
-  };
-}
-
-function applyMutations(
-  rows: Map<string, MockRow>,
-  userId: string,
-  accountVersion: number,
-  operations: HelmMutation[],
-  confirmedAt?: string,
-): MockRow[] {
-  const changed = new Map<string, MockRow>();
-  const now = confirmedAt ?? new Date().toISOString();
-  const mark = (row: MockRow) => {
-    row.revision += 1;
-    row.accountVersion = accountVersion;
-    row.updatedAt = now;
-    changed.set(rowKey(row.collection, row.recordId), row);
-  };
-
-  for (const operation of operations) {
-    if (operation.op === 'reorder') {
-      operation.orderedRecordIds.forEach((recordId, position) => {
-        const row = rows.get(rowKey(operation.collection, recordId));
-        if (row && row.deletedAt === null && row.position !== position) {
-          row.position = position;
-          mark(row);
-        }
-      });
-      continue;
-    }
-
-    const key = rowKey(operation.collection, operation.recordId);
-    const existing = rows.get(key);
-    if (operation.op === 'create') {
-      const row: MockRow = {
-        userId,
-        collection: operation.collection,
-        recordId: operation.recordId,
-        payload: operation.payload,
-        position: operation.position ?? null,
-        revision: 1,
-        accountVersion,
-        createdAt: now,
-        updatedAt: now,
-        deletedAt: null,
-      };
-      rows.set(key, row);
-      changed.set(key, row);
-    } else if (existing && operation.op === 'patch' && existing.deletedAt === null) {
-      existing.payload = { ...existing.payload, ...operation.set };
-      for (const field of operation.unset || []) delete existing.payload[field];
-      mark(existing);
-    } else if (existing && operation.op === 'increment' && existing.deletedAt === null) {
-      existing.payload[operation.field] = Number(existing.payload[operation.field] || 0) + operation.amount;
-      mark(existing);
-    } else if (existing && operation.op === 'delete' && existing.deletedAt === null) {
-      existing.deletedAt = now;
-      mark(existing);
-    } else if (existing && operation.op === 'restore' && existing.deletedAt !== null) {
-      existing.deletedAt = null;
-      mark(existing);
-    }
-  }
-
-  return [...changed.values()];
-}
-
-function rowKey(collection: string, recordId: string): string {
-  return `${collection}\0${recordId}`;
-}
-
-function toSnapshotRow(row: MockRow) {
-  return {
-    userId: row.userId,
-    collection: row.collection,
-    recordId: row.recordId,
-    payload: row.payload,
-    position: row.position,
-    revision: row.revision,
-    accountVersion: row.accountVersion,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    deletedAt: row.deletedAt,
-  };
-}
-
-function toDatabaseRow(row: MockRow) {
-  return {
-    user_id: row.userId,
-    collection: row.collection,
-    record_id: row.recordId,
-    payload: row.payload,
-    position: row.position,
-    revision: row.revision,
-    account_version: row.accountVersion,
-    created_at: row.createdAt,
-    updated_at: row.updatedAt,
-    deleted_at: row.deletedAt,
-  };
 }

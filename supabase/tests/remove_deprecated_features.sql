@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(9);
+select plan(7);
 
 select is(
   (select count(*)::integer from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -30,18 +30,6 @@ select is(
   (select count(*)::integer from pg_proc where prosrc like '%prayer.outcome%'),
   0,
   'nothing left reads prayer.outcome for Life Hero'
-);
-select ok(
-  strpos(pg_get_functiondef('helm_private.apply_helm_mutations_direct(uuid,jsonb)'::regprocedure), 'conversations') = 0
-    and strpos(pg_get_functiondef('helm_private.apply_helm_mutations_direct(uuid,jsonb)'::regprocedure), 'assistantCorrections') = 0
-    and strpos(pg_get_functiondef('helm_private.apply_helm_mutations_direct(uuid,jsonb)'::regprocedure), 'assistantActivityLog') = 0,
-  'the mutation allowlist no longer names an assistant collection'
-);
-select ok(
-  strpos(pg_get_functiondef('helm_private.apply_helm_mutations_direct(uuid,jsonb)'::regprocedure), '''employment''') > 0
-    and strpos(pg_get_functiondef('helm_private.apply_helm_mutations_direct(uuid,jsonb)'::regprocedure), '''prayerTracking''') > 0
-    and strpos(pg_get_functiondef('helm_private.apply_helm_mutations_direct(uuid,jsonb)'::regprocedure), '''settings''') > 0,
-  'the mutation allowlist keeps the remaining collections'
 );
 select is(
   (select count(*)::integer from public.helm_records

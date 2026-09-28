@@ -1,0 +1,20 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/prayer/v1/reminders/momentum"
+  },
+  "status" : 200,
+  "body" : {
+    "pillars" : [ {
+      "pillar" : "learn",
+      "enabled" : true,
+      "afterPrayers" : [ "Dhuhr", "Maghrib", "Isha" ],
+      "completedOn" : null
+    }, {
+      "pillar" : "move",
+      "enabled" : true,
+      "afterPrayers" : [ "Asr", "Isha" ],
+      "completedOn" : "2026-09-24"
+    } ]
+  }
+}

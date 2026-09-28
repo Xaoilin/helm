@@ -28,37 +28,38 @@ const [migrationRows, verificationRows] = await Promise.all([
           and c.relkind = 'r'
           and c.relname = any(array[
             'helm_account_state', 'helm_records',
-            'helm_mutation_receipts', 'helm_legacy_quarantine',
             'helm_secret_entries', 'helm_secret_mutation_receipts',
             'product_usage_events'
           ])
       ),
       'allHelmTablesUseRls', (
-        select count(*) = 7 and bool_and(c.relrowsecurity)
+        select count(*) = 5 and bool_and(c.relrowsecurity)
         from pg_class c
         join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public'
           and c.relkind = 'r'
           and c.relname = any(array[
             'helm_account_state', 'helm_records',
-            'helm_mutation_receipts', 'helm_legacy_quarantine',
             'helm_secret_entries', 'helm_secret_mutation_receipts',
             'product_usage_events'
           ])
       ),
       'authenticatedRecordsRead', has_table_privilege('authenticated', 'public.helm_records', 'select'),
-      'employmentTablesPrivate', (
-        select count(*) = 2 and bool_and(
+      'oauthApprovalTablesPrivate', (
+        select count(*) = 4 and bool_and(
           c.relrowsecurity
           and not has_table_privilege('authenticated', c.oid, 'select,insert,update,delete')
           and not has_table_privilege('anon', c.oid, 'select,insert,update,delete')
         )
         from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relkind = 'r'
-          and c.relname = any(array['helm_employment_oauth_clients', 'helm_employment_mutation_receipts'])
+          and c.relname = any(array[
+            'helm_inventory_oauth_clients', 'helm_employment_oauth_clients',
+            'helm_equity_oauth_clients', 'helm_finance_oauth_clients'
+          ])
       ),
-      'employmentRpcsRestricted', (
-        select count(*) = 9 and bool_and(
+      'oauthApprovalRpcsRestricted', (
+        select count(*) = 12 and bool_and(
           p.prosecdef
           and has_function_privilege('authenticated', p.oid, 'execute')
           and not has_function_privilege('anon', p.oid, 'execute')
@@ -66,62 +67,32 @@ const [migrationRows, verificationRows] = await Promise.all([
         )
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname = any(array[
-          'employment_list_applications', 'employment_get_application',
-          'employment_add_application', 'employment_update_application',
-          'employment_add_history', 'employment_remove_application',
-          'approve_employment_oauth_client', 'list_employment_oauth_clients',
-          'revoke_employment_oauth_client'
+          'approve_inventory_oauth_client', 'list_inventory_oauth_clients', 'revoke_inventory_oauth_client',
+          'approve_employment_oauth_client', 'list_employment_oauth_clients', 'revoke_employment_oauth_client',
+          'approve_equity_oauth_client', 'list_equity_oauth_clients', 'revoke_equity_oauth_client',
+          'approve_finance_oauth_client', 'list_finance_oauth_clients', 'revoke_finance_oauth_client'
         ])
       ),
-      'equityTablesPrivate', (
-        select count(*) = 2 and bool_and(
-          c.relrowsecurity
-          and not has_table_privilege('authenticated', c.oid, 'select,insert,update,delete')
-          and not has_table_privilege('anon', c.oid, 'select,insert,update,delete')
-        )
+      'genericStoreRetired', not exists (
+        select 1
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname in ('public', 'helm_private')
+          and (
+            p.proname like 'get_helm_%'
+            or p.proname like 'apply_helm_%'
+            or p.proname like 'inventory\_%'
+            or p.proname like 'employment\_%'
+            or p.proname like 'equity\_%'
+            or p.proname like 'finance\_%'
+            or p.proname like 'mutate\_%'
+            or p.proname = 'apply_inventory_mutations'
+          )
+      ) and not exists (
+        select 1
         from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relkind = 'r'
-          and c.relname = any(array['helm_equity_oauth_clients', 'helm_equity_mutation_receipts'])
-      ),
-      'equityRpcsRestricted', (
-        select count(*) = 8 and bool_and(
-          p.prosecdef
-          and has_function_privilege('authenticated', p.oid, 'execute')
-          and not has_function_privilege('anon', p.oid, 'execute')
-          and array_to_string(p.proconfig, ',') like '%search_path=""%'
-        )
-        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.proname = any(array[
-          'equity_list_positions', 'equity_get_position',
-          'equity_add_position', 'equity_update_position',
-          'equity_remove_position',
-          'approve_equity_oauth_client', 'list_equity_oauth_clients',
-          'revoke_equity_oauth_client'
-        ])
-      ),
-      'financeTablesPrivate', (
-        select count(*) = 2 and bool_and(
-          c.relrowsecurity
-          and not has_table_privilege('authenticated', c.oid, 'select,insert,update,delete')
-          and not has_table_privilege('anon', c.oid, 'select,insert,update,delete')
-        )
-        from pg_class c join pg_namespace n on n.oid = c.relnamespace
-        where n.nspname = 'public' and c.relkind = 'r'
-          and c.relname = any(array['helm_finance_oauth_clients', 'helm_finance_mutation_receipts'])
-      ),
-      'financeRpcsRestricted', (
-        select count(*) = 5 and bool_and(
-          p.prosecdef
-          and has_function_privilege('authenticated', p.oid, 'execute')
-          and not has_function_privilege('anon', p.oid, 'execute')
-          and array_to_string(p.proconfig, ',') like '%search_path=""%'
-        )
-        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.proname = any(array[
-          'finance_get_review', 'finance_save_review',
-          'approve_finance_oauth_client', 'list_finance_oauth_clients',
-          'revoke_finance_oauth_client'
-        ])
+          and (c.relname like 'helm\_%mutation_receipts' and c.relname <> 'helm_secret_mutation_receipts'
+            or c.relname = 'helm_legacy_quarantine')
       ),
       'authenticatedRecordsWrite',
         has_table_privilege('authenticated', 'public.helm_records', 'insert')
@@ -132,7 +103,6 @@ const [migrationRows, verificationRows] = await Promise.all([
         has_table_privilege('anon', 'public.helm_records', 'insert')
         or has_table_privilege('anon', 'public.helm_records', 'update')
         or has_table_privilege('anon', 'public.helm_records', 'delete'),
-      'authenticatedReceiptRead', has_table_privilege('authenticated', 'public.helm_mutation_receipts', 'select'),
       'authenticatedSecretMetadataAccess',
         has_table_privilege('authenticated', 'public.helm_secret_entries', 'select')
         or has_table_privilege('authenticated', 'public.helm_secret_entries', 'insert')
@@ -145,12 +115,6 @@ const [migrationRows, verificationRows] = await Promise.all([
         or has_table_privilege('anon', 'public.helm_secret_entries', 'delete'),
       'authenticatedSecretReceiptRead', has_table_privilege(
         'authenticated', 'public.helm_secret_mutation_receipts', 'select'
-      ),
-      'authenticatedRpcExecute', has_function_privilege(
-        'authenticated', 'public.apply_helm_mutations(uuid,jsonb)', 'execute'
-      ),
-      'anonymousRpcExecute', has_function_privilege(
-        'anon', 'public.apply_helm_mutations(uuid,jsonb)', 'execute'
       ),
       'authenticatedSecretRpcExecute',
         has_function_privilege('authenticated', 'public.list_helm_secrets()', 'execute')
@@ -188,14 +152,6 @@ const [migrationRows, verificationRows] = await Promise.all([
         select 1 from pg_extension where extname = 'supabase_vault'
       ),
       'authenticatedVaultUsage', has_schema_privilege('authenticated', 'vault', 'usage'),
-      'rpcIsSecurityDefiner', (
-        select p.prosecdef
-        from pg_proc p
-        join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public'
-          and p.proname = 'apply_helm_mutations'
-          and pg_get_function_identity_arguments(p.oid) = 'p_request_id uuid, p_operations jsonb'
-      ),
       'deprecatedFeaturesRemoved', not exists (
         select 1
         from pg_class c
@@ -246,14 +202,16 @@ const [migrationRows, verificationRows] = await Promise.all([
           and cmd = 'SELECT'
           and roles = array['authenticated']::name[]
       ),
-      'privateBroadcastPolicy', exists (
+      'broadcastRetired', not exists (
         select 1
         from pg_policies
         where schemaname = 'realtime'
           and tablename = 'messages'
           and policyname = 'HELM account broadcasts are private'
-          and cmd = 'SELECT'
-          and roles = array['authenticated']::name[]
+      ) and not exists (
+        select 1
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname in ('public', 'helm_private') and p.prosrc like '%realtime.send%'
       ),
       'legacyKvPublished', exists (
         select 1
@@ -311,105 +269,6 @@ const [migrationRows, verificationRows] = await Promise.all([
         where current.row_count <> (state.legacy_manifest ->> 'rowCount')::bigint
           or current.snapshot_sha256 <> state.legacy_manifest ->> 'snapshotSha256'
       ),
-      'ordinaryLegacyCollectionsAccounted', not exists (
-        select 1
-        from public.kv_store kv
-        join auth.users account on account.id::text = kv.user_id::text
-        join public.helm_account_state state on state.user_id = account.id
-        join lateral (
-          select
-            count(*)::bigint as record_count,
-            encode(extensions.digest(convert_to(
-              coalesce(jsonb_agg(
-                case when kv.key = 'projects'
-                  then item.value - 'localPath' - 'projectRoot' - 'approvedProfiles'
-                    - 'fingerprint' - 'processes' - 'logs'
-                  else item.value
-                end
-                order by item.ordinal
-              ), '[]'::jsonb)::text,
-              'UTF8'
-            ), 'sha256'), 'hex') as payload_sha256
-          from (
-            select candidate.value, candidate.ordinal
-            from jsonb_array_elements(kv.value) with ordinality candidate(value, ordinal)
-            where jsonb_typeof(candidate.value) = 'object'
-              and nullif(candidate.value ->> 'id', '') is not null
-              and length(candidate.value ->> 'id') <= 256
-              and 1 = (
-                select count(*)
-                from jsonb_array_elements(kv.value) duplicate
-                where nullif(duplicate ->> 'id', '') = nullif(candidate.value ->> 'id', '')
-              )
-          ) item
-        ) expected on true
-        join lateral (
-          select
-            count(*)::bigint as record_count,
-            encode(extensions.digest(convert_to(
-              coalesce(jsonb_agg(records.payload order by records.position, records.record_id), '[]'::jsonb)::text,
-              'UTF8'
-            ), 'sha256'), 'hex') as payload_sha256
-          from public.helm_records records
-          where records.user_id = account.id
-            and records.collection = kv.key
-            and records.deleted_at is null
-        ) actual on true
-        where kv.namespace = 'helm'
-          and jsonb_typeof(kv.value) = 'array'
-          and kv.key = any(array[
-            'integrations',
-            'calendarAccounts', 'calendarSources', 'calendarEvents',
-            'captureItems',
-            'trips', 'tripLegs', 'tripItineraryItems', 'tripBookings', 'tripBudgetEntries',
-            'projects', 'projectPages', 'tasks', 'dashboardFocusFeedback',
-            'knowledgeTopics', 'knowledgeEntries', 'lifestyleItems', 'healthFastFoodEntries',
-            'financeAccounts', 'transactions', 'financeBudgets', 'savingsGoals'
-          ])
-          and (expected.record_count, expected.payload_sha256)
-            is distinct from (actual.record_count, actual.payload_sha256)
-          and not exists (
-            select 1
-            from public.helm_mutation_receipts receipt
-            cross join lateral jsonb_array_elements(
-              coalesce(receipt.result -> 'changes', '[]'::jsonb)
-            ) change
-            where receipt.user_id = account.id
-              and receipt.applied_at >= coalesce(state.migrated_at, '-infinity'::timestamptz)
-              and change ->> 'collection' = kv.key
-          )
-      ),
-      'goldenCatalogueCurrent', coalesce((
-        select
-          count(*) = 21
-          and count(*) filter (where coalesce((record.payload ->> 'isPinned')::boolean, false)) = 6
-          and count(*) filter (
-            where not coalesce((record.payload ->> 'isPinned')::boolean, false)
-              and record.payload ->> 'status' <> 'archived'
-          ) = 13
-          and count(*) filter (where record.payload ->> 'status' = 'archived') = 2
-          and encode(extensions.digest(convert_to(
-            string_agg(record.record_id, E'\\x1f' order by record.position), 'UTF8'
-          ), 'sha256'), 'hex') = 'd027cc0f6bb063890b7311d3403903d4261462160a8f48e3f34f8b71456977e1'
-        from public.helm_records record
-        join auth.users account on account.id = record.user_id
-        where (lower(account.email) = 'alisab.london'
-            or lower(split_part(account.email, '@', 1)) = 'alisab.london')
-          and record.collection = 'projects'
-          and record.deleted_at is null
-      ), false),
-      'legacyAccountIsolationCurrent', coalesce((
-        select
-          count(*) filter (where record.collection = 'financeAccounts') = 2
-          and count(*) filter (where record.collection = 'transactions') = 58
-          and count(*) filter (where record.collection = 'tasks') = 11
-        from public.helm_records record
-        join auth.users account on account.id = record.user_id
-        where (lower(account.email) = 'xaoilin'
-            or lower(split_part(account.email, '@', 1)) = 'xaoilin')
-          and record.deleted_at is null
-          and record.collection = any(array['financeAccounts','transactions','tasks'])
-      ), false),
       'unownedLegacyRowsStayUnattached', not exists (
         select 1
         from public.kv_store kv
@@ -447,46 +306,36 @@ if (!verification || typeof verification !== 'object') {
 }
 
 const expected = {
-  helmTableCount: 7,
+  helmTableCount: 5,
   allHelmTablesUseRls: true,
   authenticatedRecordsRead: true,
-  employmentTablesPrivate: true,
-  employmentRpcsRestricted: true,
-  equityTablesPrivate: true,
-  equityRpcsRestricted: true,
-  financeTablesPrivate: true,
-  financeRpcsRestricted: true,
+  oauthApprovalTablesPrivate: true,
+  oauthApprovalRpcsRestricted: true,
+  genericStoreRetired: true,
   authenticatedRecordsWrite: false,
   anonymousRecordsRead: false,
   anonymousRecordsWrite: false,
-  authenticatedReceiptRead: false,
   authenticatedSecretMetadataAccess: false,
   anonymousSecretMetadataAccess: false,
   authenticatedSecretReceiptRead: false,
-  authenticatedRpcExecute: true,
-  anonymousRpcExecute: false,
   authenticatedSecretRpcExecute: true,
   anonymousSecretRpcExecute: false,
   secretRpcsAreSecurityDefiner: true,
   vaultInstalled: true,
   authenticatedVaultUsage: false,
-  rpcIsSecurityDefiner: true,
   deprecatedFeaturesRemoved: true,
   productUsageOwnerReadPolicy: true,
   productUsagePrivileges: true,
   productUsageIngestRetired: true,
   productUsageRowsContentFree: true,
   accountReadPolicies: 2,
-  privateBroadcastPolicy: true,
+  broadcastRetired: true,
   legacyKvPublished: false,
   authenticatedLegacyKvWrite: false,
   kvUserIdType: 'text',
   legacyAccountsMissingState: 0,
   minimumClientVersionsCorrect: true,
   legacySnapshotsMatchManifest: true,
-  ordinaryLegacyCollectionsAccounted: true,
-  goldenCatalogueCurrent: true,
-  legacyAccountIsolationCurrent: true,
   unownedLegacyRowsStayUnattached: true,
 }
 
@@ -499,7 +348,7 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `Verified HELM database schema, migration history, RLS, RPC, and private Broadcast on ${projectRef}.`,
+  `Verified HELM database schema, migration history, RLS, secret and OAuth approval RPCs, and the retired record store on ${projectRef}.`,
 )
 
 function requireEnv(name) {

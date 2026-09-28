@@ -28,7 +28,15 @@ const EQUITY: EquityPosition = {
   createdAt: FINANCE_REVIEW.createdAt, updatedAt: FINANCE_REVIEW.updatedAt,
 };
 
-test('keeps saved Finance data, drafts and confirmed writes usable without Realtime', async ({ page, scenario }, testInfo) => {
+/** The browser reports being offline (or back online), as when the network drops. */
+async function setBrowserOnline(page: Page, online: boolean): Promise<void> {
+  await page.evaluate(value => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => value });
+    window.dispatchEvent(new Event(value ? 'online' : 'offline'));
+  }, online);
+}
+
+test('keeps saved Finance data readable while offline, then saves again once back online', async ({ page, scenario }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const control = await scenario({
@@ -38,24 +46,13 @@ test('keeps saved Finance data, drafts and confirmed writes usable without Realt
   await openApp(page);
   await page.getByRole('button', { name: 'Navigate to Finance' }).click();
   const budget = page.getByRole('region', { name: 'Monthly available amount' });
-  const stocks = page.getByRole('region', { name: 'Example Co Stocks' });
   await expect(budget).toContainText('£1,750.00 / month');
-  await expect(stocks).toContainText('120 owned shares');
-  await page.getByRole('button', { name: 'Edit Example Co' }).click();
-  const editor = page.getByRole('dialog', { name: 'Edit equity' });
-  await editor.getByLabel('Company', { exact: true }).fill('Unsaved example draft');
 
-  control.setRealtimeAvailable(false);
+  await setBrowserOnline(page, false);
   const banner = page.getByTestId('sync-status-banner');
-  await expect(banner).toContainText('Live updates delayed');
-  await expect(banner).toContainText('Your saved data remains available. Checking for changes automatically.');
-  await expect(editor.getByLabel('Company', { exact: true })).toHaveValue('Unsaved example draft');
-  await expect(editor.getByRole('button', { name: 'Save equity' })).toBeEnabled();
-  page.once('dialog', prompt => { void prompt.accept(); });
-  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(editor).toHaveCount(0);
+  await expect(banner).toContainText('Offline');
+  await expect(banner).toContainText('Showing your last confirmed data. Sabah One will reconnect automatically.');
   await expect(budget).toContainText('£1,750.00 / month');
-  await expect(stocks).toContainText('120 owned shares');
 
   const evidence = [];
   for (const width of [390, 768, 1440]) {
@@ -69,42 +66,20 @@ test('keeps saved Finance data, drafts and confirmed writes usable without Realt
     expect(headingOverlap, `Status banner must not obscure the Finance heading at ${width}px`).toBe(0);
     const dimensions = await page.evaluate(() => ({
       client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth,
-      containers: [...document.querySelectorAll('.sync-status-banner, .main-content, .banking-review, .equity-position')]
+      containers: [...document.querySelectorAll('.sync-status-banner, .main-content, .banking-review')]
         .filter(element => element.getClientRects().length > 0)
         .map(element => ({ name: element.className, client: element.clientWidth, scroll: element.scrollWidth })),
     }));
     expect(dimensions.scroll).toBe(dimensions.client);
     for (const container of dimensions.containers) expect(container.scroll, container.name).toBeLessThanOrEqual(container.client + 1);
-    await page.screenshot({ path: testInfo.outputPath(`synthetic-realtime-delayed-finance-${width}.png`) });
-    let scrolling;
-    if (width === 390) {
-      const scroller = page.locator('.main-content');
-      const size = await scroller.evaluate(element => ({ client: element.clientHeight, scroll: element.scrollHeight }));
-      expect(size.scroll).toBeGreaterThan(size.client);
-      const before = await budget.boundingBox();
-      await scroller.hover();
-      await page.mouse.wheel(0, 400);
-      await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-      const after = await budget.boundingBox();
-      expect(after!.y).toBeLessThan(before!.y);
-      await scroller.evaluate(element => { element.scrollTop = 0; });
-      await scroller.focus();
-      await page.keyboard.press('PageDown');
-      await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-      scrolling = { ...size, beforeY: before!.y, afterY: after!.y, keyboardOffset: await scroller.evaluate(element => element.scrollTop) };
-      await scroller.evaluate(element => { element.scrollTop = 0; });
-    }
-    const stocksTab = page.getByRole('button', { name: 'Stocks', exact: true });
-    await stocksTab.focus();
-    await stocksTab.press('Enter');
-    await expect(stocks).toContainText('120 owned shares');
-    await page.locator('.main-content').evaluate(element => element.scrollTo(0, 0));
-    await page.screenshot({ path: testInfo.outputPath(`synthetic-realtime-delayed-equity-${width}.png`) });
-    await page.getByRole('button', { name: 'Overview', exact: true }).click();
-    evidence.push({ width, headingOverlap, ...dimensions, scrolling });
+    await page.screenshot({ path: testInfo.outputPath(`synthetic-offline-finance-${width}.png`) });
+    evidence.push({ width, headingOverlap, ...dimensions });
   }
 
-  // Tasks are the planner service's: completing one is one service write, whatever Realtime is doing.
+  // Back online, the banner goes and a task completes with one planner-service write.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setBrowserOnline(page, true);
+  await expect(banner).toHaveCount(0);
   let taskMutationCount = 0;
   page.on('request', request => {
     if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/complete')) taskMutationCount += 1;
@@ -118,7 +93,7 @@ test('keeps saved Finance data, drafts and confirmed writes usable without Realt
   expect(control.services.planner.tasks.find(task => task.id === TASK.id)?.completed).toBe(true);
   const evidencePath = testInfo.outputPath('synthetic-availability-evidence.json');
   await writeFile(evidencePath, JSON.stringify({
-    environment: 'Synthetic Playwright account and mocked HTTPS/WebSocket services; not live-account acceptance.',
+    environment: 'Synthetic Playwright account and mocked HTTPS services; not live-account acceptance.',
     taskMutationCount, dimensions: evidence,
   }, null, 2));
   await testInfo.attach('synthetic-availability-evidence', { path: evidencePath, contentType: 'application/json' });

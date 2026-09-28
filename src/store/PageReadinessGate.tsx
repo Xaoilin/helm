@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { useShell } from './ShellContext';
-import { useSyncAvailability } from './SyncAvailabilityContext';
 import { useCalendar } from './contexts/CalendarContext';
 import { useClockContext } from './contexts/ClockContext';
 import { useDailyMomentumContext } from './contexts/DailyMomentumContext';
@@ -29,7 +28,6 @@ export function useSharedPageReady(): boolean {
 
 export function PageReadinessGate({ children }: { children: ReactNode }) {
   const shell = useShell();
-  const { readOnly } = useSyncAvailability();
   const shared = useSharedPageReady();
   const projects = useProjectContext().loaded;
   const inventory = useInventoryContext().loaded;
@@ -42,15 +40,6 @@ export function PageReadinessGate({ children }: { children: ReactNode }) {
     : shell.surface === 'health' ? health
     : shell.surface === 'finance' ? finance
     : true; // Employment and its confirmed first seed retain their own loading UI.
-
-  if ((!shared || !pageReady) && shell.pageLoadError) {
-    return (
-      <div role="alert" className="surface-body">
-        <p>This page could not load: {shell.pageLoadError}</p>
-        {!readOnly && <button type="button" className="btn btn-secondary" onClick={shell.retryPageLoad}>Try again</button>}
-      </div>
-    );
-  }
 
   if (!shared || !pageReady) {
     return <div role="status" aria-live="polite" className="surface-body">Loading page data...</div>;

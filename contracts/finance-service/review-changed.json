@@ -1,0 +1,11 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/finance/v1/review"
+  },
+  "status" : 409,
+  "body" : {
+    "code" : "review_changed",
+    "message" : "The banking review changed since it was read; reload and try again."
+  }
+}

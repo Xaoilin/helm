@@ -1,0 +1,79 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/finance/v1/equity/positions/example"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "example",
+    "company" : "Example Co",
+    "asOf" : "2026-09-20",
+    "ownedShares" : 100,
+    "stockPlan" : {
+      "summary" : "Hold",
+      "status" : "tentative",
+      "waitingFor" : "",
+      "nextAction" : "Review",
+      "reviewMonth" : null
+    },
+    "optionPlan" : {
+      "summary" : "Wait",
+      "status" : "undecided",
+      "waitingFor" : "Vest",
+      "nextAction" : "",
+      "reviewMonth" : "2027-01"
+    },
+    "employmentNote" : "Example employment note",
+    "grants" : [ {
+      "id" : "grant-1",
+      "grantDate" : "2024-01-15",
+      "vested" : 50,
+      "unvested" : 150,
+      "strikeUsd" : 1.25,
+      "originalExpiry" : "2034-01-15",
+      "postEmploymentExpiry" : null,
+      "nextVest" : null
+    }, {
+      "id" : "grant-2",
+      "grantDate" : "2025-01-15",
+      "vested" : 0,
+      "unvested" : 100,
+      "strikeUsd" : 2.5,
+      "originalExpiry" : "2035-01-15",
+      "postEmploymentExpiry" : "2027-01-15",
+      "nextVest" : {
+        "date" : "2026-12-01",
+        "alternateDate" : null,
+        "quantity" : 25,
+        "condition" : "Still employed"
+      }
+    } ],
+    "actions" : [ {
+      "id" : "action-1",
+      "title" : "Read the plan rules",
+      "timing" : "This month",
+      "dueDate" : null,
+      "done" : false
+    } ],
+    "details" : [ {
+      "id" : "detail-1",
+      "title" : "Example detail",
+      "body" : "Fake notes"
+    } ],
+    "sources" : [ {
+      "id" : "source-1",
+      "label" : "Example plan",
+      "url" : "https://example.com/plan",
+      "asOf" : "2026-09-01"
+    } ],
+    "scenario" : {
+      "pricesUsd" : [ 5.0, 10.0 ],
+      "withholdingRate" : 0.45,
+      "usdToGbp" : 0.75,
+      "asOf" : "2026-09-20",
+      "notes" : ""
+    },
+    "createdAt" : "2026-09-27T12:00:00Z",
+    "updatedAt" : "2026-09-27T12:00:00Z"
+  }
+}

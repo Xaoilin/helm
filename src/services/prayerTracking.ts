@@ -1,5 +1,4 @@
 import type {
-  BoundedReminderReceipt,
   PrayerActivationDayEligibility,
   PrayerCompletionSource,
   PrayerCompletionStatus,
@@ -10,7 +9,6 @@ import type {
   PrayerOutcomeStats,
   PrayerOutcomeStatus,
   PrayerOutcomeTally,
-  PrayerReminderReceipt,
   PrayerScheduleDay,
   PrayerScheduleEntry,
   PrayerTrackingRecord,
@@ -21,7 +19,6 @@ import { prayerZonedDateTimeToInstant, shiftPrayerDate } from './prayerTimeZone'
 
 export const PRAYER_TRACKING_SCHEMA_VERSION = 1;
 export const CANONICAL_PRAYER_NAMES = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const satisfies readonly PrayerName[];
-const BOUNDED_REMINDER_KINDS = new Set(['prayer-opportunity', 'prayer-deadline', 'momentum']);
 
 const PRAYER_DEADLINES: Record<PrayerName, PrayerDeadlineName> = {
   Fajr: 'Sunrise',
@@ -51,14 +48,6 @@ export interface SetPrayerOutcomeInput {
   rewarded?: true;
   taskId?: string;
   source?: PrayerCompletionSource;
-}
-
-export interface SetPrayerReminderReceiptInput {
-  date: string;
-  prayerName: PrayerName;
-  deadlineAt: Date | string;
-  notifiedAt?: Date | string;
-  snoozedUntil?: Date | string;
 }
 
 type MutablePrayerOutcomeTally = Omit<PrayerOutcomeTally, 'percentages'>;
@@ -107,10 +96,6 @@ function normalizeInstant(value: unknown, fallback: string): string {
   return parseInstant(value)?.toISOString() ?? fallback;
 }
 
-function optionalInstant(value: unknown): string | undefined {
-  return parseInstant(value)?.toISOString();
-}
-
 function findScheduleEntry(prayers: readonly PrayerScheduleEntry[], name: string): PrayerScheduleEntry | undefined {
   return prayers.find(prayer => prayer.name === name);
 }
@@ -136,28 +121,6 @@ function normalizePrayerRecord(value: unknown, fallbackRecordedAt: string): Pray
     record.source = value.source;
   }
   return record;
-}
-
-function normalizeReminderReceipt(value: unknown): PrayerReminderReceipt | null {
-  if (!isObject(value)) return null;
-  if (typeof value.date !== 'string' || !parseLocalDate(value.date)) return null;
-  if (!isPrayerName(value.prayerName)) return null;
-
-  const deadlineAt = optionalInstant(value.deadlineAt);
-  if (!deadlineAt) return null;
-
-  const notificationKey = getPrayerReminderKey(value.date, value.prayerName, deadlineAt);
-  const receipt: PrayerReminderReceipt = {
-    date: value.date,
-    prayerName: value.prayerName,
-    deadlineAt,
-    notificationKey,
-  };
-  const notifiedAt = optionalInstant(value.notifiedAt);
-  const snoozedUntil = optionalInstant(value.snoozedUntil);
-  if (notifiedAt) receipt.notifiedAt = notifiedAt;
-  if (snoozedUntil) receipt.snoozedUntil = snoozedUntil;
-  return receipt;
 }
 
 function normalizeActivationDayEligibility(
@@ -255,18 +218,6 @@ export function getPrayerRewardLogId(prayerName: PrayerName): string {
   return `prayer:${prayerName.toLowerCase()}`;
 }
 
-export function getPrayerReminderKey(
-  date: string,
-  prayerName: PrayerName,
-  deadlineAt: Date | string,
-): string {
-  const deadline = parseInstant(deadlineAt);
-  if (!deadline) {
-    throw new RangeError('Invalid prayer reminder deadline');
-  }
-  return `${getPrayerRecordKey(date, prayerName)}::${deadline.toISOString()}`;
-}
-
 export function createPrayerTrackingState(now: Date = new Date()): PrayerTrackingState {
   if (!Number.isFinite(now.getTime())) {
     throw new RangeError('Invalid prayer tracking activation time');
@@ -275,8 +226,6 @@ export function createPrayerTrackingState(now: Date = new Date()): PrayerTrackin
     schemaVersion: PRAYER_TRACKING_SCHEMA_VERSION,
     trackingStartedAt: now.toISOString(),
     records: {},
-    reminderReceipts: {},
-    boundedReminderReceipts: {},
   };
 }
 
@@ -299,8 +248,6 @@ export function normalizePrayerTrackingState(
     activationDate,
   );
   const records: Record<string, PrayerTrackingRecord> = {};
-  const reminderReceipts: Record<string, PrayerReminderReceipt> = {};
-  const boundedReminderReceipts: Record<string, BoundedReminderReceipt> = {};
 
   if (isObject(raw.records)) {
     for (const candidate of Object.values(raw.records)) {
@@ -310,47 +257,11 @@ export function normalizePrayerTrackingState(
     }
   }
 
-  if (isObject(raw.reminderReceipts)) {
-    for (const candidate of Object.values(raw.reminderReceipts)) {
-      const receipt = normalizeReminderReceipt(candidate);
-      if (!receipt) continue;
-      reminderReceipts[receipt.notificationKey] = receipt;
-    }
-  }
-
-  if (isObject(raw.boundedReminderReceipts)) {
-    for (const [key, candidate] of Object.entries(raw.boundedReminderReceipts)) {
-      if (
-        !isObject(candidate)
-        || candidate.notificationKey !== key
-        || typeof candidate.date !== 'string'
-        || !parseLocalDate(candidate.date)
-        || typeof candidate.kind !== 'string'
-        || !BOUNDED_REMINDER_KINDS.has(candidate.kind)
-        || (candidate.snoozeCount !== 0 && candidate.snoozeCount !== 1)
-      ) continue;
-      const attemptedAt = optionalInstant(candidate.attemptedAt);
-      const notifiedAt = optionalInstant(candidate.notifiedAt);
-      const snoozedUntil = optionalInstant(candidate.snoozedUntil);
-      boundedReminderReceipts[key] = {
-        notificationKey: key,
-        date: candidate.date,
-        kind: candidate.kind as BoundedReminderReceipt['kind'],
-        snoozeCount: candidate.snoozeCount,
-        ...(attemptedAt ? { attemptedAt } : {}),
-        ...(notifiedAt ? { notifiedAt } : {}),
-        ...(snoozedUntil ? { snoozedUntil } : {}),
-      };
-    }
-  }
-
   return {
     schemaVersion: PRAYER_TRACKING_SCHEMA_VERSION,
     trackingStartedAt,
     ...(activationDayEligibility ? { activationDayEligibility } : {}),
     records,
-    reminderReceipts,
-    boundedReminderReceipts,
   };
 }
 
@@ -455,41 +366,6 @@ export function removePrayerOutcome(
   const records = { ...state.records };
   delete records[key];
   return { ...state, records };
-}
-
-export function setPrayerReminderReceipt(
-  state: PrayerTrackingState,
-  input: SetPrayerReminderReceiptInput,
-): PrayerTrackingState {
-  requireLocalDate(input.date);
-  if (!isPrayerName(input.prayerName)) {
-    throw new RangeError('Invalid prayer reminder prayer name');
-  }
-
-  const deadlineAt = optionalInstant(input.deadlineAt);
-  if (!deadlineAt) {
-    throw new RangeError('Invalid prayer reminder deadline');
-  }
-  const notificationKey = getPrayerReminderKey(input.date, input.prayerName, deadlineAt);
-  const existing = state.reminderReceipts[notificationKey];
-  const receipt: PrayerReminderReceipt = {
-    date: input.date,
-    prayerName: input.prayerName,
-    deadlineAt,
-    notificationKey,
-  };
-  const notifiedAt = optionalInstant(input.notifiedAt) ?? existing?.notifiedAt;
-  const snoozedUntil = optionalInstant(input.snoozedUntil) ?? existing?.snoozedUntil;
-  if (notifiedAt) receipt.notifiedAt = notifiedAt;
-  if (snoozedUntil) receipt.snoozedUntil = snoozedUntil;
-
-  return {
-    ...state,
-    reminderReceipts: {
-      ...state.reminderReceipts,
-      [notificationKey]: receipt,
-    },
-  };
 }
 
 export function getPrayerDeadlineBounds(

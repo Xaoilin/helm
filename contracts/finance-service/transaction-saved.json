@@ -1,0 +1,35 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/finance/v1/transactions/pay"
+  },
+  "status" : 200,
+  "body" : {
+    "transaction" : {
+      "id" : "pay",
+      "type" : "income",
+      "amount" : 250000,
+      "category" : "salary",
+      "accountId" : "current",
+      "toAccountId" : null,
+      "description" : "Example payment",
+      "date" : "2026-09-25",
+      "tags" : [ "example" ],
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
+    },
+    "accounts" : [ {
+      "id" : "current",
+      "name" : "Example Bank",
+      "type" : "current",
+      "balance" : 360401,
+      "currency" : "GBP",
+      "color" : "#22c55e",
+      "icon" : "bank",
+      "includeInNetWorth" : true,
+      "sortOrder" : 0,
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
+    } ]
+  }
+}

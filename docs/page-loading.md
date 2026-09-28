@@ -1,70 +1,35 @@
 # Account page loading
 
-The browser loads confirmed account data for the active page and keeps it in
-memory for that account. Navigating does not discard confirmed collections.
-Unrequested data stays unloaded; it must never be interpreted as an empty
-collection or passed to collection autosave. Account changes clear this state.
+Every domain provider loads its own data from its Spring service, most through
+`useServiceLoad` (`src/store/contexts/useServiceLoad.ts`): once when the
+signed-in session's providers mount, again after a change another tab or device
+saved (the live-update stream), and after a failed load (a few timed retries,
+then whenever the page is shown again). Confirmed data stays in memory for the
+session, so navigating between pages reuses it. No account data is kept in
+browser storage.
 
-`src/store/pageCollections.ts` owns the collection mapping. The shell stays
-available while the active page's providers finish hydrating. Existing domain
-providers hydrate their complete group together because their normalization,
-migration, and autosave logic assumes all related collections are present.
+`PageReadinessGate` shows `Loading page data...` until the providers the page
+needs have answered: every page needs settings, progress, momentum, tasks,
+prayer, knowledge, calendar and clock; Projects, Tasks and Secrets also need
+projects, Inventory needs inventory and projects, and Trips, Health and Finance
+their own domain. Employment keeps its own loading and retry UI. Navigation stays
+available while a page loads.
 
-Every page needs settings/integrations, tasks/gamification/prayer tracking,
-knowledge topics/entries/lifestyle items, calendar accounts/sources/events, and
-clock state. These preserve prayer reminders and reward reconciliation, Google
-background sync, and off-page timer alarms. Knowledge statistics are inputs to
-prayer rewards. Calendar accounts must be loaded before integration status is
-reconciled.
+A failed load keeps the last confirmed data on screen with the service's error
+and a Retry control; a failed write says the change was not saved and reloads
+what the service holds. While the browser reports being offline, pages are
+read-only under an Offline banner; they become editable again when it is back
+online.
 
-| Page | Additional collections |
-| --- | --- |
-| Projects, Tasks, Secrets | projects, projectPages, legacy workspaces |
-| Inventory | project group, inventoryItems, inventoryNeeds |
-| Trips | trips, tripLegs, tripItineraryItems, tripBookings, tripBudgetEntries |
-| Employment | employment (surface retains its confirmed seed/loading path) |
-| Health | healthFastFoodEntries |
-| Finance | financeAccounts, transactions, financeBudgets, savingsGoals, financeReviews, equityPositions |
-| Activity | shared collections only (usage insight reads product analytics) |
-| Dashboard, Calendar, Clock, Knowledge, Profile, Integrations, Settings, Debug | shared collections only |
+Account changes remount every provider (keyed by the signed-in session), so the
+previous account's data is cleared before the next account's pages load theirs.
+The generic Supabase record store that used to hydrate pages in scoped snapshots
+was retired in v0.2.206.
 
-Page-specific semantic requests, including secret metadata, retain their existing
-access boundaries.
+Secrets list their summaries through the Vault RPCs when the page opens, after
+each of the page's own writes, and whenever the page is focused or shown again.
+Revealed values are cleared when the page is hidden or loses focus.
 
-Each confirmed dataset has a ten-minute freshness window. A revisit within that
-window reuses memory; an expired page requests a new scoped snapshot. If that
-read discovers a newer account version, already-loaded collections are reconciled
-before the global checkpoint advances, so a missed or delayed Broadcast cannot
-hide their changes. KAN-319 reconciles metadata for every changed collection from
-the last fully invalidated checkpoint. Only changed collections needed by the current page
-are fetched; previously visited inactive collections are marked
-stale and refreshed on their next activation. A contiguous local mutation receipt
-updates its confirmed cache directly without downloading it again. Delayed,
-duplicate and missed notifications cannot acknowledge omitted changed scopes.
-
-`get_helm_changed_collections` returns an atomic account version, changed
-collection names (including deletion tombstones), and a secret-change boolean.
-It returns no record bodies or secret values. A missed secret notification clears
-revealed values and refreshes summaries when Secrets is mounted. This first-party
-metadata RPC denies anonymous and external OAuth-client sessions, matching the
-existing browser read boundary. The ten-minute check and reconnect use the same
-selective catch-up. HTTPS readiness and finite recovery budgets are unchanged.
-
-Assistant actions load 50 live records at a time, newest first. “Load more
-activity” requests the next page; the loaded count describes the visible window.
-Partial-list writes compare only provider-delivered records and do not reorder
-the unseen tail. Multi-statement page reads are staged and version-checked before
-cache replacement, so a concurrent confirmed write is retained. A changed account
-version rejects that read and uses the existing bounded recovery path.
-
-Page activation never resets recovery attempts. An explicit Retry connection
-uses the existing recovery action; unrelated navigation stays available while a
-failed page remains unloaded. No account contents are persisted in browser
-storage, and no backend cache or new external-agent capability is introduced.
-
-The initial account gate also offers Retry connection after a failed load and
-states that automatic retries are limited. It keeps account data closed until
-the signed-in account has a confirmed snapshot. Release checks run before the
-sign-in/account gate, so a failed initial load cannot prevent detecting a new
-build. Pending writes, open editors, visible drafts, and hidden tabs retain the
+Release checks run before the sign-in gate, so a sign-in problem cannot prevent
+detecting a new build. Open editors, visible drafts and hidden tabs keep the
 existing automatic-reload protections.

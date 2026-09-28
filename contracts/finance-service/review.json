@@ -1,0 +1,115 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/finance/v1/review"
+  },
+  "status" : 200,
+  "body" : {
+    "review" : {
+      "id" : "current",
+      "asOf" : "2026-09-20",
+      "currency" : "GBP",
+      "coverage" : {
+        "from" : "2026-06-01",
+        "to" : "2026-08-31",
+        "completeThrough" : "2026-08",
+        "transactionCount" : 120,
+        "accountCount" : 2,
+        "note" : "Example statements"
+      },
+      "accounts" : [ {
+        "id" : "example-current",
+        "label" : "Example Bank current",
+        "ownership" : "personal",
+        "balancePence" : 12345,
+        "asOf" : "2026-09-20"
+      } ],
+      "months" : [ {
+        "month" : "2026-08",
+        "incomePence" : 250000,
+        "outflowPence" : 200000,
+        "netPence" : 50000,
+        "salaryPence" : 240000,
+        "categories" : [ {
+          "label" : "Groceries",
+          "amountPence" : -30000
+        } ]
+      } ],
+      "budget" : {
+        "incomePence" : 250000,
+        "incomeBasis" : "Example salary",
+        "essentials" : [ {
+          "label" : "Rent",
+          "amountPence" : 100000,
+          "note" : ""
+        } ],
+        "workCostsPence" : 5000,
+        "workCostsNote" : "Travel",
+        "scenarios" : [ {
+          "label" : "Cheaper phone plan",
+          "status" : "planned",
+          "monthlyAdjustmentPence" : -1000,
+          "note" : ""
+        } ]
+      },
+      "opportunities" : [ {
+        "label" : "Streaming",
+        "monthlyPence" : 1500,
+        "note" : "Two services",
+        "suggestedCapPence" : null
+      } ],
+      "loans" : [ {
+        "id" : "loan-1",
+        "lender" : "Example Lender",
+        "purpose" : "Car",
+        "status" : "active",
+        "monthlyPaymentPence" : null,
+        "userSharePence" : null,
+        "balancePence" : null,
+        "balanceAsOf" : null,
+        "balanceKind" : "unknown",
+        "startDate" : null,
+        "endDate" : null,
+        "aprPercent" : null,
+        "settlementPence" : null,
+        "settlementAsOf" : null,
+        "nextPaymentDate" : null,
+        "paymentsRemaining" : null,
+        "originalPrincipalPence" : null,
+        "rateNote" : "",
+        "notes" : "",
+        "sourceIds" : [ ]
+      }, {
+        "id" : "loan-2",
+        "lender" : "Example Credit",
+        "purpose" : "Laptop",
+        "status" : "repaid",
+        "monthlyPaymentPence" : 5000,
+        "userSharePence" : 5000,
+        "balancePence" : 0,
+        "balanceAsOf" : "2026-09-01",
+        "balanceKind" : "statement",
+        "startDate" : "2025-01-01",
+        "endDate" : "2026-09-01",
+        "aprPercent" : 9.9,
+        "settlementPence" : 0,
+        "settlementAsOf" : "2026-09-01",
+        "nextPaymentDate" : "2026-10-01",
+        "paymentsRemaining" : 0,
+        "originalPrincipalPence" : 60000,
+        "rateNote" : "Fixed",
+        "notes" : "",
+        "sourceIds" : [ "statement-1" ]
+      } ],
+      "notes" : [ "Example note" ],
+      "sources" : [ {
+        "id" : "statement-1",
+        "label" : "Example statement",
+        "url" : "https://example.com/statement",
+        "asOf" : "2026-09-01"
+      } ],
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
+    }
+  }
+}

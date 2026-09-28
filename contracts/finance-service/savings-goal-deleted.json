@@ -1,0 +1,10 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/finance/v1/savings-goals/fund"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "fund"
+  }
+}

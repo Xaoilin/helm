@@ -1,53 +1,27 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+/**
+ * The banking review, a private dated snapshot kept by the finance service (one per account) and separate
+ * from manual accounts. The app only reads it; agents replace it through the Finance MCP. A failed reload
+ * keeps the last confirmed review on screen and says it may be out of date.
+ */
+import { useCallback, useState } from 'react';
 import type { FinanceReview } from '../../types/domain';
-import { getSyncSessionSnapshot, loadStore, subscribeSyncSession } from '../persistence';
-import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
+import { getReview, isFinanceServiceEnabled } from '../../services/backend/financeServiceApi';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
+import { useServiceLoad } from './useServiceLoad';
 
-const sessionIdentity = () => {
-  const session = getSyncSessionSnapshot();
-  return JSON.stringify([session.userId, session.status, session.hasUsableSnapshot]);
-};
+export interface FinanceReviewState {
+  review: FinanceReview | null;
+  loaded: boolean;
+  error: string | null;
+  /** The shown review is the last confirmed one and may be out of date. */
+  stale: boolean;
+  refresh: () => Promise<void>;
+}
 
-/** The imported review is a private, read-only snapshot, separate from manual accounts. */
-export function useFinanceReview() {
-  const sessionKey = useSyncExternalStore(subscribeSyncSession, sessionIdentity);
-  const [userId, status, hasUsableSnapshot] = JSON.parse(sessionKey) as [string | null, string, boolean];
-  const [state, setState] = useState<{ owner: string; review: FinanceReview | null; error: string | null } | null>(null);
-  const generation = useRef(0);
-  const readable = Boolean(userId) && (status === 'ready' || (status === 'reconnecting' && hasUsableSnapshot));
-
-  const refresh = useCallback(async () => {
-    const session = getSyncSessionSnapshot();
-    const requestedSession = sessionIdentity();
-    const request = ++generation.current;
-    if (!session.userId || (session.status !== 'ready'
-      && !(session.status === 'reconnecting' && session.hasUsableSnapshot))) return;
-    const owner = session.userId;
-    try {
-      const reviews = await loadStore<FinanceReview[]>('financeReviews');
-      if (sessionIdentity() !== requestedSession || generation.current !== request) return;
-      setState({ owner, review: reviews?.find(review => review.id === 'current') ?? null, error: null });
-    } catch (failure) {
-      if (sessionIdentity() !== requestedSession || generation.current !== request) return;
-      const message = failure instanceof Error ? failure.message
-        : failure && typeof failure === 'object' && 'message' in failure ? String(failure.message) : String(failure);
-      setState(previous => ({ owner, review: previous?.owner === owner ? previous.review : null, error: message }));
-    }
-  }, []);
-
-  useEffect(() => {
-    setState(previous => readable && previous?.owner === userId ? previous : null);
-    void refresh();
-    return () => { generation.current += 1; };
-  }, [sessionKey, userId, readable, refresh]);
-  useRemoteStoreRefresh(['financeReviews'], refresh);
-
-  const current = readable && state?.owner === userId ? state : null;
-  return {
-    review: current?.review ?? null,
-    loaded: !readable || current !== null,
-    error: !readable ? 'Reconnect your signed-in account to view the banking review.' : current?.error ?? null,
-    stale: readable && (status !== 'ready' || Boolean(current?.error)),
-    refresh,
-  };
+export function useFinanceReview(): FinanceReviewState {
+  const [review, setReview] = useState<FinanceReview | null>(null);
+  const load = useCallback(async () => setReview(await getReview()), []);
+  const { loaded, error, reload } = useServiceLoad('Banking review', isFinanceServiceEnabled(), load,
+    LIVE_DOMAINS.finance);
+  return { review, loaded, error, stale: Boolean(error) && review !== null, refresh: reload };
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 Deno.env.set('SUPABASE_URL', 'https://finance-test.supabase.co');
 Deno.env.set('SUPABASE_ANON_KEY', 'test-anon-key');
+Deno.env.set('SABAH_ONE_FINANCE_API_URL', 'https://finance-service.example.test/');
 const { handleRequest } = await import('./handler.ts');
 const baseUrl = 'https://finance-test.supabase.co/functions/v1/sabah-one-finance-mcp';
 const userId = '10000000-0000-4000-8000-000000000001';
@@ -13,13 +14,22 @@ function token(overrides: Record<string, unknown> = {}): string {
   return `header.${btoa(JSON.stringify(claims)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')}.signature`;
 }
 
-interface RpcCall { name: string; body: Record<string, unknown>; authorization: string | null }
-interface Backend {
-  calls: RpcCall[];
-  userError?: boolean;
-  approvalError?: { code: string; message: string };
-  toolError?: { code: string; message: string };
+interface ServiceCall {
+  method: string;
+  path: string;
+  body: unknown;
+  authorization: string | null;
+  idempotencyKey: string | null;
 }
+interface ServiceFailure { status: number; code: string; message: string }
+interface Backend {
+  calls: ServiceCall[];
+  userError?: boolean;
+  approvalError?: ServiceFailure;
+  toolError?: ServiceFailure;
+}
+
+const storedReview = { id: 'current', updatedAt: '2026-09-21T12:00:00Z' };
 
 async function withBackend(run: (backend: Backend) => Promise<void>) {
   const originalFetch = globalThis.fetch;
@@ -27,21 +37,24 @@ async function withBackend(run: (backend: Backend) => Promise<void>) {
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
-    assert.equal(url.origin, 'https://finance-test.supabase.co');
-    assert.equal(request.headers.get('apikey'), 'test-anon-key');
-    if (url.pathname === '/auth/v1/user') {
+    if (url.origin === 'https://finance-test.supabase.co') {
+      assert.equal(request.headers.get('apikey'), 'test-anon-key');
+      assert.equal(url.pathname, '/auth/v1/user');
       return Response.json(backend.userError ? { message: 'Invalid token' } : { id: userId, aud: 'authenticated', role: 'authenticated' }, {
         status: backend.userError ? 401 : 200,
       });
     }
-    assert.match(url.pathname, /^\/rest\/v1\/rpc\/finance_/);
-    const name = url.pathname.split('/').at(-1)!;
-    const body = await request.json();
-    backend.calls.push({ name, body, authorization: request.headers.get('authorization') });
-    const isApproval = name === 'finance_get_review';
-    const error = isApproval ? backend.approvalError : backend.toolError;
-    if (error) return Response.json(error, { status: error.code === '42501' ? 403 : 400 });
-    return Response.json(isApproval ? null : { review: { id: 'current' }, accountVersion: 1 });
+    // Only the finance service is called for account data: never a Supabase RPC.
+    assert.equal(url.origin, 'https://finance-service.example.test');
+    assert.equal(url.pathname, '/api/finance/v1/review');
+    const body = request.method === 'GET' ? undefined : await request.json();
+    backend.calls.push({
+      method: request.method, path: url.pathname, body,
+      authorization: request.headers.get('authorization'), idempotencyKey: request.headers.get('idempotency-key'),
+    });
+    const error = request.method === 'GET' ? backend.approvalError : backend.toolError;
+    if (error) return Response.json({ code: error.code, message: error.message }, { status: error.status });
+    return Response.json({ review: request.method === 'GET' ? storedReview : { ...storedReview, updatedAt: '2026-09-22T12:00:00Z' } });
   };
   try {
     await run(backend);
@@ -95,14 +108,20 @@ Deno.test('requires OAuth user identity, valid expiry, and trusted origin before
   });
 });
 
-Deno.test('checks independent Finance approval every request and fails closed on unavailable approval', async () => {
+Deno.test('asks the finance service for independent Finance approval every request and fails closed', async () => {
   await withBackend(async backend => {
-    backend.approvalError = { code: '42501', message: 'Finance approval required' };
-    assert.equal((await mcp('tools/list', {})).response.status, 403);
-    backend.approvalError = { code: '08006', message: 'Database unavailable' };
+    const accessToken = token();
+    backend.approvalError = { status: 403, code: 'agent_not_approved', message: 'This agent is not approved for this part of Sabah One.' };
+    const refused = await mcp('tools/list', {}, accessToken);
+    assert.equal(refused.response.status, 403);
+    assert.match(refused.response.headers.get('www-authenticate')!, /oauth-protected-resource/);
+    backend.approvalError = { status: 401, code: 'unauthorized', message: 'Sign in.' };
+    assert.equal((await mcp('tools/list', {})).response.status, 401);
+    backend.approvalError = { status: 503, code: 'unavailable', message: 'Service unavailable.' };
     assert.equal((await mcp('tools/list', {})).response.status, 503);
-    assert.equal(backend.calls.length, 2);
-    assert(backend.calls.every(call => call.name === 'finance_get_review'));
+    assert.equal(backend.calls.length, 3);
+    assert(backend.calls.every(call => call.method === 'GET' && call.idempotencyKey === null));
+    assert.equal(backend.calls[0].authorization, `Bearer ${accessToken}`);
   });
 });
 
@@ -215,17 +234,24 @@ Deno.test('publishes only review read/save with an explicit concurrency token', 
     assert.equal(write.annotations.idempotentHint, true);
   });
 });
-Deno.test('forwards exact validated pence values, separate balances, token and replay inputs', async () => {
+Deno.test('reads the stored review itself, or null', async () => {
+  await withBackend(async () => {
+    const { message } = await mcp('tools/call', { name: 'finance_get_review', arguments: {} });
+    assert.deepEqual(message.result.structuredContent, { result: storedReview });
+  });
+});
+Deno.test('forwards exact validated pence values with the agent token and requestId as the Idempotency-Key', async () => {
   await withBackend(async backend => {
     const accessToken = token();
     for (let retry = 0; retry < 2; retry++) {
       const { message } = await mcp('tools/call', { name: 'finance_save_review', arguments: { requestId, review, expectedUpdatedAt: null } }, accessToken);
       assert.equal(message.result.isError, undefined);
     }
-    const calls = backend.calls.filter(call => call.name === 'finance_save_review');
+    const calls = backend.calls.filter(call => call.method === 'PUT');
     assert.equal(calls.length, 2);
     assert.deepEqual(calls[0], calls[1]);
-    assert.deepEqual(calls[0].body, { p_request_id: requestId, p_review: review, p_expected_updated_at: null });
+    assert.deepEqual(calls[0].body, { review, expectedUpdatedAt: null });
+    assert.equal(calls[0].idempotencyKey, requestId);
     assert.equal(calls[0].authorization, `Bearer ${accessToken}`);
   });
 });
@@ -250,12 +276,12 @@ Deno.test('rejects invalid money, dates, net, foreign fields, source URLs and mi
     }
     const missing = await mcp('tools/call', { name: 'finance_save_review', arguments: { requestId, review } });
     assert(missing.message.error || missing.message.result?.isError);
-    assert(backend.calls.every(call => call.name === 'finance_get_review'));
+    assert(backend.calls.every(call => call.method === 'GET'));
   });
 });
-Deno.test('surfaces database stale-write failure without hiding diagnostics', async () => {
+Deno.test('surfaces the service stale-write refusal without hiding diagnostics', async () => {
   await withBackend(async backend => {
-    backend.toolError = { code: '40001', message: 'Finance review changed; reload before saving.' };
+    backend.toolError = { status: 409, code: 'review_changed', message: 'Finance review changed; reload before saving.' };
     const { message } = await mcp('tools/call', { name: 'finance_save_review', arguments: { requestId, review, expectedUpdatedAt: '2026-09-21T12:00:00+00:00' } });
     assert.equal(message.result.isError, true);
     assert.match(message.result.content[0].text, /reload before saving/);

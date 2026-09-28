@@ -1,23 +1,15 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import type { SyncSessionReason } from './persistence';
 
+/** Account data is read-only while the browser is offline: no service can confirm a change. */
 interface SyncAvailability {
   readOnly: boolean;
-  reason: SyncSessionReason;
 }
 
-export const SyncAvailabilityContext = createContext<SyncAvailability>({
-  readOnly: false,
-  reason: null,
-});
+const SyncAvailabilityContext = createContext<SyncAvailability>({ readOnly: false });
 
-export function SyncAvailabilityProvider({
-  children,
-  readOnly,
-  reason,
-}: SyncAvailability & { children: ReactNode }) {
+export function SyncAvailabilityProvider({ children, readOnly }: SyncAvailability & { children: ReactNode }) {
   return (
-    <SyncAvailabilityContext.Provider value={{ readOnly, reason }}>
+    <SyncAvailabilityContext.Provider value={{ readOnly }}>
       {children}
     </SyncAvailabilityContext.Provider>
   );

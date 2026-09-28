@@ -2,13 +2,14 @@
 
 ## Overview
 
-Sabah One is a hosted web product for a solo operator. GitHub Pages serves the web bundle and the browser is the only supported product runtime. Shared state is database-authoritative through Supabase; writes require an online server confirmation. Generic app time uses one optional account-shared IANA preference with `Automatic` browser fallback; prayer schedules keep their own authoritative zone.
+Sabah One is a hosted web product for a solo operator. GitHub Pages serves the web bundle and the browser is the only supported product runtime. Account data belongs to the Spring services (`sabah-one-services`); writes require an online server confirmation. Generic app time uses one optional account-shared IANA preference with `Automatic` browser fallback; prayer schedules keep their own authoritative zone.
 
 The current stack is:
 
 - React 19 with TypeScript 5 and Vite 8 for the web UI
 - GitHub Pages for the deployed website
-- Supabase Auth, account records, private Realtime Broadcast, and Edge Functions
+- Spring Boot services for every account domain, with a live-update stream (server-sent events)
+- Supabase Auth, Vault secrets, agent OAuth approvals, and the MCP Edge Functions
 - Google Calendar and AlAdhan integrations
 - Web Notifications where supported
 
@@ -18,7 +19,7 @@ The current stack is:
 
 The React shell renders navigation, the active surface, and Supabase sign-in controls. The Lina assistant, Chat, voice and Life Hero were removed on 2026-09-26; a stored `chat` surface from an earlier release opens the Dashboard. The supported surfaces are Dashboard, Calendar, Clock, Trips, Tasks, Employment, Projects, Inventory, Secrets, Finance, Health, Knowledge, Profile, Integrations, Activity, Settings, and Debug.
 
-The visible version comes from the web build and the deployed `public/release.json` manifest. Open pages check the manifest with a five-second deadline and perform one browser reload when a newer deployed semver is available. Reload waits until the page is visible and mounted, with no queued writes, open modal, or visible editable text; a deferred check does not consume the reload marker. The active surface is kept in browser session state so a legitimate reload can return the user to the same section.
+The visible version comes from the web build and the deployed `public/release.json` manifest. Open pages check the manifest with a five-second deadline and perform one browser reload when a newer deployed semver is available. Reload waits until the page is visible and mounted, with no open modal or visible editable text; a deferred check does not consume the reload marker. The active surface is kept in browser session state so a legitimate reload can return the user to the same section.
 
 ### State composition
 
@@ -56,34 +57,23 @@ Settings shared across devices and integration records are owned by the Spring p
 
 ## Persistence And Sync
 
-### Database-authoritative shared state
+### Service-owned account data
 
-Authenticated Supabase reads bootstrap the shared provider tree. Sign-out, invalid account authorization, account changes and incompatible schemas clear or block private data. Transient network failures retain the same account's last confirmed in-memory snapshot with a read-only freshness notice. There is no persistent account-data browser cache or offline mutation queue.
+Every account domain loads and saves through its Spring service (`src/services/backend/*`): the providers load on mount with `useServiceLoad` (or their own service sync), keep confirmed data in memory for the signed-in session, write one record per change with an Idempotency-Key, and reload a domain when the live-update stream (`liveEvents.ts`, `useLiveRefresh`) reports a change from another tab or device. There is no persistent account-data browser cache and no offline mutation queue; while the browser is offline, pages are read-only under an Offline banner (`useOnlineStatus`, `SyncAvailabilityContext`).
 
-Shared arrays are account-owned records with explicit positions. Semantic create, patch, increment, delete, restore, and reorder operations go through the transactional mutation RPC. Tombstones prevent stale resurrection, commit order resolves unavoidable same-field concurrency, and private per-account Broadcast messages carry identifiers and versions rather than secret values. Version gaps and reconnects trigger an authoritative refresh. Realtime is an optional invalidation channel: its failure never blocks healthy HTTPS reads or confirmed writes. Channel retries back off independently from database recovery, capped at 30 seconds; visible online pages probe the account version every ten minutes and reconcile immediately on Broadcast and foreground/online recovery. Concurrent refresh triggers coalesce; an unchanged account version reuses confirmed in-memory data without fetching a full snapshot. The periodic safety check is suppressed while hidden, offline, signed out, or without a usable account snapshot.
+`src/AppRoot.tsx` gates the app on the Supabase session only: loading, missing configuration, an unreachable sign-in service (Retry without signing out) and sign-in. Signed in, it mounts `AppProviders` keyed by the session, so an account change clears the previous account's data before the next account's providers load. `PageReadinessGate` holds each page until the providers it needs have answered (see `page-loading.md`). Device-only settings stay in browser local storage (`src/store/deviceSettings.ts`).
 
-Account changes clear the previous in-memory state before the next account can render. Calendar data keeps the account -> source -> event hierarchy, including intentional multi-account support.
-
-The persistence runtime has one stable consumer API at `src/store/persistence.ts`. Its implementation is divided by state ownership instead of keeping cache, queue, realtime, device, and diagnostic globals in one module:
-
-- `persistence/runtime.ts` orchestrates authenticated session bootstrap, hydration, account switching, legacy cutover, and consumer publication through one explicit `PersistenceRuntimeState` owner.
-- `persistence/cache.ts` owns authoritative records and the provider-delivered diff baseline. The separate baseline prevents a concurrent remote addition from being interpreted as a local deletion.
-- `persistence/writes.ts` owns coalesced writes, one-at-a-time committed operations, queue diagnostics, and account-epoch invalidation. Transient mutation retry remains limited to one repeat with the same request ID and operation list.
-- `persistence/realtime.ts` owns the private Broadcast channel, lifecycle refresh triggers, readiness timeout, and bounded recovery. Broadcast remains an invalidation signal; records are refreshed from the database before they are published.
-- `persistence/deviceStore.ts` owns the device-only settings key and one-way legacy shared-data quarantine. It cannot be used as a shared-data fallback.
-- `persistence/health.ts` owns immutable health publication and clears account-scoped read/write diagnostics when the account runtime resets.
-
-Each stateful boundary has an explicit reset path. Add a new boundary only when it owns distinct mutable state or policy; ordinary persistence behavior should extend the existing consumer-shaped boundary. Do not introduce a generic repository, event bus, dependency-injection container, or storage abstraction without a concrete consumer and measured benefit.
+The generic Supabase record store (`helm_records` snapshots, change metadata, the mutation RPCs and private Realtime Broadcast) was retired in v0.2.206. `public.helm_records` remains only as the source the services imported once; nothing in the app reads or writes it.
 
 ### Supabase
 
-Supabase gateways live under `src/store/supabase/`, one module per responsibility: `client.ts` owns the single client and signed-in session state; `auth.ts` covers sign-in, sign-out, session bootstrap and auth events; `records.ts` account-isolated snapshots, changed collections, version probes and pages; `mutations.ts` semantic mutation calls; `secrets.ts` account-owned Vault secret operations; `realtime.ts` private Broadcast subscriptions; `oauthClients.ts` one typed gateway for the per-domain OAuth client allowlists (Inventory, Employment, Equity and Finance), driven by a small table of RPC names; and `oauthAuthorization.ts` the consent page's OAuth server calls. `src/store/supabase.ts` is a compatibility barrel for existing store, service and test imports; new code imports the specific module. An ESLint rule forbids `src/surfaces` and `src/components` from importing that barrel or `store/persistence/*` internals (deprecated feature files are listed as explicit exceptions). The consent approval transaction (domain allowlist, then authorization, with a compensating revoke that is reported if it fails) is the plain `src/services/oauthConsent.ts` function, and Settings lists and revokes every domain's clients through `useOAuthClientApprovals`. `src/AppRoot.tsx` requires a usable snapshot for the current authenticated account and keeps its providers mounted during transient failure. Finance, Equity and Employment retain successful reads and drafts while surfacing freshness or operation errors. Employment owns its server-dependent initial seed state; it does not gate unrelated shell navigation. Failed domain writes are surfaced and reconciled without revoking a healthy account session. Existing domain MCP interfaces remain unchanged.
+Supabase gateways live under `src/store/supabase/`, one module per responsibility: `client.ts` owns the single client and signed-in session state; `auth.ts` covers sign-in, sign-out, session bootstrap, token renewal and auth events; `secrets.ts` account-owned Vault secret operations; `oauthClients.ts` one typed gateway for the per-domain OAuth client allowlists (Inventory, Employment, Equity and Finance), driven by a small table of RPC names; and `oauthAuthorization.ts` the consent page's OAuth server calls. `src/store/supabase.ts` is a compatibility barrel for the session and auth functions existing store and service code imports; new code imports the specific module. An ESLint rule forbids `src/surfaces` and `src/components` from importing that barrel. The consent approval transaction (domain allowlist, then authorization, with a compensating revoke that is reported if it fails) is the plain `src/services/oauthConsent.ts` function, and Settings lists and revokes every domain's clients through `useOAuthClientApprovals`.
 
 ### Secrets vault
 
 The Secrets surface stores searchable account-owned metadata and only a UUID reference to an encrypted `vault.secrets` row. Security-definer RPCs derive ownership from `auth.uid()`; callers cannot supply a user ID or access Vault directly.
 
-The list operation never decrypts values. Reveal fetches one active secret at a time, and the browser clears decrypted state on Hide, surface unmount, page backgrounding, sign-out, account switch, and refresh. Broadcast messages contain only request IDs, secret IDs, revisions, archive markers, and account versions. Bulk export, sharing, autofill, permanent deletion, and assistant access are intentionally absent.
+The list operation never decrypts values. Reveal fetches one active secret at a time, and the browser clears decrypted state on Hide, surface unmount, page backgrounding, sign-out, account switch, and refresh. The page reloads the summaries after its own writes and whenever it is focused or shown again. Bulk export, sharing, autofill, permanent deletion, and assistant access are intentionally absent.
 
 ## Integrations And External Services
 
@@ -129,9 +119,9 @@ Network failures use visible error states and the established retry, circuit-bre
 
 ### Cross-project Inventory access
 
-The `sabah-one-inventory-mcp` Edge Function exposes exactly seven narrow Inventory tools through a remote MCP endpoint. Supabase OAuth 2.1 with PKCE supplies user tokens; the function validates the token and uses the normal authenticated client. RLS and dedicated RPCs limit access to `inventoryItems`, `inventoryNeeds`, and minimal project name/catalogue-key resolution. Generic snapshots, Secrets, finance, calendars, chats, settings, and broad mutation RPCs reject OAuth-client sessions.
+The `sabah-one-inventory-mcp` Edge Function exposes exactly seven narrow Inventory tools through a remote MCP endpoint. Supabase OAuth 2.1 with PKCE supplies user tokens; the function validates the token, asks the life admin service whether the agent is approved (a one-result Inventory search; a refusal becomes the OAuth 403 challenge, an unavailable service 503), and forwards the agent's token to the life service for every tool, which rechecks the Inventory approval. Project resolution asks the knowledge service. Secrets and the approval RPCs reject OAuth-client sessions.
 
-The separate `sabah-one-employment-mcp` Edge Function exposes six application and history tools. Its own account/client approval table gates all reads and mutations; the consent screen explicitly selects the domain and Settings revokes Employment independently. Dedicated RPCs mutate the existing Employment singleton under the account lock, with payload-bound idempotency receipts and server-generated revisions. The browser uses these semantic mutations too, preserving concurrent jobs and history. Scheduled Codex agents own source reading and reconciliation; Gmail ingestion and scheduling are outside the hosted product.
+The separate `sabah-one-employment-mcp` Edge Function exposes six application and history tools. Its own account/client approval table gates all reads and mutations; the consent screen explicitly selects the domain and Settings revokes Employment independently. The function checks the approval with a one-application read of the life service's job list, then forwards the agent's token to the life service, which applies each semantic change with its Idempotency-Key. The browser writes through the same service. Scheduled Codex agents own source reading and reconciliation; Gmail ingestion and scheduling are outside the hosted product.
 
 The private planning integration checks live Inventory records before recommendations, requires explicit approval for writes, and keeps bulk or ambiguous changes behind review.
 
@@ -151,4 +141,4 @@ Browser review remains necessary for OAuth, browser notification permission, pag
 
 - Some integrations are real and some remain placeholder or simulated; [feature status](feature-status.md) is the source of truth.
 - Browser notification delivery depends on permission and an open page, so the in-app reminder banner remains an explicit fallback.
-- Shared records and secret metadata are account-isolated by RLS and constrained RPCs. Secret plaintext stays within the Vault reveal path and is excluded from records, logs, exports, and Broadcast.
+- Account data is account-isolated by the services, and secret metadata by RLS and constrained RPCs. Secret plaintext stays within the Vault reveal path and is excluded from records, logs, and exports.

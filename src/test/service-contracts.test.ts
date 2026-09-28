@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CONTRACT_SCHEMAS as SERVICE_SCHEMAS } from '../services/backend/contracts';
 import { ACTIVITY_CONTRACT_SCHEMAS } from '../services/backend/activityContracts';
+import { FINANCE_CONTRACT_SCHEMAS } from '../services/backend/financeContracts';
 import { KNOWLEDGE_CONTRACT_SCHEMAS } from '../services/backend/knowledgeContracts';
 import { LIFE_CONTRACT_SCHEMAS } from '../services/backend/lifeContracts';
 import { LIVE_CONTRACT_SCHEMAS } from '../services/backend/liveContracts';
@@ -15,7 +16,7 @@ import { PLANNER_CONTRACT_SCHEMAS } from '../services/backend/plannerContracts';
 
 const CONTRACT_SCHEMAS = {
   ...SERVICE_SCHEMAS, ...LIFE_CONTRACT_SCHEMAS, ...ACTIVITY_CONTRACT_SCHEMAS, ...KNOWLEDGE_CONTRACT_SCHEMAS,
-  ...PLANNER_CONTRACT_SCHEMAS, ...LIVE_CONTRACT_SCHEMAS,
+  ...PLANNER_CONTRACT_SCHEMAS, ...LIVE_CONTRACT_SCHEMAS, ...FINANCE_CONTRACT_SCHEMAS,
 };
 
 const CONTRACTS = join(process.cwd(), 'contracts');

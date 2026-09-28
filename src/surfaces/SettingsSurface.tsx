@@ -5,11 +5,7 @@ import { useAuthSession } from '../store/AuthSessionContext';
 import { OAuthClientApprovalsSection } from '../components/settings/OAuthClientApprovalsSection';
 import { OAUTH_CLIENT_DOMAINS } from '../store/supabase/oauthClients';
 import { APP_RELEASE_VERSION } from '../config/release';
-import {
-  getSyncSessionSnapshot,
-  refreshDatabasePersistence,
-  subscribeSyncSession,
-} from '../store/persistence';
+import { useSyncAvailability } from '../store/SyncAvailabilityContext';
 import { usePrayerContext } from '../store/contexts/PrayerContext';
 import { PRAYER_REMINDERS } from '../config/constants';
 import { createPrayerTrackingState } from '../services/prayerTracking';
@@ -28,7 +24,7 @@ export default function SettingsSurface() {
   const { settings } = settingsContext;
   const [confirmReset, setConfirmReset] = useState(false);
   const [prayerTestStatus, setPrayerTestStatus] = useState<string | null>(null);
-  const [syncSession, setSyncSession] = useState(() => getSyncSessionSnapshot());
+  const { readOnly } = useSyncAvailability();
   const [appTimeZoneInput, setAppTimeZoneInput] = useState(settings.appTimezone || '');
   const [appTimeZoneStatus, setAppTimeZoneStatus] = useState<{
     tone: 'saving' | 'saved' | 'error';
@@ -38,8 +34,6 @@ export default function SettingsSurface() {
 
   // Goal tags
   const [newTag, setNewTag] = useState('');
-
-  useEffect(() => subscribeSyncSession(setSyncSession), []);
 
   useEffect(() => {
     setAppTimeZoneInput(settings.appTimezone || '');
@@ -54,40 +48,19 @@ export default function SettingsSurface() {
         </div>
       </div>
       <div className="surface-body">
-        {/* Data Sync Status */}
-        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Data Sync</h3>
+        {/* Account data status */}
+        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Account data</h3>
         <div className="card">
           <div className="sync-status-card">
-            <span
-              className={`sync-status-dot ${
-                syncSession.status === 'ready' ? 'healthy' : 'syncing'
-              }`}
-              aria-hidden="true"
-            />
+            <span className={`sync-status-dot ${readOnly ? 'syncing' : 'healthy'}`} aria-hidden="true" />
             <div className="sync-status-copy">
               <div className="sync-status-title">
-                {syncSession.status === 'ready'
-                  ? 'Database source of truth'
-                  : syncSession.hasUsableSnapshot ? 'Last confirmed data (read-only)' : 'Loading database state'}
+                {readOnly ? 'Offline (read-only)' : 'Saved by the Sabah One services'}
               </div>
               <div className="sync-status-detail">
-                {`Signed in as ${signedInUserId?.slice(0, 8)}... Shared data belongs to this account and is read and written through Supabase only. Sabah One resolves concurrent updates automatically.`}
+                {`Signed in as ${signedInUserId?.slice(0, 8)}... Each page loads and saves this account's data through its Sabah One service, and changes made in other tabs or devices appear automatically.`}
               </div>
             </div>
-            <div className="sync-status-actions">
-              <button
-                className="btn btn-secondary btn-sm"
-                type="button"
-                onClick={() => void refreshDatabasePersistence()}
-                disabled={syncSession.status !== 'ready' || syncSession.readOnly}
-              >
-                Refresh from database
-              </button>
-            </div>
-          </div>
-          <div className="sync-drift-summary healthy">
-            <strong>No sync decisions required</strong>
-            <span>Legacy device copies are resolved additively and retired automatically after the database confirms the result.</span>
           </div>
         </div>
 

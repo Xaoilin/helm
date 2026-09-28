@@ -86,10 +86,6 @@ vi.mock('../store/supabase/secrets', () => ({
   saveHelmSecret: mocks.secrets.save,
   setHelmSecretArchived: vi.fn(),
 }));
-vi.mock('../store/persistence', () => ({
-  subscribeHelmSecretChanges: vi.fn(() => () => undefined),
-  subscribeSyncSession: vi.fn(() => () => undefined),
-}));
 vi.mock('../store/contexts/ProjectContext', () => ({ useProjectContext: () => mocks.projects }));
 vi.mock('../store/contexts/SettingsContext', () => ({ useSettingsContext: () => mocks.settings }));
 vi.mock('../store/SyncAvailabilityContext', () => ({ useSyncAvailability: () => mocks.sync }));

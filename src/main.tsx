@@ -6,7 +6,7 @@ import { initSupabase } from './store/supabase';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
 import { AuthSessionProvider } from './store/AuthSessionContext';
 import OAuthConsentPage from './surfaces/OAuthConsentPage';
-import { clearRetiredDashboardCaches } from './store/persistence/deviceStore';
+import { clearRetiredDashboardCaches } from './store/deviceSettings';
 
 // These retired, account-unscoped caches must also disappear before sign-in.
 clearRetiredDashboardCaches();

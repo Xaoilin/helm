@@ -48,8 +48,6 @@ export interface PrayerCompletionWorkflowInput {
   getToday: () => string;
   getTracking: PrayerTrackingStore['getTracking'];
   commitTracking: PrayerTrackingStore['commitTracking'];
-  /** Cancels the pending deadline reminder for a prayer that has just been settled. */
-  cancelReminderForPrayer: (prayerDate: string, prayerName: PrayerName) => void;
 }
 
 export interface PrayerCompletionWorkflow {
@@ -77,7 +75,6 @@ export function usePrayerCompletionWorkflow({
   getToday,
   getTracking,
   commitTracking,
-  cancelReminderForPrayer,
 }: PrayerCompletionWorkflowInput): PrayerCompletionWorkflow {
   const taskOwnerRef = useRef(taskOwner);
 
@@ -110,9 +107,8 @@ export function usePrayerCompletionWorkflow({
     if (transition.taskCompletion && transition.task) {
       taskOwner.showPrayerHabit(transition.task.id, true);
     }
-    cancelReminderForPrayer(prayerDate, prayerName);
     return { undo: transition.undo, xpEarned: 0, status, prayerName, prayerDate };
-  }, [cancelReminderForPrayer, commitTracking, getTracking, scheduleTimeZone, taskOwner, timetable, today]);
+  }, [commitTracking, getTracking, scheduleTimeZone, taskOwner, timetable, today]);
 
   const correctPrayerOutcome = useCallback((
     prayerDate: string,
@@ -128,11 +124,10 @@ export function usePrayerCompletionWorkflow({
       tracking: getTracking(),
     });
     commitTracking(transition.trackingAfter);
-    cancelReminderForPrayer(prayerDate, prayerName);
     if (prayerDate === today && transition.targetTask) {
       taskOwner.showPrayerHabit(transition.targetTask.id, transition.completed);
     }
-  }, [cancelReminderForPrayer, commitTracking, getTracking, taskOwner, today]);
+  }, [commitTracking, getTracking, taskOwner, today]);
 
   const undoPrayerCompletion = useCallback((inverse: PrayerCompletionUndoData) => {
     const transition = applyPrayerCompletionUndo(getTracking(), inverse);

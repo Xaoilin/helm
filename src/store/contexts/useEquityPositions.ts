@@ -1,122 +1,113 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+/**
+ * Equity positions, kept by the finance service. A save is confirmed by the service before it shows. Edits
+ * and removals carry the position's `updatedAt`, so a position changed elsewhere (another tab or an agent)
+ * is refused instead of overwritten. A save whose result is unknown keeps its request ID and position ID,
+ * so repeating the same change applies it once.
+ */
+import { useCallback, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import type { EquityPosition, EquityPositionDraft } from '../../types/domain';
-import { createEquityPosition, updateEquityPosition, deleteEquityPosition } from '../../services/equityAccount';
-import { getSyncSessionSnapshot, loadStore, refreshDatabasePersistence, subscribeSyncSession } from '../persistence';
-import { useRemoteStoreRefresh } from './useRemoteStoreRefresh';
+import {
+  createEquityPosition,
+  deleteEquityPosition,
+  loadEquityPositions,
+  updateEquityPosition,
+} from '../../services/equityAccount';
+import { isFinanceServiceEnabled } from '../../services/backend/financeServiceApi';
+import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
+import { errorMessage, useServiceLoad } from './useServiceLoad';
 
-const errorMessage = (error: unknown) => error instanceof Error ? error.message
-  : error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error);
+/** One change being saved: a retry of the same change reuses its IDs. */
+interface Attempt {
+  key: string;
+  requestId: string;
+  positionId: string;
+}
 
-export function useEquityPositions() {
-  // Persistence returns a fresh snapshot object; expose a stable primitive to React.
-  const sessionKey = useSyncExternalStore(subscribeSyncSession, () => {
-    const current = getSyncSessionSnapshot();
-    return JSON.stringify([current.userId, current.status, current.readOnly, current.hasUsableSnapshot]);
-  });
-  const [userId, status, readOnly, hasUsableSnapshot] = JSON.parse(sessionKey) as [string | null, string, boolean, boolean];
-  const session = { userId, status, readOnly };
-  const [state, setState] = useState<{ owner: string | null; positions: EquityPosition[] }>({ owner: null, positions: [] });
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export interface EquityPositionsState {
+  positions: EquityPosition[];
+  loaded: boolean;
+  error: string | null;
+  saving: boolean;
+  writable: boolean;
+  /** The shown positions are the last confirmed ones and may be out of date. */
+  stale: boolean;
+  save: (draft: EquityPositionDraft, existing?: EquityPosition) => Promise<void>;
+  remove: (position: EquityPosition) => Promise<void>;
+  refresh: () => Promise<void>;
+}
+
+function attemptFor(previous: Attempt | null, key: string, positionId: () => string): Attempt {
+  return previous?.key === key ? previous : { key, requestId: uuid(), positionId: positionId() };
+}
+
+export function useEquityPositions(): EquityPositionsState {
+  const enabled = isFinanceServiceEnabled();
+  const [positions, setPositions] = useState<EquityPosition[]>([]);
   const [saving, setSaving] = useState(false);
+  const [writeError, setWriteError] = useState<string | null>(null);
   const inFlight = useRef(false);
-  const generation = useRef(0);
-  const retry = useRef<{ key: string; requestId: string; positionId: string } | null>(null);
-  const readable = Boolean(userId) && (status === 'ready' || (status === 'reconnecting' && hasUsableSnapshot));
-  const writable = session.status === 'ready' && !session.readOnly && Boolean(session.userId);
+  const retry = useRef<Attempt | null>(null);
 
-  const refresh = useCallback(async (throwOnError = false) => {
-    const requestedSession = getSyncSessionSnapshot();
-    const userId = requestedSession.userId;
-    const request = ++generation.current;
-    const canRead = requestedSession.status === 'ready'
-      || (requestedSession.status === 'reconnecting' && requestedSession.hasUsableSnapshot);
-    if (!userId || !canRead || (throwOnError && requestedSession.status !== 'ready')) {
-      if (throwOnError) throw new Error('Reconnect your signed-in account to confirm the equity change.');
-      return;
-    }
-    const isCurrent = () => {
-      const current = getSyncSessionSnapshot();
-      return current.userId === userId && current.status === requestedSession.status
-        && current.hasUsableSnapshot === requestedSession.hasUsableSnapshot && request === generation.current;
-    };
-    try {
-      const positions = await loadStore<EquityPosition[]>('equityPositions');
-      if (!isCurrent()) {
-        if (throwOnError) throw new Error('The account changed while confirming the equity change. Retry after reconnecting.');
-        return;
-      }
-      setState({ owner: userId, positions: positions ?? [] });
-      setError(null);
-    } catch (failure) {
-      if (!isCurrent()) {
-        if (throwOnError) throw failure;
-        return;
-      }
-      setState(previous => ({ owner: userId, positions: previous.owner === userId ? previous.positions : [] }));
-      setError(errorMessage(failure));
-      if (throwOnError) throw failure;
-    } finally {
-      if (isCurrent()) setLoaded(true);
-    }
-  }, []);
+  const load = useCallback(async () => setPositions(await loadEquityPositions()), []);
+  const { loaded, error: loadError, reload } = useServiceLoad('Equity', enabled, load, LIVE_DOMAINS.equity);
 
-  useEffect(() => { retry.current = null; }, [userId]);
-
-  useEffect(() => {
-    setState(previous => readable && previous.owner === session.userId ? previous : { owner: null, positions: [] });
-    if (!readable) {
-      setError(null);
-      retry.current = null;
-    }
-    void refresh();
-    return () => { generation.current += 1; };
-  }, [session.userId, session.status, readable, refresh]);
-  useRemoteStoreRefresh(['equityPositions'], refresh);
-
-  const mutate = async (operation: () => Promise<unknown>) => {
-    const userId = getSyncSessionSnapshot().userId;
-    const requireAccount = () => {
-      const current = getSyncSessionSnapshot();
-      if (!userId || current.userId !== userId || current.status !== 'ready' || current.readOnly) {
-        throw new Error('A writable signed-in account is required. Reopen Finance after reconnecting.');
-      }
-    };
+  const mutate = useCallback(async (attempt: Attempt, operation: () => Promise<void>) => {
     if (inFlight.current) throw new Error('An equity change is already saving.');
-    requireAccount();
     inFlight.current = true;
     setSaving(true);
+    retry.current = attempt;
     try {
       await operation();
-      requireAccount();
-      await refreshDatabasePersistence();
-      requireAccount();
-      await refresh(true);
-      requireAccount();
+      retry.current = null;
+      setWriteError(null);
     } catch (failure) {
-      if (getSyncSessionSnapshot().userId === userId) setError(errorMessage(failure));
+      setWriteError(errorMessage(failure));
+      void reload();
       throw failure;
-    } finally { inFlight.current = false; setSaving(false); }
-  };
+    } finally {
+      inFlight.current = false;
+      setSaving(false);
+    }
+  }, [reload]);
 
-  const save = async (draft: EquityPositionDraft, existing?: EquityPosition) => {
-    const key = JSON.stringify([session.userId, existing?.id, existing?.updatedAt, draft]);
-    if (retry.current?.key !== key) retry.current = { key, requestId: uuid(), positionId: existing?.id ?? uuid() };
-    const attempt = retry.current;
-    await mutate(() => existing
-      ? updateEquityPosition(attempt.requestId, existing.id, draft, existing.updatedAt)
-      : createEquityPosition(attempt.requestId, { ...draft, id: attempt.positionId }));
-    retry.current = null;
+  const save = useCallback(async (draft: EquityPositionDraft, existing?: EquityPosition) => {
+    const key = JSON.stringify(['save', existing?.id, existing?.updatedAt, draft]);
+    const attempt = attemptFor(retry.current, key, () => existing?.id ?? uuid());
+    await mutate(attempt, async () => {
+      const saved = existing
+        ? await updateEquityPosition(attempt.requestId, existing.id, draft, existing.updatedAt)
+        : await createEquityPosition(attempt.requestId, attempt.positionId, draft);
+      setPositions(current => current.some(position => position.id === saved.id)
+        ? current.map(position => (position.id === saved.id ? saved : position))
+        : [...current, saved]);
+    });
+  }, [mutate]);
+
+  const remove = useCallback(async (position: EquityPosition) => {
+    const key = JSON.stringify(['remove', position.id, position.updatedAt]);
+    const attempt = attemptFor(retry.current, key, () => position.id);
+    await mutate(attempt, async () => {
+      await deleteEquityPosition(attempt.requestId, position.id, position.updatedAt);
+      setPositions(current => current.filter(candidate => candidate.id !== position.id));
+    });
+  }, [mutate]);
+
+  const refresh = useCallback(async () => {
+    setWriteError(null);
+    await reload();
+  }, [reload]);
+
+  const error = writeError ?? loadError;
+  return {
+    positions,
+    loaded,
+    error,
+    saving,
+    writable: enabled && loaded && !loadError,
+    stale: Boolean(loadError) && positions.length > 0,
+    save,
+    remove,
+    refresh,
   };
-  const remove = async (position: EquityPosition) => {
-    const key = JSON.stringify([session.userId, 'remove', position.id, position.updatedAt]);
-    if (retry.current?.key !== key) retry.current = { key, requestId: uuid(), positionId: position.id };
-    await mutate(() => deleteEquityPosition(retry.current!.requestId, position.id, position.updatedAt));
-    retry.current = null;
-  };
-  return { positions: state.owner === session.userId && readable ? state.positions : [],
-    loaded: !readable || (state.owner === userId && loaded),
-    error: readable && state.owner === userId ? error : null, saving, writable,
-    stale: readable && (status !== 'ready' || Boolean(error)), save, remove, refresh };
 }

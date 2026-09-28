@@ -1,0 +1,14 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/knowledge/v1/progress"
+  },
+  "status" : 200,
+  "body" : {
+    "entries" : 1,
+    "topics" : 1,
+    "haramMastered" : 0,
+    "halalConsistent" : 0,
+    "lifestyleItems" : 0
+  }
+}

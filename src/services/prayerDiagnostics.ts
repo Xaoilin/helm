@@ -1,10 +1,10 @@
+import type { ServicePrayerReminder } from './backend/contracts';
 import type { PrayerReminderPermissionState } from './browserPrayerReminder';
-import type { PrayerReminderGroup } from './prayerReminderPolicy';
 import type { PrayerTimesData } from './prayerTimes';
 
 export type PrayerScheduleStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
 
-/** What Settings and Debug show about the prayer schedule and deadline reminders. */
+/** What Settings and Debug show about the prayer schedule and the reminders the prayer service sent. */
 export interface PrayerDiagnostics {
   scheduleStatus: PrayerScheduleStatus;
   scheduleDate: string | null;
@@ -16,7 +16,8 @@ export interface PrayerDiagnostics {
   localTimezone: string;
   timezoneMatches: boolean;
   scheduleTimezoneValid: boolean;
-  nextReminderAt: string | null;
+  /** The reminders the prayer service sent that show now. */
+  activeReminders: ServicePrayerReminder[];
   suppressionReason: string | null;
   permissionState: PrayerReminderPermissionState;
   lastNotificationKey: string | null;
@@ -28,28 +29,18 @@ export function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Why no deadline reminder can be scheduled right now, or null when reminders can run. */
+/** Why no prayer reminder can show right now, or null when the service's reminders can show. */
 export function describeReminderSuppression(input: {
   prayerEnabled: boolean;
   reminderEnabled: boolean;
-  scheduleStatus: PrayerScheduleStatus;
-  schedule: PrayerTimesData | null;
-  scheduleTimezone: string;
-  reminderGroupCount: number;
+  serviceEnabled: boolean;
+  reminderLoadError: string | null;
 }): string | null {
   if (!input.prayerEnabled) return 'Prayer times are disabled.';
-  if (!input.reminderEnabled) return 'Deadline reminders are disabled.';
-  if (input.scheduleStatus !== 'ready' || !input.schedule) {
-    return 'No matching current-day prayer schedule is available.';
-  }
-  if (!input.scheduleTimezone) return 'The schedule timezone could not be verified.';
-  if (input.reminderGroupCount === 0) return 'No incomplete prayer is currently eligible.';
+  if (!input.reminderEnabled) return 'Prayer reminders are disabled; Learn/Move reminders follow their own settings.';
+  if (!input.serviceEnabled) return 'The prayer service is not configured for this build.';
+  if (input.reminderLoadError) return `The prayer service reminders could not be loaded: ${input.reminderLoadError}`;
   return null;
-}
-
-/** When the next reminder fires: the first group whose deadline is still ahead. */
-export function findNextReminderAt(groups: readonly PrayerReminderGroup[], now: Date): string | null {
-  return groups.find(group => group.deadlineAt > now)?.fireAt.toISOString() || null;
 }
 
 export function buildPrayerDiagnostics(input: {
@@ -62,7 +53,8 @@ export function buildPrayerDiagnostics(input: {
   scheduleTimezoneValid: boolean;
   localTimezone: string;
   timezoneMatches: boolean;
-  nextReminderAt: string | null;
+  /** The reminders the prayer service sent that show now. */
+  activeReminders: ServicePrayerReminder[];
   suppressionReason: string | null;
   permissionState: PrayerReminderPermissionState;
   lastNotificationKey: string | null;
@@ -79,7 +71,7 @@ export function buildPrayerDiagnostics(input: {
     localTimezone: input.localTimezone,
     timezoneMatches: input.timezoneMatches,
     scheduleTimezoneValid: input.scheduleTimezoneValid,
-    nextReminderAt: input.nextReminderAt,
+    activeReminders: input.activeReminders,
     suppressionReason: input.suppressionReason,
     permissionState: input.permissionState,
     lastNotificationKey: input.lastNotificationKey,

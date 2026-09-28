@@ -111,6 +111,8 @@ jobs:
         run: DENO_NO_PACKAGE_JSON=1 npx --yes deno@2.9.6 test --no-config --no-lock --node-modules-dir=none --allow-env supabase/functions/sabah-one-equity-mcp/index_test.ts
       - name: Exercise Employment MCP runtime contract
         run: DENO_NO_PACKAGE_JSON=1 npx --yes deno@2.9.6 test --no-config --no-lock --node-modules-dir=none --allow-env supabase/functions/sabah-one-employment-mcp/index_test.ts
+      - name: Exercise Inventory MCP runtime contract
+        run: DENO_NO_PACKAGE_JSON=1 npx --yes deno@2.9.6 test --no-config --no-lock --node-modules-dir=none --allow-env supabase/functions/sabah-one-inventory-mcp/index_test.ts
 
   e2e:
     name: e2e

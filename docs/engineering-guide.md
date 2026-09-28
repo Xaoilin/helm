@@ -69,11 +69,11 @@ Rendered components consume owning domain hooks directly. Shell owns navigation 
 
 ### Unit and contract checks
 
-Business rules, account persistence, semantic mutations, and provider error mapping should have focused deterministic coverage. Service checks should exercise success and failure responses without hiding diagnostics.
+Business rules, service calls, semantic mutations, and provider error mapping should have focused deterministic coverage. Service checks should exercise success and failure responses without hiding diagnostics.
 
 Keep business rules in plain modules that take their inputs (including the current time and time zone) as arguments, so they are tested without rendering. Every context module exports its Context object; render tests supply typed fake values with `provide` and `renderWithContexts` from `src/test/renderWithContexts.tsx` instead of `vi.mock`-ing context hook modules. Reserve `vi.mock` for true infrastructure boundaries such as the Supabase client, network, and browser APIs.
 
-Persistence changes should directly prove the affected owner: stale session epochs and account reset, delivered-cache diff policy, queued-write reset and stable retry identity, Broadcast invalidation and recovery, device-key isolation, or health publication. Run the focused persistence contract before the aggregate gate; the database contract remains the authority for RLS, idempotency, revision serialization, tombstones, and account-version behavior.
+Account data belongs to the Spring services, whose contracts (`contracts/*`) both sides test against. The database contract (`npm run test:database`) remains the authority for what Supabase still owns: Vault secret RLS and idempotency, agent OAuth approvals, and the retired record store staying retired.
 
 ### Browser E2E
 
@@ -88,15 +88,14 @@ Direct browser review is required for visible user flows and especially for OAut
 - Do not swallow errors. Surface a user-actionable message and preserve structured diagnostics.
 - Remote integrations should use the established retry, circuit-breaker, timeout, and logging utilities where appropriate.
 - Every call to a Sabah One service goes through `callService` (`src/services/backend/serviceClient.ts`), which owns backoff so no feature adds its own: transient failures (network, timeout, 429, 502, 503, 504) retry with exponential backoff and full jitter (`src/services/backoff.ts`), honouring `Retry-After`, within `SERVICE_RETRY` limits. Reads always retry; writes only with an Idempotency-Key. Five consecutive failed attempts open that endpoint's circuit (`/api/<service>/v1/<resource>`): calls fail fast with `service_unavailable` for 30 seconds, then one is let through to test it.
-- Realtime channel failures leave healthy database HTTPS operations available. Polling/version reconciliation and channel retry have independent recovery; never treat a dropped WebSocket as invalid authentication.
-- Database recovery and channel reconnect each allow five retries with exponential delays and up to 25% jitter. Hidden/offline pages pause recovery; foreground, online and explicit retry open a new cycle. During database failure, periodic checks, Broadcast and repeated same-account auth bootstrap cannot bypass that cycle. A successful version probe precedes refresh snapshots; initial hydration remains a single coalesced load. Removing a failed Broadcast subscription stops its SDK rejoin and, when it is the final channel, socket retry.
-- The locked Supabase Auth 2.111.0 SDK owns session renewal: concurrent refresh calls share one promise, transient retries back off within a 30-second attempt-start budget, and failures impose a 60-second same-token cooldown. No application token-refresh loop is added. Auth revision checks reject bootstrap completion superseded by sign-out or account changes. Existing mutation retries reuse the same request ID and operations; read recovery never replays writes.
+- A failed service load keeps the last confirmed data and retries a few times on a timer, then whenever the page is shown again (`useServiceLoad`); a dropped live-update stream reconnects with backoff and asks every domain to reload once it is back. Never treat a dropped stream as invalid authentication.
+- The locked Supabase Auth 2.111.0 SDK owns session renewal: concurrent refresh calls share one promise, transient retries back off within a 30-second attempt-start budget, and failures impose a 60-second same-token cooldown. No application token-refresh loop is added. Auth revision checks reject bootstrap completion superseded by sign-out or account changes. Write retries reuse the same Idempotency-Key; read recovery never replays writes.
 - Session rules (signing out is only ever the user's choice or the auth server ending the session):
   - Calls to Sabah One services take their token from `getFreshAccessToken`, which renews a token within a minute of expiry. A `401` renews the session once and retries with the same `Idempotency-Key`; a second `401` is reported, never turned into a sign-out.
-  - A database `401`, `403`, `42501` or `PGRST30x` first renews the session. If renewal works (the token had expired in a sleeping or background tab) or the auth server is unreachable, confirmed data stays on screen and bounded recovery reloads it. Only a session the auth server has ended clears account data.
+  - A refused Supabase call (secrets or OAuth approvals) is shown on its page; it never signs the user out. Only a session the auth server has ended clears account data.
   - At startup, a stored session whose renewal fails for a network reason is retried and then shown as "Reconnecting to Sabah One" with Retry, never as the sign-in screen. The SDK's null `INITIAL_SESSION` for that case is ignored.
   - Google Calendar access never touches the Sabah One session: consent uses Google's popup code flow, credentials stay server-side, and Google problems are `409 google_reconnect_required`, not `401`.
-- Transient read failures preserve confirmed same-account data and drafts with visible freshness; ended sessions, account changes and schema incompatibility fail closed. Domain operation errors do not invalidate unrelated capabilities.
+- Transient read failures preserve confirmed same-account data and drafts with visible freshness; ended sessions and account changes fail closed. Domain operation errors do not invalidate unrelated capabilities.
 - Degraded states must say what is unavailable and what the user can do in the page; the in-app reminder banner is the fallback for unavailable browser notifications.
 - Diagnostics redact tokens and secrets while retaining request IDs and normalized failure codes where available.
 
@@ -104,9 +103,9 @@ Direct browser review is required for visible user flows and especially for OAut
 
 - Every new or changed SQL query must follow [SQL query review](sql-query-review.md): inspect existing indexes and representative plans, and add a missing index only when measured benefit justifies its write and storage cost.
 - Keep domain types in `src/types/domain.ts` and the account -> source -> event Calendar hierarchy.
-- Shared records are signed-in, account-owned and database-authoritative through Supabase RLS and semantic mutation RPCs. Online server confirmation is required for writes; transient network failures may retain only the current account's confirmed in-memory data.
+- Account data is signed-in and account-owned, held by the Spring services; nothing reads or writes it through generic Supabase records. Online server confirmation is required for writes; transient network failures may retain only the current account's confirmed in-memory data.
 - Passive Google Calendar sync stays non-interactive; explicit reconnect or consent is user initiated.
-- Hosted Calendar refresh credentials and Vault secret values never enter browser storage, shared payloads, logs, exports, or Broadcast.
+- Hosted Calendar refresh credentials and Vault secret values never enter browser storage, shared payloads, logs, or exports.
 - Project catalogue records may include names, links, documentation, and display-only guidance. They must not include private credentials or machine-specific execution state.
 - Use the established local-date-safe helpers for day-based behavior; never derive local dates by slicing UTC ISO strings.
 

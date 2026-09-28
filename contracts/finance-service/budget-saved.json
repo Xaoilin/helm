@@ -1,0 +1,14 @@
+{
+  "request" : {
+    "method" : "PUT",
+    "path" : "/api/finance/v1/budgets/groceries"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "groceries",
+    "category" : "groceries",
+    "monthlyLimit" : 30000,
+    "createdAt" : "2026-09-27T12:00:00Z",
+    "updatedAt" : "2026-09-27T12:00:00Z"
+  }
+}

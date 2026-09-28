@@ -1,0 +1,20 @@
+{
+  "request" : {
+    "method" : "GET",
+    "path" : "/api/prayer/v1/outcomes/rewarded"
+  },
+  "status" : 200,
+  "body" : {
+    "outcomes" : [ {
+      "date" : "2026-09-24",
+      "prayer" : "Isha",
+      "recordedAt" : "2026-09-24T20:30:00Z",
+      "taskId" : null
+    }, {
+      "date" : "2026-09-25",
+      "prayer" : "Dhuhr",
+      "recordedAt" : "2026-09-25T12:00:00Z",
+      "taskId" : "task-dhuhr"
+    } ]
+  }
+}

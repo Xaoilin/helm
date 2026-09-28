@@ -17,7 +17,7 @@ const GOOGLE_SIGN_IN_SCOPES = [
   'https://www.googleapis.com/auth/calendar',
 ].join(' ');
 
-export interface AuthStateChange {
+interface AuthStateChange {
   event: AuthChangeEvent;
   user: User | null;
 }

@@ -19,6 +19,11 @@ export function deleteOutcomeKey(outcomeId: string): string {
   return `prayer-outcome:delete:${outcomeId}`;
 }
 
+/** A reminder is snoozed at most once, so its snooze is named by the reminder: a retry replays it. */
+export function snoozeReminderKey(reminderKey: string): string {
+  return `prayer-reminder:snooze:${reminderKey}`;
+}
+
 /** A save that replaces a whole value (settings, preferences): repeating it is harmless, so each save is new. */
 export function newWriteKey(): string {
   return crypto.randomUUID();

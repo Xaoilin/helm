@@ -20,7 +20,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 import { AuthSessionProvider, useAuthSession } from '../store/AuthSessionContext';
-import { getAuthSessionSnapshot, getCurrentUserId, initSupabase } from '../store/supabase';
+import { getAuthSessionSnapshot, initSupabase } from '../store/supabase/client';
 
 function session(id: string): Session {
   return {
@@ -62,7 +62,6 @@ describe('authentication recovery ordering', () => {
     expect(result.current.authUser?.id ?? null).toBe(next?.user.id ?? null);
     expect(result.current.sessionKey).toBe(sessionKey);
     expect(result.current.bootstrapped).toBe(true);
-    expect(getCurrentUserId()).toBe(next?.user.id ?? null);
     expect(getAuthSessionSnapshot()?.userId ?? null).toBe(next?.user.id ?? null);
     expect(auth.getSession).toHaveBeenCalledOnce();
   });
@@ -79,7 +78,6 @@ describe('authentication recovery ordering', () => {
     });
 
     expect(result.current.authUser).toBeNull();
-    expect(getCurrentUserId()).toBeNull();
     expect(getAuthSessionSnapshot()).toBeNull();
   });
 });

@@ -1,0 +1,23 @@
+{
+  "request" : {
+    "method" : "DELETE",
+    "path" : "/api/finance/v1/transactions/pay"
+  },
+  "status" : 200,
+  "body" : {
+    "id" : "pay",
+    "accounts" : [ {
+      "id" : "current",
+      "name" : "Example Bank",
+      "type" : "current",
+      "balance" : 110401,
+      "currency" : "GBP",
+      "color" : "#22c55e",
+      "icon" : "bank",
+      "includeInNetWorth" : true,
+      "sortOrder" : 0,
+      "createdAt" : "2026-09-27T12:00:00Z",
+      "updatedAt" : "2026-09-27T12:00:00Z"
+    } ]
+  }
+}

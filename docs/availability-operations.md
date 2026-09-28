@@ -32,7 +32,6 @@ The controlled fault exercise uses `synthetic_fault=expected_version_mismatch`. 
 ## Bounded investigation
 
 - **Auth:** Inspect only the `supabase-auth` probe first. Re-run the public health request with an eight-second limit and the configured public-key environment variable; never add a user token. If it still fails, inspect Auth and gateway entries in Supabase Dashboard Unified Logs and current provider status.
-- **Realtime:** The synthetic does not open a private Realtime channel. For an app incident, filter retained operational events by `"domain":"realtime"` and the exact correlation ID, then distinguish `channel_error`, heartbeat timeout, browser offline, and recovery before changing retry behavior.
 - **Network:** When Pages, Auth, and collector fail together, check DNS/TLS and provider status before changing product code. When only one probe fails, constrain investigation to that origin. Repeat once after the reported provider recovery; do not create an unbounded retry loop.
 - **Provider:** Filter by the affected domain and `rate_limited`, `server_error`, or `timeout`. Confirm the provider's current status and one bounded direct request. Paid assistant availability is outside this public monitor and must not be inferred from it.
 - **Reload/version:** Compare the artifact's expected and observed version first. For app reports, inspect `release` events for `release_available`, `reload_suppressed`, or `client_update_required`. Avoid repeated forced reloads; verify the public manifest and its named asset once after deployment settles.
