@@ -21,7 +21,7 @@ The current stack is:
 
 The React shell renders navigation, the active surface, and Supabase sign-in controls. The Lina assistant, Chat, voice and Life Hero were removed on 2026-09-26; a stored `chat` surface from an earlier release opens the Dashboard. The supported surfaces are Dashboard, Calendar, Clock, Trips, Tasks, Employment, Projects, Software, Inventory, Secrets, Finance, Health, Knowledge, Profile, Integrations, Activity, Settings, and Debug.
 
-Software is a read-only links page for deliberately published tools. Its small release-owned list is separate from the private account-owned Projects catalogue and contains no private catalogue payload, account records, or device paths. A tool without a confirmed repository is explicitly pending. Repository, website, and download destinations open in new tabs; this page never launches local software.
+Software lists deliberately published tools. Its small release-owned list is separate from the private account-owned Projects catalogue and contains no private catalogue payload, account records, or device paths. Repository, website, and download destinations open in new tabs. The native Mac Autoclicker has an installed-app launch link (`sabah-autoclicker://open`): a user click asks the browser/OS to open the app, whose handler stops any existing run and shows its window. No click-start commands, settings or shell text are accepted; the page cannot confirm installation or successful launch. The versioned contract is `contracts/autoclicker-launch.json`, tested by both repositories.
 
 The separate [Jev voice prototype](jev-voice-prototype.md), requested on 2026-10-09,
 is an opt-in shell panel. Deepgram supplies streaming transcripts and an

@@ -1045,7 +1045,7 @@ export interface ClockState {
 }
 
 // ── Navigation ──
-/** Published software references; no account data or execution controls. */
+/** Published software references and installed-app launch links; no account data. */
 export interface SoftwareReference {
   id: string;
   name: string;
@@ -1053,6 +1053,8 @@ export interface SoftwareReference {
   repositoryUrl?: string;
   websiteUrl?: string;
   downloadUrl?: string;
+  launchUrl?: string;
+  launchInstructions?: string;
 }
 
 export type Surface =
