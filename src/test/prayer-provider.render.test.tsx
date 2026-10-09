@@ -247,13 +247,13 @@ describe('PrayerProvider', () => {
     expect(prayer.scheduleStatus).toBe('idle');
   });
 
-  it('refuses to open a completion for a prayer that has not started', async () => {
+  it('refuses to open Isha before Maghrib starts', async () => {
     renderPrayerProvider();
     await waitFor(() => expect(prayer.scheduleStatus).toBe('ready'));
 
-    act(() => { prayer.requestPrayerCompletion('Asr', { source: 'dashboard' }); });
+    act(() => { prayer.requestPrayerCompletion('Isha', { source: 'dashboard' }); });
 
-    await waitFor(() => expect(prayer.completionNotice).toBe('Asr has not started yet.'));
+    await waitFor(() => expect(prayer.completionNotice).toBe('Isha has not started yet.'));
     expect(prayer.pendingCompletion).toBeNull();
     act(() => prayer.dismissCompletionNotice());
     await waitFor(() => expect(prayer.completionNotice).toBeNull());

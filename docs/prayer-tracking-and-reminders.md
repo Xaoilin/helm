@@ -19,6 +19,13 @@ Every prayer completion records one explicit outcome:
 
 Historical correction also supports `missed`. The persisted `unclassified` value is migration-only.
 
+Asr can be checked off once Dhuhr starts, and Isha once Maghrib starts, so either pair can
+be prayed together or separately. Each prayer keeps its own outcome; recording one never
+records the other. The browser and prayer service enforce the same earliest completion
+time in the schedule timezone. Future dates and completions before the earlier prayer
+starts remain refused. The timetable, prayer orientation, deadlines and reminder times
+continue to use each prayer's scheduled time.
+
 Final on-time deadlines use the Jafari rules requested by the product:
 
 | Prayer | Final on-time deadline |

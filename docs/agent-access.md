@@ -47,6 +47,16 @@ A first-party UI path may share the same domain service, but it does not replace
 | Other Sabah One features | Surface-dependent | Not yet published | Treat external access as unavailable until a domain MCP contract is delivered and listed here. |
 | Secrets | Intentionally unavailable | Intentionally unavailable | Secret plaintext remains outside agent tools. |
 
+## Combined prayer completion
+
+Asr completion from Dhuhr and Isha completion from Maghrib use the existing
+first-party prayer outcome operation and keep separate outcomes. Their API
+request and response shapes are unchanged. Prayer has no published semantic MCP
+tools, so external-agent acceptance remains blocked until that capability is
+delivered. Automated verification uses synthetic service/browser fixtures;
+agents cannot record or inspect a real account's prayers through a lower-level
+API, database or browser workaround.
+
 ## Employment MCP Requirement
 
 The `sabah-one-employment-mcp` function exposes semantic tools for:

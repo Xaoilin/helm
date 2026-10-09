@@ -13,6 +13,46 @@ function dhuhrReminder(overrides: Partial<ServicePrayerReminder>): ServicePrayer
 }
 
 test.describe('prayer and profile services', () => {
+  for (const { earlier, later, now } of [
+    { earlier: 'Dhuhr', later: 'Asr', now: NOON },
+    { earlier: 'Maghrib', later: 'Isha', now: '2026-08-29T19:30:00.000Z' },
+  ] as const) {
+    for (const width of [390, 1440]) {
+      test(`records ${later} during ${earlier} independently and keeps both after reload at ${width}px`, async ({ page, scenario }, testInfo) => {
+        await page.setViewportSize({ width, height: 900 });
+        const control = await scenario({ now, settings: { prayerEnabled: true } });
+        await openApp(page);
+        await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+
+        await page.getByRole('button', { name: new RegExp(`Complete ${later} Prayer`, 'u') }).click();
+        const dialog = page.getByRole('dialog', { name: `How was ${later} prayed?` });
+        await expect(dialog).toBeVisible();
+        const dialogScreenshot = testInfo.outputPath('combined-prayer-dialog.png');
+        await dialog.screenshot({ path: dialogScreenshot });
+        await testInfo.attach('combined-prayer-dialog', { path: dialogScreenshot, contentType: 'image/png' });
+        await dialog.getByRole('button', { name: /On time/u }).click();
+        await expect.poll(() => control.services.outcomes.get(`2026-08-29::${later}`)?.status).toBe('on_time');
+        expect(control.services.outcomes.has(`2026-08-29::${earlier}`)).toBe(false);
+
+        await page.reload();
+        await expect(page.getByRole('button', { name: new RegExp(`${later} Prayer — confirmed`, 'u') })).toBeVisible();
+        await page.getByRole('button', { name: new RegExp(`Complete ${earlier} Prayer`, 'u') }).click();
+        await page.getByRole('button', { name: /On time/u }).click();
+        await expect.poll(() => control.services.outcomes.get(`2026-08-29::${earlier}`)?.status).toBe('on_time');
+
+        await page.reload();
+        await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+        for (const name of [earlier, later]) {
+          await expect(page.getByRole('button', { name: new RegExp(`${name} Prayer — confirmed, Prayed on time`, 'u') })).toBeVisible();
+        }
+        expect(control.services.calls.filter(call => call === 'POST /api/prayer/v1/outcomes')).toHaveLength(2);
+        const confirmedScreenshot = testInfo.outputPath('combined-prayers-confirmed.png');
+        await page.screenshot({ path: confirmedScreenshot });
+        await testInfo.attach('combined-prayers-confirmed', { path: confirmedScreenshot, contentType: 'image/png' });
+      });
+    }
+  }
+
   test('prayer outcomes come from the prayer service and completions are saved there', async ({ page, scenario }) => {
     const control = await scenario({ now: NOON, settings: { prayerEnabled: true } });
     control.services.outcomes.set('2026-08-29::Fajr', {
