@@ -24,6 +24,7 @@ import type { FakeFinanceSeed } from './fake-finance-service';
 import type { FakeKnowledgeSeed } from './fake-knowledge-service';
 import type { FakeLifeSeed } from './fake-life-service';
 import type { FakePlannerSeed } from './fake-planner-service';
+import { installQuranRoute } from './fake-quran';
 
 const TEST_USER_ID = '11111111-1111-4111-8111-111111111111';
 const TEST_EMAIL = 'e2e@example.test';
@@ -177,6 +178,7 @@ async function installScenario(page: Page, options: HelmScenarioOptions = {}): P
   // Registered after the fake services so it answers timetable requests first.
   await installPrayerRoute(page, options.prayer);
   await installSupabaseRoutes(page);
+  await installQuranRoute(page);
   return { services };
 }
 

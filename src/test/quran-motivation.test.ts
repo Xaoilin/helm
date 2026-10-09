@@ -7,7 +7,7 @@ describe('daily Quran reading', () => {
   it('provides 206 distinct source-linked passages with prayer and devotion in the majority', () => {
     const cards = QURAN_MOTIVATION_CARDS;
     expect(cards).toHaveLength(206);
-    for (const field of ['id', 'reference', 'arabic', 'translation'] as const) {
+    for (const field of ['id', 'reference', 'arabic'] as const) {
       expect(new Set(cards.map(card => card[field])).size).toBe(cards.length);
     }
     expect(cards.filter(card => ['prayer', 'remembrance', 'dua'].includes(card.theme)).length)
@@ -15,7 +15,6 @@ describe('daily Quran reading', () => {
     expect(cards.filter(card => card.theme === 'prayer').length).toBeGreaterThanOrEqual(50);
     for (const card of cards) {
       expect(card.arabic.trim().length).toBeGreaterThan(0);
-      expect(card.translation.trim().length).toBeGreaterThan(0);
       expect(card.sourceUrl).toBe(`https://quran.com/${card.reference.replace(':', '/')}`);
     }
   });
@@ -36,7 +35,6 @@ describe('daily Quran reading', () => {
       expect(end).toBeGreaterThanOrEqual(start);
       expect(end).toBeLessThanOrEqual(verseCounts[surah - 1]);
       expect(card.arabic.split('\n')).toHaveLength(end - start + 1);
-      expect(card.translation.split('\n')).toHaveLength(end - start + 1);
       for (let ayah = start; ayah <= end; ayah++) {
         const key = `${surah}:${ayah}`;
         expect(seen.has(key), `Repeated ayah ${key}`).toBe(false);
@@ -44,14 +42,6 @@ describe('daily Quran reading', () => {
       }
     }
     expect(seen.size).toBe(374);
-  });
-
-  it('preserves every complete English verse from the Pickthall source receipt', () => {
-    // Computed from downloaded source records, not copied from app output.
-    // Re-source translation changes; see docs/quran-motivation-review.md.
-    const content = QURAN_MOTIVATION_CARDS.map(card => `${card.reference}|${card.translation}`).sort().join('\n');
-    expect(createHash('sha256').update(content).digest('hex'))
-      .toBe('66dcfbcfdb84cc955acb06d7b8a114fc6ebcd740826f6d181f9ce710cce17400');
   });
 
   it('preserves the Arabic verified against the independent Tanzil source receipt', () => {

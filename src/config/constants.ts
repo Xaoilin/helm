@@ -106,10 +106,19 @@ export const API_TIMEOUT = {
   PRAYER_BACKEND_HEALTH: 5_000,
   /** Signed-in data calls to the Spring Boot prayer and profile services */
   SERVICE_API: 10_000,
+  /** Public Quran.com English translation reads */
+  QURAN_TRANSLATION: 10_000,
   /** Calendar writes that go through Google first; the service answers within 12 seconds */
   CALENDAR_WRITE: 15_000,
   /** Mirroring every connected Google calendar */
   CALENDAR_SYNC: 60_000,
+} as const;
+
+/** Published English edition available through Quran.com's public Content API. */
+export const QURAN_TRANSLATION = {
+  API_URL: 'https://api.quran.com/api/v4/quran/translations',
+  RESOURCE_ID: 20,
+  NAME: 'Saheeh International',
 } as const;
 
 // ── Service resilience ──

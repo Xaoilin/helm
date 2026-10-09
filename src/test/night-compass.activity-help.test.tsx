@@ -52,6 +52,9 @@ vi.mock('../store/contexts/MilestoneCelebrationContext', () => ({
   useMilestoneCelebration: () => mocks.celebration,
 }));
 vi.mock('../components/dashboard/PrayerStatsCard', () => ({ default: () => null }));
+vi.mock('../hooks/useQuranTranslation', () => ({
+  useQuranTranslation: () => ({ text: 'Translation fixture', retry: vi.fn() }),
+}));
 
 describe('Night Compass activities', () => {
   beforeEach(() => {
