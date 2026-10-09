@@ -274,16 +274,21 @@ describe('Night Compass activities', () => {
     expect(mocks.celebration.celebrate).not.toHaveBeenCalled();
   });
 
-  it('keeps fully reached goals and unloaded progress disabled', () => {
+  it('hides unconfirmed progress while loading, then keeps reached goals disabled', () => {
     const date = '2026-08-29';
     const complete = recordDailyMomentumProgress(createDefaultDailyMomentumState(), {
       date, pillar: 'learn', templateId: 'learn-reading', stepId: 'pages', amount: 40,
     });
     mocks.momentum.getDay.mockReturnValue(getDailyMomentumDay(complete, date));
     mocks.momentum.loaded = false;
-    render(<NightCompassDashboard />);
+    const view = render(<NightCompassDashboard />);
+    expect(screen.getByRole('status', { name: 'Loading Learn' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Reached' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add 5 minutes' })).not.toBeInTheDocument();
+    mocks.momentum.loaded = true;
+    view.rerender(<NightCompassDashboard />);
     expect(screen.getByRole('button', { name: 'Reached' })).toBeDisabled();
-    expect(screen.getAllByRole('button', { name: 'Add 5 minutes' }).every(button => button.hasAttribute('disabled'))).toBe(true);
+    expect(screen.getAllByRole('button', { name: 'Add 5 minutes' }).every(button => !button.hasAttribute('disabled'))).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Reached' }));
     expect(mocks.momentum.recordProgress).not.toHaveBeenCalled();
   });

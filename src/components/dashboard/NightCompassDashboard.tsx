@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   CANONICAL_PRAYER_NAMES,
   calculatePrayerOutcomeStats,
@@ -27,6 +27,7 @@ import { useDailyMomentumContext } from '../../store/contexts/DailyMomentumConte
 import { useMilestoneCelebration } from '../../store/contexts/MilestoneCelebrationContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import PrayerStatsCard from './PrayerStatsCard';
+import DashboardSectionLoading from './DashboardSectionLoading';
 import type {
   DailyPillar,
   PrayerName,
@@ -363,7 +364,12 @@ function MomentumCard({
   );
 }
 
-export default function NightCompassDashboard() {
+interface NightCompassDashboardProps {
+  /** Completion dialogs and rewards must be ready before accepting a prayer action. */
+  prayerActionsReady?: boolean;
+}
+
+export default function NightCompassDashboard({ prayerActionsReady = false }: NightCompassDashboardProps) {
   const shell = useShell();
   const settings = useSettingsContext();
   const tasks = useTaskContext();
@@ -373,7 +379,15 @@ export default function NightCompassDashboard() {
   const [busyPillar, setBusyPillar] = useState<DailyPillar | null>(null);
   const [actionErrors, setActionErrors] = useState<Partial<Record<DailyPillar, string>>>({});
   const [showPrayerLog, setShowPrayerLog] = useState(false);
+  const [prayerConfirmed, setPrayerConfirmed] = useState(false);
   const pendingPillars = useRef(new Set<DailyPillar>());
+  const prayerSyncStatus = prayer.serviceSync?.status;
+  useEffect(() => {
+    // Once confirmed, keep same-account data visible during refreshes and transient failures.
+    if (prayerSyncStatus === 'synced') setPrayerConfirmed(true);
+  }, [prayerSyncStatus]);
+  const prayerReady = settings.serviceSettingsReady && (settings.settings.prayerEnabled === false
+    || prayerConfirmed || (prayer.loaded && prayerSyncStatus === 'error'));
   const today = momentum.getDay();
   const motivation = getQuranMotivationForDate(prayer.today);
   const translation = useQuranTranslation(motivation.reference);
@@ -462,6 +476,15 @@ export default function NightCompassDashboard() {
   };
 
   const renderMomentumCard = (pillar: DailyPillar) => {
+    if (!momentum.loaded) {
+      const title = pillar === 'learn' ? 'Learn' : 'Move';
+      return (
+        <section key={pillar} className={`nc-momentum-card nc-${pillar}`} aria-labelledby={`nc-${pillar}-title`} aria-busy="true">
+          <div className="nc-momentum-heading"><h2 id={`nc-${pillar}-title`}>{title}</h2></div>
+          <DashboardSectionLoading label={title} />
+        </section>
+      );
+    }
     const pillarDay = today[pillar];
     return (
       <MomentumCard
@@ -503,7 +526,7 @@ export default function NightCompassDashboard() {
 
   return (
     <section className="nc-dashboard" aria-label="Night Compass daily dashboard">
-      <section className="nc-prayer-card" aria-labelledby="nc-prayer-title">
+      <section className="nc-prayer-card" aria-labelledby="nc-prayer-title" aria-busy={!prayerReady}>
         <div className="nc-celestial" aria-hidden="true">
           <span className="nc-celestial-arc" />
           <span className="nc-orientation-marker" />
@@ -516,7 +539,7 @@ export default function NightCompassDashboard() {
             <h2 id="nc-prayer-title">Prayer</h2>
           </div>
           <span className="nc-prayer-location">
-            {settings.settings.prayerCity || 'Prayer location'} · {prayer.schedule?.timezone || prayer.localTimezone}
+            {settings.serviceSettingsReady && <>{settings.settings.prayerCity || 'Prayer location'} · {prayer.schedule?.timezone || prayer.localTimezone}</>}
           </span>
         </div>
 
@@ -527,7 +550,9 @@ export default function NightCompassDashboard() {
           </div>
         )}
 
-        {!prayerEnabled ? (
+        {!prayerReady ? (
+          <DashboardSectionLoading label="Prayer" error={prayerSyncStatus === 'error' ? prayer.serviceSync.error : null} />
+        ) : !prayerEnabled ? (
           <div className="nc-prayer-repair" role="status">
             <strong>Keep Prayer at the centre of Night Compass</strong>
             <span>Enable prayer tracking to load the five daily prayers and their canonical outcomes.</span>
@@ -648,7 +673,7 @@ export default function NightCompassDashboard() {
                         type="button"
                         className={`nc-prayer-item temporal-${temporalState} ${outcome ? `outcome-${outcome}` : ''}`}
                         data-prayer-status={outcome ?? temporalState}
-                        disabled={completed || isTomorrowOccurrence}
+                        disabled={!prayerActionsReady || completed || isTomorrowOccurrence}
                         aria-label={isTomorrowOccurrence
                           ? `${name} Prayer — Next tomorrow`
                           : outcome === 'unclassified'
@@ -747,14 +772,15 @@ export default function NightCompassDashboard() {
         {renderMomentumCard('move')}
       </div>
 
-      <section className="nc-tasks-card" aria-labelledby="nc-tasks-title">
+      <section className="nc-tasks-card" aria-labelledby="nc-tasks-title" aria-busy={!tasks.loaded}>
         <div className="nc-tasks-copy">
           <span className="nc-task-icon" aria-hidden="true">☷</span>
           <div>
             <h2 id="nc-tasks-title">Tasks</h2>
-            <p>{dueTasks.length === 0 ? 'No tasks due today' : `${dueTasks.length} due or overdue`}</p>
+            <p>{!tasks.loaded ? 'Loading tasks…' : tasks.error && tasks.tasks.length === 0
+              ? 'Tasks are unavailable.' : dueTasks.length === 0 ? 'No tasks due today' : `${dueTasks.length} due or overdue`}</p>
           </div>
-          {dueTasks.length > 0 && (
+          {tasks.loaded && dueTasks.length > 0 && (
             <span className="nc-task-preview" title={dueTasks.map(task => task.title).join(' · ')}>
               {dueTasks.slice(0, 2).map(task => task.title).join(' · ')}
             </span>
@@ -770,13 +796,16 @@ export default function NightCompassDashboard() {
         >
           Open tasks
         </button>
+        {tasks.error && <p className="nc-inline-error" role="alert">{tasks.error}{' '}
+          <button type="button" className="nc-text-action" onClick={() => void tasks.reload()}>Retry tasks</button>
+        </p>}
       </section>
 
-      <PrayerStatsCard
+      {prayerReady && prayerConfirmed && prayerActionsReady && <PrayerStatsCard
         prayerStats={prayerStats}
         showPrayerLog={showPrayerLog}
         onTogglePrayerLog={() => setShowPrayerLog(current => !current)}
-      />
+      />}
     </section>
   );
 }

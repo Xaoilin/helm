@@ -55,10 +55,10 @@ export function usePrayerPersistence({
     if (sourcesLoaded) markLoaded();
   }, [markLoaded, sourcesLoaded]);
 
-  // The page does not wait for the service: outcomes merge in when it answers.
+  // Reads need only the final location: start them alongside Tasks, whose readiness still gates writes.
   const hydratedRef = useRef(false);
   useEffect(() => {
-    if (!loaded || !locationReady || hydratedRef.current) return;
+    if (!locationReady || hydratedRef.current) return;
     hydratedRef.current = true;
     let cancelled = false;
     void serviceSync.hydrate(getTracking(), { city, country }).then(hydrated => {
@@ -69,7 +69,7 @@ export function usePrayerPersistence({
     };
     // The first load uses the final location; later changes reload through the service sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, locationReady]);
+  }, [locationReady]);
 
   useEffect(() => {
     if (!loaded) return;

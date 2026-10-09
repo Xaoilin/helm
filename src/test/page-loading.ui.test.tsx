@@ -54,11 +54,13 @@ describe('page demand and readiness', () => {
     expect(screen.queryByText('Loading page data...')).not.toBeInTheDocument();
   });
 
-  it('still waits for the dashboard core data', () => {
+  it('renders the dashboard immediately so its sections can load independently', () => {
     render(<ReadyApp coreLoaded={false} extraLoaded />);
     fireEvent.click(screen.getByText('dashboard navigation'));
+    expect(screen.getByText('dashboard data')).toBeVisible();
+    expect(screen.queryByText('Loading page data...')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('finance navigation'));
     expect(screen.getByRole('status')).toHaveTextContent('Loading page data');
-    expect(screen.queryByText('dashboard data')).not.toBeInTheDocument();
   });
 
   it.each<Surface>(['finance', 'calendar', 'integrations', 'clock', 'knowledge', 'trips'])(
