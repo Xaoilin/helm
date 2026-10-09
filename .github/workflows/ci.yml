@@ -247,10 +247,12 @@ jobs:
         env:
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           git fetch --no-tags origin \
             "$PR_BASE_REF" \
-            "+refs/pull/$PR_NUMBER/head"
+            "+$PR_HEAD_SHA:refs/pull/$PR_NUMBER/head"
+          test "$(git rev-parse "refs/pull/$PR_NUMBER/head")" = "$PR_HEAD_SHA"
       - name: Check Codex review availability
         id: codex_review_secret
         env:
