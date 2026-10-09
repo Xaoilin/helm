@@ -5,6 +5,11 @@
 import type { PrayerName, PrayerScheduleEntry } from '../types/domain';
 import { getPrayerDeadlineBounds } from './prayerTracking';
 
+const COMPLETION_START_PRAYERS: Partial<Record<PrayerName, PrayerName>> = {
+  Asr: 'Dhuhr',
+  Isha: 'Maghrib',
+};
+
 export interface PrayerCompletionCheck {
   prayerName: PrayerName;
   /** Local prayer date (YYYY-MM-DD) the outcome is for. */
@@ -27,8 +32,9 @@ export class PrayerCompletionRejectedError extends Error {
 }
 
 /**
- * A prayer can be recorded once its time has started: never for a future date, and on the
- * current date not before its timetable start. Without a timetable only the date is checked.
+ * Asr can be recorded from Dhuhr and Isha from Maghrib for combined prayers. Other prayers
+ * wait for their own start, and no prayer can be recorded for a future date.
+ * Without a timetable only the date is checked.
  *
  * @returns why the completion is not allowed, or null when it is
  */
@@ -37,8 +43,9 @@ export function prayerCompletionRejection(check: PrayerCompletionCheck): string 
   if (check.prayerDate > check.today) return notStarted;
   if (!check.timetable) return null;
 
+  const startPrayer = COMPLETION_START_PRAYERS[check.prayerName] ?? check.prayerName;
   const bounds = getPrayerDeadlineBounds(
-    check.timetable.prayers, check.prayerDate, check.prayerName, check.timetable.timezone);
+    check.timetable.prayers, check.prayerDate, startPrayer, check.timetable.timezone);
   if (bounds && check.now < bounds.startsAt) return notStarted;
   return null;
 }

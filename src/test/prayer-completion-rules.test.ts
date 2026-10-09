@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { scheduleSchema } from '../services/backend/contracts';
 import {
   assertPrayerCompletable,
   PrayerCompletionRejectedError,
@@ -21,6 +23,10 @@ const LONDON = {
   ],
 };
 
+const serviceSchedule = scheduleSchema.parse(JSON.parse(readFileSync(
+  'contracts/prayer-service/schedule.json', 'utf8',
+)).body);
+
 function check(overrides: Partial<PrayerCompletionCheck>): PrayerCompletionCheck {
   return {
     prayerName: 'Fajr',
@@ -33,6 +39,28 @@ function check(overrides: Partial<PrayerCompletionCheck>): PrayerCompletionCheck
 }
 
 describe('prayerCompletionRejection', () => {
+  describe('combined prayers using the shared service timetable', () => {
+    it.each([
+      ['Asr', '2026-09-25T11:52:00Z', '2026-09-25T15:08:00Z'],
+      ['Isha', '2026-09-25T18:12:00Z', '2026-09-25T19:18:00Z'],
+    ] as const)('allows %s from its earlier paired prayer, including separate completion later', (prayerName, anchor, ownStart) => {
+      const pairedCheck = check({
+        prayerName,
+        prayerDate: serviceSchedule.date,
+        today: serviceSchedule.date,
+        timetable: { timezone: serviceSchedule.timezone, prayers: serviceSchedule.times },
+        now: new Date(anchor),
+      });
+      expect(prayerCompletionRejection({ ...pairedCheck, now: new Date(Date.parse(anchor) - 1) }))
+        .toBe(`${prayerName} has not started yet.`);
+      expect(prayerCompletionRejection(pairedCheck)).toBeNull();
+      expect(prayerCompletionRejection({ ...pairedCheck, now: new Date(Date.parse(anchor) + 60_000) })).toBeNull();
+      expect(prayerCompletionRejection({ ...pairedCheck, now: new Date(ownStart) })).toBeNull();
+      expect(prayerCompletionRejection({ ...pairedCheck, prayerDate: '2026-09-26' }))
+        .toBe(`${prayerName} has not started yet.`);
+    });
+  });
+
   describe('allows', () => {
     it('a prayer inside its on-time window', () => {
       expect(prayerCompletionRejection(check({ prayerName: 'Fajr', now: new Date('2026-09-26T04:30:00Z') }))).toBeNull();
