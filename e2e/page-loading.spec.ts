@@ -114,7 +114,8 @@ test('Finance cold start reads the finance service and nothing from the retired 
   const recordStoreCalls = observeRecordStoreCalls(page);
   await page.goto('/');
   await expectSurfaceData(page, 'finance');
-  expect(control.services.calls).toEqual(expect.arrayContaining([
+  // Ledger visibility does not imply the independently loaded review and equity requests have arrived.
+  await expect.poll(() => control.services.calls).toEqual(expect.arrayContaining([
     'GET /api/finance/v1/ledger', 'GET /api/finance/v1/review', 'GET /api/finance/v1/equity/positions',
   ]));
   expect(recordStoreCalls).toEqual([]);

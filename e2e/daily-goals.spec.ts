@@ -30,10 +30,12 @@ for (const width of [390, 768, 1440]) {
     };
 
     const scroller = page.locator(width <= 760 ? '.main-content' : '.nc-dashboard-body');
+    await expect.poll(() => scroller.evaluate(element => (
+      element.scrollHeight - element.clientHeight
+    ))).toBeGreaterThan(0);
     const scrollMetrics = await scroller.evaluate(element => ({
       clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, top: element.scrollTop,
     }));
-    expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
     await scroller.hover();
     await page.mouse.wheel(0, 500);
     await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(scrollMetrics.top);

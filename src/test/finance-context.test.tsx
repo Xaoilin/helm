@@ -30,7 +30,8 @@ function Probe() {
 }
 
 async function renderLoaded() {
-  render(<FinanceProvider><Probe /></FinanceProvider>);
+  // Flush the async load and the probe's effect before reading its captured context.
+  await act(async () => { render(<FinanceProvider><Probe /></FinanceProvider>); });
   await screen.findByText('loaded|110401,60000|');
 }
 

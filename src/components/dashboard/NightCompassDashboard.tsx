@@ -9,6 +9,8 @@ import {
 import { formatTimeUntil, PRAYER_NAMES } from '../../services/prayerTimes';
 import { toLocalDateStr } from '../../services/financeHelpers';
 import { getQuranMotivationForDate } from '../../services/quranMotivation';
+import { QURAN_TRANSLATION } from '../../config/constants';
+import { useQuranTranslation } from '../../hooks/useQuranTranslation';
 import {
   formatPrayerInstantTime,
   getPrayerZonedClockSeconds,
@@ -374,6 +376,8 @@ export default function NightCompassDashboard() {
   const pendingPillars = useRef(new Set<DailyPillar>());
   const today = momentum.getDay();
   const motivation = getQuranMotivationForDate(prayer.today);
+  const translation = useQuranTranslation(motivation.reference);
+  const translationSourceUrl = `${motivation.sourceUrl}?translations=${QURAN_TRANSLATION.RESOURCE_ID}`;
 
   const prayerEnabled = settings.settings.prayerEnabled !== false;
   const scheduleRepairNeeded = prayerEnabled && (
@@ -715,16 +719,26 @@ export default function NightCompassDashboard() {
         </div>
         <div className="nc-quran-motivation-passages" dir="rtl">
           <blockquote lang="ar" dir="rtl">{motivation.arabic}</blockquote>
-          <blockquote lang="en" dir="ltr">{motivation.translation}</blockquote>
+          <blockquote lang="en" dir="ltr" aria-busy={!translation.text && !translation.error}>
+            {translation.text ?? (translation.error ? (
+              <>
+                <span role="alert">{translation.error}</span>{' '}
+                <button type="button" className="nc-text-action" onClick={translation.retry}>
+                  Retry Quran.com translation
+                </button>
+              </>
+            ) : <span role="status">Loading English translation from Quran.com…</span>)}
+          </blockquote>
         </div>
         <div className="nc-quran-motivation-sources">
-          <span>English translation: Marmaduke Pickthall</span>
-          <a href={motivation.sourceUrl} target="_blank" rel="noreferrer">
+          <span>English translation: {QURAN_TRANSLATION.NAME} · Quran.com</span>
+          <a href={translationSourceUrl} target="_blank" rel="noreferrer">
             Quran {motivation.reference} · Source
           </a>
           <a href="https://tanzil.net" target="_blank" rel="noreferrer">Arabic: Tanzil Project</a>
           <a href={`${import.meta.env.BASE_URL}licenses/tanzil-quran.txt`} target="_blank" rel="noreferrer">Text licence</a>
-          <a href="https://www.gutenberg.org/ebooks/16955" target="_blank" rel="noreferrer">Translation source</a>
+          <a href={translationSourceUrl} target="_blank" rel="noreferrer">Translation source</a>
+          <a href="https://quran.foundation" target="_blank" rel="noreferrer">Quran data: Quran Foundation</a>
         </div>
       </aside>
 

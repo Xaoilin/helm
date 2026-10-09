@@ -4,6 +4,8 @@
 
 Sabah One is a hosted web product for a solo operator. GitHub Pages serves the web bundle and the browser is the only supported product runtime. Account data belongs to the Spring services (`sabah-one-services`); writes require an online server confirmation. Generic app time uses one optional account-shared IANA preference with `Automatic` browser fallback; prayer schedules keep their own authoritative zone.
 
+Sabah One is the operator's one-stop shop for daily tools, projects, dashboards, and useful destinations. Projects keeps the searchable reference catalogue; shell Quick links provides immediate access to shared destinations, starting with the Grafana services dashboard. The same links appear in the desktop sidebar and the mobile More menu and open in a new tab.
+
 The current stack is:
 
 - React 19 with TypeScript 5 and Vite 8 for the web UI
