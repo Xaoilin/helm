@@ -4,6 +4,7 @@ import type { ComponentType } from 'react';
 import { useShell } from "./store/ShellContext";
 import DashboardSurface from './surfaces/DashboardSurface';
 import PrayerGlobalOverlays from './components/prayer/PrayerGlobalOverlays';
+import QuickLinks from './components/navigation/QuickLinks';
 import { PageReadinessGate, useSharedPageReady } from './store/PageReadinessGate';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
@@ -238,6 +239,7 @@ function AppInner() {
           <span className="sidebar-wordmark">SABAH ONE</span>
         </div>
         <div className="sidebar-nav" role="navigation">
+          <QuickLinks variant="sidebar" />
           {NAV_ITEMS.map(item => (
             <button
               key={item.surface}
@@ -297,6 +299,7 @@ function AppInner() {
                 &times;
               </button>
             </div>
+            <QuickLinks variant="mobile" />
             <div className="mobile-more-grid">
               {MOBILE_MORE_ITEMS.map(item => (
                 <button

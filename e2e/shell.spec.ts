@@ -4,6 +4,40 @@ import { shiftIsoDate } from '../src/services/timeZone';
 
 const FIXED_NOW = '2026-07-28T11:45:00.000Z';
 
+for (const width of [320, 390, 768, 1440]) {
+  test(`Grafana Quick links opens the dashboard without leaving Sabah One at ${width}px`, async ({ page, context, scenario }, testInfo) => {
+    await context.route('https://smallolive2165.grafana.net/**', route => route.fulfill({
+      contentType: 'text/html',
+      body: '<title>Grafana navigation fixture</title>',
+    }));
+    await page.setViewportSize({ width, height: 900 });
+    await scenario();
+    await openApp(page);
+
+    if (width <= 760) {
+      await page.getByRole('button', { name: 'Open more navigation', exact: true }).click();
+    }
+    const navigation = width <= 760
+      ? page.getByRole('dialog', { name: 'More navigation' })
+      : page.getByRole('navigation', { name: 'Main navigation', exact: true });
+    const link = navigation.getByRole('link', { name: 'Open Grafana dashboard (opens in a new tab)', exact: true });
+    await link.scrollIntoViewIfNeeded();
+    await expect(link).toBeInViewport();
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    await link.focus();
+    await expect(link).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`grafana-quick-links-${width}.png`) });
+
+    const popupPromise = page.waitForEvent('popup');
+    await page.keyboard.press('Enter');
+    const popup = await popupPromise;
+    await expect(popup).toHaveURL('https://smallolive2165.grafana.net/d/sabah-one-services/sabah-one-services3a-api-and-database-latency?from=now-6h&to=now&timezone=browser&refresh=1m');
+    await expect(page.getByRole('main', { name: 'dashboard surface', exact: true })).toBeVisible();
+    await popup.close();
+  });
+}
+
 for (const width of [390, 768, 1440]) {
   test(`Quran reading shows complete Arabic and English side by side at ${width}px`, async ({ page, scenario }, testInfo) => {
     const longest = QURAN_MOTIVATION_CARDS.reduce((left, right) => (
