@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "openUrl": "sabah-autoclicker://open",
+  "behavior": "show-window-only",
+  "acceptsParameters": false
+}

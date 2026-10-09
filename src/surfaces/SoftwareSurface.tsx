@@ -2,6 +2,7 @@ import { SOFTWARE_GITHUB_URL, SOFTWARE_REFERENCES } from '../config/software';
 import './SoftwareSurface.css';
 
 export default function SoftwareSurface() {
+  const [launchRequested, setLaunchRequested] = useState<string | null>(null);
   return <>
     <div className="surface-header">
       <div>
@@ -22,13 +23,17 @@ export default function SoftwareSurface() {
             </div>
             <p>{software.description}</p>
             <div className="software-links">
+              {software.launchUrl && <a className="btn btn-primary" href={software.launchUrl} onClick={() => setLaunchRequested(software.id)}>Launch on Mac</a>}
               {software.websiteUrl && <a className="btn btn-primary" href={software.websiteUrl} target="_blank" rel="noopener noreferrer">Open {software.name} ↗</a>}
               {software.downloadUrl && <a className="btn btn-secondary" href={software.downloadUrl} target="_blank" rel="noopener noreferrer">Download {software.name} ↗</a>}
               {software.repositoryUrl && <a className="btn btn-secondary" href={software.repositoryUrl} target="_blank" rel="noopener noreferrer">{software.name} on GitHub ↗</a>}
             </div>
+            {software.launchInstructions && <p>{software.launchInstructions}</p>}
+            {launchRequested === software.id && <p role="status">Your browser may ask permission to open the app. If nothing opens, download and install it first.</p>}
           </article>
         ))}
       </div>
     </div>
   </>;
 }
+import { useState } from 'react';
