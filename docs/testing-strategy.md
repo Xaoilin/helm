@@ -6,6 +6,7 @@ Sabah One uses a small portfolio selected by consequence and boundary fidelity, 
 
 - `npm run agent:fast` is the focused developer gate. It runs policy first, then only the lint, type, unit, or browser checks implied by the changed files.
 - `npm run check` is the complete local web gate. After policy passes, lint, typecheck, unit tests, web build, and blocking browser tests run as one timed group.
+- The installed `.githooks/pre-push` runs that complete gate on every push. After focused checks, use the push hook as the single complete local gate; running `npm run check` immediately before the same push duplicates it. Wait for the push to finish successfully before creating a pull request.
 - `npm run test:database` is the complete local database boundary. It starts from the historical migration boundary, applies the authoritative migration chain, and exercises the account/RLS, revision, legacy, and Vault contracts against Postgres.
 - GitHub Actions is the release authority. The stable aggregate checks remain `agent-policy`, `database`, `lint`, `typecheck`, `unit`, `e2e`, `build`, and `codex-review`. The risk-matched unit and browser portfolios each run once; exact-tree receipt verification remains unchanged.
 
