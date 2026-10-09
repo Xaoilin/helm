@@ -4,6 +4,7 @@ import type { ComponentType } from 'react';
 import { useShell } from "./store/ShellContext";
 import DashboardSurface from './surfaces/DashboardSurface';
 import PrayerGlobalOverlays from './components/prayer/PrayerGlobalOverlays';
+import JevVoiceControl from './components/voice/JevVoiceControl';
 import { PageReadinessGate, useSharedPageReady } from './store/PageReadinessGate';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
@@ -353,6 +354,7 @@ function AppInner() {
         </button>
       </nav>
       {!readOnly && sharedPageReady && <PrayerGlobalOverlays />}
+      <JevVoiceControl />
     </div>
   );
 }

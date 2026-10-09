@@ -19,6 +19,12 @@ The current stack is:
 
 The React shell renders navigation, the active surface, and Supabase sign-in controls. The Lina assistant, Chat, voice and Life Hero were removed on 2026-09-26; a stored `chat` surface from an earlier release opens the Dashboard. The supported surfaces are Dashboard, Calendar, Clock, Trips, Tasks, Employment, Projects, Inventory, Secrets, Finance, Health, Knowledge, Profile, Integrations, Activity, Settings, and Debug.
 
+The separate [Jev voice prototype](jev-voice-prototype.md), requested on 2026-10-09,
+is an opt-in shell panel. Deepgram supplies streaming transcripts and an
+authenticated Edge Function asks Jev for bounded choices using account-owned
+Vault keys. `useJevVoiceWorkflow` coordinates page/item selection and previewed
+task operations through the existing planner service, awaiting server confirmation.
+
 The visible version comes from the web build and the deployed `public/release.json` manifest. Open pages check the manifest with a five-second deadline and perform one browser reload when a newer deployed semver is available. Reload waits until the page is visible and mounted, with no open modal or visible editable text; a deferred check does not consume the reload marker. The active surface is kept in browser session state so a legitimate reload can return the user to the same section.
 
 ### State composition

@@ -75,6 +75,16 @@ The scheduled Codex jobs agent owns inbox reconciliation. It reads connected rec
 
 Connect the remote MCP URL `<Supabase project URL>/functions/v1/sabah-one-employment-mcp/mcp`, complete OAuth, and choose Employment on the Sabah One consent page. If that tool connection or its approval is unavailable, report the precise blocker and retain the source for reconciliation on the next run; direct database access, copied browser tokens, and UI automation remain prohibited fallbacks.
 
+## Jev voice prototype boundary
+
+The [Jev voice prototype](jev-voice-prototype.md) is a first-party browser command
+selector: Jev chooses from supplied names and IDs; the signed-in app previews and
+confirms existing planner operations. Its Edge Function exposes no external
+account read or write tools and rejects unavailable account-owned provider keys
+through the existing first-party Vault boundary. Task and Knowledge semantic
+MCP capabilities remain missing, explicitly blocking general external-agent
+acceptance. Prototype fixtures do not authorize a real account-data bypass.
+
 ## Operational diagnostics boundary
 
 Operational diagnostics add no account-owned database records or business-data API. The browser keeps a redacted memory-only timeline, cleared on account change, and sends fixed metadata envelopes to the profile service's `/api/profile/v1/operational-events` collector with the user's bearer token; OAuth client tokens cannot use it as a new domain capability. Envelopes carry no account identifiers, record contents, credentials, arbitrary messages or URLs.
