@@ -8,6 +8,7 @@ This document records the current automation policy for Sabah One. The product i
 2. Keep the smallest coherent change that can falsify the requested outcome. Preserve unrelated work and stop on unexpected overlap or tree drift.
 3. Pull-request checks cover policy, database contracts, lint, typecheck, unit tests, browser E2E, and the web build. Visual browser review supplies evidence for rendered claims.
 4. The exact tested tree is the candidate. A newer or different tree must not inherit an earlier check result.
+   Review fetches the immutable PR head SHA and verifies its local ref, so an unavailable GitHub PR head ref cannot prevent the source review gate from starting.
 5. Protected `master` promotion verifies the tested tree before GitHub Pages or Supabase Edge Function deployment.
 6. Post-promotion verification compares the deployed website, `public/release.json`, required function state, and source candidate before the change is called live.
 7. API-funded automated review is off by default (`CODEX_API_REVIEW_ENABLED`); Codex source review precedes promotion. If explicitly enabled, automated review is an additional guard: unavailable provider output is reported as advisory, while completed high-severity findings remain blocking.
