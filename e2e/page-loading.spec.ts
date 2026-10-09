@@ -62,6 +62,36 @@ function financeData(page: Page) {
   return page.locator('.finance-net-worth');
 }
 
+for (const width of [390, 1440]) {
+  test(`Dashboard is usable before unrelated Calendar, Knowledge and Clock requests finish at ${width}px`, async ({ page, scenario }, testInfo) => {
+    await scenario();
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    for (const endpoint of ['calendar/v1/calendar*', 'knowledge/v1/knowledge', 'planner/v1/clock']) {
+      await page.route(`${SERVICES_BASE_URL}/api/${endpoint}`, async route => {
+        await pending;
+        await route.fallback();
+      });
+    }
+    try {
+      await page.goto('/');
+      await expect(page.getByRole('heading', { name: 'Night Compass', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Learn', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Open tasks', exact: true })).toBeEnabled();
+      await page.screenshot({ path: testInfo.outputPath(`dashboard-before-unrelated-data-${width}.png`) });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.getByRole('button', { name: 'Navigate to Calendar', exact: true }).click();
+      await expect(page.getByRole('status').filter({ hasText: 'Loading page data' })).toBeVisible();
+      release();
+      await expect(page.getByRole('heading', { name: 'Calendar', exact: true })).toBeVisible();
+    } finally {
+      release();
+    }
+  });
+}
+
 async function expectSurfaceData(page: Page, surface: 'projects' | 'finance') {
   if (surface === 'projects') {
     await expect(page.getByRole('heading', { name: project.name, exact: true })).toBeVisible();
