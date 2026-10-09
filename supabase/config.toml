@@ -424,3 +424,7 @@ enabled = true
 # Public discovery; handler verifies OAuth identity and independent Finance approval.
 [functions.sabah-one-finance-mcp]
 verify_jwt = false
+
+# Authenticated first-party prototype; handler verifies the user and account-owned Vault RPCs.
+[functions.sabah-one-jev-voice]
+verify_jwt = false

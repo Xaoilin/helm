@@ -178,6 +178,9 @@ jobs:
         name: Stamp verified function build identity
         run: node ./scripts/stamp-assistant-deployment.mjs
 
+      - name: Deploy Sabah One Jev voice prototype
+        run: npx supabase functions deploy sabah-one-jev-voice --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
+
       - name: Deploy Sabah One Employment MCP
         run: npx supabase functions deploy sabah-one-employment-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
 
