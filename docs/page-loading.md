@@ -13,8 +13,10 @@ needs have answered, except Dashboard, which renders immediately after sign-in.
 Its Prayer, Learn/Move and Tasks sections show their own pending state and appear
 independently, so a slow Progress or momentum read cannot hide the reading card
 or an already loaded Tasks section. Progress actions and task counts are hidden
-until their data is loaded. Prayer outcomes and history wait for the service's
-first confirmation; later transient failures keep the same account's confirmed
+until their data is loaded. The confirmed prayer timetable appears without
+waiting for outcome history; unknown outcome badges say Loading and completion
+stays disabled. Prayer history waits for the service's first confirmation;
+later transient failures keep the same account's confirmed
 data visible. Prayer reads start when the service-owned location is final,
 alongside Tasks; tracking writes and actions retain their source-readiness gate.
 Prayer times can appear before Tasks and Progress finish; their completion

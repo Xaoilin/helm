@@ -102,7 +102,7 @@ async function expectSurfaceData(page: Page, surface: 'projects' | 'finance') {
 
 for (const width of [390, 768, 1440]) {
   test(`Dashboard sections appear independently without a full-page wait at ${width}px`, async ({ page, scenario }, testInfo) => {
-    const control = await scenario({ settings: { prayerEnabled: true } });
+    const control = await scenario({ now: '2026-08-29T12:30:00.000Z', settings: { prayerEnabled: true } });
     await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const release: Record<string, () => void> = {};
@@ -113,6 +113,11 @@ for (const width of [390, 768, 1440]) {
         await route.fallback();
       });
     }
+    const outcomes = new Promise<void>(resolve => { release.outcomes = resolve; });
+    await page.route(`${SERVICES_BASE_URL}/api/prayer/v1/outcomes*`, async route => {
+      await outcomes;
+      await route.fallback();
+    });
     try {
       await page.goto('/');
       const heading = page.getByRole('heading', { name: 'Night Compass', exact: true });
@@ -125,7 +130,12 @@ for (const width of [390, 768, 1440]) {
       await expect(page.locator('.nc-momentum-grid button')).toHaveCount(0);
       await expect(page.getByText('No tasks due today')).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Open tasks', exact: true })).toBeEnabled();
-      // The prayer read needs the confirmed location, not the pending Tasks response.
+      // A slow history read must not hide the independently confirmed timetable.
+      await expect(page.getByRole('region', { name: 'Prayer', exact: true })).toContainText('13:00');
+      await expect(page.getByRole('status', { name: 'Prayer data sync', exact: true })).toContainText('Loading');
+      await page.screenshot({ path: testInfo.outputPath(`dashboard-timetable-before-history-${width}.png`) });
+      release.outcomes();
+      // The outcomes read needs the confirmed location, not the pending Tasks response.
       await expect(page.getByRole('status', { name: 'Prayer data sync', exact: true })).toHaveText('Prayer data: Synced');
       await expect(page.getByRole('status', { name: 'Loading Prayer', exact: true })).toHaveCount(0);
       const prayers = page.getByRole('button', { name: /Complete .* Prayer/u });
@@ -156,6 +166,13 @@ for (const width of [390, 768, 1440]) {
       await scroller.press('PageDown');
       await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
       release.gamification();
+      const complete = page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u });
+      await expect(complete).toBeEnabled();
+      await complete.press('Enter');
+      const dialog = page.getByRole('dialog', { name: 'How was Dhuhr prayed?', exact: true });
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
     } finally {
       Object.values(release).forEach(finish => finish());
     }

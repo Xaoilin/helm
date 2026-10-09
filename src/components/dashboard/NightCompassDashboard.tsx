@@ -387,7 +387,8 @@ export default function NightCompassDashboard({ prayerActionsReady = false }: Ni
     if (prayerSyncStatus === 'synced') setPrayerConfirmed(true);
   }, [prayerSyncStatus]);
   const prayerReady = settings.serviceSettingsReady && (settings.settings.prayerEnabled === false
-    || prayerConfirmed || (prayer.loaded && prayerSyncStatus === 'error'));
+    || Boolean(prayer.schedule) || prayer.scheduleStatus === 'unavailable');
+  const prayerOutcomesPending = !prayerConfirmed && prayerSyncStatus === 'loading';
   const today = momentum.getDay();
   const motivation = getQuranMotivationForDate(prayer.today);
   const translation = useQuranTranslation(motivation.reference);
@@ -649,7 +650,7 @@ export default function NightCompassDashboard({ prayerActionsReady = false }: Ni
                   );
                   const isCurrent = currentPrayer?.name === name;
                   const isTomorrowOccurrence = isNext && nextIsTomorrow;
-                  const outcome = isTomorrowOccurrence
+                  const outcome = isTomorrowOccurrence || prayerOutcomesPending
                     ? undefined
                     : prayer.getOutcome(prayer.today, name)?.status;
                   const temporalState: PrayerTemporalState = isCurrent
@@ -663,7 +664,9 @@ export default function NightCompassDashboard({ prayerActionsReady = false }: Ni
                         : opportunityTracked
                           ? 'past'
                           : 'not_tracked';
-                  const statusPresentation = outcome
+                  const statusPresentation = prayerOutcomesPending
+                    ? { accessibleLabel: 'Outcomes loading', icon: '…', label: 'Loading' }
+                    : outcome
                     ? outcomePresentation(outcome)
                     : temporalPresentation(temporalState);
                   const completed = outcome === 'on_time' || outcome === 'late';
@@ -672,8 +675,8 @@ export default function NightCompassDashboard({ prayerActionsReady = false }: Ni
                       <button
                         type="button"
                         className={`nc-prayer-item temporal-${temporalState} ${outcome ? `outcome-${outcome}` : ''}`}
-                        data-prayer-status={outcome ?? temporalState}
-                        disabled={!prayerActionsReady || completed || isTomorrowOccurrence}
+                        data-prayer-status={prayerOutcomesPending ? 'pending' : outcome ?? temporalState}
+                        disabled={!prayerActionsReady || prayerOutcomesPending || completed || isTomorrowOccurrence}
                         aria-label={isTomorrowOccurrence
                           ? `${name} Prayer — Next tomorrow`
                           : outcome === 'unclassified'
