@@ -1,6 +1,7 @@
 import { expect, openApp, test } from './support/helm-fixture';
 import { getQuranMotivationForDate, QURAN_MOTIVATION_CARDS } from '../src/services/quranMotivation';
 import { shiftIsoDate } from '../src/services/timeZone';
+import { quranPassageFixture } from './support/fake-quran';
 
 const FIXED_NOW = '2026-07-28T11:45:00.000Z';
 
@@ -38,10 +39,38 @@ for (const width of [320, 390, 768, 1440]) {
   });
 }
 
+test('Quran reading uses the English translation returned by Quran.com', async ({ page, scenario }) => {
+  await scenario({ now: '2026-09-30T12:00:00Z' });
+  await openApp(page);
+  const card = page.getByRole('complementary', { name: 'Daily Quran reading' });
+  const passage = getQuranMotivationForDate('2026-09-30');
+  await expect(card.locator('blockquote[lang="en"]')).toHaveText(quranPassageFixture(passage.reference));
+  await expect(card.getByText('English translation: Saheeh International · Quran.com', { exact: true })).toBeVisible();
+});
+
+test('Quran reading keeps Arabic visible and can retry an unavailable English translation', async ({ page, scenario }) => {
+  await scenario({ now: '2026-09-30T12:00:00Z' });
+  let unavailable = true;
+  await page.route(/^https:\/\/api\.quran\.com\/api\/v4\/quran\/translations\/20\?/u, route => (
+    unavailable ? route.fulfill({ status: 503, json: { error: 'Provider unavailable' } }) : route.fallback()
+  ));
+  await openApp(page);
+  const card = page.getByRole('complementary', { name: 'Daily Quran reading' });
+  const passage = getQuranMotivationForDate('2026-09-30');
+  await expect(card.locator('blockquote[lang="ar"]')).toHaveText(passage.arabic);
+  await expect(card.getByRole('alert')).toContainText('English translation unavailable.');
+  await expect(card.getByRole('link', { name: 'Translation source', exact: true }))
+    .toHaveAttribute('href', `${passage.sourceUrl}?translations=20`);
+  unavailable = false;
+  await card.getByRole('button', { name: 'Retry Quran.com translation', exact: true }).click();
+  await expect(card.locator('blockquote[lang="en"]')).toHaveText(quranPassageFixture(passage.reference));
+  await expect(card.getByRole('alert')).toHaveCount(0);
+});
+
 for (const width of [390, 768, 1440]) {
   test(`Quran reading shows complete Arabic and English side by side at ${width}px`, async ({ page, scenario }, testInfo) => {
     const longest = QURAN_MOTIVATION_CARDS.reduce((left, right) => (
-      left.translation.length > right.translation.length ? left : right
+      quranPassageFixture(left.reference).length > quranPassageFixture(right.reference).length ? left : right
     ));
     const date = Array.from({ length: QURAN_MOTIVATION_CARDS.length }, (_, day) => (
       shiftIsoDate('2026-09-13', day)!
@@ -56,23 +85,23 @@ for (const width of [390, 768, 1440]) {
     const english = card.locator('blockquote[lang="en"]');
     await expect(arabic).toHaveText(longest.arabic);
     await expect(arabic).toHaveAttribute('dir', 'rtl');
-    await expect(english).toHaveText(longest.translation);
+    await expect(english).toHaveText(quranPassageFixture(longest.reference));
     await expect(english).toHaveAttribute('dir', 'ltr');
     const arabicBounds = await arabic.boundingBox();
     const englishBounds = await english.boundingBox();
     expect(arabicBounds!.x).toBeGreaterThanOrEqual(englishBounds!.x + englishBounds!.width);
     expect(Math.abs(arabicBounds!.y - englishBounds!.y)).toBeLessThan(1);
-    await expect(card.getByText('English translation: Marmaduke Pickthall', { exact: true })).toBeVisible();
+    await expect(card.getByText('English translation: Saheeh International · Quran.com', { exact: true })).toBeVisible();
     await expect(card.getByText('Reviewed meaning (paraphrase):', { exact: false })).toHaveCount(0);
     await expect(card.getByRole('link', { name: 'Arabic: Tanzil Project', exact: true }))
       .toHaveAttribute('href', 'https://tanzil.net');
     await expect(card.getByRole('link', { name: `Quran ${longest.reference} · Source`, exact: true }))
-      .toHaveAttribute('href', longest.sourceUrl);
+      .toHaveAttribute('href', `${longest.sourceUrl}?translations=20`);
     expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await card.screenshot({ path: testInfo.outputPath(`quran-long-${width}.png`) });
     const source = card.getByRole('link', { name: 'Translation source', exact: true });
-    await expect(source).toHaveAttribute('href', 'https://www.gutenberg.org/ebooks/16955');
+    await expect(source).toHaveAttribute('href', `${longest.sourceUrl}?translations=20`);
     await source.scrollIntoViewIfNeeded();
     await expect(source).toBeInViewport();
     await source.click({ trial: true });
@@ -86,13 +115,13 @@ test('Quran reading stays stable on reload and changes with the prayer date', as
   const card = page.getByRole('complementary', { name: 'Daily Quran reading' });
   const passage = card.locator('blockquote[lang="en"]');
   const arabic = card.locator('blockquote[lang="ar"]');
-  await expect(passage).toHaveText(getQuranMotivationForDate('2026-09-30').translation);
+  await expect(passage).toHaveText(quranPassageFixture(getQuranMotivationForDate('2026-09-30').reference));
   await expect(arabic).toHaveText(getQuranMotivationForDate('2026-09-30').arabic);
   await page.reload();
-  await expect(passage).toHaveText(getQuranMotivationForDate('2026-09-30').translation);
+  await expect(passage).toHaveText(quranPassageFixture(getQuranMotivationForDate('2026-09-30').reference));
   await expect(arabic).toHaveText(getQuranMotivationForDate('2026-09-30').arabic);
   await page.clock.fastForward(120_000);
-  await expect(passage).toHaveText(getQuranMotivationForDate('2026-10-01').translation);
+  await expect(passage).toHaveText(quranPassageFixture(getQuranMotivationForDate('2026-10-01').reference));
   await expect(arabic).toHaveText(getQuranMotivationForDate('2026-10-01').arabic);
 });
 

@@ -5,8 +5,9 @@
 Night Compass displays the complete Arabic text and complete English translation
 of the selected Quran passage side by side, with its surah/ayah reference,
 translator credit and source links. Arabic is the verbatim Tanzil Uthmani text;
-English uses Marmaduke Pickthall's published translation, without editorial
-encouragement titles, meaning summaries, abridgment or generated wording.
+English is Saheeh International, read directly from Quran.com's public Content
+API (translation resource 20), without editorial encouragement titles, meaning
+summaries, abridgment or generated wording.
 Multi-ayah passages include every complete verse in each language, separated by
 a newline. The Arabic presentation is right-to-left and the English presentation
 is left-to-right.
@@ -14,7 +15,7 @@ is left-to-right.
 The existing curated collection remains **206 passages across 374 distinct
 ayahs**: 57 prayer, 26 remembrance, 50 dua, 28 steadfastness and 45 good-deeds
 cards. IDs, references, themes, catalogue order and the daily selector are
-unchanged by the restoration of side-by-side Arabic and English. Prayer and related devotion account for
+unchanged by the English-source change. Prayer and related devotion account for
 133 cards. Passages do not overlap or count the same ayah twice.
 
 The original 2026-09-13 selection review covered all 114 surahs and 6,236 ayahs,
@@ -27,38 +28,34 @@ certification or a claim that every suitable passage has been exhausted.
 
 ## English source and integrity
 
-- [Project Gutenberg ebook 16955](https://www.gutenberg.org/ebooks/16955)
-  identifies Marmaduke Pickthall as a translator and lists the ebook as public
-  domain in the USA. Only its Pickthall text is used, not the other translations.
-- [Downloaded plain text](https://www.gutenberg.org/cache/epub/16955/pg16955.txt)
-  labels Pickthall records `P:`. The source says it was re-proofed against paper
-  copies. Extract each complete `P:` record up to the following `S:` marker,
-  collapse source line wrapping to spaces, and join complete selected ayahs with
-  newlines. Preserve all source words, punctuation, capitalization and parentheses.
-- The source has one truncated reference marker, `039.04`, between `039.045` and
-  `039.047`. Map that marker to **39:46** during extraction. Its complete wording
-  independently matches the previously reviewed AlQuran Cloud `en.pickthall`
-  record. This corrects the reference marker only, not the translation text.
-- Comparison with that earlier online copy matched 365 of the 374 selected ayahs
-  after whitespace normalization. Nine records have wording or punctuation
-  variants (9:129, 14:31, 19:5, 21:87, 20:14, 22:34, 27:62, 40:65 and 114:3).
-  All displayed English consistently follows the Gutenberg source.
+As requested on 2026-10-09, the dashboard replaces the bundled Pickthall text
+with **Saheeh International from Quran.com**. The public resource catalogue and
+a live verse request verified resource 20 and its translator identity:
 
-Downloaded Gutenberg text SHA-256:
-`3b96fa3ad318ab9d91db53b25100d5169fafe3a1ecb993e7c36ffff55bf9d8bc`.
+- [Quran.com translation catalogue](https://api.quran.com/api/v4/resources/translations?language=en).
+- [Live translation response for 94:5](https://api.quran.com/api/v4/quran/translations/20?verse_key=94:5&fields=verse_key).
+- [Quran Foundation Content API documentation](https://api-docs.quran.com/docs/content_apis_versioned/4.0.0/translation/).
 
-Earlier AlQuran Cloud review input SHA-256:
-`e731d9bce22575faba22b1f3de21c18b647711c33de074b89fe8d6f8384b01c5`.
+`src/services/quranTranslation.ts` requests each ayah in the selected passage,
+validates the resource ID and verse key, and joins the complete verses in their
+original order with newlines. HTML is decoded to plain text; only footnote
+markers and non-content script/style elements are removed. Words, punctuation,
+and translator-supplied explanations remain as provided. The source links pin
+`translations=20` so they open the displayed edition and its notes. The card
+credits Saheeh International, Quran.com, and Quran Foundation.
 
-Selected English SHA-256:
-`66dcfbcfdb84cc955acb06d7b8a114fc6ebcd740826f6d181f9ce710cce17400`.
+English loads when the card mounts or its passage changes. Requests omit
+credentials, have a ten-second deadline, and are cancelled when the passage
+changes or the card unmounts. Old responses cannot accompany a new Arabic
+passage. A failed or invalid response leaves the Arabic visible, shows an
+English-unavailable message, and offers Retry and the matching source link.
+There is no fallback to the former translation.
 
-The selected digest uses UTF-8 `reference|translation` records sorted lexically
-and joined with newlines, without a trailing newline. Within a passage, each
-complete ayah retains its separating newline. The regression test pins the
-independently extracted source digest and checks that every passage contains the
-exact number of verses in its reference. Translation changes require a new
-source extraction and review. There are 206 distinct English passage texts.
+Provider content is fetched for display rather than bundled or written to
+browser storage. See the [Quran Foundation Developer Terms](https://api-docs.quran.foundation/legal/developer-terms/)
+for attribution, content-display and storage requirements. Deterministic tests
+use explicitly synthetic provider fixtures, with one short live-source example
+in the service regression test; they do not distribute a translation corpus.
 
 ## Arabic source and integrity
 
@@ -104,15 +101,16 @@ month/year ends, leap days and daylight-saving transitions cannot cause early
 repeats. Refreshing the page preserves the selected passage; the provider's
 existing date rollover updates it.
 
-Tests cover full-cycle uniqueness and stability, Arabic and English source
-receipts, and the exact ayah count in both languages. Browser checks render the
-longest side-by-side passage at 390, 768 and 1440 pixels, verify its full Arabic
-and English text, right-to-left Arabic and left-to-right English semantics,
+Tests cover full-cycle uniqueness and stability, the unchanged Arabic source
+receipt, and complete ordered English provider responses. Browser checks render
+a long synthetic English fixture beside the complete Arabic at 390, 768 and
+1440 pixels, verify right-to-left Arabic and left-to-right English semantics,
 translator credit and source links, check horizontal overflow, and exercise page
-reload and prayer-local midnight rollover.
+reload, prayer-local midnight rollover, and recovery after a provider failure.
 
-The collection is bundled. No runtime network request, AI generation, account
-mutation, storage schema or external agent API is introduced.
+The curated references and Arabic collection are bundled; English is fetched
+from Quran.com without polling. This public-content change introduces no account
+mutation, storage schema, AI generation or external agent account-data API.
 
 ## Passage review ledger
 
@@ -266,7 +264,7 @@ the complete selected reference.
 | [37:99-100](https://quran.com/37/99-100) | dua | Abraham's narrative before the later trial; the Arabic request is for a gift from among the righteous, and the following verses announce a gentle son. |
 | [38:29](https://quran.com/38/29) | remembrance | A general purpose statement about revelation; it encourages reflection rather than a specific interpretive method. |
 | [38:41-43](https://quran.com/38/41-43) | dua | A prophetic narrative; the range stops before 38:44, so its unusual oath-breaking remedy is not included. |
-| [39:9](https://quran.com/39/9) | prayer | A rhetorical question to Muhammad about night devotion and knowledge; the Arabic describes a devout person standing and prostrating, while Pickthall says adoration. |
+| [39:9](https://quran.com/39/9) | prayer | A rhetorical question to Muhammad about night devotion and knowledge; the Arabic describes a devout person standing and prostrating. |
 | [39:10](https://quran.com/39/10) | steadfastness | Addressed to believing servants; 'spacious earth' is part of the passage's encouragement, not a promise of wealth. |
 | [39:22-23](https://quran.com/39/22-23) | remembrance | A description of inner response to revelation; warning language remains in the surrounding context, while the card focuses on softening. |
 | [39:38](https://quran.com/39/38) | steadfastness | A response to claims about rival protectors; mercy and harm are framed as divine power, not a guarantee of a painless life. |
@@ -274,9 +272,9 @@ the complete selected reference.
 | [39:53-55](https://quran.com/39/53-55) | steadfastness | The invitation includes repentance and action; it does not erase the passage's call to return and follow guidance. |
 | [40:7-9](https://quran.com/40/7-9) | dua | The angels' intercession is conditional on repentance and following the path; family inclusion is qualified by doing right. |
 | [40:14](https://quran.com/40/14) | dua | An imperative to believers in a polemical passage; it presents steadfast devotion, not a promise of a particular worldly result. |
-| [40:60](https://quran.com/40/60) | dua | A general divine address. Pickthall translates the response as hearing the prayer, while the Arabic uses a verb of response; the surrounding warning is not used as the card's motivation. |
+| [40:60](https://quran.com/40/60) | dua | A general divine address. the Arabic uses a verb of response; the surrounding warning is not used as the card's motivation. |
 | [40:65](https://quran.com/40/65) | dua | A general monotheistic invitation; praise and supplication are joined in the same verse. |
-| [41:33](https://quran.com/41/33) | good-deeds | The Arabic phrase calls toward Allah; Pickthall's 'prayeth' is read alongside the Arabic so the card does not reduce it to ritual prayer. |
+| [41:33](https://quran.com/41/33) | good-deeds | The Arabic phrase calls toward Allah; the card does not reduce that call to ritual prayer. |
 | [41:34-35](https://quran.com/41/34-35) | steadfastness | General ethical guidance; reconciliation is presented as possible, not certain in every relationship. |
 | [41:46](https://quran.com/41/46) | good-deeds | Moral accountability is attributed to the actor; the verse does not promise an immediate worldly result. |
 | [42:38](https://quran.com/42/38) | prayer | A description of believers in a passage contrasting lasting divine gifts with worldly comfort; prayer is one part of a shared ethical life. |
@@ -290,7 +288,7 @@ the complete selected reference.
 | [51:15-19](https://quran.com/51/15-19) | remembrance | A descriptive portrait of the God-conscious, not a fixed minimum night schedule or a prosperity formula. |
 | [51:50-51](https://quran.com/51/50-51) | remembrance | An urgent monotheistic summons in a warning section; 'flee' is spiritual return, not a physical flight instruction. |
 | [51:56-58](https://quran.com/51/56-58) | remembrance | A general theological statement; worship is broader than ritual prayer, and the provision language is not presented as a prosperity promise. |
-| [53:31-32](https://quran.com/53/31-32) | good-deeds | Pickthall renders the Arabic exception al-lamam as 'unwilled offences'; this review does not equate all minor offences with involuntary acts. The warning against self-righteousness is retained. |
+| [53:31-32](https://quran.com/53/31-32) | good-deeds | This review does not equate all minor offences with involuntary acts. The warning against self-righteousness is retained. |
 | [53:39](https://quran.com/53/39) | steadfastness | Part of a passage affirming that effort will be seen and fully repaid; this card preserves the concise original line without extending it to a worldly success guarantee. |
 | [54:10](https://quran.com/54/10) | dua | Noah's prayer within a rejection narrative; it records a plea in crisis rather than a guarantee that every requested outcome arrives immediately. |
 | [54:17](https://quran.com/54/17) | remembrance | A repeated refrain within the warning narratives; selected once, without treating the repeated refrain as multiple unique cards. |
