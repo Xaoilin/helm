@@ -77,6 +77,17 @@ describe('account-owned provider keys', () => {
 });
 
 describe('voice Edge Function', () => {
+  it('accepts commands from Software and returns Software navigation through the shared contract', async () => {
+    const softwareInput: VoiceInput = { transcript: 'Open Software', page: 'software', items: [] };
+    expect(validateVoiceInput(softwareInput)).toEqual(softwareInput);
+    expect(readVoiceDecision(decision('navigate', 'software'), softwareInput, 1))
+      .toMatchObject({ action: 'navigate', page: 'software', confident: true });
+    const fetchProvider = vi.fn<typeof fetch>().mockResolvedValue(Response.json(decision('navigate', 'software')));
+    const handler = createVoiceHandler({ authorize: async () => ({ readKey: async () => 'synthetic-provider-key' }), fetch: fetchProvider, deploymentSha: 'candidate-sha' });
+    const response = await handler(request('decide', { input: softwareInput }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ action: 'navigate', page: 'software', confident: true });
+  });
   it('calls the pinned Jev API and never returns the provider key', async () => {
     const fetchProvider = vi.fn<typeof fetch>().mockResolvedValue(Response.json(decision()));
     const handler = createVoiceHandler({ authorize: async () => ({ readKey: async () => 'synthetic-provider-key' }), fetch: fetchProvider, deploymentSha: 'candidate-sha' });

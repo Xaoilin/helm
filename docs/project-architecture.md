@@ -19,7 +19,9 @@ The current stack is:
 
 ### Hosted web shell
 
-The React shell renders navigation, the active surface, and Supabase sign-in controls. The Lina assistant, Chat, voice and Life Hero were removed on 2026-09-26; a stored `chat` surface from an earlier release opens the Dashboard. The supported surfaces are Dashboard, Calendar, Clock, Trips, Tasks, Employment, Projects, Inventory, Secrets, Finance, Health, Knowledge, Profile, Integrations, Activity, Settings, and Debug.
+The React shell renders navigation, the active surface, and Supabase sign-in controls. The Lina assistant, Chat, voice and Life Hero were removed on 2026-09-26; a stored `chat` surface from an earlier release opens the Dashboard. The supported surfaces are Dashboard, Calendar, Clock, Trips, Tasks, Employment, Projects, Software, Inventory, Secrets, Finance, Health, Knowledge, Profile, Integrations, Activity, Settings, and Debug.
+
+Software is a read-only links page for deliberately published tools. Its small release-owned list is separate from the private account-owned Projects catalogue and contains no private catalogue payload, account records, or device paths. A tool without a confirmed repository is explicitly pending. Repository, website, and download destinations open in new tabs; this page never launches local software.
 
 The separate [Jev voice prototype](jev-voice-prototype.md), requested on 2026-10-09,
 is an opt-in shell panel. Deepgram supplies streaming transcripts and an

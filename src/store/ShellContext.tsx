@@ -50,6 +50,7 @@ function isShellSurface(value: string | null): value is Surface {
     case 'clock':
     case 'trips':
     case 'projects':
+    case 'software':
     case 'inventory':
     case 'secrets':
     case 'tasks':

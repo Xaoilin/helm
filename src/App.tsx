@@ -37,6 +37,7 @@ const SURFACE_REGISTRY = {
   clock: { label: 'Clock', icon: '\u23F1\uFE0F', component: lazy(() => import('./surfaces/ClockSurface')) },
   trips: { label: 'Trips', icon: '\u{1F6EB}', component: lazy(() => import('./surfaces/TripsSurface')) },
   projects: { label: 'Projects', icon: '\u{1F4CB}', component: lazy(() => import('./surfaces/ProjectsSurface')) },
+  software: { label: 'Software', icon: '\u{1F4BB}', component: lazy(() => import('./surfaces/SoftwareSurface')) },
   inventory: { label: 'Inventory', icon: '\u{1F9F0}', component: lazy(() => import('./surfaces/InventorySurface')) },
   secrets: { label: 'Secrets', icon: '\u{1F510}', component: lazy(() => import('./surfaces/SecretsSurface')) },
   tasks: { label: 'Tasks', icon: '\u2705', component: lazy(() => import('./surfaces/TasksSurface')) },

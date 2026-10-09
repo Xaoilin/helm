@@ -113,4 +113,6 @@ acceptance; see [`finance-equity.md`](finance-equity.md).
 
 ## Browser page loading
 
+The Software surface is a release-owned list of published links, not an account-data feature. It adds no service records, domain reads, mutations, or external-agent capability; the private Projects catalogue and its existing access boundary remain unchanged.
+
 Pages load from the Spring services with the user's session; the first-party generic record store (`get_helm_account_snapshot_for_collections`, `get_helm_changed_collections`, `apply_helm_mutations`) and its Broadcast were retired in v0.2.206. No external domain MCP contract changed.

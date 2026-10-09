@@ -1045,12 +1045,23 @@ export interface ClockState {
 }
 
 // ── Navigation ──
+/** Published software references; no account data or execution controls. */
+export interface SoftwareReference {
+  id: string;
+  name: string;
+  description: string;
+  repositoryUrl?: string;
+  websiteUrl?: string;
+  downloadUrl?: string;
+}
+
 export type Surface =
   | 'dashboard'
   | 'calendar'
   | 'clock'
   | 'trips'
   | 'projects'
+  | 'software'
   | 'inventory'
   | 'secrets'
   | 'tasks'

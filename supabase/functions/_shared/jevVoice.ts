@@ -23,7 +23,7 @@ export type VoiceAction = typeof VOICE_ACTIONS[keyof typeof VOICE_ACTIONS];
 
 export const VOICE_PAGES = {
   dashboard: 'Dashboard', calendar: 'Calendar', clock: 'Clock', trips: 'Trips',
-  projects: 'Projects', inventory: 'Inventory', secrets: 'Secrets', tasks: 'Tasks',
+  projects: 'Projects', software: 'Software', inventory: 'Inventory', secrets: 'Secrets', tasks: 'Tasks',
   employment: 'Employment', finance: 'Finance', health: 'Health', knowledge: 'Knowledge',
   profile: 'Profile', integrations: 'Integrations', activity: 'Activity', settings: 'Settings', debug: 'Debug',
 } as const;
