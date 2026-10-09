@@ -59,15 +59,20 @@ afterEach(() => {
 });
 
 describe('usePrayerPersistence', () => {
-  it('waits for settings and rewards before loading anything', async () => {
+  it('loads confirmed outcomes before tasks finish, but keeps tracking writes gated', async () => {
     const { result, rerender } = renderPersistence(false);
-    await act(async () => { await Promise.resolve(); });
-    expect(api.getPrayerDashboard).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.current.serviceSync.status).toBe('synced'));
+    expect(result.current.store.loaded).toBe(false);
+    expect(result.current.store.tracking.records[FAJR_KEY]).toMatchObject({ status: 'on_time' });
+    expect(api.createPrayerOutcome).not.toHaveBeenCalled();
+    expect(api.correctPrayerOutcome).not.toHaveBeenCalled();
+    expect(api.deletePrayerOutcome).not.toHaveBeenCalled();
 
     rerender({ sourcesLoaded: true, locationReady: true });
 
     await waitFor(() => expect(result.current.serviceSync.status).toBe('synced'));
     expect(result.current.store.loaded).toBe(true);
+    expect(api.getPrayerDashboard).toHaveBeenCalledTimes(1);
   });
 
   it('is loaded without waiting for the services, and loads outcomes once the location is final', async () => {

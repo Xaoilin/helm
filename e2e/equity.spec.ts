@@ -68,8 +68,15 @@ async function proveScroll(page: Page, scroller: Locator, anchor: Locator) {
   expect(after!.y).toBeLessThan(before!.y);
   await scroller.evaluate(element => { element.scrollTop = 0; });
   await scroller.focus();
+  // PageDown animates: scrollTop > 0 alone does not mean it has finished.
+  await scroller.evaluate(element => {
+    element.addEventListener('scrollend', () => {
+      if (element.scrollTop > 0) element.setAttribute('data-keyboard-scroll-finished', 'true');
+    });
+  });
   await page.keyboard.press('PageDown');
   await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await expect(scroller).toHaveAttribute('data-keyboard-scroll-finished', 'true');
   return { ...size, beforeY: before!.y, afterY: after!.y, keyboardScrollTop: await scroller.evaluate(element => element.scrollTop) };
 }
 

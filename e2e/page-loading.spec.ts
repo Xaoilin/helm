@@ -101,6 +101,85 @@ async function expectSurfaceData(page: Page, surface: 'projects' | 'finance') {
 }
 
 for (const width of [390, 768, 1440]) {
+  test(`Dashboard sections appear independently without a full-page wait at ${width}px`, async ({ page, scenario }, testInfo) => {
+    const control = await scenario({ now: '2026-08-29T12:30:00.000Z', settings: { prayerEnabled: true } });
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const release: Record<string, () => void> = {};
+    for (const resource of ['tasks', 'momentum', 'gamification']) {
+      const pending = new Promise<void>(resolve => { release[resource] = resolve; });
+      await page.route(`${SERVICES_BASE_URL}/api/planner/v1/${resource}`, async route => {
+        await pending;
+        await route.fallback();
+      });
+    }
+    const outcomes = new Promise<void>(resolve => { release.outcomes = resolve; });
+    await page.route(`${SERVICES_BASE_URL}/api/prayer/v1/outcomes*`, async route => {
+      await outcomes;
+      await route.fallback();
+    });
+    try {
+      await page.goto('/');
+      const heading = page.getByRole('heading', { name: 'Night Compass', exact: true });
+      await expect(heading).toBeVisible();
+      await expect(page.getByRole('complementary', { name: 'Daily Quran reading' })).toBeVisible();
+      await expect(page.getByText('Loading page data...')).toHaveCount(0);
+      await expect(page.getByRole('status', { name: 'Loading Learn', exact: true })).toBeVisible();
+      await expect(page.getByRole('status', { name: 'Loading Move', exact: true })).toBeVisible();
+      await expect(page.getByText('Loading tasks…', { exact: true })).toBeVisible();
+      await expect(page.locator('.nc-momentum-grid button')).toHaveCount(0);
+      await expect(page.getByText('No tasks due today')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Open tasks', exact: true })).toBeEnabled();
+      // A slow history read must not hide the independently confirmed timetable.
+      await expect(page.getByRole('region', { name: 'Prayer', exact: true })).toContainText('13:00');
+      await expect(page.getByRole('status', { name: 'Prayer data sync', exact: true })).toContainText('Loading');
+      await page.screenshot({ path: testInfo.outputPath(`dashboard-timetable-before-history-${width}.png`) });
+      release.outcomes();
+      // The outcomes read needs the confirmed location, not the pending Tasks response.
+      await expect(page.getByRole('status', { name: 'Prayer data sync', exact: true })).toHaveText('Prayer data: Synced');
+      await expect(page.getByRole('status', { name: 'Loading Prayer', exact: true })).toHaveCount(0);
+      const prayers = page.getByRole('button', { name: /Complete .* Prayer/u });
+      await expect(prayers).toHaveCount(5);
+      expect(await prayers.evaluateAll(buttons => buttons.every(button => button.hasAttribute('disabled')))).toBe(true);
+      expect(control.services.calls.filter(call => /^(POST|PUT|PATCH|DELETE) \/api\/planner\//u.test(call))).toEqual([]);
+      const before = await heading.boundingBox();
+      await page.screenshot({ path: testInfo.outputPath(`dashboard-sections-pending-${width}.png`) });
+
+      release.tasks();
+      await expect(page.getByText('No tasks due today')).toBeVisible();
+      // Tasks are ready while the Learn/Move and Progress reads remain indefinitely held.
+      await expect(page.getByRole('status', { name: 'Loading Learn', exact: true })).toBeVisible();
+      release.momentum();
+      await expect(page.getByRole('button', { name: 'Add 2 pages', exact: true })).toBeEnabled();
+      await expect(page.getByRole('status', { name: 'Loading Learn', exact: true })).toHaveCount(0);
+      const after = await heading.boundingBox();
+      expect(before).not.toBeNull();
+      expect(after).not.toBeNull();
+      expect(Math.abs(after!.x - before!.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(after!.y - before!.y)).toBeLessThanOrEqual(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`dashboard-sections-ready-${width}.png`) });
+      const main = page.getByRole('main', { name: 'dashboard surface', exact: true });
+      const scroller = width <= 760 ? main : page.getByLabel('Dashboard content', { exact: true });
+      const dimensions = await scroller.evaluate(element => ({ client: element.clientHeight, scroll: element.scrollHeight }));
+      expect(dimensions.scroll).toBeGreaterThan(dimensions.client);
+      await scroller.press('PageDown');
+      await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+      release.gamification();
+      const complete = page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u });
+      await expect(complete).toBeEnabled();
+      await complete.press('Enter');
+      const dialog = page.getByRole('dialog', { name: 'How was Dhuhr prayed?', exact: true });
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+    } finally {
+      Object.values(release).forEach(finish => finish());
+    }
+  });
+}
+
+for (const width of [390, 768, 1440]) {
   test(`Projects loads from the knowledge service and reuses confirmed navigation data at ${width}px`, async ({ page, scenario }, testInfo) => {
     const control = await scenario({ initialSurface: 'projects', stores });
     await page.setViewportSize({ width, height: 900 });

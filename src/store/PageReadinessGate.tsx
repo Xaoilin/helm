@@ -45,7 +45,8 @@ export function PageReadinessGate({ children }: { children: ReactNode }) {
     : shell.surface === 'finance' ? finance
     : true; // Employment and its confirmed first seed retain their own loading UI.
 
-  if (!shared || !pageReady) {
+  // Dashboard sections own their readiness, so one slow read never hides the entire page.
+  if (shell.surface !== 'dashboard' && (!shared || !pageReady)) {
     return <div role="status" aria-live="polite" className="surface-body">Loading page data...</div>;
   }
 

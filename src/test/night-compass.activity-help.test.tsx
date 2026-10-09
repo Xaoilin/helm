@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import NightCompassDashboard from '../components/dashboard/NightCompassDashboard';
+import type { PrayerTimesData } from '../services/prayerTimes';
+import { makePrayerTimesData } from './prayerFixtures';
 import {
   createDefaultDailyMomentumState,
   getDailyMomentumDay,
@@ -13,13 +15,16 @@ const mocks = vi.hoisted(() => ({
     requestNavigation: vi.fn(),
   },
   settings: {
+    serviceSettingsReady: true,
     settings: { prayerEnabled: false, prayerCity: 'Bedford' },
     appTimeZone: { effectiveTimeZone: 'UTC' },
   },
   tasks: { tasks: [] },
   prayer: {
+    loaded: true,
+    serviceSync: { status: 'synced', error: null },
     tracking: { records: {} },
-    schedule: null,
+    schedule: null as PrayerTimesData | null,
     scheduleStatus: 'unavailable',
     scheduleError: null,
     now: new Date('2026-08-29T12:00:00.000Z'),
@@ -59,10 +64,29 @@ vi.mock('../hooks/useQuranTranslation', () => ({
 describe('Night Compass activities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.settings.settings.prayerEnabled = false;
+    mocks.prayer.schedule = null;
+    mocks.prayer.scheduleTimezoneValid = false;
+    mocks.prayer.scheduleStatus = 'unavailable';
+    mocks.prayer.serviceSync.status = 'synced';
     mocks.momentum.loaded = true;
     mocks.momentum.getDay.mockReturnValue(
       getDailyMomentumDay(createDefaultDailyMomentumState(), '2026-08-29'),
     );
+  });
+
+  it('shows confirmed timetable times while outcomes load and blocks premature completion', () => {
+    mocks.settings.settings.prayerEnabled = true;
+    mocks.prayer.schedule = makePrayerTimesData('2026-08-29', 'UTC');
+    mocks.prayer.scheduleStatus = 'ready';
+    mocks.prayer.scheduleTimezoneValid = true;
+    mocks.prayer.serviceSync.status = 'loading';
+    render(<NightCompassDashboard prayerActionsReady />);
+    expect(screen.getByRole('region', { name: 'Prayer', exact: true })).toHaveTextContent('12:55');
+    const complete = screen.getByRole('button', { name: /Complete Dhuhr Prayer/u });
+    expect(complete).toBeDisabled();
+    fireEvent.click(complete);
+    expect(mocks.prayer.requestPrayerCompletion).not.toHaveBeenCalled();
   });
 
   it('gives every Learn and Move activity title pointer and keyboard help', () => {
@@ -274,16 +298,21 @@ describe('Night Compass activities', () => {
     expect(mocks.celebration.celebrate).not.toHaveBeenCalled();
   });
 
-  it('keeps fully reached goals and unloaded progress disabled', () => {
+  it('hides unconfirmed progress while loading, then keeps reached goals disabled', () => {
     const date = '2026-08-29';
     const complete = recordDailyMomentumProgress(createDefaultDailyMomentumState(), {
       date, pillar: 'learn', templateId: 'learn-reading', stepId: 'pages', amount: 40,
     });
     mocks.momentum.getDay.mockReturnValue(getDailyMomentumDay(complete, date));
     mocks.momentum.loaded = false;
-    render(<NightCompassDashboard />);
+    const view = render(<NightCompassDashboard />);
+    expect(screen.getByRole('status', { name: 'Loading Learn' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Reached' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add 5 minutes' })).not.toBeInTheDocument();
+    mocks.momentum.loaded = true;
+    view.rerender(<NightCompassDashboard />);
     expect(screen.getByRole('button', { name: 'Reached' })).toBeDisabled();
-    expect(screen.getAllByRole('button', { name: 'Add 5 minutes' }).every(button => button.hasAttribute('disabled'))).toBe(true);
+    expect(screen.getAllByRole('button', { name: 'Add 5 minutes' }).every(button => !button.hasAttribute('disabled'))).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Reached' }));
     expect(mocks.momentum.recordProgress).not.toHaveBeenCalled();
   });

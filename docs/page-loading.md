@@ -9,13 +9,28 @@ session, so navigating between pages reuses it. No account data is kept in
 browser storage.
 
 `PageReadinessGate` shows `Loading page data...` until the providers the page
-needs have answered. Shared prayer overlays and daily rollover need settings,
+needs have answered, except Dashboard, which renders immediately after sign-in.
+Its Prayer, Learn/Move and Tasks sections show their own pending state and appear
+independently, so a slow Progress or momentum read cannot hide the reading card
+or an already loaded Tasks section. Progress actions and task counts are hidden
+until their data is loaded. The confirmed prayer timetable appears without
+waiting for outcome history; unknown outcome badges say Loading and completion
+stays disabled. Prayer history waits for the service's first confirmation;
+later transient failures keep the same account's confirmed
+data visible. Prayer reads start when the service-owned location is final,
+alongside Tasks; tracking writes and actions retain their source-readiness gate.
+Prayer times can appear before Tasks and Progress finish; their completion
+buttons stay disabled until the dialogs, rewards and required sources are ready.
+The dashboard's desktop content scroller is keyboard focusable.
+
+Shared prayer overlays and daily rollover need settings,
 progress, momentum, tasks and prayer. Calendar and Integrations also wait for
 Calendar, Clock for Clock, Knowledge for Knowledge, Projects, Tasks and Secrets
 for Projects, Inventory for Inventory and Projects, Trips for Trips and Calendar
 (its event importer), and Health and Finance for their own domain. Dashboard
 does not wait for Calendar, Knowledge or Clock; their providers can finish in the
-background. Employment keeps its own loading and retry UI. Navigation stays
+background. These reads have not been removed or cached in browser storage.
+Employment keeps its own loading and retry UI. Navigation stays
 available while a page loads.
 
 A failed load keeps the last confirmed data on screen with the service's error

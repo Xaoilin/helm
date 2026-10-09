@@ -34,7 +34,8 @@ function change(application: EmploymentApplication | null, applicationId = appli
 
 async function renderLoaded(applications: EmploymentApplication[]) {
   api.getJobApplications.mockResolvedValue(applications);
-  render(<EmploymentProvider><EmploymentProbe /></EmploymentProvider>);
+  // Flush the async load and the probe's effect before reading its captured context.
+  await act(async () => { render(<EmploymentProvider><EmploymentProbe /></EmploymentProvider>); });
   await screen.findByText(`loaded|${applications.length}|`);
 }
 

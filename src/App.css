@@ -5031,6 +5031,22 @@ textarea.form-input {
   isolation: isolate;
 }
 
+.nc-section-loading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  min-height: 190px;
+  color: var(--nc-text-muted);
+}
+
+.nc-section-loading p { margin: 0; font-size: 13px; }
+.nc-loading-lines { display: grid; gap: 14px; }
+.nc-loading-lines span { height: 14px; border-radius: 6px; background: rgba(145, 160, 184, 0.1); }
+.nc-loading-lines span:nth-child(2) { width: 76%; }
+.nc-loading-lines span:nth-child(3) { width: 56%; }
+
 .nc-celestial {
   position: absolute;
   inset: 0;
