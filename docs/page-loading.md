@@ -9,10 +9,13 @@ session, so navigating between pages reuses it. No account data is kept in
 browser storage.
 
 `PageReadinessGate` shows `Loading page data...` until the providers the page
-needs have answered: every page needs settings, progress, momentum, tasks,
-prayer, knowledge, calendar and clock; Projects, Tasks and Secrets also need
-projects, Inventory needs inventory and projects, and Trips, Health and Finance
-their own domain. Employment keeps its own loading and retry UI. Navigation stays
+needs have answered. Shared prayer overlays and daily rollover need settings,
+progress, momentum, tasks and prayer. Calendar and Integrations also wait for
+Calendar, Clock for Clock, Knowledge for Knowledge, Projects, Tasks and Secrets
+for Projects, Inventory for Inventory and Projects, Trips for Trips and Calendar
+(its event importer), and Health and Finance for their own domain. Dashboard
+does not wait for Calendar, Knowledge or Clock; their providers can finish in the
+background. Employment keeps its own loading and retry UI. Navigation stays
 available while a page loads.
 
 A failed load keeps the last confirmed data on screen with the service's error

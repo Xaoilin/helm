@@ -20,21 +20,25 @@ export function useSharedPageReady(): boolean {
   const momentum = useDailyMomentumContext().loaded;
   const tasks = useTaskContext().loaded;
   const prayer = usePrayerContext().loaded;
-  const knowledge = useKnowledgeContext().loaded;
-  const calendar = useCalendar().loaded;
-  const clock = useClockContext().loaded;
-  return settings && gamification && momentum && tasks && prayer && knowledge && calendar && clock;
+  return settings && gamification && momentum && tasks && prayer;
 }
 
 export function PageReadinessGate({ children }: { children: ReactNode }) {
   const shell = useShell();
   const shared = useSharedPageReady();
+  const knowledge = useKnowledgeContext().loaded;
+  const calendar = useCalendar().loaded;
+  const clock = useClockContext().loaded;
   const projects = useProjectContext().loaded;
   const inventory = useInventoryContext().loaded;
   const trips = useTripContext().loaded;
   const health = useHealthContext().loaded;
   const finance = useFinanceContext().loaded;
-  const pageReady = shell.surface === 'trips' ? trips
+  // Gate only the page's consumers: a slow Calendar load must not hold the dashboard blank.
+  const pageReady = shell.surface === 'calendar' || shell.surface === 'integrations' ? calendar
+    : shell.surface === 'clock' ? clock
+    : shell.surface === 'knowledge' ? knowledge
+    : shell.surface === 'trips' ? trips && calendar
     : shell.surface === 'projects' || shell.surface === 'tasks' || shell.surface === 'secrets' ? projects
     : shell.surface === 'inventory' ? inventory && projects
     : shell.surface === 'health' ? health
