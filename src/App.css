@@ -521,6 +521,37 @@
   font-size: 15px;
 }
 
+.quick-links-heading {
+  margin: 14px 0 6px;
+  color: #8b8fa3;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sidebar-quick-links .quick-links-heading {
+  padding: 0 20px;
+}
+
+.sidebar-quick-links {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1e2030;
+}
+
+.mobile-quick-links {
+  margin-bottom: 14px;
+}
+
+.quick-link {
+  text-decoration: none;
+}
+
+.quick-link-external {
+  margin-left: auto;
+}
+
 .sidebar-badge {
   margin-left: auto;
   background: #ff6b6b;
