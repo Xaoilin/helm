@@ -15,6 +15,7 @@ import { API_TIMEOUT, SERVICE_RETRY } from '../../config/constants';
 import { getFreshAccessToken, SessionUnavailableError } from '../../store/supabase';
 import { backoffDelayMs, retryAfterMs } from '../backoff';
 import { CircuitBreaker, CircuitOpenError } from '../circuitBreaker';
+import { reportServiceReachable } from '../networkStatus';
 import { apiErrorSchema } from './contracts';
 
 /** A failed service call. `code` is the service's error code, or a client-side reason. */
@@ -164,7 +165,7 @@ async function send(
   options: CallOptions,
 ): Promise<Response> {
   try {
-    return await fetch(url, {
+    const response = await fetch(url, {
       method,
       headers: {
         Accept: 'application/json',
@@ -175,6 +176,8 @@ async function send(
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(options.timeoutMs ?? API_TIMEOUT.SERVICE_API),
     });
+    reportServiceReachable();
+    return response;
   } catch (error) {
     const timedOut = error instanceof DOMException && error.name === 'TimeoutError';
     throw new ServiceError(0, timedOut ? 'timeout' : 'network', timedOut

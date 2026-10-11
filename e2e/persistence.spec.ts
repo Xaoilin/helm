@@ -1,4 +1,4 @@
-import type { Page, Request } from '@playwright/test';
+import type { Page, Request, Route } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import type { EquityPosition } from '../src/types/domain';
 import { FINANCE_REVIEW } from '../src/test/finance-review-fixture';
@@ -36,6 +36,30 @@ async function setBrowserOnline(page: Page, online: boolean): Promise<void> {
   }, online);
 }
 
+test('keeps controls usable when the browser reports offline but the services answer', async ({ page, scenario }, testInfo) => {
+  await scenario({ now: FINANCE_REVIEW.updatedAt, stores: { tasks: [TASK] } });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
+  });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
+  const checkbox = page.getByRole('checkbox', { name: 'Mark "Review notes" as complete' });
+  await expect(checkbox).toBeEnabled();
+  await expect(page.getByTestId('sync-status-banner')).toHaveCount(0);
+  expect(await page.evaluate(() => navigator.onLine)).toBe(false);
+
+  const taskWrite = waitForMutation(page, 'tasks');
+  await checkbox.click();
+  expect((await taskWrite).ok()).toBe(true);
+  await expect(page.getByRole('checkbox', { name: 'Mark "Review notes" as incomplete' })).toBeChecked();
+
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByTestId('sync-status-banner')).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath(`synthetic-false-offline-${width}.png`) });
+  }
+});
+
 test('keeps saved Finance data readable while offline, then saves again once back online', async ({ page, scenario }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -48,6 +72,9 @@ test('keeps saved Finance data readable while offline, then saves again once bac
   const budget = page.getByRole('region', { name: 'Monthly available amount' });
   await expect(budget).toContainText('£1,750.00 / month');
 
+  // A real disconnection fails network requests as well as changing the browser's hint.
+  const disconnected = (route: Route) => route.abort('internetdisconnected');
+  await page.route(`${SERVICES_BASE_URL}/**`, disconnected);
   await setBrowserOnline(page, false);
   const banner = page.getByTestId('sync-status-banner');
   await expect(banner).toContainText('Offline');
@@ -78,6 +105,7 @@ test('keeps saved Finance data readable while offline, then saves again once bac
 
   // Back online, the banner goes and a task completes with one planner-service write.
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.unroute(`${SERVICES_BASE_URL}/**`, disconnected);
   await setBrowserOnline(page, true);
   await expect(banner).toHaveCount(0);
   let taskMutationCount = 0;
