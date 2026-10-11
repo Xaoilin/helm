@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 
-/** Account data is read-only while the browser is offline: no service can confirm a change. */
+/** Read-only while the browser reports offline and no service response has contradicted it. */
 interface SyncAvailability {
   readOnly: boolean;
 }

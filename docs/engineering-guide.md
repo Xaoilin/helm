@@ -96,6 +96,7 @@ Direct browser review is required for visible user flows and especially for OAut
   - At startup, a stored session whose renewal fails for a network reason is retried and then shown as "Reconnecting to Sabah One" with Retry, never as the sign-in screen. The SDK's null `INITIAL_SESSION` for that case is ignored.
   - Google Calendar access never touches the Sabah One session: consent uses Google's popup code flow, credentials stay server-side, and Google problems are `409 google_reconnect_required`, not `401`.
 - Transient read failures preserve confirmed same-account data and drafts with visible freshness; ended sessions and account changes fail closed. Domain operation errors do not invalidate unrelated capabilities.
+- The browser's `navigator.onLine` flag is a network hint. An authenticated service HTTP response overrides a false offline hint, restoring controls without waiting for an `online` event; the next browser network change discards that evidence. Operation errors remain on their owning page, writes still require server confirmation, and no extra connectivity polling is added.
 - Degraded states must say what is unavailable and what the user can do in the page; the in-app reminder banner is the fallback for unavailable browser notifications.
 - Diagnostics redact tokens and secrets while retaining request IDs and normalized failure codes where available.
 
