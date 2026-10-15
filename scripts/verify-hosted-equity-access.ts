@@ -7,6 +7,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createClient } from '@supabase/supabase-js';
 import { parseMcpResponse } from './lib/mcp-response';
+import { hostedEquityUpdate } from './lib/hosted-equity-update';
 import { cleanupHostedFixture, fixturePreferencesUrl } from './lib/hosted-fixture-cleanup';
 import type { FixtureCleanupReceipt } from './lib/hosted-fixture-cleanup';
 
@@ -267,14 +268,9 @@ async function main() {
       && addReplay.accountVersion === added.accountVersion && JSON.stringify(addReplay) === JSON.stringify(added));
     const addedPosition = record(added.position);
     const addedUpdatedAt = addedPosition.updatedAt;
-    const draft = { ...addedPosition };
-    delete draft.id;
-    delete draft.createdAt;
-    delete draft.updatedAt;
     expect('Added position returns server lifecycle fields', typeof addedUpdatedAt === 'string');
-    const updated = await callTool('Synthetic owned shares updated', oauthToken, 'equity_update_position', {
-      requestId: randomUUID(), positionId, position: { ...draft, ownedShares: 7 }, expectedUpdatedAt: addedUpdatedAt,
-    });
+    const updated = await callTool('Synthetic owned shares updated', oauthToken, 'equity_update_position',
+      hostedEquityUpdate(randomUUID(), position, addedPosition));
     const updatedPosition = record(updated.position);
     expect('Owned shares update persisted without changing grant balances', updatedPosition.ownedShares === 7
       && Array.isArray(updatedPosition.grants) && record(updatedPosition.grants[0]).vested === 2);

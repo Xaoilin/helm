@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import positionSaved from '../../../contracts/finance-service/position-saved.json' with { type: 'json' };
+import { hostedEquityUpdate } from '../../../scripts/lib/hosted-equity-update.ts';
 
 Deno.env.set('SUPABASE_URL', 'https://equity-test.supabase.co');
 Deno.env.set('SUPABASE_ANON_KEY', 'test-anon-key');
@@ -25,6 +27,7 @@ interface ServiceCall {
 interface ServiceFailure { status: number; code: string; message: string }
 interface Backend {
   calls: ServiceCall[];
+  positionResponse?: unknown;
   userError?: boolean;
   approvalError?: ServiceFailure;
   toolError?: ServiceFailure;
@@ -58,7 +61,8 @@ async function withBackend(run: (backend: Backend) => Promise<void>) {
     const error = isProbe(call) ? backend.approvalError : backend.toolError;
     if (error) return Response.json({ code: error.code, message: error.message }, { status: error.status });
     if (request.method === 'DELETE') return Response.json({ id: positionId });
-    return Response.json(request.method === 'GET' && url.pathname.endsWith('/positions') ? { positions: [], total: 0 } : { id: positionId });
+    return Response.json(request.method === 'GET' && url.pathname.endsWith('/positions')
+      ? { positions: [], total: 0 } : backend.positionResponse ?? { id: positionId });
   };
   try {
     await run(backend);
@@ -138,6 +142,45 @@ const position = {
   scenario: { pricesUsd: [4, 10], withholdingRate: 0.4, usdToGbp: 0.75, asOf: '2026-09-21', notes: 'Illustrative before fees' },
 };
 const expectedUpdatedAt = '2026-09-21T12:00:00.000000+00:00';
+
+Deno.test('hosted update keeps the authored draft and exact server concurrency token', () => {
+  const original = { ...position, id: positionSaved.body.id };
+  const before = structuredClone({ original, saved: positionSaved.body });
+  assert.deepEqual(hostedEquityUpdate(requestId, original, positionSaved.body), {
+    requestId, positionId: original.id, position: { ...position, ownedShares: 7 },
+    expectedUpdatedAt: positionSaved.body.updatedAt,
+  });
+  assert.deepEqual({ original, saved: positionSaved.body }, before);
+});
+
+Deno.test('hosted fixture updates through strict MCP after a nullable provider response', async () => {
+  await withBackend(async backend => {
+    backend.positionResponse = positionSaved.body;
+    const original = { ...position, id: positionSaved.body.id };
+    const added = await mcp('tools/call', { name: 'equity_add_position', arguments: { requestId, position: original } });
+    const saved = added.message.result.structuredContent.result.position;
+    assert.deepEqual(saved, positionSaved.body);
+    const update = hostedEquityUpdate('20000000-0000-4000-8000-000000000002', original, saved);
+    const { message } = await mcp('tools/call', { name: 'equity_update_position', arguments: update });
+    assert(!message.error && message.result?.isError !== true, 'Synthetic owned shares updated: semantic success');
+    const writes = backend.calls.filter(call => call.method === 'PUT');
+    assert.equal(writes.length, 2);
+    assert.deepEqual(writes[1].body, {
+      position: { ...position, ownedShares: 7 }, expectedUpdatedAt: saved.updatedAt,
+    });
+
+    // Copying the response still fails public validation before a service write.
+    const legacyDraft: Record<string, unknown> = { ...saved };
+    delete legacyDraft.id;
+    delete legacyDraft.createdAt;
+    delete legacyDraft.updatedAt;
+    const refused = await mcp('tools/call', { name: 'equity_update_position', arguments: {
+      ...update, position: { ...legacyDraft, ownedShares: 7 },
+    } });
+    assert(refused.message.error || refused.message.result?.isError);
+    assert.equal(backend.calls.filter(call => call.method === 'PUT').length, 2);
+  });
+});
 
 Deno.test('publishes exactly five domain tools with retry, stale-write and deletion safeguards', async () => {
   await withBackend(async () => {
