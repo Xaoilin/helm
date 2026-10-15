@@ -37,3 +37,13 @@ Focused regression: `npx vitest run src/test/hosted-fixture-cleanup.test.ts` inc
 HTTP/Auth SDK boundary and negative cases for missing service/Auth proof. One disposable
 hosted lifecycle verified the existing preferences route on 15 October 2026; this is not
 acceptance of an unmerged HELM candidate or a claim of a new live deployment.
+
+The first protected run at `4412cd62` (release `0.2.216`, run `38775264147`)
+confirmed all three cleanups but failed the Equity business update. Its verifier copied
+the provider's saved response, including null optional values, into the strict MCP draft.
+The update now reuses its own authored fixture draft, changes only owned shares, and
+passes the exact server `updatedAt` separately. Public validation and every business and
+cleanup assertion remain intact. The Equity runtime tests exercise this request through
+the real MCP handler with the shared nullable provider fixture and still reject the old
+response-copy input before a service mutation. Full protected release acceptance remains
+pending for the corrected candidate.
