@@ -1,12 +1,41 @@
 # Account page loading
 
-Every domain provider loads its own data from its Spring service, most through
-`useServiceLoad` (`src/store/contexts/useServiceLoad.ts`): once when the
-signed-in session's providers mount, again after a change another tab or device
-saved (the live-update stream), and after a failed load (a few timed retries,
-then whenever the page is shown again). Confirmed data stays in memory for the
-session, so navigating between pages reuses it. No account data is kept in
-browser storage.
+Providers stay mounted for the signed-in account, but optional domains read only
+when an owning view opens. `useDomainDemand` lists those consumers: Calendar,
+Integrations and Trips need Calendar; Projects, Tasks, Secrets and Inventory
+need Projects; other optional domains load for their own view. Settings,
+Prayer, Tasks, Progress, daily momentum and Clock remain shared shell
+dependencies for reminders, overlays, timer alarms and Dashboard readiness.
+Clock must load on a cold Dashboard and follow off-page timer changes so its
+existing completion alarm still runs. Integration summaries load only
+in Integrations. The existing Jev prototype panel registers Inventory, Projects
+and Knowledge demand only while open; closing it releases those consumers.
+Its commands wait for those required data sources. No account data is kept in browser storage.
+
+`useServiceLoad` shares concurrent reads, retains same-account confirmed memory
+for up to ten minutes on a warm revisit or visibility return, and invalidates it
+after a matching live change or reconnect. Closed views remember invalidation
+without fetching; reopening one reads once. The existing 300 ms live-event
+coalescer groups reconnect/change bursts. A change arriving during a read queues
+one trailing read, so the earlier response cannot make the change disappear.
+Failures remain visible and retry only while a consumer is active. Account
+changes still remount every provider through `auth.sessionKey`; memory is never
+shared between those instances, and cached data never substitutes for service
+authorization of a write.
+
+Calendar requests the displayed seven-day week, full 42-cell month, or a
+30-day Agenda page. Agenda has previous/next controls so later dates remain
+reachable. Accounts, Integrations and the Trips source picker use the existing
+Calendar endpoint with a one-day window because no metadata-only endpoint
+exists. The service returns every account/source and adds its existing timezone
+boundary padding to event reads. Date markers use UTC arithmetic; display and
+event filtering retain the account's app zone. An obsolete window response is
+discarded; the latest window loads after the current read. Confirmed overlapping
+events stay mounted while refreshing, preserving focus. Loading occupies a
+reserved status line, and event creation waits for a successful required read.
+401/403 responses clear Calendar data; transient failures retain confirmed data
+and show Retry. Automatic Google sync runs only while a Calendar consumer is
+active and visible; provider sync behavior is otherwise unchanged.
 
 `PageReadinessGate` shows `Loading page data...` until the providers the page
 needs have answered, except Dashboard, which renders immediately after sign-in.
@@ -28,8 +57,9 @@ progress, momentum, tasks and prayer. Calendar and Integrations also wait for
 Calendar, Clock for Clock, Knowledge for Knowledge, Projects, Tasks and Secrets
 for Projects, Inventory for Inventory and Projects, Trips for Trips and Calendar
 (its event importer), and Health and Finance for their own domain. Dashboard
-does not wait for Calendar, Knowledge or Clock; their providers can finish in the
-background. These reads have not been removed or cached in browser storage.
+does not activate Calendar, Knowledge, Projects, Inventory, Employment,
+Health, Trips or Finance. Calendar keeps its navigation mounted and shows its
+own date-window pending state; other pages retain their dependency gate.
 Employment keeps its own loading and retry UI. Navigation stays
 available while a page loads.
 

@@ -11,6 +11,7 @@ import { useGamificationContext } from '../store/contexts/GamificationContext';
 import { useSyncAvailability } from '../store/SyncAvailabilityContext';
 import { completeTask, saveTask } from '../services/backend/plannerServiceApi';
 import { decideVoiceCommand } from '../services/jevVoiceApi';
+import { useViewDataDemand } from '../store/ViewDataDemand';
 
 const TASK_DEFAULTS = { description: '', priority: 'medium', category: 'task' } as const;
 const PRAYER_CATEGORY = 'prayer';
@@ -19,6 +20,7 @@ const MIN_MATCH_WORD_LENGTH = 3;
 interface PendingVoiceWrite { action: 'add_task' | 'complete_task'; id: string; title: string; }
 
 export function useJevVoiceWorkflow() {
+  useViewDataDemand('jev-voice', ['Inventory', 'Projects', 'Knowledge']);
   const shell = useShell();
   const tasks = useTaskContext();
   const inventory = useInventoryContext();
@@ -153,5 +155,6 @@ export function useJevVoiceWorkflow() {
     }
   }, [cancel, confirm]);
 
-  return { run, confirm, cancel, busy, notice, error, pending, found, measurement, readOnly: sync.readOnly };
+  return { run, confirm, cancel, busy, notice, error, pending, found, measurement, readOnly: sync.readOnly,
+    dataReady: tasks.loaded && inventory.loaded && projects.loaded && knowledge.loaded };
 }

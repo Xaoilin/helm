@@ -145,8 +145,8 @@ test('keeps navigation usable during a stalled Employment load and isolates its 
   });
   const loadRequest = page.waitForRequest(isJobsLoad);
   await openApp(page);
-  await loadRequest;
   await page.getByRole('button', { name: 'Navigate to Employment' }).click();
+  await loadRequest;
   await expect(page.getByText('Loading your applications…')).toBeVisible();
   await page.getByRole('button', { name: 'Navigate to Tasks' }).click();
   await expect(page.getByRole('checkbox', { name: 'Mark "Review notes" as complete' })).toBeVisible();
@@ -164,9 +164,9 @@ test('keeps navigation usable during a stalled Employment load and isolates its 
   await expect(page.getByTestId('sync-status-banner')).toHaveCount(0);
 
   failLoad = false;
-  await page.getByRole('button', { name: 'Navigate to Employment' }).click();
   const loadRetry = page.waitForResponse(response => isJobsLoad(response.request()) && response.ok());
-  await page.getByRole('button', { name: 'Retry loading', exact: true }).click();
+  // Returning to a failed demanded view retries immediately; no second click is required.
+  await page.getByRole('button', { name: 'Navigate to Employment' }).click();
   await loadRetry;
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.getByText('Loading your applications…')).toHaveCount(0);

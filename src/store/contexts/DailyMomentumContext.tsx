@@ -2,7 +2,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -30,7 +29,7 @@ import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
 import type { PlannerMomentumPillar } from '../../services/backend/plannerContracts';
 import { getMomentum, saveMomentumPillar } from '../../services/backend/plannerServiceApi';
 import { ServiceError } from '../../services/backend/serviceClient';
-import { useLiveRefresh } from './useLiveRefresh';
+import { useServiceLoad } from './useServiceLoad';
 
 /** A save refused because another tab changed the pillar is retried once from the latest state. */
 const SAVE_ATTEMPTS = 2;
@@ -80,7 +79,6 @@ export function useDailyMomentumContext(): DailyMomentumContextValue {
 
 export function DailyMomentumProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState(createDefaultDailyMomentumState);
-  const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stateRef = useRef(state);
@@ -97,34 +95,12 @@ export function DailyMomentumProvider({ children }: { children: ReactNode }) {
     setError(null);
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const stored = await getMomentum();
-        if (active) publishStored(stored);
-      } catch (loadError) {
-        if (active) {
-          storageValidRef.current = false;
-          setError(loadError instanceof Error ? loadError.message : String(loadError));
-        }
-      } finally {
-        if (active) setLoaded(true);
-      }
-    })();
-    return () => { active = false; };
-  }, [publishStored]);
-
-  // Progress saved in another tab or device (a live-update event) reloads, after this tab's own saves.
-  const refresh = useCallback(async () => {
+  // Reads wait for this tab's writes and share the same flight as live refreshes.
+  const load = useCallback(async () => {
     await mutationQueueRef.current;
-    try {
-      publishStored(await getMomentum());
-    } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
-    }
+    publishStored(await getMomentum());
   }, [publishStored]);
-  useLiveRefresh(LIVE_DOMAINS.momentum, refresh);
+  const { loaded, error: loadError } = useServiceLoad('Momentum', true, load, LIVE_DOMAINS.momentum);
 
   /**
    * Applies a change to the latest stored state and saves each changed pillar whole, naming the version it
@@ -214,7 +190,7 @@ export function DailyMomentumProvider({ children }: { children: ReactNode }) {
     state,
     loaded,
     saving,
-    error,
+    error: error ?? loadError,
     getDay,
     selectPath,
     recordProgress,
@@ -225,7 +201,7 @@ export function DailyMomentumProvider({ children }: { children: ReactNode }) {
     state,
     loaded,
     saving,
-    error,
+    error, loadError,
     getDay,
     selectPath,
     recordProgress,

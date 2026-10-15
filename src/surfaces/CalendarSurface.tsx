@@ -11,6 +11,7 @@ import { logError } from '../services/logger';
 import { formatAppDate, formatAppTime, getAppDate } from '../services/appTimeZone';
 import { dateTimeLocalToInstant, instantToDateTimeLocal } from '../services/timeZone';
 import type { CalendarAccount, CalendarEvent } from '../types/domain';
+import { calendarSelectedDate, calendarWindow } from '../services/calendarWindow';
 
 function isGoogleCalendarAccount(account: CalendarAccount): boolean {
   return account.provider === 'google';
@@ -53,6 +54,12 @@ export default function CalendarSurface() {
   const [tab, setTab] = useState<Tab>(settings.settings.defaultCalendarTab || 'week');
   const [viewDate, setViewDate] = useState(() => toCalendarMarker(currentAppDate));
   const [selectedDateStr, setSelectedDateStr] = useState(currentAppDate);
+  const requestWindow = calendar.requestWindow;
+  const viewMarker = viewDate.toISOString().slice(0, 10);
+  useEffect(() => {
+    requestWindow?.(calendarWindow(viewMarker, tab));
+    setSelectedDateStr(selected => calendarSelectedDate(viewMarker, tab, selected));
+  }, [requestWindow, tab, viewMarker]);
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [editingAccount, setEditingAccount] = useState<CalendarAccount | null>(null);
@@ -226,6 +233,11 @@ export default function CalendarSurface() {
   const prevWeek = () => { const d = new Date(viewDate); d.setUTCDate(d.getUTCDate() - 7); setViewDate(d); };
   const nextWeek = () => { const d = new Date(viewDate); d.setUTCDate(d.getUTCDate() + 7); setViewDate(d); };
   const goToday = () => setViewDate(toCalendarMarker(currentAppDate));
+  const shiftAgenda = (direction: number) => {
+    const next = new Date(viewDate);
+    next.setUTCDate(next.getUTCDate() + direction * 30);
+    setViewDate(next);
+  };
 
   // ── Account CRUD ──
   const openAddAccount = () => {
@@ -363,12 +375,17 @@ export default function CalendarSurface() {
   // ── Agenda ──
   const agendaEvents = useMemo(() => {
     const now = new Date().toISOString();
+    const window = calendarWindow(viewMarker, 'agenda');
     return [...visibleEvents].filter(event => {
-      if (!event.allDay) return event.end >= now;
+      if (!event.allDay) {
+        const start = getAppDate(new Date(event.start), appTimeZone);
+        const end = getAppDate(new Date(event.end), appTimeZone);
+        return event.end >= now && Boolean(start && end && start <= window.to && end >= window.from);
+      }
       const range = getAllDayCalendarDateRange(event, appTimeZone);
-      return Boolean(range && range.endDate >= currentAppDate);
+      return Boolean(range && range.endDate >= currentAppDate && range.startDate <= window.to && range.endDate >= window.from);
     }).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 30);
-  }, [appTimeZone, currentAppDate, visibleEvents]);
+  }, [appTimeZone, currentAppDate, viewMarker, visibleEvents]);
 
   // ── Sync status ──
   const syncStatusText = () => {
@@ -418,13 +435,13 @@ export default function CalendarSurface() {
         <div>
           <h1>Calendar</h1>
           <div className="subtitle">
-            {calendar.calendarAccounts.length === 0
+            {!calendar.loaded ? 'Loading accounts...' : calendar.calendarAccounts.length === 0
               ? 'No accounts connected'
               : `${calendar.calendarAccounts.length} account${calendar.calendarAccounts.length > 1 ? 's' : ''} \u00b7 ${visibleEvents.length} visible event${visibleEvents.length !== 1 ? 's' : ''}`}
             {hasGoogleAccounts ? (
               <span style={{ marginLeft: 8 }}>{syncStatusText()}</span>
             ) : (
-               <span className="mocked-indicator" style={{ marginLeft: 8 }} role="status">Manual calendar &ndash; no external provider sync</span>
+               <span className="mocked-indicator" style={{ marginLeft: 8, visibility: calendar.loaded ? undefined : 'hidden' }} role="status">Manual calendar &ndash; no external provider sync</span>
              )}
           </div>
         </div>
@@ -434,11 +451,14 @@ export default function CalendarSurface() {
               {syncState === 'syncing' ? <><span className="spinner" /> Syncing</> : '\u{21BB} Sync'}
             </button>
           )}
-          <button className="btn btn-secondary" onClick={() => openAddEvent()} disabled={writableSources.length === 0}>+ Event</button>
-          <button className="btn btn-primary" onClick={openAddAccount}>+ Account</button>
+          <button className="btn btn-secondary" onClick={() => openAddEvent()} disabled={!calendar.loaded || calendar.eventsLoading || Boolean(calendar.loadError) || writableSources.length === 0}>+ Event</button>
+          <button className="btn btn-primary" onClick={openAddAccount} disabled={!calendar.loaded || Boolean(calendar.loadError)}>+ Account</button>
         </div>
       </div>
       <div className="surface-body">
+        <div role="status" aria-live="polite" style={{ minHeight: 20 }}>
+          {(!calendar.loaded || calendar.eventsLoading) ? 'Loading page data...' : ''}
+        </div>
         {calendar.loadError && (
           <div className="info-box warning" role="alert" style={{ marginBottom: 8 }}>
             Calendar could not be refreshed: {calendar.loadError}{' '}
@@ -465,7 +485,7 @@ export default function CalendarSurface() {
                 <button className="btn-icon" onClick={nextMonth} aria-label="Next month">&rsaquo;</button>
                 <button className="btn btn-secondary btn-sm" onClick={goToday}>Today</button>
               </div>
-              {calendar.calendarAccounts.length === 0 ? (
+              {!calendar.loaded || (calendar.loadError && calendar.calendarAccounts.length === 0) ? null : calendar.calendarAccounts.length === 0 ? (
                 <div className="empty-state" role="status">
                   <div className="empty-icon">&#128197;</div>
                   <h3>No calendar accounts</h3>
@@ -576,7 +596,7 @@ export default function CalendarSurface() {
               <button className="btn btn-secondary btn-sm" onClick={goToday}>Today</button>
             </div>
             {accountLegend}
-            {calendar.calendarAccounts.length === 0 ? (
+            {!calendar.loaded || (calendar.loadError && calendar.calendarAccounts.length === 0) ? null : calendar.calendarAccounts.length === 0 ? (
               <div className="empty-state" role="status">
                 <div className="empty-icon">&#128197;</div>
                 <h3>No calendar accounts</h3>
@@ -696,8 +716,14 @@ export default function CalendarSurface() {
         {/* ── Agenda View ── */}
         {tab === 'agenda' && (
           <>
+            <div className="calendar-nav">
+              <button className="btn-icon" onClick={() => shiftAgenda(-1)} aria-label="Previous 30 days">&lsaquo;</button>
+              <span>{calendarWindow(viewMarker, 'agenda').from} – {calendarWindow(viewMarker, 'agenda').to}</span>
+              <button className="btn-icon" onClick={() => shiftAgenda(1)} aria-label="Next 30 days">&rsaquo;</button>
+              <button className="btn btn-secondary btn-sm" onClick={goToday}>Today</button>
+            </div>
             {accountLegend}
-            {agendaEvents.length === 0 ? (
+            {!calendar.loaded || (calendar.loadError && calendar.calendarAccounts.length === 0) ? null : agendaEvents.length === 0 ? (
               <div className="empty-state" role="status">
                 <div className="empty-icon">&#128197;</div>
                 <h3>No upcoming events</h3>
@@ -753,7 +779,7 @@ export default function CalendarSurface() {
                 <button className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: 11, marginLeft: 6 }} onClick={() => shell.navigate('integrations')}>Integrations</button>
               </div>
             )}
-            {calendar.calendarAccounts.length === 0 ? (
+            {!calendar.loaded || (calendar.loadError && calendar.calendarAccounts.length === 0) ? null : calendar.calendarAccounts.length === 0 ? (
               <div className="empty-state" role="status">
                 <div className="empty-icon">&#128231;</div>
                 <h3>No calendar accounts</h3>

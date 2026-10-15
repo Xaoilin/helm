@@ -5,7 +5,11 @@
  */
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
-import { useLiveRefresh } from './useLiveRefresh';
+import { useServiceLoad } from './useServiceLoad';
+import { useDomainDemand } from './useDomainDemand';
+import { ShellContext } from '../ShellContext';
+import { calendarWindow, type CalendarWindow } from '../../services/calendarWindow';
+import { getAppDate } from '../../services/appTimeZone';
 import type { CalendarAccount, CalendarEvent, CalendarSource } from '../../types/domain';
 import {
   connectGoogleAccount as connectGoogleAccountRequest,
@@ -29,17 +33,11 @@ import type {
   ServiceCalendarSource,
 } from '../../services/backend/contracts';
 import { ServiceError } from '../../services/backend/serviceClient';
-import { logWarn } from '../../services/logger';
 import { useSettingsContext } from './SettingsContext';
 
-/** Events are loaded for this many days either side of today. */
-const PAST_DAYS = 365;
-const FUTURE_DAYS = 400;
 /** Google accounts not synced for this long are synced when the calendar loads or regains focus. */
 export const CALENDAR_SYNC_STALE_MS = 15 * 60_000;
 const SYNC_CHECK_INTERVAL_MS = 5 * 60_000;
-/** A failed load is retried after these delays, then when the page is shown again. */
-const LOAD_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 60_000];
 
 export type NewCalendarEvent = Omit<CalendarEvent, 'id'>;
 
@@ -49,6 +47,8 @@ export interface CalendarContextValue {
   calendarEvents: CalendarEvent[];
   /** True once the first load finished, whether or not it succeeded. */
   loaded: boolean;
+  eventsLoading?: boolean;
+  requestWindow?: (window: CalendarWindow) => void;
   /** Why the calendar could not be loaded; null while it is current. */
   loadError: string | null;
   syncing: boolean;
@@ -145,18 +145,6 @@ function toEvent(event: ServiceCalendarEvent, sources: readonly CalendarSource[]
   };
 }
 
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function loadWindow(now = new Date()): { from: string; to: string } {
-  const day = 24 * 60 * 60_000;
-  return {
-    from: isoDate(new Date(now.getTime() - PAST_DAYS * day)),
-    to: isoDate(new Date(now.getTime() + FUTURE_DAYS * day)),
-  };
-}
-
 /** Google accounts that can sync and have not synced recently. */
 function needsSync(accounts: readonly CalendarAccount[], now = Date.now()): boolean {
   return accounts.some(account => account.provider === 'google'
@@ -165,17 +153,27 @@ function needsSync(accounts: readonly CalendarAccount[], now = Date.now()): bool
 }
 
 export function CalendarProvider({ children }: { children: ReactNode }) {
-  const { appTimeZone } = useSettingsContext();
+  const { appTimeZone, serviceSettingsReady: settingsLoaded, settings } = useSettingsContext();
   const timeZone = appTimeZone.effectiveTimeZone;
+  const shell = useContext(ShellContext);
+  const demanded = useDomainDemand('Calendar');
+  const today = getAppDate(new Date(), timeZone) ?? new Date().toISOString().slice(0, 10);
+  const [requestedWindow, setRequestedWindow] = useState<CalendarWindow | null>(null);
+  const requestWindow = useCallback((next: CalendarWindow) => {
+    setRequestedWindow(previous => previous?.from === next.from && previous.to === next.to ? previous : next);
+  }, []);
+  const range = shell?.surface === 'calendar' ? requestedWindow
+    : calendarWindow(today, shell ? 'accounts' : settings.defaultCalendarTab ?? 'week');
+  const rangeKey = range ? `${range.from}/${range.to}` : '';
+  const rangeRef = useRef(rangeKey);
+  useEffect(() => { rangeRef.current = rangeKey; }, [rangeKey]);
+  const active = demanded && settingsLoaded && Boolean(range);
+  const [confirmedRange, setConfirmedRange] = useState('');
   const [calendarAccounts, setCalendarAccounts] = useState<CalendarAccount[]>([]);
   const [calendarSources, setCalendarSources] = useState<CalendarSource[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncProblem, setSyncProblem] = useState<string | null>(null);
-  /** Consecutive failed loads; each one schedules the next retry. */
-  const [loadFailures, setLoadFailures] = useState(0);
   const sourcesRef = useRef<CalendarSource[]>([]);
   const eventsRef = useRef<CalendarEvent[]>([]);
   const accountsRef = useRef<CalendarAccount[]>([]);
@@ -185,32 +183,33 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   useEffect(() => { eventsRef.current = calendarEvents; }, [calendarEvents]);
   useEffect(() => { accountsRef.current = calendarAccounts; }, [calendarAccounts]);
 
-  const reload = useCallback(async () => {
-    if (!isCalendarServiceEnabled()) {
-      setLoadError('The calendar service is not configured for this build.');
-      setLoaded(true);
-      return;
-    }
-    const { from, to } = loadWindow();
+  const load = useCallback(async () => {
+    if (!rangeKey) return;
+    const [from, to] = rangeKey.split('/');
     try {
       const calendar = await getCalendar(from, to);
+      if (rangeRef.current !== rangeKey) return;
       const sources = calendar.sources.map(toSource);
       const accounts = calendar.accounts.map(toAccount);
       accountsRef.current = accounts;
       setCalendarAccounts(accounts);
       setCalendarSources(sources);
       setCalendarEvents(calendar.events.map(event => toEvent(event, sources)));
-      setLoadError(null);
-      setLoadFailures(0);
+      setConfirmedRange(rangeKey);
     } catch (error) {
-      // The last confirmed calendar stays on screen; the page shows why it may be out of date.
-      logWarn('Calendar', `Calendar load failed: ${calendarErrorMessage(error)}`);
-      setLoadError(calendarErrorMessage(error));
-      setLoadFailures(failures => failures + 1);
-    } finally {
-      setLoaded(true);
+      if (error instanceof ServiceError && (error.status === 401 || error.status === 403)) {
+        setCalendarAccounts([]);
+        setCalendarSources([]);
+        setCalendarEvents([]);
+        accountsRef.current = [];
+        sourcesRef.current = [];
+        eventsRef.current = [];
+      }
+      throw error;
     }
-  }, []);
+  }, [rangeKey]);
+  const { loaded, error: loadError, reload, invalidate } = useServiceLoad('Calendar', isCalendarServiceEnabled(), load,
+    LIVE_DOMAINS.calendar, { active, requestKey: rangeKey });
 
   const syncGoogle = useCallback((accountId?: string): Promise<void> => {
     syncInFlight.current ??= (async () => {
@@ -225,36 +224,21 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       } finally {
         setSyncing(false);
       }
-      await reload();
+      await invalidate();
     })().finally(() => { syncInFlight.current = null; });
     return syncInFlight.current;
-  }, [reload]);
-
-  // A change saved in another tab or device (a live-update event) reloads the calendar.
-  useLiveRefresh(isCalendarServiceEnabled() ? LIVE_DOMAINS.calendar : [], reload);
-
-  // A failed load retries by itself a few times, then whenever the page is shown again.
-  useEffect(() => {
-    if (loadFailures === 0 || !isCalendarServiceEnabled()) return undefined;
-    const delay = LOAD_RETRY_DELAYS_MS[loadFailures - 1];
-    const retryWhenShown = () => { if (document.visibilityState === 'visible') void reload(); };
-    document.addEventListener('visibilitychange', retryWhenShown);
-    const timer = delay === undefined ? undefined : window.setTimeout(() => { void reload(); }, delay);
-    return () => {
-      document.removeEventListener('visibilitychange', retryWhenShown);
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, [loadFailures, reload]);
+  }, [invalidate]);
 
   // Load, then bring stale Google accounts up to date; repeat while the page is open and visible.
   useEffect(() => {
+    if (!active || !loaded || loadError || !isCalendarServiceEnabled()) return undefined;
     let cancelled = false;
     const syncIfStale = () => {
       if (!cancelled && document.visibilityState === 'visible' && needsSync(accountsRef.current)) {
         void syncGoogle();
       }
     };
-    void reload().then(syncIfStale);
+    syncIfStale();
     const interval = window.setInterval(syncIfStale, SYNC_CHECK_INTERVAL_MS);
     document.addEventListener('visibilitychange', syncIfStale);
     return () => {
@@ -262,7 +246,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', syncIfStale);
     };
-  }, [reload, syncGoogle]);
+  }, [active, loaded, loadError, syncGoogle]);
 
   const replaceAccount = useCallback((updated: ServiceCalendarAccount, primary: boolean) => {
     const account = toAccount(updated);
@@ -348,6 +332,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
 
   const value: CalendarContextValue = {
     calendarAccounts, calendarSources, calendarEvents, loaded, loadError, syncing, syncProblem,
+    requestWindow, eventsLoading: active && confirmedRange !== rangeKey && !loadError,
     reload, syncGoogle,
     addCalendarAccount, updateCalendarAccount, setPrimaryCalendarAccount, removeCalendarAccount, connectGoogleAccount,
     addCalendarSource, updateCalendarSource, removeCalendarSource,

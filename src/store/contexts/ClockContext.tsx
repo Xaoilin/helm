@@ -22,11 +22,13 @@ import {
 } from '../../services/backend/plannerServiceApi';
 import { logWarn } from '../../services/logger';
 import type { ClockState, ClockTimerSound, ClockTimerStatus } from '../../types/domain';
-import { useLiveRefresh } from './useLiveRefresh';
+import { useServiceLoad } from './useServiceLoad';
 
 interface ClockContextValue {
   clock: ClockState;
   loaded: boolean;
+  error?: string | null;
+  reload?: () => Promise<void>;
   createStopwatch: () => string;
   setStopwatchLabel: (id: string, label: string) => void;
   removeStopwatch: (id: string) => void;
@@ -56,7 +58,6 @@ export function useClockContext(): ClockContextValue {
 
 export function ClockProvider({ children }: { children: ReactNode }) {
   const [clock, setClock] = useState<ClockState>(DEFAULT_CLOCK_STATE);
-  const [loaded, setLoaded] = useState(false);
   const previousTimerStatuses = useRef<Record<string, ClockTimerStatus>>({});
 
   // What the planner service last confirmed; only what differs from it is saved, one record at a time.
@@ -73,33 +74,17 @@ export function ClockProvider({ children }: { children: ReactNode }) {
     setClock(normalised);
   }, []);
 
-  const reload = useCallback(async () => {
+  const load = useCallback(async () => {
     if (!isPlannerServiceEnabled()) return;
     // A reload while this tab's own saves are in flight would show them undone; it waits for them.
     if (pendingWritesRef.current > 0) {
       reloadAfterWritesRef.current = true;
       return;
     }
-    try {
-      showConfirmed(await getClock());
-    } catch (error) {
-      logWarn('Clock', `Clock load failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    showConfirmed(await getClock());
   }, [showConfirmed]);
 
-  useEffect(() => {
-    let mounted = true;
-    void (async () => {
-      await reload();
-      if (mounted) setLoaded(true);
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [reload]);
-
-  // A stopwatch or timer changed in another tab or device (a live-update event) reloads the clock.
-  useLiveRefresh(LIVE_DOMAINS.clock, reload);
+  const { loaded, error, reload, invalidate } = useServiceLoad('Clock', isPlannerServiceEnabled(), load, LIVE_DOMAINS.clock);
 
   const enqueue = useCallback((write: () => Promise<unknown>) => {
     pendingWritesRef.current += 1;
@@ -110,10 +95,10 @@ export function ClockProvider({ children }: { children: ReactNode }) {
       pendingWritesRef.current -= 1;
       if (pendingWritesRef.current === 0 && reloadAfterWritesRef.current) {
         reloadAfterWritesRef.current = false;
-        void reload();
+        void invalidate();
       }
     });
-  }, [reload]);
+  }, [invalidate]);
 
   useEffect(() => {
     if (!loaded || !isPlannerServiceEnabled()) return;
@@ -452,7 +437,7 @@ export function ClockProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ClockContextValue>(() => ({
     clock,
-    loaded,
+    loaded, error, reload,
     createStopwatch: createStopwatchItem,
     setStopwatchLabel,
     removeStopwatch,
@@ -472,7 +457,7 @@ export function ClockProvider({ children }: { children: ReactNode }) {
     previewTimerSound,
   }), [
     clock,
-    loaded,
+    loaded, error, reload,
     createStopwatchItem,
     setStopwatchLabel,
     removeStopwatch,

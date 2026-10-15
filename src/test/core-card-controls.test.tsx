@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
     appTimeZone: { effectiveTimeZone: 'Europe/London' },
   },
   calendar: {
+    loaded: true,
     calendarAccounts: [] as CalendarAccount[],
     calendarSources: [] as CalendarSource[],
     calendarEvents: [] as CalendarEvent[],
