@@ -7,6 +7,8 @@
 // ── Timing (milliseconds) ──
 
 export const TIMING = {
+  /** Confirmed same-account memory can be reused on a warm view revisit. Live changes invalidate it. */
+  SERVICE_MEMORY_FRESH_MS: 10 * 60 * 1000,
   /** Stopwatch and timer repaint cadence */
   CLOCK_TICK: 100,
   /** Dashboard prayer countdown tick interval */

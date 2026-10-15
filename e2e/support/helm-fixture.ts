@@ -131,7 +131,7 @@ export function waitForMutation(page: Page, collection: string): Promise<Respons
   });
 }
 
-async function installScenario(page: Page, options: HelmScenarioOptions = {}): Promise<HelmScenarioControl> {
+export async function installScenario(page: Page, options: HelmScenarioOptions = {}): Promise<HelmScenarioControl> {
   if (options.now) {
     await page.clock.install({ time: new Date(options.now) });
   }

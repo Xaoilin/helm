@@ -1,6 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClockProvider, useClockContext } from '../store/contexts/ClockContext';
+import { ShellProvider } from '../store/ShellContext';
+import { playTimerAlarm } from '../services/clockAudio';
 import type { ClockState } from '../types/domain';
 
 const planner = vi.hoisted(() => ({
@@ -64,5 +66,24 @@ describe('clock persistence', () => {
     act(() => result.current.setStopwatchLabel('b', 'Long run'));
     await waitFor(() => expect(planner.saveStopwatch).toHaveBeenCalled());
     expect(planner.deleteStopwatch).not.toHaveBeenCalled();
+  });
+
+  it('loads a server-running timer on a cold Dashboard and plays its completion alarm off the Clock view', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-09-08T10:00:00Z');
+    planner.getClock.mockResolvedValue({ ...STORED, timers: [{
+      id: 'running-away-from-clock', label: 'Synthetic alarm', durationMs: 1000, remainingMs: 1000,
+      endsAt: Date.now() + 1000, status: 'running', sound: 'chime', alerting: false,
+    }] });
+    planner.saveTimer.mockResolvedValue(undefined);
+    const { result } = renderHook(useClockContext, { wrapper: ({ children }) =>
+      <ShellProvider><ClockProvider>{children}</ClockProvider></ShellProvider>,
+    });
+    await act(async () => {});
+    expect(planner.getClock).toHaveBeenCalledOnce();
+    expect(result.current.clock.timers[0]?.status).toBe('running');
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(result.current.clock.timers[0]?.status).toBe('completed');
+    expect(playTimerAlarm).toHaveBeenCalledExactlyOnceWith('chime');
   });
 });

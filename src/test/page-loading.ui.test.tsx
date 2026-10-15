@@ -13,7 +13,7 @@ import { InventoryContext } from '../store/contexts/InventoryContext';
 import { KnowledgeCtx } from '../store/contexts/KnowledgeContext';
 import { PrayerCtx } from '../store/contexts/PrayerContext';
 import { ProjectCtx } from '../store/contexts/ProjectContext';
-import { SettingsCtx } from '../store/contexts/SettingsContext';
+import { SettingsCtx, type SettingsContextValue } from '../store/contexts/SettingsContext';
 import { TaskCtx } from '../store/contexts/TaskContext';
 import { TripCtx } from '../store/contexts/TripContext';
 import type { Surface } from '../types/domain';
@@ -36,7 +36,8 @@ function PageProbe() {
 
 function ReadyApp({ extraLoaded = false, coreLoaded = true }) {
   return <ContextStack bindings={[
-    readiness(SettingsCtx, coreLoaded), readiness(GamificationCtx, coreLoaded),
+    provide(SettingsCtx, { loaded: coreLoaded, serviceSettingsReady: coreLoaded, integrationsLoaded: extraLoaded } as SettingsContextValue),
+    readiness(GamificationCtx, coreLoaded),
     readiness(DailyMomentumCtx, coreLoaded), readiness(TaskCtx, coreLoaded),
     readiness(PrayerCtx, coreLoaded), readiness(CalendarCtx, extraLoaded),
     readiness(ClockContext, extraLoaded), readiness(KnowledgeCtx, extraLoaded),
@@ -63,7 +64,18 @@ describe('page demand and readiness', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Loading page data');
   });
 
-  it.each<Surface>(['finance', 'calendar', 'integrations', 'clock', 'knowledge', 'trips'])(
+  it('mounts Calendar after shared settings so its own date-window loading keeps navigation mounted', () => {
+    const view = render(<ReadyApp coreLoaded={false} />);
+    fireEvent.click(screen.getByText('calendar navigation'));
+    expect(screen.getByRole('status')).toHaveTextContent('Loading page data');
+    view.rerender(<ReadyApp />);
+    const calendar = screen.getByText('calendar data');
+    expect(calendar).toBeVisible();
+    view.rerender(<ReadyApp extraLoaded />);
+    expect(screen.getByText('calendar data')).toBe(calendar);
+  });
+
+  it.each<Surface>(['finance', 'integrations', 'clock', 'knowledge', 'trips'])(
     'keeps %s gated on its data and navigation available while loading', surface => {
       const view = render(<ReadyApp />);
       fireEvent.click(screen.getByText(`${surface} navigation`));

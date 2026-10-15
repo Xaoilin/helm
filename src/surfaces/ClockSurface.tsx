@@ -51,6 +51,10 @@ export default function ClockSurface() {
       </div>
 
       <div className="surface-body">
+        {clock.error && <div role="alert" className="info-box warning">
+          Clock could not be refreshed: {clock.error}{' '}
+          <button className="btn btn-secondary btn-sm" onClick={() => { void clock.reload?.(); }}>Retry</button>
+        </div>}
         <section className="card clock-toolbar" aria-label="Clock workspace controls">
           <div className="clock-toolbar-copy">
             <div className="clock-toolbar-title">Multi-clock workspace</div>

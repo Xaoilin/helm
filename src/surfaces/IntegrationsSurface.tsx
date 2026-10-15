@@ -128,6 +128,13 @@ export default function IntegrationsSurface() {
         </div>
       </div>
       <div className="surface-body">
+        {(settings.integrationsError || calendar.loadError) && <div role="alert" className="info-box warning">
+          Connections could not be refreshed: {settings.integrationsError || calendar.loadError}{' '}
+          <button className="btn btn-secondary btn-sm" onClick={() => {
+            void settings.reloadIntegrations?.();
+            void calendar.reload();
+          }}>Retry</button>
+        </div>}
         <div className="info-box">
           Connect Google Calendar while signed into Sabah One.
           Slack and Linear connections are unavailable.

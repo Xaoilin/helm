@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useServiceLoad } from './useServiceLoad';
 import type { Settings, Integration } from '../../types/domain';
 import {
   getBrowserTimeZone,
@@ -61,6 +62,9 @@ function hydrateIntegrations(records: ServiceIntegration[]): Integration[] {
 export interface SettingsContextValue {
   settings: Settings;
   integrations: Integration[];
+  integrationsLoaded?: boolean;
+  integrationsError?: string | null;
+  reloadIntegrations?: () => Promise<void>;
   loaded: boolean;
   appTimeZone: AppTimeZoneResolution;
   appTimeZoneLoadWarning: string | null;
@@ -108,12 +112,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [settings, loaded]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
-  useEffect(() => {
-    if (!loaded || !isProfileServiceEnabled()) return;
-    getIntegrations()
-      .then(records => setIntegrations(hydrateIntegrations(records)))
-      .catch(error => console.error('Integrations could not be loaded from the profile service', error));
-  }, [loaded]);
+  const loadIntegrations = useCallback(async () => {
+    setIntegrations(hydrateIntegrations(await getIntegrations()));
+  }, []);
+  const { loaded: integrationsLoaded, error: integrationsError, reload: reloadIntegrations } =
+    useServiceLoad('Integrations', isProfileServiceEnabled(), loadIntegrations, ['profile']);
 
   const applyServiceLocation = useCallback((location: Parameters<typeof settingsFromLocation>[0]) => {
     setSettings(prev => {
@@ -196,6 +199,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     <SettingsCtx.Provider value={{
       settings,
       integrations,
+      integrationsLoaded, integrationsError, reloadIntegrations,
       loaded,
       appTimeZone,
       appTimeZoneLoadWarning,

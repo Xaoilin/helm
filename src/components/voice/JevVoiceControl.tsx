@@ -129,7 +129,7 @@ function JevVoicePanel({ close }: { close: () => void }) {
       </details>
       <p className="jev-voice-privacy">Mic audio goes to Deepgram; commands and item names go to TypeSafe. Keys stay in Vault. Speech is billed while the mic is on.</p>
       <div className="jev-voice-mic-row">
-        <button className="btn btn-primary" disabled={paused || !jevKey || !speechKey} onClick={() => {
+        <button className="btn btn-primary" disabled={paused || !jevKey || !speechKey || (micStatus === MIC_STATUS.stopped && !workflow.dataReady)} onClick={() => {
           if (micStatus !== MIC_STATUS.stopped) { stop(); return; }
           setSpeechError(null); buffer.current = ''; void speech.current?.start(speechKey);
         }}>{micStatus === MIC_STATUS.stopped ? 'Enable microphone' : 'Stop microphone'}</button>
@@ -146,7 +146,7 @@ function JevVoicePanel({ close }: { close: () => void }) {
             if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
           }} />
       </label>
-      <button className="btn btn-secondary" disabled={paused || workflow.busy || !jevKey || !command.trim()} onClick={submit}>{workflow.busy ? 'Working…' : 'Run command'}</button>
+      <button className="btn btn-secondary" disabled={paused || workflow.busy || !workflow.dataReady || !jevKey || !command.trim()} onClick={submit}>{workflow.busy ? 'Working…' : 'Run command'}</button>
       {heard && <p className="jev-voice-heard">Heard: {heard}</p>}
       {paused && <p role="status">Voice is paused while offline or viewing Secrets.</p>}
       <p role="status" aria-live="polite" className="jev-voice-notice">{workflow.notice}</p>

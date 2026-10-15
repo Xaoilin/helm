@@ -28,6 +28,8 @@ export function PageReadinessGate({ children }: { children: ReactNode }) {
   const shared = useSharedPageReady();
   const knowledge = useKnowledgeContext().loaded;
   const calendar = useCalendar().loaded;
+  const settingsReady = useSettingsContext().serviceSettingsReady;
+  const integrations = useSettingsContext().integrationsLoaded ?? true;
   const clock = useClockContext().loaded;
   const projects = useProjectContext().loaded;
   const inventory = useInventoryContext().loaded;
@@ -35,7 +37,9 @@ export function PageReadinessGate({ children }: { children: ReactNode }) {
   const health = useHealthContext().loaded;
   const finance = useFinanceContext().loaded;
   // Gate only the page's consumers: a slow Calendar load must not hold the dashboard blank.
-  const pageReady = shell.surface === 'calendar' || shell.surface === 'integrations' ? calendar
+  // Calendar owns its date-window loading state so navigation stays mounted during a load.
+  const pageReady = shell.surface === 'calendar' ? settingsReady
+    : shell.surface === 'integrations' ? calendar && integrations
     : shell.surface === 'clock' ? clock
     : shell.surface === 'knowledge' ? knowledge
     : shell.surface === 'trips' ? trips && calendar

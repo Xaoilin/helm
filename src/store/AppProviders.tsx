@@ -16,6 +16,7 @@ import { TaskProvider } from './contexts/TaskContext';
 import { TripProvider } from './contexts/TripContext';
 import { MilestoneCelebrationProvider } from './contexts/MilestoneCelebrationContext';
 import { ShellProvider } from './ShellContext';
+import { ViewDataDemandProvider } from './ViewDataDemand';
 import { useDailyTaskRollover } from './workflows/useDailyTaskRollover';
 
 /** Keeps the signed-in user's live-update streams open while the app runs, whichever page is open. */
@@ -33,39 +34,41 @@ function DailyTaskRollover() {
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <ShellProvider>
-      <LiveEvents />
-      <SettingsProvider>
-        <GamificationProvider>
-          <DailyMomentumProvider>
-            <CalendarProvider>
-              <TripProvider>
-                <ProjectProvider>
-                  <TaskProvider>
-                    <KnowledgeProvider>
-                      <InventoryProvider>
-                        <EmploymentProvider>
-                          <HealthProvider>
-                            <FinanceProvider>
-                              <PrayerProvider>
-                                <DailyTaskRollover />
-                                <ClockProvider>
-                                  <MilestoneCelebrationProvider>
-                                    {children}
-                                  </MilestoneCelebrationProvider>
-                                </ClockProvider>
-                              </PrayerProvider>
-                            </FinanceProvider>
-                          </HealthProvider>
-                        </EmploymentProvider>
-                      </InventoryProvider>
-                    </KnowledgeProvider>
-                  </TaskProvider>
-                </ProjectProvider>
-              </TripProvider>
-            </CalendarProvider>
-          </DailyMomentumProvider>
-        </GamificationProvider>
-      </SettingsProvider>
+      <ViewDataDemandProvider>
+        <LiveEvents />
+        <SettingsProvider>
+          <GamificationProvider>
+            <DailyMomentumProvider>
+              <CalendarProvider>
+                <TripProvider>
+                  <ProjectProvider>
+                    <TaskProvider>
+                      <KnowledgeProvider>
+                        <InventoryProvider>
+                          <EmploymentProvider>
+                            <HealthProvider>
+                              <FinanceProvider>
+                                <PrayerProvider>
+                                  <DailyTaskRollover />
+                                  <ClockProvider>
+                                    <MilestoneCelebrationProvider>
+                                      {children}
+                                    </MilestoneCelebrationProvider>
+                                  </ClockProvider>
+                                </PrayerProvider>
+                              </FinanceProvider>
+                            </HealthProvider>
+                          </EmploymentProvider>
+                        </InventoryProvider>
+                      </KnowledgeProvider>
+                    </TaskProvider>
+                  </ProjectProvider>
+                </TripProvider>
+              </CalendarProvider>
+            </DailyMomentumProvider>
+          </GamificationProvider>
+        </SettingsProvider>
+      </ViewDataDemandProvider>
     </ShellProvider>
   );
 }
