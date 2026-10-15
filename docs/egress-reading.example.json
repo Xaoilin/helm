@@ -1,0 +1,39 @@
+{
+  "schema": "helm-egress-reading/v1",
+  "source": {
+    "kind": "synthetic",
+    "organizationRef": "xwvpzlbyhlbdmtdmtdbn",
+    "projectScope": "all-projects",
+    "services": ["database", "auth", "storage", "functions", "realtime", "shared-pooler", "log-drains"],
+    "precision": "unknown",
+    "evidenceSha256": null,
+    "collectedAt": "2026-10-18T02:00:00Z",
+    "dataThrough": null
+  },
+  "buckets": [{
+    "start": "2026-10-16T00:00:00Z",
+    "end": "2026-10-17T00:00:00Z",
+    "totalIncludingCachedBytes": null,
+    "cachedBytes": null,
+    "complete": false
+  }],
+  "release": {
+    "helmCommit": null,
+    "servicesCommit": null,
+    "liveVerifiedAt": null,
+    "fixtureCleanupVerifiedAt": null,
+    "evidenceSha256": null
+  },
+  "workload": {
+    "start": "2026-10-16T00:00:00Z",
+    "end": "2026-10-17T00:00:00Z",
+    "windowsAlwaysOpen": false,
+    "macAlwaysOpen": false,
+    "normalAgentUse": false,
+    "remindersPassed": false,
+    "approvedMcpPassed": false,
+    "revokedMcpPassed": false,
+    "calendarConvergencePassed": false,
+    "evidenceSha256": null
+  }
+}
