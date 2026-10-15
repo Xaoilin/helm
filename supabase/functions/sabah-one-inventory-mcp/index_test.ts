@@ -34,7 +34,7 @@ async function withBackend(run: (backend: Backend) => Promise<void>) {
       if (typeof backend.approval === 'number') {
         return Response.json({ code: 'agent_not_approved', message: 'Refused.' }, { status: backend.approval });
       }
-      return Response.json({ items: [], needs: [] });
+      return url.pathname.endsWith('/access') ? new Response(null, { status: 204 }) : Response.json({ items: [], needs: [] });
     }
     assert.equal(url.origin, 'https://inventory-test.supabase.co');
     assert.equal(url.pathname, '/auth/v1/user', 'the only Supabase call is the token check');
@@ -71,6 +71,7 @@ Deno.test('public Inventory metadata names the exact protected resource', async 
   const metadata = await response.json();
   assert.equal(metadata.resource, `${baseUrl}/mcp`);
   assert.equal(metadata.resource_name, 'Sabah One Inventory');
+  assert.equal(typeof metadata.deploymentSha, 'string');
 });
 
 Deno.test('requires a valid OAuth user token before checking approval', async () => {
@@ -104,7 +105,7 @@ Deno.test('checks the agent\'s Inventory approval with the life service and fail
     assert.equal((await mcp('tools/list', {})).response.status, 503);
     assert.equal(backend.lifeCalls.length, 4);
     for (const call of backend.lifeCalls) {
-      assert.deepEqual([call.method, call.path, call.search], ['GET', '/api/life/v1/inventory/search', '?limit=1']);
+      assert.deepEqual([call.method, call.path, call.search], ['GET', '/api/life/v1/inventory/access', '']);
       assert.match(call.authorization!, /^Bearer header\./);
     }
   });

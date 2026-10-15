@@ -315,6 +315,8 @@ export type ServiceAcquisition = z.infer<typeof acquisitionSchema>;
 
 /** Life service response schemas keyed by fixture file name in `contracts/life-service/`. */
 export const LIFE_CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
+  'life-service/inventory-access': z.null(),
+  'life-service/jobs-access': z.null(),
   'life-service/fast-food-entries': fastFoodEntriesSchema,
   'life-service/fast-food-entry-saved': fastFoodEntrySchema,
   'life-service/fast-food-entry-invalid': apiErrorSchema,

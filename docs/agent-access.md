@@ -39,7 +39,7 @@ A first-party UI path may share the same domain service, but it does not replace
 | Domain | In-app use | External agent access | Current rule |
 | --- | --- | --- | --- |
 | Inventory | Inventory surface | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. The function forwards the agent's token to the life admin service (`/api/life/v1/inventory`), which holds the records and re-checks the approval (the function first asks it whether the agent is approved: a refusal is the OAuth 403 challenge); `inventory_resolve_project` resolves projects in the knowledge service (`/api/knowledge/v1/projects/resolve`), which re-checks the same approval. |
-| Employment | Employment surface | `sabah-one-employment-mcp` | Use its six narrow application/history tools with a separate Employment OAuth approval. Inventory approval does not grant Employment access. The function checks the approval with a one-application read of the job list, then forwards the agent's token to the life admin service (`/api/life/v1/jobs`), which holds the records and re-checks the approval. |
+| Employment | Employment surface | `sabah-one-employment-mcp` | Use its six narrow application/history tools with a separate Employment OAuth approval. Inventory approval does not grant Employment access. The function checks approval through `/api/life/v1/jobs/access` without reading applications, then forwards the agent's token to the life admin service (`/api/life/v1/jobs`), which holds the records and re-checks the approval. |
 | Finance equity | `Navigation and editor` | `sabah-one-equity-mcp` (requires deployment and Equity OAuth approval) | Five semantic position tools; isolated from cash/banking and other MCP domains. The function forwards the agent's token to the finance service (`/api/finance/v1/equity/positions`), which holds the positions and re-checks the Equity approval. See `finance-equity.md`. |
 | Finance banking review and loans | Dated review and loan records | `sabah-one-finance-mcp` (requires deployment and Finance OAuth approval) | Two semantic review tools; independent of Equity and existing manual accounts. The function forwards the agent's token to the finance service (`/api/finance/v1/review`), which holds the review and re-checks the Finance approval. See `finance-banking-review.md`. |
 | Finance manual accounts, transactions, budgets, savings goals | Finance surface | Not yet published | The finance service refuses agent tokens on these paths (403 `agent_not_approved`); external agents stop at the missing MCP boundary. |
@@ -116,3 +116,12 @@ acceptance; see [`finance-equity.md`](finance-equity.md).
 The Software surface is a release-owned list of published links and installed-app launch links, not an account-data feature. It adds no service records, domain reads, mutations, or external-agent capability. The Autoclicker launch URL only shows the stopped native app; it accepts no commands or parameters. The private Projects catalogue and its existing access boundary remain unchanged.
 
 Pages load from the Spring services with the user's session; the first-party generic record store (`get_helm_account_snapshot_for_collections`, `get_helm_changed_collections`, `apply_helm_mutations`) and its Broadcast were retired in v0.2.206. No external domain MCP contract changed.
+
+### Access-only MCP probes (KAN-327)
+
+Every authenticated Inventory, Employment, Finance and Equity MCP request validates the OAuth
+account and checks current domain/client approval through the provider's empty 204 access route.
+Initialization, notifications and discovery read no business data. A business tool then performs
+its normal operation once. Approval is never cached; 401/403 remain OAuth challenges, and an
+unavailable access route returns 503 without a business-read fallback. See
+[`KAN-327.md`](KAN-327.md) for exact fixture, validation and deployment boundaries.

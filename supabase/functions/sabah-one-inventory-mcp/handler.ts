@@ -5,6 +5,7 @@ import {
   type AuthInfo,
 } from 'npm:@modelcontextprotocol/server@2.0.0';
 import { z } from 'npm:zod@4.4.3';
+import { ASSISTANT_DEPLOY_SHA } from '../_shared/assistantDeployment.ts';
 import { probeServiceAccess } from '../_shared/serviceAccess.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
@@ -246,9 +247,8 @@ async function verifyAccess(request: Request): Promise<AuthInfo | Response> {
     return oauthChallenge(401, 'The Sabah One OAuth access token has expired.');
   }
 
-  // Deny by default: the life service rechecks this agent's own Inventory approval on every request,
-  // and a one-result search (the read inventory_search makes) asks it.
-  const access = await probeServiceAccess(lifeUrl('/search', { limit: 1 }), token);
+  // The access-only route rechecks this account/client's approval without loading Inventory.
+  const access = await probeServiceAccess(lifeUrl('/access'), token);
   if (access === 'not_approved') {
     return oauthChallenge(403, 'This OAuth client is not approved for Sabah One Inventory.');
   }
@@ -565,6 +565,7 @@ export async function handleRequest(request: Request): Promise<Response> {
       authorization_servers: [AUTHORIZATION_SERVER_URL],
       bearer_methods_supported: ['header'],
       scopes_supported: ['openid'],
+      deploymentSha: ASSISTANT_DEPLOY_SHA,
     }), origin);
   }
   if (!pathname.endsWith('/mcp')) {
