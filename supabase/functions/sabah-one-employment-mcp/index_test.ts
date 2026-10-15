@@ -14,7 +14,7 @@ function token(overrides: Record<string, unknown> = {}): string {
   return `header.${btoa(JSON.stringify(claims)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')}.signature`;
 }
 
-/** An approval check: the one-application job-list read the handler makes before every MCP request. */
+/** An approval-only request before every MCP request. */
 interface ProbeCall { search: string; authorization: string | null }
 interface LifeCall {
   method: string;
@@ -41,13 +41,13 @@ async function withBackend(run: (backend: Backend) => Promise<void>) {
     const request = new Request(input, init);
     const url = new URL(request.url);
     if (url.origin === 'https://life-test.example') {
-      assert.match(url.pathname, /^\/api\/life\/v1\/jobs\/applications/);
-      if (request.method === 'GET' && url.pathname === '/api/life/v1/jobs/applications' && url.search === '?limit=1') {
+      assert.match(url.pathname, /^\/api\/life\/v1\/jobs\/(applications|access)/);
+      if (request.method === 'GET' && url.pathname === '/api/life/v1/jobs/access' && url.search === '') {
         backend.calls.push({ search: url.search, authorization: request.headers.get('authorization') });
         if (backend.approvalStatus) {
           return Response.json({ code: 'agent_not_approved', message: 'Refused.' }, { status: backend.approvalStatus });
         }
-        return Response.json({ applications: [], total: 0, limit: 1, offset: 0 });
+        return new Response(null, { status: 204 });
       }
       const text = await request.text();
       backend.lifeCalls.push({

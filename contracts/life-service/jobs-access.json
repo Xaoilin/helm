@@ -1,0 +1,8 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/life/v1/jobs/access"
+  },
+  "status": 204,
+  "body": null
+}

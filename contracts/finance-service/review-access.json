@@ -1,0 +1,8 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/finance/v1/review/access"
+  },
+  "status": 204,
+  "body": null
+}

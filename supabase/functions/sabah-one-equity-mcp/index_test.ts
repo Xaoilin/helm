@@ -33,8 +33,8 @@ interface Backend {
   toolError?: ServiceFailure;
 }
 
-/** The access check reads one position and nothing else. */
-const isProbe = (call: Pick<ServiceCall, 'method' | 'search'>) => call.method === 'GET' && call.search === '?limit=1';
+/** The access check returns no business data. */
+const isProbe = (call: Pick<ServiceCall, 'method' | 'path'>) => call.method === 'GET' && call.path === '/api/finance/v1/equity/access';
 
 async function withBackend(run: (backend: Backend) => Promise<void>) {
   const originalFetch = globalThis.fetch;
@@ -51,7 +51,7 @@ async function withBackend(run: (backend: Backend) => Promise<void>) {
     }
     // Only the finance service is called for account data: never a Supabase RPC.
     assert.equal(url.origin, 'https://finance-service.example.test');
-    assert.match(url.pathname, /^\/api\/finance\/v1\/equity\/positions/);
+    assert.match(url.pathname, /^\/api\/finance\/v1\/equity\/(positions|access)/);
     const call: ServiceCall = {
       method: request.method, path: url.pathname, search: url.search,
       body: request.method === 'PUT' ? await request.json() : undefined,
@@ -60,6 +60,7 @@ async function withBackend(run: (backend: Backend) => Promise<void>) {
     backend.calls.push(call);
     const error = isProbe(call) ? backend.approvalError : backend.toolError;
     if (error) return Response.json({ code: error.code, message: error.message }, { status: error.status });
+    if (isProbe(call)) return new Response(null, { status: 204 });
     if (request.method === 'DELETE') return Response.json({ id: positionId });
     return Response.json(request.method === 'GET' && url.pathname.endsWith('/positions')
       ? { positions: [], total: 0 } : backend.positionResponse ?? { id: positionId });
@@ -127,7 +128,7 @@ Deno.test('asks the finance service for independent Equity approval every reques
     backend.approvalError = { status: 503, code: 'unavailable', message: 'Service unavailable.' };
     assert.equal((await mcp('tools/list', {})).response.status, 503);
     assert.equal(backend.calls.length, 3);
-    assert(backend.calls.every(call => isProbe(call) && call.path === '/api/finance/v1/equity/positions'));
+    assert(backend.calls.every(call => isProbe(call) && call.search === ''));
   });
 });
 

@@ -1,4 +1,4 @@
-// One cheap read decides whether an agent may use a Sabah One service right now. The service checks the
+// An access-only request decides whether an agent may use a Sabah One service right now. The service checks the
 // agent's own OAuth token and its approval for that part of Sabah One on every request: it refuses an
 // unapproved agent with 403 agent_not_approved and an invalid token with 401.
 

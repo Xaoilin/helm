@@ -2,10 +2,11 @@
 // the agent's Finance or Equity approval on every request; each write carries the tool's requestId as
 // its Idempotency-Key, so an exact retry is applied once.
 
+import { probeServiceAccess } from './serviceAccess.ts';
+
 const FINANCE_API_URL = (Deno.env.get('SABAH_ONE_FINANCE_API_URL') || 'https://57.129.161.248').replace(/\/+$/, '');
 const FINANCE_BASE_URL = `${FINANCE_API_URL}/api/finance/v1`;
 const FINANCE_TIMEOUT_MS = 15_000;
-const AGENT_NOT_APPROVED = 'agent_not_approved';
 
 type QueryValue = string | number | undefined;
 
@@ -77,17 +78,9 @@ export async function callFinance(token: string, rejected: string, call: Finance
   return response.status === 204 ? null : await response.json();
 }
 
-/** One cheap read decides access: the service refuses an unapproved agent with 403 agent_not_approved. */
-export async function probeFinanceAccess(token: string, call: FinanceCall): Promise<FinanceAccess> {
-  try {
-    await callFinance(token, 'Access check failed.', call);
-    return 'approved';
-  } catch (error) {
-    if (!(error instanceof FinanceServiceError)) return 'unavailable';
-    if (error.status === 403 || error.code === AGENT_NOT_APPROVED) return 'not_approved';
-    if (error.status === 401) return 'invalid_token';
-    return 'unavailable';
-  }
+/** A fresh approval-only request; never download a review or position to decide access. */
+export function probeFinanceAccess(token: string, path: '/review/access' | '/equity/access'): Promise<FinanceAccess> {
+  return probeServiceAccess(financeUrl(path), token);
 }
 
 export function toolResult(value: unknown) {

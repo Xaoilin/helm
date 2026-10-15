@@ -227,6 +227,8 @@ export type EquityPositionPage = z.infer<typeof equityPositionsSchema>;
 
 /** Every contracts/finance-service fixture and the schema its body must satisfy. */
 export const FINANCE_CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
+  'finance-service/review-access': z.null(),
+  'finance-service/equity-access': z.null(),
   'finance-service/ledger': ledgerSchema,
   'finance-service/account-saved': accountSchema,
   'finance-service/account-deleted': accountDeletedSchema,

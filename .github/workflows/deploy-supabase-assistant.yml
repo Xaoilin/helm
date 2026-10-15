@@ -129,6 +129,10 @@ jobs:
             fi
           done
 
+      - id: identity
+        name: Stamp verified function build identity
+        run: node ./scripts/stamp-assistant-deployment.mjs
+
       - if: ${{ steps.preflight.outputs.should_deploy == 'true' && steps.preflight.outputs.deploy_database == 'true' }}
         name: Deploy Sabah One Inventory MCP
         run: npx supabase functions deploy sabah-one-inventory-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
@@ -173,10 +177,6 @@ jobs:
             and .oauth_server_allow_dynamic_registration == true
             and .oauth_server_authorization_path == "/helm/oauth/consent"
           ' <<<"$oauth_config" >/dev/null
-
-      - id: identity
-        name: Stamp verified function build identity
-        run: node ./scripts/stamp-assistant-deployment.mjs
 
       - name: Deploy Sabah One Jev voice prototype
         run: npx supabase functions deploy sabah-one-jev-voice --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes

@@ -46,14 +46,15 @@ async function withBackend(run: (backend: Backend) => Promise<void>) {
     }
     // Only the finance service is called for account data: never a Supabase RPC.
     assert.equal(url.origin, 'https://finance-service.example.test');
-    assert.equal(url.pathname, '/api/finance/v1/review');
+    assert.match(url.pathname, /^\/api\/finance\/v1\/review(?:\/access)?$/);
     const body = request.method === 'GET' ? undefined : await request.json();
     backend.calls.push({
       method: request.method, path: url.pathname, body,
       authorization: request.headers.get('authorization'), idempotencyKey: request.headers.get('idempotency-key'),
     });
-    const error = request.method === 'GET' ? backend.approvalError : backend.toolError;
+    const error = url.pathname.endsWith('/access') ? backend.approvalError : backend.toolError;
     if (error) return Response.json({ code: error.code, message: error.message }, { status: error.status });
+    if (url.pathname.endsWith('/access')) return new Response(null, { status: 204 });
     return Response.json({ review: request.method === 'GET' ? storedReview : { ...storedReview, updatedAt: '2026-09-22T12:00:00Z' } });
   };
   try {

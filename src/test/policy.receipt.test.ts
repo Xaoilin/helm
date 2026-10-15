@@ -60,6 +60,19 @@ describe('hosted build and receipt policy boundaries', () => {
     }
   });
 
+  it('stamps all four MCP identities before Inventory deploy and preserves blocking hosted teardown', () => {
+    const text = readFileSync(resolve(root, '.github/workflows/deploy-supabase-assistant.yml'), 'utf8');
+    const stamp = text.indexOf('run: node ./scripts/stamp-assistant-deployment.mjs');
+    expect(stamp).toBeGreaterThan(text.indexOf('verify-ci-receipt.mjs deployment'));
+    for (const domain of ['inventory', 'employment', 'finance', 'equity']) {
+      expect(stamp).toBeLessThan(text.indexOf(`run: npx supabase functions deploy sabah-one-${domain}-mcp`));
+    }
+    const verifier = text.slice(text.indexOf('name: Verify hosted domain access and synthetic fixture teardown'),
+      text.indexOf('name: Retain sanitized hosted acceptance receipts'));
+    for (const domain of ['employment', 'finance', 'equity']) expect(verifier).toContain(`npx tsx scripts/verify-hosted-${domain}-access.ts`);
+    expect(verifier).not.toMatch(/continue-on-error|\|\| true/);
+  });
+
   it('requires both manual inputs and the protected workflow ref', () => {
     const input = { event: { inputs: { deploy_sha: sha('d'), source_run_id: '9876' } }, eventName: 'workflow_dispatch', ref: 'refs/heads/master' };
     expect(resolveDeploymentInputs(input)).toEqual({ deploySha: sha('d'), sourceRunId: 9876, eventName: 'workflow_dispatch' });

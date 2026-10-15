@@ -133,8 +133,8 @@ async function verifyAccess(request: Request): Promise<AuthInfo | Response> {
   if (expiresAt <= Math.floor(Date.now() / 1_000)) return oauthChallenge(401, 'The Sabah One OAuth access token has expired.');
 
   // Inventory, Employment and Equity approval never authorize Finance. The finance service rechecks
-  // this client's independent Finance approval on every request; one cheap read asks it now.
-  const access = await probeFinanceAccess(token, { method: 'GET', path: '/review' });
+  // this client's independent Finance approval on every request; the access-only route loads no business data.
+  const access = await probeFinanceAccess(token, '/review/access');
   if (access === 'not_approved') return oauthChallenge(403, 'This OAuth client is not approved for Sabah One Finance.');
   if (access === 'invalid_token') return oauthChallenge(401, 'The Sabah One OAuth access token is invalid.');
   if (access === 'unavailable') return jsonResponse({ error: 'Sabah One Finance could not verify access.' }, 503);

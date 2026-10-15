@@ -148,8 +148,8 @@ async function verifyAccess(request: Request): Promise<AuthInfo | Response> {
   if (expiresAt <= Math.floor(Date.now() / 1_000)) return oauthChallenge(401, 'The Sabah One OAuth access token has expired.');
 
   // An Inventory approval never authorizes Employment. The life service rechecks this agent's own
-  // Employment approval; a one-application read of the job list asks it.
-  const access = await probeServiceAccess(lifeUrl('/applications', { limit: 1 }), token);
+  // Employment approval through the access-only route, without loading applications.
+  const access = await probeServiceAccess(lifeUrl('/access'), token);
   if (access === 'not_approved') return oauthChallenge(403, 'This OAuth client is not approved for Sabah One Employment.');
   if (access === 'invalid_token') return oauthChallenge(401, 'The Sabah One OAuth access token is invalid.');
   if (access === 'unavailable') return jsonResponse({ error: 'Sabah One Employment could not verify access.' }, 503);
