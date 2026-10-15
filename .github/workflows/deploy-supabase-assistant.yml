@@ -188,3 +188,23 @@ jobs:
         run: npx supabase functions deploy sabah-one-finance-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
       - name: Deploy Sabah One Equity MCP
         run: npx supabase functions deploy sabah-one-equity-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
+
+      - name: Verify hosted domain access and synthetic fixture teardown
+        env:
+          ASSISTANT_DEPLOY_SHA: ${{ steps.identity.outputs.deploy_sha }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_PRAYER_API_BASE_URL: ${{ vars.PRAYER_BACKEND_URL }}
+        run: |
+          npx tsx scripts/verify-hosted-employment-access.ts
+          npx tsx scripts/verify-hosted-finance-access.ts
+          npx tsx scripts/verify-hosted-equity-access.ts
+
+      - name: Retain sanitized hosted acceptance receipts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-domain-acceptance-${{ steps.identity.outputs.deploy_sha }}
+          path: test-results/*-access-post-deploy.json
+          if-no-files-found: ignore
+          retention-days: 7

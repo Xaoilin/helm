@@ -7,10 +7,13 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createClient } from '@supabase/supabase-js';
 import { parseMcpResponse } from './lib/mcp-response';
+import { cleanupHostedFixture, fixturePreferencesUrl } from './lib/hosted-fixture-cleanup';
+import type { FixtureCleanupReceipt } from './lib/hosted-fixture-cleanup';
 
 const url = (process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
 const publicKey = process.env.VITE_SUPABASE_ANON_KEY || '';
 const sha = process.env.ASSISTANT_DEPLOY_SHA || '';
+const prayerBaseUrl = process.env.VITE_PRAYER_API_BASE_URL || '';
 const managementToken = process.env.SUPABASE_ACCESS_TOKEN || '';
 const projectRef = process.env.SUPABASE_PROJECT_REF || '';
 const functionBase = `${url}/functions/v1/sabah-one-employment-mcp`;
@@ -21,6 +24,8 @@ let fixtureRemoved = false;
 let clientCreationAttempted = false;
 let clientRemoved = false;
 let passed = false;
+let cleanup: FixtureCleanupReceipt | undefined;
+let failedFixtureId: string | undefined;
 
 class AcceptanceFailure extends Error {}
 
@@ -118,6 +123,7 @@ async function denied(scenario: string, token: string | undefined, status: numbe
 }
 
 async function main() {
+  fixturePreferencesUrl(prayerBaseUrl);
   expect('Exact target and protected acceptance configuration', /^[a-z0-9]+$/.test(projectRef)
     && url === `https://${projectRef}.supabase.co` && publicKey && managementToken && /^[a-f0-9]{40}$/.test(sha));
   const metadata = await readJson(await request('Employment resource discovery',
@@ -290,30 +296,20 @@ async function main() {
   } catch (error) {
     failure = error;
   } finally {
-    // Each cleanup is attempted independently, even after any earlier failure.
-    if (directToken) {
-      try {
-        const revoked = await admin.auth.admin.signOut(directToken, 'global');
-        expect('Synthetic Auth sessions revoked', !revoked.error);
-      } catch (error) { failure ||= error; }
-    }
-    if (oauthClientId) {
-      try {
-        const removed = await admin.auth.admin.oauth.deleteClient(oauthClientId);
-        expect('Own synthetic OAuth client deleted', !removed.error);
-        clientRemoved = true;
-      } catch (error) { failure ||= error; }
-    }
-    if (fixtureId) {
-      try {
-        const removed = await admin.auth.admin.deleteUser(fixtureId);
-        expect('Own synthetic Auth user and account data deleted', !removed.error);
-        fixtureRemoved = true;
-      } catch (error) { failure ||= error; }
+    cleanup = await cleanupHostedFixture({
+      admin: admin.auth.admin, fixtureId, directToken, oauthClientId, prayerBaseUrl, fetcher: boundedFetch,
+      observe: (scenario, passed, status) => observations.push({ scenario, passed,
+        ...(status === undefined ? {} : { status }) }),
+    });
+    fixtureRemoved = cleanup.authRemoved;
+    clientRemoved = cleanup.clientRemoved;
+    if (!cleanup.confirmed) {
+      failedFixtureId = fixtureId;
+      failure ||= new AcceptanceFailure('Synthetic fixture cleanup proof is incomplete.');
     }
   }
   if (failure) throw failure;
-  passed = fixtureRemoved && clientRemoved;
+  passed = fixtureRemoved && clientRemoved && cleanup.confirmed;
 }
 
 main().catch(error => {
@@ -324,6 +320,7 @@ main().catch(error => {
   await mkdir('test-results', { recursive: true });
   await writeFile('test-results/employment-access-post-deploy.json', `${JSON.stringify({
     deploymentSha: /^[a-f0-9]{40}$/.test(sha) ? sha : null,
-    passed, fixtureCreationAttempted, fixtureRemoved, clientCreationAttempted, clientRemoved, observations,
+    passed, fixtureCreationAttempted, fixtureRemoved, clientCreationAttempted, clientRemoved,
+    cleanup, failedFixtureId, retainedServiceHistory: 'permitted', observations,
   }, null, 2)}\n`);
 });
