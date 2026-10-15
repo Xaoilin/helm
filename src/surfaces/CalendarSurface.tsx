@@ -11,7 +11,7 @@ import { logError } from '../services/logger';
 import { formatAppDate, formatAppTime, getAppDate } from '../services/appTimeZone';
 import { dateTimeLocalToInstant, instantToDateTimeLocal } from '../services/timeZone';
 import type { CalendarAccount, CalendarEvent } from '../types/domain';
-import { calendarWindow } from '../services/calendarWindow';
+import { calendarSelectedDate, calendarWindow } from '../services/calendarWindow';
 
 function isGoogleCalendarAccount(account: CalendarAccount): boolean {
   return account.provider === 'google';
@@ -53,12 +53,13 @@ export default function CalendarSurface() {
   };
   const [tab, setTab] = useState<Tab>(settings.settings.defaultCalendarTab || 'week');
   const [viewDate, setViewDate] = useState(() => toCalendarMarker(currentAppDate));
+  const [selectedDateStr, setSelectedDateStr] = useState(currentAppDate);
   const requestWindow = calendar.requestWindow;
   const viewMarker = viewDate.toISOString().slice(0, 10);
   useEffect(() => {
     requestWindow?.(calendarWindow(viewMarker, tab));
+    setSelectedDateStr(selected => calendarSelectedDate(viewMarker, tab, selected));
   }, [requestWindow, tab, viewMarker]);
-  const [selectedDateStr, setSelectedDateStr] = useState(currentAppDate);
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [editingAccount, setEditingAccount] = useState<CalendarAccount | null>(null);

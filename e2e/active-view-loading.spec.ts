@@ -129,6 +129,7 @@ for (const width of [390, 768, 1440]) {
     await page.getByRole('button', { name: 'Next week', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Loading page data...' })).toHaveCount(0);
     await expect(event).toHaveCount(0);
+    if (width === 390) await expect(page.locator('.calendar-mobile-selected-agenda')).toContainText('Tuesday, Sep 15');
     await page.screenshot({ path: info.outputPath(`calendar-empty-${width}.png`) });
     await page.route('**/api/calendar/v1/calendar?*', route => route.fulfill({ status: 403,
       json: { code: 'forbidden', message: 'Synthetic account access refused.' } }));
