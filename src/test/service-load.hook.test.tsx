@@ -133,4 +133,22 @@ describe('demanded confirmed service memory', () => {
     expect(load).toHaveBeenCalledOnce();
     expect(result.current.error).toBeNull();
   });
+
+  it('revalidates a window discarded while inactive without invalidating a completed warm revisit', async () => {
+    let finish!: () => void;
+    const load = vi.fn().mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; })).mockResolvedValue(undefined);
+    const { rerender } = renderHook(({ active, requestKey }) => useServiceLoad('Calendar', true, load, [], { active, requestKey }),
+      { initialProps: { active: true, requestKey: 'A' } });
+    await act(async () => {});
+    rerender({ active: false, requestKey: 'B' });
+    await act(async () => { finish(); });
+    expect(load).toHaveBeenCalledTimes(1);
+    rerender({ active: true, requestKey: 'A' });
+    await act(async () => {});
+    expect(load).toHaveBeenCalledTimes(2);
+    rerender({ active: false, requestKey: 'B' });
+    rerender({ active: true, requestKey: 'A' });
+    await act(async () => {});
+    expect(load).toHaveBeenCalledTimes(2);
+  });
 });

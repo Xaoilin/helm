@@ -55,7 +55,13 @@ export function useServiceLoad(
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  useEffect(() => { activeRef.current = active; keyRef.current = requestKey; }, [active, requestKey]);
+  useEffect(() => {
+    // An inactive consumer can discard an old response too. Do not let that unpublished
+    // response count as fresh on return; completed, published warm data remains reusable.
+    if (inFlight.current && keyRef.current !== requestKey) dirty.current = true;
+    activeRef.current = active;
+    keyRef.current = requestKey;
+  }, [active, requestKey]);
 
   const reload = useCallback((): Promise<void> => {
     if (!mounted.current) return Promise.resolve();

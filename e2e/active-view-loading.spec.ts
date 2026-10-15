@@ -162,3 +162,42 @@ test('inactive Calendar invalidation defers reads and automatic sync until a con
   await expect.poll(() => control.services.calls.filter(call => call === 'POST /api/calendar/v1/sync').length).toBe(1);
   await expect(page.getByRole('button', { name: 'Open Window fixture', exact: true })).toBeVisible();
 });
+
+test('leaving during the first Calendar read cannot cache an unpublished window as fresh', async ({ page, scenario }, info) => {
+  await scenario({ now, stores, settings: { defaultCalendarTab: 'week' } });
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  let reads = 0;
+  let returned = 0;
+  await page.route('**/api/calendar/v1/calendar?*', async route => {
+    reads++;
+    if (reads === 1) {
+      await pending;
+      // Capture the original window response while the server request is pending.
+      await route.fulfill({ json: {
+        accounts: [{ id: 'account-local', name: 'Personal calendar', email: 'me@example.test', provider: 'local',
+          isPrimary: true, paletteIndex: null, authStatus: 'connected', authError: null, lastSyncedAt: null, syncError: null }],
+        sources: [{ id: 'source-local', accountId: 'account-local', name: 'Personal', color: '#3366ff',
+          visible: true, googleCalendarId: null, accessRole: null, writable: true }],
+        events: [{ id: 'event-standup', sourceId: 'source-local', title: 'Window fixture', description: '',
+          start: '2026-09-08T11:00:00.000Z', end: '2026-09-08T12:00:00.000Z', allDay: false,
+          location: null, googleEventId: null }],
+      } });
+      returned++;
+    } else await route.fallback();
+  });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Calendar', exact: true }).click();
+  await expect.poll(() => reads).toBe(1);
+  await page.getByRole('button', { name: 'Navigate to Dashboard', exact: true }).click();
+  const response = page.waitForResponse('**/api/calendar/v1/calendar?*');
+  release();
+  await response;
+  await expect.poll(() => returned).toBe(1);
+  // Process the response/contract publication while the old Calendar view is closed.
+  await page.clock.runFor(1);
+  await page.getByRole('button', { name: 'Navigate to Calendar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Open Window fixture', exact: true })).toBeVisible();
+  expect(reads).toBe(2);
+  await writeFile(info.outputPath('inactive-first-load-proof.json'), JSON.stringify({ originalResponseReturnedWhileInactive: true, reads, finalWindowPublished: true }, null, 2));
+});
