@@ -1,9 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getPrayerDeadlineBounds } from '../../services/prayerTracking';
 import { formatPrayerInstantTime } from '../../services/prayerTimeZone';
 import { useMilestoneCelebration } from '../../store/contexts/MilestoneCelebrationContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
-import type { PrayerCompletionStatus } from '../../types/domain';
+import type { PrayerCompletionStatus, PrayerName } from '../../types/domain';
 
 export default function PrayerCompletionDialog() {
   const prayer = usePrayerContext();
@@ -14,6 +14,8 @@ export default function PrayerCompletionDialog() {
   const lateButtonRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const cancelPrayerCompletion = prayer.cancelPrayerCompletion;
+  const savingKeysRef = useRef(new Set<string>());
+  const [savingPrayers, setSavingPrayers] = useState<Record<string, PrayerName>>({});
 
   useEffect(() => {
     if (!pending) return;
@@ -68,7 +70,26 @@ export default function PrayerCompletionDialog() {
     };
   }, [cancelPrayerCompletion, pending]);
 
-  if (!pending) return null;
+  const savingNames = Object.values(savingPrayers);
+  const progress = savingNames.length > 0 ? (
+    <div
+      className="milestone-celebration prayer-completion-progress"
+      role="status"
+      aria-label="Prayer completion progress"
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      <div className="milestone-celebration-card">
+        <span className="spinner" aria-hidden="true" />
+        <div className="milestone-celebration-copy">
+          <strong>Saving {savingNames.join(' and ')}…</strong>
+          <p>Your prayer and XP are being updated.</p>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  if (!pending) return progress;
 
   const bounds = prayer.schedule
     ? getPrayerDeadlineBounds(
@@ -86,10 +107,22 @@ export default function PrayerCompletionDialog() {
     : 'The current schedule is unavailable, so choose the outcome you know is correct.';
 
   const confirmCompletion = (status: PrayerCompletionStatus) => {
+    const key = `${pending.prayerDate || prayer.today}::${pending.prayerName}`;
+    if (savingKeysRef.current.has(key)) return;
     const rewarded = prayer.confirmPrayerCompletion(status);
     if (!rewarded) return;
+    savingKeysRef.current.add(key);
+    setSavingPrayers(current => ({ ...current, [key]: pending.prayerName }));
     // The celebration shows the XP the planner granted once it has rewarded the prayer.
     void rewarded.then(result => {
+      savingKeysRef.current.delete(key);
+      setSavingPrayers(current => {
+        const remaining = { ...current };
+        delete remaining[key];
+        return remaining;
+      });
+      // A refusal or reward timeout resolves without a reward; keep the service's notice visible.
+      if (!result.gamificationResult && result.xpEarned === 0) return;
       const levelUp = result.gamificationResult?.leveledUp
         ? result.gamificationResult
         : null;
@@ -111,52 +144,55 @@ export default function PrayerCompletionDialog() {
   };
 
   return (
-    <div className="prayer-completion-overlay" onMouseDown={prayer.cancelPrayerCompletion}>
-      <section
-        ref={dialogRef}
-        className="prayer-completion-dialog"
-        role="dialog"
-        tabIndex={-1}
-        aria-modal="true"
-        aria-labelledby="prayer-completion-title"
-        aria-describedby="prayer-completion-help"
-        onMouseDown={event => event.stopPropagation()}
-      >
-        <div className="prayer-completion-kicker">Prayer outcome</div>
-        <h2 id="prayer-completion-title">How was {pending.prayerName} prayed?</h2>
-        <p id="prayer-completion-help">{deadlineCopy}</p>
-        <div className="prayer-completion-actions">
-          <button
-            ref={onTimeButtonRef}
-            type="button"
-            className={`prayer-outcome-choice on-time ${pending.suggestedStatus === 'on_time' ? 'suggested' : ''}`}
-            onClick={() => confirmCompletion('on_time')}
-          >
-            <span aria-hidden="true">✓</span>
-            <strong>On time</strong>
-            {pending.suggestedStatus === 'on_time' && <small>Likely from the clock</small>}
-          </button>
-          <button
-            ref={lateButtonRef}
-            type="button"
-            className={`prayer-outcome-choice late ${pending.suggestedStatus === 'late' ? 'suggested' : ''}`}
-            onClick={() => confirmCompletion('late')}
-          >
-            <span aria-hidden="true">◷</span>
-            <strong>Late</strong>
-            {pending.suggestedStatus === 'late' && <small>Likely from the clock</small>}
-          </button>
-        </div>
-        <button
-          ref={cancelButtonRef}
-          type="button"
-          className="btn btn-secondary prayer-completion-cancel"
-          onClick={prayer.cancelPrayerCompletion}
+    <>
+      {progress}
+      <div className="prayer-completion-overlay" onMouseDown={prayer.cancelPrayerCompletion}>
+        <section
+          ref={dialogRef}
+          className="prayer-completion-dialog"
+          role="dialog"
+          tabIndex={-1}
+          aria-modal="true"
+          aria-labelledby="prayer-completion-title"
+          aria-describedby="prayer-completion-help"
+          onMouseDown={event => event.stopPropagation()}
         >
-          Cancel
-        </button>
-        <div className="prayer-completion-note">The highlighted choice is a suggestion only. Nothing is submitted automatically.</div>
-      </section>
-    </div>
+          <div className="prayer-completion-kicker">Prayer outcome</div>
+          <h2 id="prayer-completion-title">How was {pending.prayerName} prayed?</h2>
+          <p id="prayer-completion-help">{deadlineCopy}</p>
+          <div className="prayer-completion-actions">
+            <button
+              ref={onTimeButtonRef}
+              type="button"
+              className={`prayer-outcome-choice on-time ${pending.suggestedStatus === 'on_time' ? 'suggested' : ''}`}
+              onClick={() => confirmCompletion('on_time')}
+            >
+              <span aria-hidden="true">✓</span>
+              <strong>On time</strong>
+              {pending.suggestedStatus === 'on_time' && <small>Likely from the clock</small>}
+            </button>
+            <button
+              ref={lateButtonRef}
+              type="button"
+              className={`prayer-outcome-choice late ${pending.suggestedStatus === 'late' ? 'suggested' : ''}`}
+              onClick={() => confirmCompletion('late')}
+            >
+              <span aria-hidden="true">◷</span>
+              <strong>Late</strong>
+              {pending.suggestedStatus === 'late' && <small>Likely from the clock</small>}
+            </button>
+          </div>
+          <button
+            ref={cancelButtonRef}
+            type="button"
+            className="btn btn-secondary prayer-completion-cancel"
+            onClick={prayer.cancelPrayerCompletion}
+          >
+            Cancel
+          </button>
+          <div className="prayer-completion-note">The highlighted choice is a suggestion only. Nothing is submitted automatically.</div>
+        </section>
+      </div>
+    </>
   );
 }

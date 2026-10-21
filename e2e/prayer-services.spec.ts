@@ -13,6 +13,60 @@ function dhuhrReminder(overrides: Partial<ServicePrayerReminder>): ServicePrayer
 }
 
 test.describe('prayer and profile services', () => {
+  for (const width of [390, 1440]) {
+    test(`keeps completion feedback visible while saving and waiting for XP at ${width}px`, async ({ page, scenario }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const control = await scenario({ now: NOON, settings: { prayerEnabled: true } });
+      let releaseSave!: () => void;
+      let releaseReward!: () => void;
+      const saving = new Promise<void>(resolve => { releaseSave = resolve; });
+      const rewarding = new Promise<void>(resolve => { releaseReward = resolve; });
+      await page.route('**/api/prayer/v1/outcomes', async route => {
+        if (route.request().method() === 'POST') await saving;
+        await route.fallback();
+      });
+      await page.route('**/api/planner/v1/rewards/prayers/sync', async route => {
+        await rewarding;
+        await route.fallback();
+      });
+      await openApp(page);
+      await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+      await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
+      await page.getByRole('button', { name: /On time/u }).press('Enter');
+
+      const feedback = page.getByRole('status', { name: 'Prayer completion progress' });
+      try {
+        await expect(page.getByRole('dialog', { name: 'How was Dhuhr prayed?' })).toHaveCount(0);
+        await expect(feedback).toHaveText('Saving Dhuhr…Your prayer and XP are being updated.');
+        await expect(page.locator('[data-celebration-tone]')).toHaveCount(0);
+        expect(control.services.outcomes.has('2026-08-29::Dhuhr')).toBe(false);
+
+        releaseSave();
+        await expect.poll(() => control.services.outcomes.get('2026-08-29::Dhuhr')?.status).toBe('on_time');
+        // Keep feedback past the normal celebration duration, while the XP response is held.
+        await page.clock.fastForward(4_000);
+        await expect(feedback).toBeVisible();
+        await expect(page.locator('[data-celebration-tone]')).toHaveCount(0);
+        const box = await feedback.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+        await page.screenshot({ path: testInfo.outputPath('prayer-saving.png') });
+
+        releaseReward();
+        await expect(feedback).toHaveCount(0);
+        await expect(page.locator('[data-celebration-tone="prayer"]')).toContainText('Dhuhr complete');
+        await expect(page.locator('[data-celebration-tone="prayer"]')).toContainText('+15 XP');
+        expect(control.services.calls.filter(call => call === 'POST /api/prayer/v1/outcomes')).toHaveLength(1);
+        await page.screenshot({ path: testInfo.outputPath('prayer-rewarded.png') });
+      } finally {
+        releaseSave();
+        releaseReward();
+      }
+    });
+  }
+
   for (const { earlier, later, now } of [
     { earlier: 'Dhuhr', later: 'Asr', now: NOON },
     { earlier: 'Maghrib', later: 'Isha', now: '2026-08-29T19:30:00.000Z' },
@@ -203,6 +257,8 @@ test.describe('prayer and profile services', () => {
       .toBeVisible();
     await expect(page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u })).toBeVisible();
     await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+    await expect(page.getByRole('status', { name: 'Prayer completion progress' })).toHaveCount(0);
+    await expect(page.locator('[data-celebration-tone]')).toHaveCount(0);
   });
 
   test('a completion whose confirmation was lost is retried by the client and saved once', async ({ page, scenario }) => {
