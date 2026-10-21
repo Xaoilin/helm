@@ -16,6 +16,13 @@ for (const width of [320, 768, 1440]) {
     await page.keyboard.press('Enter');
     const surface = page.getByRole('main', { name: 'software surface', exact: true });
     await expect(surface.getByRole('heading', { name: 'Software', exact: true })).toBeVisible();
+    const cameraZoom = surface.getByRole('article', { name: 'Camera Zoom', exact: true });
+    await expect(cameraZoom).toBeVisible();
+    const cameraRepository = cameraZoom.getByRole('link', { name: 'Camera Zoom on GitHub' });
+    await expect(cameraRepository).toHaveAttribute('href', 'https://github.com/Xaoilin/camera-zoom');
+    await expect(cameraRepository).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(cameraZoom.getByText('Open the installed Camera Zoom app from your taskbar.', { exact: false })).toBeVisible();
+    await expect(cameraZoom.getByRole('link', { name: 'Launch on Mac', exact: true })).toHaveCount(0);
     const autoclicker = surface.getByRole('article', { name: 'Autoclicker', exact: true });
     await expect(autoclicker.getByText('Repository pending', { exact: true })).toHaveCount(0);
     const launch = autoclicker.getByRole('link', { name: 'Launch on Mac', exact: true });

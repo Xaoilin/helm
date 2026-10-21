@@ -3,6 +3,13 @@ import type { SoftwareReference } from '../types/domain';
 /** Only add confirmed, deliberately published software links to this list. */
 export const SOFTWARE_REFERENCES: readonly SoftwareReference[] = [
   {
+    id: 'camera-zoom',
+    name: 'Camera Zoom',
+    description: 'A Windows camera app with live preview, camera and software zoom, automatic photo saving and an optional transparent crop overlay.',
+    repositoryUrl: 'https://github.com/Xaoilin/camera-zoom',
+    launchInstructions: 'Windows. Open the installed Camera Zoom app from your taskbar. The private GitHub repository includes setup instructions for another PC.',
+  },
+  {
     id: 'autoclicker',
     name: 'Autoclicker',
     description: 'A native Mac autoclicker with adjustable timing, left or right clicks, repeat limits and a global start/stop shortcut.',
