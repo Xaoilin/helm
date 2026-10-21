@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "private": true,
-  "version": "0.2.222",
+  "version": "0.2.223",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
@@ -43,6 +43,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "uuid": "^13.0.0",
+    "web-vitals": "6.2.3",
     "zod": "^4.6.5"
   },
   "devDependencies": {

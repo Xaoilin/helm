@@ -1,0 +1,31 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/profile/v1/operational-events",
+    "body": {
+      "events": [
+        {
+          "id": "477356d1-2233-4556-8899-123456789012",
+          "correlationId": "477356d1-2233-4556-8899-123456789012",
+          "occurredAt": "2026-10-21T00:00:00.000Z",
+          "release": "0.2.221",
+          "domain": "browser",
+          "operation": "cls",
+          "outcome": "ok",
+          "reason": "ok",
+          "attempt": 1,
+          "durationMs": 0,
+          "recoveryMs": null,
+          "freshness": "fresh",
+          "measurement": 0.12
+        }
+      ]
+    }
+  },
+  "status": 200,
+  "body": {
+    "ok": true,
+    "accepted": 1,
+    "schemaVersion": 1
+  }
+}

@@ -278,6 +278,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   'profile-service/integrations': integrationsSchema,
   'profile-service/integration-saved': integrationSchema,
   'profile-service/operational-events-accepted': operationalReceiptSchema,
+  'profile-service/operational-measurement-accepted': operationalReceiptSchema,
   'profile-service/rate-limited': apiErrorSchema,
   'calendar-service/calendar': calendarSchema,
   'calendar-service/events': calendarEventListSchema,
