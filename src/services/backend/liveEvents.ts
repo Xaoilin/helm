@@ -9,6 +9,7 @@
 import { liveGatewayOrigins } from '../../config';
 import { getFreshAccessToken } from '../../store/supabase';
 import { backoffDelayMs } from '../backoff';
+import { recordOperationalEvent } from '../operationalTelemetry';
 import { logWarn } from '../logger';
 import { liveEventSchema, type LiveEvent } from './liveContracts';
 
@@ -35,6 +36,7 @@ function dispatch(event: LiveEvent): void {
     try {
       listener(event);
     } catch (error) {
+      recordOperationalEvent({ domain: 'realtime', operation: 'subscription', outcome: 'failed', reason: 'network' });
       logWarn('LiveEvents', `A listener failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -102,7 +104,11 @@ async function readStream(body: ReadableStream<Uint8Array>, onReady: () => void)
         continue;
       }
       const event = toLiveEvent(message);
-      if (event) dispatch(event);
+      if (event) {
+        const age = Date.now() - Date.parse(event.at);
+        recordOperationalEvent({ domain: 'realtime', operation: 'delivery', outcome: 'ok', durationMs: Number.isFinite(age) ? Math.max(0, age) : 0 });
+        dispatch(event);
+      }
     }
   }
 }
@@ -130,6 +136,7 @@ async function stream(origin: string, signal: AbortSignal): Promise<void> {
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
       const openedAt = Date.now();
       await readStream(response.body, () => {
+        recordOperationalEvent({ domain: 'realtime', operation: 'subscription', outcome: 'ok', reason: 'subscribed' });
         if (connectedBefore) {
           dispatch({ type: LIVE_READY, domain: 'live', at: new Date().toISOString(), data: null });
         }
@@ -140,6 +147,7 @@ async function stream(origin: string, signal: AbortSignal): Promise<void> {
       await sleep(backoffDelayMs(failures, RECONNECT), signal);
     } catch (error) {
       if (signal.aborted) return;
+      recordOperationalEvent({ domain: 'realtime', operation: 'subscription', outcome: 'failed', reason: 'network' });
       logWarn('LiveEvents', `Stream from ${origin} failed: ${error instanceof Error ? error.message : String(error)}`);
       await sleep(backoffDelayMs(failures, RECONNECT), signal);
       failures += 1;

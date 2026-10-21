@@ -2,7 +2,7 @@ import { APP_VERSION } from '../config/release';
 import type { OperationalDomain, OperationalEvent, OperationalOperation, OperationalReason } from '../types/domain';
 import { OPERATIONAL_MAX_AGE_MS, OPERATIONAL_MAX_BATCH, parseOperationalEvent } from './operationalEvents';
 
-export type OperationalInput = Pick<OperationalEvent, 'domain' | 'operation' | 'outcome'> & Partial<Pick<OperationalEvent, 'reason' | 'durationMs' | 'attempt' | 'freshness' | 'correlationId'>>;
+export type OperationalInput = Pick<OperationalEvent, 'domain' | 'operation' | 'outcome'> & Partial<Pick<OperationalEvent, 'reason' | 'durationMs' | 'attempt' | 'freshness' | 'correlationId' | 'measurement'>>;
 type Sender = (events: OperationalEvent[], signal: AbortSignal) => Promise<void>;
 export interface OperationalSnapshot {
   events: OperationalEvent[];
@@ -20,6 +20,7 @@ const FLUSH_DELAY = 10_000;
 const SINK_TIMEOUT = 3_000;
 let events: OperationalEvent[] = [];
 let queue: Array<{ event: OperationalEvent; attempts: number }> = [];
+let accountEstablished = false;
 let account: string | null = null; // Memory-only guard; never serialized or sent.
 let sender: Sender | null = null;
 let generation = 0;
@@ -31,6 +32,7 @@ let sink: OperationalSnapshot['sink'] = 'local_only';
 let sinkReason: OperationalReason | null = null;
 let rateWindow = 0;
 let rateCount = 0;
+let successRateCount = 0;
 let counters: OperationalSnapshot['counters'] = { disconnects: 0, failedReads: 0, failedWrites: 0, recoveries: 0, lastRecoveryMs: null };
 const incidents = new Map<string, { id: string; started: number; attempts: number }>();
 const listeners = new Set<(snapshot: OperationalSnapshot) => void>();
@@ -58,6 +60,9 @@ export function exportOperationalDiagnostics(): string {
 
 export function setOperationalAccount(next: string | null): void {
   if (account === next) return;
+  // Initial browser boot diagnostics contain only allowlisted metadata. Never carry them across accounts.
+  const startup = !accountEstablished && next ? events.filter(event => event.domain === 'browser').slice(-QUEUE_LIMIT) : [];
+  if (next) accountEstablished = true;
   account = next;
   generation += 1;
   inFlight?.abort();
@@ -66,15 +71,17 @@ export function setOperationalAccount(next: string | null): void {
   reloadFlight = null;
   if (timer !== null) clearTimeout(timer);
   timer = null;
-  events = [];
-  queue = [];
+  events = startup;
+  queue = startup.map(event => ({ event, attempts: 0 }));
   incidents.clear();
   dropped = 0;
   rateCount = 0;
+  successRateCount = 0;
   rateWindow = Date.now();
   counters = { disconnects: 0, failedReads: 0, failedWrites: 0, recoveries: 0, lastRecoveryMs: null };
   sink = next && sender ? 'idle' : 'local_only';
   sinkReason = null;
+  schedule();
   publish();
 }
 
@@ -165,12 +172,14 @@ export async function flushOperationalEvents(): Promise<void> {
 export function recordOperationalEvent(input: OperationalInput): void {
   try {
     const now = Date.now();
-    if (now - rateWindow >= 60_000 || now < rateWindow) { rateWindow = now; rateCount = 0; }
-    if (++rateCount > RATE_LIMIT) { dropped = increment(dropped); return; }
+    if (now - rateWindow >= 60_000 || now < rateWindow) { rateWindow = now; rateCount = 0; successRateCount = 0; }
+    // Success traffic cannot consume the separate failure allowance.
+    const overLimit = input.outcome === 'failed' ? ++rateCount > RATE_LIMIT : ++successRateCount > RATE_LIMIT / 2;
+    if (overLimit) { dropped = increment(dropped); return; }
     const key = `${input.domain}:${input.operation}`;
     // An explicit request correlation is one invocation, not evidence that a
     // separate concurrent invocation recovered. Only state streams auto-recover.
-    const tracksState = input.correlationId === undefined;
+    const tracksState = input.correlationId === undefined && ['session', 'refresh', 'subscription', 'heartbeat', 'connectivity', 'manifest', 'version'].includes(input.operation);
     const prior = tracksState ? incidents.get(key) : undefined;
     const failed = input.outcome === 'failed';
     const recovered = input.outcome === 'ok' && Boolean(prior);
@@ -188,6 +197,7 @@ export function recordOperationalEvent(input: OperationalInput): void {
       durationMs: bounded(input.durationMs ?? 0),
       recoveryMs: recovered && prior ? bounded(now - prior.started) : null,
       freshness: input.freshness ?? 'unknown',
+      ...(input.measurement === undefined ? {} : { measurement: input.measurement }),
     }, now);
     if (!event) { dropped = increment(dropped); return; }
     if (failed) {
@@ -202,7 +212,13 @@ export function recordOperationalEvent(input: OperationalInput): void {
     }
     events = [...events.filter(item => Date.parse(item.occurredAt) >= now - OPERATIONAL_MAX_AGE_MS), event].slice(-RING_LIMIT);
     if (account && sender) {
-      if (queue.length === QUEUE_LIMIT) { queue.shift(); dropped = increment(dropped); }
+      if (queue.length === QUEUE_LIMIT) {
+        const normal = queue.findIndex(item => item.event.outcome !== 'failed');
+        if (normal >= 0) queue.splice(normal, 1);
+        else if (input.outcome !== 'failed') { dropped = increment(dropped); publish(); return; }
+        else queue.shift();
+        dropped = increment(dropped);
+      }
       queue.push({ event, attempts: 0 });
       schedule();
     }

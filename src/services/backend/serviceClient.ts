@@ -11,6 +11,8 @@
  * every call to it fails fast until a cool-down passes, so a struggling service is not hammered.
  */
 import type { z } from 'zod';
+import type { OperationalDomain } from '../../types/domain';
+import { classifyOperationalFailure, recordOperationalEvent } from '../operationalTelemetry';
 import { API_TIMEOUT, SERVICE_RETRY } from '../../config/constants';
 import { getFreshAccessToken, SessionUnavailableError } from '../../store/supabase';
 import { backoffDelayMs, retryAfterMs } from '../backoff';
@@ -99,6 +101,7 @@ export async function callService<T>(
       });
     } catch (error) {
       if (error instanceof CircuitOpenError) {
+        recordOperationalEvent({ domain: operationalDomain(url), operation: 'request', outcome: 'failed', reason: 'circuit_open' });
         throw new ServiceError(503, 'service_unavailable',
           'This service is temporarily unavailable; Sabah One will try again shortly.');
       }
@@ -164,6 +167,8 @@ async function send(
   body: unknown,
   options: CallOptions,
 ): Promise<Response> {
+  const started = performance.now();
+  const domain = operationalDomain(url);
   try {
     const response = await fetch(url, {
       method,
@@ -177,9 +182,14 @@ async function send(
       signal: AbortSignal.timeout(options.timeoutMs ?? API_TIMEOUT.SERVICE_API),
     });
     reportServiceReachable();
+    recordOperationalEvent({ domain, operation: 'request', outcome: response.ok ? 'ok' : 'failed',
+      reason: response.ok ? 'ok' : classifyOperationalFailure({ status: response.status }),
+      durationMs: performance.now() - started });
     return response;
   } catch (error) {
     const timedOut = error instanceof DOMException && error.name === 'TimeoutError';
+    recordOperationalEvent({ domain, operation: 'request', outcome: 'failed',
+      reason: timedOut ? 'timeout' : 'network', durationMs: performance.now() - started });
     throw new ServiceError(0, timedOut ? 'timeout' : 'network', timedOut
       ? 'The service did not respond in time.'
       : 'The service could not be reached.');
@@ -192,4 +202,10 @@ async function toServiceError(response: Response): Promise<ServiceError> {
   return parsed.success
     ? new ServiceError(response.status, parsed.data.code, parsed.data.message, retryAfter)
     : new ServiceError(response.status, 'http_error', `HTTP ${response.status}.`, retryAfter);
+}
+
+/** Derive a bounded service name without retaining the URL, resource ID, or query. */
+function operationalDomain(url: string): OperationalDomain {
+  const service = /\/api\/(calendar|prayer|profile|life|knowledge|planner|finance)\//u.exec(url)?.[1];
+  return (service as OperationalDomain | undefined) ?? 'database';
 }

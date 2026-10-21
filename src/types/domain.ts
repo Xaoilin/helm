@@ -1,8 +1,10 @@
 // Operational diagnostics contain only normalized metadata, never account contents.
-export type OperationalDomain = 'auth' | 'database' | 'realtime' | 'browser' | 'release' | 'calendar' | 'github' | 'assistant' | 'employment' | 'finance' | 'equity';
-export type OperationalOperation = 'session' | 'refresh' | 'read' | 'write' | 'version' | 'subscription' | 'heartbeat' | 'connectivity' | 'visibility' | 'manifest' | 'reload' | 'request' | 'recovery';
-export type OperationalReason = 'ok' | 'network' | 'timeout' | 'unauthorized' | 'forbidden' | 'rate_limited' | 'server_error' | 'invalid_response' | 'offline' | 'online' | 'hidden' | 'visible' | 'signed_in' | 'signed_out' | 'token_refreshed' | 'initial_session' | 'subscribing' | 'subscribed' | 'closed' | 'channel_error' | 'heartbeat_sent' | 'heartbeat_ok' | 'heartbeat_timeout' | 'heartbeat_error' | 'release_available' | 'reload_suppressed' | 'client_update_required' | 'circuit_open' | 'paused' | 'unknown';
+export type OperationalDomain = 'auth' | 'database' | 'realtime' | 'browser' | 'release' | 'calendar' | 'github' | 'assistant' | 'employment' | 'finance' | 'equity' | 'prayer' | 'profile' | 'life' | 'knowledge' | 'planner';
+export type OperationalOperation = 'session' | 'refresh' | 'read' | 'write' | 'version' | 'subscription' | 'heartbeat' | 'connectivity' | 'visibility' | 'manifest' | 'reload' | 'request' | 'recovery' | 'render' | 'exception' | 'unhandled_rejection' | 'lcp' | 'inp' | 'cls' | 'fcp' | 'ttfb' | 'long_task' | 'navigation' | 'collector' | 'delivery';
+export type OperationalReason = 'ok' | 'network' | 'timeout' | 'unauthorized' | 'forbidden' | 'rate_limited' | 'server_error' | 'invalid_response' | 'offline' | 'online' | 'hidden' | 'visible' | 'signed_in' | 'signed_out' | 'token_refreshed' | 'initial_session' | 'subscribing' | 'subscribed' | 'closed' | 'channel_error' | 'heartbeat_sent' | 'heartbeat_ok' | 'heartbeat_timeout' | 'heartbeat_error' | 'release_available' | 'reload_suppressed' | 'client_update_required' | 'circuit_open' | 'paused' | 'unknown' | 'javascript_error' | 'resource_error' | 'react_render_error' | 'telemetry_dropped';
 export interface OperationalEvent {
+  /** Web measurement: milliseconds, CLS ratio, or dropped-event count, according to operation. */
+  measurement?: number;
   id: string;
   correlationId: string;
   occurredAt: string;

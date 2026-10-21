@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { recordBrowserFailure } from '../services/browserObservability';
 import { logError } from '../services/logger';
 import { trackProductUsageEvent } from '../services/productUsageAnalytics';
 
@@ -31,6 +32,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    recordBrowserFailure('render');
     logError(`ErrorBoundary:${this.props.name}`, error);
     trackProductUsageEvent({
       kind: 'error',

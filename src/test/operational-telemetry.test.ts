@@ -47,6 +47,20 @@ describe('bounded operational telemetry', () => {
     await vi.advanceTimersByTimeAsync(3_600_001);
     expect(getOperationalSnapshot().events).toHaveLength(0);
   });
+  it('reserves failure capacity when successful requests fill the rate and queue budgets', () => {
+    configureOperationalTransport(async () => {});
+    for (let i = 0; i < 100; i++) recordOperationalEvent({ domain: 'profile', operation: 'request', outcome: 'ok' });
+    for (let i = 0; i < 50; i++) failure();
+    expect(getOperationalSnapshot().events.filter(event => event.outcome === 'failed')).toHaveLength(50);
+    expect(getOperationalSnapshot().pending).toBe(50);
+  });
+  it('accepts fractional vitals but refuses arbitrary measurements or free text', () => {
+    recordOperationalEvent({ domain: 'browser', operation: 'cls', outcome: 'ok', measurement: 0.12 });
+    recordOperationalEvent({ domain: 'browser', operation: 'request', outcome: 'ok', measurement: 1 });
+    expect(getOperationalSnapshot().events).toHaveLength(1);
+    expect(getOperationalSnapshot().events[0].measurement).toBe(0.12);
+    expect(getOperationalSnapshot().dropped).toBe(1);
+  });
   it('drops old-account queued and in-flight completions without sending under a new identity', async () => {
     const send = vi.fn(async () => {});
     configureOperationalTransport(send);

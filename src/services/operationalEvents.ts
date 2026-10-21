@@ -4,9 +4,9 @@ import type { OperationalEvent } from '../types/domain';
 export const OPERATIONAL_MAX_BATCH = 10;
 export const OPERATIONAL_MAX_BYTES = 12_000;
 export const OPERATIONAL_MAX_AGE_MS = 60 * 60 * 1_000;
-const domains = new Set(['auth', 'database', 'realtime', 'browser', 'release', 'calendar', 'github', 'assistant', 'employment', 'finance', 'equity']);
-const operations = new Set(['session', 'refresh', 'read', 'write', 'version', 'subscription', 'heartbeat', 'connectivity', 'visibility', 'manifest', 'reload', 'request', 'recovery']);
-const reasons = new Set(['ok', 'network', 'timeout', 'unauthorized', 'forbidden', 'rate_limited', 'server_error', 'invalid_response', 'offline', 'online', 'hidden', 'visible', 'signed_in', 'signed_out', 'token_refreshed', 'initial_session', 'subscribing', 'subscribed', 'closed', 'channel_error', 'heartbeat_sent', 'heartbeat_ok', 'heartbeat_timeout', 'heartbeat_error', 'release_available', 'reload_suppressed', 'client_update_required', 'circuit_open', 'paused', 'unknown']);
+const domains = new Set(['auth', 'database', 'realtime', 'browser', 'release', 'calendar', 'github', 'assistant', 'employment', 'finance', 'equity', 'prayer', 'profile', 'life', 'knowledge', 'planner']);
+const operations = new Set(['session', 'refresh', 'read', 'write', 'version', 'subscription', 'heartbeat', 'connectivity', 'visibility', 'manifest', 'reload', 'request', 'recovery', 'render', 'exception', 'unhandled_rejection', 'lcp', 'inp', 'cls', 'fcp', 'ttfb', 'long_task', 'navigation', 'collector', 'delivery']);
+const reasons = new Set(['ok', 'network', 'timeout', 'unauthorized', 'forbidden', 'rate_limited', 'server_error', 'invalid_response', 'offline', 'online', 'hidden', 'visible', 'signed_in', 'signed_out', 'token_refreshed', 'initial_session', 'subscribing', 'subscribed', 'closed', 'channel_error', 'heartbeat_sent', 'heartbeat_ok', 'heartbeat_timeout', 'heartbeat_error', 'release_available', 'reload_suppressed', 'client_update_required', 'circuit_open', 'paused', 'unknown', 'javascript_error', 'resource_error', 'react_render_error', 'telemetry_dropped']);
 const outcomes = new Set(['ok', 'failed', 'pending', 'changed', 'recovered']);
 const fields = ['id', 'correlationId', 'occurredAt', 'release', 'domain', 'operation', 'outcome', 'reason', 'attempt', 'durationMs', 'recoveryMs', 'freshness'];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -16,7 +16,11 @@ const integer = (value: unknown, max: number) => Number.isSafeInteger(value) && 
 export function parseOperationalEvent(value: unknown, now = Date.now()): OperationalEvent | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
-  if (Object.keys(row).length !== fields.length || Object.keys(row).some(key => !fields.includes(key))) return null;
+  if (Object.keys(row).length !== fields.length + (row.measurement === undefined ? 0 : 1)
+    || Object.keys(row).some(key => !fields.includes(key) && key !== 'measurement')) return null;
+  if (row.measurement !== undefined && (typeof row.measurement !== 'number' || !Number.isFinite(row.measurement)
+    || row.measurement < 0 || row.measurement > 86_400_000
+    || !['lcp', 'inp', 'cls', 'fcp', 'ttfb', 'long_task', 'navigation', 'collector'].includes(String(row.operation)))) return null;
   if (typeof row.id !== 'string' || !uuid.test(row.id) || typeof row.correlationId !== 'string' || !uuid.test(row.correlationId)) return null;
   if (typeof row.occurredAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(row.occurredAt)) return null;
   const timestamp = Date.parse(row.occurredAt);
@@ -26,7 +30,8 @@ export function parseOperationalEvent(value: unknown, now = Date.now()): Operati
   if (typeof row.freshness !== 'string' || !['fresh', 'stale', 'unknown'].includes(row.freshness)) return null;
   if (!integer(row.attempt, 100) || !integer(row.durationMs, 86_400_000) || !(row.recoveryMs === null || integer(row.recoveryMs, 86_400_000))) return null;
   // Explicit construction also prevents future unreviewed properties entering logs.
-  return Object.fromEntries(fields.map(key => [key, row[key]])) as unknown as OperationalEvent;
+  return { ...Object.fromEntries(fields.map(key => [key, row[key]])),
+    ...(row.measurement === undefined ? {} : { measurement: row.measurement }) } as unknown as OperationalEvent;
 }
 
 export function parseOperationalBatch(value: unknown, now = Date.now()): OperationalEvent[] | null {

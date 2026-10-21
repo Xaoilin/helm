@@ -4,6 +4,7 @@
  * uses them as API mocks. The app's runtime schemas must accept every one of them.
  */
 import { readdirSync, readFileSync } from 'node:fs';
+import { parseOperationalBatch } from '../services/operationalEvents';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CONTRACT_SCHEMAS as SERVICE_SCHEMAS } from '../services/backend/contracts';
@@ -29,6 +30,10 @@ function fixtureNames(): string[] {
 }
 
 describe('service contracts', () => {
+  it('accepts the same bounded measurement request as the provider', () => {
+    const fixture = JSON.parse(readFileSync(join(CONTRACTS, 'profile-service/operational-measurement-accepted.json'), 'utf8'));
+    expect(parseOperationalBatch(fixture.request.body, Date.parse('2026-10-21T00:00:00.000Z'))?.[0].measurement).toBe(0.12);
+  });
   it('has a runtime schema for every fixture and a fixture for every schema', () => {
     expect(fixtureNames().sort()).toEqual(Object.keys(CONTRACT_SCHEMAS).sort());
   });

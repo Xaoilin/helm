@@ -189,6 +189,9 @@ jobs:
       - name: Deploy Sabah One Equity MCP
         run: npx supabase functions deploy sabah-one-equity-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
 
+      - name: Deploy existing Jev voice function with bounded observability
+        run: npx supabase functions deploy sabah-one-jev-voice --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
+
       - name: Verify hosted domain access and synthetic fixture teardown
         env:
           ASSISTANT_DEPLOY_SHA: ${{ steps.identity.outputs.deploy_sha }}
