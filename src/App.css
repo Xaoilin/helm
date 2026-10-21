@@ -2129,6 +2129,21 @@ textarea.form-input {
   --milestone-accent-soft: #8fe7c4;
 }
 
+.prayer-completion-progress {
+  animation: none;
+}
+
+.prayer-completion-progress .milestone-celebration-card {
+  align-items: center;
+}
+
+.prayer-completion-progress .spinner {
+  justify-self: center;
+  width: 24px;
+  height: 24px;
+  border-top-color: var(--milestone-accent);
+}
+
 .milestone-celebration.tone-move {
   --milestone-accent: #e6c66a;
   --milestone-accent-soft: #f29a60;
@@ -2613,6 +2628,7 @@ textarea.form-input {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .prayer-completion-progress .spinner,
   .milestone-celebration,
   .milestone-celebration-card,
   .milestone-celebration-mark::before,

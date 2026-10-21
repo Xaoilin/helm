@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PrayerCompletionDialog from '../components/prayer/PrayerCompletionDialog';
 
@@ -50,5 +50,30 @@ describe('prayer completion celebration', () => {
       title: 'Dhuhr complete',
       message: 'A meaningful daily win · +15 XP',
     }));
+  });
+
+  it('shows immediate progress until the planner responds, without inventing XP', async () => {
+    let resolveReward!: (result: { prayerName: string; xpEarned: number }) => void;
+    mocks.prayer.confirmPrayerCompletion.mockReturnValue(new Promise(resolve => { resolveReward = resolve; }));
+    render(<PrayerCompletionDialog />);
+
+    fireEvent.click(screen.getByRole('button', { name: /On time/i }));
+    expect(screen.getByRole('status', { name: 'Prayer completion progress' })).toHaveTextContent('Saving Dhuhr…');
+    expect(mocks.celebration.celebrate).not.toHaveBeenCalled();
+    // A repeated input during the same request must not submit again.
+    fireEvent.click(screen.getByRole('button', { name: /On time/i }));
+    expect(mocks.prayer.confirmPrayerCompletion).toHaveBeenCalledTimes(1);
+
+    await act(async () => { resolveReward({ prayerName: 'Dhuhr', xpEarned: 15 }); });
+    expect(screen.queryByRole('status', { name: 'Prayer completion progress' })).not.toBeInTheDocument();
+    expect(mocks.celebration.celebrate).toHaveBeenCalledWith(expect.objectContaining({ message: 'A meaningful daily win · +15 XP' }));
+  });
+
+  it('clears progress without celebrating when there is no confirmed reward', async () => {
+    mocks.prayer.confirmPrayerCompletion.mockReturnValue(Promise.resolve({ prayerName: 'Dhuhr', xpEarned: 0 }));
+    render(<PrayerCompletionDialog />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /On time/i })); });
+    expect(screen.queryByRole('status', { name: 'Prayer completion progress' })).not.toBeInTheDocument();
+    expect(mocks.celebration.celebrate).not.toHaveBeenCalled();
   });
 });
