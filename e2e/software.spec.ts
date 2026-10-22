@@ -35,6 +35,15 @@ for (const width of [320, 768, 1440]) {
     await launch.focus();
     await page.keyboard.press('Enter');
     await expect(autoclicker.getByRole('status')).toContainText('If nothing opens, download and install it first.');
+    const kitab = surface.getByRole('article', { name: 'Kitab', exact: true });
+    await expect(kitab).toBeVisible();
+    const kitabSite = kitab.getByRole('link', { name: 'Open Kitab' });
+    await expect(kitabSite).toHaveAttribute('href', 'https://xaoilin.github.io/kitab/');
+    await expect(kitabSite).toHaveAttribute('target', '_blank');
+    await expect(kitabSite).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(kitab.getByRole('link', { name: 'Kitab on GitHub' })).toHaveAttribute('href', 'https://github.com/Xaoilin/kitab');
+    await expect(kitab.getByRole('link', { name: 'Launch on Mac', exact: true })).toHaveCount(0);
+    await expect(kitab.getByRole('link', { name: 'Download Kitab' })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`software-${width}.png`) });
 
