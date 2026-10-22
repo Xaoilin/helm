@@ -11,3 +11,18 @@ describe('native software launch contract', () => {
     expect(contract).toEqual({ version: 1, openUrl: 'sabah-autoclicker://open', behavior: 'show-window-only', acceptsParameters: false });
   });
 });
+
+describe('software list', () => {
+  it('links Kitab, a browser app, to its live reader and its repository, with no native launch or download', () => {
+    const kitab = SOFTWARE_REFERENCES.find(software => software.id === 'kitab');
+    expect(kitab?.websiteUrl).toBe('https://xaoilin.github.io/kitab/');
+    expect(kitab?.repositoryUrl).toBe('https://github.com/Xaoilin/kitab');
+    expect(kitab?.launchUrl).toBeUndefined();
+    expect(kitab?.downloadUrl).toBeUndefined();
+  });
+
+  it('gives every entry its own id', () => {
+    const ids = SOFTWARE_REFERENCES.map(software => software.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
