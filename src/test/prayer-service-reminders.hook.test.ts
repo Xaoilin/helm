@@ -130,7 +130,7 @@ describe('usePrayerServiceReminders', () => {
     expect(shown).toEqual([]);
   });
 
-  it('shows a prayer.notice as a banner and one notification tagged with its key', async () => {
+  it('tracks a prayer.notice and sends one system notification tagged with its key', async () => {
     const { result, onArrived } = renderReminders();
     await waitFor(() => expect(api.getPrayerReminders).toHaveBeenCalled());
 
@@ -164,7 +164,7 @@ describe('usePrayerServiceReminders', () => {
     }]);
   });
 
-  it('without permission shows only the banner', async () => {
+  it('without permission retains reminder diagnostics without sending a notification', async () => {
     FakeNotification.permission = 'denied';
     const { result, reporter } = renderReminders();
 
