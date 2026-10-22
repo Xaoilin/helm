@@ -20,7 +20,7 @@ import type {
 import { validatePrayerTimeZone } from '../../services/prayerTimeZone';
 import { getPrayerOutcome, normalizePrayerTrackingState } from '../../services/prayerTracking';
 import type { PrayerReminderPermissionRequestResult } from '../../services/browserPrayerReminder';
-import type { getNextPrayer, PrayerTime, PrayerTimesData } from '../../services/prayerTimes';
+import type { getNextPrayer, PrayerTimesData } from '../../services/prayerTimes';
 import type { PrayerReminderView } from '../../services/prayerServiceReminders';
 import { isPrayerServiceEnabled } from '../../services/backend/prayerServiceApi';
 import {
@@ -57,7 +57,6 @@ import {
   type PrayerCompletionRequest,
   type PrayerCompletionRequestOptions,
 } from './prayer/usePrayerCompletionPrompt';
-import { usePrayerAdhan } from './prayer/usePrayerAdhan';
 
 export type { PrayerCompletionMutationResult } from './prayer/usePrayerCompletionWorkflow';
 export type { PrayerCompletionRequest } from './prayer/usePrayerCompletionPrompt';
@@ -80,13 +79,12 @@ export interface PrayerContextValue {
   deadlines: Record<PrayerName, PrayerDeadlineBounds | null>;
   nextPrayer: ReturnType<typeof getNextPrayer>;
   pendingCompletion: PrayerCompletionRequest | null;
-  /** The prayer service's deadline reminder the in-app banner shows now. */
+  /** The prayer service's currently active deadline reminder. */
   activeReminder: PrayerReminderView | null;
-  /** The prayer service's opportunity or Learn/Move reminder the in-app banner shows now. */
+  /** The prayer service's currently active opportunity or Learn/Move reminder. */
   activeBoundedReminder: PrayerReminderView | null;
   /** Why the last snooze was refused, in the prayer service's words. */
   reminderSnoozeError: string | null;
-  adhanPrayer: PrayerTime | null;
   diagnostics: PrayerDiagnostics;
   /** Sync with the Spring Boot prayer service; `disabled` when it is not configured. */
   serviceSync: PrayerServiceSyncState;
@@ -118,7 +116,6 @@ export interface PrayerContextValue {
   retrySchedule: () => Promise<void>;
   requestReminderPermission: () => Promise<PrayerReminderPermissionRequestResult>;
   testReminder: (prayerName?: PrayerName) => Promise<boolean>;
-  dismissAdhan: () => void;
 }
 
 export const PrayerCtx = createContext<PrayerContextValue | null>(null);
@@ -282,8 +279,6 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     commitTracking(normalizePrayerTrackingState(state, { now: new Date() }));
   }, [allowBulkDelete, commitTracking]);
 
-  const { adhanPrayer, dismissAdhan } = usePrayerAdhan({ prayerEnabled, timetable, now, today });
-
   const suppressionReason = describeReminderSuppression({
     prayerEnabled,
     reminderEnabled,
@@ -345,7 +340,6 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     activeReminder,
     activeBoundedReminder,
     reminderSnoozeError: reminders.snoozeError,
-    adhanPrayer,
     diagnostics,
     serviceSync,
     completionNotice,
@@ -363,11 +357,9 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     retrySchedule,
     requestReminderPermission,
     testReminder,
-    dismissAdhan,
   }), [
     activeReminder,
     activeBoundedReminder,
-    adhanPrayer,
     cancelPrayerCompletion,
     completePrayer,
     completionNotice,
@@ -375,7 +367,6 @@ export function PrayerProvider({ children }: { children: ReactNode }) {
     correctPrayerOutcome,
     deadlines,
     diagnostics,
-    dismissAdhan,
     dismissCompletionNotice,
     getOutcome,
     loaded,

@@ -150,5 +150,5 @@ Browser review remains necessary for OAuth, browser notification permission, pag
 ## Current Architecture Risks
 
 - Some integrations are real and some remain placeholder or simulated; [feature status](feature-status.md) is the source of truth.
-- Browser notification delivery depends on permission and an open page, so the in-app reminder banner remains an explicit fallback.
+- System Web Notification delivery depends on permission and an open page. Reminder banners and the adhan overlay are removed; denied or unsupported notifications do not create an in-app fallback.
 - Account data is account-isolated by the services, and secret metadata by RLS and constrained RPCs. Secret plaintext stays within the Vault reveal path and is excluded from records, logs, and exports.

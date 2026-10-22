@@ -46,7 +46,7 @@ export interface PrayerServiceRemindersInput {
   momentum: DailyMomentumState | null;
   now: Date;
   refreshPermission: () => Promise<PrayerReminderPermissionState>;
-  /** Called after a reminder arrives, so the clock (and the banners) catch up at once. */
+  /** Called after a reminder arrives, so the clock and diagnostics catch up at once. */
   onArrived: () => void;
   reporter: PrayerReminderReporter;
 }
@@ -88,8 +88,8 @@ function reminderFromEvent(event: LiveEvent): ServicePrayerReminder | 'invalid' 
  * The reminders the prayer service decides and sends. They load on start (`GET /reminders`: those already
  * sent and still active) and whenever a prayer change or reconnect arrives, and each new one arrives over the
  * live-update stream as a `prayer.notice` or `prayer.reminder` event. A new one shows as a Web Notification when
- * permitted (tabs share one: its tag names the reminder); the in-app banners show every active one and hide it
- * once it expires, is snoozed, or its prayer or Learn/Move Level 1 is done. No timer here decides a reminder.
+ * permitted (tabs share one: its tag names the reminder). Active reminders remain available to diagnostics;
+ * no in-app reminder is displayed, including when notifications are unavailable. No timer here decides a reminder.
  */
 export function usePrayerServiceReminders({
   enabled,

@@ -65,11 +65,11 @@ const dhuhrTask = makeTask({ id: 'task-dhuhr', title: 'Dhuhr Prayer', category: 
 const VALUE_KEYS: (keyof PrayerContextValue)[] = [
   'loaded', 'tracking', 'schedule', 'scheduleStatus', 'scheduleError', 'now', 'today', 'localTimezone',
   'timezoneMatches', 'scheduleTimezoneValid', 'scheduleDays', 'stats', 'deadlines', 'nextPrayer',
-  'pendingCompletion', 'activeReminder', 'activeBoundedReminder', 'reminderSnoozeError', 'adhanPrayer',
+  'pendingCompletion', 'activeReminder', 'activeBoundedReminder', 'reminderSnoozeError',
   'diagnostics', 'serviceSync', 'completionNotice', 'dismissCompletionNotice', 'requestPrayerCompletion',
   'cancelPrayerCompletion', 'confirmPrayerCompletion', 'completePrayer', 'correctPrayerOutcome', 'getOutcome',
   'undoPrayerCompletion', 'replacePrayerTracking', 'snoozeActiveReminder', 'snoozeActiveBoundedReminder',
-  'retrySchedule', 'requestReminderPermission', 'testReminder', 'dismissAdhan',
+  'retrySchedule', 'requestReminderPermission', 'testReminder',
 ];
 
 let prayer: PrayerContextValue;
@@ -166,7 +166,7 @@ describe('PrayerProvider', () => {
       permissionState: 'unsupported',
       suppressionReason: null,
     });
-    // The prayer service's reminders fall back to the in-app banner without notification support.
+    // Active service reminders remain available to diagnostics without notification support.
     await waitFor(() => expect(prayer.activeBoundedReminder?.title).toBe('Dhuhr prayer opportunity'));
     expect(prayer.diagnostics.activeReminders.map(reminder => reminder.key)).toEqual([dhuhrOpportunity.key]);
     expect(prayer.activeReminder).toBeNull();
