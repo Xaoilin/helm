@@ -10,6 +10,8 @@ HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the lin
 4. Review visible changes in a browser at the relevant responsive widths. Capture rendered evidence when practical.
 5. Hand off the exact branch and commit to Sol for integration, hosted deployment, and final acceptance.
 
+Use `rg --no-ignore` for targeted searches of `src/`; inherited ignores have hidden tracked files from ordinary directory searches.
+
 ## Product Invariants
 
 - `src/types/domain.ts` owns app data shapes.

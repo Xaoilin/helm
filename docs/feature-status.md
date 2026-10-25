@@ -52,8 +52,8 @@ Use this matrix when updating documentation or UI copy. `real` means the hosted 
 
 Removed on 2026-09-26 (v0.2.200): the Lina assistant (Chat, hosted OpenAI and Ollama planning, billing, conversation export, activity log and undo, AI diagnostics), voice (wake word, speech recognition and output, Deepgram, ElevenLabs), Life Hero (progression, dashboard companion, daily adventure, motivational voice, concept artifact), its evidence sources (GitHub App integration, Apple Health movement import, Elif B manual evidence), and the unused browser Monzo client. Their code, Edge Functions (`assistant-openai`, `assistant-openai-billing`, `assistant-speech`, `github-life-hero`), database objects and account records (`conversations`, `assistantCorrections`, `assistantActivityLog`) were deleted, not migrated. Stored settings from earlier releases that name these features are ignored.
 
-## DigitalOcean migration preparation
+## DigitalOcean migration cutover
 
-The live-update client preserves a product API path prefix. The four MCP services default to the shared DigitalOcean API base. Cutover remains pending deployment and authenticated verification.
+The live-update client preserves a product API path prefix. The four MCP services default to the shared DigitalOcean API base. Both staged products passed authenticated domain, database, cross-product token rejection and live-event verification on 25 October. Release 0.2.228 switches configured callers and reloads existing tabs after protected deployment. OVH cancellation remains conditional on final production verification. Hosted fixture cleanup preserves the `/sabah-one` API prefix.
 
 The private prayer-provider relay authenticates a separate data-only credential. It forwards only the existing AlAdhan timings-by-city request; account tokens and provider credentials never go to AlAdhan. This addresses the observed DigitalOcean egress timeout without changing prayer calculations.
