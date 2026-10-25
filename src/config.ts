@@ -48,7 +48,7 @@ export const FINANCE_BACKEND_URL = import.meta.env.VITE_FINANCE_API_BASE_URL || 
 
 /**
  * Where the live-update gateway runs: on every server that hosts a service, each streaming its own
- * services' changes. One stream per distinct origin of the configured service URLs.
+ * services' changes. One stream per distinct API base, preserving a product path prefix.
  */
 export function liveGatewayOrigins(): string[] {
   const urls = [PRAYER_BACKEND_URL, PROFILE_BACKEND_URL, CALENDAR_BACKEND_URL, LIFE_BACKEND_URL,
@@ -56,7 +56,10 @@ export function liveGatewayOrigins(): string[] {
   const origins = new Set<string>();
   for (const url of urls) {
     try {
-      if (url.trim()) origins.add(new URL(url.trim()).origin);
+      if (url.trim()) {
+        const base = new URL(url.trim());
+        origins.add(`${base.origin}${base.pathname.replace(/\/+$/u, '')}`);
+      }
     } catch {
       // A malformed URL has no gateway to reach; its service reports its own error.
     }

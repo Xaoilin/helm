@@ -14,10 +14,10 @@ const FUNCTION_BASE_URL = `${SUPABASE_URL}/functions/v1/sabah-one-inventory-mcp`
 const RESOURCE_URL = `${FUNCTION_BASE_URL}/mcp`;
 const RESOURCE_METADATA_URL = `${FUNCTION_BASE_URL}/.well-known/oauth-protected-resource`;
 const AUTHORIZATION_SERVER_URL = `${SUPABASE_URL}/auth/v1`;
-const LIFE_API_URL = (Deno.env.get('SABAH_ONE_LIFE_API_URL') || 'https://51.38.83.48').replace(/\/+$/, '');
+const LIFE_API_URL = (Deno.env.get('SABAH_ONE_LIFE_API_URL') || 'https://144.126.197.25/sabah-one').replace(/\/+$/, '');
 const LIFE_INVENTORY_URL = `${LIFE_API_URL}/api/life/v1/inventory`;
 const LIFE_TIMEOUT_MS = 15_000;
-const KNOWLEDGE_API_URL = (Deno.env.get('SABAH_ONE_KNOWLEDGE_API_URL') || 'https://57.129.161.248').replace(/\/+$/, '');
+const KNOWLEDGE_API_URL = (Deno.env.get('SABAH_ONE_KNOWLEDGE_API_URL') || 'https://144.126.197.25/sabah-one').replace(/\/+$/, '');
 const KNOWLEDGE_RESOLVE_URL = `${KNOWLEDGE_API_URL}/api/knowledge/v1/projects/resolve`;
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://xaoilin.github.io',

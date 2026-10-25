@@ -51,3 +51,7 @@ Use this matrix when updating documentation or UI copy. `real` means the hosted 
 ## Removed features
 
 Removed on 2026-09-26 (v0.2.200): the Lina assistant (Chat, hosted OpenAI and Ollama planning, billing, conversation export, activity log and undo, AI diagnostics), voice (wake word, speech recognition and output, Deepgram, ElevenLabs), Life Hero (progression, dashboard companion, daily adventure, motivational voice, concept artifact), its evidence sources (GitHub App integration, Apple Health movement import, Elif B manual evidence), and the unused browser Monzo client. Their code, Edge Functions (`assistant-openai`, `assistant-openai-billing`, `assistant-speech`, `github-life-hero`), database objects and account records (`conversations`, `assistantCorrections`, `assistantActivityLog`) were deleted, not migrated. Stored settings from earlier releases that name these features are ignored.
+
+## DigitalOcean migration preparation
+
+The live-update client preserves a product API path prefix. The four MCP services default to the shared DigitalOcean API base. Cutover remains pending deployment and authenticated verification.
