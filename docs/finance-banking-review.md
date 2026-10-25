@@ -8,6 +8,21 @@ Spending shows complete-month receipts, payments, net cash change and payment
 categories, with high-value spending groups to review. Loans keeps lender balances,
 settlement figures, repayments, ownership shares and source dates distinct.
 
+Spending opens with this month's review and a last-month shortcut. Each imported
+month has a payment breakdown with category search, money in, money out and net
+cash flow. Missing months remain unavailable rather than zero; partial totals are
+never compared with a complete month. Full-month differences compare only adjacent
+complete months. Refund categories remain visible separately from the positive
+payment bars. Savings suggestions retain their own source periods and conditions;
+a suggested cap shows its illustrative saving without labelling all spending
+unnecessary. Full budget assumptions, historical cash flow and sources remain
+available below the summary.
+
+The presentation uses the existing Finance MCP review fields and adds no bank
+connection, payment capability or automatic refresh. Agents refresh the private
+review through `finance_get_review` and `finance_save_review`; receipt evidence
+must be reconciled with bank payments before being added to monthly totals.
+
 ## Source and calculation boundaries
 
 The review is an account-owned snapshot, not a live bank feed or an executable

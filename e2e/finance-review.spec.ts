@@ -47,6 +47,14 @@ test('shows the private banking budget, twelve month review and separate dated l
     await page.screenshot({ path: testInfo.outputPath(`banking-overview-${width}.png`) });
 
     await page.getByRole('button', { name: 'Spending', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Monthly spending explorer' })).toContainText('September 2026 has not been imported yet.');
+    await page.getByRole('button', { name: 'Last month', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Spending by category' })).toContainText('Retail purchases');
+    await page.getByRole('searchbox', { name: 'Find a category' }).fill('refund');
+    await expect(page.getByRole('region', { name: 'Spending by category' })).toContainText('-£100.00');
+    await page.getByRole('searchbox', { name: 'Find a category' }).fill('');
+    await page.locator('.main-content').evaluate(element => element.scrollTo(0, 0));
+    await page.screenshot({ path: testInfo.outputPath(`monthly-spending-${width}.png`) });
     const table = page.getByRole('table', { name: 'Monthly bank cash flow' });
     await expect(table.getByRole('row')).toHaveCount(13);
     await expect(page.getByRole('region', { name: 'High-value spending' })).toContainText('Illustrative cap: £500.00 / month');

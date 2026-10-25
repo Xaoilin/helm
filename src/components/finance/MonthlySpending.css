@@ -1,0 +1,42 @@
+.monthly-spending { border: 1px solid #3d4866; border-radius: 18px; padding: 24px; background: linear-gradient(135deg, #202542, #141b2b 65%); margin: 20px 0 28px; }
+.spending-heading { display: flex; justify-content: space-between; align-items: end; gap: 18px; flex-wrap: wrap; }
+.spending-eyebrow { color: #b6b2ff; font-size: 10px; font-weight: 700; letter-spacing: .14em; }
+.monthly-spending h3 { font-size: 25px; margin: 8px 0 4px; }
+.monthly-spending h4 { font-size: 16px; margin: 0; }
+.spending-month-label, .spending-search { display: grid; gap: 7px; color: #c4cce0; font-size: 12px; max-width: 100%; }
+.monthly-spending select, .monthly-spending input { border: 1px solid #515b7c; border-radius: 8px; color: #edf0ff; background: #171d30; padding: 10px 12px; font: inherit; min-width: 0; max-width: 100%; }
+.spending-periods { display: flex; gap: 8px; margin: 18px 0; flex-wrap: wrap; }
+.spending-periods button { border: 1px solid #515b7c; background: transparent; color: #d8def0; padding: 9px 16px; border-radius: 20px; cursor: pointer; font: inherit; font-size: 13px; }
+.spending-periods button[aria-pressed="true"] { background: #d3d0ff; color: #201c45; border-color: #d3d0ff; font-weight: 700; }
+.monthly-spending :is(button, select, input):focus-visible { outline: 2px solid #d3d0ff; outline-offset: 3px; }
+.spending-budget-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; padding: 15px 0; border-top: 1px solid #39415e; border-bottom: 1px solid #39415e; color: #cbd3e7; }
+.spending-budget-line strong { color: #a0e6d8; font-size: 18px; font-variant-numeric: tabular-nums; }
+.spending-budget-line > span { width: 100%; color: #b7bfd3; font-size: 12px; }
+.spending-month-title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 22px 0 14px; }
+.spending-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.spending-stat { display: flex; flex-direction: column; gap: 12px; padding: 18px; background: #1d2538; border: 1px solid #35415b; border-radius: 12px; min-width: 0; }
+.spending-stat > span { color: #c3cce2; font-size: 12px; }
+.spending-stat strong { font-size: 25px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.spending-stat small { color: #b7bfd3; line-height: 1.6; font-size: 12px; }
+.spending-stat-primary { background: #303052; border-color: #655f99; }
+.spending-breakdown { margin-top: 28px; }
+.spending-breakdown .spending-heading p { margin: 7px 0 0; color: #b7bfd3; }
+.spending-category-list { display: grid; gap: 20px; margin: 24px 0; }
+.spending-category > div:first-child { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; }
+.spending-category span { overflow-wrap: anywhere; }
+.spending-category strong { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.spending-bar { height: 7px; border-radius: 5px; margin-top: 9px; background: #2a344a; overflow: hidden; }
+.spending-bar > span { display: block; height: 100%; border-radius: inherit; min-width: 2px; }
+.spending-category small { color: #a0e6d8; display: block; margin-top: 7px; }
+.spending-missing { padding: 20px; margin-top: 20px; border: 1px dashed #69769b; border-radius: 12px; color: #cdd6eb; }
+.spending-missing strong { color: #f1e0ae; }
+.spending-savings { border-top: 3px solid #77cdb7; }
+.spending-saving-value { color: #a0e6d8; font-weight: 700; }
+@media (max-width: 700px) {
+  .monthly-spending { padding: 16px; }
+  .spending-summary { grid-template-columns: 1fr; }
+  .spending-heading > *, .spending-month-label select, .spending-search input { width: 100%; }
+  .monthly-spending h3 { font-size: 22px; }
+  .spending-category > div:first-child { flex-wrap: wrap; gap: 6px 12px; }
+  .spending-category strong { margin-left: auto; }
+}
