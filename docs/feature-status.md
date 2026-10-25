@@ -55,3 +55,5 @@ Removed on 2026-09-26 (v0.2.200): the Lina assistant (Chat, hosted OpenAI and Ol
 ## DigitalOcean migration preparation
 
 The live-update client preserves a product API path prefix. The four MCP services default to the shared DigitalOcean API base. Cutover remains pending deployment and authenticated verification.
+
+The private prayer-provider relay authenticates a separate data-only credential. It forwards only the existing AlAdhan timings-by-city request; account tokens and provider credentials never go to AlAdhan. This addresses the observed DigitalOcean egress timeout without changing prayer calculations.

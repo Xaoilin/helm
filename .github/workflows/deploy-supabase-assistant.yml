@@ -184,6 +184,9 @@ jobs:
       - name: Deploy Sabah One Employment MCP
         run: npx supabase functions deploy sabah-one-employment-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
 
+      - name: Deploy the private prayer-provider relay
+        run: npx supabase functions deploy sabah-one-prayer-provider --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
+
       - name: Deploy Sabah One Finance MCP
         run: npx supabase functions deploy sabah-one-finance-mcp --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt --yes
       - name: Deploy Sabah One Equity MCP
