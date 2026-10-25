@@ -1,6 +1,7 @@
 import type { FinanceReview } from '../../types/domain';
 import { formatGBP } from '../../services/financeHelpers';
 import { useFinanceReview } from '../../store/contexts/useFinanceReview';
+import { MonthlySpending } from './MonthlySpending';
 import './BankingReview.css';
 
 type View = 'overview' | 'spending' | 'loans';
@@ -79,16 +80,19 @@ function Budget({ review }: { review: FinanceReview }) {
 function Spending({ review }: { review: FinanceReview }) {
   const months = [...review.months].sort((a, b) => b.month.localeCompare(a.month));
   return <>
-    <Budget review={review} />
+    <MonthlySpending review={review} />
     <section className="banking-block" aria-label="High-value spending">
-      <h3>High-value spending to review</h3>
-      <div className="banking-grid">{review.opportunities.map((item, index) => <article className="banking-card" key={`${item.label}-${index}`}>
+      <h3>Where you could save</h3>
+      <p className="banking-muted">Review suggestions from the dated analysis, across its stated source periods. Useful work tools, essential bills and one-off purchases are not automatically waste.</p>
+      <div className="banking-grid">{review.opportunities.map((item, index) => <article className="banking-card spending-savings" key={`${item.label}-${index}`}>
         <h4>{item.label}</h4><div className="banking-amount banking-amount-small">{formatGBP(item.monthlyPence)}<span> / month</span></div>
         <p>{item.note}</p>
         {item.suggestedCapPence !== undefined && <p className="banking-cap">Illustrative cap: {formatGBP(item.suggestedCapPence)} / month</p>}
+        {item.suggestedCapPence !== undefined && item.monthlyPence > item.suggestedCapPence && <p className="spending-saving-value">Could free up {formatGBP(item.monthlyPence - item.suggestedCapPence)} / month if this cap suits you.</p>}
       </article>)}</div>
       {review.opportunities.length === 0 && <p>No spending opportunities recorded yet.</p>}
     </section>
+    <details className="banking-notes"><summary>Full budget & assumptions</summary><Budget review={review} /></details>
     <section className="banking-block" aria-label="Monthly cash flow">
       <h3>Monthly cash flow</h3>
       <p className="banking-muted">Money in includes receipts beyond salary. Cash flow is separate from the usual monthly budget above.</p>
