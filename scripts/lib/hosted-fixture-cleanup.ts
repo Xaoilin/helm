@@ -23,8 +23,8 @@ export interface FixtureCleanupOptions {
 export function fixturePreferencesUrl(baseUrl: string): string {
   try {
     const base = new URL(baseUrl);
-    if (base.protocol === 'https:' && base.pathname === '/' && !base.username && !base.password
-      && !base.search && !base.hash) return `${base.origin}/api/prayer/v1/preferences`;
+    if (base.protocol === 'https:' && ['/', '/sabah-one', '/sabah-one/'].includes(base.pathname) && !base.username && !base.password
+      && !base.search && !base.hash) return `${base.origin}${base.pathname.replace(/\/$/, '')}/api/prayer/v1/preferences`;
   } catch { /* Report only the static configuration boundary. */ }
   throw new Error('Synthetic fixture cleanup requires the configured HTTPS Prayer service origin.');
 }

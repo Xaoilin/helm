@@ -100,19 +100,23 @@ describe('hosted synthetic fixture cleanup proof', () => {
     expect(f.fetcher).not.toHaveBeenCalled();
   });
 
+  it.each(['https://prayer.example.invalid/sabah-one', 'https://prayer.example.invalid/sabah-one/'])('preserves the product API prefix %s', base => {
+    expect(fixturePreferencesUrl(base)).toBe('https://prayer.example.invalid/sabah-one/api/prayer/v1/preferences');
+  });
+
   it.each(['', 'http://prayer.example.invalid', 'https://user:secret@prayer.example.invalid',
     'https://prayer.example.invalid/?token=private', 'https://prayer.example.invalid/api'])('rejects unsafe or missing configured service origins: %s', value => {
     expect(() => fixturePreferencesUrl(value)).toThrow('configured HTTPS Prayer service origin');
   });
 
-  it('exercises real HTTP and Auth SDK error decoding across deletion and service readback', async () => {
+  it.each(['', '/sabah-one'])('exercises real HTTP and Auth SDK error decoding at prefix %s', async prefix => {
     let deleted = false;
     let enabled = true;
     const requests: string[] = [];
     const server = createServer(async (request, response) => {
       requests.push(`${request.method} ${request.url}`);
       response.setHeader('Content-Type', 'application/json');
-      if (request.url === '/api/prayer/v1/preferences') {
+      if (request.url === `${prefix}/api/prayer/v1/preferences`) {
         if (request.method === 'PUT') {
           let raw = '';
           for await (const chunk of request) raw += chunk;
@@ -137,12 +141,12 @@ describe('hosted synthetic fixture cleanup proof', () => {
     }).auth.admin;
     try {
       const receipt = await cleanupHostedFixture({ admin, fixtureId: '00000000-0000-4000-8000-000000000325', directToken: 'synthetic-jwt',
-        prayerBaseUrl: 'https://prayer.example.invalid', observe: () => {},
+        prayerBaseUrl: `https://prayer.example.invalid${prefix}`, observe: () => {},
         fetcher: (input, init) => fetch(`${origin}${new URL(String(input)).pathname}`, init) });
       expect(receipt.confirmed).toBe(true);
-      expect(requests).toEqual(['GET /api/prayer/v1/preferences', 'PUT /api/prayer/v1/preferences',
+      expect(requests).toEqual([`GET ${prefix}/api/prayer/v1/preferences`, `PUT ${prefix}/api/prayer/v1/preferences`,
         'POST /auth/v1/logout?scope=global', 'DELETE /auth/v1/admin/users/00000000-0000-4000-8000-000000000325',
-        'GET /auth/v1/admin/users/00000000-0000-4000-8000-000000000325', 'GET /api/prayer/v1/preferences']);
+        'GET /auth/v1/admin/users/00000000-0000-4000-8000-000000000325', `GET ${prefix}/api/prayer/v1/preferences`]);
     } finally {
       server.closeAllConnections();
       await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
