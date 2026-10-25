@@ -4,7 +4,7 @@
 
 import { probeServiceAccess } from './serviceAccess.ts';
 
-const FINANCE_API_URL = (Deno.env.get('SABAH_ONE_FINANCE_API_URL') || 'https://57.129.161.248').replace(/\/+$/, '');
+const FINANCE_API_URL = (Deno.env.get('SABAH_ONE_FINANCE_API_URL') || 'https://144.126.197.25/sabah-one').replace(/\/+$/, '');
 const FINANCE_BASE_URL = `${FINANCE_API_URL}/api/finance/v1`;
 const FINANCE_TIMEOUT_MS = 15_000;
 

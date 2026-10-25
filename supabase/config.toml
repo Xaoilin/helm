@@ -428,3 +428,7 @@ verify_jwt = false
 # Authenticated first-party prototype; handler verifies the user and account-owned Vault RPCs.
 [functions.sabah-one-jev-voice]
 verify_jwt = false
+
+# Private data-only prayer provider relay; authenticates its own product credential.
+[functions.sabah-one-prayer-provider]
+verify_jwt = false

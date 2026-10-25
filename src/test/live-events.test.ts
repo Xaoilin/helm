@@ -41,12 +41,12 @@ describe('live-update streams', () => {
     const received: LiveEvent[] = [];
     const unsubscribe = subscribeLiveEvents(event => received.push(event));
 
-    const stop = startLiveEvents(['https://one.test', 'https://two.test']);
+    const stop = startLiveEvents(['https://one.test/sabah-one', 'https://two.test']);
     await vi.waitFor(() => expect(received.filter(event => event.type === 'lifestyle.save-item')).toHaveLength(2));
     stop();
     unsubscribe();
 
-    expect(fetch).toHaveBeenCalledWith('https://one.test/api/live/v1/events', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('https://one.test/sabah-one/api/live/v1/events', expect.objectContaining({
       headers: expect.objectContaining({ Authorization: 'Bearer token-1' }),
     }));
     expect(fetch).toHaveBeenCalledWith('https://two.test/api/live/v1/events', expect.anything());
