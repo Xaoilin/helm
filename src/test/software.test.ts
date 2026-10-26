@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import contract from '../../contracts/autoclicker-launch.json';
+import netscopeContract from '../../contracts/netscope-launch.json';
 import { SOFTWARE_REFERENCES } from '../config/software';
 
 describe('native software launch contract', () => {
@@ -13,12 +14,13 @@ describe('native software launch contract', () => {
 });
 
 describe('software list', () => {
-  it('links NetScope to its Mac download and repository without inventing a native launch protocol', () => {
+  it('links NetScope to its Mac download, repository and show-window-only launch contract', () => {
     const netscope = SOFTWARE_REFERENCES.find(software => software.id === 'netscope');
     expect(netscope?.repositoryUrl).toBe('https://github.com/Xaoilin/mac-network-activity');
     expect(netscope?.downloadUrl).toBe('https://github.com/Xaoilin/mac-network-activity/releases/latest/download/NetScope-macOS-arm64.zip');
     expect(netscope?.launchInstructions).toContain('Install NetScope.command');
-    expect(netscope?.launchUrl).toBeUndefined();
+    expect(netscope?.launchUrl).toBe(netscopeContract.openUrl);
+    expect(netscopeContract).toEqual({ version: 1, openUrl: 'sabah-netscope://open', behavior: 'show-window-only', acceptsParameters: false });
   });
 
   it('links Kitab, a browser app, to its live reader and its repository, with no native launch or download', () => {
