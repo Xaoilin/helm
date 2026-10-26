@@ -44,7 +44,17 @@ for (const width of [320, 768, 1440]) {
     await expect(kitab.getByRole('link', { name: 'Kitab on GitHub' })).toHaveAttribute('href', 'https://github.com/Xaoilin/kitab');
     await expect(kitab.getByRole('link', { name: 'Launch on Mac', exact: true })).toHaveCount(0);
     await expect(kitab.getByRole('link', { name: 'Download Kitab' })).toHaveCount(0);
+    const netscope = surface.getByRole('article', { name: 'NetScope', exact: true });
+    await expect(netscope).toBeVisible();
+    await expect(netscope.getByRole('link', { name: 'NetScope on GitHub' })).toHaveAttribute('href', 'https://github.com/Xaoilin/mac-network-activity');
+    const netscopeDownload = netscope.getByRole('link', { name: 'Download NetScope' });
+    await expect(netscopeDownload).toHaveAttribute('href', 'https://github.com/Xaoilin/mac-network-activity/releases/latest/download/NetScope-macOS-arm64.zip');
+    await expect(netscopeDownload).toHaveAttribute('target', '_blank');
+    await expect(netscopeDownload).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(netscope.getByText('Extract the download and run Install NetScope.command', { exact: false })).toBeVisible();
+    await expect(netscope.getByRole('link', { name: 'Launch on Mac', exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await netscope.scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath(`software-${width}.png`) });
 
     await context.route('https://github.com/Xaoilin?tab=repositories', route => route.fulfill({

@@ -26,6 +26,14 @@ export const SOFTWARE_REFERENCES: readonly SoftwareReference[] = [
     websiteUrl: 'https://xaoilin.github.io/kitab/',
     launchInstructions: 'Opens in your browser. On iPhone, open it in Safari, then choose Share and Add to Home Screen. The first time you listen it downloads a voice (about 160 to 430 MB).',
   },
+  {
+    id: 'netscope',
+    name: 'NetScope',
+    description: 'A native Mac network monitor with live device and per-app upload and download speeds, local graphs and history, named snapshots and CSV export. Its background agent starts at login and keeps recording after the dashboard closes.',
+    repositoryUrl: 'https://github.com/Xaoilin/mac-network-activity',
+    downloadUrl: 'https://github.com/Xaoilin/mac-network-activity/releases/latest/download/NetScope-macOS-arm64.zip',
+    launchInstructions: 'Apple Silicon, macOS 14+. Extract the download and run Install NetScope.command, then open the installed NetScope app. The download is ad-hoc signed and not Apple notarized. Per-app attribution follows macOS sampling limits.',
+  },
 ];
 
 export const SOFTWARE_GITHUB_URL = 'https://github.com/Xaoilin?tab=repositories';
