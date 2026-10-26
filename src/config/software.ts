@@ -32,7 +32,8 @@ export const SOFTWARE_REFERENCES: readonly SoftwareReference[] = [
     description: 'A native Mac network monitor with live device and per-app upload and download speeds, local graphs and history, named snapshots and CSV export. Its background agent starts at login and keeps recording after the dashboard closes.',
     repositoryUrl: 'https://github.com/Xaoilin/mac-network-activity',
     downloadUrl: 'https://github.com/Xaoilin/mac-network-activity/releases/latest/download/NetScope-macOS-arm64.zip',
-    launchInstructions: 'Apple Silicon, macOS 14+. Extract the download and run Install NetScope.command, then open the installed NetScope app. The download is ad-hoc signed and not Apple notarized. Per-app attribution follows macOS sampling limits.',
+    launchUrl: 'sabah-netscope://open',
+    launchInstructions: 'Apple Silicon, macOS 14+. Install NetScope 1.0.1 or later: extract the download and run Install NetScope.command, then open the app once. Launch on Mac opens its dashboard without changing collection. The download is ad-hoc signed and not Apple notarized. Per-app attribution follows macOS sampling limits.',
   },
 ];
 

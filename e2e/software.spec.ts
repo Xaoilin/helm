@@ -51,8 +51,15 @@ for (const width of [320, 768, 1440]) {
     await expect(netscopeDownload).toHaveAttribute('href', 'https://github.com/Xaoilin/mac-network-activity/releases/latest/download/NetScope-macOS-arm64.zip');
     await expect(netscopeDownload).toHaveAttribute('target', '_blank');
     await expect(netscopeDownload).toHaveAttribute('rel', 'noopener noreferrer');
-    await expect(netscope.getByText('Extract the download and run Install NetScope.command', { exact: false })).toBeVisible();
-    await expect(netscope.getByRole('link', { name: 'Launch on Mac', exact: true })).toHaveCount(0);
+    await expect(netscope.getByText('Install NetScope 1.0.1 or later:', { exact: false })).toBeVisible();
+    const netscopeLaunch = netscope.getByRole('link', { name: 'Launch on Mac', exact: true });
+    await expect(netscopeLaunch).toHaveAttribute('href', 'sabah-netscope://open');
+    await expect(netscopeLaunch).not.toHaveAttribute('target', '_blank');
+    // Native launch acceptance belongs to the installed app, not the CI browser.
+    await netscopeLaunch.evaluate(element => element.addEventListener('click', event => event.preventDefault()));
+    await netscopeLaunch.focus();
+    await page.keyboard.press('Enter');
+    await expect(netscope.getByRole('status')).toContainText('If nothing opens, download and install it first.');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await netscope.scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath(`software-${width}.png`) });
