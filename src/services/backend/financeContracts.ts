@@ -152,6 +152,8 @@ export const loanProfileSchema = z.object({
 
 export const budgetForecastSchema = z.object({
   baselineMonth: month,
+  incomePence: optional(pence.min(0).max(1_000_000_000_000)),
+  incomeBasis: optional(z.string().max(4000)),
   items: z.array(z.object({
     id: z.string().trim().min(1).max(256), label: z.string().trim().min(1).max(4000),
     amountPence: pence.min(0).max(1_000_000_000_000),
@@ -178,6 +180,14 @@ export const financeReviewSchema = z.object({
     label: z.string(), group: z.enum(['non-discretionary', 'necessary', 'discretionary']),
   }))),
   budgetForecast: optional(budgetForecastSchema),
+  transactions: optional(z.array(z.object({
+    id: z.string().trim().min(1).max(256), accountId: z.string().min(1).max(256), month,
+    date: optional(isoDate), merchant: z.string().trim().min(1).max(4000),
+    description: z.string().max(4000), category: z.string().trim().min(1).max(4000),
+    amountPence: pence.min(-1_000_000_000_000).max(1_000_000_000_000).refine(value => value !== 0),
+    detail: optional(z.string().max(4000)), recurrence: optional(z.enum(['recurring', 'one-off', 'unknown'])),
+    sourceIds: optional(z.array(z.string().min(1).max(256)).max(100)), origin: z.enum(['bank', 'user']),
+  })).max(5000)),
   budget: z.object({
     incomePence: pence,
     incomeBasis: z.string(),
@@ -275,6 +285,7 @@ export const FINANCE_CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   'finance-service/review': reviewEnvelopeSchema,
   'finance-service/review-expense-groups': reviewEnvelopeSchema,
   'finance-service/review-budget-forecast': reviewEnvelopeSchema,
+  'finance-service/review-spending-details': reviewEnvelopeSchema,
   'finance-service/review-empty': reviewEnvelopeSchema,
   'finance-service/review-saved': reviewSavedSchema,
   'finance-service/review-loan-profiles': reviewEnvelopeSchema,

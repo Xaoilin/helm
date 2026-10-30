@@ -11,6 +11,14 @@
 .forecast-item input[aria-invalid="true"] { border-color: #e49bc5; }
 .forecast-item button { justify-self: start; }
 .budget-forecast button:disabled { opacity: .6; cursor: not-allowed; }
+.forecast-comparison { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
+.forecast-comparison .spending-stat { min-width: 0; }
+.forecast-comparison label { display: grid; gap: 8px; font-size: 13px; color: #c4cce0; }
+.forecast-comparison input { width: 100%; box-sizing: border-box; }
+.forecast-comparison small { line-height: 1.5; overflow-wrap: anywhere; }
+.forecast-over-budget { border-color: #e49bc5; }
+.forecast-over-budget > strong { color: #ffb8c8; }
 @media (max-width: 700px) {
+  .forecast-comparison { grid-template-columns: 1fr; }
   .forecast-toolbar > *, .forecast-toolbar select { width: 100%; }
 }

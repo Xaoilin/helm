@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import type { BudgetForecast, BudgetForecastItem, ExpenseGroup, FinanceReview } from '../../types/domain';
 import { EXPENSE_GROUPS } from '../../services/expenseGroups';
-import { forecastBaseline, forecastFromMonth, MAX_FORECAST_ITEMS } from '../../services/budgetForecast';
+import { forecastBaseline, forecastFingerprint, forecastFromMonth, MAX_FORECAST_ITEMS } from '../../services/budgetForecast';
 import { formatGBP } from '../../services/financeHelpers';
 import { useFinanceReview } from '../../store/contexts/useFinanceReview';
+import { CategoryPayments } from './SpendingTransactions';
 import './MonthlySpending.css';
 import './ExpenseGroups.css';
 import './MonthlyBudgetForecast.css';
@@ -27,7 +28,9 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
   const [baseline, setBaseline] = useState(initial.baselineMonth);
   const [sourceMonth, setSourceMonth] = useState(initial.baselineMonth);
   const [items, setItems] = useState<DraftItem[]>(() => initial.items.map(toDraft));
-  const [confirmed, setConfirmed] = useState<string | null>(review.budgetForecast ? JSON.stringify(initial) : null);
+  const [income, setIncome] = useState(((initial.incomePence ?? review.budget.incomePence) / 100).toFixed(2));
+  const [incomeBasis, setIncomeBasis] = useState(initial.incomeBasis ?? review.budget.incomeBasis);
+  const [confirmed, setConfirmed] = useState<string | null>(review.budgetForecast ? forecastFingerprint(initial) : null);
   const [message, setMessage] = useState('');
   const [failure, setFailure] = useState('');
   const pendingFocus = useRef<string | null>(null);
@@ -35,12 +38,15 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
   useEffect(() => {
     if (pendingFocus.current) { names.current.get(pendingFocus.current)?.focus(); pendingFocus.current = null; }
   }, [items]);
-  const valid = items.every(item => item.label.trim() && amountPence(item.amount) !== null);
-  const forecast: BudgetForecast = { baselineMonth: baseline, items: items.map(item => ({
+  const valid = amountPence(income) !== null && items.every(item => item.label.trim() && amountPence(item.amount) !== null);
+  const forecast: BudgetForecast = { baselineMonth: baseline, incomePence: amountPence(income) ?? 0, incomeBasis, items: items.map(item => ({
     id: item.id, label: item.label.trim(), amountPence: amountPence(item.amount) ?? 0, group: item.group,
   })) };
-  const dirty = JSON.stringify(forecast) !== confirmed;
-  const persisted = review.budgetForecast ? JSON.stringify(review.budgetForecast) : null;
+  const spending = forecast.items.reduce((sum, item) => sum + item.amountPence, 0);
+  const remainder = forecast.incomePence! - spending;
+  const incomeUsed = forecast.incomePence! > 0 ? spending / forecast.incomePence! * 100 : null;
+  const dirty = forecastFingerprint(forecast) !== confirmed;
+  const persisted = review.budgetForecast ? forecastFingerprint(review.budgetForecast) : null;
   const changedElsewhere = persisted !== confirmed;
   const disabled = saving || !writable;
   const update = (id: string, patch: Partial<DraftItem>) => {
@@ -52,7 +58,7 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
     setFailure(''); setMessage('');
     try {
       await onSave(forecast);
-      setConfirmed(JSON.stringify(forecast));
+      setConfirmed(forecastFingerprint(forecast));
       setMessage('Forecast saved to your account.');
     } catch (error) { setFailure(error instanceof Error ? error.message : 'Your forecast could not be saved. Try again.'); }
   };
@@ -60,7 +66,19 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
   return <section className="monthly-spending budget-forecast" aria-label="Monthly budget forecast" aria-busy={saving}>
     <div className="spending-heading"><div><span className="spending-eyebrow">YOUR PLAN FOR A TYPICAL MONTH</span>
       <h3>Monthly budget forecast</h3><p>Start from {monthLabel(baseline)}, then change amounts, add items or remove spending you don’t expect.</p></div>
-      <div className="forecast-grand-total"><span>Forecast monthly spending</span><strong>{valid ? formatGBP(forecast.items.reduce((sum, item) => sum + item.amountPence, 0)) : 'Complete the amounts'}</strong></div>
+    </div>
+    <div className="forecast-comparison" aria-label="Monthly income and budget comparison">
+      <article className="spending-stat"><span>Monthly take-home salary</span><strong>{amountPence(income) !== null ? formatGBP(forecast.incomePence!) : 'Enter your salary'}</strong>
+        <label>Monthly take-home salary (£)<input aria-label="Monthly take-home salary (£)" inputMode="decimal" value={income} disabled={disabled} aria-invalid={amountPence(income) === null}
+          onChange={event => { setIncome(event.target.value); setIncomeBasis('Your monthly take-home salary estimate.'); setMessage(''); setFailure(''); }} /></label>
+        <small>{incomeBasis} Excludes refunds, transfers and other one-off receipts.</small>
+      </article>
+      <article className="spending-stat"><span>Forecast monthly spending</span><strong>{valid ? formatGBP(spending) : 'Complete the amounts'}</strong>
+        <small>{valid && incomeUsed !== null ? `${incomeUsed.toFixed(1)}% of your salary budgeted` : 'Set your salary to compare your plan.'}</small>
+      </article>
+      <article className={`spending-stat ${valid && remainder < 0 ? 'forecast-over-budget' : ''}`}><span>{remainder < 0 ? 'Over budget by' : 'Left after your budget'}</span><strong>{valid ? formatGBP(Math.abs(remainder)) : 'Complete the amounts'}</strong>
+        <small>{valid && remainder < 0 ? 'Planned spending exceeds your take-home salary.' : 'Unallocated income for saving or a buffer.'}</small>
+      </article>
     </div>
     <div className="forecast-toolbar">
       <label>Example month<select aria-label="Forecast example month" value={sourceMonth} disabled={disabled} onChange={event => setSourceMonth(event.target.value)}>
@@ -77,13 +95,14 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
       <button className="btn btn-primary" disabled={disabled || !valid || !dirty || changedElsewhere} onClick={() => void save()}>{saving ? 'Saving…' : 'Save forecast'}</button>
     </div>
     <p className="forecast-status" role="status">{saving ? 'Saving your forecast…' : message || (dirty ? 'Draft changes — save to keep them.' : 'Saved to your account.')}</p>
-    {!valid && <p className="banking-muted">Give each item a name and a valid amount, with up to two decimal places.</p>}
+    {!valid && <p className="banking-muted">Enter a valid salary and give each item a name and an amount, with up to two decimal places.</p>}
     {failure && <p className="banking-error" role="alert">{failure} Your draft is still here.</p>}
     {changedElsewhere && <div className="banking-error" role="alert">
       <p>Your saved forecast changed elsewhere. Your draft is still here. Load the latest plan before saving.</p>
       <button className="btn btn-secondary" disabled={saving} onClick={() => {
         const latest = review.budgetForecast ?? forecastFromMonth(review, forecastBaseline(review));
         setItems(latest.items.map(toDraft)); setBaseline(latest.baselineMonth); setSourceMonth(latest.baselineMonth);
+        setIncome(((latest.incomePence ?? review.budget.incomePence) / 100).toFixed(2)); setIncomeBasis(latest.incomeBasis ?? review.budget.incomeBasis);
         setConfirmed(persisted); setFailure(''); setMessage('Latest saved forecast loaded.');
       }}>Load latest saved forecast</button>
     </div>}
@@ -102,6 +121,7 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
             <label>Group<select aria-label={`Budget group for ${item.label || 'new item'}`} value={item.group} disabled={disabled} onChange={event => {
               pendingFocus.current = item.id; update(item.id, { group: event.target.value as ExpenseGroup });
             }}>{EXPENSE_GROUPS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <CategoryPayments review={review} month={baseline} category={item.label} />
             <button className="btn btn-danger btn-sm" aria-label={`Remove ${item.label || 'new item'}`} disabled={disabled} onClick={() => {
               setItems(current => current.filter(candidate => candidate.id !== item.id)); setMessage('');
             }}>Remove</button>
@@ -110,7 +130,7 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
       })}
     </div>
     {items.length === 0 && <p>Your forecast is empty. Add an item or choose an example month.</p>}
-    <p className="banking-muted">This is an editable forecast, not a promise of future spending. Review one-off purchases. Refund credits and marked completed repayments aren’t carried into the starting example.</p>
+    <p className="banking-muted">The starting example excludes known one-off payments, refund credits and marked completed repayments. Payment details show the historical example; your editable monthly amounts are your plan.</p>
   </section>;
 }
 

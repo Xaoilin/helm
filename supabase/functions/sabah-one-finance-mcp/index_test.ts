@@ -383,3 +383,29 @@ Deno.test('forwards the editable budget forecast through the existing semantic r
     assert.deepEqual(backend.calls.find(call => call.method === 'PUT')?.body, { review: { ...review, budgetForecast }, expectedUpdatedAt: storedReview.updatedAt });
   });
 });
+
+Deno.test('forwards salary and personal payment evidence, refusing invalid dates, sources and joint detail', async () => {
+  await withBackend(async backend => {
+    const account = review.accounts.find(account => account.ownership === 'personal')!;
+    const payment = { id: 'payment', accountId: account.id, month: '2026-09', date: '2026-09-20',
+      merchant: 'Example cover', description: 'EXAMPLE COVER', category: 'Insurance', amountPence: 6450,
+      detail: 'Two-day car cover', recurrence: 'one-off', sourceIds: [review.sources[0].id], origin: 'bank' };
+    const budgetForecast = { baselineMonth: '2026-09', incomePence: 250000, incomeBasis: 'Example net salary', items: [] };
+    const valid = { ...review, transactions: [payment], budgetForecast };
+    const saved = await mcp('tools/call', { name: 'finance_save_review', arguments: { requestId, expectedUpdatedAt: storedReview.updatedAt, review: valid } });
+    assert.equal(saved.message.result.isError, undefined);
+    assert.deepEqual(backend.calls.find(call => call.method === 'PUT')?.body, { review: valid, expectedUpdatedAt: storedReview.updatedAt });
+    const writes = backend.calls.filter(call => call.method === 'PUT').length;
+    for (const patch of [{ accountId: 'missing' }, { date: '2026-10-01' }, { date: undefined },
+      { sourceIds: [] }, { sourceIds: ['missing'] }, { amountPence: 0 }, { amountPence: 0.5 }]) {
+      const result = await mcp('tools/call', { name: 'finance_save_review', arguments: {
+        requestId, expectedUpdatedAt: storedReview.updatedAt, review: { ...valid, transactions: [{ ...payment, ...patch }] },
+      } });
+      assert(result.message.error || result.message.result?.isError);
+    }
+    const joint = await mcp('tools/call', { name: 'finance_save_review', arguments: { requestId,
+      expectedUpdatedAt: storedReview.updatedAt, review: { ...valid, accounts: [{ ...account, ownership: 'household' }] } } });
+    assert(joint.message.error || joint.message.result?.isError);
+    assert.equal(backend.calls.filter(call => call.method === 'PUT').length, writes);
+  });
+});

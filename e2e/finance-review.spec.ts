@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import type { FinanceAccount } from '../src/types/domain';
 import { FINANCE_REVIEW } from '../src/test/finance-review-fixture';
-import { BUDGET_REVIEW } from '../src/test/budget-forecast-fixture';
+import { BUDGET_REVIEW, DETAILED_BUDGET_REVIEW } from '../src/test/budget-forecast-fixture';
 import { forecastFromMonth } from '../src/services/budgetForecast';
 import { OVERPAYMENT_REVIEW } from '../src/test/loan-overpayment-fixture';
 import { expect, openApp, test, waitForMutation } from './support/helm-fixture';
@@ -395,6 +395,9 @@ test('plans a September-based monthly budget with editable amounts, additions an
   const editor = page.getByRole('region', { name: 'Monthly budget forecast', exact: true });
   await expect(editor.getByLabel('Forecast example month', { exact: true })).toHaveValue('2026-09');
   await expect(editor).toContainText('£1,765.00');
+  await expect(editor).toContainText('£3,235.00');
+  await expect(editor).toContainText('35.3% of your salary budgeted');
+  await editor.getByLabel('Monthly take-home salary (£)', { exact: true }).fill('4500');
   await editor.getByLabel('Monthly amount for Groceries', { exact: true }).fill('250.50');
   await editor.getByRole('button', { name: 'Remove Subscriptions', exact: true }).click();
   await editor.getByRole('button', { name: '+ Add item', exact: true }).click();
@@ -408,12 +411,14 @@ test('plans a September-based monthly budget with editable amounts, additions an
   expect(control.services.finance.review?.months).toEqual(BUDGET_REVIEW.months);
   const stored = control.services.finance.review?.budgetForecast as { baselineMonth: string; items: { label: string; amountPence: number }[] };
   expect(stored.baselineMonth).toBe('2026-09');
+  expect(control.services.finance.review?.budgetForecast).toMatchObject({ incomePence: 450000 });
   expect(stored.items.find(item => item.label === 'Emergency buffer')?.amountPence).toBe(7500);
   expect(stored.items.some(item => item.label === 'Subscriptions')).toBe(false);
   await page.reload();
   await page.getByRole('button', { name: 'Budgets & Goals', exact: true }).click();
   await expect(editor.getByLabel('Monthly amount for Groceries', { exact: true })).toHaveValue('250.50');
   await expect(editor.getByLabel('Monthly amount for Emergency buffer', { exact: true })).toHaveValue('75.00');
+  await expect(editor.getByLabel('Monthly take-home salary (£)', { exact: true })).toHaveValue('4500.00');
   await expect(editor.getByRole('button', { name: '+ Add item', exact: true })).toBeEnabled();
   for (const width of [320, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -429,6 +434,34 @@ test('plans a September-based monthly budget with editable amounts, additions an
   await scroller.focus();
   await page.keyboard.press('PageDown');
   await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+});
+
+test('shows personal payment purpose and sources in Spending and its budget example without joint itemisation', async ({ page, scenario }, testInfo) => {
+  await scenario({ now: DETAILED_BUDGET_REVIEW.updatedAt, stores: { financeReviews: [DETAILED_BUDGET_REVIEW] } });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await page.getByRole('button', { name: 'Spending', exact: true }).click();
+  await page.getByRole('button', { name: 'Last month', exact: true }).click();
+  const payments = page.getByRole('region', { name: 'Itemised transactions', exact: true });
+  await expect(payments).toContainText('Example Temporary Cover');
+  await expect(payments).toContainText('Two-day cover for an example hybrid car, 27–29 September.');
+  await expect(payments).toContainText('One-off');
+  await expect(payments.getByRole('link', { name: 'Example lender statement' })).toHaveAttribute('href', 'https://example.test/loan-statement');
+  await payments.getByLabel('Find a payment').fill('hybrid');
+  await expect(payments).toContainText('Example Temporary Cover');
+  await page.getByRole('button', { name: 'Budgets & Goals', exact: true }).click();
+  const editor = page.getByRole('region', { name: 'Monthly budget forecast', exact: true });
+  await editor.getByText('1 payment · Example Temporary Cover', { exact: true }).click();
+  await expect(editor).toContainText('Two-day cover for an example hybrid car, 27–29 September.');
+  await editor.getByLabel('Monthly take-home salary (£)', { exact: true }).fill('1000');
+  await expect(editor).toContainText('Over budget by');
+  await expect(editor).toContainText('Planned spending exceeds your take-home salary.');
+  for (const width of [320, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await editor.getByRole('heading', { name: 'Monthly budget forecast' }).scrollIntoViewIfNeeded();
+    expect(await editor.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`income-and-payments-${width}.png`) });
+  }
 });
 
 test('retains a budget draft after a refused save and permits an explicitly empty saved forecast', async ({ page, scenario }) => {
