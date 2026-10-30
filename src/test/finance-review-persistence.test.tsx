@@ -4,15 +4,17 @@ import { useFinanceReview } from '../store/contexts/useFinanceReview';
 import { FINANCE_REVIEW } from './finance-review-fixture';
 import { OVERPAYMENT_PROFILE } from './loan-overpayment-fixture';
 
-const api = vi.hoisted(() => ({ getReview: vi.fn(), changeLoanProfile: vi.fn(), enabled: true }));
+const api = vi.hoisted(() => ({ getReview: vi.fn(), saveReview: vi.fn(), changeLoanProfile: vi.fn(), enabled: true }));
 vi.mock('../services/backend/financeServiceApi', () => ({
   getReview: api.getReview,
+  saveReview: api.saveReview,
   changeLoanProfile: api.changeLoanProfile,
   isFinanceServiceEnabled: () => api.enabled,
 }));
 
 beforeEach(() => {
   api.getReview.mockReset();
+  api.saveReview.mockReset();
   api.getReview.mockResolvedValue(FINANCE_REVIEW);
   api.changeLoanProfile.mockReset();
   api.enabled = true;
@@ -78,5 +80,59 @@ describe('banking review from the finance service', () => {
     expect(api.changeLoanProfile.mock.calls[1]).toEqual(api.changeLoanProfile.mock.calls[0]);
     api.changeLoanProfile.mockResolvedValueOnce(FINANCE_REVIEW);
     await act(async () => { await expect(result.current.changeProfile(change)).rejects.toThrow('did not confirm'); });
+  });
+  it('saves only the group change with the exact revision and waits for server confirmation', async () => {
+    const original = { ...FINANCE_REVIEW, loanProfiles: [OVERPAYMENT_PROFILE] };
+    api.getReview.mockResolvedValue(original);
+    const confirmed = { ...original, expenseGroups: [{ label: 'Retail purchases', group: 'necessary' as const }] };
+    let finish!: (value: typeof confirmed) => void;
+    api.saveReview.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    const { result } = renderHook(useFinanceReview);
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    let saving!: Promise<void>;
+    act(() => { saving = result.current.moveExpense('Retail purchases', 'necessary'); });
+    expect(result.current.saving).toBe(true);
+    expect(result.current.review).toBe(original);
+    await act(async () => { await result.current.moveExpense('Retail purchases', 'necessary'); });
+    expect(api.saveReview).toHaveBeenCalledOnce();
+    const [draft, expectedUpdatedAt] = api.saveReview.mock.calls[0];
+    expect(draft).toMatchObject({ budget: FINANCE_REVIEW.budget, months: FINANCE_REVIEW.months,
+      loans: FINANCE_REVIEW.loans, sources: FINANCE_REVIEW.sources, loanProfiles: original.loanProfiles,
+      expenseGroups: confirmed.expenseGroups });
+    expect(draft).not.toHaveProperty('id');
+    expect(draft).not.toHaveProperty('createdAt');
+    expect(draft).not.toHaveProperty('updatedAt');
+    expect(expectedUpdatedAt).toBe(FINANCE_REVIEW.updatedAt);
+    await act(async () => { finish(confirmed); await saving; });
+    expect(result.current.review).toBe(confirmed);
+    expect(result.current.saving).toBe(false);
+  });
+
+  it('retains the confirmed group and shows a refused save instead of claiming a move', async () => {
+    api.saveReview.mockRejectedValue(new Error('The review changed; reload and try again.'));
+    const { result } = renderHook(useFinanceReview);
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    await act(async () => {
+      await expect(result.current.moveExpense('Retail purchases', 'necessary')).rejects.toThrow('review changed');
+    });
+    expect(result.current.review).toBe(FINANCE_REVIEW);
+    expect(result.current.error).toContain('not saved');
+    expect(result.current.saving).toBe(false);
+  });
+
+  it('keeps a newer confirmed refresh when an earlier expense save response arrives late', async () => {
+    const saved = { ...FINANCE_REVIEW, expenseGroups: [{ label: 'Fuel', group: 'necessary' as const }], updatedAt: '2026-10-30T10:00:00Z' };
+    const latest = { ...saved, loanProfiles: [OVERPAYMENT_PROFILE], updatedAt: '2026-10-30T10:01:00Z' };
+    let finish!: (value: typeof saved) => void;
+    api.saveReview.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    const { result } = renderHook(useFinanceReview);
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    let saving!: Promise<void>;
+    act(() => { saving = result.current.moveExpense('Fuel', 'necessary'); });
+    api.getReview.mockResolvedValueOnce(latest);
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.review).toBe(latest);
+    await act(async () => { finish(saved); await saving; });
+    expect(result.current.review).toBe(latest);
   });
 });

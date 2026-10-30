@@ -2,6 +2,7 @@ import type { FinanceReview } from '../../types/domain';
 import { formatGBP } from '../../services/financeHelpers';
 import { useFinanceReview } from '../../store/contexts/useFinanceReview';
 import { MonthlySpending } from './MonthlySpending';
+import type { ExpenseGroupControls } from './ExpenseGroups';
 import { LoanOverpaymentCalculator } from './LoanOverpaymentCalculator';
 import './BankingReview.css';
 
@@ -78,10 +79,10 @@ function Budget({ review }: { review: FinanceReview }) {
   </>;
 }
 
-function Spending({ review }: { review: FinanceReview }) {
+function Spending({ review, ...groupControls }: { review: FinanceReview } & ExpenseGroupControls) {
   const months = [...review.months].sort((a, b) => b.month.localeCompare(a.month));
   return <>
-    <MonthlySpending review={review} />
+    <MonthlySpending review={review} {...groupControls} />
     <section className="banking-block" aria-label="High-value spending">
       <h3>Where you could save</h3>
       <p className="banking-muted">Review suggestions from the dated analysis, across its stated source periods. Useful work tools, essential bills and one-off purchases are not automatically waste.</p>
@@ -165,7 +166,7 @@ function Loans({ review, changeProfile, profilesWritable, savingProfile }: Pick<
 }
 
 export function BankingReview({ view = 'overview' }: { view?: View }) {
-  const { review, loaded, error, stale, refresh, changeProfile, profilesWritable, savingProfile } = useFinanceReview();
+  const { review, loaded, error, stale, refresh, saving, expensesWritable, moveExpense, changeProfile, profilesWritable, savingProfile } = useFinanceReview();
   return <section className="banking-review" aria-label="Banking review">
     <h2>{view === 'loans' ? 'Loans' : view === 'spending' ? 'Spending review' : 'Your monthly budget'}</h2>
     {error && <div className="banking-error" role="alert">{error} <button className="btn btn-sm" onClick={() => void refresh()}>Retry loading</button></div>}
@@ -174,7 +175,7 @@ export function BankingReview({ view = 'overview' }: { view?: View }) {
     {review && <>
       <p className="banking-muted">Snapshot as of {date(review.asOf)} · Imported bank snapshot · No automatic refresh</p>
       <p className="banking-coverage">{date(review.coverage.from)} – {date(review.coverage.to)} · {review.coverage.transactionCount.toLocaleString('en-GB')} transactions · {review.coverage.accountCount} accounts<br />{review.coverage.note}</p>
-      {view === 'overview' ? <Budget review={review} /> : view === 'spending' ? <Spending review={review} /> : <Loans review={review} changeProfile={changeProfile} profilesWritable={profilesWritable} savingProfile={savingProfile} />}
+      {view === 'overview' ? <Budget review={review} /> : view === 'spending' ? <Spending review={review} onMove={moveExpense} saving={saving} disabled={stale || !expensesWritable} /> : <Loans review={review} changeProfile={changeProfile} profilesWritable={profilesWritable} savingProfile={savingProfile} />}
     </>}
   </section>;
 }

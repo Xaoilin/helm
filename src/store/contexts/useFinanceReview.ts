@@ -1,14 +1,15 @@
 /**
  * The banking review, a private dated snapshot kept by the finance service (one per account) and separate
- * from manual accounts. The app reads it and saves narrow scenario-profile commands; agents use Finance MCP. A failed reload
+ * from manual accounts. The app saves expense groups and narrow scenario-profile commands; agents use Finance MCP. A failed reload
  * keeps the last confirmed review on screen and says it may be out of date.
  */
 import { useCallback, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
-import type { FinanceReview } from '../../types/domain';
-import { changeLoanProfile, getReview, isFinanceServiceEnabled, type LoanProfileChange } from '../../services/backend/financeServiceApi';
+import type { ExpenseGroup, FinanceReview } from '../../types/domain';
+import { changeLoanProfile, getReview, isFinanceServiceEnabled, saveReview, type LoanProfileChange } from '../../services/backend/financeServiceApi';
 import { loanProfileSchema } from '../../services/backend/financeContracts';
 import { useSyncAvailability } from '../SyncAvailabilityContext';
+import { normalizeExpenseLabel } from '../../services/expenseGroups';
 import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
 import { errorMessage, useServiceLoad } from './useServiceLoad';
 
@@ -25,6 +26,9 @@ export interface FinanceReviewState {
   /** The shown review is the last confirmed one and may be out of date. */
   stale: boolean;
   refresh: () => Promise<void>;
+  saving: boolean;
+  expensesWritable: boolean;
+  moveExpense: (label: string, group: ExpenseGroup) => Promise<void>;
   savingProfile: boolean;
   profilesWritable: boolean;
   changeProfile: (change: LoanProfileChange) => Promise<void>;
@@ -32,14 +36,48 @@ export interface FinanceReviewState {
 
 export function useFinanceReview(): FinanceReviewState {
   const [review, setReview] = useState<FinanceReview | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const revision = useRef(0);
   const [savingProfile, setSavingProfile] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const retry = useRef<ProfileAttempt | null>(null);
   const { readOnly } = useSyncAvailability();
-  const load = useCallback(async () => setReview(await getReview()), []);
-  const { loaded, error, reload } = useServiceLoad('Banking review', isFinanceServiceEnabled(), load,
+  const load = useCallback(async () => {
+    const started = ++revision.current;
+    const confirmed = await getReview();
+    if (started === revision.current) setReview(confirmed);
+  }, []);
+  const { loaded, error, reload, reportFailure } = useServiceLoad('Banking review', isFinanceServiceEnabled(), load,
     LIVE_DOMAINS.finance);
+  const moveExpense = async (label: string, group: ExpenseGroup) => {
+    if (!review || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    const draft = {
+      asOf: review.asOf, currency: review.currency, coverage: review.coverage, accounts: review.accounts,
+      months: review.months, budget: review.budget, opportunities: review.opportunities,
+      loans: review.loans, notes: review.notes, sources: review.sources, loanProfiles: review.loanProfiles,
+    };
+    const expenseGroups = (review.expenseGroups ?? []).filter(item =>
+      normalizeExpenseLabel(item.label) !== normalizeExpenseLabel(label));
+    try {
+      const confirmed = await saveReview({ ...draft, expenseGroups: [...expenseGroups, { label, group }] }, review.updatedAt);
+      if (!confirmed.expenseGroups?.some(item => normalizeExpenseLabel(item.label) === normalizeExpenseLabel(label)
+        && item.group === group)) throw new Error('The finance service did not confirm your expense group. Reload and try again.');
+      // An older in-flight read must not replace this server-confirmed write.
+      revision.current++;
+      setReview(current => current && Date.parse(current.updatedAt) > Date.parse(confirmed.updatedAt) ? current : confirmed);
+      setWriteError(null);
+    } catch (failure) {
+      reportFailure(failure);
+      throw failure;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
   const changeProfile = useCallback(async (change: LoanProfileChange) => {
     if (inFlight.current) throw new Error('A profile change is already saving.');
     if (!review || !loaded || error || readOnly) throw new Error('Connect to Finance and reload the review before saving a profile.');
@@ -55,6 +93,7 @@ export function useFinanceReview(): FinanceReviewState {
       if (change.operation === 'save' ? !saved || JSON.stringify(saved) !== JSON.stringify(loanProfileSchema.parse(change.profile)) : saved) {
         throw new Error('Finance did not confirm the profile change. Reload and try again.');
       }
+      revision.current++;
       setReview(current => current && Date.parse(current.updatedAt) > Date.parse(confirmed.updatedAt) ? current : confirmed);
       retry.current = null;
       setWriteError(null);
@@ -69,9 +108,11 @@ export function useFinanceReview(): FinanceReviewState {
       setSavingProfile(false);
     }
   }, [review, loaded, error, readOnly, reload]);
+  const writable = isFinanceServiceEnabled() && loaded && !error && !readOnly && review !== null;
   return {
     review, loaded, error: writeError ?? error, stale: Boolean(error) && review !== null, refresh: reload,
-    savingProfile, profilesWritable: isFinanceServiceEnabled() && loaded && !error && !readOnly && review !== null,
+    saving: saving || savingProfile, expensesWritable: writable && !savingProfile, moveExpense,
+    savingProfile, profilesWritable: writable && !saving,
     changeProfile,
   };
 }

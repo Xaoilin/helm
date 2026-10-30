@@ -1106,6 +1106,13 @@ export interface LoanOverpaymentProfile {
 }
 
 /** Dated banking analysis. Amounts are integer pence, never live bank credentials. */
+export type ExpenseGroup = 'non-discretionary' | 'necessary' | 'discretionary';
+
+export interface ExpenseGroupAssignment {
+  label: string;
+  group: ExpenseGroup;
+}
+
 export interface FinanceReview {
   id: string;
   asOf: string;
@@ -1113,6 +1120,8 @@ export interface FinanceReview {
   coverage: { from: string; to: string; completeThrough: string; transactionCount: number; accountCount: number; note: string };
   accounts: { id: string; label: string; ownership: 'personal' | 'household'; balancePence: number; asOf: string }[];
   months: { month: string; incomePence: number; outflowPence: number; netPence: number; salaryPence: number; categories: { label: string; amountPence: number }[] }[];
+  /** Account-owned category choices, shared across imported months. */
+  expenseGroups?: ExpenseGroupAssignment[];
   budget: {
     incomePence: number; incomeBasis: string;
     essentials: { label: string; amountPence: number; note: string }[];

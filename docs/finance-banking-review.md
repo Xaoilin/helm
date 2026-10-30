@@ -13,15 +13,43 @@ month has a payment breakdown with category search, money in, money out and net
 cash flow. Missing months remain unavailable rather than zero; partial totals are
 never compared with a complete month. Full-month differences compare only adjacent
 complete months. Refund categories remain visible separately from the positive
-payment bars. Savings suggestions retain their own source periods and conditions;
+spending totals. Savings suggestions retain their own source periods and conditions;
 a suggested cap shows its illustrative saving without labelling all spending
 unnecessary. Full budget assumptions, historical cash flow and sources remain
 available below the summary.
 
-The presentation uses the existing Finance MCP review fields and adds no bank
+The presentation uses the Finance MCP review and adds no bank
 connection, payment capability or automatic refresh. Agents refresh the private
 review through `finance_get_review` and `finance_save_review`; receipt evidence
 must be reconciled with bank payments before being added to monthly totals.
+
+## Expense groups
+
+Finance → Spending groups each imported month's categories into Non-discretionary,
+Discretionary but necessary, and 100% discretionary, with signed totals per group.
+Mortgage, loan repayments and bills start in the first group; food, takeaways and
+fuel start in the middle group; subscriptions, entertainment and clothes start in
+the last group. These are labelled suggestions, not verified judgments about each
+purchase. Broad unknown labels start in the middle group marked “Needs your review”.
+Mixed source categories move as a whole; this snapshot has no individual receipts
+to split. Refunds retain their negative amounts, and search filters visible cards
+without changing the month's group totals. No budget or loan amount changes.
+
+Drag a category into a column or use its labelled group selector (keyboard and
+touch supported). The browser sends the existing revision-checked review save and
+changes the displayed placement only after the service confirms the group.
+While saving, further moves are disabled. Refused or stale writes retain the
+confirmed placement and show a retryable error.
+
+The optional `expenseGroups` array stores `{ label, group }` choices privately in
+the finance service. Group values are `non-discretionary`, `necessary`, and
+`discretionary`. Labels match after trimming and lowercasing across all months.
+The existing `finance_get_review` and `finance_save_review` semantic tools expose
+these choices; agents preserve them when refreshing the dated bank analysis.
+Omitting the array or sending null through the service preserves existing choices;
+an explicit empty array clears them. Old snapshots need no migration. The shared
+`review-expense-groups` response fixture is tested by both apps. This feature
+requires the matching finance-service release before the browser/MCP release.
 
 ## Source and calculation boundaries
 

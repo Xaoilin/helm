@@ -60,6 +60,16 @@ whole-review writes that omit or send null `loanProfiles` preserve them; explici
 schedules and ratios are not stored. `finance_get_review` and
 `finance_save_review` remain the source-loan interface. No new OAuth scope is added.
 
+Finance expense-group choices are included in the existing semantic review tools
+as optional `expenseGroups: [{ label, group }]`, where group is `non-discretionary`,
+`necessary`, or `discretionary`. A choice applies to that normalized category label
+across imported months. Read the current review, preserve its other fields, and
+save with its exact `updatedAt` and a new request ID. Older imports that omit the
+field preserve existing choices; an explicit empty array clears them. The browser
+uses the same revision-checked service save. No new account scope or bank action
+is introduced. Shared contracts and authenticated synthetic acceptance cover
+round-trip persistence; production acceptance requires the matching service release.
+
 ## Combined prayer completion
 
 Asr completion from Dhuhr and Isha completion from Maghrib use the existing

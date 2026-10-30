@@ -1,0 +1,25 @@
+.expense-groups { margin-top: 24px; }
+.expense-groups-intro p { color: #c4cce0; line-height: 1.6; }
+.expense-group-feedback { min-height: 24px; margin: 10px 0; color: #a0e6d8; font-size: 13px; }
+.expense-group-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.expense-group-column { min-width: 0; border: 1px solid #515b7c; border-top: 3px solid #b6b2ff; border-radius: 12px; background: #171d30; }
+.expense-group-column:nth-child(2) { border-top-color: #64d6c6; }
+.expense-group-column:nth-child(3) { border-top-color: #f6bd72; }
+.expense-group-column.expense-group-target { outline: 2px solid #d3d0ff; outline-offset: 3px; background: #303052; }
+.expense-group-column > header { padding: 16px; }
+.expense-group-column h5 { font-size: 15px; line-height: 1.5; margin: 0 0 12px; overflow-wrap: anywhere; }
+.expense-group-column header > strong { display: block; font-size: 22px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.expense-group-column header p { font-size: 13px; line-height: 1.6; color: #c4cce0; }
+.expense-group-column small { display: block; color: #b7bfd3; font-size: 12px; line-height: 1.6; }
+.expense-group-items { display: grid; align-content: start; gap: 12px; padding: 0 12px 12px; }
+.expense-group-item { background: #242c43; padding: 14px; border: 1px solid #46516e; border-radius: 10px; min-width: 0; }
+.expense-group-item[draggable="true"] { cursor: grab; }
+.expense-group-item[draggable="true"]:active { cursor: grabbing; }
+.expense-group-item-heading { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.expense-group-item-heading strong { font-variant-numeric: tabular-nums; }
+.expense-drag-handle { color: #b6b2ff; }
+.expense-group-item label { display: grid; gap: 6px; font-size: 12px; color: #c4cce0; margin-top: 12px; overflow-wrap: anywhere; }
+.expense-group-item select { width: 100%; min-width: 0; font-size: 12px; cursor: pointer; }
+.expense-group-item select:disabled { opacity: .65; cursor: wait; }
+.expense-group-empty { padding: 12px; color: #b7bfd3; font-size: 13px; }
+@media (max-width: 1000px) { .expense-group-columns { grid-template-columns: 1fr; } }

@@ -271,6 +271,8 @@ Deno.test('rejects invalid money, dates, net, foreign fields, source URLs and mi
       { sources: [{ ...review.sources[0], url: 'https://user:password@example.com' }] },
       { sources: [{ ...review.sources[0], url: 'javascript:alert(1)' }] },
       { notes: Array.from({ length: 100 }, () => 'x'.repeat(4000)) },
+      { expenseGroups: [{ label: 'Fuel', group: 'optional-ish' }] },
+      { expenseGroups: [{ label: 'Fuel', group: 'necessary' }, { label: ' fuel ', group: 'discretionary' }] },
     ];
     for (const patch of invalid) {
       const { message } = await mcp('tools/call', { name: 'finance_save_review', arguments: { requestId, review: { ...review, ...patch }, expectedUpdatedAt: null } });
@@ -279,6 +281,21 @@ Deno.test('rejects invalid money, dates, net, foreign fields, source URLs and mi
     const missing = await mcp('tools/call', { name: 'finance_save_review', arguments: { requestId, review } });
     assert(missing.message.error || missing.message.result?.isError);
     assert(backend.calls.every(call => call.method === 'GET'));
+  });
+});
+Deno.test('forwards saved expense groups and publishes them in the semantic review contract', async () => {
+  await withBackend(async backend => {
+    const expenseGroups = [{ label: 'Fuel', group: 'discretionary' }];
+    const { message } = await mcp('tools/call', { name: 'finance_save_review', arguments: {
+      requestId, expectedUpdatedAt: storedReview.updatedAt, review: { ...review, expenseGroups },
+    } });
+    assert.equal(message.result.isError, undefined);
+    assert.deepEqual(backend.calls.find(call => call.method === 'PUT')?.body, {
+      review: { ...review, expenseGroups }, expectedUpdatedAt: storedReview.updatedAt,
+    });
+    const list = await mcp('tools/list', {});
+    const write = list.message.result.tools.find((tool: { name: string }) => tool.name === 'finance_save_review');
+    assert(write.inputSchema.properties.review.properties.expenseGroups);
   });
 });
 Deno.test('surfaces the service stale-write refusal without hiding diagnostics', async () => {
