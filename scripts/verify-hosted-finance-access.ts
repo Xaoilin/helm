@@ -348,13 +348,15 @@ async function main() {
       ]
 };
     const expenseGroups = [{ label: 'Refund', group: 'necessary' }];
-    const saveArgs = { requestId: randomUUID(), review: { ...review, expenseGroups }, expectedUpdatedAt: null };
+    const budgetForecast = { baselineMonth: '2026-09', items: [{ id: 'synthetic-food', label: 'Food', amountPence: 20000, group: 'necessary' }] };
+    const saveArgs = { requestId: randomUUID(), review: { ...review, expenseGroups, budgetForecast }, expectedUpdatedAt: null };
     const saved = await callTool('Synthetic review saved', oauthToken, 'finance_save_review', saveArgs);
     const savedReview = record(saved.review);
     expect('Synthetic review persisted with server lifecycle', savedReview.id === 'current'
       && typeof savedReview.updatedAt === 'string' && typeof savedReview.createdAt === 'string');
     expect('Expense group choice is confirmed by the finance service',
       JSON.stringify(savedReview.expenseGroups) === JSON.stringify(expenseGroups));
+    expect('Budget forecast is confirmed by the finance service', JSON.stringify(savedReview.budgetForecast) === JSON.stringify(budgetForecast));
     const replay = await callTool('Synthetic review replayed', oauthToken, 'finance_save_review', saveArgs);
     expect('Exact replay returns original receipt', JSON.stringify(replay) === JSON.stringify(saved));
     const changedReplay = await mcp('Changed retry rejected', oauthToken, 'tools/call', {
@@ -368,6 +370,7 @@ async function main() {
       && record(updated.review).createdAt === savedReview.createdAt);
     expect('Older review refreshes preserve expense group choices when omitted',
       JSON.stringify(record(updated.review).expenseGroups) === JSON.stringify(expenseGroups));
+    expect('Legacy refresh preserves the budget forecast when omitted', JSON.stringify(record(updated.review).budgetForecast) === JSON.stringify(budgetForecast));
     const stale = await mcp('Stale review rejected', oauthToken, 'tools/call', {
       name: 'finance_save_review', arguments: { requestId: randomUUID(), review, expectedUpdatedAt: savedReview.updatedAt },
     });
@@ -375,6 +378,7 @@ async function main() {
     const fetched = await callTool('Synthetic review read back', oauthToken, 'finance_get_review', {});
     expect('Expense group choice survives an independent authenticated read',
       JSON.stringify(fetched.expenseGroups) === JSON.stringify(expenseGroups));
+    expect('Budget forecast survives an independent authenticated read', JSON.stringify(fetched.budgetForecast) === JSON.stringify(budgetForecast));
     expect('Readback preserves exact review', JSON.stringify(fetched) === JSON.stringify(updated.review));
     const loan = Array.isArray(fetched.loans) ? record(fetched.loans[0]) : {};
     expect('Loan balance and settlement remain distinct', loan.balancePence === 700000 && loan.settlementPence === 650000);
@@ -420,6 +424,11 @@ async function main() {
       && (record(removed.review).loanProfiles as unknown[]).length === 1);
     const removedReplay = await callTool('Profile removal replayed', oauthToken, 'finance_remove_loan_profile', removeArgs);
     expect('Removal exact retry is idempotent', JSON.stringify(removedReplay) === JSON.stringify(removed));
+    const emptyForecast = { baselineMonth: budgetForecast.baselineMonth, items: [] };
+    const cleared = await callTool('Explicit empty budget forecast saved', oauthToken, 'finance_save_review', { requestId: randomUUID(), review: { ...review, budgetForecast: emptyForecast }, expectedUpdatedAt: record(removed.review).updatedAt });
+    expect('Explicit empty forecast persists instead of restoring the baseline', JSON.stringify(record(cleared.review).budgetForecast) === JSON.stringify(emptyForecast));
+    const emptyReadback = await callTool('Empty forecast read back independently', oauthToken, 'finance_get_review', {});
+    expect('Empty forecast survives authenticated reload', JSON.stringify(emptyReadback.budgetForecast) === JSON.stringify(emptyForecast));
     const revoked = await client.rpc('revoke_finance_oauth_client', { p_client_id: oauthClientId });
     expect('Own Finance permission revoked', !revoked.error && record(revoked.data).clientId === oauthClientId
       && typeof record(revoked.data).revokedAt === 'string');

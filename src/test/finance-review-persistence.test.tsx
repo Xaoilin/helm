@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useFinanceReview } from '../store/contexts/useFinanceReview';
 import { FINANCE_REVIEW } from './finance-review-fixture';
 import { OVERPAYMENT_PROFILE } from './loan-overpayment-fixture';
+import { BUDGET_REVIEW } from './budget-forecast-fixture';
+import { forecastFromMonth } from '../services/budgetForecast';
 
 const api = vi.hoisted(() => ({ getReview: vi.fn(), saveReview: vi.fn(), changeLoanProfile: vi.fn(), enabled: true }));
 vi.mock('../services/backend/financeServiceApi', () => ({
@@ -21,6 +23,18 @@ beforeEach(() => {
 });
 
 describe('banking review from the finance service', () => {
+  it('saves a forecast with the exact review revision and preserves spending and profiles', async () => {
+    const original = { ...BUDGET_REVIEW, loanProfiles: [OVERPAYMENT_PROFILE] };
+    const budgetForecast = forecastFromMonth(original, '2026-09');
+    api.getReview.mockResolvedValue(original);
+    api.saveReview.mockResolvedValue({ ...original, budgetForecast });
+    const { result } = renderHook(useFinanceReview);
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    await act(async () => { await result.current.saveForecast(budgetForecast); });
+    expect(api.saveReview).toHaveBeenCalledWith(expect.objectContaining({ budgetForecast,
+      months: original.months, expenseGroups: original.expenseGroups, loanProfiles: original.loanProfiles }), original.updatedAt);
+    expect(result.current.review?.budgetForecast).toEqual(budgetForecast);
+  });
   it('reads the review the service holds', async () => {
     const { result } = renderHook(useFinanceReview);
     await waitFor(() => expect(result.current.review).toBe(FINANCE_REVIEW));

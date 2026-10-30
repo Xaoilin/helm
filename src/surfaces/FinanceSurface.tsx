@@ -10,6 +10,7 @@ import {
 
 import { EquitySection } from '../components/finance/EquitySection';
 import { BankingReview } from '../components/finance/BankingReview';
+import { MonthlyBudgetForecast } from '../components/finance/MonthlyBudgetForecast';
 import { ServiceStatusBanner } from '../components/common/ServiceStatusBanner';
 
 type Tab = 'overview' | 'spending' | 'loans' | 'transactions' | 'accounts' | 'budgets' | 'stocks' | 'options';
@@ -351,6 +352,8 @@ export default function FinanceSurface() {
         {/* ══ Budgets & Goals ══ */}
         {tab === 'budgets' && (
           <>
+            <MonthlyBudgetForecast />
+            <details><summary>Category spending limits</summary>
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Monthly Budgets</h3>
             {finance.financeBudgets.length === 0 ? (
               <div className="empty-state" role="status" style={{ padding: '30px 16px' }}>
@@ -379,6 +382,7 @@ export default function FinanceSurface() {
               </>
             )}
 
+            </details>
             <h3 style={{ fontSize: 14, fontWeight: 600, margin: '24px 0 12px' }}>Savings Goals</h3>
             {finance.savingsGoals.length === 0 ? (
               <div className="empty-state" role="status" style={{ padding: '30px 16px' }}>

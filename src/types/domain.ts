@@ -1113,6 +1113,18 @@ export interface ExpenseGroupAssignment {
   group: ExpenseGroup;
 }
 
+export interface BudgetForecastItem {
+  id: string;
+  label: string;
+  amountPence: number;
+  group: ExpenseGroup;
+}
+
+export interface BudgetForecast {
+  baselineMonth: string;
+  items: BudgetForecastItem[];
+}
+
 export interface FinanceReview {
   id: string;
   asOf: string;
@@ -1122,6 +1134,7 @@ export interface FinanceReview {
   months: { month: string; incomePence: number; outflowPence: number; netPence: number; salaryPence: number; categories: { label: string; amountPence: number }[] }[];
   /** Account-owned category choices, shared across imported months. */
   expenseGroups?: ExpenseGroupAssignment[];
+  budgetForecast?: BudgetForecast;
   budget: {
     incomePence: number; incomeBasis: string;
     essentials: { label: string; amountPence: number; note: string }[];

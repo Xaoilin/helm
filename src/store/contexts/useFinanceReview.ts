@@ -5,9 +5,9 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
-import type { ExpenseGroup, FinanceReview } from '../../types/domain';
+import type { BudgetForecast, ExpenseGroup, FinanceReview, FinanceReviewDraft } from '../../types/domain';
 import { changeLoanProfile, getReview, isFinanceServiceEnabled, saveReview, type LoanProfileChange } from '../../services/backend/financeServiceApi';
-import { loanProfileSchema } from '../../services/backend/financeContracts';
+import { budgetForecastSchema, loanProfileSchema } from '../../services/backend/financeContracts';
 import { useSyncAvailability } from '../SyncAvailabilityContext';
 import { normalizeExpenseLabel } from '../../services/expenseGroups';
 import { LIVE_DOMAINS } from '../../services/backend/liveDomains';
@@ -29,9 +29,19 @@ export interface FinanceReviewState {
   saving: boolean;
   expensesWritable: boolean;
   moveExpense: (label: string, group: ExpenseGroup) => Promise<void>;
+  saveForecast: (forecast: BudgetForecast) => Promise<void>;
   savingProfile: boolean;
   profilesWritable: boolean;
   changeProfile: (change: LoanProfileChange) => Promise<void>;
+}
+
+function reviewDraft(review: FinanceReview): FinanceReviewDraft {
+  return {
+    asOf: review.asOf, currency: review.currency, coverage: review.coverage, accounts: review.accounts,
+    months: review.months, budget: review.budget, opportunities: review.opportunities,
+    loans: review.loans, notes: review.notes, sources: review.sources, loanProfiles: review.loanProfiles,
+    expenseGroups: review.expenseGroups, budgetForecast: review.budgetForecast,
+  };
 }
 
 export function useFinanceReview(): FinanceReviewState {
@@ -55,11 +65,7 @@ export function useFinanceReview(): FinanceReviewState {
     if (!review || savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
-    const draft = {
-      asOf: review.asOf, currency: review.currency, coverage: review.coverage, accounts: review.accounts,
-      months: review.months, budget: review.budget, opportunities: review.opportunities,
-      loans: review.loans, notes: review.notes, sources: review.sources, loanProfiles: review.loanProfiles,
-    };
+    const draft = reviewDraft(review);
     const expenseGroups = (review.expenseGroups ?? []).filter(item =>
       normalizeExpenseLabel(item.label) !== normalizeExpenseLabel(label));
     try {
@@ -67,6 +73,28 @@ export function useFinanceReview(): FinanceReviewState {
       if (!confirmed.expenseGroups?.some(item => normalizeExpenseLabel(item.label) === normalizeExpenseLabel(label)
         && item.group === group)) throw new Error('The finance service did not confirm your expense group. Reload and try again.');
       // An older in-flight read must not replace this server-confirmed write.
+      revision.current++;
+      setReview(current => current && Date.parse(current.updatedAt) > Date.parse(confirmed.updatedAt) ? current : confirmed);
+      setWriteError(null);
+    } catch (failure) {
+      reportFailure(failure);
+      throw failure;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+  const saveForecast = async (forecast: BudgetForecast) => {
+    if (!review || !loaded || error || readOnly) throw new Error('Connect to Finance and reload before saving your forecast.');
+    if (savingRef.current || inFlight.current) throw new Error('A Finance change is already saving.');
+    const validated = budgetForecastSchema.parse(forecast);
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const confirmed = await saveReview({ ...reviewDraft(review), budgetForecast: validated }, review.updatedAt);
+      if (JSON.stringify(confirmed.budgetForecast) !== JSON.stringify(validated)) {
+        throw new Error('Finance did not confirm your forecast. Reload and try again.');
+      }
       revision.current++;
       setReview(current => current && Date.parse(current.updatedAt) > Date.parse(confirmed.updatedAt) ? current : confirmed);
       setWriteError(null);
@@ -111,7 +139,7 @@ export function useFinanceReview(): FinanceReviewState {
   const writable = isFinanceServiceEnabled() && loaded && !error && !readOnly && review !== null;
   return {
     review, loaded, error: writeError ?? error, stale: Boolean(error) && review !== null, refresh: reload,
-    saving: saving || savingProfile, expensesWritable: writable && !savingProfile, moveExpense,
+    saving: saving || savingProfile, expensesWritable: writable && !savingProfile, moveExpense, saveForecast,
     savingProfile, profilesWritable: writable && !saving,
     changeProfile,
   };

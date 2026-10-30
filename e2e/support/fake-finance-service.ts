@@ -253,6 +253,9 @@ function handleReview(route: Route, finance: FakeFinance, method: string, body: 
   if (draft.expenseGroups == null && finance.review?.expenseGroups) {
     draft = { ...draft, expenseGroups: finance.review.expenseGroups };
   }
+  if (draft.budgetForecast == null && finance.review?.budgetForecast) {
+    draft = { ...draft, budgetForecast: finance.review.budgetForecast };
+  }
   finance.review = { ...serviceReview(draft), id: 'current', createdAt: finance.review?.createdAt ?? stamp, updatedAt: stamp };
   return reply(route, 200, { review: finance.review }, reviewEnvelopeSchema);
 }
