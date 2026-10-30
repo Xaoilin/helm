@@ -2,16 +2,19 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useFinanceReview } from '../store/contexts/useFinanceReview';
 import { FINANCE_REVIEW } from './finance-review-fixture';
+import { OVERPAYMENT_PROFILE } from './loan-overpayment-fixture';
 
-const api = vi.hoisted(() => ({ getReview: vi.fn(), enabled: true }));
+const api = vi.hoisted(() => ({ getReview: vi.fn(), changeLoanProfile: vi.fn(), enabled: true }));
 vi.mock('../services/backend/financeServiceApi', () => ({
   getReview: api.getReview,
+  changeLoanProfile: api.changeLoanProfile,
   isFinanceServiceEnabled: () => api.enabled,
 }));
 
 beforeEach(() => {
   api.getReview.mockReset();
   api.getReview.mockResolvedValue(FINANCE_REVIEW);
+  api.changeLoanProfile.mockReset();
   api.enabled = true;
 });
 
@@ -50,5 +53,30 @@ describe('banking review from the finance service', () => {
     await waitFor(() => expect(result.current.loaded).toBe(true));
     expect(result.current.error).toMatch(/not configured/u);
     expect(api.getReview).not.toHaveBeenCalled();
+  });
+
+  it('saves only the semantic profile command and publishes server-confirmed profiles', async () => {
+    const confirmed = { ...FINANCE_REVIEW, loanProfiles: [OVERPAYMENT_PROFILE], updatedAt: '2026-10-30T10:00:00Z' };
+    api.changeLoanProfile.mockResolvedValue(confirmed);
+    const { result } = renderHook(useFinanceReview);
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    await act(async () => { await result.current.changeProfile({ operation: 'save', profile: OVERPAYMENT_PROFILE }); });
+    expect(api.changeLoanProfile).toHaveBeenCalledWith({ operation: 'save', profile: OVERPAYMENT_PROFILE }, FINANCE_REVIEW.updatedAt, expect.any(String));
+    expect(result.current.review).toBe(confirmed);
+    expect(result.current.savingProfile).toBe(false);
+  });
+
+  it('retains exact command identity after an unknown response and refuses an unconfirmed save', async () => {
+    api.changeLoanProfile.mockRejectedValueOnce(new Error('Connection lost'))
+      .mockResolvedValueOnce({ ...FINANCE_REVIEW, loanProfiles: [OVERPAYMENT_PROFILE] });
+    const { result } = renderHook(useFinanceReview);
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    const change = { operation: 'save' as const, profile: OVERPAYMENT_PROFILE };
+    await act(async () => { await expect(result.current.changeProfile(change)).rejects.toThrow('Connection lost'); });
+    expect(result.current.review?.loanProfiles).toBeUndefined();
+    await act(async () => { await result.current.changeProfile(change); });
+    expect(api.changeLoanProfile.mock.calls[1]).toEqual(api.changeLoanProfile.mock.calls[0]);
+    api.changeLoanProfile.mockResolvedValueOnce(FINANCE_REVIEW);
+    await act(async () => { await expect(result.current.changeProfile(change)).rejects.toThrow('did not confirm'); });
   });
 });

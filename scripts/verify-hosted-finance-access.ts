@@ -244,8 +244,8 @@ async function main() {
     await request('MCP initialized notification accepted', resource,
       mcpInit(oauthToken, 'notifications/initialized', {}));
     const catalogue = await mcp('Approved Finance tools listed', oauthToken, 'tools/list');
-    const expectedTools = ['finance_get_review', 'finance_save_review'].sort();
-    expect('Exactly two Finance tools published', Array.isArray(catalogue.tools)
+    const expectedTools = ['finance_get_review', 'finance_save_review', 'finance_list_loan_profiles', 'finance_get_loan_profile', 'finance_save_loan_profile', 'finance_remove_loan_profile'].sort();
+    expect('Exactly six Finance tools published', Array.isArray(catalogue.tools)
       && JSON.stringify(catalogue.tools.map(tool => record(tool).name).sort()) === JSON.stringify(expectedTools));
     const empty = await mcp('Empty synthetic review read', oauthToken, 'tools/call', { name: 'finance_get_review', arguments: {} });
     expect('New account has no review', empty.isError !== true && record(empty.structuredContent).result === null);
@@ -371,6 +371,48 @@ async function main() {
     expect('Readback preserves exact review', JSON.stringify(fetched) === JSON.stringify(updated.review));
     const loan = Array.isArray(fetched.loans) ? record(fetched.loans[0]) : {};
     expect('Loan balance and settlement remain distinct', loan.balancePence === 700000 && loan.settlementPence === 650000);
+    const profile = {
+      id: 'synthetic-profile', name: 'Synthetic extra payments', isDefault: true,
+      firstPaymentMonth: '2026-10', selectedLoanId: null, showShare: false, reviewAsOf: review.asOf,
+      loans: [{ loanId: 'example-loan', balancePence: 700000, annualRatePercent: 12, monthlyPaymentPence: 20000,
+        monthlyExtraPence: 10000, lumpSumPence: 0, extraStartsAfterMonths: 0, sharePercent: 50, matchExtra: false,
+        repaymentMode: 'shorten-term', balanceAsOf: '2026-09-21' }],
+    };
+    const profileArgs = { requestId: randomUUID(), profile, expectedUpdatedAt: fetched.updatedAt };
+    const profileSaved = await callTool('Named loan profile saved', oauthToken, 'finance_save_loan_profile', profileArgs);
+    const profileReview = record(profileSaved.review);
+    expect('Profile save preserves other review fields', JSON.stringify(profileReview.loans) === JSON.stringify(fetched.loans)
+      && JSON.stringify(profileReview.notes) === JSON.stringify(fetched.notes));
+    const secondProfile = await callTool('New default profile saved', oauthToken, 'finance_save_loan_profile', {
+      requestId: randomUUID(), profile: { ...profile, id: 'synthetic-default' }, expectedUpdatedAt: profileReview.updatedAt,
+    });
+    const secondReview = record(secondProfile.review);
+    const listed = await callTool('Loan profiles listed', oauthToken, 'finance_list_loan_profiles', {});
+    expect('Exactly one default retained', Array.isArray(listed.profiles) && listed.profiles.length === 2
+      && listed.profiles.filter(item => record(item).isDefault === true).length === 1
+      && listed.updatedAt === secondReview.updatedAt);
+    const oneProfile = await callTool('Named profile fetched', oauthToken, 'finance_get_loan_profile', { profileId: profile.id });
+    expect('Fetched profile includes raw extra amount and updated default', record(oneProfile.profile).isDefault === false
+      && Array.isArray(record(oneProfile.profile).loans)
+      && record((record(oneProfile.profile).loans as unknown[])[0]).monthlyExtraPence === 10000);
+    const profileReplay = await callTool('Profile exact retry after newer write', oauthToken, 'finance_save_loan_profile', profileArgs);
+    expect('Profile exact retry returns original receipt', JSON.stringify(profileReplay) === JSON.stringify(profileSaved));
+    const profileStale = await mcp('Stale profile write rejected', oauthToken, 'tools/call', {
+      name: 'finance_save_loan_profile', arguments: { ...profileArgs, requestId: randomUUID() },
+    });
+    expect('Stale profile write fails closed', profileStale.isError === true);
+    const legacy = await callTool('Legacy review save retains profiles', oauthToken, 'finance_save_review', {
+      requestId: randomUUID(), review, expectedUpdatedAt: secondReview.updatedAt,
+    });
+    expect('Legacy omission preserves both profiles', Array.isArray(record(legacy.review).loanProfiles)
+      && (record(legacy.review).loanProfiles as unknown[]).length === 2);
+    const removeArgs = { requestId: randomUUID(), profileId: profile.id, confirmed: true,
+      expectedUpdatedAt: record(legacy.review).updatedAt };
+    const removed = await callTool('Named profile removed', oauthToken, 'finance_remove_loan_profile', removeArgs);
+    expect('Removal preserves the other default profile', Array.isArray(record(removed.review).loanProfiles)
+      && (record(removed.review).loanProfiles as unknown[]).length === 1);
+    const removedReplay = await callTool('Profile removal replayed', oauthToken, 'finance_remove_loan_profile', removeArgs);
+    expect('Removal exact retry is idempotent', JSON.stringify(removedReplay) === JSON.stringify(removed));
     const revoked = await client.rpc('revoke_finance_oauth_client', { p_client_id: oauthClientId });
     expect('Own Finance permission revoked', !revoked.error && record(revoked.data).clientId === oauthClientId
       && typeof record(revoked.data).revokedAt === 'string');

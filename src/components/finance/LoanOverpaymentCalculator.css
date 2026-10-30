@@ -1,4 +1,8 @@
 .loan-overpayment { border-top: 1px solid #39415d; padding-top: 24px; }
+.loan-scenario-fields { margin: 0; padding: 0; min-width: 0; border: 0; }
+.loan-profile-panel { margin: 20px 0; }
+.loan-toolbar .loan-profile-default { display: flex; align-items: center; gap: 8px; padding-bottom: 9px; }
+.loan-profile-default input { flex: 0 0 auto; }
 .loan-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; margin: 20px 0 10px; }
 .loan-toolbar label { display: grid; gap: 7px; font-size: 13px; flex: 1 1 190px; min-width: 0; }
 .loan-overpayment .form-input, .loan-overpayment .form-select { width: 100%; min-width: 0; box-sizing: border-box; }
