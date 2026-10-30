@@ -47,6 +47,11 @@ A first-party UI path may share the same domain service, but it does not replace
 | Other Sabah One features | Surface-dependent | Not yet published | Treat external access as unavailable until a domain MCP contract is delivered and listed here. |
 | Secrets | Intentionally unavailable | Intentionally unavailable | Secret plaintext remains outside agent tools. |
 
+The Selina/NatWest overpayment calculator is a view-local scenario over the existing
+Finance review. Agents read or correct its source loan records using the published
+`finance_get_review` and `finance_save_review` tools. Scenario inputs and calculated
+schedules are not persisted and add no service operation, bank action or new scope.
+
 ## Combined prayer completion
 
 Asr completion from Dhuhr and Isha completion from Maghrib use the existing
