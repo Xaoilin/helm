@@ -148,3 +148,7 @@ Initialization, notifications and discovery read no business data. A business to
 its normal operation once. Approval is never cached; 401/403 remain OAuth challenges, and an
 unavailable access route returns 503 without a business-read fallback. See
 [`KAN-327.md`](KAN-327.md) for exact fixture, validation and deployment boundaries.
+
+## Budget forecast
+
+The existing `finance_get_review` and `finance_save_review` tools include optional `budgetForecast: { baselineMonth, items: [{ id, label, amountPence, group }] }`. Read the current review and preserve its other fields when saving with the exact revision. The bounded editable plan is separate from historical spending and essential-budget assumptions. Missing/null preserves the stored forecast; an explicit empty items list clears its contents. No new scope, bank access or money movement is introduced. Shared service contracts and hosted synthetic checks cover save/readback, legacy preservation and the empty-plan case.

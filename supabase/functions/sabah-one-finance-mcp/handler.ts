@@ -50,6 +50,14 @@ const monthReviewSchema = z.object({
 }).strict().refine(value => value.incomePence - value.outflowPence === value.netPence, 'Monthly net must equal income minus outflow.');
 const uniqueIds = (entries: { id: string }[]) => new Set(entries.map(entry => entry.id)).size === entries.length;
 const MAX_EXPENSE_GROUPS = 500;
+const MAX_FORECAST_ITEMS = 200;
+const budgetForecastSchema = z.object({
+  baselineMonth: monthSchema,
+  items: z.array(z.object({
+    id: idSchema, label: labelSchema, amountPence: pence,
+    group: z.enum(['non-discretionary', 'necessary', 'discretionary']),
+  }).strict()).max(MAX_FORECAST_ITEMS).refine(uniqueIds, 'Duplicate forecast item IDs.'),
+}).strict();
 const expenseGroupsSchema = z.array(z.object({
   label: labelSchema, group: z.enum(['non-discretionary', 'necessary', 'discretionary']),
 }).strict()).max(MAX_EXPENSE_GROUPS).refine(entries =>
@@ -75,6 +83,7 @@ const draftSchema = z.object({
   accounts: z.array(z.object({ id: idSchema, label: labelSchema, ownership: z.enum(['personal', 'household']), balancePence: signedPence, asOf: dateSchema }).strict()).max(50).refine(uniqueIds, 'Duplicate account IDs.'),
   months: z.array(monthReviewSchema).max(120).refine(entries => new Set(entries.map(entry => entry.month)).size === entries.length, 'Duplicate months.'),
   expenseGroups: expenseGroupsSchema.optional().describe('Saved category choices across all months. Preserve these when refreshing bank history; omit to retain existing choices, or [] to clear them.'),
+  budgetForecast: budgetForecastSchema.nullable().optional().describe('Editable monthly forecast, separate from historical spending. Missing/null preserves the saved plan; an explicit empty items list saves an empty plan.'),
   budget: z.object({ incomePence: pence, incomeBasis: textSchema,
     essentials: z.array(z.object({ label: labelSchema, amountPence: pence, note: textSchema }).strict()).max(100),
     workCostsPence: pence, workCostsNote: textSchema,

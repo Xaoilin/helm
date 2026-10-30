@@ -150,6 +150,15 @@ export const loanProfileSchema = z.object({
   showShare: z.boolean(), reviewAsOf: isoDate, loans: z.array(loanProfileLoanSchema).min(1).max(50),
 });
 
+export const budgetForecastSchema = z.object({
+  baselineMonth: month,
+  items: z.array(z.object({
+    id: z.string().trim().min(1).max(256), label: z.string().trim().min(1).max(4000),
+    amountPence: pence.min(0).max(1_000_000_000_000),
+    group: z.enum(['non-discretionary', 'necessary', 'discretionary']),
+  })).max(200),
+}).refine(value => new Set(value.items.map(item => item.id)).size === value.items.length, 'Duplicate forecast item IDs.');
+
 export const financeReviewSchema = z.object({
   id: z.string(),
   asOf: isoDate,
@@ -168,6 +177,7 @@ export const financeReviewSchema = z.object({
   expenseGroups: optional(z.array(z.object({
     label: z.string(), group: z.enum(['non-discretionary', 'necessary', 'discretionary']),
   }))),
+  budgetForecast: optional(budgetForecastSchema),
   budget: z.object({
     incomePence: pence,
     incomeBasis: z.string(),
@@ -264,6 +274,7 @@ export const FINANCE_CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   'finance-service/savings-goal-deleted': deletedSchema,
   'finance-service/review': reviewEnvelopeSchema,
   'finance-service/review-expense-groups': reviewEnvelopeSchema,
+  'finance-service/review-budget-forecast': reviewEnvelopeSchema,
   'finance-service/review-empty': reviewEnvelopeSchema,
   'finance-service/review-saved': reviewSavedSchema,
   'finance-service/review-loan-profiles': reviewEnvelopeSchema,

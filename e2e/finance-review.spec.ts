@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import type { FinanceAccount } from '../src/types/domain';
 import { FINANCE_REVIEW } from '../src/test/finance-review-fixture';
+import { BUDGET_REVIEW } from '../src/test/budget-forecast-fixture';
 import { OVERPAYMENT_REVIEW } from '../src/test/loan-overpayment-fixture';
 import { expect, openApp, test, waitForMutation } from './support/helm-fixture';
 
@@ -381,4 +382,77 @@ test('a refused group save retains the confirmed placement and supports recovery
   await expect(board.getByLabel('Group for Fuel', { exact: true })).toBeEnabled();
   await board.getByLabel('Group for Fuel', { exact: true }).selectOption('discretionary');
   await expect(board.getByRole('region', { name: '100% discretionary', exact: true }).getByRole('article', { name: 'Fuel expense' })).toBeVisible();
+});
+
+test('plans a September-based monthly budget with editable amounts, additions and removals that survive reload', async ({ page, scenario }, testInfo) => {
+  const control = await scenario({ now: BUDGET_REVIEW.updatedAt, stores: { financeReviews: [BUDGET_REVIEW] } });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await page.getByRole('button', { name: 'Budgets & Goals', exact: true }).click();
+  const editor = page.getByRole('region', { name: 'Monthly budget forecast', exact: true });
+  await expect(editor.getByLabel('Forecast example month', { exact: true })).toHaveValue('2026-09');
+  await expect(editor).toContainText('£1,765.00');
+  await editor.getByLabel('Monthly amount for Groceries', { exact: true }).fill('250.50');
+  await editor.getByRole('button', { name: 'Remove Subscriptions', exact: true }).click();
+  await editor.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await expect(editor.getByLabel('Name for new item', { exact: true })).toBeFocused();
+  await editor.getByLabel('Name for new item', { exact: true }).fill('Emergency buffer');
+  await editor.getByLabel('Monthly amount for Emergency buffer', { exact: true }).fill('75');
+  const response = page.waitForResponse(reply => reply.url().endsWith('/api/finance/v1/review') && reply.request().method() === 'PUT');
+  await editor.getByRole('button', { name: 'Save forecast', exact: true }).click();
+  await response;
+  await expect(editor.getByRole('status')).toContainText('Forecast saved');
+  expect(control.services.finance.review?.months).toEqual(BUDGET_REVIEW.months);
+  const stored = control.services.finance.review?.budgetForecast as { baselineMonth: string; items: { label: string; amountPence: number }[] };
+  expect(stored.baselineMonth).toBe('2026-09');
+  expect(stored.items.find(item => item.label === 'Emergency buffer')?.amountPence).toBe(7500);
+  expect(stored.items.some(item => item.label === 'Subscriptions')).toBe(false);
+  await page.reload();
+  await page.getByRole('button', { name: 'Budgets & Goals', exact: true }).click();
+  await expect(editor.getByLabel('Monthly amount for Groceries', { exact: true })).toHaveValue('250.50');
+  await expect(editor.getByLabel('Monthly amount for Emergency buffer', { exact: true })).toHaveValue('75.00');
+  await expect(editor.getByRole('button', { name: '+ Add item', exact: true })).toBeEnabled();
+  for (const width of [320, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await editor.getByRole('heading', { name: 'Monthly budget forecast' }).scrollIntoViewIfNeeded();
+    expect(await editor.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`budget-forecast-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 320, height: 800 });
+  await editor.getByLabel('Monthly amount for Emergency buffer', { exact: true }).focus();
+  await expect(editor.getByLabel('Monthly amount for Emergency buffer', { exact: true })).toBeInViewport();
+  const scroller = page.locator('.main-content');
+  await scroller.evaluate(element => { element.scrollTop = 0; });
+  await scroller.focus();
+  await page.keyboard.press('PageDown');
+  await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+});
+
+test('retains a budget draft after a refused save and permits an explicitly empty saved forecast', async ({ page, scenario }) => {
+  await scenario({ now: BUDGET_REVIEW.updatedAt, stores: { financeReviews: [BUDGET_REVIEW] } });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await page.getByRole('button', { name: 'Budgets & Goals', exact: true }).click();
+  const editor = page.getByRole('region', { name: 'Monthly budget forecast', exact: true });
+  await editor.getByLabel('Monthly amount for Groceries', { exact: true }).fill('123.45');
+  await page.route('**/api/finance/v1/review', async route => {
+    if (route.request().method() === 'PUT') await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: 'review_changed', message: 'Review changed; reload before saving.' }) });
+    else await route.fallback();
+  });
+  await editor.getByRole('button', { name: 'Save forecast', exact: true }).click();
+  await expect(editor.getByRole('alert')).toContainText('Your draft is still here');
+  await expect(editor.getByLabel('Monthly amount for Groceries', { exact: true })).toHaveValue('123.45');
+  await page.unroute('**/api/finance/v1/review');
+  await page.getByRole('button', { name: 'Retry loading forecast' }).click();
+  for (let remaining = await editor.getByRole('button', { name: /^Remove / }).count(); remaining > 0; remaining--) {
+    await editor.getByRole('button', { name: /^Remove / }).first().click();
+  }
+  await editor.getByRole('button', { name: 'Save forecast', exact: true }).click();
+  await expect(editor.getByRole('status')).toContainText('Forecast saved');
+  await page.reload();
+  await page.getByRole('button', { name: 'Budgets & Goals', exact: true }).click();
+  await expect(editor).toContainText('Your forecast is empty');
+  await expect(editor.getByRole('button', { name: /^Remove / })).toHaveCount(0);
 });

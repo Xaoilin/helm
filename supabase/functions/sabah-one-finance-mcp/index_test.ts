@@ -272,6 +272,8 @@ Deno.test('rejects invalid money, dates, net, foreign fields, source URLs and mi
       { sources: [{ ...review.sources[0], url: 'javascript:alert(1)' }] },
       { notes: Array.from({ length: 100 }, () => 'x'.repeat(4000)) },
       { expenseGroups: [{ label: 'Fuel', group: 'optional-ish' }] },
+      { budgetForecast: { baselineMonth: '2026-09', items: [{ id: 'one', label: 'Food', amountPence: 1.5, group: 'necessary' }] } },
+      { budgetForecast: { baselineMonth: '2026-13', items: [] } },
       { expenseGroups: [{ label: 'Fuel', group: 'necessary' }, { label: ' fuel ', group: 'discretionary' }] },
     ];
     for (const patch of invalid) {
@@ -370,5 +372,14 @@ Deno.test('validates bounded profiles and refuses unconfirmed removals before an
     const { message } = await mcp('tools/call', { name: 'finance_remove_loan_profile', arguments: { requestId, profileId: profile.id, confirmed: false, expectedUpdatedAt: storedReview.updatedAt } });
     assert(message.error || message.result?.isError);
     assert(backend.calls.every(call => call.method === 'GET'));
+  });
+});
+
+Deno.test('forwards the editable budget forecast through the existing semantic review save', async () => {
+  await withBackend(async backend => {
+    const budgetForecast = { baselineMonth: '2026-09', items: [{ id: 'food', label: 'Food', amountPence: 20000, group: 'necessary' }] };
+    const { message } = await mcp('tools/call', { name: 'finance_save_review', arguments: { requestId, expectedUpdatedAt: storedReview.updatedAt, review: { ...review, budgetForecast } } });
+    assert.equal(message.result.isError, undefined);
+    assert.deepEqual(backend.calls.find(call => call.method === 'PUT')?.body, { review: { ...review, budgetForecast }, expectedUpdatedAt: storedReview.updatedAt });
   });
 });

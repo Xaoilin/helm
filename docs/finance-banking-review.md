@@ -208,3 +208,11 @@ v0.2.161, protected CI and Sol-owned deployment passed, separate Finance OAuth
 consent completed, and the personal review was semantically saved, read back
 exactly and preserved through a browser reload. No personal values are stored in
 the repository or its acceptance fixtures.
+
+## Editable monthly forecast
+
+Finance → Budgets & Goals starts with a monthly spending forecast. Its example month defaults to the latest complete imported month; the current personal plan uses September 2026. Positive spending categories seed an editable draft, while refunds and marked completed repayments are omitted. Confirmed current household and spouse transfers replace their older baseline counterparts once. Every amount, name and necessity group can be edited; items can be added or removed. Category limits and savings goals remain below the forecast.
+
+Save forecast persists the complete plan only after service confirmation. Until then edits stay in the visible draft; a refused or conflicting save keeps them available for retry. An explicitly empty saved forecast stays empty on reload. Choosing another example replaces only the draft until it is saved. Forecasts do not alter historical money movements or the separate essential-budget assumptions.
+
+The optional account-owned `budgetForecast` contains `baselineMonth` and at most 200 items with unique `id`, `label`, nonnegative integer `amountPence` and the existing expense `group`. Existing Finance MCP review read/save tools expose it. Omitted/null forecasts preserve the saved plan during older imports and profile commands. A forecast with `items: []` explicitly saves an empty plan. The new shared `review-budget-forecast` fixture is tested by both applications; matching service deployment precedes the browser/MCP release.
