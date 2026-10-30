@@ -112,9 +112,9 @@ function Spending({ review, ...groupControls }: { review: FinanceReview } & Expe
     </section>
     <section className="banking-block" aria-label="Bank balance snapshots">
       <h3>Bank balance snapshots</h3>
-      <p className="banking-muted">Personal and household balances are shown separately. These snapshots do not add to the manually tracked account net worth.</p>
-      <div className="banking-grid">{review.accounts.map(account => <article className="banking-card" key={account.id}>
-        <h4>{account.label}</h4><span className="banking-badge">{account.ownership === 'household' ? 'Household' : 'Personal'}</span>
+      <p className="banking-muted">Personal account snapshots only. House bills are represented by your single outgoing transfer, without a joint-account breakdown.</p>
+      <div className="banking-grid">{review.accounts.filter(account => account.ownership === 'personal').map(account => <article className="banking-card" key={account.id}>
+        <h4>{account.label}</h4><span className="banking-badge">Personal</span>
         <div className={`banking-amount banking-amount-small ${account.balancePence < 0 ? 'banking-negative' : ''}`}>{formatGBP(account.balancePence)}</div>
         <p className="banking-muted">As of {date(account.asOf)}</p>
       </article>)}</div>
