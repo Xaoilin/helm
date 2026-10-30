@@ -40,13 +40,15 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
     id: item.id, label: item.label.trim(), amountPence: amountPence(item.amount) ?? 0, group: item.group,
   })) };
   const dirty = JSON.stringify(forecast) !== confirmed;
+  const persisted = review.budgetForecast ? JSON.stringify(review.budgetForecast) : null;
+  const changedElsewhere = persisted !== confirmed;
   const disabled = saving || !writable;
   const update = (id: string, patch: Partial<DraftItem>) => {
     setMessage(''); setFailure('');
     setItems(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
   };
   const save = async () => {
-    if (!valid || disabled) return;
+    if (!valid || disabled || changedElsewhere) return;
     setFailure(''); setMessage('');
     try {
       await onSave(forecast);
@@ -72,11 +74,19 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
         const id = uuid(); pendingFocus.current = id;
         setItems(current => [...current, { id, label: '', amount: '', group: 'necessary' }]); setMessage('');
       }}>+ Add item</button>
-      <button className="btn btn-primary" disabled={disabled || !valid || !dirty} onClick={() => void save()}>{saving ? 'Saving…' : 'Save forecast'}</button>
+      <button className="btn btn-primary" disabled={disabled || !valid || !dirty || changedElsewhere} onClick={() => void save()}>{saving ? 'Saving…' : 'Save forecast'}</button>
     </div>
     <p className="forecast-status" role="status">{saving ? 'Saving your forecast…' : message || (dirty ? 'Draft changes — save to keep them.' : 'Saved to your account.')}</p>
     {!valid && <p className="banking-muted">Give each item a name and a valid amount, with up to two decimal places.</p>}
     {failure && <p className="banking-error" role="alert">{failure} Your draft is still here.</p>}
+    {changedElsewhere && <div className="banking-error" role="alert">
+      <p>Your saved forecast changed elsewhere. Your draft is still here. Load the latest plan before saving.</p>
+      <button className="btn btn-secondary" disabled={saving} onClick={() => {
+        const latest = review.budgetForecast ?? forecastFromMonth(review, forecastBaseline(review));
+        setItems(latest.items.map(toDraft)); setBaseline(latest.baselineMonth); setSourceMonth(latest.baselineMonth);
+        setConfirmed(persisted); setFailure(''); setMessage('Latest saved forecast loaded.');
+      }}>Load latest saved forecast</button>
+    </div>}
     <div className="expense-group-columns">
       {EXPENSE_GROUPS.map(group => {
         const grouped = items.filter(item => item.group === group.value);

@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test';
 import type { FinanceAccount } from '../src/types/domain';
 import { FINANCE_REVIEW } from '../src/test/finance-review-fixture';
 import { BUDGET_REVIEW } from '../src/test/budget-forecast-fixture';
+import { forecastFromMonth } from '../src/services/budgetForecast';
 import { OVERPAYMENT_REVIEW } from '../src/test/loan-overpayment-fixture';
 import { expect, openApp, test, waitForMutation } from './support/helm-fixture';
 
@@ -455,4 +456,27 @@ test('retains a budget draft after a refused save and permits an explicitly empt
   await page.getByRole('button', { name: 'Budgets & Goals', exact: true }).click();
   await expect(editor).toContainText('Your forecast is empty');
   await expect(editor.getByRole('button', { name: /^Remove / })).toHaveCount(0);
+});
+
+test('a live forecast change from another tab cannot be overwritten by an older local draft', async ({ page, scenario }) => {
+  const initial = forecastFromMonth(BUDGET_REVIEW, '2026-09');
+  const control = await scenario({ now: BUDGET_REVIEW.updatedAt, stores: { financeReviews: [{ ...BUDGET_REVIEW, budgetForecast: initial }] } });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await page.getByRole('button', { name: 'Budgets & Goals', exact: true }).click();
+  const editor = page.getByRole('region', { name: 'Monthly budget forecast', exact: true });
+  await editor.getByLabel('Monthly amount for Groceries', { exact: true }).fill('222');
+  const latest = { ...initial, items: initial.items.map(item => item.label === 'House bills' ? { ...item, amountPence: 130_000 } : item) };
+  control.services.finance.review!.budgetForecast = latest;
+  control.services.finance.review!.updatedAt = '2026-10-30T10:01:00.000Z';
+  control.services.liveEvents.push({ type: 'finance.updated', domain: 'finance', at: '2026-10-30T10:01:00.000Z', data: null });
+  await expect(editor.getByRole('alert')).toContainText('Your saved forecast changed elsewhere');
+  await expect(editor.getByRole('button', { name: 'Save forecast', exact: true })).toBeDisabled();
+  await expect(editor.getByLabel('Monthly amount for Groceries', { exact: true })).toHaveValue('222');
+  await editor.getByRole('button', { name: 'Load latest saved forecast', exact: true }).click();
+  await expect(editor.getByLabel('Monthly amount for House bills', { exact: true })).toHaveValue('1300.00');
+  await editor.getByLabel('Monthly amount for Groceries', { exact: true }).fill('222');
+  await editor.getByRole('button', { name: 'Save forecast', exact: true }).click();
+  await expect(editor.getByRole('status')).toContainText('Forecast saved');
+  expect((control.services.finance.review!.budgetForecast as typeof latest).items.find(item => item.label === 'House bills')?.amountPence).toBe(130_000);
 });
