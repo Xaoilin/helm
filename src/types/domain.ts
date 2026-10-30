@@ -1079,6 +1079,32 @@ export type Surface =
   | 'settings'
   | 'debug';
 
+/** Saved calculator assumptions; these never change a lender payment or bank balance. */
+export interface LoanOverpaymentProfileLoan {
+  loanId: string;
+  balancePence: number;
+  annualRatePercent: number;
+  monthlyPaymentPence: number;
+  monthlyExtraPence: number;
+  lumpSumPence: number;
+  extraStartsAfterMonths: number;
+  sharePercent: number;
+  matchExtra: boolean;
+  repaymentMode: 'shorten-term' | 'reduce-payment';
+  balanceAsOf?: string;
+}
+
+export interface LoanOverpaymentProfile {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  firstPaymentMonth: string;
+  selectedLoanId?: string;
+  showShare: boolean;
+  reviewAsOf: string;
+  loans: LoanOverpaymentProfileLoan[];
+}
+
 /** Dated banking analysis. Amounts are integer pence, never live bank credentials. */
 export type ExpenseGroup = 'non-discretionary' | 'necessary' | 'discretionary';
 
@@ -1113,6 +1139,7 @@ export interface FinanceReview {
   }[];
   notes: string[];
   sources: { id: string; label: string; url: string; asOf: string }[];
+  loanProfiles?: LoanOverpaymentProfile[];
   createdAt: string;
   updatedAt: string;
 }

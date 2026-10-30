@@ -14,6 +14,7 @@ import type {
   FinanceBudget,
   FinanceReview,
   FinanceReviewDraft,
+  LoanOverpaymentProfile,
   SavingsGoal,
   Transaction,
 } from '../../types/domain';
@@ -152,6 +153,15 @@ export async function getReview(): Promise<FinanceReview | null> {
 export async function saveReview(review: FinanceReviewDraft, expectedUpdatedAt: string | null,
   idempotencyKey?: string): Promise<FinanceReview> {
   return (await write('PUT', `${BASE}/review`, reviewSavedSchema, { review, expectedUpdatedAt }, idempotencyKey)).review;
+}
+
+export type LoanProfileChange = { operation: 'save'; profile: LoanOverpaymentProfile }
+  | { operation: 'remove'; profileId: string; confirmed: true };
+
+/** A fixed semantic command; retries retain this exact body and Idempotency-Key. */
+export async function changeLoanProfile(loanProfileChange: LoanProfileChange, expectedUpdatedAt: string,
+  idempotencyKey: string): Promise<FinanceReview> {
+  return (await write('PUT', `${BASE}/review`, reviewSavedSchema, { loanProfileChange, expectedUpdatedAt }, idempotencyKey)).review;
 }
 
 // ── Equity ──

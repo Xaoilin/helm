@@ -102,12 +102,32 @@ to repay sooner or recalculating regular payments over the modelled remaining te
 The latter uses the normal-payment estimate's end date, not a verified contractual
 term, and recalculates after each extra payment; actual lender rules may differ.
 
-All scenario inputs are editable and stay in component memory. Selecting a single
-loan preserves the other scenario while this calculator remains mounted; leaving
-Loans, reloading, an account change or a refreshed review discards scenarios. No
-account records, payment instructions, Direct Debits or lender agreements change.
-The existing Finance MCP review tools remain the account-data interface; this
-display calculation adds no stored data, service operation or approval scope.
+Scenario inputs remain local until explicitly saved as a named profile. Profiles
+are stored in the account-owned Finance review JSON document, with a single optional
+default that loads when opening Loans. Load, update, create from current inputs and
+confirmed deletion are available. Profiles retain opening assumptions, source dates,
+the first payment month, both loan inputs and the joint/share selection; returning
+later does not silently roll historical balances forward. An unavailable loan in a
+profile is disclosed and combined totals stay unavailable. Changing another tab's
+saved data does not silently discard the current draft. Account changes clear it.
+
+The browser sends a narrow `loanProfileChange` save/remove command to the existing
+`PUT /api/finance/v1/review`, with the last `expectedUpdatedAt` and a stable
+Idempotency-Key. The service applies it under the review lock through the existing
+command queue, preserving bank data. Unknown outcomes retain the exact command and
+key; a conflict requires a fresh read. A save is displayed as successful only after
+the service confirms the profile. Errors preserve inputs. No payment instructions,
+Direct Debits or lender agreements change, and account data is never cached in
+browser storage.
+
+The independent Finance MCP adds `finance_list_loan_profiles`,
+`finance_get_loan_profile`, `finance_save_loan_profile` and
+`finance_remove_loan_profile`; removal requires explicit confirmation. The existing
+Finance approval covers these tools. They forward fixed commands to the same
+service path, so retries do not rebuild a different review. Legacy whole-review
+writes that omit or send null `loanProfiles` preserve profiles; explicit `[]` clears
+them. Profile IDs are unique, at most one is default, and all inputs are bounded.
+The producer must be deployed before this consumer enables saved profiles.
 
 Opening capital comes from a statement/estimated balance. For older records only,
 one explicitly named `current-balance line £…` in a saved note can seed an editable
@@ -134,6 +154,26 @@ whole-loan amortisation and payoff dates. A recorded payment share seeds the
 allocation; otherwise 50% is explicitly assumed and editable. Matching extras
 requires its own explicit checkbox; selecting a share never doubles a contribution.
 The combined payoff is the later of the selected loans' payoff months.
+
+### Capital, monthly interest and repayment ratios
+
+“Capital repaid” replaces the less familiar “principal repaid”: payment minus
+interest, which reduces the balance. Paired stacked bars show capital and interest
+in pounds and as percentages for a selected repayment month. The percentage is
+interest divided by the actual monthly repayment **including monthly extras**,
+not the borrowing rate or a percentage of the outstanding balance. A month slider
+updates these bars and a balance-to-interest panel showing the month's opening
+balance and resulting monthly accrued interest, before and after overpayments.
+
+Separate labelled charts show monthly interest charged in pounds and the interest
+share of repayments over time; a marker follows the selected month. Matching
+columns also appear in the monthly schedule. Paying off a loan ends its repayment
+ratio rather than inventing 0%; monthly interest afterwards is zero. Unprojected
+months stay unavailable. If interest exceeds a payment, capital is negative, the
+interest ratio can exceed 100%, and the balance-growth message remains explicit.
+Opening lump sums reduce capital before month one and are separate from monthly
+repayment ratios. These are the same monthly estimates used by the calculator,
+not lender transaction-history measurements or exact daily-interest accruals.
 
 ## Private persistence and external access
 

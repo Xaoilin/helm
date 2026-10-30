@@ -1,11 +1,15 @@
 import { useId, useState } from 'react';
-import type { FinanceReview } from '../../types/domain';
+import type { FinanceReview, LoanOverpaymentProfile, LoanOverpaymentProfileLoan } from '../../types/domain';
+import type { LoanProfileChange } from '../../services/backend/financeServiceApi';
 import { formatGBP, toMonthStr } from '../../services/financeHelpers';
 import {
   compareLoan, loanStartingValues, moneyInputPence, paymentMonth, scenarioError, termLabel,
   type LoanProjection, type LoanScenario, type ReviewLoan,
 } from '../../services/loanOverpayment';
 import './LoanOverpaymentCalculator.css';
+import { LoanProfilePanel } from './LoanProfilePanel';
+import { LoanRepaymentVisuals } from './LoanRepaymentVisuals';
+import { repaymentBreakdown, repaymentPercent } from '../../services/loanRepaymentBreakdown';
 
 interface LoanFields {
   balance: string;
@@ -37,6 +41,14 @@ function initialFields(loan: ReviewLoan): LoanFields {
     balance: pounds(starting.balancePence), rate: starting.annualRatePercent?.toString() ?? '',
     payment: pounds(loan.monthlyPaymentPence), extra: '0', lumpSum: '0', delay: '0',
     share: String(Math.round(share * 100) / 100), matchExtra: false, repaymentMode: 'shorten-term',
+  };
+}
+
+function profileFields(loan: LoanOverpaymentProfileLoan): LoanFields {
+  return {
+    balance: pounds(loan.balancePence), rate: String(loan.annualRatePercent), payment: pounds(loan.monthlyPaymentPence),
+    extra: pounds(loan.monthlyExtraPence), lumpSum: pounds(loan.lumpSumPence), delay: String(loan.extraStartsAfterMonths),
+    share: String(loan.sharePercent), matchExtra: loan.matchExtra, repaymentMode: loan.repaymentMode,
   };
 }
 
@@ -111,14 +123,15 @@ function Schedule({ calculation, firstMonth, factor }: { calculation: LoanCalcul
     </select>
     <div className="banking-table-wrap" tabIndex={0} role="region" aria-label={`${calculation.loan.lender} monthly schedule`}>
       <table><caption>Normal payments compared with your scenario</caption>
-        <thead><tr><th>Month</th><th>Normal interest</th><th>Scenario interest</th><th>Scenario regular payment</th><th>Scenario payment incl. extra</th><th>Principal repaid</th><th>Normal balance</th><th>Scenario balance</th></tr></thead>
+        <thead><tr><th>Month</th><th>Normal interest</th><th>Normal interest share</th><th>Scenario interest</th><th>Scenario interest share</th><th>Scenario regular payment</th><th>Scenario payment incl. extra</th><th>Capital repaid</th><th>Normal balance</th><th>Scenario balance</th></tr></thead>
         <tbody>{Array.from({ length: Math.min(12, count - from) }, (_, index) => {
           const offset = from + index;
           const before = normal.months[offset];
           const after = overpaid.months[offset];
           const value = (projection: LoanProjection, amount?: number) => amount !== undefined ? money(amount) : projection.status === 'repaid' ? money(0) : 'Unavailable';
           return <tr key={offset}><th scope="row">{paymentMonth(firstMonth, offset)}</th>
-            <td>{value(normal, before?.interestPence)}</td><td>{value(overpaid, after?.interestPence)}</td>
+            <td>{value(normal, before?.interestPence)}</td><td>{repaymentPercent(repaymentBreakdown(normal, offset).interestPercent)}</td>
+            <td>{value(overpaid, after?.interestPence)}</td><td>{repaymentPercent(repaymentBreakdown(overpaid, offset).interestPercent)}</td>
             <td>{value(overpaid, after?.regularPaymentPence)}</td><td>{value(overpaid, after?.paymentPence)}</td><td>{value(overpaid, after?.principalPence)}</td>
             <td>{value(normal, before?.balancePence)}</td><td>{value(overpaid, after?.balancePence)}</td></tr>;
         })}</tbody>
@@ -148,12 +161,14 @@ function LoanResults({ calculation, firstMonth, factor }: { calculation: LoanCal
     {complete && <p className="loan-saving" role="status">{normal.months.length - overpaid.months.length > 0 ? `${termLabel(normal.months.length - overpaid.months.length)} sooner · ` : ''}{money(normal.interestPence - overpaid.interestPence)} interest saved</p>}
     {overpaid.status !== 'repaid' && <p className="banking-error" role="status">{overpaid.status === 'not-amortising' ? 'This payment does not reduce the balance. Increase the monthly payment or adjust the rate.' : 'This loan is not repaid within the 100-year calculation limit.'}</p>}
     <BalanceChart normal={normal} overpaid={overpaid} opening={calculation.input.balancePence} />
+    <LoanRepaymentVisuals normal={normal} overpaid={overpaid} firstMonth={firstMonth} factor={factor} openingBalancePence={calculation.input.balancePence} />
     <Schedule calculation={calculation} firstMonth={firstMonth} factor={factor} />
   </div>;
 }
 
-function LoanEditor({ calculation, review, update, firstMonth, shareView }: {
+function LoanEditor({ calculation, review, update, firstMonth, shareView, profileBalanceDate, fromProfile }: {
   calculation: LoanCalculation; review: FinanceReview; update: (fields: Partial<LoanFields>) => void; firstMonth: string | null; shareView: boolean;
+  profileBalanceDate?: string; fromProfile: boolean;
 }) {
   const { loan, fields, error, input } = calculation;
   const starting = loanStartingValues(loan);
@@ -162,7 +177,8 @@ function LoanEditor({ calculation, review, update, firstMonth, shareView }: {
   const balanceDate = loan.balanceAsOf ?? (starting.balanceFromNote ? sourceDates.at(-1) : undefined);
   return <article className="banking-card loan-calculator-card" aria-label={`${loan.lender} overpayment calculator`}>
     <h4>{loan.lender}</h4>
-    <p className="banking-muted">{starting.balancePence === undefined ? 'Opening balance needs confirmation.' : `${starting.balanceFromNote ? 'Capital balance from saved loan note' : loan.balanceKind === 'estimate' ? 'Estimated opening balance' : 'Reported capital balance'}${balanceDate ? ` · source dated ${balanceDate}` : ''}.`} These are dated starting figures, not today’s lender balance.</p>
+    <p className="banking-muted">{fromProfile ? `Saved profile starting figures${profileBalanceDate ? ` · capital source dated ${profileBalanceDate}` : ' · capital source date unavailable'}.`
+      : starting.balancePence === undefined ? 'Opening balance needs confirmation.' : `${starting.balanceFromNote ? 'Capital balance from saved loan note' : loan.balanceKind === 'estimate' ? 'Estimated opening balance' : 'Reported capital balance'}${balanceDate ? ` · source dated ${balanceDate}` : ''}.`} These are editable scenario assumptions, not today’s lender balance.</p>
     <div className="loan-inputs">
       <Input label="Opening balance (£)" value={fields.balance} onChange={balance => update({ balance })} />
       <Input label="Annual borrowing rate (%)" value={fields.rate} onChange={rate => update({ rate })} max={100} />
@@ -181,7 +197,7 @@ function LoanEditor({ calculation, review, update, firstMonth, shareView }: {
       : firstMonth && <LoanResults calculation={calculation} firstMonth={firstMonth} factor={factor} />}
     <details><summary>Saved loan terms & calculation assumptions</summary>
       <p>{loan.rateNote || 'No borrowing rate has been confirmed.'}</p>
-      {starting.annualRatePercent !== undefined && <p>The initial rate is read from the fixed rate in this saved note. It stays constant for the entire estimate, including after the fixed period. Edit it to try another rate.</p>}
+      {starting.annualRatePercent !== undefined && !fromProfile && <p>The initial rate is read from the fixed rate in this saved note. It stays constant for the entire estimate, including after the fixed period. Edit it to try another rate.</p>}
       {starting.balanceFromNote && <p>The opening capital is taken from the explicitly named current-balance line in the saved redemption note. The redemption total includes other charges and is excluded.</p>}
       <p>Interest is estimated monthly at the annual borrowing rate divided by 12. Your lenders may calculate daily. Choose to keep the regular payment for an earlier payoff, or recalculate it after each overpayment over the remaining modelled term. The latter uses the normal-payment estimate’s end date, not a confirmed contractual term. Lender recalculation rules and timing can differ. This does not amend your contractual term or Direct Debit.</p>
       <p>Fees, early repayment charges, allowance usage and future rate changes are excluded. Confirm your own allowance and how overpayments are applied in the saved agreement or with the lender.</p>
@@ -190,27 +206,62 @@ function LoanEditor({ calculation, review, update, firstMonth, shareView }: {
   </article>;
 }
 
-export function LoanOverpaymentCalculator({ review }: { review: FinanceReview }) {
-  const [edits, setEdits] = useState<Record<string, LoanFields>>({});
-  const [selection, setSelection] = useState('both');
-  const [shareView, setShareView] = useState(false);
-  const [firstMonth, setFirstMonth] = useState(() => toMonthStr(new Date()));
+export function LoanOverpaymentCalculator({ review, changeProfile, profilesWritable = false, savingProfile = false }: {
+  review: FinanceReview; changeProfile?: (change: LoanProfileChange) => Promise<void>; profilesWritable?: boolean; savingProfile?: boolean;
+}) {
+  const [initialProfile] = useState(() => review.loanProfiles?.find(profile => profile.isDefault));
+  const [edits, setEdits] = useState<Record<string, LoanFields>>(() => Object.fromEntries(initialProfile?.loans.map(loan => [loan.loanId, profileFields(loan)]) ?? []));
+  const [selection, setSelection] = useState(initialProfile?.selectedLoanId ?? 'both');
+  const [shareView, setShareView] = useState(initialProfile?.showShare ?? false);
+  const [firstMonth, setFirstMonth] = useState(() => initialProfile?.firstPaymentMonth ?? toMonthStr(new Date()));
+  const [profileBasis, setProfileBasis] = useState(initialProfile?.reviewAsOf ?? '');
+  const [profileLoanIds, setProfileLoanIds] = useState(() => initialProfile?.loans.map(loan => loan.loanId) ?? []);
+  const [savedBalanceDates, setSavedBalanceDates] = useState<Record<string, string | undefined>>(() => Object.fromEntries(initialProfile?.loans.map(loan => [loan.loanId, loan.balanceAsOf]) ?? []));
   const monthId = useId();
   const loans = review.loans.filter(loan => loan.status === 'active' && /\b(?:selina|natwest)\b/iu.test(loan.lender));
+  const missingProfileLoans = profileLoanIds.filter(loanId => !loans.some(current => current.id === loanId));
   const calculations = loans.filter(loan => selection === 'both' || selection === loan.id)
     .map(loan => calculate(loan, edits[loan.id] ?? initialFields(loan)));
   const validMonth = /^(?:20|21)\d{2}-(?:0[1-9]|1[0-2])$/u.test(firstMonth);
-  const complete = calculations.length > 0 && calculations.every(item => item.comparison !== null) && validMonth;
+  const complete = calculations.length > 0 && calculations.every(item => item.comparison !== null) && validMonth && missingProfileLoans.length === 0;
   const totals = (value: (item: LoanCalculation) => number) => calculations.reduce((sum, item) => sum + Math.round(value(item) * (shareView ? Number(item.fields.share) / 100 : 1)), 0);
   const totalMonthly = totals(item => item.input.monthlyPaymentPence);
   const extraMonthly = totals(item => item.input.monthlyExtraPence);
   const canCompare = complete && calculations.every(item => item.comparison?.normal.status === 'repaid' && item.comparison?.overpaid.status === 'repaid');
   const payoffMonth = canCompare ? Math.max(...calculations.map(item => item.comparison!.overpaid.months.length)) : 0;
   const normalPayoffMonth = canCompare ? Math.max(...calculations.map(item => item.comparison!.normal.months.length)) : 0;
+  const loadProfile = (profile: LoanOverpaymentProfile) => {
+    if (profile.loans.some(loan => !loans.some(current => current.id === loan.loanId))) throw new Error('A loan in this saved profile is no longer active or available. Review your current loan records before loading it.');
+    setEdits(Object.fromEntries(profile.loans.map(loan => [loan.loanId, profileFields(loan)])));
+    setSelection(profile.selectedLoanId ?? 'both'); setShareView(profile.showShare); setFirstMonth(profile.firstPaymentMonth);
+    setProfileBasis(profile.reviewAsOf);
+    setProfileLoanIds(profile.loans.map(loan => loan.loanId));
+    setSavedBalanceDates(Object.fromEntries(profile.loans.map(loan => [loan.loanId, loan.balanceAsOf])));
+  };
+  const makeProfile = (id: string, name: string, isDefault: boolean): LoanOverpaymentProfile => {
+    if (!validMonth) throw new Error('Choose a valid first payment month before saving.');
+    const savedLoans = loans.map(loan => calculate(loan, edits[loan.id] ?? initialFields(loan)));
+    if (savedLoans.some(item => item.error)) throw new Error('Complete valid inputs for both loans before saving a profile.');
+    return {
+      id, name, isDefault, firstPaymentMonth: firstMonth, selectedLoanId: selection === 'both' ? undefined : selection,
+      showShare: shareView, reviewAsOf: profileBasis || review.asOf,
+      loans: savedLoans.map(item => ({
+        loanId: item.loan.id, balancePence: item.input.balancePence, annualRatePercent: item.input.annualRatePercent,
+        monthlyPaymentPence: item.input.monthlyPaymentPence, monthlyExtraPence: moneyInputPence(item.fields.extra)!,
+        lumpSumPence: item.input.lumpSumPence, extraStartsAfterMonths: item.input.extraStartsAfterMonths,
+        sharePercent: Number(item.fields.share), matchExtra: item.fields.matchExtra, repaymentMode: item.fields.repaymentMode,
+        balanceAsOf: savedBalanceDates[item.loan.id] ?? item.loan.balanceAsOf ?? review.sources.filter(source => item.loan.sourceIds.includes(source.id)).map(source => source.asOf).sort().at(-1),
+      })),
+    };
+  };
   return <section className="loan-overpayment banking-block" aria-label="Loan overpayment calculator">
     <h3>Loan overpayment calculator</h3>
-    <p className="banking-muted">Compare Selina and NatWest separately or together. Adjust the dated starting figures and see what an extra payment could change. Estimates hold your entered rates constant; future rate changes and fees are excluded. Scenarios stay on this page and are not saved.</p>
+    <p className="banking-muted">Compare Selina and NatWest separately or together. Adjust the dated starting figures and see what an extra payment could change. Estimates hold your entered rates constant; future rate changes and fees are excluded.</p>
     {loans.length === 0 ? <p>No active Selina or NatWest loan is recorded. Add verified loan details through the Finance review before calculating.</p> : <>
+      <LoanProfilePanel profiles={review.loanProfiles ?? []} writable={profilesWritable} saving={savingProfile} changeProfile={changeProfile} makeProfile={makeProfile} loadProfile={loadProfile} newProfile={() => setProfileLoanIds([])} />
+      {profileBasis && <p className="banking-muted">Loaded profile assumptions from the review dated {profileBasis}. Saved balances and rates are editable scenario values; current lender terms may differ.</p>}
+      {missingProfileLoans.length > 0 && <p className="banking-error" role="alert">A loan in your default profile is no longer active or available. Check the saved profile and current loan records before comparing.</p>}
+      <fieldset className="loan-scenario-fields" disabled={savingProfile}>
       <div className="loan-toolbar">
         <label>Loans<select className="form-select" aria-label="Loans" value={selection} onChange={event => setSelection(event.target.value)}>
           <option value="both">Both loans</option>{loans.map(loan => <option key={loan.id} value={loan.id}>{loan.lender}</option>)}
@@ -230,8 +281,10 @@ export function LoanOverpaymentCalculator({ review }: { review: FinanceReview })
         <div><span>All selected loans paid off</span><strong>{canCompare ? payoffMonth === 0 ? 'Paid off now' : paymentMonth(firstMonth, payoffMonth - 1) : 'Unavailable'}</strong><small>{canCompare && (normalPayoffMonth > payoffMonth ? `${termLabel(normalPayoffMonth - payoffMonth)} sooner` : 'No change in duration')}</small></div>
       </div>
       <div className="loan-editors">{calculations.map(calculation => <LoanEditor key={calculation.loan.id} calculation={calculation} review={review}
+        fromProfile={Object.hasOwn(savedBalanceDates, calculation.loan.id)} profileBalanceDate={savedBalanceDates[calculation.loan.id]}
         firstMonth={validMonth ? firstMonth : null} shareView={shareView}
         update={fields => setEdits(current => ({ ...current, [calculation.loan.id]: { ...(current[calculation.loan.id] ?? initialFields(calculation.loan)), ...fields } }))} />)}</div>
+      </fieldset>
     </>}
   </section>;
 }

@@ -27,6 +27,7 @@ interface Backend {
   userError?: boolean;
   approvalError?: ServiceFailure;
   toolError?: ServiceFailure;
+  review?: Record<string, unknown> | null;
 }
 
 const storedReview = { id: 'current', updatedAt: '2026-09-21T12:00:00Z' };
@@ -55,7 +56,7 @@ async function withBackend(run: (backend: Backend) => Promise<void>) {
     const error = url.pathname.endsWith('/access') ? backend.approvalError : backend.toolError;
     if (error) return Response.json({ code: error.code, message: error.message }, { status: error.status });
     if (url.pathname.endsWith('/access')) return new Response(null, { status: 204 });
-    return Response.json({ review: request.method === 'GET' ? storedReview : { ...storedReview, updatedAt: '2026-09-22T12:00:00Z' } });
+    return Response.json({ review: request.method === 'GET' ? (backend.review === undefined ? storedReview : backend.review) : { ...storedReview, updatedAt: '2026-09-22T12:00:00Z' } });
   };
   try {
     await run(backend);
@@ -225,10 +226,10 @@ const review = {
   ]
 };
 
-Deno.test('publishes only review read/save with an explicit concurrency token', async () => {
+Deno.test('publishes six narrow Finance tools with explicit write concurrency tokens', async () => {
   await withBackend(async () => {
     const { message } = await mcp('tools/list', {});
-    assert.deepEqual(message.result.tools.map((tool: { name: string }) => tool.name).sort(), ['finance_get_review', 'finance_save_review']);
+    assert.deepEqual(message.result.tools.map((tool: { name: string }) => tool.name).sort(), ['finance_get_loan_profile', 'finance_get_review', 'finance_list_loan_profiles', 'finance_remove_loan_profile', 'finance_save_loan_profile', 'finance_save_review']);
     const write = message.result.tools.find((tool: { name: string }) => tool.name === 'finance_save_review');
     assert(write.inputSchema.required.includes('requestId'));
     assert(write.inputSchema.required.includes('expectedUpdatedAt'));
@@ -303,5 +304,71 @@ Deno.test('surfaces the service stale-write refusal without hiding diagnostics',
     const { message } = await mcp('tools/call', { name: 'finance_save_review', arguments: { requestId, review, expectedUpdatedAt: '2026-09-21T12:00:00+00:00' } });
     assert.equal(message.result.isError, true);
     assert.match(message.result.content[0].text, /reload before saving/);
+  });
+});
+
+const profile = {
+  id: 'example-profile', name: 'Extra payments', isDefault: true, firstPaymentMonth: '2026-10',
+  selectedLoanId: null, showShare: false, reviewAsOf: '2026-09-21',
+  loans: [{ loanId: 'example-loan', balancePence: 700000, annualRatePercent: 12, monthlyPaymentPence: 20000,
+    monthlyExtraPence: 10000, lumpSumPence: 0, extraStartsAfterMonths: 0, sharePercent: 50, matchExtra: true,
+    repaymentMode: 'shorten-term', balanceAsOf: '2026-09-21' }],
+};
+Deno.test('reads account-owned profiles and the current review version with an explicit missing result', async () => {
+  await withBackend(async backend => {
+    backend.review = { ...review, ...storedReview, loanProfiles: [profile] };
+    const listed = await mcp('tools/call', { name: 'finance_list_loan_profiles', arguments: {} });
+    assert.deepEqual(listed.message.result.structuredContent.result, { profiles: [profile], updatedAt: storedReview.updatedAt });
+    const fetched = await mcp('tools/call', { name: 'finance_get_loan_profile', arguments: { profileId: profile.id } });
+    assert.deepEqual(fetched.message.result.structuredContent.result, { profile, updatedAt: storedReview.updatedAt });
+    backend.review = null;
+    const empty = await mcp('tools/call', { name: 'finance_get_loan_profile', arguments: { profileId: profile.id } });
+    assert.deepEqual(empty.message.result.structuredContent.result, { profile: null, updatedAt: null });
+  });
+});
+Deno.test('profile writes forward deterministic semantic commands for exact retries without read-modify-write', async () => {
+  await withBackend(async backend => {
+    const args = { requestId, profile, expectedUpdatedAt: storedReview.updatedAt };
+    for (let retry = 0; retry < 2; retry++) {
+      const result = await mcp('tools/call', { name: 'finance_save_loan_profile', arguments: args });
+      assert.equal(result.message.result.isError, undefined);
+      backend.review = { ...review, ...storedReview, loanProfiles: [{ ...profile, name: 'Changed later' }] };
+    }
+    const writes = backend.calls.filter(call => call.method === 'PUT');
+    assert.equal(writes.length, 2);
+    assert.deepEqual(writes[0], writes[1]);
+    assert.deepEqual(writes[0].body, { loanProfileChange: { operation: 'save', profile }, expectedUpdatedAt: storedReview.updatedAt });
+    assert.equal(writes[0].idempotencyKey, requestId);
+    assert.equal(writes[0].authorization, `Bearer ${token()}`);
+    assert(backend.calls.filter(call => call.method === 'GET').every(call => call.path.endsWith('/access')));
+    const remove = await mcp('tools/call', { name: 'finance_remove_loan_profile', arguments: {
+      requestId, profileId: profile.id, confirmed: true, expectedUpdatedAt: storedReview.updatedAt,
+    } });
+    assert.equal(remove.message.result.isError, undefined);
+    assert.deepEqual(backend.calls.at(-1)?.body, { loanProfileChange: { operation: 'remove', profileId: profile.id, confirmed: true }, expectedUpdatedAt: storedReview.updatedAt });
+  });
+});
+Deno.test('validates bounded profiles and refuses unconfirmed removals before any business write', async () => {
+  await withBackend(async backend => {
+    for (const patch of [{ name: '' }, { name: 'x'.repeat(129) }, { firstPaymentMonth: '2026-13' },
+      { selectedLoanId: 'missing' }, { loans: [] }, { loans: [profile.loans[0], profile.loans[0]] },
+      { loans: [{ ...profile.loans[0], monthlyExtraPence: 0.5 }] },
+      { loans: [{ ...profile.loans[0], monthlyPaymentPence: 0 }] },
+      { loans: [{ ...profile.loans[0], annualRatePercent: 101 }] },
+      { loans: [{ ...profile.loans[0], sharePercent: 101 }] },
+      { loans: [{ ...profile.loans[0], extraStartsAfterMonths: 1200 }] },
+      { loans: [{ ...profile.loans[0], repaymentMode: 'invalid' }] }]) {
+      const { message } = await mcp('tools/call', { name: 'finance_save_loan_profile', arguments: { requestId, profile: { ...profile, ...patch }, expectedUpdatedAt: storedReview.updatedAt } });
+      assert(message.error || message.result?.isError);
+    }
+    for (const profiles of [[profile, profile], [profile, { ...profile, id: 'two' }],
+      [{ ...profile, loans: [{ ...profile.loans[0], loanId: 'unknown' }] }],
+      Array.from({length:21}, (_,index)=>({...profile,id:`p-${index}`,isDefault:false}))]) {
+      const { message } = await mcp('tools/call', { name: 'finance_save_review', arguments: { requestId, review: { ...review, loanProfiles: profiles }, expectedUpdatedAt: storedReview.updatedAt } });
+      assert(message.error || message.result?.isError);
+    }
+    const { message } = await mcp('tools/call', { name: 'finance_remove_loan_profile', arguments: { requestId, profileId: profile.id, confirmed: false, expectedUpdatedAt: storedReview.updatedAt } });
+    assert(message.error || message.result?.isError);
+    assert(backend.calls.every(call => call.method === 'GET'));
   });
 });

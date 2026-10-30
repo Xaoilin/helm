@@ -1,4 +1,4 @@
-import type { FinanceReview } from '../types/domain';
+import type { FinanceReview, LoanOverpaymentProfile } from '../types/domain';
 import { FINANCE_REVIEW } from './finance-review-fixture';
 
 /** Entirely synthetic loan amounts and terms; provider names only select the requested calculators. */
@@ -18,5 +18,17 @@ export const OVERPAYMENT_REVIEW: FinanceReview = {
       rateNote: '6% fixed for the initial period. Original illustration APRC 7.5%.',
       notes: 'Payments may be recalculated by the lender.', sourceIds: ['statement'],
     },
+  ],
+};
+
+export const OVERPAYMENT_PROFILE: LoanOverpaymentProfile = {
+  id: 'example-profile', name: 'Example overpayment plan', isDefault: true, firstPaymentMonth: '2026-10',
+  showShare: false, reviewAsOf: '2026-09-21', loans: [
+    { loanId: 'example-selina', balancePence: 1_000_000, annualRatePercent: 12, monthlyPaymentPence: 20_000,
+      monthlyExtraPence: 10_000, lumpSumPence: 0, extraStartsAfterMonths: 0, sharePercent: 50,
+      matchExtra: false, repaymentMode: 'shorten-term', balanceAsOf: '2026-09-20' },
+    { loanId: 'example-natwest', balancePence: 2_000_000, annualRatePercent: 6, monthlyPaymentPence: 25_000,
+      monthlyExtraPence: 5_000, lumpSumPence: 0, extraStartsAfterMonths: 0, sharePercent: 50,
+      matchExtra: false, repaymentMode: 'shorten-term', balanceAsOf: '2026-09-20' },
   ],
 };

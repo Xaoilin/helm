@@ -11,6 +11,86 @@ const BANK: FinanceAccount = {
   createdAt: FINANCE_REVIEW.createdAt, updatedAt: FINANCE_REVIEW.updatedAt,
 };
 
+test('saves default overpayment profiles across reload and compares capital and interest amounts and repayment shares', async ({ page, scenario }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const control = await scenario({ now: OVERPAYMENT_REVIEW.updatedAt, stores: { financeReviews: [OVERPAYMENT_REVIEW] } });
+  const originalLoans = structuredClone(control.services.finance.review!.loans);
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await page.getByRole('button', { name: 'Loans', exact: true }).click();
+  const selina = page.getByRole('article', { name: 'Selina (example) overpayment calculator' });
+  await selina.getByLabel('Extra payment (£/month)', { exact: true }).fill('100');
+  await page.getByLabel('First projected payment').fill('2026-10');
+  const profiles = page.getByRole('region', { name: 'Saved overpayment profiles' });
+  await profiles.getByLabel('Profile name').fill('Monthly capital plan');
+  await profiles.getByLabel('Load this profile by default').check();
+  const save = waitForMutation(page, 'financeReviews');
+  await profiles.getByRole('button', { name: 'Save profile', exact: true }).click();
+  const response = await save;
+  const body = response.request().postDataJSON();
+  expect(body).not.toHaveProperty('review');
+  expect(body.loanProfileChange).toMatchObject({ operation: 'save', profile: { name: 'Monthly capital plan', isDefault: true } });
+  await expect(profiles).toContainText('Saved “Monthly capital plan” to your account as your default.');
+  expect(control.services.finance.review!.loans).toEqual(originalLoans);
+  await page.reload();
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await page.getByRole('button', { name: 'Loans', exact: true }).click();
+  await expect(selina.getByLabel('Extra payment (£/month)', { exact: true })).toHaveValue('100.00');
+  await expect(page.getByLabel('First projected payment')).toHaveValue('2026-10');
+  const before = selina.getByRole('region', { name: 'Normal repayment split' });
+  const after = selina.getByRole('region', { name: 'Overpayment repayment split' });
+  await expect(before).toContainText('Interest charged£100.00 (50%)');
+  await expect(after).toContainText('Interest charged£100.00 (33.3%)');
+  await selina.getByRole('slider').focus();
+  await selina.getByRole('slider').press('ArrowRight');
+  await expect(before).toContainText('Interest charged£99.00 (49.5%)');
+  await expect(after).toContainText('Interest charged£98.00 (32.7%)');
+  const accrual = selina.getByLabel('Monthly interest from the remaining balance');
+  await expect(accrual).toContainText('£9,900.00 balance → £99.00 interest');
+  await expect(accrual).toContainText('£9,800.00 balance → £98.00 interest');
+  for (const width of [320, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await assertNoOverflow(page);
+    await selina.getByRole('heading', { name: 'Where your repayments go' }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`capital-interest-split-${width}.png`) });
+    await selina.getByRole('figure').filter({ hasText: 'Monthly interest charged (£)' }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`interest-over-time-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await profiles.getByRole('button', { name: 'New profile from these inputs' }).click();
+  await profiles.getByLabel('Profile name').fill('Alternative plan');
+  await profiles.getByLabel('Load this profile by default').check();
+  await profiles.getByRole('button', { name: 'Save profile', exact: true }).click();
+  await expect(profiles).toContainText('Saved “Alternative plan”');
+  const stored = control.services.finance.review!.loanProfiles as { name: string; isDefault: boolean }[];
+  expect(stored.filter(profile => profile.isDefault).map(profile => profile.name)).toEqual(['Alternative plan']);
+  await profiles.getByLabel('Saved profile', { exact: true }).selectOption({ label: 'Monthly capital plan' });
+  await profiles.getByRole('button', { name: 'Load profile', exact: true }).click();
+  await expect(profiles.getByLabel('Profile name')).toHaveValue('Monthly capital plan');
+  page.once('dialog', dialog => dialog.accept());
+  await profiles.getByRole('button', { name: 'Delete profile', exact: true }).click();
+  await expect(profiles).toContainText('Profile deleted.');
+  expect((control.services.finance.review!.loanProfiles as unknown[]).length).toBe(1);
+});
+
+test('retains profile inputs after a version conflict and saves after reloading the confirmed review', async ({ page, scenario }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const control = await scenario({ now: OVERPAYMENT_REVIEW.updatedAt, stores: { financeReviews: [OVERPAYMENT_REVIEW] } });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await page.getByRole('button', { name: 'Loans', exact: true }).click();
+  const profiles = page.getByRole('region', { name: 'Saved overpayment profiles' });
+  await profiles.getByLabel('Profile name').fill('Keep my edits');
+  control.services.finance.review!.updatedAt = '2026-10-01T12:00:00.000Z';
+  await profiles.getByRole('button', { name: 'Save profile', exact: true }).click();
+  await expect(profiles.getByRole('alert')).toContainText('Your inputs are still here.');
+  await expect(profiles.getByLabel('Profile name')).toHaveValue('Keep my edits');
+  await expect(profiles.getByRole('button', { name: 'Save profile', exact: true })).toBeEnabled();
+  await profiles.getByRole('button', { name: 'Save profile', exact: true }).click();
+  await expect(profiles).toContainText('Saved “Keep my edits”');
+});
+
 test('compares Selina and NatWest overpayments, shares and monthly schedules without saving scenarios', async ({ page, scenario }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });

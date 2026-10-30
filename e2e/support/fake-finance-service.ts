@@ -233,7 +233,27 @@ function handleReview(route: Route, finance: FakeFinance, method: string, body: 
   if (expected !== null && finance.review?.updatedAt !== expected) {
     return refuse(route, 409, 'review_changed', 'The banking review changed since it was read; reload and try again.');
   }
-  finance.review = { ...serviceReview(body?.review as Json), id: 'current', createdAt: finance.review?.createdAt ?? stamp, updatedAt: stamp };
+  const change = body?.loanProfileChange as Json | undefined;
+  let draft = body?.review as Json;
+  if (change) {
+    if (!finance.review) return refuse(route, 409, 'review_changed', 'Read the current review before saving a profile.');
+    const profiles = (finance.review.loanProfiles ?? []) as Json[];
+    if (change.operation === 'save') {
+      const profile = change.profile as Json;
+      const next = profiles.filter(candidate => candidate.id !== profile.id)
+        .map(candidate => profile.isDefault ? { ...candidate, isDefault: false } : candidate);
+      if (next.length >= 20) return refuse(route, 400, 'invalid_review', 'At most 20 loan profiles may be saved.');
+      draft = { ...finance.review, loanProfiles: [...next, profile] };
+    } else if (change.operation === 'remove' && change.confirmed === true) {
+      draft = { ...finance.review, loanProfiles: profiles.filter(profile => profile.id !== change.profileId) };
+    } else return refuse(route, 400, 'invalid_request', 'Confirm profile removal.');
+  } else if (draft.loanProfiles == null && finance.review?.loanProfiles) {
+    draft = { ...draft, loanProfiles: finance.review.loanProfiles };
+  }
+  if (draft.expenseGroups == null && finance.review?.expenseGroups) {
+    draft = { ...draft, expenseGroups: finance.review.expenseGroups };
+  }
+  finance.review = { ...serviceReview(draft), id: 'current', createdAt: finance.review?.createdAt ?? stamp, updatedAt: stamp };
   return reply(route, 200, { review: finance.review }, reviewEnvelopeSchema);
 }
 

@@ -47,4 +47,12 @@ describe('monthly spending explorer', () => {
     expect(screen.getByText('No category breakdown was supplied for this month.')).toBeVisible();
     expect(screen.queryByRole('region', { name: 'Expense groups', exact: true })).not.toBeInTheDocument();
   });
+
+  it('opens the latest imported expenses when this month and last month are missing', () => {
+    vi.setSystemTime(new Date('2026-10-30T12:00:00Z'));
+    render(<MonthlySpending review={FINANCE_REVIEW} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Latest imported month' }));
+    expect(screen.getByRole('combobox', { name: 'Review month' })).toHaveValue('2026-08');
+    expect(screen.getByRole('region', { name: 'Expense groups', exact: true })).toBeVisible();
+  });
 });

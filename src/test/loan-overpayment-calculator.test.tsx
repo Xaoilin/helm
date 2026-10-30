@@ -1,9 +1,41 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { LoanOverpaymentCalculator } from '../components/finance/LoanOverpaymentCalculator';
-import { OVERPAYMENT_REVIEW } from './loan-overpayment-fixture';
+import { OVERPAYMENT_PROFILE, OVERPAYMENT_REVIEW } from './loan-overpayment-fixture';
 
 describe('loan overpayment calculator', () => {
+  it('loads the saved default and displays monthly interest amounts and repayment ratios over time', () => {
+    render(<LoanOverpaymentCalculator review={{ ...OVERPAYMENT_REVIEW, loanProfiles: [OVERPAYMENT_PROFILE] }} />);
+    expect(screen.getByLabelText('Saved profile')).toHaveValue(OVERPAYMENT_PROFILE.id);
+    const selina = screen.getByRole('article', { name: 'Selina (example) overpayment calculator' });
+    expect(within(selina).getByLabelText('Extra payment (£/month)')).toHaveValue(100);
+    expect(within(selina).getByRole('region', { name: 'Normal repayment split' })).toHaveTextContent('Interest charged£100.00 (50%)');
+    expect(within(selina).getByRole('region', { name: 'Overpayment repayment split' })).toHaveTextContent('Interest charged£100.00 (33.3%)');
+    expect(within(selina).getByRole('region', { name: 'Overpayment repayment split' })).toHaveTextContent('Capital repaid£200.00 (66.7%)');
+    fireEvent.change(within(selina).getByRole('slider'), { target: { value: '2' } });
+    expect(within(selina).getByRole('region', { name: 'Normal repayment split' })).toHaveTextContent('Interest charged£99.00 (49.5%)');
+    expect(within(selina).getByRole('region', { name: 'Overpayment repayment split' })).toHaveTextContent('Interest charged£98.00 (32.7%)');
+    const accrual = within(selina).getByLabelText('Monthly interest from the remaining balance');
+    expect(accrual).toHaveTextContent('£9,900.00 balance → £99.00 interest');
+    expect(accrual).toHaveTextContent('£9,800.00 balance → £98.00 interest');
+    expect(within(selina).getByRole('img', { name: 'Monthly interest charged (£)' })).toBeInTheDocument();
+    expect(within(selina).getByRole('img', { name: 'Interest share of each repayment (%)' })).toBeInTheDocument();
+  });
+
+  it('sends a named profile only when explicitly saved and keeps entered extras separate from matching', async () => {
+    const changeProfile = vi.fn().mockResolvedValue(undefined);
+    render(<LoanOverpaymentCalculator review={OVERPAYMENT_REVIEW} profilesWritable changeProfile={changeProfile} />);
+    const selina = screen.getByRole('article', { name: 'Selina (example) overpayment calculator' });
+    fireEvent.change(within(selina).getByLabelText('Extra payment (£/month)'), { target: { value: '100' } });
+    fireEvent.click(within(selina).getByRole('checkbox'));
+    expect(changeProfile).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'My monthly plan' } });
+    fireEvent.click(screen.getByLabelText('Load this profile by default'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save profile', exact: true }));
+    expect(changeProfile).toHaveBeenCalledWith({ operation: 'save', profile: expect.objectContaining({ name: 'My monthly plan', isDefault: true,
+      loans: expect.arrayContaining([expect.objectContaining({ loanId: 'example-selina', monthlyExtraPence: 10_000, matchExtra: true })]) }) });
+    expect(await screen.findByText(/Saved “My monthly plan”/)).toBeVisible();
+  });
   it('compares both dated loans, individual loans and a share without changing the loan calculation', () => {
     render(<LoanOverpaymentCalculator review={OVERPAYMENT_REVIEW} />);
     const totals = screen.getByLabelText('Selected loan totals');

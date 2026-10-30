@@ -54,6 +54,20 @@ const expenseGroupsSchema = z.array(z.object({
   label: labelSchema, group: z.enum(['non-discretionary', 'necessary', 'discretionary']),
 }).strict()).max(MAX_EXPENSE_GROUPS).refine(entries =>
   new Set(entries.map(entry => entry.label.trim().toLowerCase())).size === entries.length, 'Duplicate expense group labels.');
+const profileLoanSchema = z.object({
+  loanId: idSchema, balancePence: pence, annualRatePercent: z.number().min(0).max(100),
+  monthlyPaymentPence: pence, monthlyExtraPence: pence, lumpSumPence: pence,
+  extraStartsAfterMonths: z.number().int().min(0).max(1199), sharePercent: z.number().min(0).max(100),
+  matchExtra: z.boolean(), repaymentMode: z.enum(['shorten-term', 'reduce-payment']), balanceAsOf: dateSchema.nullable().optional(),
+}).strict().refine(value => value.balancePence === 0 || value.monthlyPaymentPence > 0, 'A positive loan balance needs a positive monthly payment.');
+const profileSchema = z.object({
+  id: idSchema, name: z.string().trim().min(1).max(128), isDefault: z.boolean(), firstPaymentMonth: monthSchema,
+  selectedLoanId: idSchema.nullable().optional(), showShare: z.boolean(), reviewAsOf: dateSchema,
+  loans: z.array(profileLoanSchema).min(1).max(50),
+}).strict().refine(value => new Set(value.loans.map(loan => loan.loanId)).size === value.loans.length, 'Duplicate profile loan IDs.')
+  .refine(value => !value.selectedLoanId || value.loans.some(loan => loan.loanId === value.selectedLoanId), 'The selected loan must be in the profile.');
+const profilesSchema = z.array(profileSchema).max(20).refine(uniqueIds, 'Duplicate loan profile IDs.')
+  .refine(profiles => profiles.filter(profile => profile.isDefault).length <= 1, 'Only one loan profile can be the default.');
 const draftSchema = z.object({
   asOf: dateSchema, currency: z.literal('GBP'),
   coverage: z.object({ from: dateSchema, to: dateSchema, completeThrough: monthSchema, transactionCount: count, accountCount: count, note: textSchema }).strict()
@@ -68,9 +82,11 @@ const draftSchema = z.object({
   }).strict(),
   opportunities: z.array(z.object({ label: labelSchema, monthlyPence: pence, note: textSchema, suggestedCapPence: pence.optional() }).strict()).max(100),
   loans: z.array(loanSchema).max(50).refine(uniqueIds, 'Duplicate loan IDs.'), notes: z.array(textSchema).max(100),
+  loanProfiles: profilesSchema.nullable().optional(),
   sources: z.array(sourceSchema).max(100).refine(uniqueIds, 'Duplicate source IDs.'),
 }).strict().refine(value => new TextEncoder().encode(JSON.stringify(value, null, 1)).byteLength <= 262_144, 'Finance input must fit within 256 KiB.')
-  .refine(value => value.loans.every(loan => loan.sourceIds.every(id => value.sources.some(source => source.id === id))), 'Loan references an unknown source.');
+  .refine(value => value.loans.every(loan => loan.sourceIds.every(id => value.sources.some(source => source.id === id))), 'Loan references an unknown source.')
+  .refine(value => !value.loanProfiles || value.loanProfiles.every(profile => profile.loans.every(item => value.loans.some(loan => loan.id === item.loanId))), 'Loan profile references an unknown loan.');
 const expectedUpdatedAtSchema = z.string().min(1).max(64).nullable().describe('Exact updatedAt from finance_get_review, or null only when no review exists. Reload after a conflict.');
 
 function corsHeaders(origin: string | null): Record<string, string> {
@@ -160,6 +176,11 @@ async function forward(tool: string, run: () => Promise<unknown>) {
   }
 }
 
+async function readProfileReview(token: string) {
+  const body = await callFinance(token, 'Sabah One Finance could not read loan profiles.', { method: 'GET', path: '/review' });
+  return (body as { review?: { loanProfiles?: z.infer<typeof profileSchema>[]; updatedAt: string } | null }).review ?? null;
+}
+
 function registerFinanceTools(server: McpServer, token: string): void {
   server.registerTool('finance_get_review', {
     title: 'Get Sabah One Banking Review and Loans',
@@ -170,9 +191,45 @@ function registerFinanceTools(server: McpServer, token: string): void {
     const body = await callFinance(token, 'Sabah One Finance rejected finance_get_review.', { method: 'GET', path: '/review' });
     return (body as { review?: unknown } | null)?.review ?? null;
   }));
+  server.registerTool('finance_list_loan_profiles', {
+    title: 'List Saved Loan Scenarios',
+    description: 'List this account’s named loan planning profiles and the current review updatedAt. These are saved assumptions, not live balances or payment instructions.',
+    inputSchema: z.object({}).strict(),
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  }, () => forward('finance_list_loan_profiles', async () => {
+    const review = await readProfileReview(token);
+    return { profiles: review?.loanProfiles ?? [], updatedAt: review?.updatedAt ?? null };
+  }));
+  server.registerTool('finance_get_loan_profile', {
+    title: 'Get Saved Loan Scenario',
+    description: 'Read one saved loan planning profile by ID, or null if missing, with the review updatedAt for a later save.',
+    inputSchema: z.object({ profileId: idSchema }).strict(),
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  }, input => forward('finance_get_loan_profile', async () => {
+    const review = await readProfileReview(token);
+    return { profile: review?.loanProfiles?.find(profile => profile.id === input.profileId) ?? null, updatedAt: review?.updatedAt ?? null };
+  }));
+  server.registerTool('finance_save_loan_profile', {
+    title: 'Save Named Loan Scenario',
+    description: 'Create or replace one named loan planning profile. Read the review first and supply its exact updatedAt. Setting isDefault clears the other profile default flags. Preserves every other review field. Reuse requestId and exact input for a retry. This never changes a loan or makes a payment.',
+    inputSchema: z.object({ requestId: requestIdSchema, profile: profileSchema, expectedUpdatedAt: z.string().min(1).max(64) }).strict(),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  }, input => forward('finance_save_loan_profile', () => callFinance(token, 'Sabah One Finance rejected finance_save_loan_profile.', {
+    method: 'PUT', path: '/review', requestId: input.requestId,
+    body: { loanProfileChange: { operation: 'save', profile: input.profile }, expectedUpdatedAt: input.expectedUpdatedAt },
+  })));
+  server.registerTool('finance_remove_loan_profile', {
+    title: 'Remove Saved Loan Scenario',
+    description: 'Remove exactly one saved profile with explicit confirmed=true and the latest review updatedAt. Preserves all other review fields. Reuse the same requestId and input for an exact retry. This does not change borrowing or payments.',
+    inputSchema: z.object({ requestId: requestIdSchema, profileId: idSchema, confirmed: z.literal(true), expectedUpdatedAt: z.string().min(1).max(64) }).strict(),
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  }, input => forward('finance_remove_loan_profile', () => callFinance(token, 'Sabah One Finance rejected finance_remove_loan_profile.', {
+    method: 'PUT', path: '/review', requestId: input.requestId,
+    body: { loanProfileChange: { operation: 'remove', profileId: input.profileId, confirmed: input.confirmed }, expectedUpdatedAt: input.expectedUpdatedAt },
+  })));
   server.registerTool('finance_save_review', {
     title: 'Save Sabah One Banking Review and Loans',
-    description: 'Replace the complete current private review with source-dated verified information and explicit uncertainty. Amounts are integer pence. Preserve loans, sources and expenseGroups; keep household transfers separate to prevent double counting and loan balances separate from settlement quotes. Expense groups classify category labels across all months: non-discretionary, necessary, or discretionary. Supply the exact updatedAt from the latest read, or null for the first save. Reuse requestId only for an exact retry. This cannot access banks, move money, change borrowing or make payments.',
+    description: 'Replace the complete current private review with source-dated verified information and explicit uncertainty. Amounts are integer pence. Preserve loans, sources and expenseGroups; keep household transfers separate to prevent double counting and loan balances separate from settlement quotes. Expense groups classify category labels across all months: non-discretionary, necessary, or discretionary. Supply the exact updatedAt from the latest read, or null for the first save. Reuse requestId only for an exact retry. Omitted or null loanProfiles preserve stored scenarios; an explicit empty array clears them. This cannot access banks, move money, change borrowing or make payments.',
     inputSchema: z.object({ requestId: requestIdSchema, review: draftSchema, expectedUpdatedAt: expectedUpdatedAtSchema }).strict(),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, input => forward('finance_save_review', () => callFinance(token, 'Sabah One Finance rejected finance_save_review.', {

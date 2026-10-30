@@ -130,6 +130,26 @@ const loanSchema = z.object({
   sourceIds: z.array(z.string()),
 });
 
+export const loanProfileLoanSchema = z.object({
+  loanId: z.string().min(1).max(256),
+  balancePence: z.number().int().min(0).max(1_000_000_000_000),
+  annualRatePercent: z.number().min(0).max(100),
+  monthlyPaymentPence: z.number().int().min(0).max(1_000_000_000_000),
+  monthlyExtraPence: z.number().int().min(0).max(1_000_000_000_000),
+  lumpSumPence: z.number().int().min(0).max(1_000_000_000_000),
+  extraStartsAfterMonths: z.number().int().min(0).max(1199),
+  sharePercent: z.number().min(0).max(100),
+  matchExtra: z.boolean(),
+  repaymentMode: z.enum(['shorten-term', 'reduce-payment']),
+  balanceAsOf: optional(isoDate),
+});
+
+export const loanProfileSchema = z.object({
+  id: z.string().min(1).max(256), name: z.string().trim().min(1).max(128), isDefault: z.boolean(),
+  firstPaymentMonth: month, selectedLoanId: optional(z.string().min(1).max(256)),
+  showShare: z.boolean(), reviewAsOf: isoDate, loans: z.array(loanProfileLoanSchema).min(1).max(50),
+});
+
 export const financeReviewSchema = z.object({
   id: z.string(),
   asOf: isoDate,
@@ -164,6 +184,7 @@ export const financeReviewSchema = z.object({
   loans: z.array(loanSchema),
   notes: z.array(z.string()),
   sources: z.array(reviewSourceSchema),
+  loanProfiles: optional(z.array(loanProfileSchema).max(20)),
   createdAt: instant,
   updatedAt: instant,
 }).transform((review): FinanceReview => review);
@@ -245,6 +266,8 @@ export const FINANCE_CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   'finance-service/review-expense-groups': reviewEnvelopeSchema,
   'finance-service/review-empty': reviewEnvelopeSchema,
   'finance-service/review-saved': reviewSavedSchema,
+  'finance-service/review-loan-profiles': reviewEnvelopeSchema,
+  'finance-service/review-loan-profile-saved': reviewEnvelopeSchema,
   'finance-service/review-changed': apiErrorSchema,
   'finance-service/equity-positions': equityPositionsSchema,
   'finance-service/equity-position': equityPositionSchema,

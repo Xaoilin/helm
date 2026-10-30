@@ -149,11 +149,11 @@ function LoanCard({ loan, sources }: { loan: Loan; sources: FinanceReview['sourc
   </article>;
 }
 
-function Loans({ review }: { review: FinanceReview }) {
+function Loans({ review, changeProfile, profilesWritable, savingProfile }: Pick<ReturnType<typeof useFinanceReview>, 'review' | 'changeProfile' | 'profilesWritable' | 'savingProfile'> & { review: FinanceReview }) {
   const active = review.loans.filter(loan => loan.status === 'active');
   const history = review.loans.filter(loan => loan.status !== 'active');
   return <>
-    <LoanOverpaymentCalculator key={review.updatedAt} review={review} />
+    <LoanOverpaymentCalculator review={review} changeProfile={changeProfile} profilesWritable={profilesWritable} savingProfile={savingProfile} />
     <p className="banking-muted">Dated loan records. Reported balances and settlement quotes are snapshots; missing amounts remain unconfirmed.</p>
     <section className="banking-block" aria-label="Active loans"><h3>Active loans</h3>
       <div className="banking-grid">{active.map(loan => <LoanCard key={loan.id} loan={loan} sources={review.sources} />)}</div>
@@ -166,7 +166,7 @@ function Loans({ review }: { review: FinanceReview }) {
 }
 
 export function BankingReview({ view = 'overview' }: { view?: View }) {
-  const { review, loaded, error, stale, refresh, saving, moveExpense } = useFinanceReview();
+  const { review, loaded, error, stale, refresh, saving, expensesWritable, moveExpense, changeProfile, profilesWritable, savingProfile } = useFinanceReview();
   return <section className="banking-review" aria-label="Banking review">
     <h2>{view === 'loans' ? 'Loans' : view === 'spending' ? 'Spending review' : 'Your monthly budget'}</h2>
     {error && <div className="banking-error" role="alert">{error} <button className="btn btn-sm" onClick={() => void refresh()}>Retry loading</button></div>}
@@ -175,7 +175,7 @@ export function BankingReview({ view = 'overview' }: { view?: View }) {
     {review && <>
       <p className="banking-muted">Snapshot as of {date(review.asOf)} · Imported bank snapshot · No automatic refresh</p>
       <p className="banking-coverage">{date(review.coverage.from)} – {date(review.coverage.to)} · {review.coverage.transactionCount.toLocaleString('en-GB')} transactions · {review.coverage.accountCount} accounts<br />{review.coverage.note}</p>
-      {view === 'overview' ? <Budget review={review} /> : view === 'spending' ? <Spending review={review} onMove={moveExpense} saving={saving} disabled={stale} /> : <Loans review={review} />}
+      {view === 'overview' ? <Budget review={review} /> : view === 'spending' ? <Spending review={review} onMove={moveExpense} saving={saving} disabled={stale || !expensesWritable} /> : <Loans review={review} changeProfile={changeProfile} profilesWritable={profilesWritable} savingProfile={savingProfile} />}
     </>}
   </section>;
 }

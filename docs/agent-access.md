@@ -41,16 +41,24 @@ A first-party UI path may share the same domain service, but it does not replace
 | Inventory | Inventory surface | Published `sabah-one-inventory-mcp` | Use its seven narrow tools and Inventory-specific OAuth approval. The function forwards the agent's token to the life admin service (`/api/life/v1/inventory`), which holds the records and re-checks the approval (the function first asks it whether the agent is approved: a refusal is the OAuth 403 challenge); `inventory_resolve_project` resolves projects in the knowledge service (`/api/knowledge/v1/projects/resolve`), which re-checks the same approval. |
 | Employment | Employment surface | `sabah-one-employment-mcp` | Use its six narrow application/history tools with a separate Employment OAuth approval. Inventory approval does not grant Employment access. The function checks approval through `/api/life/v1/jobs/access` without reading applications, then forwards the agent's token to the life admin service (`/api/life/v1/jobs`), which holds the records and re-checks the approval. |
 | Finance equity | `Navigation and editor` | `sabah-one-equity-mcp` (requires deployment and Equity OAuth approval) | Five semantic position tools; isolated from cash/banking and other MCP domains. The function forwards the agent's token to the finance service (`/api/finance/v1/equity/positions`), which holds the positions and re-checks the Equity approval. See `finance-equity.md`. |
-| Finance banking review and loans | Dated review and loan records | `sabah-one-finance-mcp` (requires deployment and Finance OAuth approval) | Two semantic review tools; independent of Equity and existing manual accounts. The function forwards the agent's token to the finance service (`/api/finance/v1/review`), which holds the review and re-checks the Finance approval. See `finance-banking-review.md`. |
+| Finance banking review and loans | Dated review, loan records and saved calculator profiles | `sabah-one-finance-mcp` (requires deployment and Finance OAuth approval) | Two semantic review tools and four profile tools; independent of Equity and existing manual accounts. The function forwards the agent's token to the finance service (`/api/finance/v1/review`), which holds the review and profiles and re-checks the Finance approval. See `finance-banking-review.md`. |
 | Finance manual accounts, transactions, budgets, savings goals | Finance surface | Not yet published | The finance service refuses agent tokens on these paths (403 `agent_not_approved`); external agents stop at the missing MCP boundary. |
 | Tasks, Calendar, Knowledge, Prayer | Their surfaces | Not yet published | External agents stop at the missing MCP boundary. |
 | Other Sabah One features | Surface-dependent | Not yet published | Treat external access as unavailable until a domain MCP contract is delivered and listed here. |
 | Secrets | Intentionally unavailable | Intentionally unavailable | Secret plaintext remains outside agent tools. |
 
-The Selina/NatWest overpayment calculator is a view-local scenario over the existing
-Finance review. Agents read or correct its source loan records using the published
-`finance_get_review` and `finance_save_review` tools. Scenario inputs and calculated
-schedules are not persisted and add no service operation, bank action or new scope.
+The Selina/NatWest calculator saves explicit named profiles within the existing
+Finance review, under the same Finance approval. Agents use
+`finance_list_loan_profiles` / `finance_get_loan_profile` to read profiles and the
+current review revision, `finance_save_loan_profile` to create or update one (setting
+it default deliberately clears other default flags), and
+`finance_remove_loan_profile` with explicit confirmation to remove one. Writes
+carry the exact expected review revision and stable request ID; they forward a
+fixed semantic command to the Finance service's existing review endpoint. Legacy
+whole-review writes that omit or send null `loanProfiles` preserve them; explicit
+`[]` clears them. Profiles are assumptions, never bank actions, and calculated
+schedules and ratios are not stored. `finance_get_review` and
+`finance_save_review` remain the source-loan interface. No new OAuth scope is added.
 
 Finance expense-group choices are included in the existing semantic review tools
 as optional `expenseGroups: [{ label, group }]`, where group is `non-discretionary`,
