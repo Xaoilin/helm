@@ -3,6 +3,14 @@ import { expenseGrouping, normalizeExpenseLabel } from './expenseGroups';
 import { spendingTransactions } from './spendingTransactions';
 
 export const MAX_FORECAST_ITEMS = 200;
+
+/** Service JSON field order is not a meaningful change to a saved plan. */
+export function forecastFingerprint(forecast: BudgetForecast): string {
+  return JSON.stringify({ baselineMonth: forecast.baselineMonth, incomePence: forecast.incomePence ?? null,
+    incomeBasis: forecast.incomeBasis ?? null, items: forecast.items.map(item => ({
+      id: item.id, label: item.label, amountPence: item.amountPence, group: item.group,
+    })) });
+}
 const HOUSEHOLD = /\b(household contributions?|house bills)\b/iu;
 const SPOUSE = /\b(support for wife|wife support|spouse support|spending fund)\b/iu;
 const COMPLETED_REPAYMENT = /\b(completed|closed|repaid)\b.*\b(loans?|repayments?)\b/iu;

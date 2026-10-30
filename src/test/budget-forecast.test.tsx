@@ -31,6 +31,21 @@ describe('monthly budget forecast', () => {
     expect(forecastFromMonth(review, '2026-09').items.find(item => item.label === 'Subscriptions')?.amountPence).toBe(1000);
   });
 
+  it('accepts the same saved forecast when the real service serialises fields in a different order', async () => {
+    const initial = forecastFromMonth(BUDGET_REVIEW, '2026-09');
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<BudgetForecastEditor review={{ ...BUDGET_REVIEW, budgetForecast: initial }} onSave={onSave} saving={false} writable />);
+    fireEvent.change(screen.getByLabelText('Monthly take-home salary (£)'), { target: { value: '4400' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save forecast' }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Forecast saved'));
+    const saved = onSave.mock.calls[0][0];
+    const serviceOrdered = { baselineMonth: saved.baselineMonth, items: saved.items, incomePence: saved.incomePence, incomeBasis: saved.incomeBasis };
+    rerender(<BudgetForecastEditor review={{ ...BUDGET_REVIEW, budgetForecast: serviceOrdered }} onSave={onSave} saving={false} writable />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Monthly amount for Groceries'), { target: { value: '225' } });
+    expect(screen.getByRole('button', { name: 'Save forecast' })).toBeEnabled();
+  });
+
   it('shows the evidence behind a baseline category and handles zero salary without a false percentage', () => {
     render(<BudgetForecastEditor review={DETAILED_BUDGET_REVIEW} onSave={vi.fn()} saving={false} writable />);
     fireEvent.click(screen.getByText('1 payment · Example Temporary Cover'));

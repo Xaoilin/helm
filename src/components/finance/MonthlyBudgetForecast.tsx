@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import type { BudgetForecast, BudgetForecastItem, ExpenseGroup, FinanceReview } from '../../types/domain';
 import { EXPENSE_GROUPS } from '../../services/expenseGroups';
-import { forecastBaseline, forecastFromMonth, MAX_FORECAST_ITEMS } from '../../services/budgetForecast';
+import { forecastBaseline, forecastFingerprint, forecastFromMonth, MAX_FORECAST_ITEMS } from '../../services/budgetForecast';
 import { formatGBP } from '../../services/financeHelpers';
 import { useFinanceReview } from '../../store/contexts/useFinanceReview';
 import { CategoryPayments } from './SpendingTransactions';
@@ -30,7 +30,7 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
   const [items, setItems] = useState<DraftItem[]>(() => initial.items.map(toDraft));
   const [income, setIncome] = useState(((initial.incomePence ?? review.budget.incomePence) / 100).toFixed(2));
   const [incomeBasis, setIncomeBasis] = useState(initial.incomeBasis ?? review.budget.incomeBasis);
-  const [confirmed, setConfirmed] = useState<string | null>(review.budgetForecast ? JSON.stringify(initial) : null);
+  const [confirmed, setConfirmed] = useState<string | null>(review.budgetForecast ? forecastFingerprint(initial) : null);
   const [message, setMessage] = useState('');
   const [failure, setFailure] = useState('');
   const pendingFocus = useRef<string | null>(null);
@@ -45,8 +45,8 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
   const spending = forecast.items.reduce((sum, item) => sum + item.amountPence, 0);
   const remainder = forecast.incomePence! - spending;
   const incomeUsed = forecast.incomePence! > 0 ? spending / forecast.incomePence! * 100 : null;
-  const dirty = JSON.stringify(forecast) !== confirmed;
-  const persisted = review.budgetForecast ? JSON.stringify(review.budgetForecast) : null;
+  const dirty = forecastFingerprint(forecast) !== confirmed;
+  const persisted = review.budgetForecast ? forecastFingerprint(review.budgetForecast) : null;
   const changedElsewhere = persisted !== confirmed;
   const disabled = saving || !writable;
   const update = (id: string, patch: Partial<DraftItem>) => {
@@ -58,7 +58,7 @@ export function BudgetForecastEditor({ review, onSave, saving, writable }: {
     setFailure(''); setMessage('');
     try {
       await onSave(forecast);
-      setConfirmed(JSON.stringify(forecast));
+      setConfirmed(forecastFingerprint(forecast));
       setMessage('Forecast saved to your account.');
     } catch (error) { setFailure(error instanceof Error ? error.message : 'Your forecast could not be saved. Try again.'); }
   };
