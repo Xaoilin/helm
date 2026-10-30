@@ -209,6 +209,7 @@ test('shows the private banking budget, twelve month review and separate dated l
     await page.screenshot({ path: testInfo.outputPath(`banking-overview-${width}.png`) });
 
     await page.getByRole('button', { name: 'Spending', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Bank balance snapshots' })).not.toContainText('Example household bank');
     await expect(page.getByRole('region', { name: 'Monthly spending explorer' })).toContainText('September 2026 has not been imported yet.');
     await page.getByRole('button', { name: 'Last month', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Spending by category' })).toContainText('Retail purchases');

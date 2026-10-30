@@ -18,6 +18,12 @@ a suggested cap shows its illustrative saving without labelling all spending
 unnecessary. Full budget assumptions, historical cash flow and sources remain
 available below the summary.
 
+Spending represents house bills through the raw personal transfer to the joint
+account, counted once. It does not itemise downstream joint-account payments and
+only shows personal bank-balance snapshots. User-confirmed raw movements belong
+in the month's spending categories, with explicit group choices and reconciled
+cash-flow totals; changing the separate budget does not create a Spending row.
+
 The presentation uses the Finance MCP review and adds no bank
 connection, payment capability or automatic refresh. Agents refresh the private
 review through `finance_get_review` and `finance_save_review`; receipt evidence

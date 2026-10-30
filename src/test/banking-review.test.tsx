@@ -22,14 +22,15 @@ describe('banking review', () => {
     expect(screen.getByText('Includes both mortgages and household bills.')).toBeVisible();
     expect(screen.getByText(/No automatic refresh/)).toBeVisible();
   });
-  it('shows all months, category refunds and personal versus household snapshots', () => {
+  it('shows raw personal spending and refunds while excluding joint-account snapshots', () => {
     render(<BankingReview view="spending" />);
     expect(within(screen.getByRole('table', { name: 'Monthly bank cash flow' })).getAllByRole('row')).toHaveLength(13);
     fireEvent.click(screen.getAllByText('Categories')[0]);
     expect(screen.getAllByText('-£100.00')[0]).toBeVisible();
     const balances = screen.getByRole('region', { name: 'Bank balance snapshots' });
     expect(balances).toHaveTextContent('Personal');
-    expect(balances).toHaveTextContent('Household');
+    expect(balances).not.toHaveTextContent('Example household bank');
+    expect(balances).not.toHaveTextContent('£450.00');
     expect(balances).toHaveTextContent('-£1,200.00');
     expect(screen.getByRole('region', { name: 'High-value spending' })).toHaveTextContent('Illustrative cap: £500.00 / month');
   });
