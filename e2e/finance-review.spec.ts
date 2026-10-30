@@ -215,3 +215,89 @@ test('logs a manual expense and shows the balance the finance service works out,
   await expect(page.getByRole('heading', { name: 'Finance', exact: true })).toBeVisible();
   await expect(page.locator('.surface-header .subtitle')).toHaveText('Net worth: £4,987.66');
 });
+
+
+const EXPENSE_REVIEW = {
+  ...FINANCE_REVIEW,
+  months: FINANCE_REVIEW.months.map(month => ({ ...month, categories: [
+    { label: 'Mortgage', amountPence: 200_000 }, { label: 'Groceries', amountPence: 40_000 },
+    { label: 'Fuel', amountPence: 10_000 }, { label: 'Netflix subscriptions', amountPence: 2_000 },
+    { label: 'Other outgoings', amountPence: 168_000 }, { label: 'Refunds', amountPence: -10_000 },
+  ] })),
+};
+
+test('expense groups save menu and drag moves across months and reload, with responsive keyboard access', async ({ page, scenario }, testInfo) => {
+  const control = await scenario({ now: EXPENSE_REVIEW.updatedAt, stores: { financeReviews: [EXPENSE_REVIEW] } });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await page.getByRole('button', { name: 'Spending', exact: true }).click();
+  await page.getByRole('button', { name: 'Last month', exact: true }).click();
+  const board = page.getByRole('region', { name: 'Expense groups', exact: true });
+  const fixed = board.getByRole('region', { name: 'Non-discretionary', exact: true });
+  const necessary = board.getByRole('region', { name: 'Discretionary but necessary', exact: true });
+  const optional = board.getByRole('region', { name: '100% discretionary', exact: true });
+  await expect(fixed.getByRole('article', { name: 'Mortgage expense' })).toBeVisible();
+  await expect(necessary.getByRole('article', { name: 'Fuel expense' })).toBeVisible();
+  await expect(optional.getByRole('article', { name: 'Netflix subscriptions expense' })).toBeVisible();
+  await board.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('expense-groups-desktop.png') });
+  const write = page.waitForResponse(response => response.url().endsWith('/api/finance/v1/review') && response.request().method() === 'PUT');
+  await board.getByLabel('Group for Fuel', { exact: true }).focus();
+  await expect(board.getByLabel('Group for Fuel', { exact: true })).toBeFocused();
+  await board.getByLabel('Group for Fuel', { exact: true }).selectOption('discretionary');
+  const response = await write;
+  expect(response.request().postDataJSON()).toMatchObject({ expectedUpdatedAt: EXPENSE_REVIEW.updatedAt,
+    review: { expenseGroups: [{ label: 'Fuel', group: 'discretionary' }] } });
+  await expect(optional.getByRole('article', { name: 'Fuel expense' })).toBeVisible();
+  await expect(board.getByLabel('Group for Fuel', { exact: true })).toBeFocused();
+  expect(control.services.finance.review?.expenseGroups).toEqual([{ label: 'Fuel', group: 'discretionary' }]);
+  await optional.getByRole('article', { name: 'Netflix subscriptions expense' }).dragTo(necessary);
+  await expect(necessary.getByRole('article', { name: 'Netflix subscriptions expense' })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Review month', exact: true }).selectOption('2026-07');
+  await expect(optional.getByRole('article', { name: 'Fuel expense' })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Spending', exact: true }).click();
+  await page.getByRole('button', { name: 'Last month', exact: true }).click();
+  await expect(optional.getByRole('article', { name: 'Fuel expense' })).toBeVisible();
+  await expect(necessary.getByRole('article', { name: 'Netflix subscriptions expense' })).toBeVisible();
+  for (const width of [320, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await board.getByRole('heading', { name: 'How necessary is it?' }).scrollIntoViewIfNeeded();
+    expect(await board.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await expect(board.getByLabel('Group for Mortgage', { exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`expense-groups-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 320, height: 800 });
+  const scroller = page.locator('.main-content');
+  await scroller.evaluate(element => { element.scrollTop = 0; });
+  await scroller.focus();
+  await page.keyboard.press('PageDown');
+  await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await board.getByLabel('Group for Fuel', { exact: true }).focus();
+  await expect(board.getByLabel('Group for Fuel', { exact: true })).toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath('expense-groups-mobile-move.png') });
+});
+
+test('a refused group save retains the confirmed placement and supports recovery', async ({ page, scenario }) => {
+  await scenario({ now: EXPENSE_REVIEW.updatedAt, stores: { financeReviews: [EXPENSE_REVIEW] } });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await page.getByRole('button', { name: 'Spending', exact: true }).click();
+  await page.getByRole('button', { name: 'Last month', exact: true }).click();
+  const board = page.getByRole('region', { name: 'Expense groups', exact: true });
+  await page.route('**/api/finance/v1/review', async route => {
+    if (route.request().method() === 'PUT') await route.fulfill({ status: 409, contentType: 'application/json',
+      body: JSON.stringify({ code: 'review_changed', message: 'The banking review changed; reload and try again.' }) });
+    else await route.fallback();
+  });
+  await board.getByLabel('Group for Fuel', { exact: true }).selectOption('discretionary');
+  await expect(page.getByRole('alert').filter({ hasText: 'Your last change was not saved' })).toBeVisible();
+  await expect(board.getByRole('region', { name: 'Discretionary but necessary', exact: true }).getByRole('article', { name: 'Fuel expense' })).toBeVisible();
+  await page.unroute('**/api/finance/v1/review');
+  await page.getByRole('button', { name: 'Retry loading' }).click();
+  await expect(board.getByLabel('Group for Fuel', { exact: true })).toBeEnabled();
+  await board.getByLabel('Group for Fuel', { exact: true }).selectOption('discretionary');
+  await expect(board.getByRole('region', { name: '100% discretionary', exact: true }).getByRole('article', { name: 'Fuel expense' })).toBeVisible();
+});

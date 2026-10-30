@@ -347,11 +347,14 @@ async function main() {
             }
       ]
 };
-    const saveArgs = { requestId: randomUUID(), review, expectedUpdatedAt: null };
+    const expenseGroups = [{ label: 'Refund', group: 'necessary' }];
+    const saveArgs = { requestId: randomUUID(), review: { ...review, expenseGroups }, expectedUpdatedAt: null };
     const saved = await callTool('Synthetic review saved', oauthToken, 'finance_save_review', saveArgs);
     const savedReview = record(saved.review);
     expect('Synthetic review persisted with server lifecycle', savedReview.id === 'current'
       && typeof savedReview.updatedAt === 'string' && typeof savedReview.createdAt === 'string');
+    expect('Expense group choice is confirmed by the finance service',
+      JSON.stringify(savedReview.expenseGroups) === JSON.stringify(expenseGroups));
     const replay = await callTool('Synthetic review replayed', oauthToken, 'finance_save_review', saveArgs);
     expect('Exact replay returns original receipt', JSON.stringify(replay) === JSON.stringify(saved));
     const changedReplay = await mcp('Changed retry rejected', oauthToken, 'tools/call', {
@@ -363,11 +366,15 @@ async function main() {
     });
     expect('Update advances revision and preserves lifecycle', record(updated.review).updatedAt !== savedReview.updatedAt
       && record(updated.review).createdAt === savedReview.createdAt);
+    expect('Older review refreshes preserve expense group choices when omitted',
+      JSON.stringify(record(updated.review).expenseGroups) === JSON.stringify(expenseGroups));
     const stale = await mcp('Stale review rejected', oauthToken, 'tools/call', {
       name: 'finance_save_review', arguments: { requestId: randomUUID(), review, expectedUpdatedAt: savedReview.updatedAt },
     });
     expect('Stale write fails closed', stale.isError === true);
     const fetched = await callTool('Synthetic review read back', oauthToken, 'finance_get_review', {});
+    expect('Expense group choice survives an independent authenticated read',
+      JSON.stringify(fetched.expenseGroups) === JSON.stringify(expenseGroups));
     expect('Readback preserves exact review', JSON.stringify(fetched) === JSON.stringify(updated.review));
     const loan = Array.isArray(fetched.loans) ? record(fetched.loans[0]) : {};
     expect('Loan balance and settlement remain distinct', loan.balancePence === 700000 && loan.settlementPence === 650000);

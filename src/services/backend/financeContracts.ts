@@ -145,6 +145,9 @@ export const financeReviewSchema = z.object({
     month, incomePence: pence, outflowPence: pence, netPence: pence, salaryPence: pence,
     categories: z.array(z.object({ label: z.string(), amountPence: pence })),
   })),
+  expenseGroups: optional(z.array(z.object({
+    label: z.string(), group: z.enum(['non-discretionary', 'necessary', 'discretionary']),
+  }))),
   budget: z.object({
     incomePence: pence,
     incomeBasis: z.string(),
@@ -239,6 +242,7 @@ export const FINANCE_CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   'finance-service/savings-goal-saved': savingsGoalSchema,
   'finance-service/savings-goal-deleted': deletedSchema,
   'finance-service/review': reviewEnvelopeSchema,
+  'finance-service/review-expense-groups': reviewEnvelopeSchema,
   'finance-service/review-empty': reviewEnvelopeSchema,
   'finance-service/review-saved': reviewSavedSchema,
   'finance-service/review-changed': apiErrorSchema,

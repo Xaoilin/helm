@@ -1,25 +1,24 @@
 import { useState } from 'react';
 import type { FinanceReview } from '../../types/domain';
 import { formatGBP, toMonthStr } from '../../services/financeHelpers';
+import { ExpenseGroups, type ExpenseGroupControls } from './ExpenseGroups';
 import './MonthlySpending.css';
-
-const CATEGORY_COLORS = ['#a6a1ff', '#64d6c6', '#f6bd72', '#e49bc5', '#77b8ef', '#bbc586'];
 
 function monthLabel(value: string) {
   return new Date(`${value}-01T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
-export function MonthlySpending({ review }: { review: FinanceReview }) {
+export function MonthlySpending({ review, ...groupControls }: { review: FinanceReview } & ExpenseGroupControls) {
   const today = new Date();
   const thisMonth = toMonthStr(today);
   const lastMonth = toMonthStr(new Date(today.getFullYear(), today.getMonth() - 1, 1));
   const [selected, setSelected] = useState(thisMonth);
   const [query, setQuery] = useState('');
+  const latestImported = review.months.map(item => item.month).sort().at(-1);
   const months = [...new Set([thisMonth, lastMonth, ...review.months.map(item => item.month)])].sort().reverse();
   const month = review.months.find(item => item.month === selected);
   const partial = selected > review.coverage.completeThrough.slice(0, 7);
   const categories = [...(month?.categories ?? [])].sort((a, b) => b.amountPence - a.amountPence);
-  const positiveTotal = categories.reduce((sum, item) => sum + Math.max(0, item.amountPence), 0);
   const visible = categories.filter(item => item.label.toLocaleLowerCase('en-GB').includes(query.trim().toLocaleLowerCase('en-GB')));
   const essentials = review.budget.essentials.reduce((sum, item) => sum + item.amountPence, 0);
   const available = review.budget.incomePence - essentials - review.budget.workCostsPence;
@@ -40,6 +39,10 @@ export function MonthlySpending({ review }: { review: FinanceReview }) {
     <div className="spending-periods" role="group" aria-label="Quick month selection">
       <button aria-pressed={selected === thisMonth} onClick={() => { setSelected(thisMonth); setQuery(''); }}>This month</button>
       <button aria-pressed={selected === lastMonth} onClick={() => { setSelected(lastMonth); setQuery(''); }}>Last month</button>
+      {latestImported && latestImported !== thisMonth && latestImported !== lastMonth && <button
+        aria-pressed={selected === latestImported} onClick={() => { setSelected(latestImported); setQuery(''); }}>
+        Latest imported month
+      </button>}
     </div>
     <p className="spending-budget-line">Usual salary left after essentials & work costs <strong>{formatGBP(available)} / month</strong><span>Planning estimate, before optional and irregular spending.</span></p>
     {!month ? <div className="spending-missing" role="status">
@@ -56,17 +59,11 @@ export function MonthlySpending({ review }: { review: FinanceReview }) {
         <article className="spending-stat"><span>Net cash flow</span><strong className={month.netPence < 0 ? 'banking-negative' : ''}>{formatGBP(month.netPence)}</strong><small>Money in minus money out. This is not recurring savings.</small></article>
       </div>
       <section className="spending-breakdown" aria-label="Spending by category">
-        <div className="spending-heading"><div><h4>Every category</h4><p>Largest payments first. Refunds remain visible below.</p></div>
+        <div className="spending-heading"><div><h4>Your expenses</h4><p>Largest payments first in each group. Refunds stay visible.</p></div>
           <label className="spending-search">Find a category<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="e.g. subscriptions" /></label>
         </div>
-        <div className="spending-category-list">
-          {visible.map((item, index) => <div className="spending-category" key={`${item.label}-${index}`}>
-            <div><span>{item.label}</span><strong>{formatGBP(item.amountPence)}</strong></div>
-            {item.amountPence > 0 && positiveTotal > 0 && <div className="spending-bar" aria-hidden="true"><span style={{ width: `${item.amountPence / positiveTotal * 100}%`, background: CATEGORY_COLORS[categories.indexOf(item) % CATEGORY_COLORS.length] }} /></div>}
-            {item.amountPence < 0 && <small>Refund / credit</small>}
-          </div>)}
-          {visible.length === 0 && <p role="status">{categories.length === 0 ? 'No category breakdown was supplied for this month.' : 'No categories match your search.'}</p>}
-        </div>
+        {categories.length > 0 && <ExpenseGroups review={review} categories={categories} query={query} {...groupControls} />}
+        {visible.length === 0 && <p role="status">{categories.length === 0 ? 'No category breakdown was supplied for this month.' : 'No categories match your search.'}</p>}
         <p className="banking-muted">These are cash payments, including commitments and debt repayments. Household contributions are counted once; transfers between your own personal accounts are excluded.</p>
       </section>
     </>}

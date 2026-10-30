@@ -49,12 +49,18 @@ const monthReviewSchema = z.object({
   categories: z.array(z.object({ label: labelSchema, amountPence: signedPence }).strict()).max(100),
 }).strict().refine(value => value.incomePence - value.outflowPence === value.netPence, 'Monthly net must equal income minus outflow.');
 const uniqueIds = (entries: { id: string }[]) => new Set(entries.map(entry => entry.id)).size === entries.length;
+const MAX_EXPENSE_GROUPS = 500;
+const expenseGroupsSchema = z.array(z.object({
+  label: labelSchema, group: z.enum(['non-discretionary', 'necessary', 'discretionary']),
+}).strict()).max(MAX_EXPENSE_GROUPS).refine(entries =>
+  new Set(entries.map(entry => entry.label.trim().toLowerCase())).size === entries.length, 'Duplicate expense group labels.');
 const draftSchema = z.object({
   asOf: dateSchema, currency: z.literal('GBP'),
   coverage: z.object({ from: dateSchema, to: dateSchema, completeThrough: monthSchema, transactionCount: count, accountCount: count, note: textSchema }).strict()
     .refine(value => value.from <= value.to && value.completeThrough <= value.to.slice(0, 7), 'Coverage dates are inconsistent.'),
   accounts: z.array(z.object({ id: idSchema, label: labelSchema, ownership: z.enum(['personal', 'household']), balancePence: signedPence, asOf: dateSchema }).strict()).max(50).refine(uniqueIds, 'Duplicate account IDs.'),
   months: z.array(monthReviewSchema).max(120).refine(entries => new Set(entries.map(entry => entry.month)).size === entries.length, 'Duplicate months.'),
+  expenseGroups: expenseGroupsSchema.optional().describe('Saved category choices across all months. Preserve these when refreshing bank history; omit to retain existing choices, or [] to clear them.'),
   budget: z.object({ incomePence: pence, incomeBasis: textSchema,
     essentials: z.array(z.object({ label: labelSchema, amountPence: pence, note: textSchema }).strict()).max(100),
     workCostsPence: pence, workCostsNote: textSchema,
@@ -166,7 +172,7 @@ function registerFinanceTools(server: McpServer, token: string): void {
   }));
   server.registerTool('finance_save_review', {
     title: 'Save Sabah One Banking Review and Loans',
-    description: 'Replace the complete current private review with source-dated verified information and explicit uncertainty. Amounts are integer pence. Preserve loans and sources; keep household transfers separate to prevent double counting and loan balances separate from settlement quotes. Supply the exact updatedAt from the latest read, or null for the first save. Reuse requestId only for an exact retry. This cannot access banks, move money, change borrowing or make payments.',
+    description: 'Replace the complete current private review with source-dated verified information and explicit uncertainty. Amounts are integer pence. Preserve loans, sources and expenseGroups; keep household transfers separate to prevent double counting and loan balances separate from settlement quotes. Expense groups classify category labels across all months: non-discretionary, necessary, or discretionary. Supply the exact updatedAt from the latest read, or null for the first save. Reuse requestId only for an exact retry. This cannot access banks, move money, change borrowing or make payments.',
     inputSchema: z.object({ requestId: requestIdSchema, review: draftSchema, expectedUpdatedAt: expectedUpdatedAtSchema }).strict(),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, input => forward('finance_save_review', () => callFinance(token, 'Sabah One Finance rejected finance_save_review.', {

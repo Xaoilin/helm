@@ -40,4 +40,11 @@ describe('monthly spending explorer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Last month' }));
     expect(screen.getByRole('combobox', { name: 'Review month' })).toHaveValue('2025-12');
   });
+
+  it('does not invent zero expense-group totals when an imported month lacks categories', () => {
+    render(<MonthlySpending review={{ ...FINANCE_REVIEW, months: FINANCE_REVIEW.months.map(month => ({ ...month, categories: [] })) }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Last month' }));
+    expect(screen.getByText('No category breakdown was supplied for this month.')).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Expense groups', exact: true })).not.toBeInTheDocument();
+  });
 });
