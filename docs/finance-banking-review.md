@@ -37,8 +37,8 @@ Mortgage, loan repayments and bills start in the first group; food, takeaways an
 fuel start in the middle group; subscriptions, entertainment and clothes start in
 the last group. These are labelled suggestions, not verified judgments about each
 purchase. Broad unknown labels start in the middle group marked “Needs your review”.
-Mixed source categories move as a whole; this snapshot has no individual receipts
-to split. Refunds retain their negative amounts, and search filters visible cards
+Mixed source categories move as a whole; supporting personal payment details
+remain available within each category. Refunds retain their negative amounts, and search filters visible cards
 without changing the month's group totals. No budget or loan amount changes.
 
 Drag a category into a column or use its labelled group selector (keyboard and
@@ -216,3 +216,30 @@ Finance → Budgets & Goals starts with a monthly spending forecast. Its example
 Save forecast persists the complete plan only after service confirmation. Until then edits stay in the visible draft; a refused or conflicting save keeps them available for retry. An explicitly empty saved forecast stays empty on reload. A live update that changes the saved forecast blocks an older draft from saving and offers Load latest saved forecast; unrelated review updates can still be preserved during a save. Choosing another example replaces only the draft until it is saved. Forecasts do not alter historical money movements or the separate essential-budget assumptions.
 
 The optional account-owned `budgetForecast` contains `baselineMonth` and at most 200 items with unique `id`, `label`, nonnegative integer `amountPence` and the existing expense `group`. Existing Finance MCP review read/save tools expose it. Omitted/null forecasts preserve the saved plan during older imports and profile commands. A forecast with `items: []` explicitly saves an empty plan. The new shared `review-budget-forecast` fixture is tested by both applications; matching service deployment precedes the browser/MCP release.
+
+## Salary and payment detail
+
+Budgets & Goals compares editable monthly take-home salary with the full spending
+forecast, percentage allocated, and money left or overspent. The salary starts
+from the saved usual-payroll estimate and states its dated basis; total bank
+receipts include one-offs and are not a salary estimate. Save confirms salary
+and spending together. Existing revision and live-refresh guards apply to both.
+
+Spending retains category totals and adds searchable personal payment rows.
+Category cards and forecast rows expose their supporting historical payments:
+merchant, original description, date (or explicitly unknown posting date),
+verified purpose, recurrence and source links. Missing detail is visible;
+merchant names alone never establish an exact product or recurring obligation.
+The list reports whether it reconciles to the month's total. Household accounts
+are excluded even if a malformed response includes a row; a raw personal transfer
+can represent all joint house bills without exposing downstream payments.
+
+New example forecasts subtract evidence-marked one-offs and omit explicitly
+one-off categories, refunds and completed repayments. Existing chosen plans
+remain editable; importing payment history does not silently overwrite them.
+
+The escaped product gaps came from treating category totals as itemisation and
+verifying expense editing without the income-to-spending decision. The acceptance
+journey now exercises salary, remaining/overspent amounts, payment purpose/source,
+and save/reload together. Shared contracts and hosted Finance MCP acceptance
+verify that salary and payment evidence survive older-client refreshes.

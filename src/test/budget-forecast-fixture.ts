@@ -17,3 +17,13 @@ export const BUDGET_REVIEW: FinanceReview = {
   }],
   expenseGroups: [{ label: 'Private spending fund', group: 'non-discretionary' }],
 };
+
+export const DETAILED_BUDGET_REVIEW: FinanceReview = {
+  ...BUDGET_REVIEW,
+  transactions: [
+    { id: 'cover', accountId: 'personal', month: '2026-09', date: '2026-09-27', merchant: 'Example Temporary Cover', description: 'EXAMPLE COVER', category: 'Subscriptions', amountPence: 1000,
+      detail: 'Two-day cover for an example hybrid car, 27–29 September.', recurrence: 'one-off', sourceIds: ['statement'], origin: 'bank' },
+    { id: 'support', accountId: 'personal', month: '2026-10', merchant: 'Private spending fund', description: 'Monthly personal transfer', category: 'Private spending fund', amountPence: 25_000,
+      detail: 'Monthly private spending fund confirmed by you.', recurrence: 'recurring', origin: 'user' },
+  ],
+};

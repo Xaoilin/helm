@@ -53,11 +53,22 @@ const MAX_EXPENSE_GROUPS = 500;
 const MAX_FORECAST_ITEMS = 200;
 const budgetForecastSchema = z.object({
   baselineMonth: monthSchema,
+  incomePence: pence.nullable().optional(),
+  incomeBasis: textSchema.nullable().optional(),
   items: z.array(z.object({
     id: idSchema, label: labelSchema, amountPence: pence,
     group: z.enum(['non-discretionary', 'necessary', 'discretionary']),
   }).strict()).max(MAX_FORECAST_ITEMS).refine(uniqueIds, 'Duplicate forecast item IDs.'),
 }).strict();
+const reviewTransactionsSchema = z.array(z.object({
+  id: idSchema, accountId: idSchema, month: monthSchema, date: dateSchema.nullable().optional(),
+  merchant: labelSchema, description: textSchema, category: labelSchema,
+  amountPence: signedPence.refine(value => value !== 0, 'A payment cannot be zero.'),
+  detail: textSchema.nullable().optional(), recurrence: z.enum(['recurring', 'one-off', 'unknown']).nullable().optional(),
+  sourceIds: z.array(idSchema).max(100).nullable().optional(), origin: z.enum(['bank', 'user']),
+}).strict().refine(value => !value.date || value.date.slice(0, 7) === value.month, 'Payment date must match its month.')
+  .refine(value => value.origin !== 'bank' || Boolean(value.date && value.sourceIds?.length), 'Bank payments require a date and source.'))
+  .max(5000).refine(uniqueIds, 'Duplicate payment IDs.');
 const expenseGroupsSchema = z.array(z.object({
   label: labelSchema, group: z.enum(['non-discretionary', 'necessary', 'discretionary']),
 }).strict()).max(MAX_EXPENSE_GROUPS).refine(entries =>
@@ -84,6 +95,7 @@ const draftSchema = z.object({
   months: z.array(monthReviewSchema).max(120).refine(entries => new Set(entries.map(entry => entry.month)).size === entries.length, 'Duplicate months.'),
   expenseGroups: expenseGroupsSchema.optional().describe('Saved category choices across all months. Preserve these when refreshing bank history; omit to retain existing choices, or [] to clear them.'),
   budgetForecast: budgetForecastSchema.nullable().optional().describe('Editable monthly forecast, separate from historical spending. Missing/null preserves the saved plan; an explicit empty items list saves an empty plan.'),
+  transactions: reviewTransactionsSchema.nullable().optional().describe('Itemised personal spending: positive debit amounts, negative refunds. Preserve bank descriptions; add only verified purpose, recurrence and receipt sources. No joint-account itemisation. Missing/null preserves existing rows; [] clears.'),
   budget: z.object({ incomePence: pence, incomeBasis: textSchema,
     essentials: z.array(z.object({ label: labelSchema, amountPence: pence, note: textSchema }).strict()).max(100),
     workCostsPence: pence, workCostsNote: textSchema,
@@ -95,7 +107,9 @@ const draftSchema = z.object({
   sources: z.array(sourceSchema).max(100).refine(uniqueIds, 'Duplicate source IDs.'),
 }).strict().refine(value => new TextEncoder().encode(JSON.stringify(value, null, 1)).byteLength <= 262_144, 'Finance input must fit within 256 KiB.')
   .refine(value => value.loans.every(loan => loan.sourceIds.every(id => value.sources.some(source => source.id === id))), 'Loan references an unknown source.')
-  .refine(value => !value.loanProfiles || value.loanProfiles.every(profile => profile.loans.every(item => value.loans.some(loan => loan.id === item.loanId))), 'Loan profile references an unknown loan.');
+  .refine(value => !value.loanProfiles || value.loanProfiles.every(profile => profile.loans.every(item => value.loans.some(loan => loan.id === item.loanId))), 'Loan profile references an unknown loan.')
+  .refine(value => !value.transactions || value.transactions.every(item => value.accounts.some(account => account.id === item.accountId && account.ownership === 'personal')), 'Payment must reference a personal account.')
+  .refine(value => !value.transactions || value.transactions.every(item => (item.sourceIds ?? []).every(id => value.sources.some(source => source.id === id))), 'Payment references an unknown source.');
 const expectedUpdatedAtSchema = z.string().min(1).max(64).nullable().describe('Exact updatedAt from finance_get_review, or null only when no review exists. Reload after a conflict.');
 
 function corsHeaders(origin: string | null): Record<string, string> {

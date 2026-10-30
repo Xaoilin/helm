@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ExpenseGroup, FinanceReview } from '../../types/domain';
 import { EXPENSE_GROUPS, expenseGrouping } from '../../services/expenseGroups';
 import { formatGBP } from '../../services/financeHelpers';
+import { CategoryPayments } from './SpendingTransactions';
 import './ExpenseGroups.css';
 
 type Category = FinanceReview['months'][number]['categories'][number];
@@ -11,10 +12,11 @@ export interface ExpenseGroupControls {
   disabled?: boolean;
 }
 
-export function ExpenseGroups({ review, categories, query = '', onMove, saving = false, disabled = false }: ExpenseGroupControls & {
+export function ExpenseGroups({ review, categories, month, query = '', onMove, saving = false, disabled = false }: ExpenseGroupControls & {
   review: FinanceReview;
   categories: Category[];
   query?: string;
+  month?: string;
 }) {
   const [dragged, setDragged] = useState<string | null>(null);
   const [target, setTarget] = useState<ExpenseGroup | null>(null);
@@ -83,6 +85,7 @@ export function ExpenseGroups({ review, categories, query = '', onMove, saving =
               onDragEnd={() => { setDragged(null); setTarget(null); }}>
               <div className="expense-group-item-heading"><span>{!unavailable && <span aria-hidden="true" className="expense-drag-handle">⠿ </span>}{item.label}</span><strong>{formatGBP(item.amountPence)}</strong></div>
               <small>{item.amountPence < 0 ? 'Refund / credit · ' : ''}{expenseGrouping(item.label, review).basis}</small>
+              {month && <CategoryPayments review={review} month={month} category={item.label} />}
               <label>Group for {item.label}<select aria-label={`Group for ${item.label}`} value={group.value} disabled={unavailable}
                 ref={element => { if (element) menus.current.set(item.label, element); else menus.current.delete(item.label); }}
                 onChange={event => void move(item.label, event.target.value as ExpenseGroup)}>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FinanceReview } from '../../types/domain';
 import { formatGBP, toMonthStr } from '../../services/financeHelpers';
 import { ExpenseGroups, type ExpenseGroupControls } from './ExpenseGroups';
+import { SpendingTransactions } from './SpendingTransactions';
 import './MonthlySpending.css';
 
 function monthLabel(value: string) {
@@ -62,10 +63,11 @@ export function MonthlySpending({ review, ...groupControls }: { review: FinanceR
         <div className="spending-heading"><div><h4>Your expenses</h4><p>Largest payments first in each group. Refunds stay visible.</p></div>
           <label className="spending-search">Find a category<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="e.g. subscriptions" /></label>
         </div>
-        {categories.length > 0 && <ExpenseGroups review={review} categories={categories} query={query} {...groupControls} />}
+        {categories.length > 0 && <ExpenseGroups review={review} categories={categories} month={selected} query={query} {...groupControls} />}
         {visible.length === 0 && <p role="status">{categories.length === 0 ? 'No category breakdown was supplied for this month.' : 'No categories match your search.'}</p>}
         <p className="banking-muted">These are cash payments, including commitments and debt repayments. Household contributions are counted once; transfers between your own personal accounts are excluded.</p>
       </section>
+      <SpendingTransactions key={selected} review={review} month={selected} />
     </>}
   </section>;
 }

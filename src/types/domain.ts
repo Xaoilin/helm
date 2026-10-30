@@ -1122,7 +1122,25 @@ export interface BudgetForecastItem {
 
 export interface BudgetForecast {
   baselineMonth: string;
+  incomePence?: number;
+  incomeBasis?: string;
   items: BudgetForecastItem[];
+}
+
+/** Personal cash payments only. Positive amounts are spending; negative amounts are refunds. */
+export interface FinanceReviewTransaction {
+  id: string;
+  accountId: string;
+  month: string;
+  date?: string;
+  merchant: string;
+  description: string;
+  category: string;
+  amountPence: number;
+  detail?: string;
+  recurrence?: 'recurring' | 'one-off' | 'unknown';
+  sourceIds?: string[];
+  origin: 'bank' | 'user';
 }
 
 export interface FinanceReview {
@@ -1135,6 +1153,7 @@ export interface FinanceReview {
   /** Account-owned category choices, shared across imported months. */
   expenseGroups?: ExpenseGroupAssignment[];
   budgetForecast?: BudgetForecast;
+  transactions?: FinanceReviewTransaction[];
   budget: {
     incomePence: number; incomeBasis: string;
     essentials: { label: string; amountPence: number; note: string }[];
