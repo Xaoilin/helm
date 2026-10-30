@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import type { FinanceAccount } from '../src/types/domain';
 import { FINANCE_REVIEW } from '../src/test/finance-review-fixture';
+import { OVERPAYMENT_REVIEW } from '../src/test/loan-overpayment-fixture';
 import { expect, openApp, test, waitForMutation } from './support/helm-fixture';
 
 const BANK: FinanceAccount = {
@@ -9,6 +10,87 @@ const BANK: FinanceAccount = {
   currency: 'GBP', color: '#4f5bff', icon: '£', includeInNetWorth: true, sortOrder: 0,
   createdAt: FINANCE_REVIEW.createdAt, updatedAt: FINANCE_REVIEW.updatedAt,
 };
+
+test('compares Selina and NatWest overpayments, shares and monthly schedules without saving scenarios', async ({ page, scenario }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const control = await scenario({ now: OVERPAYMENT_REVIEW.updatedAt, stores: { financeReviews: [OVERPAYMENT_REVIEW] } });
+  const savedReview = structuredClone(control.services.finance.review);
+  await openApp(page);
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await page.getByRole('button', { name: 'Loans', exact: true }).click();
+  const calculator = page.getByRole('region', { name: 'Loan overpayment calculator' });
+  const totals = calculator.getByLabel('Selected loan totals');
+  await expect(totals).toContainText('£30,000.00');
+  const selina = calculator.getByRole('article', { name: 'Selina (example) overpayment calculator' });
+  await selina.getByLabel('Extra payment (£/month)', { exact: true }).fill('100');
+  await selina.getByRole('checkbox').check();
+  await expect(totals).toContainText('£650.00 / month');
+  await calculator.getByLabel('Show amounts as').selectOption('share');
+  await expect(totals).toContainText('£15,000.00');
+  await expect(totals).toContainText('£325.00 / month');
+  await calculator.getByLabel('Loans', { exact: true }).selectOption('example-natwest');
+  await expect(totals).toContainText('£10,000.00');
+  await calculator.getByLabel('Loans', { exact: true }).selectOption('both');
+  await calculator.getByLabel('Show amounts as').selectOption('joint');
+  await calculator.getByLabel('First projected payment').fill('2026-10');
+  await selina.getByLabel('Overpayment effect').selectOption('reduce-payment');
+  await expect(selina.getByLabel('Selina (example) results')).toContainText('Month two regular payment');
+  await selina.getByLabel('Overpayment effect').selectOption('shorten-term');
+  const evidence: unknown[] = [];
+  for (const width of [320, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    evidence.push({ view: 'calculator', width, ...await assertNoOverflow(page) });
+    await calculator.getByRole('heading', { name: 'Loan overpayment calculator', exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`loan-calculator-${width}.png`) });
+    await selina.getByLabel('Selina (example) results').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`loan-results-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 320, height: 900 });
+  const summary = selina.getByText('Monthly interest, repayments & balances', { exact: true });
+  await summary.focus();
+  await summary.press('Enter');
+  const schedule = selina.getByRole('region', { name: 'Selina (example) monthly schedule' });
+  await expect(schedule.getByRole('row')).toHaveCount(13);
+  await expect(schedule).toContainText('Oct 2026');
+  await selina.getByLabel('Schedule year').selectOption('2');
+  await expect(schedule).toContainText('Oct 2027');
+  await schedule.scrollIntoViewIfNeeded();
+  await schedule.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => schedule.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  await schedule.evaluate(element => { element.scrollLeft = 0; });
+  await schedule.hover();
+  await page.mouse.wheel(400, 0);
+  await expect.poll(() => schedule.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  evidence.push({ view: 'schedule-scroll', ...await schedule.evaluate(element => ({ client: element.clientWidth, scroll: element.scrollWidth, offset: element.scrollLeft })) });
+  await page.screenshot({ path: testInfo.outputPath('loan-monthly-schedule-320.png') });
+  await summary.press('Enter');
+  const scroller = page.locator('.main-content');
+  await scroller.evaluate(element => { element.scrollTop = 0; });
+  await scroller.focus();
+  await page.keyboard.press('PageDown');
+  await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await scroller.evaluate(element => { element.scrollTop = 0; });
+  await scroller.hover();
+  await page.mouse.wheel(0, 450);
+  await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await calculator.evaluate(section => {
+    const elements = [section, ...section.querySelectorAll<HTMLElement>('*')];
+    const sizes = elements.map(element => Number.parseFloat(getComputedStyle(element).fontSize));
+    elements.forEach((element, index) => { (element as HTMLElement).style.fontSize = `${sizes[index] * 2}px`; });
+  });
+  evidence.push({ view: 'calculator-200-percent-text', ...await assertNoOverflow(page) });
+  await calculator.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('loan-calculator-text-200.png') });
+  expect(control.services.finance.review).toEqual(savedReview);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.reload();
+  await page.getByRole('button', { name: 'Navigate to Finance' }).click();
+  await page.getByRole('button', { name: 'Loans', exact: true }).click();
+  await expect(page.getByRole('article', { name: 'Selina (example) overpayment calculator' }).getByLabel('Extra payment (£/month)', { exact: true })).toHaveValue('0');
+  await writeFile(testInfo.outputPath('loan-calculator-evidence.json'), JSON.stringify(evidence, null, 2));
+});
 
 async function assertNoOverflow(page: Page) {
   const dimensions = await page.evaluate(() => ({

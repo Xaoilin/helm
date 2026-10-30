@@ -2,6 +2,7 @@ import type { FinanceReview } from '../../types/domain';
 import { formatGBP } from '../../services/financeHelpers';
 import { useFinanceReview } from '../../store/contexts/useFinanceReview';
 import { MonthlySpending } from './MonthlySpending';
+import { LoanOverpaymentCalculator } from './LoanOverpaymentCalculator';
 import './BankingReview.css';
 
 type View = 'overview' | 'spending' | 'loans';
@@ -151,6 +152,7 @@ function Loans({ review }: { review: FinanceReview }) {
   const active = review.loans.filter(loan => loan.status === 'active');
   const history = review.loans.filter(loan => loan.status !== 'active');
   return <>
+    <LoanOverpaymentCalculator key={review.updatedAt} review={review} />
     <p className="banking-muted">Dated loan records. Reported balances and settlement quotes are snapshots; missing amounts remain unconfirmed.</p>
     <section className="banking-block" aria-label="Active loans"><h3>Active loans</h3>
       <div className="banking-grid">{active.map(loan => <LoanCard key={loan.id} loan={loan} sources={review.sources} />)}</div>

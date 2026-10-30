@@ -63,6 +63,50 @@ figures retain their dates. Repayment and consolidation intentions do not imply
 that a lender has approved a change or that a financial transaction occurred.
 Review balances do not modify existing account net worth or Equity holdings.
 
+## Loan overpayment calculator
+
+Finance → Loans compares active Selina and NatWest records separately or together.
+It shows opening balances, regular and extra monthly payments, estimated payoff
+dates, total interest and repayments, balance curves and a monthly amortisation
+table. Scenarios support an opening lump sum, delayed monthly extras, an explicit
+matching contribution from the other borrower, and either keeping regular payments
+to repay sooner or recalculating regular payments over the modelled remaining term.
+The latter uses the normal-payment estimate's end date, not a verified contractual
+term, and recalculates after each extra payment; actual lender rules may differ.
+
+All scenario inputs are editable and stay in component memory. Selecting a single
+loan preserves the other scenario while this calculator remains mounted; leaving
+Loans, reloading, an account change or a refreshed review discards scenarios. No
+account records, payment instructions, Direct Debits or lender agreements change.
+The existing Finance MCP review tools remain the account-data interface; this
+display calculation adds no stored data, service operation or approval scope.
+
+Opening capital comes from a statement/estimated balance. For older records only,
+one explicitly named `current-balance line £…` in a saved note can seed an editable
+scenario, with its note provenance and latest linked source date shown. Settlement
+totals and original advances are never substituted. One unambiguous explicitly
+labelled fixed rate in `rateNote` may seed the borrowing rate; APR/APRC and historical
+illustrations are excluded. Missing or ambiguous values require input. This is a
+bounded compatibility projection of existing private data, not a writeback or an
+independent verification of the source note. No personal figures ship in source.
+
+Money is calculated in integer pence. The monthly model charges rounded interest
+at the entered nominal annual rate divided by 12, then applies the month's payment;
+an opening lump sum reduces capital before month one's interest. The rate stays
+constant throughout, including beyond any initial fixed period. Source balances
+are not automatically advanced to the selected first payment month. Daily interest,
+future rate changes, fees, allowance usage and early repayment charges are excluded;
+the UI discloses these limits and retains saved lender terms below each scenario.
+Final payments and lump sums are capped at the amount owed. A paid-off loan's budget
+is not automatically rolled into the other loan. Non-amortising loans and estimates
+beyond 1,200 months have no invented payoff or complete interest-saving total.
+
+Joint/share views only allocate displayed amounts for budgeting and retain the
+whole-loan amortisation and payoff dates. A recorded payment share seeds the
+allocation; otherwise 50% is explicitly assumed and editable. Matching extras
+requires its own explicit checkbox; selecting a share never doubles a contribution.
+The combined payoff is the later of the selected loans' payoff months.
+
 ## Private persistence and external access
 
 The Spring finance service (`/api/finance/v1/review`) holds one current review
