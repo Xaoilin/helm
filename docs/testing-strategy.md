@@ -5,6 +5,7 @@ Sabah One uses a small portfolio selected by consequence and boundary fidelity, 
 ## Gates
 
 - `npm run agent:fast` is the focused developer gate. It runs policy first, then only the lint, type, unit, or browser checks implied by the changed files.
+- If a newer host Node fails in shared Web Storage setup before product assertions, use CI's Node 22 runtime and verify the actual `node --version` before rerunning. A package-runner request alone does not prove the runtime changed; do not alter product code to work around the host mismatch.
 - `npm run check` is the complete local web gate. After policy passes, lint, typecheck, unit tests, web build, and blocking browser tests run as one timed group.
 - The installed `.githooks/pre-push` runs that complete gate on every push. After focused checks, use the push hook as the single complete local gate; running `npm run check` immediately before the same push duplicates it. Wait for the push to finish successfully before creating a pull request.
 - `npm run test:database` is the complete local database boundary. It starts from the historical migration boundary, applies the authoritative migration chain, and exercises the account/RLS, revision, legacy, and Vault contracts against Postgres.
