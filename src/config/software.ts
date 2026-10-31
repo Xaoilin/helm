@@ -3,6 +3,14 @@ import type { SoftwareReference } from '../types/domain';
 /** Only add confirmed, deliberately published software links to this list. */
 export const SOFTWARE_REFERENCES: readonly SoftwareReference[] = [
   {
+    id: 'camillo',
+    name: 'Camillo',
+    description: 'Your memory service for connected AI assistants. Browse, search, edit and export your saved memories in its web dashboard.',
+    repositoryUrl: 'https://github.com/Xaoilin/memory-service',
+    websiteUrl: 'https://camillo.app/app',
+    launchInstructions: 'Opens in your browser. Sign in to your existing Camillo account if asked.',
+  },
+  {
     id: 'camera-zoom',
     name: 'Camera Zoom',
     description: 'A Windows camera app with live preview, camera and software zoom, automatic photo saving and an optional transparent crop overlay.',
