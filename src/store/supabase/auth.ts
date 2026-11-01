@@ -10,12 +10,8 @@ import {
   recordAuthSession,
 } from './client';
 
-const GOOGLE_SIGN_IN_SCOPES = [
-  'openid',
-  'email',
-  'profile',
-  'https://www.googleapis.com/auth/calendar',
-].join(' ');
+// Calendar has its own consent flow in Integrations; signing in needs identity only.
+const GOOGLE_SIGN_IN_SCOPES = 'openid email profile';
 
 interface AuthStateChange {
   event: AuthChangeEvent;
@@ -29,11 +25,10 @@ export async function signInWithGoogle(redirectTo?: string): Promise<void> {
     provider: 'google',
     options: {
       scopes: GOOGLE_SIGN_IN_SCOPES,
-      redirectTo: redirectTo || window.location.origin + (window.location.pathname.includes('/helm') ? '/helm/' : '/'),
+      redirectTo: redirectTo || window.location.origin + import.meta.env.BASE_URL,
       queryParams: {
-        access_type: 'offline',
-        include_granted_scopes: 'true',
-        prompt: 'consent select_account',
+        // Earlier Calendar grants must not be added back to an ordinary sign-in.
+        include_granted_scopes: 'false',
       },
     },
   });
