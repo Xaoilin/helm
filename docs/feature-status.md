@@ -59,3 +59,13 @@ Removed on 2026-09-26 (v0.2.200): the Lina assistant (Chat, hosted OpenAI and Ol
 The live-update client preserves a product API path prefix. The four MCP services default to the shared DigitalOcean API base. Both staged products passed authenticated domain, database, cross-product token rejection and live-event verification on 25 October. Release 0.2.228 switches configured callers and reloads existing tabs after protected deployment. OVH cancellation remains conditional on final production verification. Hosted fixture cleanup preserves the `/sabah-one` API prefix.
 
 The private prayer-provider relay authenticates a separate data-only credential. It forwards only the existing AlAdhan timings-by-city request; account tokens and provider credentials never go to AlAdhan. This addresses the observed DigitalOcean egress timeout without changing prayer calculations.
+
+## Personal domain deployment
+
+The hosted app is available at `https://sabah.xaoilin.com/helm/`, retaining its
+existing asset base and protected GitHub Pages artifact source. The root URL
+redirects to `/helm/`. Eight domain services use `https://api.sabah.xaoilin.com`;
+private provider relays, brokers and databases are not exposed by this hostname.
+The existing Pages and DigitalOcean IP URLs remain available during cutover.
+Auth retains its independent Sabah project; the new return URL is
+`https://sabah.xaoilin.com/helm/` and Calendar uses the new browser origin.
