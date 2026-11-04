@@ -1176,3 +1176,19 @@ export interface FinanceReview {
   updatedAt: string;
 }
 export type FinanceReviewDraft = Omit<FinanceReview, 'id' | 'createdAt' | 'updatedAt'>;
+
+/** Read-only prayer challenge totals. Non-obligatory, future and unclassified prayers are excluded. */
+export interface PrayerCompetitionSummary {
+  from: string;
+  to: string;
+  asOf: string;
+  onTime: number;
+  late: number;
+  missed: number;
+}
+
+export interface PrayerCompetition {
+  status: 'ready' | 'not_connected' | 'unavailable';
+  self: PrayerCompetitionSummary;
+  partner: PrayerCompetitionSummary | null;
+}

@@ -1,0 +1,37 @@
+.prayer-challenge { --challenge-text: var(--text-primary, var(--mc-strong, #f7fbff)); --challenge-muted: var(--text-secondary, var(--mc-muted, #aab5c9)); color: var(--challenge-text); padding: clamp(16px, 2.2vw, 28px); border-radius: 22px; overflow: hidden; }
+.prayer-challenge-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.prayer-challenge-eyebrow { margin: 0 0 5px; font-size: 10px; font-weight: 700; letter-spacing: .18em; color: var(--challenge-muted); }
+.prayer-challenge h2 { margin: 0; font-size: clamp(20px, 2vw, 26px); letter-spacing: -.035em; }
+.prayer-challenge h2 span { color: #bd9162; margin-left: 5px; }
+.prayer-challenge-periods { display: flex; gap: 3px; padding: 4px; border: 1px solid color-mix(in srgb, currentColor 15%, transparent); border-radius: 30px; }
+.prayer-challenge button { font: inherit; cursor: pointer; color: inherit; }
+.prayer-challenge button:disabled { opacity: .38; cursor: default; }
+.prayer-challenge button:focus-visible { outline: 3px solid #818cf8; outline-offset: 3px; }
+.prayer-challenge-periods button { border: 0; background: transparent; border-radius: 24px; padding: 7px 13px; font-size: 12px; }
+.prayer-challenge-periods button[aria-pressed="true"] { background: var(--challenge-text); color: var(--challenge-surface, var(--mc-surface, #151a2a)); }
+.prayer-challenge-dates { display: flex; justify-content: center; align-items: center; gap: 12px; margin: 23px 0 0; text-align: center; }
+.prayer-challenge-dates strong { min-width: 0; font-size: 13px; font-weight: 600; }
+.prayer-challenge-dates button { flex: 0 0 32px; height: 32px; border-radius: 50%; border: 1px solid color-mix(in srgb, currentColor 15%, transparent); background: transparent; font-size: 23px; }
+.prayer-challenge-verdict { text-align: center; color: var(--challenge-muted); margin: 7px 0 20px; min-height: 20px; font-size: 12px; }
+.prayer-challenge-players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(10px, 2vw, 22px); }
+.prayer-challenge-player { min-width: 0; padding: clamp(14px, 2vw, 22px); border-radius: 17px; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); background: color-mix(in srgb, currentColor 3%, transparent); }
+.prayer-challenge-player.is-lina { --player-color: #b190e0; }
+.prayer-challenge-player.is-sabah { --player-color: #72b8b6; }
+.prayer-challenge-name { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.prayer-challenge-avatar { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--challenge-text); background: color-mix(in srgb, var(--player-color) 25%, transparent); font-size: 12px; }
+.prayer-challenge-crown { color: #ba9254; margin-left: auto; font-size: 22px; }
+.prayer-challenge-score { font-size: clamp(34px, 4vw, 54px); line-height: 1.15; font-weight: 600; letter-spacing: -.055em; margin-top: 18px; font-variant-numeric: tabular-nums; }
+.prayer-challenge-score > span { font-size: .48em; color: var(--challenge-muted); margin-left: 3px; }
+.prayer-challenge-count { font-size: 12px; color: var(--challenge-muted); margin: 5px 0 16px; }
+.prayer-challenge-track { display: flex; height: 8px; overflow: hidden; border-radius: 10px; background: color-mix(in srgb, currentColor 10%, transparent); }
+.prayer-challenge-track > span { height: 100%; }
+.prayer-challenge .challenge-on-time { background: #329c83; }
+.prayer-challenge .challenge-late { background: #d1a345; }
+.prayer-challenge .challenge-missed { background: #c37d89; }
+.prayer-challenge-key { display: flex; justify-content: center; gap: 15px; margin: 17px 0; font-size: 11px; color: var(--challenge-muted); flex-wrap: wrap; }
+.prayer-challenge-key > span { display: inline-flex; align-items: center; gap: 5px; }
+.prayer-challenge-key i { width: 7px; height: 7px; border-radius: 50%; }
+.prayer-challenge-message { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, currentColor 5%, transparent); font-size: 12px; line-height: 1.5; }
+.prayer-challenge-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent); padding-top: 16px; }
+.prayer-challenge-footer small { font-size: 11px; line-height: 1.6; color: var(--challenge-muted); }
+@media (max-width: 420px) { .prayer-challenge-heading { gap: 12px; } .prayer-challenge-periods { width: 100%; } .prayer-challenge-periods button { flex: 1; } .prayer-challenge-player { padding: 12px; } .prayer-challenge-name { gap: 5px; } .prayer-challenge-count { font-size: 11px; } .prayer-challenge-footer { align-items: flex-start; } }
