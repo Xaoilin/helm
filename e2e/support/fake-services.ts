@@ -4,6 +4,7 @@
  * services are verified against (contracts/<service>/*.json).
  */
 import { readFileSync } from 'node:fs';
+import { competitionSchema } from '../../src/services/backend/competitionContracts';
 import { join } from 'node:path';
 import type { Page, Route } from '@playwright/test';
 import type { z } from 'zod';
@@ -334,6 +335,8 @@ async function handle(
 ): Promise<void> {
   const outcomeId = /^(PATCH|DELETE) \/api\/prayer\/v1\/outcomes\/([^/]+)$/u.exec(call);
   switch (true) {
+    case call === 'GET /api/prayer/v1/competition':
+      return reply(route, 200, { status: 'not_connected', self: { from: url.searchParams.get('from'), to: url.searchParams.get('to'), asOf: now.toISOString(), onTime: 0, late: 0, missed: 0 }, partner: null }, competitionSchema);
     case call === 'GET /api/prayer/v1/dashboard':
       return reply(route, 200, dashboard(services, now), dashboardSchema);
     case call === 'GET /api/prayer/v1/outcomes':

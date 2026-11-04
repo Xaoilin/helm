@@ -27,6 +27,7 @@ import { useDailyMomentumContext } from '../../store/contexts/DailyMomentumConte
 import { useMilestoneCelebration } from '../../store/contexts/MilestoneCelebrationContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import PrayerStatsCard from './PrayerStatsCard';
+import PrayerCompetitionCard from './PrayerCompetitionCard';
 import DashboardSectionLoading from './DashboardSectionLoading';
 import type {
   DailyPillar,
@@ -739,6 +740,8 @@ export default function NightCompassDashboard({ prayerActionsReady = false }: Ni
           </>
         )}
       </section>
+
+      {prayerReady && prayerConfirmed && prayerActionsReady && <PrayerCompetitionCard />}
 
       <aside className="nc-quran-motivation" aria-label="Daily Quran reading">
         <div className="nc-quran-motivation-heading">
