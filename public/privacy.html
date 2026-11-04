@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="How Sabah One (HELM) uses, stores and removes account and Google Calendar data.">
+    <title>Sabah One (HELM) — Privacy notice</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./public-pages.css">
+  </head>
+  <body>
+    <div class="page">
+      <nav aria-label="Public navigation"><a class="brand" href="./about.html">Sabah One (HELM)</a><a href="./">Open app</a></nav>
+      <main>
+        <p class="eyebrow">Last updated 4 November 2026</p>
+        <h1>Privacy notice</h1>
+        <p class="intro">Sabah One (HELM) is a personal planning app with authenticated account access. This notice explains how account data and an optional Google Calendar connection are used.</p>
+        <div class="sections">
+          <section aria-labelledby="data"><h2 id="data">Information the app uses</h2><p>Google sign-in provides basic account identity, such as your name, email address and profile information, to authenticate your Sabah One (HELM) account. Your sign-in session is saved in your browser.</p><p>Sabah One (HELM) stores the information you enter in its features: tasks, appointments, prayer history, habits, knowledge, projects, personal finance, inventory, trips, health reflections, employment tracking, progress and preferences. Secrets entered in the Secrets feature use the account-owned Vault path.</p><p>If you separately connect Google Calendar, the calendar service retrieves your Google calendar list and event details, including calendar identifiers and names, event identifiers, titles, descriptions, locations and start/end times. It also stores connection status and an encrypted credential so it can keep the connection working.</p></section>
+          <section aria-labelledby="use"><h2 id="use">Why Google access is requested</h2><p>The optional Calendar connection requests two permissions: calendar.calendarlist.readonly to identify the connected account and list available calendars, and calendar.events to read your appointments and send event additions, edits and deletions that you request to Google Calendar. The app does not request permission to change calendar sharing or create or delete whole calendars. Your existing Google calendar access roles still apply.</p><p>Google data is used for account sign-in and the calendar features described here. It is not sold, used for advertising or used to train general-purpose artificial-intelligence models.</p><p>Sabah One (HELM)’s use and transfer of information received from Google APIs follows the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a> and the <a href="https://developers.google.com/workspace/workspace-api-user-data-developer-policy">Google Workspace API User Data and Developer Policy</a>, including the Limited Use requirements.</p></section>
+          <section aria-labelledby="storage"><h2 id="storage">Storage and service providers</h2><p>Account data is stored in Sabah One (HELM)’s authenticated backend services and database. Calendar refresh credentials are encrypted at rest by the calendar service and are not stored as browser calendar credentials.</p><p>Supabase provides authentication and database hosting. DigitalOcean hosts Sabah One’s backend, and GitHub Pages serves its public website and browser app. Google processes sign-in, authorization and Google Calendar API requests. These services are used to operate the app; Google calendar data is not sent to advertising or data-broker services.</p><p>Technical logs can contain connection errors and account or calendar identifiers for operation and troubleshooting. Technical connection metadata is used to maintain the service. Human access to Google Calendar content is limited to your specific support requests with your agreement, security investigations, or legal obligations.</p></section>
+          <section aria-labelledby="removal"><h2 id="removal">Retention and removing Google access</h2><p>The active account copy is kept while you use the app. To remove a connected Google account, open Integrations → Google Calendar → Disconnect, then confirm. Sabah One (HELM) removes that connection’s local calendars and events and deletes its stored calendar credential; it also attempts to revoke the credential with Google. Disconnecting does not delete the original calendars or events in Google Calendar.</p><p>You can independently revoke Sabah One (HELM)’s Google access through <a href="https://myaccount.google.com/connections">your Google Account’s third-party connections</a>. Revoking access stops future authorized Google requests but does not itself erase the copy already held by Sabah One (HELM); disconnect in the app or request deletion as well.</p><p>For full account-data removal, contact the operator below. This is a manual request; the app does not currently offer a full self-service account-deletion button. Recovery backups may retain copies until the hosting provider’s backup retention expires.</p></section>
+          <section aria-labelledby="contact"><h2 id="contact">Contact</h2><p>For support, privacy questions or deletion requests, email <a href="mailto:alisab.london@gmail.com">alisab.london@gmail.com</a>. Do not include passwords or Google authorization credentials in your message.</p></section>
+        </div>
+      </main>
+      <footer><a href="./about.html">About Sabah One (HELM)</a><a href="./">Open app</a></footer>
+    </div>
+  </body>
+</html>
