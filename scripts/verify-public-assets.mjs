@@ -17,5 +17,12 @@ async function scan(directory) {
     }
   }
 }
+for (const name of ['about.html', 'privacy.html']) {
+  const html = await readFile(resolve('dist', name), 'utf8');
+  if (!html.includes('Sabah One (HELM)') || !html.includes('./public-pages.css')) {
+    throw new Error(`Public information page is missing its identity or styling: ${name}`);
+  }
+}
+await readFile(resolve('dist', 'public-pages.css'), 'utf8');
 await scan(resolve('dist'));
 console.log(`Public asset credential check passed (${files} assets; ${forbidden.length} supplied provider sentinels/values checked).`);

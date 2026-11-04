@@ -121,6 +121,16 @@ and evidence sync. Revoked GitHub access requires **Reconnect GitHub App**.
 Provider failures remain visible and leave setup available for an explicit retry.
 Slack and Linear are unavailable; there are no simulated connection actions.
 
+Google Calendar authorization requests only `calendar.calendarlist.readonly` and
+`calendar.events`, with `include_granted_scopes: false`. The provider adapter uses
+calendar-list reads and event reads/creation/updates/deletion; it does not change
+calendar properties, calendars, sharing ACLs or settings. These two scopes cover
+that operation set under [Google's scope reference](https://developers.google.com/workspace/calendar/api/auth).
+Existing credentials are not revoked by a website release; the narrower request
+applies on explicit connect/reconnect. Public product/privacy pages are served
+without sign-in at `/helm/about.html` and `/helm/privacy.html`; their publication
+does not establish Google verification approval.
+
 Google deployment configuration belongs to the site operator, not an end-user
 Settings field. The Pages build uses `VITE_GOOGLE_OAUTH_CLIENT_ID`; the calendar
 service holds the matching client and the server-only client secret (the

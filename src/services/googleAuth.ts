@@ -2,7 +2,10 @@
 // calendar service exchanges the code; no Google token is ever kept in the browser.
 
 const GIS_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
-const SCOPES = 'https://www.googleapis.com/auth/calendar';
+const SCOPES = [
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+  'https://www.googleapis.com/auth/calendar.events',
+].join(' ');
 
 export interface GoogleAuthorizationCode {
   code: string;
@@ -62,7 +65,7 @@ export function requestGoogleAuthorizationCode(
       client_id: clientId,
       scope: SCOPES,
       ux_mode: 'popup',
-      include_granted_scopes: true,
+      include_granted_scopes: false,
       login_hint: options.loginHint,
       select_account: options.selectAccount ?? true,
       callback: (response: GoogleCodeResponse) => {
