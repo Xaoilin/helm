@@ -17,7 +17,11 @@ The two products keep separate Auth, databases, services and deployment identiti
 
 ## Activation and rollback
 
-Implemented code is disabled until a reviewed pair is configured. No credentials are created or account pairing activated by the source change. After final owner approval, configure each product’s existing root-owned prayer environment independently:
+Sharing is disabled by default. On 4 November 2026, Sabah explicitly approved completion-percentage scoring and creation of dedicated totals-only sharing credentials. The selected Sabah Google account and Lina account are now paired in their own server configurations. Independent keys remain in each product’s root-only prayer environment; no Auth or database credentials were shared. Only the prayer containers were restarted, and both products’ public prayer and database health checks passed.
+
+The running-container checks confirmed that each environment matches its prepared private configuration. Each product’s peer key reached the other product’s invalid-range guard with HTTP 400; a wrong key and use of the peer key on ordinary prayer-outcome routes returned HTTP 401. Every check used an invalid or oversized range and read no prayer records or totals. This proves the authenticated link and its access boundary, rather than an actual account-total comparison.
+
+The existing root-owned prayer environment supplies these settings independently for each product:
 
 | Environment variable | Value |
 | --- | --- |
@@ -32,4 +36,4 @@ Remove the read key and restart that product’s prayer service to revoke inboun
 
 ## Acceptance boundary
 
-Source and synthetic checks prove the feature only within their exercised boundaries. Real pairing and live account comparison remain pending explicit activation. A narrow `prayer_get_competition` semantic MCP tool is not yet published; external-agent acceptance is explicitly blocked. Agents must not inspect real prayer accounts through lower-level APIs, database access, session-token reuse or browser automation.
+The approved pair is enabled. Source and synthetic checks cover the dashboard behavior; running-container checks cover the authenticated link, denied capabilities and service health. The actual signed-in prayer-total comparison has not been inspected by an agent. A narrow `prayer_get_competition` semantic MCP tool is not yet published; external-agent acceptance remains explicitly blocked. Agents must not inspect real prayer accounts through lower-level APIs, database access, session-token reuse or browser automation.
