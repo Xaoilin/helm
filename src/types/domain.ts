@@ -607,6 +607,7 @@ export interface QuranMotivationCard {
 
 // ── Prayer Tracking ──
 export type PrayerCompletionStatus = 'on_time' | 'late';
+export type PrayerTiming = 'prompt' | 'within_window' | 'outside_window';
 export type PrayerOutcomeStatus = PrayerCompletionStatus | 'missed' | 'unclassified';
 export type PrayerCompletionSource =
   | 'dashboard'
@@ -621,6 +622,8 @@ export type PrayerCompletionSource =
   | (string & {});
 
 export interface PrayerTrackingRecord {
+  /** Explicit timing choice; absent on entries recorded before timing points. */
+  timing?: PrayerTiming;
   date: string; // local YYYY-MM-DD
   prayerName: PrayerName;
   status: PrayerOutcomeStatus;
@@ -1179,6 +1182,9 @@ export type FinanceReviewDraft = Omit<FinanceReview, 'id' | 'createdAt' | 'updat
 
 /** Read-only prayer challenge totals. Non-obligatory, future and unclassified prayers are excluded. */
 export interface PrayerCompetitionSummary {
+  allPrayed?: boolean;
+  pointsEarned?: number;
+  pointsAvailable?: number;
   from: string;
   to: string;
   asOf: string;

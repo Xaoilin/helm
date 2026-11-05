@@ -7,6 +7,7 @@ import {
 import { shiftPrayerDate } from '../../services/prayerTimeZone';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import PrayerOutcomeBars from '../prayer/PrayerOutcomeBars';
+import { isPrayerTiming, PRAYER_TIMING_CHOICES, prayerTimingPoints, prayerTimingStatus } from '../../services/prayerTiming';
 
 interface PrayerStatsCardProps {
   prayerStats: PrayerOutcomeStats;
@@ -72,7 +73,7 @@ export default function PrayerStatsCard({
       {showPrayerLog && (
         <div className="prayer-history-editor">
           <p id="prayer-history-help">
-            Correct On time, Late, or Missed outcomes. Corrections never award XP.
+            Correct the prayer timing or mark it missed. Corrections update challenge points but never award extra XP.
             Open and future prayers stay locked here; record them from Prayer Times or Tasks after praying.
           </p>
           <div className="prayer-history-scroll">
@@ -96,13 +97,14 @@ export default function PrayerStatsCard({
                       return (
                         <td key={prayerName}>
                           <select
-                            value={status}
+                            value={prayer.getOutcome(dateStr, prayerName)?.timing ?? status}
                             className={`prayer-history-status ${status}`}
                             disabled={isLocked}
                             onChange={event => prayer.correctPrayerOutcome(
                               dateStr,
                               prayerName,
-                              event.target.value as PrayerOutcomeStatus,
+                              isPrayerTiming(event.target.value) ? prayerTimingStatus(event.target.value) : event.target.value as PrayerOutcomeStatus,
+                              isPrayerTiming(event.target.value) ? event.target.value : undefined,
                             )}
                             aria-label={`${prayerName} outcome on ${label}`}
                             aria-describedby="prayer-history-help"
@@ -115,8 +117,9 @@ export default function PrayerStatsCard({
                             <option value="pending" disabled>Pending</option>
                             <option value="not_tracked" disabled>Before tracking</option>
                             <option value="unclassified" disabled>Legacy unknown</option>
-                            <option value="on_time">On time</option>
-                            <option value="late">Late</option>
+                            {!prayer.getOutcome(dateStr, prayerName)?.timing && status === 'on_time' && <option value="on_time">On time · earlier entry</option>}
+                            {!prayer.getOutcome(dateStr, prayerName)?.timing && status === 'late' && <option value="late">Late · earlier entry</option>}
+                            {PRAYER_TIMING_CHOICES.map(choice => <option key={choice.timing} value={choice.timing}>{choice.shortLabel} · {prayerTimingPoints(choice.timing)} pts</option>)}
                             <option value="missed">Missed</option>
                           </select>
                         </td>

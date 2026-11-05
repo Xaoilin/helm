@@ -6,6 +6,7 @@
 import type {
   PrayerCompletionSource,
   PrayerCompletionStatus,
+  PrayerTiming,
   PrayerCompletionUndoData,
   PrayerName,
   PrayerOutcomeStatus,
@@ -43,6 +44,7 @@ function dateForInstant(instant: Date, scheduleTimeZone: string): string {
 export function buildPrayerCompletionTransition(input: {
   prayerName: PrayerName;
   status: PrayerCompletionStatus;
+  timing?: PrayerTiming;
   prayerDate: string;
   source: PrayerCompletionSource;
   completedAt: Date;
@@ -59,6 +61,7 @@ export function buildPrayerCompletionTransition(input: {
     date: input.prayerDate,
     prayerName: input.prayerName,
     status: input.status,
+    timing: input.timing,
     rewarded: true,
     taskId: task?.id,
     source: input.source,
@@ -107,6 +110,7 @@ export function buildPrayerCorrectionTransition(input: {
   prayerDate: string;
   prayerName: PrayerName;
   status: PrayerOutcomeStatus;
+  timing?: PrayerTiming;
   correctedAt: Date;
   tasks: readonly Task[];
   tracking: PrayerTrackingState;
@@ -120,6 +124,7 @@ export function buildPrayerCorrectionTransition(input: {
     date: input.prayerDate,
     prayerName: input.prayerName,
     status: input.status,
+    timing: input.timing,
     taskId: targetTask?.id,
     source: 'history',
     recordedAt: input.correctedAt,
@@ -138,6 +143,7 @@ function prayerRecordsEqual(
   return left.date === right.date
     && left.prayerName === right.prayerName
     && left.status === right.status
+    && left.timing === right.timing
     && left.recordedAt === right.recordedAt
     && left.rewarded === right.rewarded
     && left.taskId === right.taskId

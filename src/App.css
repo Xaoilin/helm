@@ -2038,12 +2038,17 @@ textarea.form-input {
 
 .prayer-completion-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
 
 .prayer-outcome-choice {
-  min-height: 112px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  min-height: 84px;
   padding: 16px;
   border: 1px solid #32364a;
   border-radius: 14px;
@@ -2061,7 +2066,7 @@ textarea.form-input {
 
 .prayer-outcome-choice > span {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   font-size: 25px;
 }
 
@@ -10771,3 +10776,11 @@ button {
   .employment-application-details-row > td { display: block; width: 100%; padding: 4px 6px 14px; }
   .employment-company-group :is(.employment-application-row, .employment-application-details-row) + .employment-application-row { border-top: 1px solid #222e41; }
 }
+
+/* Three explicit, one-tap prayer timing choices. */
+.prayer-outcome-choice .prayer-choice-copy { font-size: 14px; }
+.prayer-outcome-choice .prayer-choice-copy small { line-height: 1.4; font-size: 11px; }
+.prayer-choice-points { text-align: center; font-size: 26px; font-variant-numeric: tabular-nums; }
+.prayer-choice-points small { font-size: 10px; font-weight: 500; }
+.prayer-outcome-choice.prompt:hover, .prayer-outcome-choice.prompt:focus-visible { border-color: #b6a1f3; box-shadow: 0 0 0 2px #b6a1f329; }
+.prayer-outcome-choice.prompt > span:first-child { color: #c4b5fd; }

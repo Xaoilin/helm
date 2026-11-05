@@ -2,7 +2,7 @@
 
 Requested by Sabah on 4 November 2026 for both Lina One and Sabah One.
 
-The dashboard compares prayer completion for a calendar month (default), Monday–Sunday week, or day. Previous periods are browsable. Scores count on-time plus late prayers divided by on-time, late and missed prayers. Pending, unclassified, pre-tracking and non-obligatory prayers are excluded by the existing prayer statistics service. Exact fractions decide the leader; rounded percentages are display only. An empty denominator has no score or winner.
+The dashboard compares prayer completion for a calendar month (default), Monday–Sunday week, or day. Previous periods are browsable. Challenge scores use 12 points for prompt prayer, 8 within the time window, and 2 outside it, divided by 12 times eligible prayer opportunities. Completion percentages remain separate. Historical untimed completed prayers retain full 12-point credit. Pending, unclassified, pre-tracking and non-obligatory prayers are excluded by the existing prayer statistics service. Exact fractions decide the leader; rounded percentages are display only. An empty denominator has no score or winner.
 
 The card refreshes on confirmed prayer changes, once per minute while mounted, and through Refresh. Account/session changes and superseded requests cannot reuse another account or period’s response. No totals or credentials are persisted in the browser. A missing partner is shown as unavailable, never as a zero score.
 
@@ -13,7 +13,7 @@ progress remains separate from the Sabah–Lina win tally. Day counts completed
 days in the displayed month, with no results before the start. Week counts
 completed Monday–Sunday weeks beginning on or after the start; the partial week
 containing 1 November is excluded. Month counts completed calendar months from
-November onward. The current day, week and month never count as finished wins.
+November onward. A current day can count immediately when both participants have completed every required prayer. A current week or month can count early only on its last date and only when both whole periods are complete; future dates never settle early.
 Ties and periods without eligible scores are shown separately.
 
 The browser derives this record from the existing authenticated totals-only
@@ -27,7 +27,7 @@ showing a partial result as complete. Refresh retries it.
 
 ## Narrow sharing boundary
 
-The two products keep separate Auth, databases, services and deployment identities. This requested comparison introduces only an explicitly configured, read-only exchange of period totals. The summary contains `from`, `to`, `asOf`, `onTime`, `late`, and `missed`. It contains no account IDs, individual prayer records, cycle dates, exemption counts, notes, location or other account data. Totals can still reveal patterns; pairing requires explicit owner activation.
+The two products keep separate Auth, databases, services and deployment identities. This requested comparison introduces only an explicitly configured, read-only exchange of period totals. The summary contains `from`, `to`, `asOf`, `onTime`, `late`, `missed`, paired optional `pointsEarned`/`pointsAvailable`, and optional `allPrayed`. It contains no account IDs, individual prayer records, cycle dates, exemption counts, notes, location or other account data. Totals can still reveal patterns; pairing requires explicit owner activation.
 
 - `GET /api/prayer/v1/competition?from=YYYY-MM-DD&to=YYYY-MM-DD` uses this product’s signed-in account. Only the configured owner receives the configured partner. Other accounts see their own totals and `not_connected`. OAuth client tokens are refused until a prayer agent contract is delivered.
 - `GET /api/prayer/v1/competition/summary` uses a separate server-only `X-Prayer-Competition-Key`, scoped to the configured owner and this one read-only route. It cannot authorize ordinary prayer reads or writes. Requests without the exact key are rejected before database access.
@@ -56,3 +56,18 @@ Remove the read key and restart that product’s prayer service to revoke inboun
 ## Acceptance boundary
 
 The approved pair is enabled. Source and synthetic checks cover the dashboard behavior; running-container checks cover the authenticated link, denied capabilities and service health. The actual signed-in prayer-total comparison has not been inspected by an agent. A narrow `prayer_get_competition` semantic MCP tool is not yet published; external-agent acceptance, including historical win records, remains explicitly blocked. Agents must not inspect real prayer accounts through lower-level APIs, database access, session-token reuse or browser automation.
+
+## Explicit timing choices
+
+The completion dialog offers Prompt (12), Within time (8), and Outside time (2)
+with one tap; no time entry is required. These are self-reported choices and are
+never inferred from when a user logs the prayer. History can correct timing
+without earning XP again. Outcome timing is service-confirmed and survives reload.
+The challenge keeps confirmed values and card elements in place during refresh,
+and replaces them only when the next same-account response arrives.
+
+Both point summaries are required before a weighted comparison. During a mixed
+backend rollout the card explains that point totals are updating, with no winner.
+Existing fully legacy comparisons keep their completion meaning. The additive
+backend must be deployed before this consumer. All external-agent Prayer MCP
+limitations described above remain in force.

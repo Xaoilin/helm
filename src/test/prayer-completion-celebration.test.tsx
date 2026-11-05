@@ -41,14 +41,14 @@ describe('prayer completion celebration', () => {
   it('turns a confirmed prayer click into a dignified visible achievement with the planner\'s XP', async () => {
     render(<PrayerCompletionDialog />);
 
-    fireEvent.click(screen.getByRole('button', { name: /On time/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Prayed within the time window/i }));
 
-    expect(mocks.prayer.confirmPrayerCompletion).toHaveBeenCalledWith('on_time');
+    expect(mocks.prayer.confirmPrayerCompletion).toHaveBeenCalledWith('on_time', 'within_window');
     await waitFor(() => expect(mocks.celebration.celebrate).toHaveBeenCalledWith({
       tone: 'prayer',
       eyebrow: 'Prayer kept on time',
       title: 'Dhuhr complete',
-      message: 'A meaningful daily win · +15 XP',
+      message: '8 challenge points · +15 XP',
     }));
   });
 
@@ -57,22 +57,22 @@ describe('prayer completion celebration', () => {
     mocks.prayer.confirmPrayerCompletion.mockReturnValue(new Promise(resolve => { resolveReward = resolve; }));
     render(<PrayerCompletionDialog />);
 
-    fireEvent.click(screen.getByRole('button', { name: /On time/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Prayed within the time window/i }));
     expect(screen.getByRole('status', { name: 'Prayer completion progress' })).toHaveTextContent('Saving Dhuhr…');
     expect(mocks.celebration.celebrate).not.toHaveBeenCalled();
     // A repeated input during the same request must not submit again.
-    fireEvent.click(screen.getByRole('button', { name: /On time/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Prayed within the time window/i }));
     expect(mocks.prayer.confirmPrayerCompletion).toHaveBeenCalledTimes(1);
 
     await act(async () => { resolveReward({ prayerName: 'Dhuhr', xpEarned: 15 }); });
     expect(screen.queryByRole('status', { name: 'Prayer completion progress' })).not.toBeInTheDocument();
-    expect(mocks.celebration.celebrate).toHaveBeenCalledWith(expect.objectContaining({ message: 'A meaningful daily win · +15 XP' }));
+    expect(mocks.celebration.celebrate).toHaveBeenCalledWith(expect.objectContaining({ message: '8 challenge points · +15 XP' }));
   });
 
   it('clears progress without celebrating when there is no confirmed reward', async () => {
     mocks.prayer.confirmPrayerCompletion.mockReturnValue(Promise.resolve({ prayerName: 'Dhuhr', xpEarned: 0 }));
     render(<PrayerCompletionDialog />);
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /On time/i })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Prayed within the time window/i })); });
     expect(screen.queryByRole('status', { name: 'Prayer completion progress' })).not.toBeInTheDocument();
     expect(mocks.celebration.celebrate).not.toHaveBeenCalled();
   });

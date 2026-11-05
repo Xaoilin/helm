@@ -8,6 +8,7 @@ import {
 } from 'react';
 import type {
   PrayerCompletionStatus,
+  PrayerTiming,
   PrayerCompletionUndoData,
   PrayerDeadlineBounds,
   PrayerName,
@@ -97,7 +98,7 @@ export interface PrayerContextValue {
   ) => void;
   cancelPrayerCompletion: () => void;
   /** Records the prayer; resolves with the result and its XP once the planner has rewarded it. */
-  confirmPrayerCompletion: (status: PrayerCompletionStatus) => Promise<PrayerCompletionMutationResult> | null;
+  confirmPrayerCompletion: (status: PrayerCompletionStatus, timing?: PrayerTiming) => Promise<PrayerCompletionMutationResult> | null;
   completePrayer: (
     prayerName: PrayerName,
     status: PrayerCompletionStatus,
@@ -107,6 +108,7 @@ export interface PrayerContextValue {
     prayerDate: string,
     prayerName: PrayerName,
     status: PrayerOutcomeStatus,
+    timing?: PrayerTiming,
   ) => void;
   getOutcome: (prayerDate: string, prayerName: PrayerName) => PrayerTrackingRecord | undefined;
   undoPrayerCompletion: (inverse: PrayerCompletionUndoData) => void;

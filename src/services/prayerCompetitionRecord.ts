@@ -61,3 +61,16 @@ export async function loadCompetitionRecord(
   await Promise.all(Array.from({ length: Math.min(periods.length, PRAYER_COMPETITION_RECORD.concurrentReads) }, worker));
   return unavailable || !isCurrent() ? null : record;
 }
+
+/** A period may enter the record before midnight once both participants have finished it. */
+export function includeFinishedCurrentPeriod(record: CompetitionRecord, comparison: PrayerCompetition | undefined, today: string): CompetitionRecord {
+  if (!comparison?.partner || !comparison.self.allPrayed || !comparison.partner.allPrayed
+    || comparison.self.from > today || comparison.self.to !== today) return record;
+  const winner = competitionLeader(comparison.self, comparison.partner);
+  return {
+    self: record.self + (winner === 'self' ? 1 : 0),
+    partner: record.partner + (winner === 'partner' ? 1 : 0),
+    ties: record.ties + (winner === 'tie' ? 1 : 0),
+    unscored: record.unscored + (winner === null ? 1 : 0),
+  };
+}

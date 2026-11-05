@@ -33,11 +33,11 @@ test.describe('prayer and profile services', () => {
       await openApp(page);
       await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
       await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
-      await page.getByRole('button', { name: /On time/u }).press('Enter');
+      await page.getByRole('button', { name: /Prayed within the time window/u }).press('Enter');
 
       const feedback = page.getByRole('status', { name: 'Prayer completion progress' });
       try {
-        await expect(page.getByRole('dialog', { name: 'How was Dhuhr prayed?' })).toHaveCount(0);
+        await expect(page.getByRole('dialog', { name: 'When did you pray Dhuhr?' })).toHaveCount(0);
         await expect(feedback).toHaveText('Saving Dhuhr…Your prayer and XP are being updated.');
         await expect(page.locator('[data-celebration-tone]')).toHaveCount(0);
         expect(control.services.outcomes.has('2026-08-29::Dhuhr')).toBe(false);
@@ -79,25 +79,25 @@ test.describe('prayer and profile services', () => {
         await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
 
         await page.getByRole('button', { name: new RegExp(`Complete ${later} Prayer`, 'u') }).click();
-        const dialog = page.getByRole('dialog', { name: `How was ${later} prayed?` });
+        const dialog = page.getByRole('dialog', { name: `When did you pray ${later}?` });
         await expect(dialog).toBeVisible();
         const dialogScreenshot = testInfo.outputPath('combined-prayer-dialog.png');
         await dialog.screenshot({ path: dialogScreenshot });
         await testInfo.attach('combined-prayer-dialog', { path: dialogScreenshot, contentType: 'image/png' });
-        await dialog.getByRole('button', { name: /On time/u }).click();
+        await dialog.getByRole('button', { name: /Prayed within the time window/u }).click();
         await expect.poll(() => control.services.outcomes.get(`2026-08-29::${later}`)?.status).toBe('on_time');
         expect(control.services.outcomes.has(`2026-08-29::${earlier}`)).toBe(false);
 
         await page.reload();
         await expect(page.getByRole('button', { name: new RegExp(`${later} Prayer — confirmed`, 'u') })).toBeVisible();
         await page.getByRole('button', { name: new RegExp(`Complete ${earlier} Prayer`, 'u') }).click();
-        await page.getByRole('button', { name: /On time/u }).click();
+        await page.getByRole('button', { name: /Prayed within the time window/u }).click();
         await expect.poll(() => control.services.outcomes.get(`2026-08-29::${earlier}`)?.status).toBe('on_time');
 
         await page.reload();
         await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
         for (const name of [earlier, later]) {
-          await expect(page.getByRole('button', { name: new RegExp(`${name} Prayer — confirmed, Prayed on time`, 'u') })).toBeVisible();
+          await expect(page.getByRole('button', { name: new RegExp(`${name} Prayer — confirmed, Within time, 8 challenge points`, 'u') })).toBeVisible();
         }
         expect(control.services.calls.filter(call => call === 'POST /api/prayer/v1/outcomes')).toHaveLength(2);
         const confirmedScreenshot = testInfo.outputPath('combined-prayers-confirmed.png');
@@ -126,7 +126,7 @@ test.describe('prayer and profile services', () => {
     await expect(page.getByRole('button', { name: /Fajr Prayer — confirmed/u })).toBeVisible();
 
     await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
-    await page.getByRole('button', { name: /On time/u }).click();
+    await page.getByRole('button', { name: /Prayed within the time window/u }).click();
     await expect.poll(() => control.services.outcomes.get('2026-08-29::Dhuhr')?.status).toBe('on_time');
 
     await page.reload();
@@ -219,7 +219,7 @@ test.describe('prayer and profile services', () => {
     // Backoff bounds the load: one read is tried at most four times, then the circuit fails fast.
     expect(control.services.calls.filter(call => call === 'GET /api/prayer/v1/dashboard').length).toBeLessThanOrEqual(4);
     await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
-    await page.getByRole('button', { name: /On time/u }).click();
+    await page.getByRole('button', { name: /Prayed within the time window/u }).click();
     await expect(page.getByRole('button', { name: /Dhuhr Prayer — confirmed/u })).toBeVisible();
     expect(control.services.outcomes.size).toBe(0);
   });
@@ -233,7 +233,7 @@ test.describe('prayer and profile services', () => {
     for (const prayer of ['Fajr', 'Dhuhr']) {
       await page.getByRole('button', { name: new RegExp(`Complete ${prayer} Prayer`, 'u') }).click();
       await expect(page.getByRole('alert').filter({ hasText: `${prayer} has not started yet.` })).toBeVisible();
-      await expect(page.getByRole('dialog', { name: `How was ${prayer} prayed?` })).toHaveCount(0);
+      await expect(page.getByRole('dialog', { name: `When did you pray ${prayer}?` })).toHaveCount(0);
     }
     await expect(page.getByRole('button', { name: /Fajr Prayer — confirmed/u })).toHaveCount(0);
     expect(control.services.calls.filter(call => call === 'POST /api/prayer/v1/outcomes')).toEqual([]);
@@ -251,7 +251,7 @@ test.describe('prayer and profile services', () => {
     await openApp(page);
 
     await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
-    await page.getByRole('button', { name: /On time/u }).click();
+    await page.getByRole('button', { name: /Prayed within the time window/u }).click();
 
     await expect(page.getByRole('alert').filter({ hasText: 'Dhuhr on 2026-08-29 was not saved: Dhuhr has not started yet.' }))
       .toBeVisible();
@@ -269,7 +269,7 @@ test.describe('prayer and profile services', () => {
     // The service saves the next write, but its answer never reaches the app.
     control.services.loseNextWriteResponse = true;
     await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
-    await page.getByRole('button', { name: /On time/u }).click();
+    await page.getByRole('button', { name: /Prayed within the time window/u }).click();
     await expect.poll(() => control.services.outcomes.get('2026-08-29::Dhuhr')?.status).toBe('on_time');
 
     // The client retries the write after a short backoff with the same Idempotency-Key.
@@ -294,7 +294,7 @@ test.describe('prayer and profile services', () => {
     await openApp(page);
 
     await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
-    await page.getByRole('button', { name: /On time/u }).click();
+    await page.getByRole('button', { name: /Prayed within the time window/u }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'Dhuhr on 2026-08-29 was not saved' })).toBeVisible();
     expect(creates()).toBe(1);
 

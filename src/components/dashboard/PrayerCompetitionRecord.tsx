@@ -1,29 +1,30 @@
 import { useEffect, useState } from 'react';
-import { competitionRecordWindow, loadCompetitionRecord, type CompetitionRecord } from '../../services/prayerCompetitionRecord';
+import { competitionRecordWindow, includeFinishedCurrentPeriod, loadCompetitionRecord, type CompetitionRecord } from '../../services/prayerCompetitionRecord';
+import type { PrayerCompetition } from '../../types/domain';
 import type { CompetitionPeriod } from '../../services/prayerCompetition';
 
-export default function PrayerCompetitionRecord({ today, period, selectedDate, sessionKey, attempt }: {
-  today: string; period: CompetitionPeriod; selectedDate: string; sessionKey: string; attempt: number;
+export default function PrayerCompetitionRecord({ today, period, selectedDate, sessionKey, attempt, comparison }: {
+  today: string; period: CompetitionPeriod; selectedDate: string; sessionKey: string; attempt: number; comparison?: PrayerCompetition;
 }) {
   const recordDate = period === 'day' ? `${selectedDate.slice(0, 7)}-01` : today;
   const window = competitionRecordWindow(today, period, recordDate);
-  const key = `${sessionKey}:${today}:${period}:${window.label}:${attempt}`;
-  const [result, setResult] = useState<{ key: string; record: CompetitionRecord | null } | null>(null);
+  const key = `${sessionKey}:${today}:${period}:${window.label}`;
+  const [result, setResult] = useState<{ key: string; record: CompetitionRecord | null; error?: boolean } | null>(null);
 
   useEffect(() => {
     let active = true;
     const { periods } = competitionRecordWindow(today, period, recordDate);
     void loadCompetitionRecord(periods, () => active).then(
-      record => { if (active) setResult({ key, record }); },
-      () => { if (active) setResult({ key, record: null }); },
+      record => { if (active) setResult(previous => record ? { key, record } : { key, record: previous?.key === key ? previous.record : null, error: true }); },
+      () => { if (active) setResult(previous => ({ key, record: previous?.key === key ? previous.record : null, error: true })); },
     );
     return () => { active = false; };
   // The key changes only for a new record window, account, day or explicit refresh.
   // Minute-by-minute progress updates must not re-fetch completed periods.
-  }, [key, today, period, recordDate]);
+  }, [key, today, period, recordDate, attempt]);
 
   const current = result?.key === key ? result : null;
-  const record = current?.record;
+  const record = current?.record ? includeFinishedCurrentPeriod(current.record, comparison, today) : null;
   const unit = period === 'day' ? 'days' : period === 'week' ? 'weeks' : 'months';
   return <div className="prayer-challenge-record" role="group" aria-label={`${period === 'day' ? 'Daily' : period === 'week' ? 'Weekly' : 'Monthly'} record`} aria-busy={!current}>
     <div className="prayer-challenge-record-heading"><strong>{unit[0].toUpperCase() + unit.slice(1)} won</strong><span>{window.label}</span></div>
@@ -34,7 +35,8 @@ export default function PrayerCompetitionRecord({ today, period, selectedDate, s
     </div>
     <p className="prayer-challenge-record-note" role="status">{!current ? 'Loading record…'
       : !record ? 'Record unavailable. Refresh to try again.'
-        : !window.periods.length ? `No completed ${unit} yet`
+        : current.error ? 'Could not refresh. Showing the last confirmed record.'
+        : !window.periods.length && !record.self && !record.partner && !record.ties && !record.unscored ? `No completed ${unit} yet`
           : `${record.ties} tied · ${record.unscored} without scores · Completed ${unit} only`}</p>
   </div>;
 }

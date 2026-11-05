@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type {
   PrayerCompletionSource,
   PrayerCompletionStatus,
+  PrayerTiming,
   PrayerCompletionUndoData,
   PrayerName,
   PrayerOutcomeStatus,
@@ -24,12 +25,14 @@ export interface PrayerCompletionMutationResult {
   /** XP the planner granted for this prayer; 0 until it has (see `usePrayerRewards`). */
   xpEarned: number;
   status: PrayerCompletionStatus;
+  timing?: PrayerTiming;
   prayerName: PrayerName;
   prayerDate: string;
   gamificationResult?: CompletionResult;
 }
 
 export interface CompletePrayerOptions {
+  timing?: PrayerTiming;
   taskId?: string;
   prayerDate?: string;
   source?: PrayerCompletionSource;
@@ -56,7 +59,7 @@ export interface PrayerCompletionWorkflow {
     status: PrayerCompletionStatus,
     options?: CompletePrayerOptions,
   ) => PrayerCompletionMutationResult;
-  correctPrayerOutcome: (prayerDate: string, prayerName: PrayerName, status: PrayerOutcomeStatus) => void;
+  correctPrayerOutcome: (prayerDate: string, prayerName: PrayerName, status: PrayerOutcomeStatus, timing?: PrayerTiming) => void;
   undoPrayerCompletion: (inverse: PrayerCompletionUndoData) => void;
   /** Shows the service's version of an outcome it refused. */
   revertRefusedOutcome: (rejection: PrayerOutcomeRejection) => void;
@@ -94,6 +97,7 @@ export function usePrayerCompletionWorkflow({
     const transition = buildPrayerCompletionTransition({
       prayerName,
       status,
+      timing: options.timing,
       prayerDate,
       source,
       completedAt,
@@ -107,19 +111,21 @@ export function usePrayerCompletionWorkflow({
     if (transition.taskCompletion && transition.task) {
       taskOwner.showPrayerHabit(transition.task.id, true);
     }
-    return { undo: transition.undo, xpEarned: 0, status, prayerName, prayerDate };
+    return { undo: transition.undo, xpEarned: 0, status, timing: transition.outcomeAfter.timing, prayerName, prayerDate };
   }, [commitTracking, getTracking, scheduleTimeZone, taskOwner, timetable, today]);
 
   const correctPrayerOutcome = useCallback((
     prayerDate: string,
     prayerName: PrayerName,
     status: PrayerOutcomeStatus,
+    timing?: PrayerTiming,
   ) => {
     const transition = buildPrayerCorrectionTransition({
       prayerDate,
       prayerName,
       status,
       correctedAt: new Date(),
+      timing,
       tasks: taskOwner.tasks,
       tracking: getTracking(),
     });
