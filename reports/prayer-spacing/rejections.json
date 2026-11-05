@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "id": "HELM-PRAYER-SPACING-001",
+      "date": "2026-11-05",
+      "subjects": ["prayer-timeline"],
+      "reason": "The timeline overlaps the icons and is too close. Let the whole section breathe more and review its spacing.",
+      "requiredCheck": "At phone, tablet and desktop widths, the rail and its largest marker must have their own space above every prayer card. Check comfortable card padding, gaps between cards, and separation from the current prayer and timeline caption.",
+      "rejectedArtifacts": [{"path": "reports/prayer-spacing/owner-before.png"}],
+      "source": "Explicit owner feedback and attached dashboard screenshot on 5 November 2026.",
+      "status": "active"
+    }
+  ]
+}

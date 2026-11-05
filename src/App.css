@@ -5207,16 +5207,14 @@ textarea.form-input {
 .nc-prayer-timeline {
   position: relative;
   min-width: 0;
-  margin-top: 4px;
-  padding: 0 4px;
+  margin-top: 24px;
+  padding: 16px 4px 0;
 }
 
 .nc-prayer-rail {
-  position: absolute;
-  top: 78px;
-  right: 10%;
-  left: 10%;
+  position: relative;
   height: 2px;
+  margin: 0 10% 24px;
   border-radius: 999px;
   background: rgba(145, 160, 184, 0.3);
 }
@@ -5247,7 +5245,7 @@ textarea.form-input {
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 4px;
+  gap: 12px;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -5262,11 +5260,11 @@ textarea.form-input {
   display: flex;
   width: 100%;
   min-width: 0;
-  min-height: 174px;
+  min-height: 196px;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 8px 4px;
+  padding: 16px 8px;
   border: 1px solid transparent;
   border-radius: 12px;
   color: var(--nc-text);
@@ -5357,7 +5355,7 @@ textarea.form-input {
   height: 42px;
   align-items: center;
   justify-content: center;
-  margin: 10px 0 7px;
+  margin: 12px 0 10px;
   border: 1px solid color-mix(in srgb, var(--nc-prayer-symbol-color) 82%, var(--nc-border));
   border-radius: 50%;
   color: var(--nc-prayer-symbol-color);
@@ -5395,7 +5393,7 @@ textarea.form-input {
 }
 
 .nc-prayer-item time {
-  margin-top: 5px;
+  margin-top: 8px;
   font-size: 17px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -5481,7 +5479,7 @@ textarea.form-input {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  margin: 2px 0 0;
+  margin: 16px 0 0;
   color: var(--nc-text-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -5993,9 +5991,10 @@ textarea.form-input {
   .nc-next-prayer time { font-size: 48px; }
   .nc-celestial-arc { top: 68px; left: 6%; width: 88%; height: 30%; }
   .nc-celestial i { display: none; }
-  .nc-prayer-rail { right: 7%; left: 7%; }
+  .nc-prayer-timeline { margin-top: 20px; padding: 12px 0 0; }
+  .nc-prayer-rail { margin-bottom: 20px; }
   .nc-prayer-sequence { gap: 4px; }
-  .nc-prayer-item { min-height: 148px; padding: 8px 2px; border-radius: 9px; }
+  .nc-prayer-item { min-height: 156px; padding: 12px 2px; border-radius: 9px; }
   .nc-prayer-name { font-size: 11px; }
   .nc-prayer-arabic { display: none; }
   .nc-prayer-symbol { width: 34px; height: 34px; margin-top: 10px; font-size: 20px; }
@@ -6014,6 +6013,11 @@ textarea.form-input {
   .nc-tasks-card { align-items: stretch; flex-direction: column; }
   .nc-task-preview { margin-left: 0; }
   .nc-secondary-action { width: 100%; }
+}
+
+@media (max-width: 360px) {
+  .nc-prayer-state { flex-direction: column; gap: 3px; padding: 4px 2px; }
+  .nc-prayer-item { min-height: 174px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
