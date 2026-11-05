@@ -35,6 +35,7 @@ export function toTrackingRecord(outcome: ServiceOutcome): PrayerTrackingRecord 
     date: outcome.date,
     prayerName: outcome.prayer,
     status: outcome.status,
+    ...(outcome.timing ? { timing: outcome.timing } : {}),
     recordedAt: outcome.recordedAt,
     ...(outcome.rewarded ? { rewarded: true as const } : {}),
     ...(outcome.taskId ? { taskId: outcome.taskId } : {}),
@@ -65,7 +66,7 @@ export function mergeRecords(
   const merged: Record<string, PrayerTrackingRecord> = { ...local };
   for (const [key, confirmed] of Object.entries(service)) {
     const current = local[key];
-    if (!current || (current.status !== confirmed.status && !isNewer(current, confirmed))) merged[key] = confirmed;
+    if (!current || ((current.status !== confirmed.status || current.timing !== confirmed.timing) && !isNewer(current, confirmed))) merged[key] = confirmed;
   }
   return merged;
 }
@@ -128,7 +129,7 @@ export function planOutcomeSync(
     const current = confirmed.records[key];
     const id = confirmed.ids[key];
     if (!current) operations.push({ kind: 'create', key, record });
-    else if (current.status !== record.status && id) operations.push({ kind: 'correct', key, id, record });
+    else if ((current.status !== record.status || current.timing !== record.timing) && id) operations.push({ kind: 'correct', key, id, record });
   }
   for (const key of Object.keys(confirmed.records)) {
     const id = confirmed.ids[key];
@@ -171,7 +172,7 @@ export async function applyOutcomeOperation(
   const status = writableStatus(operation.record);
   if (operation.kind === 'correct') {
     const change = await correctPrayerOutcome(operation.id, status, operation.record.source,
-      correctOutcomeKey(operation.id, operation.record));
+      correctOutcomeKey(operation.id, operation.record), operation.record.timing);
     return withOutcome(confirmed, operation.key, change.outcome);
   }
   try {
@@ -179,6 +180,7 @@ export async function applyOutcomeOperation(
       date: operation.record.date,
       prayer: operation.record.prayerName,
       status,
+      ...(operation.record.timing ? { timing: operation.record.timing } : {}),
       ...(operation.record.source ? { source: operation.record.source } : {}),
       ...(operation.record.taskId ? { taskId: operation.record.taskId } : {}),
     }, createOutcomeKey(operation.record));
@@ -223,8 +225,8 @@ async function correctExisting(
   const existing = (await listPrayerOutcomes(record.date, record.date))
     .find(outcome => outcome.prayer === record.prayerName);
   if (!existing) throw new ServiceError(409, 'outcome_exists', `${record.prayerName} is already recorded.`);
-  if (existing.status === status) return withOutcome(confirmed, key, existing);
-  const change = await correctPrayerOutcome(existing.id, status, record.source, correctOutcomeKey(existing.id, record));
+  if (existing.status === status && (existing.timing ?? undefined) === record.timing) return withOutcome(confirmed, key, existing);
+  const change = await correctPrayerOutcome(existing.id, status, record.source, correctOutcomeKey(existing.id, record), record.timing);
   return withOutcome(confirmed, key, change.outcome);
 }
 

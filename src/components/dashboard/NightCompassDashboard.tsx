@@ -34,7 +34,10 @@ import type {
   DailyPillar,
   PrayerName,
   PrayerOutcomeStatus,
+  PrayerTiming,
 } from '../../types/domain';
+
+import { prayerTimingPoints } from '../../services/prayerTiming';
 
 type PrayerTemporalState = 'current' | 'next' | 'upcoming' | 'past' | 'not_tracked' | 'pending';
 
@@ -44,7 +47,12 @@ interface PrayerStatusPresentation {
   label: string;
 }
 
-function outcomePresentation(status: PrayerOutcomeStatus): PrayerStatusPresentation {
+function outcomePresentation(status: PrayerOutcomeStatus, timing?: PrayerTiming): PrayerStatusPresentation {
+  if (timing && (status === 'on_time' || status === 'late')) {
+    const label = timing === 'prompt' ? 'Prompt' : timing === 'within_window' ? 'Within time' : 'Outside time';
+    const shortLabel = timing === 'prompt' ? 'Prompt' : timing === 'within_window' ? 'Within' : 'Outside';
+    return { accessibleLabel: `${label}, ${prayerTimingPoints(timing)} challenge points`, icon: timing === 'prompt' ? '✦' : '✓', label: `${shortLabel} ·${prayerTimingPoints(timing)}` };
+  }
   switch (status) {
     case 'on_time': return { accessibleLabel: 'Prayed on time', icon: '✓', label: 'Prayed' };
     case 'late': return { accessibleLabel: 'Prayed late', icon: '✓', label: 'Prayed late' };
@@ -652,9 +660,8 @@ export default function NightCompassDashboard({ prayerActionsReady = false }: Ni
                   );
                   const isCurrent = currentPrayer?.name === name;
                   const isTomorrowOccurrence = isNext && nextIsTomorrow;
-                  const outcome = isTomorrowOccurrence || prayerOutcomesPending
-                    ? undefined
-                    : prayer.getOutcome(prayer.today, name)?.status;
+                  const outcomeRecord = isTomorrowOccurrence || prayerOutcomesPending ? undefined : prayer.getOutcome(prayer.today, name);
+                  const outcome = outcomeRecord?.status;
                   const temporalState: PrayerTemporalState = isCurrent
                     ? 'current'
                     : isNext
@@ -669,7 +676,7 @@ export default function NightCompassDashboard({ prayerActionsReady = false }: Ni
                   const statusPresentation = prayerOutcomesPending
                     ? { accessibleLabel: 'Outcomes loading', icon: '…', label: 'Loading' }
                     : outcome
-                    ? outcomePresentation(outcome)
+                    ? outcomePresentation(outcome, outcomeRecord?.timing)
                     : temporalPresentation(temporalState);
                   const completed = outcome === 'on_time' || outcome === 'late';
                   return (

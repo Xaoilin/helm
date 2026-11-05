@@ -102,6 +102,7 @@ describe('prayer schedule, deadline, and reminder semantics', () => {
       source: 'history',
     });
     expect(getPrayerOutcome(recorded, DATE, 'Fajr')).toEqual({
+      timing: 'within_window',
       date: DATE,
       prayerName: 'Fajr',
       status: 'on_time',

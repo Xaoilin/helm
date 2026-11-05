@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "subjects": [
+    "sabah-prayer-timing",
+    "prayer-completion-dialog",
+    "prayer-status-labels",
+    "weighted-prayer-competition"
+  ],
+  "sourceFiles": [
+    {
+      "path": "src/components/prayer/PrayerCompletionDialog.tsx",
+      "sha256": "283e70ac1b2fcb99e08d0ab2be99cc96491013603ebe40ca20652de86af2e31c"
+    },
+    {
+      "path": "src/App.css",
+      "sha256": "32816c7f2e13855b405b900b59f011206c67558c64aad78c92242c8a9acb5056"
+    },
+    {
+      "path": "src/components/dashboard/PrayerCompetitionCard.tsx",
+      "sha256": "0228e3a1c41dd16cdf9477c44cf050ff664a18cccba7a2c4b6793b1e0682b67c"
+    },
+    {
+      "path": "src/components/dashboard/PrayerCompetitionRecord.tsx",
+      "sha256": "8dd5b66413319758c6b858db395b1c6fcf91de3f23ad980901d639ac6ed912a9"
+    },
+    {
+      "path": "src/components/dashboard/prayer-competition.css",
+      "sha256": "a2361dcb4f12b40fc06f7f3499bf631491624e8ab4cd45d11237673731738f6d"
+    },
+    {
+      "path": "src/components/dashboard/NightCompassDashboard.tsx",
+      "sha256": "190133e8cbb95e9d1b2b56e8ee958aa085ee566906d331fec4719987fca3623e"
+    },
+    {
+      "path": "src/components/dashboard/PrayerStatsCard.tsx",
+      "sha256": "dadad2ece145d1228c161edad669101f401f8e40654e0add172651579e65840b"
+    },
+    {
+      "path": "src/services/prayerTiming.ts",
+      "sha256": "df2bb5cfc5d9ea6afbc28018799bde148f3724f540c9013712dc9280687d3791"
+    }
+  ],
+  "renders": [
+    {
+      "path": "reports/prayer-timing/timing-dark-1440.png",
+      "sha256": "3df8ad942ece61d176627e110f665bbc36febfe100cca52d23e4b207f2783def",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-timing/timing-dark-320.png",
+      "sha256": "f6e3293834a00c848495f86c801262667b8e2176572d29a6529de0f2a76c56fa",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-timing/timing-light-1440.png",
+      "sha256": "3df8ad942ece61d176627e110f665bbc36febfe100cca52d23e4b207f2783def",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-timing/timing-light-320.png",
+      "sha256": "f6e3293834a00c848495f86c801262667b8e2176572d29a6529de0f2a76c56fa",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-timing/timing-saved-dark-1440.png",
+      "sha256": "b7dd8d3d795c1caf6f06605ebe5abf569414fd6ba245af90aa8947521ede54bc",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-timing/timing-saved-dark-320.png",
+      "sha256": "7688d640887b9195fc5db31b386d5d8bbecbc3c6b0e52f07a86f0a76499883b1",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-timing/timing-saved-light-1440.png",
+      "sha256": "65121d35adbaa843104e58917a352a57abdaf3488463420d1676e0dce75e30f3",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-timing/timing-saved-light-320.png",
+      "sha256": "7688d640887b9195fc5db31b386d5d8bbecbc3c6b0e52f07a86f0a76499883b1",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-timing/weighted-competition.png",
+      "sha256": "02de475fdb4e910b9634be5b6dfc2e8c0f6cdb2312bb03f6c36bb69385608dad",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-timing/refresh-held.png",
+      "sha256": "030f0b66b27804e39563aaa16add8951e93ada0a55889972a49ab9d6fe906f90",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    }
+  ],
+  "references": [
+    {
+      "path": "reports/prayer-timing/reference-existing-card.png",
+      "sha256": "c2519a41e8924229dc258537d3b14c141f602202a527dbe5ef2abb4fa7ac1735",
+      "relationship": "reviewer-selected",
+      "qualities": "Existing Sabah Night Compass establishes navy surfaces, compact prayer timeline labels, subtle borders and numeric hierarchy. Candidate retains that visual language."
+    }
+  ],
+  "implementer": "root/sol_release",
+  "reviewer": {
+    "id": "root/visual_record_review",
+    "kind": "independent-agent"
+  },
+  "criteria": {
+    "craft": {
+      "verdict": "pass",
+      "evidence": "Ten full-size browser images inspected. Three dialog choices maintain aligned icon, copy and 12/8/2 point columns. Saved Prompt \u00b712, Within \u00b78 and Outside \u00b72 labels remain visible in the narrow 320px prayer timeline and orderly at 1440px."
+    },
+    "coherence": {
+      "verdict": "pass",
+      "evidence": "Dark navy cards, subtle border colours and compact typography match the existing Night Compass reference. Screenshots named dark and light show the same fixed dark product treatment; they do not prove distinct themes."
+    },
+    "hierarchy": {
+      "verdict": "pass",
+      "evidence": "The timing dialog presents three explicit actions with prominent point totals and explanatory copy. Challenge score captions and 12-of-12/8-of-12 point labels distinguish 100%/67% scores from each participant\u2019s separate 100% complete line."
+    },
+    "stateMotion": {
+      "verdict": "pass",
+      "evidence": "The within-window focus outline is visible in the 320px dialog. All three saved outcomes show retained status labels. The held-refresh render retains score numbers and record rather than loading placeholders. No new motion requires a clip; temporal refresh correctness belongs to the functional browser test."
+    },
+    "actualSize": {
+      "verdict": "pass",
+      "evidence": "Inspected dialogs and saved timeline in context at 1440\u00d7950 and 320\u00d7950 under both stored preferences. Choice copy wraps without clipping. Compact saved labels remain legible and the timeline line stays above prayer labels. The held-refresh screenshot at phone width preserves the score/points/completion hierarchy."
+    },
+    "rejectionRegression": {
+      "verdict": "pass",
+      "evidence": "Current ledger cases VA-001/002 concern mouse icons and do not apply. The compact timing labels avoid the cropped long labels found in the sibling Lina Opal review. The Sabah timeline line remains separated from the labels in the reviewed 320px image."
+    }
+  },
+  "motionRequired": false,
+  "rejectionLedgerSha256": "9c033b6db403f8174a659b72965779d3f557048698f1edae79e6adf83e0bfb33",
+  "rejectionsAddressed": [],
+  "blockingIssues": [],
+  "verdict": "pass",
+  "ownerAcceptance": "not-requested"
+}

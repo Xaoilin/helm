@@ -2,6 +2,7 @@ import type {
   PrayerActivationDayEligibility,
   PrayerCompletionSource,
   PrayerCompletionStatus,
+  PrayerTiming,
   PrayerDeadlineBounds,
   PrayerDeadlineName,
   PrayerName,
@@ -15,6 +16,7 @@ import type {
   PrayerTrackingState,
 } from '../types/domain';
 import { toLocalDateStr } from './financeHelpers';
+import { defaultPrayerTiming, isPrayerTiming, prayerTimingMatches } from './prayerTiming';
 import { prayerZonedDateTimeToInstant, shiftPrayerDate } from './prayerTimeZone';
 
 export const PRAYER_TRACKING_SCHEMA_VERSION = 1;
@@ -41,6 +43,7 @@ export interface NormalizePrayerTrackingOptions {
 }
 
 export interface SetPrayerOutcomeInput {
+  timing?: PrayerTiming;
   date: string;
   prayerName: PrayerName;
   status: PrayerOutcomeStatus;
@@ -111,6 +114,7 @@ function normalizePrayerRecord(value: unknown, fallbackRecordedAt: string): Pray
     status: value.status,
     recordedAt: normalizeInstant(value.recordedAt, fallbackRecordedAt),
   };
+  if (isPrayerTiming(value.timing) && prayerTimingMatches(record.status, value.timing)) record.timing = value.timing;
   if (value.rewarded === true) {
     record.rewarded = true;
   }
@@ -339,6 +343,11 @@ export function setPrayerOutcome(
     status: input.status,
     recordedAt: recordedAtDate.toISOString(),
   };
+  const timing = input.timing ?? (existing?.status === input.status ? existing.timing : defaultPrayerTiming(input.status));
+  if (timing) {
+    if (!prayerTimingMatches(input.status, timing)) throw new RangeError('Prayer timing does not match the outcome');
+    record.timing = timing;
+  }
   const rewarded = input.rewarded ?? existing?.rewarded;
   const taskId = input.taskId ?? existing?.taskId;
   const source = input.source ?? existing?.source;

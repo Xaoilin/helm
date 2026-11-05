@@ -107,8 +107,8 @@ test('renders a dignified prayer completion receipt @visual', async ({ page, sce
   await openApp(page);
 
   await page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u }).click();
-  await expect(page.getByRole('dialog', { name: 'How was Dhuhr prayed?' })).toBeVisible();
-  await page.getByRole('button', { name: /On time/u }).click();
+  await expect(page.getByRole('dialog', { name: 'When did you pray Dhuhr?' })).toBeVisible();
+  await page.getByRole('button', { name: /Prayed within the time window/u }).click();
 
   const celebration = page.getByRole('status').filter({ hasText: 'Dhuhr complete' });
   await expect(celebration).toBeVisible();

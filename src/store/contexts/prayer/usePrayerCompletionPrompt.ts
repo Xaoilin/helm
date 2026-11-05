@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import type {
   PrayerCompletionSource,
   PrayerCompletionStatus,
+  PrayerTiming,
   PrayerName,
 } from '../../../types/domain';
 import type { PrayerTimesData } from '../../../services/prayerTimes';
@@ -47,7 +48,7 @@ export interface PrayerCompletionPrompt {
   requestPrayerCompletion: (prayerName: PrayerName, options?: PrayerCompletionRequestOptions) => void;
   cancelPrayerCompletion: () => void;
   /** Records the prayer; resolves with the result and what it earned once the planner has rewarded it. */
-  confirmPrayerCompletion: (status: PrayerCompletionStatus) => Promise<PrayerCompletionMutationResult> | null;
+  confirmPrayerCompletion: (status: PrayerCompletionStatus, timing?: PrayerTiming) => Promise<PrayerCompletionMutationResult> | null;
 }
 
 /**
@@ -99,12 +100,13 @@ export function usePrayerCompletionPrompt({
     setPendingCompletion(null);
   }, []);
 
-  const confirmPrayerCompletion = useCallback((status: PrayerCompletionStatus) => {
+  const confirmPrayerCompletion = useCallback((status: PrayerCompletionStatus, timing?: PrayerTiming) => {
     const pending = pendingCompletion;
     if (!pending) return null;
     let result: PrayerCompletionMutationResult;
     try {
       result = completePrayer(pending.prayerName, status, {
+        timing,
         taskId: pending.taskId,
         prayerDate: pending.prayerDate,
         source: pending.source,

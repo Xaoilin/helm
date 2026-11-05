@@ -7,12 +7,12 @@ import type { PrayerTrackingRecord, ProductUsageEvent } from '../../types/domain
 
 /** The completion this record was created by: retries share its `recordedAt`. */
 export function createOutcomeKey(record: PrayerTrackingRecord): string {
-  return `prayer-outcome:create:${record.date}:${record.prayerName}:${record.status}:${record.recordedAt}`;
+  return `prayer-outcome:create:${record.date}:${record.prayerName}:${record.status}${record.timing ? `:${record.timing}` : ''}:${record.recordedAt}`;
 }
 
 /** Each correction stamps a new `recordedAt`, so correcting back and forth never reuses a key. */
 export function correctOutcomeKey(outcomeId: string, record: PrayerTrackingRecord): string {
-  return `prayer-outcome:correct:${outcomeId}:${record.status}:${record.recordedAt}`;
+  return `prayer-outcome:correct:${outcomeId}:${record.status}${record.timing ? `:${record.timing}` : ''}:${record.recordedAt}`;
 }
 
 export function deleteOutcomeKey(outcomeId: string): string {

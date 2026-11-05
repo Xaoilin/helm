@@ -121,9 +121,9 @@ test('keeps Dashboard Tasks and Prayer active without focus AI or cache writes @
   const prayerWrite = page.waitForRequest(request => request.method() === 'POST'
     && request.url().endsWith('/api/prayer/v1/outcomes'));
   await page.getByRole('button', { name: 'Complete Dhuhr Prayer — Current prayer' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: /^On time/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Prayed within the time window/ }).click();
   await prayerWrite;
-  await expect(page.getByRole('button', { name: 'Dhuhr Prayer — confirmed, Prayed on time' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Dhuhr Prayer — confirmed, Within time, 8 challenge points' })).toBeDisabled();
   await page.clock.fastForward(120_000);
   expect(focusRequests).toEqual([]);
   expect(await page.evaluate(() => [
@@ -133,7 +133,7 @@ test('keeps Dashboard Tasks and Prayer active without focus AI or cache writes @
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole('region', { name: 'Night Compass daily dashboard' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Dhuhr Prayer — confirmed, Prayed on time' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Dhuhr Prayer — confirmed, Within time, 8 challenge points' })).toBeDisabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: test.info().outputPath(`dashboard-retired-runtime-${width}.png`) });
   }

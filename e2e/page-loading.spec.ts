@@ -169,7 +169,7 @@ for (const width of [390, 768, 1440]) {
       const complete = page.getByRole('button', { name: /Complete Dhuhr Prayer — Current prayer/u });
       await expect(complete).toBeEnabled();
       await complete.press('Enter');
-      const dialog = page.getByRole('dialog', { name: 'How was Dhuhr prayed?', exact: true });
+      const dialog = page.getByRole('dialog', { name: 'When did you pray Dhuhr?', exact: true });
       await expect(dialog).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();

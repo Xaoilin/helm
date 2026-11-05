@@ -603,6 +603,7 @@ function createOutcome(route: Route, services: FakeServices, body: Record<string
     date: String(body.date),
     prayer: body.prayer as ServiceOutcome['prayer'],
     status: body.status as ServiceOutcome['status'],
+    timing: (body.timing ?? (body.status === 'on_time' ? 'within_window' : body.status === 'late' ? 'outside_window' : null)) as ServiceOutcome['timing'],
     recordedAt: now.toISOString(),
     source: typeof body.source === 'string' ? body.source : null,
     taskId: typeof body.taskId === 'string' ? body.taskId : null,
@@ -622,6 +623,7 @@ function correctOutcome(route: Route, services: FakeServices, id: string, body: 
   const outcome: ServiceOutcome = {
     ...existing,
     status,
+    timing: (body.timing ?? (status === existing.status ? existing.timing : status === 'on_time' ? 'within_window' : status === 'late' ? 'outside_window' : null)) as ServiceOutcome['timing'],
     recordedAt: now.toISOString(),
     source: typeof body.source === 'string' ? body.source : existing.source,
     rewarded: existing.rewarded || firstReward,
