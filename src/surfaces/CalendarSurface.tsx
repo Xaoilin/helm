@@ -1,3 +1,4 @@
+import { useViewPreference } from '../store/ViewPreferencesContext';
 import { useEffect, useState, useMemo } from 'react';
 import { useShell } from "../store/ShellContext";
 import { calendarErrorMessage, useCalendar } from "../store/contexts/CalendarContext";
@@ -51,7 +52,7 @@ export default function CalendarSurface() {
     const [markerYear, markerMonth, markerDay] = date.split('-').map(Number);
     return new Date(Date.UTC(markerYear, markerMonth - 1, markerDay));
   };
-  const [tab, setTab] = useState<Tab>(settings.settings.defaultCalendarTab || 'week');
+  const [tab, setTab] = useViewPreference<Tab>('calendar.view', settings.settings.defaultCalendarTab || 'week');
   const [viewDate, setViewDate] = useState(() => toCalendarMarker(currentAppDate));
   const [selectedDateStr, setSelectedDateStr] = useState(currentAppDate);
   const requestWindow = calendar.requestWindow;

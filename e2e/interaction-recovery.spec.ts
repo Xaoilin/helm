@@ -18,6 +18,7 @@ for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     for (const view of ['Month', 'Week', 'Agenda']) {
       await page.getByRole('button', { name: view, exact: true }).click();
+      await expect(page.getByRole('button', { name: view, exact: true })).toHaveClass(/active/);
       if (view === 'Month') {
         const day = page.getByRole('button', { name: 'Select Wednesday, Sep 9', exact: true });
         const cell = day.locator('..');

@@ -1,3 +1,4 @@
+import { useViewPreference } from '../store/ViewPreferencesContext';
 import { useState } from 'react';
 import TripBookingEditor from '../components/trips/TripBookingEditor';
 import TripBookingsTab from '../components/trips/TripBookingsTab';
@@ -36,7 +37,7 @@ export default function TripsSurface() {
   const now = new Date();
   const todayStr = toLocalDateStr(now);
 
-  const [activeTab, setActiveTab] = useState<TripsTab>('overview');
+  const [activeTab, setActiveTab] = useViewPreference<TripsTab>('trips.tab', 'overview');
   const [requestedTripId, setRequestedTripId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [editor, setEditor] = useState<OpenEditor | null>(null);
@@ -48,7 +49,6 @@ export default function TripsSurface() {
 
   function selectTrip(tripId: string): void {
     setRequestedTripId(tripId);
-    setActiveTab('overview');
   }
 
   function editBookingById(bookingId: string): void {

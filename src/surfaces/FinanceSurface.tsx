@@ -1,3 +1,4 @@
+import { useViewPreference } from '../store/ViewPreferencesContext';
 import { useState, useMemo } from 'react';
 import { useFinanceContext } from "../store/contexts/FinanceContext";
 import type { TransactionType, TransactionCategory, ExpenseCategory, FinanceAccount, FinanceAccountType, Transaction } from '../types/domain';
@@ -17,7 +18,7 @@ type Tab = 'overview' | 'spending' | 'loans' | 'transactions' | 'accounts' | 'bu
 
 export default function FinanceSurface() {
   const finance = useFinanceContext();
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useViewPreference<Tab>('finance.tab', 'overview');
   const todayStr = toLocalDateStr(new Date());
   const currentMonth = toMonthStr(new Date());
 
@@ -51,7 +52,7 @@ export default function FinanceSurface() {
   const goalIcon = '\u{1F3E6}';
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [filterType, setFilterType] = useState<'all' | TransactionType>('all');
+  const [filterType, setFilterType] = useViewPreference<'all' | TransactionType>('finance.filterType', 'all');
 
   // ── Derived data ──
   const netWorth = useMemo(() => calculateNetWorth(finance.financeAccounts), [finance.financeAccounts]);

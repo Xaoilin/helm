@@ -1,3 +1,4 @@
+import { useViewPreference } from '../store/ViewPreferencesContext';
 import { useState, useEffect } from 'react';
 import { useSettingsContext } from "../store/contexts/SettingsContext";
 import { useGamificationContext } from "../store/contexts/GamificationContext";
@@ -22,6 +23,7 @@ export default function SettingsSurface() {
   const authSession = useAuthSession();
   const signedInUserId = authSession.authUser?.id ?? null;
   const { settings } = settingsContext;
+  const [calendarView, setCalendarView] = useViewPreference<'month' | 'week' | 'agenda' | 'accounts'>('calendar.view', settings.defaultCalendarTab || 'week');
   const [confirmReset, setConfirmReset] = useState(false);
   const [prayerTestStatus, setPrayerTestStatus] = useState<string | null>(null);
   const { readOnly } = useSyncAvailability();
@@ -181,12 +183,13 @@ export default function SettingsSurface() {
               id="settings-default-cal-view"
               className="form-select"
               style={{ maxWidth: 200 }}
-              value={settings.defaultCalendarTab || 'week'}
-              onChange={e => settingsContext.updateSettings({ defaultCalendarTab: e.target.value as 'month' | 'week' | 'agenda' | 'accounts' })}
+              value={calendarView}
+              onChange={e => setCalendarView(e.target.value as 'month' | 'week' | 'agenda' | 'accounts')}
             >
               <option value="week">Week</option>
               <option value="month">Month</option>
               <option value="agenda">Agenda</option>
+              <option value="accounts">Accounts</option>
             </select>
             <div style={{ fontSize: 12, color: '#6b6f85', marginTop: 4 }}>
               The tab shown when you open the Calendar.

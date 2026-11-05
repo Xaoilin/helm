@@ -1,3 +1,5 @@
+import { viewPreferenceSchema, viewPreferencesSchema } from '../../src/services/backend/viewPreferenceContracts';
+import { isViewPreference } from '../../src/config/viewPreferences';
 /**
  * Stateful stand-ins for the Spring Boot prayer, profile, calendar and life admin services. Every response is parsed
  * through the app's contract schemas first, so this fake cannot drift from the contract the real
@@ -54,6 +56,7 @@ import { createFakePlanner, handlePlanner, type FakePlanner, type FakePlannerSee
 export const SERVICES_BASE_URL = 'https://services.helm.test';
 
 export interface FakeServicesOptions {
+  viewPreferences?: Record<string, string>;
   /** Every data call answers with this status, e.g. 503 for an outage. */
   failureStatus?: number;
   /** Every outcome create is refused with this 409 error, like the real service's time rules. */
@@ -98,6 +101,7 @@ interface StoredWrite {
 }
 
 export interface FakeServices {
+  viewPreferences: Record<string, string>;
   outcomes: Map<string, ServiceOutcome>;
   tracking: ServiceTracking | null;
   preferences: ServicePreferences;
@@ -189,6 +193,7 @@ export function createFakeServices(options: FakeServicesOptions = {}): FakeServi
       : { theme: 'dark', dataRetentionDays: 90, telemetry: false, defaultCalendarTab: null, goalTags: [], updatedAt: null },
     integrations: options.integrations ?? [],
     operationalEvents: [],
+    viewPreferences: { ...options.viewPreferences },
     calls: [],
     conflicts: 0,
     replays: 0,
@@ -366,6 +371,17 @@ async function handle(
       const next = body as Pick<ServiceGlobalSettings, 'city' | 'country' | 'timeZone'>;
       services.profile = { city: next.city, country: next.country, timeZone: next.timeZone ?? null, updatedAt: now.toISOString() };
       return reply(route, 200, services.profile, globalSettingsSchema);
+    }
+    case call === 'GET /api/profile/v1/view-preferences':
+      return reply(route, 200, { values: services.viewPreferences }, viewPreferencesSchema);
+    case /^PUT \/api\/profile\/v1\/view-preferences\/[^/]+$/u.test(call): {
+      const key = decodeURIComponent(url.pathname.split('/').at(-1)!);
+      const value = body?.value;
+      if (typeof value !== 'string' || !isViewPreference(key, value)) {
+        return reply(route, 400, { code: 'invalid_view_preference', message: 'That display preference or value is not supported.' }, apiErrorSchema);
+      }
+      services.viewPreferences[key] = value;
+      return reply(route, 200, { key, value, updatedAt: now.toISOString() }, viewPreferenceSchema);
     }
     case call === 'GET /api/profile/v1/preferences':
       return reply(route, 200, services.appPreferences, appPreferencesSchema);

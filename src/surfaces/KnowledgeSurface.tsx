@@ -1,3 +1,4 @@
+import { useViewPreference } from '../store/ViewPreferencesContext';
 import { useState, useMemo, useCallback } from 'react';
 import { useKnowledgeContext } from "../store/contexts/KnowledgeContext";
 import type { KnowledgeTopic, KnowledgeEntry, KnowledgeSource, LifestyleItem, LifestyleType, LifestyleStatus } from '../types/domain';
@@ -93,10 +94,10 @@ function sourceTagClass(type: KnowledgeSource['type']): string {
 
 export default function KnowledgeSurface() {
   const knowledge = useKnowledgeContext();
-  const [tab, setTab] = useState<Tab>('browse');
+  const [tab, setTab] = useViewPreference<Tab>('knowledge.tab', 'browse');
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [sourceFilter, setSourceFilter] = useViewPreference<SourceFilter>('knowledge.sourceFilter', 'all');
   const [deletingTopicId, setDeletingTopicId] = useState<string | null>(null);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
 
@@ -120,7 +121,7 @@ export default function KnowledgeSurface() {
 
   // Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchSourceFilter, setSearchSourceFilter] = useState<SourceFilter>('all');
+  const [searchSourceFilter, setSearchSourceFilter] = useViewPreference<SourceFilter>('knowledge.searchSourceFilter', 'all');
   const [searchTopicFilter, setSearchTopicFilter] = useState('all');
 
   // Lifestyle tracker

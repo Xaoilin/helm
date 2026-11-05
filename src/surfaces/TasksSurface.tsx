@@ -1,3 +1,4 @@
+import { useViewPreference } from '../store/ViewPreferencesContext';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useShell } from "../store/ShellContext";
 import { useTaskContext } from "../store/contexts/TaskContext";
@@ -36,7 +37,6 @@ import {
 type Tab = 'today' | 'all' | 'goals';
 type AllTaskAccordionSectionId = AllTaskSectionId | 'completed';
 
-const DEFAULT_ALL_TASK_FILTERS: AllTaskFilters = { category: 'all', priority: 'all', status: 'all' };
 
 interface EditorState {
   editing: Task | null;
@@ -50,16 +50,23 @@ export default function TasksSurface() {
   const projects = useProjectContext();
   const settings = useSettingsContext();
   const prayer = usePrayerContext();
-  const [tab, setTab] = useState<Tab>('today');
+  const [tab, setTab] = useViewPreference<Tab>('tasks.tab', 'today');
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [showCompletedGoals, setShowCompletedGoals] = useState(false);
+  const [showCompletedGoals, setShowCompletedGoals] = useViewPreference<boolean>('tasks.showCompletedGoals', false);
   const [expandedAllTaskSections, setExpandedAllTaskSections] = useState<Partial<Record<AllTaskAccordionSectionId, boolean>>>({
     completed: false,
   });
   const [filterGoalTag, setFilterGoalTag] = useState<string>('all');
   const [filterProjectId, setFilterProjectId] = useState<string>('all');
-  const [allTaskFilters, setAllTaskFilters] = useState<AllTaskFilters>(DEFAULT_ALL_TASK_FILTERS);
+  const [categoryFilter, setCategoryFilter] = useViewPreference<AllTaskFilters['category']>('tasks.category', 'all');
+  const [priorityFilter, setPriorityFilter] = useViewPreference<AllTaskFilters['priority']>('tasks.priority', 'all');
+  const [statusFilter, setStatusFilter] = useViewPreference<AllTaskFilters['status']>('tasks.status', 'all');
+  const allTaskFilters = useMemo<AllTaskFilters>(() => ({ category: categoryFilter, priority: priorityFilter, status: statusFilter }),
+    [categoryFilter, priorityFilter, statusFilter]);
+  const resetTaskFilters = useCallback(() => {
+    setCategoryFilter('all'); setPriorityFilter('all'); setStatusFilter('all');
+  }, [setCategoryFilter, setPriorityFilter, setStatusFilter]);
   const { toasts, showLevelFlash, celebrate } = useRewardToasts();
 
   const appTimeZone = settings.appTimeZone.effectiveTimeZone;
@@ -77,13 +84,13 @@ export default function TasksSurface() {
       setTab(tasksState.tab);
     }
     if (tasksState?.resetFilters) {
-      setAllTaskFilters(DEFAULT_ALL_TASK_FILTERS);
+      resetTaskFilters();
       setFilterGoalTag('all');
       setFilterProjectId('all');
     }
 
     dismissNavigationRequest(request.id);
-  }, [navigationRequest, dismissNavigationRequest]);
+  }, [navigationRequest, dismissNavigationRequest, resetTaskFilters, setTab]);
 
   // ── Derived data ──
   const projectFilteredTasks = useMemo(() => filterByProject(tasks, filterProjectId), [tasks, filterProjectId]);
@@ -200,8 +207,8 @@ export default function TasksSurface() {
 
   const resetAllTaskFilters = useCallback(() => {
     setFilterProjectId('all');
-    setAllTaskFilters(DEFAULT_ALL_TASK_FILTERS);
-  }, []);
+    resetTaskFilters();
+  }, [resetTaskFilters]);
 
   const toggleAllTaskSection = useCallback((sectionId: AllTaskAccordionSectionId) => {
     setExpandedAllTaskSections(prev => ({
@@ -366,7 +373,7 @@ export default function TasksSurface() {
                 </label>
                 <label className="all-tasks-filter-field">
                   <span>Type</span>
-                  <select className="form-select" value={allTaskFilters.category} onChange={e => setAllTaskFilters(current => ({ ...current, category: e.target.value as AllTaskFilters['category'] }))}>
+                  <select className="form-select" value={allTaskFilters.category} onChange={e => setCategoryFilter(e.target.value as AllTaskFilters['category'])}>
                     <option value="all">All types</option>
                     <option value="daily">Daily habits</option>
                     <option value="prayer">Prayer tasks</option>
@@ -375,7 +382,7 @@ export default function TasksSurface() {
                 </label>
                 <label className="all-tasks-filter-field">
                   <span>Priority</span>
-                  <select className="form-select" value={allTaskFilters.priority} onChange={e => setAllTaskFilters(current => ({ ...current, priority: e.target.value as AllTaskFilters['priority'] }))}>
+                  <select className="form-select" value={allTaskFilters.priority} onChange={e => setPriorityFilter(e.target.value as AllTaskFilters['priority'])}>
                     <option value="all">All priorities</option>
                     <option value="high">High</option>
                     <option value="medium">Medium</option>
@@ -384,7 +391,7 @@ export default function TasksSurface() {
                 </label>
                 <label className="all-tasks-filter-field">
                   <span>Status</span>
-                  <select className="form-select" value={allTaskFilters.status} onChange={e => setAllTaskFilters(current => ({ ...current, status: e.target.value as AllTaskFilters['status'] }))}>
+                  <select className="form-select" value={allTaskFilters.status} onChange={e => setStatusFilter(e.target.value as AllTaskFilters['status'])}>
                     <option value="all">All statuses</option>
                     <option value="active">Active</option>
                     <option value="completed">Completed</option>

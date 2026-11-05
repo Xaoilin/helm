@@ -1,0 +1,15 @@
+.view-preference-notice {
+  position: fixed;
+  z-index: 1400;
+  right: 16px;
+  bottom: 88px;
+  width: min(380px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid var(--border-color, #a78bfa);
+  border-radius: 12px;
+  color: var(--text-primary, #f8fafc);
+  background: var(--bg-card, #292038);
+  box-shadow: 0 4px 24px #0003;
+  font-size: 13px;
+}
+.view-preference-notice button { display: block; margin-top: 8px; }

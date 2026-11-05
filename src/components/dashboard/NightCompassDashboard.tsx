@@ -1,3 +1,4 @@
+import { useViewPreference } from '../../store/ViewPreferencesContext';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   CANONICAL_PRAYER_NAMES,
@@ -271,7 +272,7 @@ function MomentumCard({
   onReset,
 }: MomentumCardProps) {
   const [confirmingReset, setConfirmingReset] = useState(false);
-  const [individualSteps, setIndividualSteps] = useState(false);
+  const [individualSteps, setIndividualSteps] = useViewPreference<boolean>(pillar === 'learn' ? 'dashboard.learnIndividualSteps' : 'dashboard.moveIndividualSteps', false);
   const accentIcon = pillar === 'learn' ? '◇' : '△';
   const title = pillar === 'learn' ? 'Learn' : 'Move';
   const completedActivities = day.activities.filter(activity => activity.complete).length;
@@ -379,7 +380,7 @@ export default function NightCompassDashboard({ prayerActionsReady = false }: Ni
   const { celebrate } = useMilestoneCelebration();
   const [busyPillar, setBusyPillar] = useState<DailyPillar | null>(null);
   const [actionErrors, setActionErrors] = useState<Partial<Record<DailyPillar, string>>>({});
-  const [showPrayerLog, setShowPrayerLog] = useState(false);
+  const [showPrayerLog, setShowPrayerLog] = useViewPreference<boolean>('dashboard.showPrayerLog', false);
   const [prayerConfirmed, setPrayerConfirmed] = useState(false);
   const pendingPillars = useRef(new Set<DailyPillar>());
   const prayerSyncStatus = prayer.serviceSync?.status;
