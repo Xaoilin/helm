@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "subjects": [
+    "prayer-competition-record"
+  ],
+  "sourceFiles": [
+    {
+      "path": "src/components/dashboard/PrayerCompetitionCard.tsx",
+      "sha256": "2b90d36f84cafed2d5532bac7b0b5b28c3e44b5664f79c015411bf1cee75c9b6"
+    },
+    {
+      "path": "src/components/dashboard/PrayerCompetitionRecord.tsx",
+      "sha256": "cb382826f6a591c14c974fde0c40095d50fbdf28843b80e76e106394f90ecd1a"
+    },
+    {
+      "path": "src/components/dashboard/prayer-competition.css",
+      "sha256": "36d4005eb32cd3bccc7485546411664d58bfed285b2912288d8ca645f8610e41"
+    }
+  ],
+  "renders": [
+    {
+      "path": "reports/prayer-win-record/monthly-record.png",
+      "sha256": "7fef206619d442f67dbe847967d7ce27bca133f4ea279f04741a47cfb28de464",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-win-record/record-dark-1440.png",
+      "sha256": "cfc00c44e9502671208d46797e605e3e3abb91d7945e3f5e4cffdca8d58cb4b8",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-win-record/record-dark-320.png",
+      "sha256": "b4ddfbf74e47a9199b19c24ded5ee839d2a3c7d91179125824905af1dd90b73e",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-win-record/record-light-1440.png",
+      "sha256": "7f1f25e797d1f8ee9e568e6aa198cc177cd76553b5abfae135b20372a33aca0d",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-win-record/record-light-320.png",
+      "sha256": "852fb186c2bd281557b8d3fb1ea5b9894cad2c9f947f12212fb5bd8daac20b41",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-win-record/weekly-record.png",
+      "sha256": "d726ce7a8423de7b5704deef1303331a8c9b7f81062b17ad202cb6ffbee24878",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    }
+  ],
+  "references": [
+    {
+      "path": "reports/prayer-win-record/reference-existing-card.png",
+      "sha256": "c2519a41e8924229dc258537d3b14c141f602202a527dbe5ef2abb4fa7ac1735",
+      "relationship": "reviewer-selected",
+      "qualities": "Existing Sabah prayer card with rounded panels, restrained borders, participant labels and strong score hierarchy."
+    }
+  ],
+  "implementer": "root",
+  "reviewer": {
+    "id": "sol_release",
+    "kind": "independent-agent"
+  },
+  "criteria": {
+    "craft": {
+      "verdict": "pass",
+      "evidence": "Independent review: rounded panel, border and type look finished; labelled wins have balanced numerals."
+    },
+    "coherence": {
+      "verdict": "pass",
+      "evidence": "Matches the existing fixed-dark score-card tokens and spacing. Both stored theme preferences render this unchanged appearance; no light-appearance claim."
+    },
+    "hierarchy": {
+      "verdict": "pass",
+      "evidence": "Current progress remains primary, labelled completed-period wins sit in a separate subordinate panel."
+    },
+    "stateMotion": {
+      "verdict": "pass",
+      "evidence": "Selected Day/Week/Month controls, record labels and zero-result states stay coherent. No new animation."
+    },
+    "actualSize": {
+      "verdict": "pass",
+      "evidence": "All six current renders inspected at1440/1280 and320px. Narrow headings, scores and notes fit and wrap without clipping."
+    },
+    "rejectionRegression": {
+      "verdict": "pass",
+      "evidence": "VA-001/002 concern mouse icons and do not apply to this record panel. Existing prayer timeline untouched."
+    }
+  },
+  "motionRequired": false,
+  "rejectionLedgerSha256": "9c033b6db403f8174a659b72965779d3f557048698f1edae79e6adf83e0bfb33",
+  "rejectionsAddressed": [],
+  "blockingIssues": [],
+  "verdict": "pass",
+  "ownerAcceptance": "not-requested"
+}

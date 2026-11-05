@@ -6,6 +6,25 @@ The dashboard compares prayer completion for a calendar month (default), Monday�
 
 The card refreshes on confirmed prayer changes, once per minute while mounted, and through Refresh. Account/session changes and superseded requests cannot reuse another account or period’s response. No totals or credentials are persisted in the browser. A missing partner is shown as unavailable, never as a zero score.
 
+## Win record
+
+Requested on 5 November 2026, starting **1 November 2026**. The current period's
+progress remains separate from the Sabah–Lina win tally. Day counts completed
+days in the displayed month, with no results before the start. Week counts
+completed Monday–Sunday weeks beginning on or after the start; the partial week
+containing 1 November is excluded. Month counts completed calendar months from
+November onward. The current day, week and month never count as finished wins.
+Ties and periods without eligible scores are shown separately.
+
+The browser derives this record from the existing authenticated totals-only
+comparisons, with at most three reads in flight. No new sharing fields,
+credentials, individual prayer records or browser-persisted results are added.
+Completed results load on entering a record window, calendar-day rollover or
+explicit Refresh, not on each minute's progress update. Changing accounts or
+views discards superseded results and stops scheduling their remaining reads.
+A failed or missing historical comparison hides the whole tally rather than
+showing a partial result as complete. Refresh retries it.
+
 ## Narrow sharing boundary
 
 The two products keep separate Auth, databases, services and deployment identities. This requested comparison introduces only an explicitly configured, read-only exchange of period totals. The summary contains `from`, `to`, `asOf`, `onTime`, `late`, and `missed`. It contains no account IDs, individual prayer records, cycle dates, exemption counts, notes, location or other account data. Totals can still reveal patterns; pairing requires explicit owner activation.
@@ -36,4 +55,4 @@ Remove the read key and restart that product’s prayer service to revoke inboun
 
 ## Acceptance boundary
 
-The approved pair is enabled. Source and synthetic checks cover the dashboard behavior; running-container checks cover the authenticated link, denied capabilities and service health. The actual signed-in prayer-total comparison has not been inspected by an agent. A narrow `prayer_get_competition` semantic MCP tool is not yet published; external-agent acceptance remains explicitly blocked. Agents must not inspect real prayer accounts through lower-level APIs, database access, session-token reuse or browser automation.
+The approved pair is enabled. Source and synthetic checks cover the dashboard behavior; running-container checks cover the authenticated link, denied capabilities and service health. The actual signed-in prayer-total comparison has not been inspected by an agent. A narrow `prayer_get_competition` semantic MCP tool is not yet published; external-agent acceptance, including historical win records, remains explicitly blocked. Agents must not inspect real prayer accounts through lower-level APIs, database access, session-token reuse or browser automation.

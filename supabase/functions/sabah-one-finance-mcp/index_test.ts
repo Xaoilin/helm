@@ -330,9 +330,11 @@ Deno.test('reads account-owned profiles and the current review version with an e
 });
 Deno.test('profile writes forward deterministic semantic commands for exact retries without read-modify-write', async () => {
   await withBackend(async backend => {
+    // Exact retries must reuse the same token even when the clock crosses a second.
+    const accessToken = token();
     const args = { requestId, profile, expectedUpdatedAt: storedReview.updatedAt };
     for (let retry = 0; retry < 2; retry++) {
-      const result = await mcp('tools/call', { name: 'finance_save_loan_profile', arguments: args });
+      const result = await mcp('tools/call', { name: 'finance_save_loan_profile', arguments: args }, accessToken);
       assert.equal(result.message.result.isError, undefined);
       backend.review = { ...review, ...storedReview, loanProfiles: [{ ...profile, name: 'Changed later' }] };
     }
@@ -341,7 +343,7 @@ Deno.test('profile writes forward deterministic semantic commands for exact retr
     assert.deepEqual(writes[0], writes[1]);
     assert.deepEqual(writes[0].body, { loanProfileChange: { operation: 'save', profile }, expectedUpdatedAt: storedReview.updatedAt });
     assert.equal(writes[0].idempotencyKey, requestId);
-    assert.equal(writes[0].authorization, `Bearer ${token()}`);
+    assert.equal(writes[0].authorization, `Bearer ${accessToken}`);
     assert(backend.calls.filter(call => call.method === 'GET').every(call => call.path.endsWith('/access')));
     const remove = await mcp('tools/call', { name: 'finance_remove_loan_profile', arguments: {
       requestId, profileId: profile.id, confirmed: true, expectedUpdatedAt: storedReview.updatedAt,

@@ -5,6 +5,7 @@ import { usePrayerContext } from '../../store/contexts/PrayerContext';
 import { competitionLeader, competitionRange, competitionScore, getPrayerCompetition, type CompetitionPeriod } from '../../services/prayerCompetition';
 import type { PrayerCompetition, PrayerCompetitionSummary } from '../../types/domain';
 import './prayer-competition.css';
+import PrayerCompetitionRecord from './PrayerCompetitionRecord';
 
 const SELF = 'Sabah';
 const PARTNER = 'Lina';
@@ -78,6 +79,7 @@ export default function PrayerCompetitionCard() {
     </div>
     <div className="prayer-challenge-key" aria-label="Chart key"><span><i className="challenge-on-time" />On time</span>
       <span><i className="challenge-late" />Late</span><span><i className="challenge-missed" />Missed</span></div>
+    <PrayerCompetitionRecord today={today} period={selectedPeriod} selectedDate={range.from} sessionKey={sessionKey} attempt={attempt} />
     {current?.error && <p className="prayer-challenge-message" role="alert">{current.error}</p>}
     {data?.status === 'not_connected' && <p className="prayer-challenge-message">Your shared challenge isn’t connected yet. Your own totals are shown.</p>}
     {data?.status === 'unavailable' && <p className="prayer-challenge-message" role="status">{PARTNER}’s totals are temporarily unavailable. Try refreshing.</p>}
