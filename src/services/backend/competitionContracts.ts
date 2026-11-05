@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PRAYER_TIMING_POINTS } from '../../config/prayerCompetition';
 
 export const competitionSummarySchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
@@ -7,7 +8,16 @@ export const competitionSummarySchema = z.object({
   onTime: z.number().int().nonnegative(),
   late: z.number().int().nonnegative(),
   missed: z.number().int().nonnegative(),
-}).refine(summary => summary.onTime + summary.late + summary.missed <= 155);
+  allPrayed: z.boolean().optional(),
+  pointsEarned: z.number().int().nonnegative().optional(),
+  pointsAvailable: z.number().int().nonnegative().optional(),
+}).refine(summary => {
+  const total = summary.onTime + summary.late + summary.missed;
+  if (total > 155) return false;
+  if (summary.pointsEarned === undefined && summary.pointsAvailable === undefined) return true;
+  return summary.pointsEarned !== undefined && summary.pointsAvailable === total * PRAYER_TIMING_POINTS.prompt
+    && summary.pointsEarned <= summary.pointsAvailable;
+});
 
 export const competitionSchema = z.object({
   status: z.enum(['ready', 'not_connected', 'unavailable']),

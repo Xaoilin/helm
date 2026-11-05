@@ -48,9 +48,18 @@ export function competitionScore(summary: PrayerCompetitionSummary) {
   return { completed, total, percentage: total ? Math.round(completed / total * 100) : null };
 }
 
+export function competitionPoints(summary: PrayerCompetitionSummary) {
+  if (summary.pointsEarned === undefined || summary.pointsAvailable === undefined) return null;
+  return { earned: summary.pointsEarned, available: summary.pointsAvailable,
+    percentage: summary.pointsAvailable ? Math.round(summary.pointsEarned / summary.pointsAvailable * 100) : null };
+}
+
 export function competitionLeader(self: PrayerCompetitionSummary, partner: PrayerCompetitionSummary): 'self' | 'partner' | 'tie' | null {
-  const a = competitionScore(self);
-  const b = competitionScore(partner);
+  const selfPoints = competitionPoints(self);
+  const partnerPoints = competitionPoints(partner);
+  if (Boolean(selfPoints) !== Boolean(partnerPoints)) return null;
+  const a = selfPoints && partnerPoints ? { completed: selfPoints.earned, total: selfPoints.available } : competitionScore(self);
+  const b = selfPoints && partnerPoints ? { completed: partnerPoints.earned, total: partnerPoints.available } : competitionScore(partner);
   if (!a.total || !b.total) return null;
   // Compare exact fractions; display rounding must never decide the winner.
   const difference = a.completed * b.total - b.completed * a.total;

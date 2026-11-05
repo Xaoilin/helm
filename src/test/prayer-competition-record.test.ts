@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { competitionRecordWindow, loadCompetitionRecord } from '../services/prayerCompetitionRecord';
+import { competitionRecordWindow, includeFinishedCurrentPeriod, loadCompetitionRecord } from '../services/prayerCompetitionRecord';
 import type { PrayerCompetition, PrayerCompetitionSummary } from '../types/domain';
 
 const summary = (completed: number, missed: number): PrayerCompetitionSummary => ({
@@ -58,5 +58,22 @@ describe('prayer competition record', () => {
     expect(await loadCompetitionRecord(competitionRecordWindow('2026-11-07', 'day', '2026-11-07').periods, () => active, read)).toBeNull();
     expect(maximum).toBe(3);
     expect(read).toHaveBeenCalledTimes(3);
+  });
+});
+
+
+describe('early completed-period records', () => {
+  const record = { self: 1, partner: 4, ties: 0, unscored: 0 };
+  const side = { from: '2026-11-05', to: '2026-11-05', asOf: '2026-11-05T22:00:00Z', onTime: 5, late: 0, missed: 0, allPrayed: true, pointsEarned: 60, pointsAvailable: 60 };
+  it('counts a finished day before midnight only when both participants finish', () => {
+    expect(includeFinishedCurrentPeriod(record, { status: 'ready', self: side, partner: { ...side, pointsEarned: 40 } }, '2026-11-05').self).toBe(2);
+    expect(includeFinishedCurrentPeriod(record, { status: 'ready', self: side, partner: { ...side, allPrayed: false } }, '2026-11-05')).toBe(record);
+  });
+  it('counts complete weeks and months on their last day and never counts a future end', () => {
+    for (const from of ['2026-11-02', '2026-11-01']) {
+      const period = { ...side, from, to: '2026-11-08' };
+      expect(includeFinishedCurrentPeriod(record, { status: 'ready', self: period, partner: period }, '2026-11-08').ties).toBe(1);
+      expect(includeFinishedCurrentPeriod(record, { status: 'ready', self: period, partner: period }, '2026-11-05')).toBe(record);
+    }
   });
 });

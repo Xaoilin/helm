@@ -3,13 +3,15 @@ import { getPrayerDeadlineBounds } from '../../services/prayerTracking';
 import { formatPrayerInstantTime } from '../../services/prayerTimeZone';
 import { useMilestoneCelebration } from '../../store/contexts/MilestoneCelebrationContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
-import type { PrayerCompletionStatus, PrayerName } from '../../types/domain';
+import type { PrayerName, PrayerTiming } from '../../types/domain';
+import { PRAYER_TIMING_CHOICES, prayerTimingPoints, prayerTimingStatus } from '../../services/prayerTiming';
 
 export default function PrayerCompletionDialog() {
   const prayer = usePrayerContext();
   const { celebrate } = useMilestoneCelebration();
   const pending = prayer.pendingCompletion;
   const dialogRef = useRef<HTMLElement>(null);
+  const promptButtonRef = useRef<HTMLButtonElement>(null);
   const onTimeButtonRef = useRef<HTMLButtonElement>(null);
   const lateButtonRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
@@ -24,6 +26,7 @@ export default function PrayerCompletionDialog() {
       ? document.activeElement
       : null;
     const getFocusableControls = () => [
+      promptButtonRef.current,
       onTimeButtonRef.current,
       lateButtonRef.current,
       cancelButtonRef.current,
@@ -106,10 +109,11 @@ export default function PrayerCompletionDialog() {
       )}).`
     : 'The current schedule is unavailable, so choose the outcome you know is correct.';
 
-  const confirmCompletion = (status: PrayerCompletionStatus) => {
+  const confirmCompletion = (timing: PrayerTiming) => {
+    const status = prayerTimingStatus(timing);
     const key = `${pending.prayerDate || prayer.today}::${pending.prayerName}`;
     if (savingKeysRef.current.has(key)) return;
-    const rewarded = prayer.confirmPrayerCompletion(status);
+    const rewarded = prayer.confirmPrayerCompletion(status, timing);
     if (!rewarded) return;
     savingKeysRef.current.add(key);
     setSavingPrayers(current => ({ ...current, [key]: pending.prayerName }));
@@ -134,11 +138,7 @@ export default function PrayerCompletionDialog() {
             ? 'Prayer kept on time'
             : 'Prayer completed',
         title: levelUp ? `Level ${levelUp.newLevel} reached` : `${result.prayerName} complete`,
-        message: levelUp
-          ? `${result.prayerName} moved you forward · ${levelUp.newTitle}`
-          : status === 'on_time'
-            ? `A meaningful daily win${result.xpEarned > 0 ? ` · +${result.xpEarned} XP` : '.'}`
-            : `Recorded with honesty${result.xpEarned > 0 ? ` · +${result.xpEarned} XP` : '.'}`,
+        message: `${prayerTimingPoints(timing)} challenge points${result.xpEarned > 0 ? ` · +${result.xpEarned} XP` : ''}${levelUp ? ` · ${levelUp.newTitle}` : ''}`,
       });
     });
   };
@@ -158,29 +158,20 @@ export default function PrayerCompletionDialog() {
           onMouseDown={event => event.stopPropagation()}
         >
           <div className="prayer-completion-kicker">Prayer outcome</div>
-          <h2 id="prayer-completion-title">How was {pending.prayerName} prayed?</h2>
+          <h2 id="prayer-completion-title">When did you pray {pending.prayerName}?</h2>
           <p id="prayer-completion-help">{deadlineCopy}</p>
           <div className="prayer-completion-actions">
-            <button
-              ref={onTimeButtonRef}
+            {PRAYER_TIMING_CHOICES.map(choice => <button
+              key={choice.timing}
+              ref={choice.timing === 'prompt' ? promptButtonRef : choice.timing === 'within_window' ? onTimeButtonRef : lateButtonRef}
               type="button"
-              className={`prayer-outcome-choice on-time ${pending.suggestedStatus === 'on_time' ? 'suggested' : ''}`}
-              onClick={() => confirmCompletion('on_time')}
+              className={`prayer-outcome-choice ${choice.timing === 'prompt' ? 'prompt' : choice.status === 'on_time' ? 'on-time' : 'late'}`}
+              onClick={() => confirmCompletion(choice.timing)}
             >
-              <span aria-hidden="true">✓</span>
-              <strong>On time</strong>
-              {pending.suggestedStatus === 'on_time' && <small>Likely from the clock</small>}
-            </button>
-            <button
-              ref={lateButtonRef}
-              type="button"
-              className={`prayer-outcome-choice late ${pending.suggestedStatus === 'late' ? 'suggested' : ''}`}
-              onClick={() => confirmCompletion('late')}
-            >
-              <span aria-hidden="true">◷</span>
-              <strong>Late</strong>
-              {pending.suggestedStatus === 'late' && <small>Likely from the clock</small>}
-            </button>
+              <span aria-hidden="true">{choice.icon}</span>
+              <span className="prayer-choice-copy"><strong>{choice.label}</strong><small>{choice.description}</small></span>
+              <b className="prayer-choice-points">{prayerTimingPoints(choice.timing)}<small>points</small></b>
+            </button>)}
           </div>
           <button
             ref={cancelButtonRef}
@@ -190,7 +181,7 @@ export default function PrayerCompletionDialog() {
           >
             Cancel
           </button>
-          <div className="prayer-completion-note">The highlighted choice is a suggestion only. Nothing is submitted automatically.</div>
+          <div className="prayer-completion-note">Choose when you prayed, even if you’re logging it later. One tap saves your choice.</div>
         </section>
       </div>
     </>

@@ -1,6 +1,6 @@
 /** Typed calls to the prayer service (`/api/prayer/v1`). */
 import { PRAYER_BACKEND_URL } from '../../config';
-import type { PrayerCompletionSource, PrayerName, PrayerOutcomeStatus } from '../../types/domain';
+import type { PrayerCompletionSource, PrayerName, PrayerOutcomeStatus, PrayerTiming } from '../../types/domain';
 import { newWriteKey, snoozeReminderKey } from './idempotencyKeys';
 import { callService } from './serviceClient';
 import {
@@ -45,6 +45,7 @@ export function listPrayerOutcomes(from: string, to: string): Promise<ServiceOut
 }
 
 export interface CreateOutcomeRequest {
+  timing?: PrayerTiming;
   date: string;
   prayer: PrayerName;
   status: Exclude<PrayerOutcomeStatus, 'unclassified'>;
@@ -61,9 +62,10 @@ export function correctPrayerOutcome(
   status: Exclude<PrayerOutcomeStatus, 'unclassified'>,
   source: PrayerCompletionSource | undefined,
   idempotencyKey: string,
+  timing?: PrayerTiming,
 ): Promise<ServiceOutcomeChange> {
   return callService(PRAYER_BACKEND_URL, 'PATCH', `${BASE}/outcomes/${encodeURIComponent(id)}`,
-    outcomeChangeSchema, { status, ...(source ? { source } : {}) }, { idempotencyKey });
+    outcomeChangeSchema, { status, ...(timing ? { timing } : {}), ...(source ? { source } : {}) }, { idempotencyKey });
 }
 
 export function deletePrayerOutcome(id: string, idempotencyKey: string): Promise<void> {
