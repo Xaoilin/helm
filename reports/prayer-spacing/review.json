@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "subjects": [
+    "prayer-timeline"
+  ],
+  "sourceFiles": [
+    {
+      "path": "src/App.css",
+      "sha256": "92c9bd4a008113ac7cf48a4e3466d67e0c651c2d1aa43fa4a3b5b7bb10f0c8d1"
+    }
+  ],
+  "renders": [
+    {
+      "path": "reports/prayer-spacing/after-small-phone.png",
+      "sha256": "266ed5c14c0b24e3794588b75d37d5ee97af2d829ae250160bf9f09599163045",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-spacing/after-phone.png",
+      "sha256": "824c2168f76e94f5aa0c955d89c6363d720c2f0faa9e006d716cb86e5e059331",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-spacing/after-tablet.png",
+      "sha256": "1cbbd34263966de54a9b7f89d49c3e13a054e825d80ac2a68ff85a4fbeea8885",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-spacing/after-desktop.png",
+      "sha256": "6951e5d34011cba1b2fdc12fc1612b70006074a21fe13d6102fe5ee779400089",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-spacing/after-wide.png",
+      "sha256": "35618cf75015488381a3d5eb9726b45269f12f53ebb82ef3721855fb60d63013",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    }
+  ],
+  "references": [
+    {
+      "path": "reports/prayer-spacing/owner-before.png",
+      "sha256": "79da738e7b9a947ccb37f0f076975a4086c4e3e78a3109556bdfa928f1a41e29",
+      "relationship": "rejected-before",
+      "qualities": "Owner-rejected rail crossing the prayer icon row and cramped surrounding spacing."
+    },
+    {
+      "path": "reports/prayer-spacing/before-desktop.png",
+      "sha256": "ee1d9075c8a358e103884d4574669ae8e20cd8772447b71644a1ad1203bfbfb5",
+      "relationship": "reviewer-selected",
+      "qualities": "Use the surrounding dashboard card gutters and Prayer challenge heading/control spacing as the product-specific reference for a calm, separated layout."
+    }
+  ],
+  "implementer": "root",
+  "reviewer": {
+    "id": "prayer_spacing_review",
+    "kind": "independent-agent"
+  },
+  "criteria": {
+    "craft": {
+      "verdict": "pass",
+      "evidence": "The rail has its own uninterrupted row, with balanced card padding and cleanly separated caption."
+    },
+    "coherence": {
+      "verdict": "pass",
+      "evidence": "Existing dark surfaces, typography, prayer identity colours and state styling remain coherent with the surrounding dashboard."
+    },
+    "hierarchy": {
+      "verdict": "pass",
+      "evidence": "The current prayer and time remain the focal point; the rail and five prayer cards read as separate supporting rows."
+    },
+    "stateMotion": {
+      "verdict": "pass",
+      "evidence": "Prayed, missed, current, next and upcoming remain distinct. The existing progress transition is unchanged; the maximum 18px marker is checked with transitions disabled."
+    },
+    "actualSize": {
+      "verdict": "pass",
+      "evidence": "Independent reviewer inspected 320, 390, 768, 1440 and 2560px in-context renders. Narrow-phone status icons stack above their labels without clipping."
+    },
+    "rejectionRegression": {
+      "verdict": "pass",
+      "evidence": "The rail no longer crosses prayer icons or times. Card gaps, interior padding, heading clearance and caption spacing directly address the owner screenshot."
+    }
+  },
+  "motionRequired": false,
+  "rejectionLedgerSha256": "32e1626f21563f18599008ab4faac44204fcd6809c8cba1061357ac1f5318f6b",
+  "rejectionsAddressed": [
+    {
+      "id": "HELM-PRAYER-SPACING-001",
+      "evidence": "Dedicated rail row above the cards; 24px desktop and 20px phone rail-to-card margins, increased card padding and 16px caption gap."
+    }
+  ],
+  "blockingIssues": [],
+  "verdict": "pass",
+  "ownerAcceptance": "not-requested"
+}
