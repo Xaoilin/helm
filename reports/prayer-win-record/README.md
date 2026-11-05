@@ -28,3 +28,9 @@ Visual scope: the browser shell already uses fixed dark tokens and
 `record-light-*` filenames therefore identify the stored-preference fixture,
 not a light appearance. All renders demonstrate the actual fixed-dark product;
 this change does not implement or claim a second theme.
+
+Hosted CI exposed an existing Finance MCP test that regenerated its synthetic
+second-based token for each retry and the final assertion. The fixture now
+captures one token for the exact retry pair. A local harness advancing the clock
+by a second on every read failed before the repair and passed afterward; all
+14 Finance MCP cases passed. Only the test fixture changed, not Finance runtime.
