@@ -63,10 +63,11 @@ function SettingsProbe() {
 }
 
 function TimeZoneProbe() {
-  const { appTimeZone, saveAppTimeZonePreference } = useSettingsContext();
+  const { appTimeZone, saveAppTimeZonePreference, serviceSettingsReady } = useSettingsContext();
   return (
     <div>
       <span>{`${appTimeZone.source}|${appTimeZone.effectiveTimeZone}`}</span>
+      <span>{serviceSettingsReady ? 'settings-ready' : 'settings-loading'}</span>
       <button type="button" onClick={() => void saveAppTimeZonePreference('America/New_York')}>
         Save New York
       </button>
@@ -234,6 +235,10 @@ describe('settings shared/device partition', () => {
 
   it('confirms a preferred time zone with the profile service before showing it', async () => {
     profileApi.isProfileServiceEnabled.mockReturnValue(true);
+    let finishPreferences!: (preferences: typeof servicePreferences) => void;
+    profileApi.getAppPreferences.mockReturnValue(new Promise<typeof servicePreferences>(resolve => {
+      finishPreferences = resolve;
+    }));
     profileApi.getGlobalSettings.mockResolvedValue({
       city: 'London', country: 'United Kingdom', timeZone: 'Europe/London', updatedAt: '2026-09-01T00:00:00Z',
     });
@@ -246,15 +251,18 @@ describe('settings shared/device partition', () => {
       </SettingsProvider>,
     );
     await screen.findByText('preference|Europe/London');
+    // Location text can arrive before the remaining settings have finished loading.
+    expect(screen.getByText('settings-loading')).toBeInTheDocument();
+    await act(async () => { finishPreferences(servicePreferences); });
+    await screen.findByText('settings-ready');
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save New York' }));
     });
 
-    expect(profileApi.saveGlobalSettings).toHaveBeenCalledTimes(1);
-    expect(profileApi.saveGlobalSettings).toHaveBeenCalledWith({
+    expect(profileApi.saveGlobalSettings.mock.calls).toEqual([[{
       city: 'London', country: 'United Kingdom', timeZone: 'America/New_York',
-    });
+    }]]);
     expect(screen.getByText('preference|America/New_York')).toBeInTheDocument();
   });
 

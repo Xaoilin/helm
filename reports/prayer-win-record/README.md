@@ -34,3 +34,13 @@ second-based token for each retry and the final assertion. The fixture now
 captures one token for the exact retry pair. A local harness advancing the clock
 by a second on every read failed before the repair and passed afterward; all
 14 Finance MCP cases passed. Only the test fixture changed, not Finance runtime.
+
+A second CI run reported three profile writes in an unchanged Settings test.
+That sequence did not reproduce in twelve whole-file repetitions or six
+controlled service-delay schedules. The schedules did prove that the displayed
+time zone can arrive before all service settings are ready. The fixture now
+holds the preferences reply, observes that partial state, and explicitly waits
+for readiness before the intended post-load edit. Its exact one-write payload
+assertion remains intact and now prints the complete call list on failure.
+No Settings runtime behaviour was changed; the original three-write cause is
+not claimed as reproduced or as a proven runtime defect.
