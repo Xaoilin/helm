@@ -9,7 +9,6 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
 
 const baseURL = `http://127.0.0.1:${port}/helm/`;
 const isCi = Boolean(process.env.CI);
-const useHostedChrome = process.env.HELM_E2E_USE_HOST_CHROME === '1';
 const runId = process.env.HELM_E2E_RUN_ID || String(port);
 
 export default defineConfig({
@@ -29,8 +28,7 @@ export default defineConfig({
   webServer: {
     command: `npm exec vite -- --host 127.0.0.1 --port ${port} --strictPort`,
     env: {
-      VITE_SUPABASE_PUBLISHABLE_KEY: 'helm-test-publishable-key',
-      VITE_SUPABASE_URL: 'https://helm.test.supabase.co',
+      VITE_ACCESS_API_BASE_URL: 'https://identity.helm.test/api/access',
       // Every browser test runs against the stateful service fakes in e2e/support/fake-services.ts.
       VITE_PRAYER_API_BASE_URL: 'https://services.helm.test',
       VITE_PROFILE_API_BASE_URL: 'https://services.helm.test',
@@ -46,10 +44,9 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'chromium',
+      name: 'firefox',
       use: {
-        browserName: 'chromium',
-        channel: useHostedChrome ? 'chrome' : undefined,
+        browserName: 'firefox',
       },
     },
   ],

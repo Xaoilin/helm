@@ -1,128 +1,78 @@
-/**
- * The one Supabase client and the signed-in session it serves.
- *
- * This module owns the mutable client and session state. Readers use the
- * exported getters; only `auth.ts` records session changes, through
- * `recordAuthSession` and `advanceAuthSessionRevision`.
- */
-import { createClient, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
-import {
-  configureOperationalTransport,
-  setOperationalAccount,
-} from '../../services/operationalTelemetry';
+/** Product-owned browser session; access tokens are held only in memory. */
+import { independentEndpoint } from '../../config/nativeIdentity';
+import { configureOperationalTransport, setOperationalAccount } from '../../services/operationalTelemetry';
 import { operationalEventsUrl } from '../../services/backend/profileServiceApi';
 import { operationalReceiptSchema } from '../../services/backend/contracts';
 
-let client: SupabaseClient | null = null;
-let currentUserId: string | null = null;
-let currentSession: Session | null = null;
-let authSessionRevision = 0;
-
-interface AuthSessionSnapshot {
-  userId: string;
-  email: string | null;
-  accessTokenPresent: boolean;
-  providerToken: string | null;
-  providerRefreshToken: string | null;
-  provider: string | null;
-  expiresAt: number | null;
+export interface AuthUser {
+  id: string;
+  email?: string;
+  user_metadata?: { full_name?: string };
 }
+export interface BrowserSession {
+  user: AuthUser | null;
+  accessToken: string | null;
+  expiresAt: string | null;
+}
+let endpoint = '';
+let session: BrowserSession | null = null;
+let revision = 0;
 
-export function initSupabase(url: string, publishableKey: string): void {
-  authSessionRevision += 1;
-  if (!url || !publishableKey) {
-    client = null;
-    currentUserId = null;
-    currentSession = null;
-    configureOperationalTransport(null);
-    setOperationalAccount(null);
-    return;
-  }
-  // Operational events become metrics in the profile service (and from there Grafana). Without a
-  // profile service there is nowhere to send them, so they stay in the local diagnostics buffer.
-  const collectorUrl = operationalEventsUrl();
-  configureOperationalTransport(collectorUrl ? async (events, signal) => {
-    const accessToken = currentSession?.access_token;
-    if (!accessToken) {
-      const error = new Error('Operational telemetry requires a current signed-in session.') as Error & { status?: number };
-      error.status = 401;
-      throw error;
-    }
-    const response = await fetch(collectorUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ events }),
-      signal,
-      keepalive: true,
+export function initAccessService(url: string): void {
+  revision += 1;
+  endpoint = url ? independentEndpoint(url).replace(/\/$/, '') : '';
+  session = null;
+  setOperationalAccount(null);
+  const collector = operationalEventsUrl();
+  configureOperationalTransport(endpoint && collector ? async (events, signal) => {
+    const { getFreshAccessToken } = await import('./auth');
+    const token = await getFreshAccessToken();
+    if (!token) throw Object.assign(new Error('Sign-in is required.'), { status: 401 });
+    const response = await fetch(collector, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ events }), signal, keepalive: true,
     });
-    if (!response.ok) {
-      const code = response.status === 400
-        ? 'invalid_response'
-        : response.status === 401
-          ? 'unauthorized'
-          : response.status === 403 ? 'forbidden' : response.status === 429 ? 'rate_limited' : undefined;
-      throw Object.assign(new Error('Operational collection unavailable.'), { status: response.status, code });
-    }
+    if (!response.ok) throw Object.assign(new Error('Operational collection unavailable.'), { status: response.status });
     const receipt = operationalReceiptSchema.safeParse(await response.json().catch(() => null));
     if (!receipt.success || receipt.data.accepted !== events.length) {
       throw Object.assign(new Error('Operational collection returned an invalid receipt.'), { code: 'invalid_response' });
     }
   } : null);
-  client = createClient(url, publishableKey);
 }
-
-export function isSupabaseReady(): boolean {
-  return client !== null;
+export function isAccessReady(): boolean { return Boolean(endpoint); }
+export function accessServiceUrl(path = ''): string {
+  if (!endpoint) throw new Error('Sabah One sign-in is not configured.');
+  return endpoint + path;
 }
-
-export function getClient(): SupabaseClient | null {
-  return client;
+export function getAuthSessionRevision(): number { return revision; }
+export function advanceAuthSessionRevision(): void { revision += 1; }
+export function currentBrowserSession(): BrowserSession | null { return session; }
+export function getCurrentSessionUser(): AuthUser | null { return session?.user ?? null; }
+export function recordAuthSession(next: BrowserSession | null): void {
+  session = next;
+  setOperationalAccount(next?.user?.id ?? null);
 }
-
-/** The configured client for a signed-in account; throws otherwise. */
-export function requireClient(): SupabaseClient {
-  if (!client) throw new Error('Supabase is not configured.');
-  if (!currentUserId) throw new Error('A signed-in Sabah One account is required.');
-  return client;
-}
-
-export function getAuthSessionSnapshot(): AuthSessionSnapshot | null {
-  if (!currentSession?.user) return null;
+export function getAuthSessionSnapshot() {
+  if (!session?.user) return null;
   return {
-    userId: currentSession.user.id,
-    email: currentSession.user.email ?? null,
-    accessTokenPresent: Boolean(currentSession.access_token),
-    providerToken: currentSession.provider_token ?? null,
-    providerRefreshToken: currentSession.provider_refresh_token ?? null,
-    provider: currentSession.user.app_metadata?.provider ?? null,
-    expiresAt: currentSession.expires_at ?? null,
+    userId: session.user.id, email: session.user.email ?? null,
+    accessTokenPresent: Boolean(session.accessToken), providerToken: null, providerRefreshToken: null,
+    provider: 'google', expiresAt: session.expiresAt ? Date.parse(session.expiresAt) / 1000 : null,
   };
 }
 
-/** Monotonic counter that lets an in-flight session read detect a newer auth event. */
-export function getAuthSessionRevision(): number {
-  return authSessionRevision;
-}
-
-/** Mark every in-flight session read as superseded. Used by `auth.ts` only. */
-export function advanceAuthSessionRevision(): void {
-  authSessionRevision += 1;
-}
-
-/** The user of the last recorded session, if any. */
-export function getCurrentSessionUser(): User | null {
-  return currentSession?.user ?? null;
-}
-
-/**
- * Record the session the SDK reported (or `null` when signed out). Used by
- * `auth.ts` only.
- */
-export function recordAuthSession(session: Session | null): void {
-  currentUserId = session?.user?.id || null;
-  currentSession = session;
-  setOperationalAccount(currentUserId);
+/** A browser cookie and synchronizer CSRF token protect every account/consent management write. */
+export async function accessRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers);
+  const method = options.method || 'GET';
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const csrf = await accessRequest<{ headerName: string; token: string }>('/csrf');
+    headers.set(csrf.headerName, csrf.token);
+  }
+  const response = await fetch(accessServiceUrl(path), { ...options, headers, credentials: 'include', cache: 'no-store' });
+  if (!response.ok) {
+    const error = await response.json().catch(() => null) as { message?: string } | null;
+    throw Object.assign(new Error(error?.message || 'Sabah One could not complete this request.'), { status: response.status });
+  }
+  return response.status === 204 ? undefined as T : response.json() as Promise<T>;
 }

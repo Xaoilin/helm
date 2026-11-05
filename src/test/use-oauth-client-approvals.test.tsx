@@ -1,5 +1,5 @@
 import { act, waitFor } from '@testing-library/react';
-import type { User } from '@supabase/supabase-js';
+import type { AuthUser as User } from '../store/supabase/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useOAuthClientApprovals } from '../hooks/useOAuthClientApprovals';
 import { AuthSessionCtx } from '../store/AuthSessionContext';
@@ -26,7 +26,7 @@ function session(authUser: User | null) {
     authUser,
     bootstrapped: true,
     loading: false,
-    supabaseReady: true,
+    accessReady: true,
     sessionKey: `${authUser?.id ?? 'signed-out'}:0`,
     signInWithGoogle: vi.fn(),
     signOut: vi.fn(),

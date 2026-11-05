@@ -96,7 +96,6 @@ test('Sabah-specific tabs and static filters restore from the account across act
   const preferences = {
     'finance.tab': 'transactions', 'finance.filterType': 'transfer',
     'inventory.view': 'needed', 'inventory.category': 'tool',
-    'secrets.kindFilter': 'api_key', 'secrets.showArchived': 'true',
     'knowledge.tab': 'search', 'knowledge.searchSourceFilter': 'scholarly',
     'employment.activeOnly': 'false', 'employment.showFilters': 'true', 'employment.status': 'offer',
     'employment.workType': 'contract', 'employment.remoteStatus': 'confirmed',
@@ -119,9 +118,6 @@ test('Sabah-specific tabs and static filters restore from the account across act
   await navigate('Inventory');
   await expect(page.getByRole('tab', { name: 'Needed', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('combobox', { name: 'Filter inventory category' })).toHaveValue('tool');
-  await navigate('Secrets');
-  await expect(page.getByRole('combobox', { name: 'Filter by type' })).toHaveValue('api_key');
-  await expect(page.getByLabel('Show archived', { exact: true })).toBeChecked();
   await navigate('Knowledge');
   await expect(page.getByRole('button', { name: 'Search', exact: true })).toHaveClass(/active/);
   await expect(page.getByRole('button', { name: 'Scholarly', exact: true })).toHaveClass(/btn-primary/);

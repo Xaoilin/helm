@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   evaluateCiWorkflow,
   evaluateDeployWorkflow,
+  evaluateDigitalOceanTarget,
   evaluatePagesSpaFallback,
 } from '../../scripts/lib/agentPolicy.mjs';
 import {
@@ -43,9 +44,9 @@ describe('hosted build and receipt policy boundaries', () => {
     expect(findSuccessfulRunForHead([older, latest], sha('a'))).toBeNull();
   });
 
-  it.each(['deploy.yml', 'deploy-supabase-assistant.yml'])('verifies the candidate before deployment work in %s', (workflow) => {
+  it.each(['deploy.yml'])('verifies the candidate before deployment work in %s', (workflow) => {
     const text = readFileSync(resolve(root, '.github/workflows', workflow), 'utf8');
-    const workflowName = workflow === 'deploy.yml' ? 'Deploy to GitHub Pages' : 'Deploy Supabase Assistant Function';
+    const workflowName = 'Deploy Sabah One to DigitalOcean';
     expect(evaluateDeployWorkflow(text, workflowName).ok).toBe(true);
     expect(evaluateDeployWorkflow(text.replaceAll('verify-ci-receipt.mjs deployment', 'echo unverified'), workflowName).ok).toBe(false);
     expect(evaluateDeployWorkflow(text.replaceAll('required: true', 'required: false'), workflowName).ok).toBe(false);
@@ -56,21 +57,19 @@ describe('hosted build and receipt policy boundaries', () => {
     expect(text).toContain('ref: master');
     if (workflow === 'deploy.yml') {
       const deployJob = text.slice(text.indexOf('\n  deploy:'));
-      expect(deployJob.indexOf('verify-ci-receipt.mjs deployment')).toBeLessThan(deployJob.indexOf('uses: actions/deploy-pages'));
+      expect(deployJob.indexOf('verify-ci-receipt.mjs deployment')).toBeLessThan(deployJob.indexOf('ssh -o BatchMode=yes'));
     }
   });
 
-  it('stamps all four MCP identities before Inventory deploy and preserves blocking hosted teardown', () => {
-    const text = readFileSync(resolve(root, '.github/workflows/deploy-supabase-assistant.yml'), 'utf8');
-    const stamp = text.indexOf('run: node ./scripts/stamp-assistant-deployment.mjs');
-    expect(stamp).toBeGreaterThan(text.indexOf('verify-ci-receipt.mjs deployment'));
-    for (const domain of ['inventory', 'employment', 'finance', 'equity']) {
-      expect(stamp).toBeLessThan(text.indexOf(`run: npx supabase functions deploy sabah-one-${domain}-mcp`));
+  it('requires native readiness, scoped SSH and retirement of the old deployment', () => {
+    const text = readFileSync(resolve(root, '.github/workflows/deploy.yml'), 'utf8');
+    expect(evaluateDigitalOceanTarget(text).ok).toBe(true);
+    for (const required of ['verify-native-services.py', 'StrictHostKeyChecking=yes', 'sabah-web-deploy@${DEPLOY_HOST:?}']) {
+      expect(evaluateDigitalOceanTarget(text.replaceAll(required, 'missing')).ok).toBe(false);
     }
-    const verifier = text.slice(text.indexOf('name: Verify hosted domain access and synthetic fixture teardown'),
-      text.indexOf('name: Retain sanitized hosted acceptance receipts'));
-    for (const domain of ['employment', 'finance', 'equity']) expect(verifier).toContain(`npx tsx scripts/verify-hosted-${domain}-access.ts`);
-    expect(verifier).not.toMatch(/continue-on-error|\|\| true/);
+    expect(evaluateDigitalOceanTarget(`${text}\nVITE_SUPABASE_URL: legacy`).ok).toBe(false);
+    expect(existsSync(resolve(root, '.github/workflows/deploy-supabase-assistant.yml'))).toBe(false);
+    expect(text.indexOf('scripts/verify-public-frontend.py')).toBeLessThan(text.indexOf('scripts/prepare-address-redirect.py'));
   });
 
   it('requires both manual inputs and the protected workflow ref', () => {

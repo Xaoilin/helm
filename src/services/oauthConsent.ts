@@ -2,7 +2,7 @@
  * The OAuth consent approval transaction.
  *
  * Approving a client is two writes that must succeed together: the domain
- * allowlist row, then the Supabase authorization. If the authorization step
+ * allowlist row, then the native OAuth authorization. If the authorization step
  * fails, the allowlist row is revoked again so a client never keeps domain
  * access for a request the user did not complete. A failed compensation is
  * reported alongside the original failure, never hidden.
@@ -11,8 +11,8 @@
 export interface OAuthConsentDependencies {
   /** Allow the client in the selected domain's database allowlist. */
   approveClientAccess(clientId: string, clientName: string): Promise<unknown>;
-  /** Approve the Supabase authorization request and return the client redirect URL. */
-  approveAuthorization(authorizationId: string): Promise<string>;
+  /** Approve the native OAuth authorization request and return the client redirect URL. */
+  approveAuthorization(authorizationId: string): Promise<string | void>;
   /** Compensation: block the client in the selected domain's allowlist again. */
   revokeClientAccess(clientId: string): Promise<unknown>;
 }
@@ -26,7 +26,7 @@ export interface OAuthConsentRequest {
 }
 
 export type OAuthConsentOutcome =
-  | { ok: true; redirectUrl: string }
+  | { ok: true; redirectUrl: string | void }
   | {
     ok: false;
     /** User-facing message combining the failure and any rollback failure. */

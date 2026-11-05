@@ -1,174 +1,101 @@
-/** Supabase Auth sign-in, sign-out, session bootstrap and auth events. */
-import { isAuthRetryableFetchError, type AuthChangeEvent, type User } from '@supabase/supabase-js';
-import { logWarn } from '../../services/logger';
-import { classifyOperationalFailure, recordOperationalEvent } from '../../services/operationalTelemetry';
+/** Identity-only Google sign-in and product-owned HTTP-only browser sessions. */
+import { recordOperationalEvent } from '../../services/operationalTelemetry';
 import {
-  advanceAuthSessionRevision,
-  getAuthSessionRevision,
-  getClient,
-  getCurrentSessionUser,
-  recordAuthSession,
+  accessRequest, accessServiceUrl, advanceAuthSessionRevision, currentBrowserSession,
+  getAuthSessionRevision, getCurrentSessionUser, isAccessReady, recordAuthSession,
+  type AuthUser, type BrowserSession,
 } from './client';
 
-// Calendar has its own consent flow in Integrations; signing in needs identity only.
-const GOOGLE_SIGN_IN_SCOPES = 'openid email profile';
+export type AuthChangeEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED' | 'USER_UPDATED';
+interface AuthStateChange { event: AuthChangeEvent; user: AuthUser | null }
+const listeners = new Set<(change: AuthStateChange) => void>();
+let refresh: Promise<string | null> | null = null;
+let channel: BroadcastChannel | null = null;
 
-interface AuthStateChange {
-  event: AuthChangeEvent;
-  user: User | null;
-}
-
-export async function signInWithGoogle(redirectTo?: string): Promise<void> {
-  const client = getClient();
-  if (!client) throw new Error('Supabase is not configured.');
-  const { error } = await client.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      scopes: GOOGLE_SIGN_IN_SCOPES,
-      redirectTo: redirectTo || window.location.origin + import.meta.env.BASE_URL,
-      queryParams: {
-        // Earlier Calendar grants must not be added back to an ordinary sign-in.
-        include_granted_scopes: 'false',
-      },
-    },
-  });
-  if (error) throw error;
-}
-
-export async function signOut(): Promise<void> {
-  const client = getClient();
-  if (!client) return;
-  const { error } = await client.auth.signOut();
-  if (error) throw error;
-  advanceAuthSessionRevision();
-  recordAuthSession(null);
-  recordOperationalEvent({ domain: 'auth', operation: 'session', outcome: 'changed', reason: 'signed_out' });
-}
-
-/** Startup waits this long between attempts when the auth server cannot be reached. */
-const SESSION_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
-/** A token this close to expiry is renewed before use, so a request never leaves with a dead token. */
-const TOKEN_EXPIRY_MARGIN_SECONDS = 60;
-
-/**
- * The auth server could not be reached to renew a stored session. The session may still be valid,
- * so this is never treated as "signed out".
- */
 export class SessionUnavailableError extends Error {
   constructor(cause: unknown) {
-    super('Sabah One could not reach its sign-in service to renew your session.');
+    super('Sabah One could not reach its sign-in service to renew your session.', { cause });
     this.name = 'SessionUnavailableError';
-    this.cause = cause;
   }
 }
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+function notify(event: AuthChangeEvent): void {
+  const user = getCurrentSessionUser();
+  listeners.forEach(callback => callback({ event, user }));
 }
-
-/**
- * The signed-in user at startup, or null only when there is genuinely no session.
- *
- * A stored session whose renewal fails for a network reason is retried; if the auth server stays
- * unreachable, {@link SessionUnavailableError} is thrown so the app can offer a retry instead of a
- * sign-in screen (the SDK keeps such sessions stored, and signing in again would not help).
- */
-export async function getSessionUser(): Promise<User | null> {
-  const activeClient = getClient();
-  if (!activeClient) return null;
-  const revision = getAuthSessionRevision();
-  const superseded = () => getClient() !== activeClient || revision !== getAuthSessionRevision();
-  const startedAt = performance.now();
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt <= SESSION_RETRY_DELAYS_MS.length; attempt += 1) {
-    if (attempt > 0) await sleep(SESSION_RETRY_DELAYS_MS[attempt - 1]);
-    // An auth event may supersede this read while the SDK recovers its session.
-    if (superseded()) return getCurrentSessionUser();
-    const { data: { session }, error } = await activeClient.auth.getSession();
-    if (superseded()) return getCurrentSessionUser();
-    if (!error) {
-      recordAuthSession(session);
-      recordOperationalEvent({
-        domain: 'auth',
-        operation: 'session',
-        outcome: session?.user ? 'ok' : 'changed',
-        reason: session?.user ? 'initial_session' : 'signed_out',
-        durationMs: performance.now() - startedAt,
-      });
-      return session?.user ?? null;
-    }
-    lastError = error;
-    if (!isAuthRetryableFetchError(error)) break;
-    logWarn('Supabase', `Session renewal failed; retrying: ${error.message}`);
-  }
-  recordOperationalEvent({
-    domain: 'auth',
-    operation: 'session',
-    outcome: 'failed',
-    reason: classifyOperationalFailure(lastError),
-    durationMs: performance.now() - startedAt,
-  });
-  if (isAuthRetryableFetchError(lastError)) throw new SessionUnavailableError(lastError);
-  // The refresh token was rejected: the session has ended and the SDK has removed it.
-  logWarn('Supabase', `Session ended: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
-  recordAuthSession(null);
-  return null;
-}
-
-let refreshInFlight: Promise<string | null> | null = null;
-
-/**
- * An access token that is valid for at least a minute, renewing the session first when needed.
- * Every call to a Sabah One service uses this rather than a cached token, so a tab that slept or
- * sat in the background never sends an expired one.
- *
- * @param forceRefresh renew even if the current token looks valid (after a 401)
- * @returns null only when there is no session: the user is signed out
- * @throws SessionUnavailableError when the auth server cannot be reached; the session is kept
- */
-export async function getFreshAccessToken(options: { forceRefresh?: boolean } = {}): Promise<string | null> {
-  const activeClient = getClient();
-  if (!activeClient) return null;
-  if (!options.forceRefresh) {
-    const { data: { session }, error } = await activeClient.auth.getSession();
-    if (error && isAuthRetryableFetchError(error)) throw new SessionUnavailableError(error);
-    if (!session) return null;
-    if ((session.expires_at ?? 0) - TOKEN_EXPIRY_MARGIN_SECONDS > Date.now() / 1000) return session.access_token;
-  }
-  // One renewal at a time; the SDK also serialises renewals across tabs.
-  refreshInFlight ??= activeClient.auth.refreshSession()
-    .then(async ({ data, error }) => {
-      if (!error) return data.session?.access_token ?? null;
-      if (isAuthRetryableFetchError(error)) throw new SessionUnavailableError(error);
-      // Another tab may have renewed the session first; use whatever session storage now holds.
-      const { data: { session } } = await activeClient.auth.getSession();
-      return session?.access_token ?? null;
-    })
-    .finally(() => { refreshInFlight = null; });
-  return refreshInFlight;
-}
-
-export function onAuthStateChange(callback: (change: AuthStateChange) => void): () => void {
-  const client = getClient();
-  if (!client) return () => {};
-  const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
-    // The SDK reports INITIAL_SESSION as null when renewing a stored session fails for a network
-    // reason, while keeping that session. getSessionUser decides the startup state instead.
-    if (event === 'INITIAL_SESSION' && !session) return;
+function notifyOtherTabs(): void { channel?.postMessage('session-changed'); }
+function observeOtherTabs(): void {
+  if (channel || typeof BroadcastChannel === 'undefined') return;
+  channel = new BroadcastChannel('helm:browser-session');
+  channel.onmessage = () => {
+    // Only an invalidation hint crosses tabs; user data and credentials never do.
     advanceAuthSessionRevision();
-    const user = session?.user || null;
-    recordAuthSession(session ?? null);
-    recordOperationalEvent({
-      domain: 'auth',
-      operation: event === 'TOKEN_REFRESHED' ? 'refresh' : 'session',
-      outcome: event === 'INITIAL_SESSION' ? 'ok' : 'changed',
-      reason: event === 'INITIAL_SESSION'
-        ? 'initial_session'
-        : event === 'TOKEN_REFRESHED'
-          ? 'token_refreshed'
-          : user ? 'signed_in' : 'signed_out',
-    });
-    callback({ event, user });
-  });
-  return () => subscription.unsubscribe();
+    void renewSession().catch(() => {});
+  };
+}
+export async function signInWithGoogle(): Promise<void> {
+  window.location.assign(accessServiceUrl('/signin'));
+}
+export async function signOut(): Promise<void> {
+  if (!isAccessReady()) return;
+  await accessRequest<void>('/signout', { method: 'POST' });
+  advanceAuthSessionRevision();
+  recordAuthSession(null);
+  notify('SIGNED_OUT');
+  notifyOtherTabs();
+  recordOperationalEvent({ domain: 'auth', operation: 'session', outcome: 'changed', reason: 'signed_out' });
+}
+async function renewSession(): Promise<string | null> {
+  const revision = getAuthSessionRevision();
+  const previous = getCurrentSessionUser()?.id;
+  let next: BrowserSession;
+  try {
+    next = await accessRequest<BrowserSession>('/session');
+    if ((next.user && (typeof next.user.id !== 'string' || typeof next.accessToken !== 'string'
+        || !Number.isFinite(Date.parse(next.expiresAt || '')))) || (!next.user && next.accessToken)) {
+      throw new Error('Invalid sign-in service response.');
+    }
+  } catch (error) {
+    throw new SessionUnavailableError(error);
+  }
+  if (revision !== getAuthSessionRevision()) return currentBrowserSession()?.accessToken ?? null;
+  recordAuthSession(next);
+  notify(!next.user ? 'SIGNED_OUT' : previous === next.user.id ? 'TOKEN_REFRESHED' : 'SIGNED_IN');
+  return next.accessToken;
+}
+export async function getFreshAccessToken(options: { forceRefresh?: boolean } = {}): Promise<string | null> {
+  if (!isAccessReady()) return null;
+  const current = currentBrowserSession();
+  if (!options.forceRefresh && current && (!current.user || Date.parse(current.expiresAt || '') > Date.now() + 60_000)) {
+    return current.accessToken;
+  }
+  refresh ??= renewSession().finally(() => { refresh = null; });
+  return refresh;
+}
+export async function getSessionUser(): Promise<AuthUser | null> {
+  if (!isAccessReady()) return null;
+  const delays = [0, 1000, 2000, 4000, 8000];
+  let failure: unknown;
+  for (const delay of delays) {
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+    try {
+      await getFreshAccessToken({ forceRefresh: true });
+      return getCurrentSessionUser();
+    } catch (error) { failure = error; }
+  }
+  throw failure;
+}
+export function onAuthStateChange(callback: (change: AuthStateChange) => void): () => void {
+  observeOtherTabs();
+  listeners.add(callback);
+  const recheck = () => {
+    if (document.visibilityState === 'visible') void getFreshAccessToken({ forceRefresh: true }).catch(() => {});
+  };
+  window.addEventListener('focus', recheck);
+  document.addEventListener('visibilitychange', recheck);
+  return () => {
+    listeners.delete(callback);
+    window.removeEventListener('focus', recheck);
+    document.removeEventListener('visibilitychange', recheck);
+    if (!listeners.size) { channel?.close(); channel = null; }
+  };
 }

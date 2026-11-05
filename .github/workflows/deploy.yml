@@ -1,9 +1,9 @@
-name: Deploy to GitHub Pages
+name: Deploy Sabah One to DigitalOcean
 
 run-name: >-
   ${{ inputs.source_run_id != '' &&
-      format('Deploy Pages receipt {0} {1}', inputs.source_run_id, inputs.deploy_sha) ||
-      format('Deploy Pages {0}', github.ref_name) }}
+      format('Deploy DigitalOcean receipt {0} {1}', inputs.source_run_id, inputs.deploy_sha) ||
+      format('Deploy DigitalOcean {0}', github.ref_name) }}
 
 on:
   workflow_dispatch:
@@ -28,11 +28,9 @@ permissions:
   actions: read
   contents: read
   pull-requests: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: digitalocean-web
   cancel-in-progress: false
   queue: max
 
@@ -43,9 +41,6 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
         !startsWith(github.event.workflow_run.display_title, 'CI receipt source '))
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -60,13 +55,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: node ./scripts/verify-ci-receipt.mjs deployment
       - run: npm ci
-      - name: Wait for authoritative database cutover
-        timeout-minutes: 12
-        run: npm run database:wait
+      - name: Verify native service and database cutover
+        run: python3 scripts/verify-native-services.py "${{ vars.API_BASE_URL }}"
       - run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_ACCESS_API_BASE_URL: ${{ vars.API_BASE_URL }}/api/access
           VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.VITE_GOOGLE_OAUTH_CLIENT_ID }}
           VITE_PRAYER_API_BASE_URL: ${{ vars.PRAYER_BACKEND_URL }}
           VITE_PROFILE_API_BASE_URL: ${{ vars.PROFILE_BACKEND_URL }}
@@ -75,9 +68,13 @@ jobs:
           VITE_KNOWLEDGE_API_BASE_URL: ${{ vars.KNOWLEDGE_BACKEND_URL }}
           VITE_PLANNER_API_BASE_URL: ${{ vars.PLANNER_BACKEND_URL }}
           VITE_FINANCE_API_BASE_URL: ${{ vars.FINANCE_BACKEND_URL }}
-      - uses: actions/upload-pages-artifact@v5.0.0
+      - name: Package the verified frontend and source receipt
+        run: python3 scripts/pack-web-release.py dist web-release.tar "$(git rev-parse HEAD)" "${{ inputs.source_run_id || github.event.workflow_run.id }}"
+      - uses: actions/upload-artifact@v5
         with:
-          path: dist
+          name: sabah-web
+          path: web-release.tar
+          retention-days: 3
 
   deploy:
     needs: build
@@ -86,9 +83,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
         !startsWith(github.event.workflow_run.display_title, 'CI receipt source '))
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    environment: production
     steps:
       - uses: actions/checkout@v5
         with:
@@ -97,9 +92,49 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Revalidate candidate immediately before Pages deployment
+      - name: Revalidate candidate immediately before DigitalOcean deployment
         env:
           GH_TOKEN: ${{ github.token }}
         run: node ./scripts/verify-ci-receipt.mjs deployment
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/download-artifact@v5
+        with:
+          name: sabah-web
+      - name: Deploy verified frontend artifacts
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "sabah-web-deploy@${DEPLOY_HOST:?}" < web-release.tar
+
+  legacy-address:
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.publication.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: master
+      - name: Verify the owned public site before replacing the old address
+        timeout-minutes: 12
+        run: python3 scripts/verify-public-frontend.py "$(git rev-parse HEAD)"
+      - name: Retain the previous address as a redirect
+        run: python3 scripts/prepare-address-redirect.py release-address
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          name: legacy-address-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-address
+      - id: publication
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: legacy-address-${{ github.run_id }}-${{ github.run_attempt }}

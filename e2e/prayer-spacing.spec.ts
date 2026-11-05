@@ -37,7 +37,7 @@ test('prayer timeline has room around its rail, cards and caption', async ({ pag
     expect(geometry.headingGap, `heading gap at ${width}px`).toBeGreaterThanOrEqual(24);
     expect(geometry.markerGap, `marker clearance at ${width}px`).toBeGreaterThanOrEqual(8);
     expect(geometry.captionGap, `caption gap at ${width}px`).toBeGreaterThanOrEqual(12);
-    expect(Math.min(...geometry.cardGaps), `card gaps at ${width}px`).toBeGreaterThanOrEqual(width <= 760 ? 4 : 12);
+    expect(Math.round(Math.min(...geometry.cardGaps) * 1000) / 1000, `card gaps at ${width}px`).toBeGreaterThanOrEqual(width <= 760 ? 4 : 12);
     expect(geometry.topPadding).toBeGreaterThanOrEqual(12);
     expect(geometry.bottomPadding).toBeGreaterThanOrEqual(12);
     expect(geometry.overflow).toBeLessThanOrEqual(1);

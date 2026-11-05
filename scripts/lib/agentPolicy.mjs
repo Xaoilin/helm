@@ -349,7 +349,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
   }
 
   const forbiddenAutoPromoteDeployDispatches = [
-    '"Deploy to GitHub Pages"',
+    '"Deploy Sabah One to DigitalOcean"',
     '"Deploy Supabase Assistant Function"',
   ]
   const autoPromoteStart = rawWorkflow.indexOf('\n  auto-promote:')
@@ -375,7 +375,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
     'npm run test -- --config vite.config.ts',
     'name: e2e',
     'npm run test:e2e -- --fully-parallel --workers=2 --reporter=line',
-    'google-chrome --version',
+    'npx playwright install --with-deps firefox',
   ]
 
   for (const snippet of requiredEfficiencySnippets) {
@@ -442,9 +442,7 @@ export function evaluateCiWorkflow(rawWorkflow) {
 export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
   const failures = []
   const passes = []
-  const receiptTitle = workflowName === 'Deploy to GitHub Pages'
-    ? "format('Deploy Pages receipt {0} {1}', inputs.source_run_id, inputs.deploy_sha)"
-    : "format('Deploy Supabase receipt {0} {1}', inputs.source_run_id, inputs.deploy_sha)"
+  const receiptTitle = "format('Deploy DigitalOcean receipt {0} {1}', inputs.source_run_id, inputs.deploy_sha)"
 
   if (!rawWorkflow.includes('workflow_dispatch:')) {
     failures.push(`${workflowName} workflow must support workflow_dispatch for verified receipts.`)
@@ -493,10 +491,10 @@ export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
   if (verifyIndex < 0 || verifyIndex > rawWorkflow.indexOf('run: npm ci')) {
     failures.push(`${workflowName} must verify the receipt before installing or deploying candidate code.`)
   }
-  if (workflowName === 'Deploy to GitHub Pages') {
+  if (workflowName === 'Deploy Sabah One to DigitalOcean') {
     const deployJob = rawWorkflow.slice(rawWorkflow.indexOf('\n  deploy:'))
-    if (deployJob.indexOf(verifyCommand) < 0 || deployJob.indexOf(verifyCommand) > deployJob.indexOf('uses: actions/deploy-pages')) {
-      failures.push('Pages must revalidate the receipt immediately before publication.')
+    if (deployJob.indexOf(verifyCommand) < 0 || deployJob.indexOf(verifyCommand) > deployJob.indexOf('ssh -o BatchMode=yes')) {
+      failures.push('DigitalOcean must revalidate the receipt immediately before publication.')
     }
   }
 
@@ -507,34 +505,22 @@ export function evaluateDeployWorkflow(rawWorkflow, workflowName) {
   }
 }
 
-export function evaluateSupabaseOAuthOrigin(rawWorkflow) {
-  const failures = []
-  const passes = []
-  const productionSiteOrigin = 'https://xaoilin.github.io'
-  const expectedPatch = `--data '{"site_url":"${productionSiteOrigin}","oauth_server_enabled":true,"oauth_server_allow_dynamic_registration":true,"oauth_server_authorization_path":"/helm/oauth/consent"}'`
-  const expectedVerification = `.site_url == "${productionSiteOrigin}"`
-
-  if (!rawWorkflow.includes(expectedPatch)) {
-    failures.push(
-      `Supabase deploy workflow must configure the pathless production OAuth Site URL in the same fail-closed PATCH as the /helm consent path: ${productionSiteOrigin}.`,
-    )
-  } else {
-    passes.push('Supabase deploy workflow configures the production Sabah One OAuth origin atomically.')
-  }
-
-  if (!rawWorkflow.includes(expectedVerification)) {
-    failures.push(
-      `Supabase deploy workflow must verify the returned pathless production OAuth Site URL: ${productionSiteOrigin}.`,
-    )
-  } else {
-    passes.push('Supabase deploy workflow verifies the returned production Sabah One OAuth origin.')
-  }
-
-  return {
-    failures,
-    passes,
-    ok: failures.length === 0,
-  }
+export function evaluateDigitalOceanTarget(rawWorkflow) {
+  const required = [
+    'python3 scripts/verify-native-services.py',
+    'VITE_ACCESS_API_BASE_URL: ${{ vars.API_BASE_URL }}/api/access',
+    'python3 scripts/pack-web-release.py',
+    'StrictHostKeyChecking=yes',
+    'sabah-web-deploy@${DEPLOY_HOST:?}',
+  ]
+  const forbidden = ['VITE_SUPABASE', 'SUPABASE_ACCESS_TOKEN', 'npx supabase']
+  const failures = [
+    ...required.filter(value => !rawWorkflow.includes(value)).map(value => `DigitalOcean deployment is missing ${value}.`),
+    ...forbidden.filter(value => rawWorkflow.includes(value)).map(value => `Retired deployment dependency remains: ${value}.`),
+  ]
+  const applicationJobs = rawWorkflow.split('\n  legacy-address:')[0]
+  if (applicationJobs.includes('actions/deploy-pages')) failures.push('The application must publish through its DigitalOcean SSH target.')
+  return { failures, passes: failures.length ? [] : ['DigitalOcean artifacts require native readiness and a scoped verified SSH target.'], ok: failures.length === 0 }
 }
 
 export function evaluatePagesSpaFallback(packageManifest, fallbackScriptExists = true) {
@@ -651,11 +637,7 @@ export function evaluateAgentPolicy(rootDir) {
   passes.push(...ciResult.passes)
 
   const deployWorkflows = [
-    ['Deploy to GitHub Pages', resolve(rootDir, '.github', 'workflows', 'deploy.yml')],
-    [
-      'Deploy Supabase Assistant Function',
-      resolve(rootDir, '.github', 'workflows', 'deploy-supabase-assistant.yml'),
-    ],
+    ['Deploy Sabah One to DigitalOcean', resolve(rootDir, '.github', 'workflows', 'deploy.yml')],
   ]
 
   for (const [workflowName, workflowPath] of deployWorkflows) {
@@ -664,11 +646,14 @@ export function evaluateAgentPolicy(rootDir) {
     passes.push(...deployResult.passes)
   }
 
-  const supabaseOAuthOriginResult = evaluateSupabaseOAuthOrigin(
-    readFileSync(resolve(rootDir, '.github', 'workflows', 'deploy-supabase-assistant.yml'), 'utf8'),
+  const targetResult = evaluateDigitalOceanTarget(
+    readFileSync(resolve(rootDir, '.github', 'workflows', 'deploy.yml'), 'utf8'),
   )
-  failures.push(...supabaseOAuthOriginResult.failures)
-  passes.push(...supabaseOAuthOriginResult.passes)
+  failures.push(...targetResult.failures)
+  passes.push(...targetResult.passes)
+  if (existsSync(resolve(rootDir, '.github', 'workflows', 'deploy-supabase-assistant.yml'))) {
+    failures.push('Retired Supabase deployment workflow must not remain active.')
+  }
 
   const pagesSpaFallbackResult = evaluatePagesSpaFallback(
     JSON.parse(readFileSync(resolve(rootDir, 'package.json'), 'utf8')),

@@ -1,0 +1,540 @@
+[
+  {
+    "name": "employment_list_applications",
+    "title": "List Sabah One Employment Applications",
+    "description": "Search this account’s job and freelance applications. Match recruiting updates to an existing application before adding one. Results and history are bounded; use offset to page.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "query": {
+          "default": "",
+          "type": "string",
+          "maxLength": 160
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "lead",
+            "recruiter",
+            "applied",
+            "interview",
+            "offer",
+            "closed"
+          ]
+        },
+        "workType": {
+          "type": "string",
+          "enum": [
+            "contract",
+            "permanent",
+            "unknown"
+          ]
+        },
+        "remoteStatus": {
+          "type": "string",
+          "enum": [
+            "confirmed",
+            "needs_verification"
+          ]
+        },
+        "limit": {
+          "default": 50,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "default": 0,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "employment_get_application",
+    "title": "Get Sabah One Employment Application",
+    "description": "Read one application and its evidence history by exact account-owned ID.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "applicationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "applicationId"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "employment_add_application",
+    "title": "Add Sabah One Employment Application",
+    "description": "Record one verified job or freelance lead/application after searching for an existing record. Preserve unknown dates and remote eligibility; a recruiting email is not a confirmed offer. Reuse requestId only for an exact retry.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Required idempotency key. Reuse the same UUID and exact input when retrying a write; use a new UUID for new evidence."
+        },
+        "application": {
+          "type": "object",
+          "properties": {
+            "company": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "role": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "workType": {
+              "type": "string",
+              "enum": [
+                "contract",
+                "permanent",
+                "unknown"
+              ]
+            },
+            "remoteRegion": {
+              "type": "string",
+              "enum": [
+                "uk",
+                "emea",
+                "global",
+                "unknown"
+              ]
+            },
+            "remoteStatus": {
+              "type": "string",
+              "enum": [
+                "confirmed",
+                "needs_verification"
+              ]
+            },
+            "remoteEvidence": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "remoteCaveat": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "compensation": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "lead",
+                "recruiter",
+                "applied",
+                "interview",
+                "offer",
+                "closed"
+              ]
+            },
+            "applicationDate": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "description": "Confirmed local calendar date, YYYY-MM-DD. Omit when the source does not supply a date."
+            },
+            "nextAction": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "nextActionDate": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "description": "Confirmed local calendar date, YYYY-MM-DD. Omit when the source does not supply a date."
+            },
+            "notes": {
+              "type": "string",
+              "maxLength": 8000
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "history": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "application",
+                      "contact",
+                      "document",
+                      "remote_evidence",
+                      "note"
+                    ]
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                    "description": "Confirmed local calendar date, YYYY-MM-DD. Omit when the source does not supply a date."
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "evidenceUrl": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "kind",
+                  "summary"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "company",
+            "role"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "requestId",
+        "application"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "employment_update_application",
+    "title": "Update Sabah One Employment Application",
+    "description": "Patch an existing job record from verified evidence. Omitted fields and all history are preserved; null clears an optional field. Append source evidence with employment_add_history. Never infer an offer, submission, or date.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Required idempotency key. Reuse the same UUID and exact input when retrying a write; use a new UUID for new evidence."
+        },
+        "applicationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "patch": {
+          "type": "object",
+          "properties": {
+            "company": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "role": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "url": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workType": {
+              "type": "string",
+              "enum": [
+                "contract",
+                "permanent",
+                "unknown"
+              ]
+            },
+            "remoteRegion": {
+              "type": "string",
+              "enum": [
+                "uk",
+                "emea",
+                "global",
+                "unknown"
+              ]
+            },
+            "remoteStatus": {
+              "type": "string",
+              "enum": [
+                "confirmed",
+                "needs_verification"
+              ]
+            },
+            "remoteEvidence": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "remoteCaveat": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "compensation": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "lead",
+                "recruiter",
+                "applied",
+                "interview",
+                "offer",
+                "closed"
+              ]
+            },
+            "applicationDate": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                  "description": "Confirmed local calendar date, YYYY-MM-DD. Omit when the source does not supply a date."
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "nextAction": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "nextActionDate": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                  "description": "Confirmed local calendar date, YYYY-MM-DD. Omit when the source does not supply a date."
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "notes": {
+              "type": "string",
+              "maxLength": 8000
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "requestId",
+        "applicationId",
+        "patch"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "employment_add_history",
+    "title": "Add Sabah One Employment Evidence",
+    "description": "Append a concise sourced recruiting update without changing status or inventing a date. Include the email/job evidence URL when available; repeated history IDs or evidence URLs are deduplicated.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Required idempotency key. Reuse the same UUID and exact input when retrying a write; use a new UUID for new evidence."
+        },
+        "applicationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "history": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "application",
+                "contact",
+                "document",
+                "remote_evidence",
+                "note"
+              ]
+            },
+            "date": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "description": "Confirmed local calendar date, YYYY-MM-DD. Omit when the source does not supply a date."
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "details": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "evidenceUrl": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "kind",
+            "summary"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "requestId",
+        "applicationId",
+        "history"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "employment_remove_application",
+    "title": "Remove Sabah One Employment Application",
+    "description": "Remove one application and its history only after the user explicitly confirms that exact record. A rejection normally means setting status to closed, retaining history.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Required idempotency key. Reuse the same UUID and exact input when retrying a write; use a new UUID for new evidence."
+        },
+        "applicationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "confirmed": {
+          "type": "boolean",
+          "const": true,
+          "description": "Must reflect explicit user confirmation to remove this exact application."
+        }
+      },
+      "required": [
+        "requestId",
+        "applicationId",
+        "confirmed"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  }
+]

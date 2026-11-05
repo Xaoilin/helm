@@ -1,6 +1,6 @@
 # HELM
 
-HELM is Sabah One, a hosted web product for GitHub Pages. Treat code and the linked engineering docs as authoritative over older notes. The browser website is the only supported product runtime.
+HELM is Sabah One, a hosted browser product. Treat code and the linked engineering docs as authoritative over older notes. The browser website is the only supported product runtime.
 
 ## Start Here
 
@@ -18,7 +18,7 @@ Use `rg --no-ignore` for targeted searches of `src/`; inherited ignores have hid
 - Account data is signed-in and owned by the Spring services; each page loads and saves through its service. Writes require server confirmation; transient failures may retain only the same account's confirmed in-memory data. Invalid authorization and account changes fail closed. The generic Supabase record store and its Realtime Broadcast are retired; do not reintroduce them.
 - Calendar data remains account -> source -> event, with intentional multi-account support.
 - The Lina assistant (Chat), voice and Life Hero were removed on 2026-09-26; do not reintroduce them without a new product decision.
-- Secret values belong in the account-owned Supabase Vault path. Never place plaintext in account records, browser storage, live-update events, logs, exports, or durable memory.
+- The optional account Secrets feature is retired. Required service credentials stay server-side. Never place plaintext in account records, browser storage, live-update events, logs, exports, or durable memory.
 - Project catalogue records may sync names, links, documentation, and display-only guidance; private credentials never enter shared records.
 - The prayer service decides when every prayer reminder (deadline, prayer opportunity, Learn/Move) is due and sends it to open tabs over the live-update stream (server-sent events); tabs show it only as a system Web Notification when permitted. Prayer, Learn/Move, and adhan reminders never display sticky in-app banners or overlays, including when notification permission is denied or unavailable. Snooze remains service-owned. No tab keeps its own reminder timer or reminder receipts.
 - Tasks, habits, goals, XP, streaks, daily momentum and the clock belong to the planner service: XP and the daily reset are worked out there, and the app only shows them.
@@ -31,8 +31,8 @@ Use `rg --no-ignore` for targeted searches of `src/`; inherited ignores have hid
 - Update relevant docs and `docs/feature-status.md` when product status changes.
 - A new or materially changed account-data feature must expose and test a narrow semantic agent interface, or record the missing MCP capability as an explicit acceptance blocker. See `docs/agent-access.md`.
 - Keep the required GitHub checks and their stable names aligned with the hosted web pipeline.
-- After a completed Sabah One feature passes its required gates, proceed directly through the protected PR, merge, GitHub Pages deployment, and live-verification path without waiting for user review. This project-specific standing authorization does not bypass protected controls, release evidence, or Sol ownership, and any blocker that needs new user authority must still be surfaced.
-- Protected `master` promotion, GitHub Pages deployment, Supabase function deployment, and live verification are Sol-owned acceptance steps.
+- After a completed Sabah One feature passes its required gates, proceed directly through the protected PR, merge, DigitalOcean deployment, and live-verification path without waiting for user review. This project-specific standing authorization does not bypass protected controls, release evidence, or Sol ownership, and any blocker that needs new user authority must still be surfaced.
+- Protected `master` promotion, DigitalOcean deployment, and live verification are Sol-owned acceptance steps.
 - Never describe branch-only work as deployed or live.
 
 ## Deeper References

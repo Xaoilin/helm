@@ -72,3 +72,5 @@ private provider relays, brokers and databases are not exposed by this hostname.
 The existing Pages and DigitalOcean IP URLs remain available during cutover.
 Auth retains its independent Sabah project; the new return URL is
 `https://sabah.xaoilin.com/helm/` and Calendar uses the new browser origin.
+
+Native DigitalOcean migration is in progress on a topic branch. Spring identity/MCP and managed PostgreSQL preflight checks pass; production cutover and Supabase retirement are still pending. Optional account Secrets is retired in this candidate.

@@ -2,8 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useAuthSession } from '../store/AuthSessionContext';
 import { signInWithGoogle } from '../store/supabase/auth';
 import {
-  approveOAuthAuthorization,
-  denyOAuthAuthorization,
+  submitOAuthAuthorization,
   getOAuthAuthorization,
   type OAuthAuthorizationDetails,
 } from '../store/supabase/oauthAuthorization';
@@ -12,6 +11,7 @@ import {
   revokeOAuthClientAllowlist,
   type OAuthClientDomain,
 } from '../store/supabase/oauthClients';
+
 import { approveOAuthConsent } from '../services/oauthConsent';
 
 type ConsentArea = 'Inventory' | 'Employment' | 'Equity' | 'Finance';
@@ -40,10 +40,6 @@ export default function OAuthConsentPage() {
     let cancelled = false;
     getOAuthAuthorization(authorizationId).then(lookup => {
       if (cancelled) return;
-      if (lookup.kind === 'resolved') {
-        window.location.assign(lookup.redirectUrl);
-        return;
-      }
       setDetails(lookup.details);
     }, (requestError: unknown) => {
       if (!cancelled) setError(errorMessage(requestError));
@@ -58,18 +54,13 @@ export default function OAuthConsentPage() {
     setError('');
     const outcome = await approveOAuthConsent({
       approveClientAccess: (clientId, clientName) => approveOAuthClientAccess(domain, clientId, clientName),
-      approveAuthorization: approveOAuthAuthorization,
+      approveAuthorization: async () => { await submitOAuthAuthorization(details, true); },
       revokeClientAccess: clientId => revokeOAuthClientAllowlist(domain, clientId),
     }, {
-      authorizationId: details.authorization_id,
-      clientId: details.client.id,
-      clientName: details.client.name || `Sabah One ${access}`,
-      areaLabel: access,
+      authorizationId: details.authorization_id, clientId: details.client.id,
+      clientName: details.client.name || `Sabah One ${access}`, areaLabel: access,
     });
-    if (outcome.ok) {
-      window.location.assign(outcome.redirectUrl);
-      return;
-    }
+    if (outcome.ok) return;
     setError(outcome.message);
     setBusy(null);
   };
@@ -79,7 +70,7 @@ export default function OAuthConsentPage() {
     setBusy('deny');
     setError('');
     try {
-      window.location.assign(await denyOAuthAuthorization(details.authorization_id));
+      await submitOAuthAuthorization(details, false);
     } catch (denialError) {
       setError(errorMessage(denialError));
       setBusy(null);
@@ -95,7 +86,7 @@ export default function OAuthConsentPage() {
       <ConsentShell>
         <h1>Sign in to review access</h1>
         <p>Authentication must finish in Sabah One before a Codex client can request access.</p>
-        <button className="btn btn-primary" type="button" onClick={() => void signInWithGoogle(window.location.href)}>Continue with Google</button>
+        <button className="btn btn-primary" type="button" onClick={() => void signInWithGoogle()}>Continue with Google</button>
       </ConsentShell>
     );
   }
@@ -103,7 +94,7 @@ export default function OAuthConsentPage() {
   if (!details) return <ConsentShell><p>Loading the authorization request…</p></ConsentShell>;
 
   let redirectHost = details.redirect_uri;
-  try { redirectHost = new URL(details.redirect_uri).host; } catch { /* show bounded Supabase value */ }
+  try { redirectHost = new URL(details.redirect_uri).host; } catch { /* show the server-validated redirect */ }
   const requestedScope = details.scope.trim() || 'Account identity';
   return (
     <ConsentShell>

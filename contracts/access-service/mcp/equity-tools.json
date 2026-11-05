@@ -1,0 +1,853 @@
+[
+  {
+    "name": "equity_list_positions",
+    "title": "List Sabah One Equity Positions",
+    "description": "List this account’s private stock and option planning records. Search by company before adding a position. These are dated records, not live quotes or cash balances.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "query": {
+          "default": "",
+          "type": "string",
+          "maxLength": 160
+        },
+        "limit": {
+          "default": 50,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "default": 0,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "equity_get_position",
+    "title": "Get Sabah One Equity Position",
+    "description": "Read one account-owned position, distinct stock/option plans, grant details, dated scenarios and sources. Use the returned updatedAt when editing.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "positionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "positionId"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "equity_add_position",
+    "title": "Add Sabah One Equity Position",
+    "description": "Record verified holdings and the user’s plan. Keep owned shares separate from unexercised grants. Never auto-vest, infer a departure deadline, treat scenarios as cash, or place trades. Reuse requestId only for the exact same retry.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Required idempotency key. Reuse the same UUID and exact input when retrying a write; use a new UUID for a new change."
+        },
+        "position": {
+          "type": "object",
+          "properties": {
+            "company": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "asOf": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "ownedShares": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "stockPlan": {
+              "type": "object",
+              "properties": {
+                "summary": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "agreed",
+                    "tentative",
+                    "undecided"
+                  ]
+                },
+                "waitingFor": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "nextAction": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "reviewMonth": {
+                  "type": "string",
+                  "pattern": "^(?!0000)\\d{4}-(0[1-9]|1[0-2])$"
+                }
+              },
+              "required": [
+                "summary",
+                "status",
+                "waitingFor",
+                "nextAction"
+              ],
+              "additionalProperties": false
+            },
+            "optionPlan": {
+              "type": "object",
+              "properties": {
+                "summary": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "agreed",
+                    "tentative",
+                    "undecided"
+                  ]
+                },
+                "waitingFor": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "nextAction": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "reviewMonth": {
+                  "type": "string",
+                  "pattern": "^(?!0000)\\d{4}-(0[1-9]|1[0-2])$"
+                }
+              },
+              "required": [
+                "summary",
+                "status",
+                "waitingFor",
+                "nextAction"
+              ],
+              "additionalProperties": false
+            },
+            "employmentNote": {
+              "type": "string",
+              "maxLength": 16000
+            },
+            "grants": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "grantDate": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "vested": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "unvested": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "strikeUsd": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "originalExpiry": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "postEmploymentExpiry": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "nextVest": {
+                    "type": "object",
+                    "properties": {
+                      "date": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "alternateDate": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "quantity": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000000
+                      },
+                      "condition": {
+                        "type": "string",
+                        "maxLength": 4000
+                      }
+                    },
+                    "required": [
+                      "date",
+                      "quantity",
+                      "condition"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "id",
+                  "grantDate",
+                  "vested",
+                  "unvested",
+                  "strikeUsd",
+                  "originalExpiry"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "actions": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "timing": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "done": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "title",
+                  "timing",
+                  "done"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "details": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "body": {
+                    "type": "string",
+                    "maxLength": 16000
+                  }
+                },
+                "required": [
+                  "id",
+                  "title",
+                  "body"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "sources": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "url": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "asOf": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "url",
+                  "asOf"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "scenario": {
+              "type": "object",
+              "properties": {
+                "pricesUsd": {
+                  "maxItems": 20,
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  }
+                },
+                "withholdingRate": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "usdToGbp": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000
+                },
+                "asOf": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "notes": {
+                  "type": "string",
+                  "maxLength": 16000
+                }
+              },
+              "required": [
+                "pricesUsd",
+                "withholdingRate",
+                "usdToGbp",
+                "asOf",
+                "notes"
+              ],
+              "additionalProperties": false
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "company",
+            "asOf",
+            "ownedShares",
+            "stockPlan",
+            "optionPlan",
+            "employmentNote",
+            "grants",
+            "actions",
+            "details",
+            "sources",
+            "scenario"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "requestId",
+        "position"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "equity_update_position",
+    "title": "Update Sabah One Equity Position",
+    "description": "Replace one position’s editable details after reading it. Supply the complete draft and exact latest updatedAt, preserving other grants, plans, sources and uncertainties. A stale edit is rejected. No trade or exercise is performed.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Required idempotency key. Reuse the same UUID and exact input when retrying a write; use a new UUID for a new change."
+        },
+        "positionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "position": {
+          "type": "object",
+          "properties": {
+            "company": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "asOf": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "ownedShares": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "stockPlan": {
+              "type": "object",
+              "properties": {
+                "summary": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "agreed",
+                    "tentative",
+                    "undecided"
+                  ]
+                },
+                "waitingFor": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "nextAction": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "reviewMonth": {
+                  "type": "string",
+                  "pattern": "^(?!0000)\\d{4}-(0[1-9]|1[0-2])$"
+                }
+              },
+              "required": [
+                "summary",
+                "status",
+                "waitingFor",
+                "nextAction"
+              ],
+              "additionalProperties": false
+            },
+            "optionPlan": {
+              "type": "object",
+              "properties": {
+                "summary": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "agreed",
+                    "tentative",
+                    "undecided"
+                  ]
+                },
+                "waitingFor": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "nextAction": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "reviewMonth": {
+                  "type": "string",
+                  "pattern": "^(?!0000)\\d{4}-(0[1-9]|1[0-2])$"
+                }
+              },
+              "required": [
+                "summary",
+                "status",
+                "waitingFor",
+                "nextAction"
+              ],
+              "additionalProperties": false
+            },
+            "employmentNote": {
+              "type": "string",
+              "maxLength": 16000
+            },
+            "grants": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "grantDate": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "vested": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "unvested": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "strikeUsd": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "originalExpiry": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "postEmploymentExpiry": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "nextVest": {
+                    "type": "object",
+                    "properties": {
+                      "date": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "alternateDate": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "quantity": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000000
+                      },
+                      "condition": {
+                        "type": "string",
+                        "maxLength": 4000
+                      }
+                    },
+                    "required": [
+                      "date",
+                      "quantity",
+                      "condition"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "id",
+                  "grantDate",
+                  "vested",
+                  "unvested",
+                  "strikeUsd",
+                  "originalExpiry"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "actions": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "timing": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "done": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "title",
+                  "timing",
+                  "done"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "details": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "body": {
+                    "type": "string",
+                    "maxLength": 16000
+                  }
+                },
+                "required": [
+                  "id",
+                  "title",
+                  "body"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "sources": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "url": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "asOf": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "url",
+                  "asOf"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "scenario": {
+              "type": "object",
+              "properties": {
+                "pricesUsd": {
+                  "maxItems": 20,
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  }
+                },
+                "withholdingRate": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "usdToGbp": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000
+                },
+                "asOf": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "notes": {
+                  "type": "string",
+                  "maxLength": 16000
+                }
+              },
+              "required": [
+                "pricesUsd",
+                "withholdingRate",
+                "usdToGbp",
+                "asOf",
+                "notes"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "company",
+            "asOf",
+            "ownedShares",
+            "stockPlan",
+            "optionPlan",
+            "employmentNote",
+            "grants",
+            "actions",
+            "details",
+            "sources",
+            "scenario"
+          ],
+          "additionalProperties": false
+        },
+        "expectedUpdatedAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Exact updatedAt from the latest equity_get_position response. Reload after a conflict."
+        }
+      },
+      "required": [
+        "requestId",
+        "positionId",
+        "position",
+        "expectedUpdatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "equity_remove_position",
+    "title": "Remove Sabah One Equity Position",
+    "description": "Remove this exact planning record only after explicit user confirmation. This does not sell holdings or exercise options.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Required idempotency key. Reuse the same UUID and exact input when retrying a write; use a new UUID for a new change."
+        },
+        "positionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedUpdatedAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Exact updatedAt from the latest equity_get_position response. Reload after a conflict."
+        },
+        "confirmed": {
+          "type": "boolean",
+          "const": true,
+          "description": "Must reflect explicit user confirmation to remove this exact record."
+        }
+      },
+      "required": [
+        "requestId",
+        "positionId",
+        "expectedUpdatedAt",
+        "confirmed"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  }
+]

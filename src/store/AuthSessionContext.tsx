@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { User } from '@supabase/supabase-js';
+import type { AuthUser as User } from './supabase/client';
 import {
   getSessionUser,
   SessionUnavailableError,
-  isSupabaseReady,
+  isAccessReady,
   onAuthStateChange,
   signInWithGoogle as startGoogleSignIn,
-  signOut as endSupabaseSession,
+  signOut as endBrowserSession,
 } from './supabase';
 import { logInfo } from '../services/logger';
 
@@ -14,7 +14,7 @@ interface AuthSessionContextValue {
   authUser: User | null;
   bootstrapped: boolean;
   loading: boolean;
-  supabaseReady: boolean;
+  accessReady: boolean;
   sessionKey: string;
   /** The auth server could not be reached to renew the stored session; the user is not signed out. */
   sessionUnavailable: boolean;
@@ -37,10 +37,10 @@ export function useOptionalAuthSession(): AuthSessionContextValue | null {
 }
 
 export function AuthSessionProvider({ children }: { children: ReactNode }) {
-  const supabaseReady = isSupabaseReady();
+  const accessReady = isAccessReady();
   const [authUser, setAuthUser] = useState<User | null>(null);
-  const [bootstrapped, setBootstrapped] = useState(!supabaseReady);
-  const [loading, setLoading] = useState(supabaseReady);
+  const [bootstrapped, setBootstrapped] = useState(!accessReady);
+  const [loading, setLoading] = useState(accessReady);
   const [generation, setGeneration] = useState(0);
   const [sessionUnavailable, setSessionUnavailable] = useState(false);
   const [sessionAttempt, setSessionAttempt] = useState(0);
@@ -51,7 +51,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   }, [authUser]);
 
   useEffect(() => {
-    if (!supabaseReady) {
+    if (!accessReady) {
       return;
     }
 
@@ -108,7 +108,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       unsubscribe();
     };
-  }, [supabaseReady, sessionAttempt]);
+  }, [accessReady, sessionAttempt]);
 
   const retrySession = useCallback(() => {
     setLoading(true);
@@ -120,7 +120,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await endSupabaseSession();
+    await endBrowserSession();
     authUserRef.current = null;
     setAuthUser(null);
     setGeneration(current => current + 1);
@@ -132,7 +132,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
         authUser,
         bootstrapped,
         loading,
-        supabaseReady,
+        accessReady,
         sessionKey: `${authUser?.id ?? 'signed-out'}:${generation}`,
         sessionUnavailable,
         retrySession,

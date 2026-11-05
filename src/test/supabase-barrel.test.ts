@@ -9,8 +9,8 @@ import * as barrel from '../store/supabase';
 const PUBLIC_NAMES = [
   'getFreshAccessToken',
   'getSessionUser',
-  'initSupabase',
-  'isSupabaseReady',
+  'initAccessService',
+  'isAccessReady',
   'onAuthStateChange',
   'SessionUnavailableError',
   'signInWithGoogle',

@@ -136,12 +136,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Verify hosted browser
-        run: google-chrome --version
+      - name: Install Firefox
+        run: npx playwright install --with-deps firefox
       - name: Run blocking E2E portfolio
         run: npm run test:e2e -- --fully-parallel --workers=2 --reporter=line
-        env:
-          HELM_E2E_USE_HOST_CHROME: "1"
 
   build:
     name: build

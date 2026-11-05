@@ -389,7 +389,7 @@ async function loadPackageVersion() {
 async function main() {
   const outputPath = process.env.MONITOR_OUTPUT_PATH || 'test-results/availability-monitor.json'
   const report = await runAvailabilityMonitor({
-    pagesBaseUrl: process.env.PAGES_BASE_URL || 'https://xaoilin.github.io/helm/',
+    pagesBaseUrl: process.env.PAGES_BASE_URL || 'https://sabah.xaoilin.com/helm/',
     supabaseUrl: process.env.SUPABASE_URL || '',
     supabasePublicKey: process.env.SUPABASE_PUBLIC_KEY || '',
     profileBaseUrl: process.env.PROFILE_BASE_URL || '',

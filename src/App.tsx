@@ -4,14 +4,13 @@ import type { ComponentType } from 'react';
 import { useShell } from "./store/ShellContext";
 import DashboardSurface from './surfaces/DashboardSurface';
 import PrayerGlobalOverlays from './components/prayer/PrayerGlobalOverlays';
-import JevVoiceControl from './components/voice/JevVoiceControl';
 import QuickLinks from './components/navigation/QuickLinks';
 import { PageReadinessGate, useSharedPageReady } from './store/PageReadinessGate';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
-  isSupabaseReady,
+  isAccessReady,
   signInWithGoogle as startGoogleSignIn,
-  signOut as endSupabaseSession,
+  signOut as endBrowserSession,
 } from './store/supabase';
 import { ingestProductUsageEvents, isProfileServiceEnabled } from './services/backend/profileServiceApi';
 import type { Surface } from './types/domain';
@@ -39,7 +38,7 @@ const SURFACE_REGISTRY = {
   projects: { label: 'Projects', icon: '\u{1F4CB}', component: lazy(() => import('./surfaces/ProjectsSurface')) },
   software: { label: 'Software', icon: '\u{1F4BB}', component: lazy(() => import('./surfaces/SoftwareSurface')) },
   inventory: { label: 'Inventory', icon: '\u{1F9F0}', component: lazy(() => import('./surfaces/InventorySurface')) },
-  secrets: { label: 'Secrets', icon: '\u{1F510}', component: lazy(() => import('./surfaces/SecretsSurface')) },
+  secrets: { label: 'Secrets', icon: '\u{1F510}', component: DashboardSurface },
   tasks: { label: 'Tasks', icon: '\u2705', component: lazy(() => import('./surfaces/TasksSurface')) },
   employment: { label: 'Employment', icon: '\u{1F4BC}', component: lazy(() => import('./surfaces/EmploymentSurface')) },
   finance: { label: 'Finance', icon: '\u{1F4B7}', component: lazy(() => import('./surfaces/FinanceSurface')) },
@@ -52,7 +51,7 @@ const SURFACE_REGISTRY = {
   debug: { label: 'Debug', icon: '\u{1F41E}', component: lazy(() => import('./surfaces/DebugSurface')) },
 } satisfies Record<Surface, SurfaceDefinition>;
 
-const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = (Object.keys(SURFACE_REGISTRY) as Surface[]).map(surface => ({
+const NAV_ITEMS: { surface: Surface; label: string; icon: string }[] = (Object.keys(SURFACE_REGISTRY) as Surface[]).filter(surface => surface !== 'secrets').map(surface => ({
   surface,
   label: SURFACE_REGISTRY[surface].label,
   icon: SURFACE_REGISTRY[surface].icon,
@@ -71,8 +70,8 @@ function AppInner() {
   const authUserId = authUser?.id ?? null;
   const authLoading = authSession?.loading ?? false;
   const signInWithGoogle = authSession?.signInWithGoogle ?? startGoogleSignIn;
-  const signOut = authSession?.signOut ?? endSupabaseSession;
-  const supabaseReady = authSession?.supabaseReady ?? isSupabaseReady();
+  const signOut = authSession?.signOut ?? endBrowserSession;
+  const accessReady = authSession?.accessReady ?? isAccessReady();
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const { dialogRef: moreDialogRef, requestClose: closeMoreDialog } = useDialog({
     open: mobileMoreOpen, onClose: () => setMobileMoreOpen(false),
@@ -81,12 +80,12 @@ function AppInner() {
 
   useEffect(() => {
     configureProductUsageAnalytics({
-      enabled: Boolean(authUserId && supabaseReady && isProfileServiceEnabled()),
+      enabled: Boolean(authUserId && accessReady && isProfileServiceEnabled()),
       accountId: authUserId,
       releaseVersion: APP_RELEASE_VERSION,
       sink: ingestProductUsageEvents,
     });
-    if (authUserId && supabaseReady) {
+    if (authUserId && accessReady) {
       trackProductUsageEvent({
         kind: 'performance',
         feature: 'application',
@@ -104,10 +103,10 @@ function AppInner() {
         sink: ingestProductUsageEvents,
       });
     };
-  }, [authUserId, supabaseReady]);
+  }, [authUserId, accessReady]);
 
   useEffect(() => {
-    if (!authUserId || !supabaseReady) return;
+    if (!authUserId || !accessReady) return;
     const now = performance.now();
     const previous = previousSurface.current;
     if (previous) {
@@ -139,7 +138,7 @@ function AppInner() {
       durationMs: 0,
     });
     previousSurface.current = { surface: shell.surface, startedAt: now };
-  }, [authUserId, shell.surface, supabaseReady]);
+  }, [authUserId, shell.surface, accessReady]);
 
   const handleSignIn = async () => {
     try {
@@ -184,7 +183,7 @@ function AppInner() {
   };
 
   const renderAuthContent = (variant: 'sidebar' | 'mobile') => {
-    if (!supabaseReady) {
+    if (!accessReady) {
       return <span className={`${variant}-auth-status`}>Account database unavailable in this build.</span>;
     }
 
@@ -358,7 +357,6 @@ function AppInner() {
         </button>
       </nav>
       {!readOnly && sharedPageReady && <PrayerGlobalOverlays />}
-      <JevVoiceControl />
     </div>
   );
 }

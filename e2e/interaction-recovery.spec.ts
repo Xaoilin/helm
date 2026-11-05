@@ -76,7 +76,6 @@ for (const width of [390, 1440]) {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openApp(page);
     const editors = [
-      { surface: 'Secrets', open: /Add Secret/, name: 'Add secret', field: 'Label' },
       { surface: 'Trips', open: /Plan Trip/, name: 'Plan trip', field: 'Trip Name' },
       { surface: 'Tasks', open: /Add Task/, name: 'Add Task', field: 'Title' },
     ];
@@ -91,7 +90,6 @@ for (const width of [390, 1440]) {
       const field = dialog.getByLabel(editor.field, { exact: true });
       await expect(field).toBeFocused();
       await field.fill('Retain this synthetic draft');
-      if (editor.surface === 'Secrets') await dialog.getByLabel('Secret value', { exact: true }).fill('synthetic-draft-value');
       for (const dismiss of ['Escape', 'backdrop', 'Cancel']) {
         const confirmation = page.waitForEvent('dialog').then(async prompt => {
           expect(prompt.message()).toContain('Discard unsaved changes');
@@ -102,7 +100,6 @@ for (const width of [390, 1440]) {
         else await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
         await confirmation;
         await expect(field).toHaveValue('Retain this synthetic draft');
-        if (editor.surface === 'Secrets') await expect(dialog.getByLabel('Secret value', { exact: true })).toHaveValue('synthetic-draft-value');
       }
       const size = await dialog.evaluate(element => ({ client: element.clientHeight, scroll: element.scrollHeight }));
       if (width === 390) {
