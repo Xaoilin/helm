@@ -422,12 +422,8 @@ async function dispatchDeploys() {
 
   const dispatches = [
     {
-      runTitle: deployRunTitle('Pages', sourceRunId, deploySha),
+      runTitle: deployRunTitle('DigitalOcean', sourceRunId, deploySha),
       workflowFile: 'deploy.yml',
-    },
-    {
-      runTitle: deployRunTitle('Supabase', sourceRunId, deploySha),
-      workflowFile: 'deploy-supabase-assistant.yml',
     },
   ]
   const results = await Promise.allSettled(dispatches.map(dispatch => dispatchWorkflowOnce({

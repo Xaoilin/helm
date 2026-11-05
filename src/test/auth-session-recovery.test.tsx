@@ -1,83 +1,66 @@
-import { act, cleanup, renderHook } from '@testing-library/react';
-import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-const auth = vi.hoisted(() => ({
-  getSession: vi.fn(),
-  callback: null as ((event: AuthChangeEvent, session: Session | null) => void) | null,
-}));
-
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: () => ({
-    auth: {
-      getSession: auth.getSession,
-      onAuthStateChange: (callback: typeof auth.callback) => {
-        auth.callback = callback;
-        return { data: { subscription: { unsubscribe: vi.fn() } } };
-      },
-    },
-  }),
-}));
-
 import { AuthSessionProvider, useAuthSession } from '../store/AuthSessionContext';
-import { getAuthSessionSnapshot, initSupabase } from '../store/supabase/client';
+import { getAuthSessionSnapshot, initAccessService, type BrowserSession } from '../store/supabase/client';
+import { getFreshAccessToken, getSessionUser, SessionUnavailableError, signOut } from '../store/supabase/auth';
 
-function session(id: string): Session {
-  return {
-    access_token: `synthetic-${id}`,
-    refresh_token: 'synthetic-refresh',
-    expires_in: 3600,
-    token_type: 'bearer',
-    user: { id, app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: '' },
-  };
+function session(id: string): BrowserSession {
+  return { user: { id }, accessToken: `synthetic-${id}`, expiresAt: new Date(Date.now() + 600_000).toISOString() };
 }
-
-describe('authentication recovery ordering', () => {
-  beforeEach(() => {
-    auth.getSession.mockReset();
-    auth.callback = null;
-    initSupabase('https://project.supabase.test', 'public-key');
+const signedOut = { user: null, accessToken: null, expiresAt: null };
+describe('native browser session recovery', () => {
+  beforeEach(() => { initAccessService('https://api.sabah.example/api/access'); });
+  afterEach(() => { cleanup(); initAccessService(''); vi.unstubAllGlobals(); vi.useRealTimers(); });
+  it('uses the HTTP-only session cookie and never persists access or refresh tokens in browser storage', async () => {
+    const fetcher = vi.fn(async () => Response.json(session('account')));
+    vi.stubGlobal('fetch', fetcher);
+    await expect(getFreshAccessToken()).resolves.toBe('synthetic-account');
+    expect(fetcher.mock.calls[0]).toEqual(['https://api.sabah.example/api/access/session', expect.objectContaining({ credentials: 'include', cache: 'no-store' })]);
+    expect(JSON.stringify(localStorage)).not.toContain('synthetic-account');
+    expect(JSON.stringify(sessionStorage)).not.toContain('synthetic-account');
   });
-
-  afterEach(() => {
-    cleanup();
-    initSupabase('', '');
+  it('renews a sleeping tab before sending an expired token and coalesces concurrent renewal', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ ...session('account'), expiresAt: new Date(Date.now() + 1000).toISOString() }))
+      .mockResolvedValueOnce(Response.json({ ...session('account'), accessToken: 'renewed' }));
+    vi.stubGlobal('fetch', fetcher);
+    await getFreshAccessToken();
+    expect(await Promise.all([getFreshAccessToken(), getFreshAccessToken()])).toEqual(['renewed', 'renewed']);
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
-
-  it.each([
-    { event: 'SIGNED_OUT' as const, next: null, error: null },
-    { event: 'SIGNED_IN' as const, next: session('new-account'), error: null },
-    { event: 'SIGNED_IN' as const, next: session('new-account'), error: new Error('Synthetic bootstrap failure') },
-  ])('keeps newer $event when an older bootstrap completes (error=$error)', async ({ event, next, error }) => {
-    let complete!: (value: { data: { session: Session | null }; error: Error | null }) => void;
-    auth.getSession.mockReturnValue(new Promise(resolve => { complete = resolve; }));
+  it('keeps a valid account during an auth-service outage', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(session('account'))).mockRejectedValue(new TypeError('offline'));
+    vi.stubGlobal('fetch', fetcher);
+    await getFreshAccessToken();
+    await expect(getFreshAccessToken({ forceRefresh: true })).rejects.toBeInstanceOf(SessionUnavailableError);
+    expect(getAuthSessionSnapshot()?.userId).toBe('account');
+  });
+  it('keeps sign-out when an older session read completes afterwards', async () => {
+    let complete!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (url.endsWith('/csrf')) return Promise.resolve(Response.json({ headerName: 'X-CSRF-TOKEN', token: 'synthetic-csrf' }));
+      if (url.endsWith('/signout')) return Promise.resolve(new Response(null, { status: 204 }));
+      return new Promise<Response>(resolve => { complete = resolve; });
+    }));
     const { result } = renderHook(useAuthSession, { wrapper: AuthSessionProvider });
-
-    act(() => { auth.callback?.(event, next); });
-    const sessionKey = result.current.sessionKey;
-    await act(async () => {
-      complete({ data: { session: error ? null : session('old-account') }, error });
-    });
-
-    expect(result.current.authUser?.id ?? null).toBe(next?.user.id ?? null);
-    expect(result.current.sessionKey).toBe(sessionKey);
-    expect(result.current.bootstrapped).toBe(true);
-    expect(getAuthSessionSnapshot()?.userId ?? null).toBe(next?.user.id ?? null);
-    expect(auth.getSession).toHaveBeenCalledOnce();
-  });
-
-  it('keeps sign-out delivered between the bootstrap read and provider publication', async () => {
-    let complete!: (value: { data: { session: Session }; error: null }) => void;
-    auth.getSession.mockReturnValue(new Promise(resolve => { complete = resolve; }));
-    const { result } = renderHook(useAuthSession, { wrapper: AuthSessionProvider });
-
-    await act(async () => {
-      complete({ data: { session: session('old-account') }, error: null });
-      await Promise.resolve();
-      auth.callback?.('SIGNED_OUT', null);
-    });
-
+    await act(async () => { await signOut(); });
+    const key = result.current.sessionKey;
+    await act(async () => { complete(Response.json(session('old-account'))); });
     expect(result.current.authUser).toBeNull();
+    expect(result.current.sessionKey).toBe(key);
     expect(getAuthSessionSnapshot()).toBeNull();
+  });
+  it('bootstraps genuine signed-out sessions without retrying or opening account providers', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(signedOut)));
+    const { result } = renderHook(useAuthSession, { wrapper: AuthSessionProvider });
+    await waitFor(() => expect(result.current.bootstrapped).toBe(true));
+    expect(result.current.authUser).toBeNull();
+    expect(result.current.sessionUnavailable).toBe(false);
+  });
+  it('offers retry after bounded startup failures instead of pretending the account signed out', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
+    const pending = expect(getSessionUser()).rejects.toBeInstanceOf(SessionUnavailableError);
+    await vi.runAllTimersAsync();
+    await pending;
   });
 });

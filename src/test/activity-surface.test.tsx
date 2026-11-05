@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
     authUser: { id: 'user-1' } as { id: string } | null,
     bootstrapped: true,
     loading: false,
-    supabaseReady: true,
+    accessReady: true,
   },
   getActivityInsights: vi.fn(),
   isProfileServiceEnabled: vi.fn(() => true),
@@ -37,7 +37,7 @@ describe('Activity surface', () => {
     mocks.auth.authUser = { id: 'user-1' };
     mocks.auth.bootstrapped = true;
     mocks.auth.loading = false;
-    mocks.auth.supabaseReady = true;
+    mocks.auth.accessReady = true;
     mocks.isProfileServiceEnabled.mockReturnValue(true);
     mocks.getActivityInsights.mockReset();
     mocks.getActivityInsights.mockResolvedValue(EXAMPLE);

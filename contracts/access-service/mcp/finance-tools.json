@@ -1,0 +1,1180 @@
+[
+  {
+    "name": "finance_get_review",
+    "title": "Get Sabah One Banking Review and Loans",
+    "description": "Read this account’s current dated banking review, monthly cash flow, budget assumptions, spending opportunities and loans, or null when none exists. Dated information is not a live bank balance. Read before replacing the review.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "finance_list_loan_profiles",
+    "title": "List Saved Loan Scenarios",
+    "description": "List this account’s named loan planning profiles and the current review updatedAt. These are saved assumptions, not live balances or payment instructions.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "finance_get_loan_profile",
+    "title": "Get Saved Loan Scenario",
+    "description": "Read one saved loan planning profile by ID, or null if missing, with the review updatedAt for a later save.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "profileId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "profileId"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "finance_save_loan_profile",
+    "title": "Save Named Loan Scenario",
+    "description": "Create or replace one named loan planning profile. Read the review first and supply its exact updatedAt. Setting isDefault clears the other profile default flags. Preserves every other review field. Reuse requestId and exact input for a retry. This never changes a loan or makes a payment.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Required idempotency key. Reuse the same UUID and exact input when retrying a write; use a new UUID for a new change."
+        },
+        "profile": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "isDefault": {
+              "type": "boolean"
+            },
+            "firstPaymentMonth": {
+              "type": "string",
+              "pattern": "^(?!0000)\\d{4}-(0[1-9]|1[0-2])$"
+            },
+            "selectedLoanId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "showShare": {
+              "type": "boolean"
+            },
+            "reviewAsOf": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "loans": {
+              "minItems": 1,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "loanId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "balancePence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "annualRatePercent": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "monthlyPaymentPence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "monthlyExtraPence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "lumpSumPence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "extraStartsAfterMonths": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1199
+                  },
+                  "sharePercent": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "matchExtra": {
+                    "type": "boolean"
+                  },
+                  "repaymentMode": {
+                    "type": "string",
+                    "enum": [
+                      "shorten-term",
+                      "reduce-payment"
+                    ]
+                  },
+                  "balanceAsOf": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "loanId",
+                  "balancePence",
+                  "annualRatePercent",
+                  "monthlyPaymentPence",
+                  "monthlyExtraPence",
+                  "lumpSumPence",
+                  "extraStartsAfterMonths",
+                  "sharePercent",
+                  "matchExtra",
+                  "repaymentMode"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "isDefault",
+            "firstPaymentMonth",
+            "showShare",
+            "reviewAsOf",
+            "loans"
+          ],
+          "additionalProperties": false
+        },
+        "expectedUpdatedAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "requestId",
+        "profile",
+        "expectedUpdatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "finance_remove_loan_profile",
+    "title": "Remove Saved Loan Scenario",
+    "description": "Remove exactly one saved profile with explicit confirmed=true and the latest review updatedAt. Preserves all other review fields. Reuse the same requestId and input for an exact retry. This does not change borrowing or payments.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Required idempotency key. Reuse the same UUID and exact input when retrying a write; use a new UUID for a new change."
+        },
+        "profileId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "confirmed": {
+          "type": "boolean",
+          "const": true
+        },
+        "expectedUpdatedAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "requestId",
+        "profileId",
+        "confirmed",
+        "expectedUpdatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "finance_save_review",
+    "title": "Save Sabah One Banking Review and Loans",
+    "description": "Replace the complete current private review with source-dated verified information and explicit uncertainty. Amounts are integer pence. Preserve loans, sources and expenseGroups; keep household transfers separate to prevent double counting and loan balances separate from settlement quotes. Expense groups classify category labels across all months: non-discretionary, necessary, or discretionary. Supply the exact updatedAt from the latest read, or null for the first save. Reuse requestId only for an exact retry. Omitted or null loanProfiles preserve stored scenarios; an explicit empty array clears them. This cannot access banks, move money, change borrowing or make payments.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Required idempotency key. Reuse the same UUID and exact input when retrying a write; use a new UUID for a new change."
+        },
+        "review": {
+          "type": "object",
+          "properties": {
+            "asOf": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "currency": {
+              "type": "string",
+              "const": "GBP"
+            },
+            "coverage": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "to": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "completeThrough": {
+                  "type": "string",
+                  "pattern": "^(?!0000)\\d{4}-(0[1-9]|1[0-2])$"
+                },
+                "transactionCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000000
+                },
+                "accountCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000000
+                },
+                "note": {
+                  "type": "string",
+                  "maxLength": 4000
+                }
+              },
+              "required": [
+                "from",
+                "to",
+                "completeThrough",
+                "transactionCount",
+                "accountCount",
+                "note"
+              ],
+              "additionalProperties": false
+            },
+            "accounts": {
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "ownership": {
+                    "type": "string",
+                    "enum": [
+                      "personal",
+                      "household"
+                    ]
+                  },
+                  "balancePence": {
+                    "type": "integer",
+                    "minimum": -1000000000000,
+                    "maximum": 1000000000000
+                  },
+                  "asOf": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "ownership",
+                  "balancePence",
+                  "asOf"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "months": {
+              "maxItems": 120,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "month": {
+                    "type": "string",
+                    "pattern": "^(?!0000)\\d{4}-(0[1-9]|1[0-2])$"
+                  },
+                  "incomePence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "outflowPence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "netPence": {
+                    "type": "integer",
+                    "minimum": -1000000000000,
+                    "maximum": 1000000000000
+                  },
+                  "salaryPence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "categories": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4000
+                        },
+                        "amountPence": {
+                          "type": "integer",
+                          "minimum": -1000000000000,
+                          "maximum": 1000000000000
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "amountPence"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "month",
+                  "incomePence",
+                  "outflowPence",
+                  "netPence",
+                  "salaryPence",
+                  "categories"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "expenseGroups": {
+              "description": "Saved category choices across all months. Preserve these when refreshing bank history; omit to retain existing choices, or [] to clear them.",
+              "maxItems": 500,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "group": {
+                    "type": "string",
+                    "enum": [
+                      "non-discretionary",
+                      "necessary",
+                      "discretionary"
+                    ]
+                  }
+                },
+                "required": [
+                  "label",
+                  "group"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "budgetForecast": {
+              "description": "Editable monthly forecast, separate from historical spending. Missing/null preserves the saved plan; an explicit empty items list saves an empty plan.",
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "baselineMonth": {
+                      "type": "string",
+                      "pattern": "^(?!0000)\\d{4}-(0[1-9]|1[0-2])$"
+                    },
+                    "incomePence": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000000000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "incomeBasis": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 4000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "items": {
+                      "maxItems": 200,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4000
+                          },
+                          "amountPence": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 1000000000000
+                          },
+                          "group": {
+                            "type": "string",
+                            "enum": [
+                              "non-discretionary",
+                              "necessary",
+                              "discretionary"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "amountPence",
+                          "group"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "baselineMonth",
+                    "items"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "transactions": {
+              "description": "Itemised personal spending: positive debit amounts, negative refunds. Preserve bank descriptions; add only verified purpose, recurrence and receipt sources. No joint-account itemisation. Missing/null preserves existing rows; [] clears.",
+              "anyOf": [
+                {
+                  "maxItems": 5000,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "accountId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "month": {
+                        "type": "string",
+                        "pattern": "^(?!0000)\\d{4}-(0[1-9]|1[0-2])$"
+                      },
+                      "date": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "merchant": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      },
+                      "description": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "category": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      },
+                      "amountPence": {
+                        "type": "integer",
+                        "minimum": -1000000000000,
+                        "maximum": 1000000000000
+                      },
+                      "detail": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 4000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "recurrence": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "recurring",
+                              "one-off",
+                              "unknown"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sourceIds": {
+                        "anyOf": [
+                          {
+                            "maxItems": 100,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "origin": {
+                        "type": "string",
+                        "enum": [
+                          "bank",
+                          "user"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "accountId",
+                      "month",
+                      "merchant",
+                      "description",
+                      "category",
+                      "amountPence",
+                      "origin"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "budget": {
+              "type": "object",
+              "properties": {
+                "incomePence": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000000
+                },
+                "incomeBasis": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "essentials": {
+                  "maxItems": 100,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      },
+                      "amountPence": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000000
+                      },
+                      "note": {
+                        "type": "string",
+                        "maxLength": 4000
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "amountPence",
+                      "note"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "workCostsPence": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000000
+                },
+                "workCostsNote": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "scenarios": {
+                  "maxItems": 50,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "planned",
+                          "confirmed"
+                        ]
+                      },
+                      "monthlyAdjustmentPence": {
+                        "type": "integer",
+                        "minimum": -1000000000000,
+                        "maximum": 1000000000000
+                      },
+                      "note": {
+                        "type": "string",
+                        "maxLength": 4000
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "status",
+                      "monthlyAdjustmentPence",
+                      "note"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "incomePence",
+                "incomeBasis",
+                "essentials",
+                "workCostsPence",
+                "workCostsNote",
+                "scenarios"
+              ],
+              "additionalProperties": false
+            },
+            "opportunities": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "monthlyPence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "suggestedCapPence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  }
+                },
+                "required": [
+                  "label",
+                  "monthlyPence",
+                  "note"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "loans": {
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "lender": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "repaid",
+                      "closed"
+                    ]
+                  },
+                  "monthlyPaymentPence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "userSharePence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "balancePence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "balanceAsOf": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "balanceKind": {
+                    "type": "string",
+                    "enum": [
+                      "statement",
+                      "settlement",
+                      "estimate",
+                      "unknown"
+                    ]
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "endDate": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "aprPercent": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "settlementPence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "settlementAsOf": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "nextPaymentDate": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "paymentsRemaining": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000000
+                  },
+                  "originalPrincipalPence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "rateNote": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "sourceIds": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "lender",
+                  "purpose",
+                  "status",
+                  "balanceKind",
+                  "rateNote",
+                  "notes",
+                  "sourceIds"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "notes": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 4000
+              }
+            },
+            "loanProfiles": {
+              "anyOf": [
+                {
+                  "maxItems": 20,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "isDefault": {
+                        "type": "boolean"
+                      },
+                      "firstPaymentMonth": {
+                        "type": "string",
+                        "pattern": "^(?!0000)\\d{4}-(0[1-9]|1[0-2])$"
+                      },
+                      "selectedLoanId": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "showShare": {
+                        "type": "boolean"
+                      },
+                      "reviewAsOf": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "loans": {
+                        "minItems": 1,
+                        "maxItems": 50,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "loanId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "balancePence": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000000000
+                            },
+                            "annualRatePercent": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "monthlyPaymentPence": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000000000
+                            },
+                            "monthlyExtraPence": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000000000
+                            },
+                            "lumpSumPence": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000000000
+                            },
+                            "extraStartsAfterMonths": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1199
+                            },
+                            "sharePercent": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "matchExtra": {
+                              "type": "boolean"
+                            },
+                            "repaymentMode": {
+                              "type": "string",
+                              "enum": [
+                                "shorten-term",
+                                "reduce-payment"
+                              ]
+                            },
+                            "balanceAsOf": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "loanId",
+                            "balancePence",
+                            "annualRatePercent",
+                            "monthlyPaymentPence",
+                            "monthlyExtraPence",
+                            "lumpSumPence",
+                            "extraStartsAfterMonths",
+                            "sharePercent",
+                            "matchExtra",
+                            "repaymentMode"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "isDefault",
+                      "firstPaymentMonth",
+                      "showShare",
+                      "reviewAsOf",
+                      "loans"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sources": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "url": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "asOf": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "url",
+                  "asOf"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "asOf",
+            "currency",
+            "coverage",
+            "accounts",
+            "months",
+            "budget",
+            "opportunities",
+            "loans",
+            "notes",
+            "sources"
+          ],
+          "additionalProperties": false
+        },
+        "expectedUpdatedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact updatedAt from finance_get_review, or null only when no review exists. Reload after a conflict."
+        }
+      },
+      "required": [
+        "requestId",
+        "review",
+        "expectedUpdatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  }
+]

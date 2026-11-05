@@ -1,7 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import {
-  buildGitHubPagesUrl,
   evaluateHandoffVerification,
   findVersionedJavaScriptAsset,
   findSuccessfulRunForHead,
@@ -77,7 +76,7 @@ async function main() {
   const currentHead = run('git', ['rev-parse', 'HEAD'])
   const masterHead = run('git', ['rev-parse', 'origin/master'])
   const remote = parseGitHubRemoteUrl(remoteUrl)
-  const pagesUrl = buildGitHubPagesUrl(remote)
+  const pagesUrl = 'https://sabah.xaoilin.com/helm/'
   const currentBranch = run('git', ['branch', '--show-current']) || '(detached HEAD)'
   const isHeadMergedIntoMaster = runStatus('git', ['merge-base', '--is-ancestor', 'HEAD', 'origin/master']).status === 0
   const blockingWorkingTreeChanges = parseStatusPaths(
@@ -94,12 +93,14 @@ async function main() {
 
   const repository = `${remote.owner}/${remote.repo}`
   const ciRuns = loadRunsForHead(repository, 'ci.yml', masterHead)
-  const pagesRuns = loadRunsForHead(repository, 'deploy.yml', masterHead)
-  const supabaseRuns = loadRunsForHead(repository, 'deploy-supabase-assistant.yml', masterHead)
+  const deploymentRuns = loadRunsForHead(repository, 'deploy.yml', masterHead)
 
   const ciRun = findSuccessfulRunForHead(ciRuns, masterHead)
-  const pagesRun = findSuccessfulRunForHead(pagesRuns, masterHead)
-  const supabaseRun = findSuccessfulRunForHead(supabaseRuns, masterHead)
+  const deploymentRun = findSuccessfulRunForHead(deploymentRuns, masterHead)
+  const nativeMetadata = await fetch('https://api.sabah.xaoilin.com/.well-known/oauth-authorization-server/api/access', { signal: AbortSignal.timeout(15000) })
+  const nativeIdentityReady = nativeMetadata.ok && (await nativeMetadata.json()).issuer === 'https://api.sabah.xaoilin.com/api/access'
+  const deployed = await fetch(new URL('deployment.json', pagesUrl), { signal: AbortSignal.timeout(15000) })
+  const deploymentReceipt = deployed.ok ? await deployed.json() : null
 
   let assetUrl = null
   let liveSiteContainsVersion = false
@@ -123,9 +124,10 @@ async function main() {
     masterHead,
     mergedLocalTopicBranches,
     mergedRemoteTopicBranches,
-    pagesRun,
+    deploymentRun,
     pagesUrl,
-    supabaseRun,
+    nativeIdentityReady,
+    deploymentReceipt,
     version,
   })
 

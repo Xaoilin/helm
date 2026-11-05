@@ -22,12 +22,12 @@ export function BootstrappedApp({ children }: { children?: ReactNode }) {
     );
   }
 
-  if (!auth.supabaseReady) {
+  if (!auth.accessReady) {
     return (
       <OnlineGate
         eyebrow="Sign-in required"
         title="Sabah One cannot open account data"
-        detail="This build is missing its Supabase sign-in configuration. Account data is never opened from a device fallback."
+        detail="This build is missing its sign-in service configuration. Account data is never opened from a device fallback."
       />
     );
   }

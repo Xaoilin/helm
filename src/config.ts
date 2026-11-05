@@ -16,11 +16,8 @@ function getSettingsValue(key: 'googleOAuthClientId'): string {
   } catch { return ''; }
 }
 
-/** Supabase project URL. */
-export const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || '');
-
-/** Supabase publishable key (legacy anon key remains supported during rotation). */
-export const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '') || (import.meta.env.VITE_SUPABASE_ANON_KEY || '');
+/** Native product sign-in and agent authorization service. */
+export const ACCESS_BACKEND_URL = import.meta.env.VITE_ACCESS_API_BASE_URL || '';
 
 /** Optional Spring Boot prayer-service base URL. */
 export const PRAYER_BACKEND_URL = import.meta.env.VITE_PRAYER_API_BASE_URL || '';

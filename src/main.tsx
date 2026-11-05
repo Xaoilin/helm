@@ -3,8 +3,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import AppRoot from './AppRoot';
-import { initSupabase } from './store/supabase';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
+import { initAccessService } from './store/supabase';
+import { ACCESS_BACKEND_URL } from './config';
 import { AuthSessionProvider } from './store/AuthSessionContext';
 import OAuthConsentPage from './surfaces/OAuthConsentPage';
 import { clearRetiredDashboardCaches } from './store/deviceSettings';
@@ -15,8 +15,8 @@ startBrowserObservability();
 clearRetiredDashboardCaches();
 
 // Initialize the account database only from build-managed configuration.
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  initSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
+if (ACCESS_BACKEND_URL) {
+  initAccessService(ACCESS_BACKEND_URL);
 }
 
 const isOAuthConsent = /\/oauth\/consent\/?$/.test(window.location.pathname);

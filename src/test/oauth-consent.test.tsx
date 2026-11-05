@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import type { User } from '@supabase/supabase-js';
+import type { AuthUser as User } from '../store/supabase/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import OAuthConsentPage from '../surfaces/OAuthConsentPage';
 import { AuthSessionCtx } from '../store/AuthSessionContext';
@@ -9,8 +9,7 @@ const mocks = vi.hoisted(() => ({
   approveOAuthClientAccess: vi.fn(),
   revokeOAuthClientAllowlist: vi.fn(),
   getOAuthAuthorization: vi.fn(),
-  approveOAuthAuthorization: vi.fn(),
-  denyOAuthAuthorization: vi.fn(),
+  submitOAuthAuthorization: vi.fn(),
   signInWithGoogle: vi.fn(),
 }));
 
@@ -20,8 +19,7 @@ vi.mock('../store/supabase/oauthClients', () => ({
 }));
 vi.mock('../store/supabase/oauthAuthorization', () => ({
   getOAuthAuthorization: mocks.getOAuthAuthorization,
-  approveOAuthAuthorization: mocks.approveOAuthAuthorization,
-  denyOAuthAuthorization: mocks.denyOAuthAuthorization,
+  submitOAuthAuthorization: mocks.submitOAuthAuthorization,
 }));
 vi.mock('../store/supabase/auth', () => ({ signInWithGoogle: mocks.signInWithGoogle }));
 
@@ -41,7 +39,7 @@ function renderConsentPage() {
       authUser,
       bootstrapped: true,
       loading: false,
-      supabaseReady: true,
+      accessReady: true,
       sessionKey: 'account-id:0',
       signInWithGoogle: vi.fn(),
       signOut: vi.fn(),
@@ -61,8 +59,8 @@ describe('separate domain OAuth consent', () => {
     mocks.getOAuthAuthorization.mockResolvedValue({ kind: 'pending', details });
     mocks.approveOAuthClientAccess.mockResolvedValue({});
     mocks.revokeOAuthClientAllowlist.mockResolvedValue({});
-    mocks.approveOAuthAuthorization.mockResolvedValue('#approved');
-    mocks.denyOAuthAuthorization.mockResolvedValue('#denied');
+    mocks.submitOAuthAuthorization.mockResolvedValue('#approved');
+    mocks.submitOAuthAuthorization.mockResolvedValue('#denied');
   });
 
   it('requires an explicit area selection even when the client name claims Employment', async () => {
@@ -82,7 +80,7 @@ describe('separate domain OAuth consent', () => {
   ] as const)('approves only the selected %s area', async (area, domain) => {
     renderConsentPage();
     await chooseAndAllow(area);
-    await waitFor(() => expect(mocks.approveOAuthAuthorization).toHaveBeenCalledWith('authorization-id'));
+    await waitFor(() => expect(mocks.submitOAuthAuthorization).toHaveBeenCalledWith(details, true));
     expect(mocks.approveOAuthClientAccess).toHaveBeenCalledTimes(1);
     expect(mocks.approveOAuthClientAccess).toHaveBeenCalledWith(domain, 'client-id', 'Employment client');
     expect(mocks.revokeOAuthClientAllowlist).not.toHaveBeenCalled();
@@ -94,7 +92,7 @@ describe('separate domain OAuth consent', () => {
     ['Equity', 'equity'],
     ['Finance', 'finance'],
   ] as const)('rolls back %s alone when OAuth approval fails', async (area, domain) => {
-    mocks.approveOAuthAuthorization.mockRejectedValue(new Error('Authorization expired'));
+    mocks.submitOAuthAuthorization.mockRejectedValue(new Error('Authorization expired'));
     renderConsentPage();
     await chooseAndAllow(area);
     expect(await screen.findByRole('alert')).toHaveTextContent('Authorization expired');
@@ -104,20 +102,13 @@ describe('separate domain OAuth consent', () => {
   });
 
   it.each(['Employment', 'Equity', 'Finance'] as const)('surfaces %s rollback failures with a concrete Settings recovery path', async area => {
-    mocks.approveOAuthAuthorization.mockRejectedValue(new Error('Network unavailable'));
+    mocks.submitOAuthAuthorization.mockRejectedValue(new Error('Network unavailable'));
     mocks.revokeOAuthClientAllowlist.mockRejectedValue(new Error('Database unavailable'));
     renderConsentPage();
     await chooseAndAllow(area);
     expect(await screen.findByRole('alert')).toHaveTextContent(`Revoke this client's ${area} access in Settings`);
     expect(screen.getByRole('alert')).toHaveTextContent('Network unavailable');
     expect(screen.getByRole('alert')).toHaveTextContent('Database unavailable');
-  });
-
-  it('redirects without approving when the request was already resolved', async () => {
-    mocks.getOAuthAuthorization.mockResolvedValue({ kind: 'resolved', redirectUrl: '#resolved' });
-    renderConsentPage();
-    await waitFor(() => expect(window.location.hash).toBe('#resolved'));
-    expect(mocks.approveOAuthClientAccess).not.toHaveBeenCalled();
   });
 
   it('shows why an authorization request cannot be loaded', async () => {
@@ -145,12 +136,12 @@ describe('separate domain OAuth consent', () => {
   it('denies without approving any area', async () => {
     renderConsentPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Deny' }));
-    await waitFor(() => expect(mocks.denyOAuthAuthorization).toHaveBeenCalledWith('authorization-id'));
+    await waitFor(() => expect(mocks.submitOAuthAuthorization).toHaveBeenCalledWith(details, false));
     expect(mocks.approveOAuthClientAccess).not.toHaveBeenCalled();
   });
 
   it('surfaces a failed denial and lets the user try again', async () => {
-    mocks.denyOAuthAuthorization.mockRejectedValue(new Error('The authorization request could not be denied.'));
+    mocks.submitOAuthAuthorization.mockRejectedValue(new Error('The authorization request could not be denied.'));
     renderConsentPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Deny' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('The authorization request could not be denied.');

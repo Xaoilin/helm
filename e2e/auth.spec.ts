@@ -1,26 +1,15 @@
 import { expect, test } from './support/helm-fixture';
 
 test.describe('account boot boundary', () => {
-  test('Google sign-in requests identity without Calendar access or repeated consent', async ({ page, scenario }) => {
+  test('Google sign-in hands off to the product-owned server', async ({ page, scenario }) => {
     await scenario({ authenticated: false });
-    await page.route('**/auth/v1/authorize?*', route => route.fulfill({
-      contentType: 'text/html',
-      body: '<h1>Google sign-in handoff</h1>',
+    await page.route('**/api/access/signin', route => route.fulfill({
+      contentType: 'text/html', body: '<h1>Google sign-in handoff</h1>',
     }));
     await page.goto('/');
-    const appUrl = page.url();
-
-    const authorization = page.waitForRequest('**/auth/v1/authorize?*');
     await page.getByRole('button', { name: 'Continue with Google' }).click();
-    const params = new URL((await authorization).url()).searchParams;
-
-    expect(params.get('provider')).toBe('google');
-    expect(params.get('scopes')?.split(' ').sort()).toEqual(['email', 'openid', 'profile']);
-    expect(params.get('include_granted_scopes')).toBe('false');
-    expect(params.has('prompt')).toBe(false);
-    expect(params.has('access_type')).toBe(false);
-    expect(params.get('redirect_to')).toBe(new URL('/helm/', appUrl).href);
     await expect(page.getByRole('heading', { name: 'Google sign-in handoff' })).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe('/api/access/signin');
   });
 
   test('keeps signed-out visitors behind the account gate', async ({ page, scenario }) => {

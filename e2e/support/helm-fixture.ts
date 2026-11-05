@@ -140,44 +140,20 @@ export async function installScenario(page: Page, options: HelmScenarioOptions =
   const settings = scenarioSettings(options);
   const authenticated = options.authenticated !== false;
 
-  await page.addInitScript(({ authenticated: shouldAuthenticate, email, marker, user, initialSurface, surfaceKey }) => {
+  await page.addInitScript(({ marker, initialSurface, surfaceKey }) => {
     if (sessionStorage.getItem(marker) === 'ready') return;
-
-    localStorage.clear();
-    sessionStorage.clear();
+    localStorage.clear(); sessionStorage.clear();
     if (initialSurface) sessionStorage.setItem(surfaceKey, initialSurface);
-    if (shouldAuthenticate) {
-      localStorage.setItem('sb-helm-auth-token', JSON.stringify({
-        access_token: 'e2e-access-token',
-        expires_at: 4_102_444_800,
-        expires_in: 3600,
-        refresh_token: 'e2e-refresh-token',
-        token_type: 'bearer',
-        user: {
-          app_metadata: { provider: 'google' },
-          aud: 'authenticated',
-          email,
-          id: user,
-          role: 'authenticated',
-          user_metadata: { full_name: 'E2E User' },
-        },
-      }));
-    }
     sessionStorage.setItem(marker, 'ready');
   }, {
-    authenticated,
-    email: options.email || TEST_EMAIL,
-    marker: 'helm-kan252-e2e-scenario-ready',
-    user: userId,
-    initialSurface: options.initialSurface,
-    surfaceKey: STORAGE_KEYS.SHELL_SURFACE,
+    marker: 'helm-kan252-e2e-scenario-ready', initialSurface: options.initialSurface, surfaceKey: STORAGE_KEYS.SHELL_SURFACE,
   });
 
   const services = createFakeServices(servicesFromScenario(options, settings));
   await installFakeServices(page, services);
   // Registered after the fake services so it answers timetable requests first.
   await installPrayerRoute(page, options.prayer);
-  await installSupabaseRoutes(page);
+  await installAccessRoutes(page, { authenticated, userId, email: options.email || TEST_EMAIL });
   await installQuranRoute(page);
   return { services };
 }
@@ -238,14 +214,34 @@ function lifeFromScenario(stores: Record<string, unknown> | undefined): FakeLife
   };
 }
 
-/** The Supabase calls the app still makes: agent OAuth approvals and Vault secret summaries. */
-async function installSupabaseRoutes(page: Page): Promise<void> {
-  for (const domain of ['inventory', 'employment', 'equity', 'finance']) {
-    await page.route(`**/rest/v1/rpc/list_${domain}_oauth_clients*`, route => route.fulfill({ json: [] }));
-  }
-  await page.route('**/rest/v1/rpc/list_helm_secrets*', route => route.fulfill({
-    json: { accountVersion: 1, secrets: [] },
-  }));
+/** Native browser-session and approval APIs; no credentials are injected into browser storage. */
+async function installAccessRoutes(page: Page, account: { authenticated: boolean; userId: string; email: string }): Promise<void> {
+  let signedIn = account.authenticated;
+  const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Credentials': 'true' };
+  await page.route('**/api/access/**', async route => {
+    const request = route.request();
+    const origin = request.headers().origin;
+    const headers = { ...cors, 'Access-Control-Allow-Origin': origin || '*' };
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: { ...headers, 'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'content-type,x-csrf-token' } });
+      return;
+    }
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith('/session')) {
+      await route.fulfill({ headers, json: signedIn ? {
+        user: { id: account.userId, email: account.email, user_metadata: { full_name: 'E2E User' } },
+        accessToken: 'e2e-access-token', expiresAt: '2100-01-01T00:00:00Z',
+      } : { user: null, accessToken: null, expiresAt: null } });
+    } else if (path.endsWith('/csrf')) {
+      await route.fulfill({ headers, json: { headerName: 'X-CSRF-TOKEN', token: 'fixture-csrf' } });
+    } else if (path.endsWith('/signout')) {
+      signedIn = false;
+      await route.fulfill({ headers, status: 204 });
+    } else if (/\/agents\/(inventory|employment|equity|finance)\/clients$/.test(path)) {
+      await route.fulfill({ headers, json: [] });
+    } else await route.fulfill({ headers, status: 404, json: { message: 'Unconfigured synthetic access endpoint.' } });
+  });
 }
 
 const APP_PREFERENCE_KEYS = ['theme', 'dataRetentionDays', 'telemetry', 'defaultCalendarTab', 'goalTags'];

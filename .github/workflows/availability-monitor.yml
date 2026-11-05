@@ -49,7 +49,7 @@ jobs:
 
       - name: Probe public availability
         env:
-          PAGES_BASE_URL: https://xaoilin.github.io/helm/
+          PAGES_BASE_URL: https://sabah.xaoilin.com/helm/
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_PUBLIC_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
           PROFILE_BASE_URL: ${{ vars.PROFILE_BACKEND_URL }}

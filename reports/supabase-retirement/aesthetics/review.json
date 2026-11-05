@@ -1,0 +1,161 @@
+{
+  "schema": 1,
+  "subjects": [
+    "native-oauth-consent",
+    "agent-approval-settings",
+    "ui-button",
+    "ui-spacing-layout",
+    "ui-overlap"
+  ],
+  "sourceFiles": [
+    {
+      "path": "src/surfaces/OAuthConsentPage.tsx",
+      "sha256": "4a31894351fc166e83d0ccc15b5f00e7dd11b4c427ec6ae3e8e11778d94ca385"
+    },
+    {
+      "path": "src/components/settings/OAuthClientApprovalsSection.tsx",
+      "sha256": "2a75838175ca3e64654594bb6416ca29a73ae6a6398d7708d075751339cb11cd"
+    },
+    {
+      "path": "src/App.css",
+      "sha256": "92c9bd4a008113ac7cf48a4e3466d67e0c651c2d1aa43fa4a3b5b7bb10f0c8d1"
+    },
+    {
+      "path": "src/index.css",
+      "sha256": "2ba52ac14c23248adc203bf3bdb9660953e819e134a3eb70b14542a3a84b844d"
+    }
+  ],
+  "renders": [
+    {
+      "path": "reports/supabase-retirement/aesthetics/consent-unselected-1440.png",
+      "sha256": "8dfbbce784a960cd7ea18abb0a54eb8be07bc12138a8603c9182b971f43a8799",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/supabase-retirement/aesthetics/consent-unselected-390.png",
+      "sha256": "d1386796a5699bbd340aa84e5a09efcf8ca3589c48d678b2d1ef4f785630d2ed",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/supabase-retirement/aesthetics/consent-employment-1440.png",
+      "sha256": "d7a593aa9cc4d8112ff4f77eb36178d947d0ea8dd0774a6490a7ed9465f73d46",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/supabase-retirement/aesthetics/consent-employment-390.png",
+      "sha256": "18ba01c1e0299bb13650e4831a1ca676e6d17a4abf6ff38461cb617a79ac5a7e",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/supabase-retirement/aesthetics/consent-actions-1440.png",
+      "sha256": "15ded3b13cdbdbdb5e8f5b601ca6f814e56bf3ee5af2933a8d0ebc31340748e7",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/supabase-retirement/aesthetics/consent-actions-390.png",
+      "sha256": "590502c9fa6904a33b90297b70147883e2acea43b16cea01a9d8a7179cef7080",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/supabase-retirement/aesthetics/consent-actions-large-text-390.png",
+      "sha256": "55aa35e881cddc2cb36ba6ab8589128d31327a261107e23fa364e51e31db1978",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/supabase-retirement/aesthetics/employment-access-1440.png",
+      "sha256": "35a89e654b9513b9f0d35164bef01ccd26b775cdf48f9996104426fad5ffeb6b",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/supabase-retirement/aesthetics/employment-access-390.png",
+      "sha256": "55089caa929c27cdbba5e6c60c7b8a8f2748eee5660b3214cae92c0484952e7b",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/supabase-retirement/aesthetics/employment-revoked-1440.png",
+      "sha256": "878c42c70310dfd492ca6b9eb2cbf6f62104d5d4aa6e07ed18884675bd5686ec",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/supabase-retirement/aesthetics/employment-revoked-390.png",
+      "sha256": "3a5aa5b5def70898f866e4812917c2ea4f65442f77f0c9b72b942e510935acdf",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    }
+  ],
+  "references": [
+    {
+      "path": "reports/supabase-retirement/aesthetics/employment-access-1440.png",
+      "sha256": "35a89e654b9513b9f0d35164bef01ccd26b775cdf48f9996104426fad5ffeb6b",
+      "relationship": "reviewer-selected",
+      "qualities": "Existing Sabah One Settings control family: dark navy panels, cool white headings, muted supporting text, cyan boundary notices, restrained indigo actions and compact rounded controls. This is a product-style reference, not owner acceptance."
+    }
+  ],
+  "implementer": "root",
+  "reviewer": {
+    "id": "native_consent_visual_review",
+    "kind": "independent-agent"
+  },
+  "criteria": {
+    "craft": {
+      "verdict": "pass",
+      "evidence": "Consent uses clean rounded card and radio-group edges with aligned labels. Normal desktop controls and mobile normal/enlarged actions have deliberate label clearance; no stretched or unfinished assets are visible."
+    },
+    "coherence": {
+      "verdict": "pass",
+      "evidence": "The consent card uses the same navy surfaces, cool white headings, muted copy and cyan accents as the actual Settings reference. Selected domain outlines and boundary bullets use cyan consistently; the indigo Allow action belongs to the existing primary-button family."
+    },
+    "hierarchy": {
+      "verdict": "pass",
+      "evidence": "Brand and client name precede the consent heading; explicit domain choices precede the bounded permission description, OAuth metadata and final actions. Settings separates Inventory, Employment and Equity, with revocation status remaining inside the Employment card."
+    },
+    "stateMotion": {
+      "verdict": "pass",
+      "evidence": "Unselected, selected, focused, enabled and revoked states were inspected. The selected Employment radio has a cyan outline/fill; focused Allow retains a distinct ring; revoked text and disabled Revoke remain readable. These are static approval states; no animation-dependent product behavior is changed."
+    },
+    "actualSize": {
+      "verdict": "pass",
+      "evidence": "Actual Firefox renders at 1440x844 and390x844 were inspected. The mobile enlarged-text fixture verifies Allow text actually grows by25percent from its measured normal size, all four label clearances exceed7px and the complete button ends at least8px above the844px viewport edge. Enlarged permission copy wraps within its card without horizontal collisions."
+    },
+    "rejectionRegression": {
+      "verdict": "pass",
+      "evidence": "VA-003: normal mobile actions have a10px gap, balanced label padding and a visible bottom inset; the actual enlarged action retains >7px label clearance on every side. VA-004: whole rendered panels were checked with persistent app chrome and the revoked status. In the centered390px revoked Settings render the Employment card is x16..373/y275..568, its boundary notice is x31..358/y378..428, and the client row is x31..358/y442..511 (14px separation). The status remains inside the card, which ends204px above navigation at y772 and begins below the header ending y77. Desktop cards remain inside the content column to the right of the sidebar. Consent permission panel ends y652 before metadata/action rows; enlarged actions end near y819 within844px. Scrollable neighbouring content may pass behind the persistent header/navigation intentionally; the target approval panel and actions are fully clear. No accidental intersection of independent surfaces was observed."
+    }
+  },
+  "motionRequired": false,
+  "rejectionLedgerSha256": "2a2a4b44e4360cbc9bbae4600dfb58c39c034596efaabb35c1f495e232d23bc8",
+  "rejectionsAddressed": [
+    {
+      "id": "VA-003",
+      "evidence": "Actual-size normal and25percent enlarged mobile Allow actions remain fully visible, with balanced label insets,10px sibling separation and >7px measured clearance per label edge. The focus ring also stays inside the viewport."
+    },
+    {
+      "id": "VA-004",
+      "evidence": "Inspected permission notices, client rows, revoked status, domain cards and persistent header/navigation as composed screens. Rendered whole-panel borders are separated: revoked mobile notice ends y428 before row y442; Employment card ends y568 before navigation y772. Target cards are wholly clear of app chrome. The first mobile Settings captures obscured the target row and were superseded by centered captures, without changing product source."
+    }
+  ],
+  "blockingIssues": [],
+  "verdict": "pass",
+  "ownerAcceptance": "not-requested"
+}

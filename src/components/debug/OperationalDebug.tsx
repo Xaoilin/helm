@@ -31,7 +31,7 @@ export default function OperationalDebug() {
           ['Pending collection', snapshot.pending], ['Dropped events', snapshot.dropped],
         ].map(([label, value]) => <div key={label}><dt style={{ color: 'var(--text-secondary, #a1a6bd)', fontSize: 12 }}>{label}</dt><dd style={{ margin: '4px 0', fontWeight: 600 }}>{value}</dd></div>)}
       </dl>
-      <p style={{ color: 'var(--text-secondary, #a1a6bd)', fontSize: 12 }}>Counters cover retained session observations and may undercount when events are dropped. Hosted history is available to the site operator in Supabase Logs.</p>
+      <p style={{ color: 'var(--text-secondary, #a1a6bd)', fontSize: 12 }}>Counters cover retained session observations and may undercount when events are dropped. Hosted history is available to the site operator in Grafana.</p>
       {snapshot.events.length === 0 ? <p>No events in this session yet.</p> : (
         <ol aria-label="Operational event timeline" style={{ listStyle: 'none', padding: 0 }}>
           {snapshot.events.slice().reverse().map(event => (

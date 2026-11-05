@@ -109,16 +109,21 @@ export function evaluateHandoffVerification(state) {
     passes.push(`CI passed for origin/master: ${state.ciRun.url}`)
   }
 
-  if (!state.pagesRun) {
-    failures.push(`No successful GitHub Pages deploy was found for origin/master at ${state.masterHead.slice(0, 7)}.`)
+  if (!state.deploymentRun) {
+    failures.push(`No successful DigitalOcean deployment was found for origin/master at ${state.masterHead.slice(0, 7)}.`)
   } else {
-    passes.push(`GitHub Pages deploy passed: ${state.pagesRun.url}`)
+    passes.push(`DigitalOcean deployment passed: ${state.deploymentRun.url}`)
   }
 
-  if (!state.supabaseRun) {
-    failures.push(`No successful Supabase assistant deploy was found for origin/master at ${state.masterHead.slice(0, 7)}.`)
+  if (!state.nativeIdentityReady) {
+    failures.push('The native Sabah identity issuer is not live.')
   } else {
-    passes.push(`Supabase assistant deploy passed: ${state.supabaseRun.url}`)
+    passes.push('The native Sabah identity issuer is live.')
+  }
+  if (state.deploymentReceipt?.repository !== 'Xaoilin/helm' || state.deploymentReceipt.commit !== state.masterHead) {
+    failures.push('The served frontend source receipt does not match origin/master.')
+  } else {
+    passes.push('The served frontend source receipt matches origin/master.')
   }
 
   if (!state.liveSiteContainsVersion) {

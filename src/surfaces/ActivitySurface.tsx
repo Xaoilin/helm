@@ -162,7 +162,7 @@ function UsageInsights({ insights }: { insights: ProductUsageInsights }) {
 function UsageSection() {
   const authSession = useOptionalAuthSession();
   const authUserId = authSession?.authUser?.id ?? null;
-  const supabaseReady = authSession?.supabaseReady ?? false;
+  const accessReady = authSession?.accessReady ?? false;
   const serviceReady = isProfileServiceEnabled();
   const [insights, setInsights] = useState<ProductUsageInsights | null>(null);
   const [rangeDays, setRangeDays] = useViewPreference<'7' | '30' | '90'>('activity.rangeDays', '30');
@@ -182,7 +182,7 @@ function UsageSection() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
-  const ready = Boolean(authUserId && supabaseReady && serviceReady);
+  const ready = Boolean(authUserId && accessReady && serviceReady);
 
   useEffect(() => {
     if (!ready || authSession?.loading) {
@@ -209,7 +209,7 @@ function UsageSection() {
         <div className="activity-panel activity-state" role="status" aria-live="polite">Checking private account access…</div>
       ) : !authUserId ? (
         <div className="activity-panel activity-state" role="status"><strong>Sign in to view private usage activity.</strong><span>Usage records are never shown in signed-out mode.</span></div>
-      ) : !supabaseReady ? (
+      ) : !accessReady ? (
         <div className="activity-panel activity-state" role="alert"><strong>Account database unavailable.</strong><span>Private usage activity is hidden until the account database is ready.</span></div>
       ) : !serviceReady ? (
         <div className="activity-panel activity-state" role="alert"><strong>Activity service unavailable.</strong><span>Private usage activity is hidden until the profile service is configured.</span></div>

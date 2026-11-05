@@ -1,0 +1,603 @@
+[
+  {
+    "name": "inventory_search",
+    "title": "Search Sabah One Inventory",
+    "description": "Search live owned items and open needs, optionally filtered by project, category, or location.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "query": {
+          "default": "",
+          "type": "string",
+          "maxLength": 160
+        },
+        "projectCatalogKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "machine",
+            "tool",
+            "electronics",
+            "component",
+            "material",
+            "consumable",
+            "fastener",
+            "safety",
+            "storage",
+            "other"
+          ]
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "limit": {
+          "default": 50,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "inventory_check",
+    "title": "Check Inventory Stock",
+    "description": "Check whether Sabah One has enough of a named item for a required quantity and unit.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "requiredQuantity": {
+          "default": 1,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "inventory_resolve_project",
+    "title": "Resolve Sabah One Project",
+    "description": "Resolve a project name to minimal catalogue keys for Inventory linking.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "inventory_save_items",
+    "title": "Save Owned Inventory Items",
+    "description": "Create or enrich one or more explicitly approved owned items. An explicit id updates only that account record and preserves unspecified fields. Multi-item batches require prior review.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "description": "Optional idempotency key. Reuse the same UUID only when retrying the same write.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "items": {
+          "minItems": 1,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "machine",
+                  "tool",
+                  "electronics",
+                  "component",
+                  "material",
+                  "consumable",
+                  "fastener",
+                  "safety",
+                  "storage",
+                  "other"
+                ]
+              },
+              "subcategory": {
+                "type": "string",
+                "enum": [
+                  "3d_printers",
+                  "other_machines",
+                  "workshop_equipment",
+                  "general_tools",
+                  "hand_tools",
+                  "power_tools",
+                  "measuring_tools",
+                  "screws_fasteners",
+                  "filament",
+                  "resin",
+                  "wire_cable",
+                  "connectors_terminals",
+                  "power_supplies",
+                  "power_modules",
+                  "switches_relays",
+                  "microcontrollers",
+                  "prototyping_boards",
+                  "fuses_protection",
+                  "lights_alarms",
+                  "heat_shrink_sleeving",
+                  "cable_management",
+                  "magnets",
+                  "adhesives_tapes",
+                  "mechanical_hardware",
+                  "general_components",
+                  "general_electronics",
+                  "general_materials",
+                  "general_consumables",
+                  "storage_organisation",
+                  "safety_equipment",
+                  "other"
+                ]
+              },
+              "imageUrl": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              "trackingMode": {
+                "type": "string",
+                "enum": [
+                  "durable",
+                  "counted",
+                  "measured"
+                ]
+              },
+              "quantity": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000000000
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              },
+              "lowStockThreshold": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000000000
+              },
+              "brand": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "model": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "dimensions": {
+                "type": "object",
+                "properties": {
+                  "length": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "width": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "height": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "mm",
+                      "cm",
+                      "m",
+                      "in"
+                    ]
+                  }
+                },
+                "required": [
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              "specifications": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "condition": {
+                "type": "string",
+                "enum": [
+                  "unknown",
+                  "new",
+                  "good",
+                  "worn",
+                  "needs_repair"
+                ]
+              },
+              "location": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "tags": {
+                "maxItems": 25,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 50
+                }
+              },
+              "notes": {
+                "type": "string",
+                "maxLength": 4000
+              },
+              "projectCatalogKeys": {
+                "maxItems": 25,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "reviewed": {
+          "default": false,
+          "description": "Must be true after the user reviews a multi-item batch.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "inventory_save_need",
+    "title": "Save Inventory Need",
+    "description": "Save one explicitly requested Inventory need without purchasing or consuming stock.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "description": "Optional idempotency key. Reuse the same UUID only when retrying the same write.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "need": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "machine",
+                "tool",
+                "electronics",
+                "component",
+                "material",
+                "consumable",
+                "fastener",
+                "safety",
+                "storage",
+                "other"
+              ]
+            },
+            "subcategory": {
+              "type": "string",
+              "enum": [
+                "3d_printers",
+                "other_machines",
+                "workshop_equipment",
+                "general_tools",
+                "hand_tools",
+                "power_tools",
+                "measuring_tools",
+                "screws_fasteners",
+                "filament",
+                "resin",
+                "wire_cable",
+                "connectors_terminals",
+                "power_supplies",
+                "power_modules",
+                "switches_relays",
+                "microcontrollers",
+                "prototyping_boards",
+                "fuses_protection",
+                "lights_alarms",
+                "heat_shrink_sleeving",
+                "cable_management",
+                "magnets",
+                "adhesives_tapes",
+                "mechanical_hardware",
+                "general_components",
+                "general_electronics",
+                "general_materials",
+                "general_consumables",
+                "storage_organisation",
+                "safety_equipment",
+                "other"
+              ]
+            },
+            "imageUrl": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "linkedItemId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "projectCatalogKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "requiredQuantity": {
+              "default": 1,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000
+            },
+            "unit": {
+              "default": "units",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            },
+            "dimensions": {
+              "type": "object",
+              "properties": {
+                "length": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "width": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "height": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "mm",
+                    "cm",
+                    "m",
+                    "in"
+                  ]
+                }
+              },
+              "required": [
+                "unit"
+              ],
+              "additionalProperties": false
+            },
+            "specifications": {
+              "default": {},
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "priority": {
+              "default": "normal",
+              "type": "string",
+              "enum": [
+                "low",
+                "normal",
+                "high"
+              ]
+            },
+            "status": {
+              "default": "needed",
+              "type": "string",
+              "enum": [
+                "needed",
+                "ordered"
+              ]
+            },
+            "notes": {
+              "default": "",
+              "type": "string",
+              "maxLength": 4000
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "need"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "inventory_complete_need",
+    "title": "Mark Inventory Need Acquired",
+    "description": "Atomically close an open need and add its quantity to linked or newly created owned stock.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "description": "Optional idempotency key. Reuse the same UUID only when retrying the same write.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "needId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "newItemId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      },
+      "required": [
+        "needId"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "inventory_archive_item",
+    "title": "Archive Inventory Item",
+    "description": "Archive an owned item only after the user explicitly confirms the exact item.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestId": {
+          "description": "Optional idempotency key. Reuse the same UUID only when retrying the same write.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "itemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "confirmed": {
+          "type": "boolean",
+          "const": true,
+          "description": "Proof that the user explicitly confirmed this archive action."
+        }
+      },
+      "required": [
+        "itemId",
+        "confirmed"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  }
+]

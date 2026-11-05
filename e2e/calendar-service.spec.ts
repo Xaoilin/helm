@@ -17,16 +17,14 @@ test('a calendar write whose token was rejected renews the session and succeeds 
     return route.fallback();
   });
   const renewals: string[] = [];
-  await page.route('**/auth/v1/token?grant_type=refresh_token', async route => {
+  await page.route('**/api/access/session', async route => {
+    if (rejected === 0 || route.request().method() === 'OPTIONS') return route.fallback();
     renewals.push(route.request().url());
-    const user = {
-      id: '11111111-1111-4111-8111-111111111111', aud: 'authenticated', role: 'authenticated', email: 'e2e@example.test',
-      app_metadata: { provider: 'google' }, user_metadata: { full_name: 'E2E User' },
-    };
-    await route.fulfill({ json: {
-      access_token: 'renewed-access-token', refresh_token: 'renewed-refresh-token', token_type: 'bearer',
-      expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user,
-    } });
+    await route.fulfill({
+      headers: { 'Access-Control-Allow-Origin': new URL(page.url()).origin, 'Access-Control-Allow-Credentials': 'true' },
+      json: { accessToken: 'renewed-access-token', expiresAt: '2100-01-01T00:00:00Z',
+        user: { id: '11111111-1111-4111-8111-111111111111', email: 'e2e@example.test' } },
+    });
   });
   const authorizations: string[] = [];
   page.on('request', request => {

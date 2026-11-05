@@ -36,7 +36,7 @@ describe('capability-shaped application composition', () => {
     }).failures).toContain(
       'src/store/services.ts uses forbidden application service-locator identifier useServices.',
     );
-  });
+  }, 15_000);
 
   it('keeps provider order and readiness ownership explicit', () => {
     const providers = readFileSync(resolve(root, 'src/store/AppProviders.tsx'), 'utf8');

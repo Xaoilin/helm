@@ -1,36 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const auth = vi.hoisted(() => ({ signInWithOAuth: vi.fn() }));
-
-vi.mock('../store/supabase/client', () => ({
-  getClient: () => ({ auth }),
-}));
-
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { initAccessService } from '../store/supabase/client';
 import { signInWithGoogle } from '../store/supabase/auth';
 
-describe('Google account sign-in', () => {
-  beforeEach(() => {
-    auth.signInWithOAuth.mockReset();
-    auth.signInWithOAuth.mockResolvedValue({ error: null });
-  });
-
-  it('requests identity only, without earlier Calendar grants or forced consent', async () => {
+describe('product-owned Google sign-in', () => {
+  afterEach(() => { initAccessService(''); vi.unstubAllGlobals(); });
+  it('navigates to the configured server sign-in entry and never trusts a caller return address', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('window', { location: { assign } });
+    initAccessService('https://api.sabah.example/api/access');
     await signInWithGoogle();
-
-    expect(auth.signInWithOAuth).toHaveBeenCalledWith({
-      provider: 'google',
-      options: {
-        scopes: 'openid email profile',
-        redirectTo: window.location.origin + import.meta.env.BASE_URL,
-        queryParams: { include_granted_scopes: 'false' },
-      },
-    });
-  });
-
-  it('preserves the agent consent return address', async () => {
-    const redirectTo = 'https://sabah.example.test/helm/?authorization_id=synthetic';
-    await signInWithGoogle(redirectTo);
-
-    expect(auth.signInWithOAuth.mock.calls[0][0].options.redirectTo).toBe(redirectTo);
+    expect(assign).toHaveBeenCalledWith('https://api.sabah.example/api/access/signin');
   });
 });

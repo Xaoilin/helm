@@ -61,7 +61,8 @@ export function exportOperationalDiagnostics(): string {
 export function setOperationalAccount(next: string | null): void {
   if (account === next) return;
   // Initial browser boot diagnostics contain only allowlisted metadata. Never carry them across accounts.
-  const startup = !accountEstablished && next ? events.filter(event => event.domain === 'browser').slice(-QUEUE_LIMIT) : [];
+  const startup = !accountEstablished && next ? events.filter(event => event.domain === 'browser' || event.domain === 'release').slice(-QUEUE_LIMIT) : [];
+  const startupIncidents = !accountEstablished && next ? [...incidents.entries()].filter(([key]) => key.startsWith('release:')) : [];
   if (next) accountEstablished = true;
   account = next;
   generation += 1;
@@ -74,6 +75,7 @@ export function setOperationalAccount(next: string | null): void {
   events = startup;
   queue = startup.map(event => ({ event, attempts: 0 }));
   incidents.clear();
+  for (const [key, incident] of startupIncidents) incidents.set(key, incident);
   dropped = 0;
   rateCount = 0;
   successRateCount = 0;
