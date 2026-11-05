@@ -125,6 +125,9 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: master
+      - name: Verify the owned public site before replacing the old address
+        timeout-minutes: 12
+        run: python3 scripts/verify-public-frontend.py "$(git rev-parse HEAD)"
       - name: Retain the previous address as a redirect
         run: python3 scripts/prepare-address-redirect.py release-address
       - uses: actions/upload-pages-artifact@v5

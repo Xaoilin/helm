@@ -69,6 +69,7 @@ describe('hosted build and receipt policy boundaries', () => {
     }
     expect(evaluateDigitalOceanTarget(`${text}\nVITE_SUPABASE_URL: legacy`).ok).toBe(false);
     expect(existsSync(resolve(root, '.github/workflows/deploy-supabase-assistant.yml'))).toBe(false);
+    expect(text.indexOf('scripts/verify-public-frontend.py')).toBeLessThan(text.indexOf('scripts/prepare-address-redirect.py'));
   });
 
   it('requires both manual inputs and the protected workflow ref', () => {
