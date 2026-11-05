@@ -1,3 +1,4 @@
+import { useViewPreference } from '../../store/ViewPreferencesContext';
 import { useEffect, useState } from 'react';
 import { useAuthSession } from '../../store/AuthSessionContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
@@ -31,10 +32,11 @@ function Player({ name, summary, leading }: {
 export default function PrayerCompetitionCard() {
   const { today, now, tracking } = usePrayerContext();
   const { sessionKey } = useAuthSession();
-  const [view, setView] = useState<{ period: CompetitionPeriod; offset: number }>({ period: 'month', offset: 0 });
+  const [selectedPeriod, setPeriod] = useViewPreference<CompetitionPeriod>('prayerChallenge.period', 'month');
+  const [offset, setOffset] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ key: string; data?: PrayerCompetition; error?: string } | null>(null);
-  const range = competitionRange(today, view.period, view.offset);
+  const range = competitionRange(today, selectedPeriod, offset);
   const minute = Math.floor(now.getTime() / 60_000);
   const key = `${sessionKey}:${range.from}:${range.to}:${minute}:${attempt}`;
 
@@ -61,14 +63,14 @@ export default function PrayerCompetitionCard() {
       <h2 id="prayer-challenge-title">Prayer challenge <span aria-hidden="true">✦</span></h2></div>
       <div className="prayer-challenge-periods" role="group" aria-label="Comparison period">
         {(['day', 'week', 'month'] as const).map(period => <button key={period} type="button"
-          aria-pressed={view.period === period} onClick={() => setView({ period, offset: 0 })}>
+          aria-pressed={selectedPeriod === period} onClick={() => { setPeriod(period); setOffset(0); }}>
           {period[0].toUpperCase() + period.slice(1)}</button>)}
       </div>
     </div>
-    <div className="prayer-challenge-dates"><button type="button" aria-label={`Previous ${view.period}`}
-      onClick={() => setView(current => ({ ...current, offset: current.offset - 1 }))}>‹</button>
-      <strong>{range.label}</strong><button type="button" aria-label={`Next ${view.period}`} disabled={view.offset >= 0}
-        onClick={() => setView(current => ({ ...current, offset: current.offset + 1 }))}>›</button></div>
+    <div className="prayer-challenge-dates"><button type="button" aria-label={`Previous ${selectedPeriod}`}
+      onClick={() => setOffset(current => current - 1)}>‹</button>
+      <strong>{range.label}</strong><button type="button" aria-label={`Next ${selectedPeriod}`} disabled={offset >= 0}
+        onClick={() => setOffset(current => current + 1)}>›</button></div>
     <p className="prayer-challenge-verdict" aria-live="polite">{loading ? 'Loading your comparison…' : headline}</p>
     <div className="prayer-challenge-players">
       <Player name={SELF} summary={data?.self ?? null} leading={leader === 'self'} />

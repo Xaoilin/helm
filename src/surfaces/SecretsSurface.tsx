@@ -1,3 +1,4 @@
+import { useViewPreference } from '../store/ViewPreferencesContext';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { useProjectContext } from "../store/contexts/ProjectContext";
@@ -91,10 +92,10 @@ export default function SecretsSurface() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [kindFilter, setKindFilter] = useState<SecretKind | 'all'>('all');
+  const [kindFilter, setKindFilter] = useViewPreference<SecretKind | 'all'>('secrets.kindFilter', 'all');
   const [environmentFilter, setEnvironmentFilter] = useState('all');
   const [projectFilter, setProjectFilter] = useState('all');
-  const [showArchived, setShowArchived] = useState(false);
+  const [showArchived, setShowArchived] = useViewPreference<boolean>('secrets.showArchived', false);
   const [form, setForm] = useState<SecretFormState | null>(null);
   const [initialForm, setInitialForm] = useState<SecretFormState | null>(null);
 

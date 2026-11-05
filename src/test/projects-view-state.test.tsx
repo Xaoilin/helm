@@ -102,17 +102,17 @@ describe('useProjectSelection', () => {
     expect(result.current.selectedProject).toBeNull();
   });
 
-  it('returns to the overview tab when leaving the workspace or revealing a project', () => {
+  it('preserves the chosen tab when leaving the workspace or revealing a project', () => {
     const { result } = renderHook(() => useProjectSelection(projects));
     act(() => result.current.manage('atlas'));
     act(() => result.current.setActiveTab('wiki'));
     act(() => result.current.leaveManagement());
-    expect(result.current).toMatchObject({ managedProjectId: null, selectedProjectId: null, activeTab: 'overview' });
+    expect(result.current).toMatchObject({ managedProjectId: null, selectedProjectId: null, activeTab: 'wiki' });
 
     act(() => result.current.manage('atlas'));
     act(() => result.current.setActiveTab('board'));
     act(() => result.current.reveal('vault'));
-    expect(result.current).toMatchObject({ managedProjectId: null, activeTab: 'overview' });
+    expect(result.current).toMatchObject({ managedProjectId: null, activeTab: 'board' });
     expect(result.current.detailProject?.id).toBe('vault');
   });
 });

@@ -1,3 +1,4 @@
+import { useViewPreference } from '../store/ViewPreferencesContext';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useShell } from '../store/ShellContext';
 import { useInventoryContext } from '../store/contexts/InventoryContext';
@@ -570,9 +571,9 @@ export function ProjectInventorySection({ catalogKey, projectName }: { catalogKe
 export default function InventorySurface() {
   const inventory = useInventoryContext();
   const projects = useProjectContext();
-  const [view, setView] = useState<InventoryView>('owned');
+  const [view, setView] = useViewPreference<InventoryView>('inventory.view', 'owned');
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<'all' | InventoryCategory>('all');
+  const [category, setCategory] = useViewPreference<'all' | InventoryCategory>('inventory.category', 'all');
   const [projectKey, setProjectKey] = useState('all');
   const [location, setLocation] = useState('all');
   const [editor, setEditor] = useState<EditorState>(null);

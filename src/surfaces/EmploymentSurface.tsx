@@ -1,3 +1,4 @@
+import { useViewPreference } from '../store/ViewPreferencesContext';
 import {
   Fragment,
   useEffect,
@@ -316,11 +317,13 @@ function OpportunityCard({ application, onEdit }: { application: EmploymentAppli
 
 export default function EmploymentSurface() {
   const employment = useEmploymentContext();
-  const [activeOnly, setActiveOnly] = useState(true);
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<EmploymentFilters>({
-    query: '', status: 'all', workType: 'all', remoteStatus: 'all',
-  });
+  const [activeOnly, setActiveOnly] = useViewPreference<boolean>('employment.activeOnly', true);
+  const [showFilters, setShowFilters] = useViewPreference<boolean>('employment.showFilters', false);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useViewPreference<EmploymentFilters['status']>('employment.status', 'all');
+  const [workType, setWorkType] = useViewPreference<EmploymentFilters['workType']>('employment.workType', 'all');
+  const [remoteStatus, setRemoteStatus] = useViewPreference<EmploymentFilters['remoteStatus']>('employment.remoteStatus', 'all');
+  const filters = useMemo<EmploymentFilters>(() => ({ query, status, workType, remoteStatus }), [query, status, workType, remoteStatus]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<EmploymentApplication | 'new' | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -339,7 +342,7 @@ export default function EmploymentSurface() {
     setExpandedId(current => current === application.id ? null : application.id);
   };
   const clearFilters = () => {
-    setFilters({ query: '', status: 'all', workType: 'all', remoteStatus: 'all' });
+    setQuery(''); setStatus('all'); setWorkType('all'); setRemoteStatus('all');
     setActiveOnly(true);
   };
   const openEditor = (application: EmploymentApplication | 'new', trigger: HTMLElement) => {
@@ -378,13 +381,13 @@ export default function EmploymentSurface() {
           <button type="button" aria-label="Active applications" aria-pressed={activeOnly} onClick={() => setActiveOnly(true)}>Active <span>{activeCount}</span></button>
           <button type="button" aria-label="All applications" aria-pressed={!activeOnly} onClick={() => setActiveOnly(false)}>All <span>{employment.applications.length}</span></button>
         </div>
-        <label className="employment-search"><span className="sr-only">Search Employment opportunities</span><input className="form-input" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} placeholder="Search company, role, note, compensation…" /></label>
+        <label className="employment-search"><span className="sr-only">Search Employment opportunities</span><input className="form-input" value={filters.query} onChange={event => setQuery(event.target.value)} placeholder="Search company, role, note, compensation…" /></label>
         <button type="button" className="btn btn-secondary" aria-expanded={showFilters} aria-controls="employment-filters" onClick={() => setShowFilters(value => !value)}>Filters{filterCount > 0 ? ` (${filterCount})` : ''}</button>
       </div>
       {showFilters && <section id="employment-filters" className="employment-filter-options" aria-label="Employment pipeline filters">
-        <label><span>Stage</span><select aria-label="Filter Employment status" className="form-select" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value as EmploymentFilters['status'] }))}><option value="all">All pipeline stages</option>{STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-        <label><span>Work type</span><select aria-label="Filter Employment work type" className="form-select" value={filters.workType} onChange={event => setFilters(current => ({ ...current, workType: event.target.value as EmploymentFilters['workType'] }))}><option value="all">All work types</option>{WORK_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-        <label><span>Remote eligibility</span><select aria-label="Filter Employment remote proof" className="form-select" value={filters.remoteStatus} onChange={event => setFilters(current => ({ ...current, remoteStatus: event.target.value as EmploymentFilters['remoteStatus'] }))}><option value="all">All remote proof</option>{REMOTE_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label><span>Stage</span><select aria-label="Filter Employment status" className="form-select" value={filters.status} onChange={event => setStatus(event.target.value as EmploymentFilters['status'])}><option value="all">All pipeline stages</option>{STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label><span>Work type</span><select aria-label="Filter Employment work type" className="form-select" value={filters.workType} onChange={event => setWorkType(event.target.value as EmploymentFilters['workType'])}><option value="all">All work types</option>{WORK_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label><span>Remote eligibility</span><select aria-label="Filter Employment remote proof" className="form-select" value={filters.remoteStatus} onChange={event => setRemoteStatus(event.target.value as EmploymentFilters['remoteStatus'])}><option value="all">All remote proof</option>{REMOTE_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <button type="button" className="btn btn-ghost" onClick={clearFilters}>Clear filters</button>
       </section>}
 

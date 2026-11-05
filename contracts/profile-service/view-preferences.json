@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/profile/v1/view-preferences"
+  },
+  "status": 200,
+  "body": {
+    "values": {
+      "prayerChallenge.period": "day",
+      "dashboard.learnIndividualSteps": "true"
+    }
+  }
+}

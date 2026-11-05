@@ -1,3 +1,4 @@
+import { useViewPreference } from '../../store/ViewPreferencesContext';
 import { useCallback, useMemo, useState } from 'react';
 import { resolveProjectId, type ProjectTab } from '../../services/projectModel';
 import type { Project } from '../../types/domain';
@@ -14,7 +15,7 @@ export function useProjectSelection(projects: readonly Project[]) {
   const [pickedProjectId, setPickedProjectId] = useState<string | null>(null);
   const [detailProjectId, setDetailProjectId] = useState<string | null>(null);
   const [managedProjectId, setManagedProjectId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<ProjectTab>('overview');
+  const [activeTab, setActiveTab] = useViewPreference<ProjectTab>('projects.tab', 'overview');
   const [pickedPageId, setPickedPageId] = useState<string | null>(null);
 
   const selectedProjectId = useMemo(
@@ -41,13 +42,11 @@ export function useProjectSelection(projects: readonly Project[]) {
     setDetailProjectId(null);
     setManagedProjectId(projectId);
     setPickedProjectId(projectId);
-    setActiveTab('overview');
   }, []);
 
   const leaveManagement = useCallback(() => {
     setManagedProjectId(null);
     setPickedProjectId(null);
-    setActiveTab('overview');
   }, []);
 
   /** Show one project's details from the catalogue, as the assistant asks. */
@@ -55,12 +54,10 @@ export function useProjectSelection(projects: readonly Project[]) {
     setPickedProjectId(projectId);
     setDetailProjectId(projectId);
     setManagedProjectId(null);
-    setActiveTab('overview');
   }, []);
 
   const showCreated = useCallback((projectId: string) => {
     setPickedProjectId(projectId);
-    setActiveTab('overview');
   }, []);
 
   return {

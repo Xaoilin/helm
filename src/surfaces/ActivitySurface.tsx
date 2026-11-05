@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useViewPreference } from '../store/ViewPreferencesContext';
 import { MetricCard } from '../components/common/MetricCard';
 import { logError } from '../services/logger';
 import { getActivityInsights, isProfileServiceEnabled } from '../services/backend/profileServiceApi';
@@ -164,7 +165,20 @@ function UsageSection() {
   const supabaseReady = authSession?.supabaseReady ?? false;
   const serviceReady = isProfileServiceEnabled();
   const [insights, setInsights] = useState<ProductUsageInsights | null>(null);
-  const [filters, setFilters] = useState<ProductUsageFilters>(DEFAULT_PRODUCT_USAGE_FILTERS);
+  const [rangeDays, setRangeDays] = useViewPreference<'7' | '30' | '90'>('activity.rangeDays', '30');
+  const [kind, setKind] = useViewPreference<ProductUsageFilters['kind']>('activity.kind', 'all');
+  const [surface, setSurface] = useViewPreference<ProductUsageFilters['surface']>('activity.surface', 'all');
+  const [outcome, setOutcome] = useViewPreference<ProductUsageFilters['outcome']>('activity.outcome', 'all');
+  const [feature, setFeature] = useState('all');
+  const filters = useMemo<ProductUsageFilters>(() => ({ rangeDays: Number(rangeDays) as UsageRangeDays, kind, surface, outcome, feature }),
+    [rangeDays, kind, surface, outcome, feature]);
+  const updateFilters = (next: Partial<ProductUsageFilters>) => {
+    if (next.rangeDays !== undefined) setRangeDays(String(next.rangeDays) as '7' | '30' | '90');
+    if (next.kind !== undefined) setKind(next.kind);
+    if (next.surface !== undefined) setSurface(next.surface);
+    if (next.outcome !== undefined) setOutcome(next.outcome);
+    if (next.feature !== undefined) setFeature(next.feature);
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -206,7 +220,7 @@ function UsageSection() {
       ) : insights.totalEventCount === 0 ? (
         <div className="activity-panel activity-state"><strong>No private usage activity yet.</strong><span>Once this signed-in account uses Sabah One, content-free activity will appear here.</span></div>
       ) : (
-        <><FilterControls filters={filters} features={insights.features} onChange={next => setFilters(current => ({ ...current, ...next }))} />{insights.summary.eventCount === 0 ? <div className="activity-panel activity-state"><strong>No activity matches these filters.</strong><button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilters(DEFAULT_PRODUCT_USAGE_FILTERS)}>Clear filters</button></div> : <UsageInsights insights={insights} />}</>
+        <><FilterControls filters={filters} features={insights.features} onChange={updateFilters} />{insights.summary.eventCount === 0 ? <div className="activity-panel activity-state"><strong>No activity matches these filters.</strong><button type="button" className="btn btn-secondary btn-sm" onClick={() => updateFilters(DEFAULT_PRODUCT_USAGE_FILTERS)}>Clear filters</button></div> : <UsageInsights insights={insights} />}</>
       )}
     </section>
   );

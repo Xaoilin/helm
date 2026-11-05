@@ -17,6 +17,7 @@ import { TripProvider } from './contexts/TripContext';
 import { MilestoneCelebrationProvider } from './contexts/MilestoneCelebrationContext';
 import { ShellProvider } from './ShellContext';
 import { ViewDataDemandProvider } from './ViewDataDemand';
+import { ViewPreferencesProvider } from './ViewPreferencesContext';
 import { useDailyTaskRollover } from './workflows/useDailyTaskRollover';
 
 /** Keeps the signed-in user's live-update streams open while the app runs, whichever page is open. */
@@ -37,6 +38,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <ViewDataDemandProvider>
         <LiveEvents />
         <SettingsProvider>
+          <ViewPreferencesProvider>
           <GamificationProvider>
             <DailyMomentumProvider>
               <CalendarProvider>
@@ -67,6 +69,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
               </CalendarProvider>
             </DailyMomentumProvider>
           </GamificationProvider>
+          </ViewPreferencesProvider>
         </SettingsProvider>
       </ViewDataDemandProvider>
     </ShellProvider>

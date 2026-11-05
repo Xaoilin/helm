@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useViewPreference } from '../store/ViewPreferencesContext';
 import CalendarBackendStatus from '../components/dashboard/CalendarBackendStatus';
 import PrayerDebug from '../components/debug/PrayerDebug';
 import OperationalDebug from '../components/debug/OperationalDebug';
@@ -12,7 +12,7 @@ const DEBUG_TABS: { id: DebugTab; label: string; icon: string }[] = [
 ];
 
 export default function DebugSurface() {
-  const [tab, setTab] = useState<DebugTab>('network');
+  const [tab, setTab] = useViewPreference<DebugTab>('debug.tab', 'network');
 
   return (
     <>

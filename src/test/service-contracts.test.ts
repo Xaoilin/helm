@@ -7,6 +7,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { parseOperationalBatch } from '../services/operationalEvents';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { viewPreferenceSchema, viewPreferencesSchema } from '../services/backend/viewPreferenceContracts';
 import { competitionSchema, competitionSummarySchema } from '../services/backend/competitionContracts';
 import { CONTRACT_SCHEMAS as SERVICE_SCHEMAS } from '../services/backend/contracts';
 import { ACTIVITY_CONTRACT_SCHEMAS } from '../services/backend/activityContracts';
@@ -17,6 +18,8 @@ import { LIVE_CONTRACT_SCHEMAS } from '../services/backend/liveContracts';
 import { PLANNER_CONTRACT_SCHEMAS } from '../services/backend/plannerContracts';
 
 const CONTRACT_SCHEMAS = {
+  'profile-service/view-preferences': viewPreferencesSchema,
+  'profile-service/view-preference-updated': viewPreferenceSchema,
   'prayer-service/competition': competitionSchema,
   'prayer-service/competition-not-connected': competitionSchema,
   'prayer-service/competition-summary': competitionSummarySchema,
