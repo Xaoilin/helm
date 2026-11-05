@@ -18,7 +18,7 @@
     },
     {
       "path": "src/App.css",
-      "sha256": "92c9bd4a008113ac7cf48a4e3466d67e0c651c2d1aa43fa4a3b5b7bb10f0c8d1"
+      "sha256": "32816c7f2e13855b405b900b59f011206c67558c64aad78c92242c8a9acb5056"
     },
     {
       "path": "src/index.css",
@@ -56,14 +56,14 @@
     },
     {
       "path": "reports/supabase-retirement/aesthetics/consent-actions-1440.png",
-      "sha256": "15ded3b13cdbdbdb5e8f5b601ca6f814e56bf3ee5af2933a8d0ebc31340748e7",
+      "sha256": "cb09f934de3564cb28734dadc8514ee90dda77aa23a39bd448dcbb0f6f686665",
       "inContext": true,
       "actualSize": true,
       "kind": "image"
     },
     {
       "path": "reports/supabase-retirement/aesthetics/consent-actions-390.png",
-      "sha256": "590502c9fa6904a33b90297b70147883e2acea43b16cea01a9d8a7179cef7080",
+      "sha256": "4188d960d2b77139e1d30a228d06bcb32ec2daa9238f4610c6df3441140203fb",
       "inContext": true,
       "actualSize": true,
       "kind": "image"
@@ -77,7 +77,7 @@
     },
     {
       "path": "reports/supabase-retirement/aesthetics/employment-access-1440.png",
-      "sha256": "35a89e654b9513b9f0d35164bef01ccd26b775cdf48f9996104426fad5ffeb6b",
+      "sha256": "7581f6da3c115ec75ba9275af9b2bff4145aba29d2d6a474ecaa4a5e12f5b58b",
       "inContext": true,
       "actualSize": true,
       "kind": "image"
@@ -91,7 +91,7 @@
     },
     {
       "path": "reports/supabase-retirement/aesthetics/employment-revoked-1440.png",
-      "sha256": "878c42c70310dfd492ca6b9eb2cbf6f62104d5d4aa6e07ed18884675bd5686ec",
+      "sha256": "24b8a365346860ad214dd0ab11212360086a32138dfed063e06853fc5f7148c8",
       "inContext": true,
       "actualSize": true,
       "kind": "image"
@@ -107,7 +107,7 @@
   "references": [
     {
       "path": "reports/supabase-retirement/aesthetics/employment-access-1440.png",
-      "sha256": "35a89e654b9513b9f0d35164bef01ccd26b775cdf48f9996104426fad5ffeb6b",
+      "sha256": "7581f6da3c115ec75ba9275af9b2bff4145aba29d2d6a474ecaa4a5e12f5b58b",
       "relationship": "reviewer-selected",
       "qualities": "Existing Sabah One Settings control family: dark navy panels, cool white headings, muted supporting text, cyan boundary notices, restrained indigo actions and compact rounded controls. This is a product-style reference, not owner acceptance."
     }
@@ -136,7 +136,7 @@
     },
     "actualSize": {
       "verdict": "pass",
-      "evidence": "Actual Firefox renders at 1440x844 and390x844 were inspected. The mobile enlarged-text fixture verifies Allow text actually grows by25percent from its measured normal size, all four label clearances exceed7px and the complete button ends at least8px above the844px viewport edge. Enlarged permission copy wraps within its card without horizontal collisions."
+      "evidence": "Fresh Firefox renders after merging origin/master f138311 were inspected at1440x844 and390x844: normal unselected/selected consent, fully visible focused action rows, actual25percent enlarged mobile text, and Settings before/after revocation. The enlarged fixture asserts actual computed text growth, >7px label clearance on every side, and complete action bounds at least8px above the844px viewport edge. Enlarged copy wraps inside its card. These current-source renders confirm that the prayer-specific shared-CSS changes did not alter the target consent/Settings presentation."
     },
     "rejectionRegression": {
       "verdict": "pass",
