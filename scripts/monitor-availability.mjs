@@ -150,12 +150,11 @@ function validateConfiguration(config) {
     failures.push('pages_url_invalid')
   }
   try {
-    const supabase = new URL(config.supabaseUrl)
-    if (supabase.protocol !== 'https:') failures.push('supabase_url_invalid')
+    const access = new URL(config.accessBaseUrl)
+    if (access.protocol !== 'https:') failures.push('access_url_invalid')
   } catch {
-    failures.push('supabase_url_invalid')
+    failures.push('access_url_invalid')
   }
-  if (!config.supabasePublicKey) failures.push('supabase_public_key_missing')
   try {
     const profile = new URL(config.profileBaseUrl)
     if (profile.protocol !== 'https:') failures.push('profile_url_invalid')
@@ -178,8 +177,7 @@ export async function runAvailabilityMonitor(input) {
   const timeoutMs = Math.min(DEFAULT_TIMEOUT_MS, Math.max(1, input.fetchTimeoutMs ?? DEFAULT_TIMEOUT_MS))
   const config = {
     pagesBaseUrl: input.pagesBaseUrl,
-    supabaseUrl: input.supabaseUrl,
-    supabasePublicKey: input.supabasePublicKey,
+    accessBaseUrl: input.accessBaseUrl,
     profileBaseUrl: input.profileBaseUrl,
     expectedVersion: input.expectedVersion,
     expectedSourceSha: input.expectedSourceSha,
@@ -209,7 +207,7 @@ export async function runAvailabilityMonitor(input) {
   }
 
   const pagesBase = new URL(config.pagesBaseUrl)
-  const supabaseBase = config.supabaseUrl.replace(/\/+$/u, '')
+  const accessBase = config.accessBaseUrl.replace(/\/+$/u, '')
   const profileBase = config.profileBaseUrl.replace(/\/+$/u, '')
   const cacheKey = encodeURIComponent(correlationId)
   const common = { fetchImpl, timeoutMs, now }
@@ -228,8 +226,8 @@ export async function runAvailabilityMonitor(input) {
     }),
     requestBounded({
       ...common,
-      url: `${supabaseBase}/auth/v1/health`,
-      headers: { Accept: 'application/json', apikey: config.supabasePublicKey },
+      url: `${accessBase}/api/access/health?availability=${cacheKey}`,
+      headers: { Accept: 'application/json' },
       maxBytes: MAX_JSON_BYTES,
     }),
     // Operational events are collected by the profile service; its liveness is the collector's.
@@ -314,15 +312,19 @@ export async function runAvailabilityMonitor(input) {
     probes.push(failedProbe('pages-app-asset', 'not_attempted'))
   }
 
-  probes.push(authResponse.ok
-    ? {
-        id: 'supabase-auth',
-        outcome: 'passed',
-        httpStatus: authResponse.status,
-        durationMs: authResponse.durationMs,
-        responseBytes: authResponse.responseBytes,
-      }
-    : responseFailure('supabase-auth', authResponse))
+  if (!authResponse.ok) {
+    probes.push(responseFailure('native-identity', authResponse))
+  } else {
+    const up = parseJson(authResponse.text)?.status === 'UP'
+    probes.push({
+      id: 'native-identity',
+      outcome: up ? 'passed' : 'failed',
+      ...(up ? {} : { code: 'invalid_identity_health' }),
+      httpStatus: authResponse.status,
+      durationMs: authResponse.durationMs,
+      responseBytes: authResponse.responseBytes,
+    })
+  }
 
   if (!collectorResponse.ok) {
     probes.push(responseFailure('operational-collector', collectorResponse))
@@ -390,8 +392,7 @@ async function main() {
   const outputPath = process.env.MONITOR_OUTPUT_PATH || 'test-results/availability-monitor.json'
   const report = await runAvailabilityMonitor({
     pagesBaseUrl: process.env.PAGES_BASE_URL || 'https://sabah.xaoilin.com/helm/',
-    supabaseUrl: process.env.SUPABASE_URL || '',
-    supabasePublicKey: process.env.SUPABASE_PUBLIC_KEY || '',
+    accessBaseUrl: process.env.ACCESS_BASE_URL || '',
     profileBaseUrl: process.env.PROFILE_BASE_URL || '',
     expectedVersion: process.env.EXPECTED_VERSION || await loadPackageVersion(),
     expectedSourceSha: process.env.EXPECTED_SOURCE_SHA || '',

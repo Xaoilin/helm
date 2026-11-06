@@ -2,11 +2,11 @@
 
 ## Objective and evidence boundary
 
-Sabah One targets at least 99.5% successful completed public probe runs over a rolling 30-day window. A run succeeds only when the protected `master` version matches the public Pages release, the current app entry asset responds, Supabase Auth health responds, and the profile service (which collects operational events) reports `UP`.
+Sabah One targets at least 99.5% successful completed public probe runs over a rolling 30-day window. A run succeeds only when the protected `master` version matches the public DigitalOcean release, the current app entry asset responds, native Spring identity reports `UP`, and the profile service (which collects operational events) reports `UP`.
 
 The workflow runs every 15 minutes. The operational detection objective is therefore 15 minutes plus any GitHub scheduler or queue delay; it is an objective, not an SLA. Track scheduler gaps separately from failed probes. The practical active-page recovery objective is at most 45 seconds once the backend is healthy. Current assembled-browser evidence does not isolate that production wall-clock interval: its retained `recoveryMs` is 42,663 ms from incident to recovery and includes an intentional 10-second outage plus a 31-second fake-clock advance after restore. It proves the recovery state and timing instrumentation under synthetic services, not attainment of a live recovery objective.
 
-The monitor uses public endpoints and a Supabase public key only. It has no user session, does not write product telemetry, and retains no response bodies, URLs, headers, personal data, or credentials. Every request has an eight-second deadline and a bounded response. The job has a five-minute ceiling, writes a bounded JSON artifact for seven days, updates the GitHub step summary, and exits nonzero on any failed assertion. GitHub's native run status is the only notification path.
+The monitor uses public endpoints without credentials or a user session. It does not write product telemetry and retains no response bodies, URLs, headers, personal data, or credentials. Every request has an eight-second deadline and a bounded response. The job has a five-minute ceiling, writes a bounded JSON artifact for seven days, updates the GitHub step summary, and exits nonzero on any failed assertion. GitHub's native run status is the only notification path.
 
 ## Probes and release identity
 
@@ -16,7 +16,7 @@ The monitor uses public endpoints and a Supabase public key only. It has no user
 | --- | --- |
 | Pages release | `release.json` has a valid version equal to the checked-out `package.json` version. |
 | Pages app | The served HTML names a same-origin JavaScript asset and that exact asset answers the bounded `HEAD` request. |
-| Supabase Auth | `/auth/v1/health` responds successfully with the configured public key and no user bearer token. |
+| Native identity | `/api/access/health` responds successfully with JSON status `UP`, without an API key, cookie or bearer token. |
 | Operational collector | Public `GET /api/profile/health` on `PROFILE_BACKEND_URL` returns `status: UP` for `profile-service`. |
 
 Pages currently exposes exact version but not commit SHA, so the workflow does not claim commit identity for the web bundle. A version mismatch is actionable and fails the run, including during a legitimate rollout.
@@ -32,7 +32,7 @@ The controlled fault exercise uses `synthetic_fault=expected_version_mismatch`. 
 ## Bounded investigation
 
 - **False offline banner (2026-10-11):** Brave reported `navigator.onLine=false` while the same tab received HTTP 200 from prayer and planner APIs. The banner used only that flag; the shell therefore made controls read-only; the hook waited for a browser `online` event; service responses were not connected to the hook; and the old offline browser fixture changed only the flag while leaving requests successful. The underlying browser/OS reason for the false flag is unverified. Service HTTP responses now override the hint until the next network change. Unit and browser regressions replay the false flag with working requests; the real-offline fixture also aborts network requests. [MDN documents the flag's unreliability](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/onLine).
-- **Auth:** Inspect only the `supabase-auth` probe first. Re-run the public health request with an eight-second limit and the configured public-key environment variable; never add a user token. If it still fails, inspect Auth and gateway entries in Supabase Dashboard Unified Logs and current provider status.
+- **Auth:** Inspect the `native-identity` probe first. Re-run the public `/api/access/health` request with an eight-second limit and no credentials. If it still fails, inspect the independently owned access-service and gateway diagnostics. Health does not prove a real Google sign-in or Calendar grant.
 - **Network:** When Pages, Auth, and collector fail together, check DNS/TLS and provider status before changing product code. When only one probe fails, constrain investigation to that origin. Repeat once after the reported provider recovery; do not create an unbounded retry loop.
 - **Provider:** Filter by the affected domain and `rate_limited`, `server_error`, or `timeout`. Confirm the provider's current status and one bounded direct request. Paid assistant availability is outside this public monitor and must not be inferred from it.
 - **Reload/version:** Compare the artifact's expected and observed version first. For app reports, inspect `release` events for `release_available`, `reload_suppressed`, or `client_update_required`. Avoid repeated forced reloads; verify the public manifest and its named asset once after deployment settles.
