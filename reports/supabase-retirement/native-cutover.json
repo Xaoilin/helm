@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "product": "sabah-one",
+  "observedAt": "2026-11-06T01:25:22.885465+00:00",
+  "stage": "public-native-cutover",
+  "backendCommit": "f8a8364dfde8122dc3ff6736c9df45ba0f5328cc",
+  "backendCiRun": 42134348586,
+  "frontendVersion": "0.2.246",
+  "serviceHealthChecks": 9,
+  "databaseHealthChecks": 8,
+  "nativeIssuer": "https://api.sabah.xaoilin.com/api/access",
+  "publicSigningKeysOnly": true,
+  "finalSnapshotStage": "final-frozen",
+  "applicationTables": 79,
+  "approvalTables": 4,
+  "databaseTls": "verify-full",
+  "siblingDatabaseConnectionRejected": true,
+  "realGoogleOwnerSignIn": "verified-in-Firefox",
+  "supabaseRetired": false,
+  "remainingSupabaseRuntimeDependency": "authenticated-AlAdhan-provider-relay",
+  "calendarContinuity": "encrypted credentials and keys preserved; post-cutover provider sync pending",
+  "liveUpdateAcceptance": "post-cutover authenticated event check pending",
+  "frontendCommit": "686032fb15fea5e26c9140291fee5d47001bde04",
+  "frontendPublishRun": 42130828209,
+  "nativeMcp": {
+    "oauthConnectionsVerified": 4,
+    "authenticatedToolDiscovery": 24,
+    "currentChatConnectionRefreshPending": true
+  },
+  "monitoring": {
+    "collectorActive": true,
+    "managedPostgresScrapeObserved": 1,
+    "nativeIdentityProbeObserved": 1,
+    "liveDashboardAndAlertEditsPending": true
+  }
+}

@@ -1,7 +1,7 @@
 import { expect, openApp, test } from './support/helm-fixture';
 import { getQuranMotivationForDate, QURAN_MOTIVATION_CARDS } from '../src/services/quranMotivation';
 import { shiftIsoDate } from '../src/services/timeZone';
-import { quranPassageFixture } from './support/fake-quran';
+import { quranPassageFixture, quranVerseFixture } from './support/fake-quran';
 
 const FIXED_NOW = '2026-07-28T11:45:00.000Z';
 
@@ -51,9 +51,17 @@ test('Quran reading uses the English translation returned by Quran.com', async (
 test('Quran reading keeps Arabic visible and can retry an unavailable English translation', async ({ page, scenario }) => {
   await scenario({ now: '2026-09-30T12:00:00Z' });
   let unavailable = true;
-  await page.route(/^https:\/\/api\.quran\.com\/api\/v4\/quran\/translations\/20\?/u, route => (
-    unavailable ? route.fulfill({ status: 503, json: { error: 'Provider unavailable' } }) : route.fallback()
-  ));
+  let recoveredRequests = 0;
+  await page.route(/^https:\/\/api\.quran\.com\/api\/v4\/quran\/translations\/20\?/u, route => {
+    const headers = { 'Access-Control-Allow-Origin': '*' };
+    if (unavailable) return route.fulfill({ status: 503, headers, json: { error: 'Provider unavailable' } });
+    // Keep the outage and recovery in one handler instead of falling through a second route.
+    recoveredRequests += 1;
+    const verseKey = new URL(route.request().url()).searchParams.get('verse_key')!;
+    return route.fulfill({ headers, json: {
+      translations: [{ resource_id: 20, verse_key: verseKey, text: quranVerseFixture(verseKey) }],
+    } });
+  });
   await openApp(page);
   const card = page.getByRole('complementary', { name: 'Daily Quran reading' });
   const passage = getQuranMotivationForDate('2026-09-30');
@@ -63,6 +71,7 @@ test('Quran reading keeps Arabic visible and can retry an unavailable English tr
     .toHaveAttribute('href', `${passage.sourceUrl}?translations=20`);
   unavailable = false;
   await card.getByRole('button', { name: 'Retry Quran.com translation', exact: true }).click();
+  await expect.poll(() => recoveredRequests).toBeGreaterThan(0);
   await expect(card.locator('blockquote[lang="en"]')).toHaveText(quranPassageFixture(passage.reference));
   await expect(card.getByRole('alert')).toHaveCount(0);
 });
