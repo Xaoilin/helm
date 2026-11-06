@@ -12,7 +12,7 @@ The normal change flow is:
 4. Let the protected pull-request checks validate the exact branch contents.
 5. Have Sol integrate the accepted commit, publish the website and required Supabase functions, and verify the deployed result.
 
-A branch-only change is not deployed or live. The deployed Pages bundle, its `public/release.json` manifest, and the associated Supabase functions must describe the same product version and candidate.
+A branch-only change is not deployed or live. The deployed DigitalOcean bundle, its `public/release.json` manifest and deployment receipt must describe the same product version and candidate. The legacy Pages address only redirects.
 
 ## Root Cause Analysis
 
@@ -29,7 +29,9 @@ A feature or documentation change is ready for integration when:
 - account, security, and user-facing copy remain aligned;
 - `docs/feature-status.md` is updated when product status changes.
 
-Only Sol can claim the overall change live after protected promotion, GitHub Pages deployment, Supabase deployment where required, and direct live verification.
+Only Sol can claim the overall change live after protected promotion, DigitalOcean deployment and direct live verification.
+
+When a release also deploys the backend, wait for its production workflow and native readiness checks to finish before frontend publication. The frontend gate correctly rejects a transient 502 during a backend restart; after backend health is verified, rerun the failed publication against the same tested source rather than weakening that gate.
 
 ## Validation Contract
 
