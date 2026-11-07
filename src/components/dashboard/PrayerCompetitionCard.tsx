@@ -92,7 +92,7 @@ export default function PrayerCompetitionCard() {
     {current?.error && <p className="prayer-challenge-message" role="alert">{current.error}</p>}
     {data?.status === 'not_connected' && <p className="prayer-challenge-message">Your shared challenge isn’t connected yet. Your own totals are shown.</p>}
     {data?.status === 'unavailable' && <p className="prayer-challenge-message" role="status">{PARTNER}’s totals are temporarily unavailable. Try refreshing.</p>}
-    <div className="prayer-challenge-footer"><small>{showPoints ? `Challenge score · Prompt ${PRAYER_TIMING_POINTS.prompt} · Within ${PRAYER_TIMING_POINTS.within_window} · Outside ${PRAYER_TIMING_POINTS.outside_window}` : 'Completion rate · On time + late'}<br />Pending and non-obligatory prayers don’t affect the score.</small>
+    <div className="prayer-challenge-footer"><small>{showPoints ? `Challenge score · Prompt ${PRAYER_TIMING_POINTS.prompt} · Within ${PRAYER_TIMING_POINTS.within_window} · Outside ${PRAYER_TIMING_POINTS.outside_window}` : 'Completion rate · On time + late'}<br />{PRAYER_TIMING_POINTS.prompt} points only within 15 minutes of the adhan.<br />Pending and non-obligatory prayers don’t affect the score.</small>
       <button type="button" className="btn btn-secondary btn-sm" disabled={loading} onClick={() => setAttempt(value => value + 1)}>
         Refresh<span className="sr-only"> comparison</span></button></div>
   </section>;

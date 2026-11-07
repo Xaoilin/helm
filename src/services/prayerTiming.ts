@@ -2,7 +2,7 @@ import { PRAYER_TIMING_POINTS } from '../config/prayerCompetition';
 import type { PrayerCompletionStatus, PrayerOutcomeStatus, PrayerTiming } from '../types/domain';
 
 export const PRAYER_TIMING_CHOICES = [
-  { timing: 'prompt', status: 'on_time', label: 'Prayed promptly', shortLabel: 'Prompt', description: 'Soon after the prayer started', icon: '✦' },
+  { timing: 'prompt', status: 'on_time', label: 'Prayed promptly', shortLabel: 'Prompt', description: 'Within 15 minutes of the adhan', icon: '✦' },
   { timing: 'within_window', status: 'on_time', label: 'Prayed within the time window', shortLabel: 'Within time', description: 'Later, before the window ended', icon: '✓' },
   { timing: 'outside_window', status: 'late', label: 'Prayed outside the time window', shortLabel: 'Outside time', description: 'After the window ended', icon: '◷' },
 ] as const;

@@ -284,6 +284,7 @@ test('logs a manual expense and shows the balance the finance service works out,
   await page.getByRole('button', { name: 'Navigate to Finance' }).click();
   await expect(page.locator('.finance-net-worth')).toHaveText('£5,000.00');
   await page.getByRole('button', { name: /^Transactions/ }).click();
+  await expect(page.getByRole('button', { name: /^Transactions/ })).toHaveClass(/\bactive\b/u);
   const write = waitForMutation(page, 'transactions');
   await page.locator('.finance-amount-input').fill('12.34');
   await page.locator('.finance-amount-input').press('Enter');

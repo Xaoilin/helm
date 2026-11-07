@@ -2,7 +2,7 @@
 
 Requested by Sabah on 4 November 2026 for both Lina One and Sabah One.
 
-The dashboard compares prayer completion for a calendar month (default), Monday–Sunday week, or day. Previous periods are browsable. Challenge scores use 12 points for prompt prayer, 8 within the time window, and 2 outside it, divided by 12 times eligible prayer opportunities. Completion percentages remain separate. Historical untimed completed prayers retain full 12-point credit. Pending, unclassified, pre-tracking and non-obligatory prayers are excluded by the existing prayer statistics service. Exact fractions decide the leader; rounded percentages are display only. An empty denominator has no score or winner.
+The dashboard compares prayer completion for a calendar month (default), Monday–Sunday week, or day. Previous periods are browsable. Challenge scores use 12 points for prayer within 15 minutes of the adhan, 8 within the time window, and 2 outside it, divided by 12 times eligible prayer opportunities. Completion percentages remain separate. Historical untimed completed prayers retain full 12-point credit. Pending, unclassified, pre-tracking and non-obligatory prayers are excluded by the existing prayer statistics service. Exact fractions decide the leader; rounded percentages are display only. An empty denominator has no score or winner.
 
 The card refreshes on confirmed prayer changes, once per minute while mounted, and through Refresh. Account/session changes and superseded requests cannot reuse another account or period’s response. No totals or credentials are persisted in the browser. A missing partner is shown as unavailable, never as a zero score.
 
@@ -59,7 +59,7 @@ The approved pair is enabled. Source and synthetic checks cover the dashboard be
 
 ## Explicit timing choices
 
-The completion dialog offers Prompt (12), Within time (8), and Outside time (2)
+The completion dialog offers Within 15 minutes of the adhan (12), Within time (8), and Outside time (2)
 with one tap; no time entry is required. These are self-reported choices and are
 never inferred from when a user logs the prayer. History can correct timing
 without earning XP again. Outcome timing is service-confirmed and survives reload.
@@ -71,3 +71,5 @@ backend rollout the card explains that point totals are updating, with no winner
 Existing fully legacy comparisons keep their completion meaning. The additive
 backend must be deployed before this consumer. All external-agent Prayer MCP
 limitations described above remain in force.
+
+Prompt means within 15 minutes of the adhan. This remains self-reported: the app does not infer the prayer time from when an entry is logged. Timing weights and backend rules are unchanged.
