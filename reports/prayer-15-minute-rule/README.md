@@ -17,3 +17,12 @@ not final candidate renders or an owner rejection.
 
 Source and screenshot hashes are bound by the independent visual review receipt.
 No real account data was read. Temporary QA fixture files were removed.
+
+The required pre-push gate encountered two unrelated browser failures. Quran
+translation retry passed unchanged in its isolated recheck and the next full
+run. A Finance expense case then missed its write. A held preference-response
+probe proved that the shared amount selector exists in the still-active Overview
+pane before Transactions is confirmed, and that confirmation replaces that input.
+The fixture now waits for the Transactions active state before filling it; exact
+save assertions remain intact. The lost-save event itself was not reproduced.
+No Finance runtime code changed.
