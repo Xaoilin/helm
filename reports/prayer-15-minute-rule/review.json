@@ -1,0 +1,147 @@
+{
+  "schema": 1,
+  "subjects": [
+    "sabah-prayer-15-minute-copy",
+    "ui-button",
+    "ui-spacing-layout",
+    "ui-overlap"
+  ],
+  "sourceFiles": [
+    {
+      "path": "src/services/prayerTiming.ts",
+      "sha256": "30377c236aaa90e4c1f6f5d5f2bf1dc6f96a02f3c7d140f76e89905f22bcaceb"
+    },
+    {
+      "path": "src/components/dashboard/NightCompassDashboard.tsx",
+      "sha256": "e5e5931020cea27daa3705e97a81deca148577356e30842d21a6a71d876a6cf2"
+    },
+    {
+      "path": "src/components/dashboard/PrayerCompetitionCard.tsx",
+      "sha256": "6d86e9fa2dc734d760079e6bd347f858c99b6de159f834fa6c956a68245f868b"
+    },
+    {
+      "path": "src/components/prayer/PrayerCompletionDialog.tsx",
+      "sha256": "283e70ac1b2fcb99e08d0ab2be99cc96491013603ebe40ca20652de86af2e31c"
+    }
+  ],
+  "renders": [
+    {
+      "path": "reports/prayer-15-minute-rule/timing-dark-320.png",
+      "sha256": "fa21dfb25098dc224a07693e973e76c63afaf008ded80a00077284bae20bb69c",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-15-minute-rule/timing-dark-1440.png",
+      "sha256": "43d5b0825167e14ff3b3ec4f4d33679d94e354a93df1c588d4aa68ad75435e4e",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-15-minute-rule/weighted-competition.png",
+      "sha256": "bcc64d788cecafb3d691ef815028922b70e1c465e648599ef8e0b85bdf8c0c5c",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-15-minute-rule/rule-footer-normal-320.png",
+      "sha256": "0a64265f03c08be8234a31d44a55cead9de3f196cc28724e67358fc3b3551744",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-15-minute-rule/actual125-dialog-320.png",
+      "sha256": "4ddd811c3f02e5858d1d6d21fb57156d233dde64ef1eaec567addecf00169c10",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/prayer-15-minute-rule/actual125-footer-320.png",
+      "sha256": "368c831bda12744a94364f4ace2c30b58605296e6322c6ce6f5e6a3f38f45601",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    }
+  ],
+  "references": [
+    {
+      "path": "reports/prayer-timing/timing-dark-320.png",
+      "sha256": "f6e3293834a00c848495f86c801262667b8e2176572d29a6529de0f2a76c56fa",
+      "relationship": "reviewer-selected",
+      "qualities": "Prior independently reviewed dialog establishes the three choice rows, separate point totals and deliberate button spacing."
+    },
+    {
+      "path": "reports/prayer-timing/weighted-competition.png",
+      "sha256": "02de475fdb4e910b9634be5b6dfc2e8c0f6cdb2312bb03f6c36bb69385608dad",
+      "relationship": "reviewer-selected",
+      "qualities": "Prior independently reviewed competition card establishes the point/completion hierarchy and framed footer."
+    },
+    {
+      "path": "reports/prayer-15-minute-rule/rule-history-normal-320.png",
+      "sha256": "3b751311f50d0cf4d11a678c1229907716cd89855cd2858d6c1e2b2ffa499a24",
+      "relationship": "rejected-before",
+      "qualities": "Intermediate longer history label; agent review found the native picker cramped. Root restored the existing Prompt label. This is not an owner rejection or final render."
+    },
+    {
+      "path": "reports/prayer-15-minute-rule/actual125-history-320.png",
+      "sha256": "e9ddca76bd4d74e689e0c728c5a778c6bb62d2e346b86cfcf4fb38dd9a3ad88d",
+      "relationship": "rejected-before",
+      "qualities": "Intermediate125% history label truncates in the native picker; the original Prompt shortLabel is restored in the bound final source. Not a final candidate render."
+    }
+  ],
+  "implementer": "root/sol_release",
+  "reviewer": {
+    "id": "root/visual_record_review",
+    "kind": "independent-agent"
+  },
+  "criteria": {
+    "craft": {
+      "verdict": "pass",
+      "evidence": "Six final Firefox renders inspected. Within15minutes of the adhan is shown directly under Prayed promptly beside12points. It wraps cleanly at320px normal and125%text and stays aligned with the point column at1440px. Footer copy remains complete."
+    },
+    "coherence": {
+      "verdict": "pass",
+      "evidence": "The copy change preserves Sabah’s fixed dark card/modal treatment, restrained borders, status accents and typography. No new theme appearance is claimed."
+    },
+    "hierarchy": {
+      "verdict": "pass",
+      "evidence": "The12point restriction is directly beside the prompt choice and repeated in the footer, including the unconnected state.8point/2point alternatives and separate completion percentages remain clear. Timeline visiblePrompt·12 and historyPrompt stay compact; accessibility text expands the15-minute rule."
+    },
+    "stateMotion": {
+      "verdict": "pass",
+      "evidence": "The focused within-window row retains its visible outline. Static copy introduces no motion. Modal over dimmed dashboard/navigation is intentional and no choice, Cancel action or explanatory note is covered."
+    },
+    "actualSize": {
+      "verdict": "pass",
+      "evidence": "Inspected normal dialog320/1440, weightedcard1440, normalfooter320 and actual125%dialog/footer320. The longer condition is fully readable and the footer remains above fixed navigation. Actual125% capture snapshots computed font sizes before scaling and restores them between views, avoiding inheritance compounding. Intermediate history frames are references only; finalsource restores originalPrompt."
+    },
+    "rejectionRegression": {
+      "verdict": "pass",
+      "evidence": "VA-003: normal and enlarged320px choices retain approximately16–22px icon/point clearance,12–14px row gaps and distinct text/point columns; Cancel retains a separate row. VA-004: full changedfooter and its border stay above fixed navigation; modal/background layering is intentional. VA-001/002 mouse cases do not apply."
+    }
+  },
+  "motionRequired": false,
+  "rejectionLedgerSha256": "2a2a4b44e4360cbc9bbae4600dfb58c39c034596efaabb35c1f495e232d23bc8",
+  "rejectionsAddressed": [
+    {
+      "id": "VA-003",
+      "evidence": "Actual-size normal/125%text at320px retains roughly16–22px inner edge clearance and12–14px between choice rows; captions wrap without crowding the points."
+    },
+    {
+      "id": "VA-004",
+      "evidence": "Normal and125%footer images show the full revised footer/border above bottomnavigation. The dialog overlays only its intentionally dimmed background."
+    }
+  ],
+  "blockingIssues": [],
+  "verdict": "pass",
+  "ownerAcceptance": "not-requested",
+  "browser": "Firefox",
+  "limitations": [
+    "Intermediate longer history labels were not accepted as candidate visuals; root restored the originalPrompt label. Rejected-before references document an agent finding, not an owner rejection."
+  ]
+}

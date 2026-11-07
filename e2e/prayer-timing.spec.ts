@@ -8,6 +8,7 @@ for (const theme of ['dark', 'light']) {
       const control = await scenario({ now: '2026-11-05T18:00:00Z', settings: { theme, prayerEnabled: true } });
       await openApp(page);
       await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+      await expect(page.getByRole('region', { name: 'Prayer challenge' })).toContainText('12 points only within 15 minutes of the adhan.');
       for (const [name, timing, label] of [
         ['Fajr', 'prompt', 'Prayed promptly'],
         ['Dhuhr', 'within_window', 'Prayed within the time window'],
@@ -18,6 +19,7 @@ for (const theme of ['dark', 'light']) {
         await expect(dialog.getByRole('button')).toHaveCount(4);
         if (name === 'Fajr') {
           await expect(dialog.locator('.prayer-choice-points')).toHaveText(['12points', '8points', '2points']);
+          await expect(dialog).toContainText('Within 15 minutes of the adhan');
           await page.screenshot({ path: info.outputPath(`timing-${theme}-${width}.png`) });
           expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
         }
@@ -48,6 +50,7 @@ test('weighted competition shows points separately from complete prayers', async
   await openApp(page);
   const card = page.getByRole('region', { name: 'Prayer challenge' });
   await expect(card).toContainText('Sabah is leading');
+  await expect(card).toContainText('12 points only within 15 minutes of the adhan.');
   await expect(card.getByText('12 of 12 points', { exact: true })).toBeVisible();
   await expect(card.getByText('8 of 12 points', { exact: true })).toBeVisible();
   await expect(card.getByText('100% complete · 1 of 1 prayed', { exact: true })).toHaveCount(2);

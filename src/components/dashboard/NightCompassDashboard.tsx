@@ -49,7 +49,7 @@ interface PrayerStatusPresentation {
 
 function outcomePresentation(status: PrayerOutcomeStatus, timing?: PrayerTiming): PrayerStatusPresentation {
   if (timing && (status === 'on_time' || status === 'late')) {
-    const label = timing === 'prompt' ? 'Prompt' : timing === 'within_window' ? 'Within time' : 'Outside time';
+    const label = timing === 'prompt' ? 'Prompt, within 15 minutes of the adhan' : timing === 'within_window' ? 'Within time' : 'Outside time';
     const shortLabel = timing === 'prompt' ? 'Prompt' : timing === 'within_window' ? 'Within' : 'Outside';
     return { accessibleLabel: `${label}, ${prayerTimingPoints(timing)} challenge points`, icon: timing === 'prompt' ? '✦' : '✓', label: `${shortLabel} ·${prayerTimingPoints(timing)}` };
   }
