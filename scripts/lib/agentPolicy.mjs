@@ -279,7 +279,7 @@ export function findForbiddenLocalDateSlicing(rootDir, filePaths) {
   return findings
 }
 
-export function evaluateCiWorkflow(rawWorkflow) {
+export function evaluateCiWorkflow(rawWorkflow, lockedPlaywrightVersion) {
   const failures = []
   const passes = []
 
@@ -375,7 +375,6 @@ export function evaluateCiWorkflow(rawWorkflow) {
     'npm run test -- --config vite.config.ts',
     'name: e2e',
     'npm run test:e2e -- --fully-parallel --workers=2 --reporter=line',
-    'npx playwright install --with-deps firefox',
   ]
 
   for (const snippet of requiredEfficiencySnippets) {
@@ -386,6 +385,16 @@ export function evaluateCiWorkflow(rawWorkflow) {
 
   if (requiredEfficiencySnippets.every((snippet) => rawWorkflow.includes(snippet))) {
     passes.push('CI workflow cancels stale PR runs and runs the risk-matched unit and browser portfolios once.')
+  }
+
+  const e2eJob = rawWorkflow.split('\n  e2e:\n')[1]?.split(/\n {2}\S/u)[0] ?? ''
+  const browserImage = e2eJob.match(
+    /^    container:\n      image: mcr\.microsoft\.com\/playwright:v(\d+\.\d+\.\d+)-noble@sha256:[a-f0-9]{64}$/mu,
+  )
+  if (!browserImage || browserImage[1] !== lockedPlaywrightVersion || /playwright install|apt-get/u.test(e2eJob)) {
+    failures.push('The e2e job must use an official digest-pinned Playwright image matching the npm lockfile without reinstalling browsers.')
+  } else {
+    passes.push('The e2e job uses the digest-pinned Playwright image matching the npm lockfile.')
   }
 
   const requiredReceiptSnippets = [
@@ -632,7 +641,9 @@ export function evaluateAgentPolicy(rootDir) {
   }
 
   const ciWorkflowPath = resolve(rootDir, '.github', 'workflows', 'ci.yml')
-  const ciResult = evaluateCiWorkflow(readFileSync(ciWorkflowPath, 'utf8'))
+  const packageLock = JSON.parse(readFileSync(resolve(rootDir, 'package-lock.json'), 'utf8'))
+  const lockedPlaywrightVersion = packageLock.packages?.['node_modules/playwright']?.version
+  const ciResult = evaluateCiWorkflow(readFileSync(ciWorkflowPath, 'utf8'), lockedPlaywrightVersion)
   failures.push(...ciResult.failures)
   passes.push(...ciResult.passes)
 

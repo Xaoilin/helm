@@ -134,11 +134,15 @@ describe('hosted build and receipt policy boundaries', () => {
   });
 
   it('proves the checked-in CI workflow declares the required named gates', () => {
-    const result = evaluateCiWorkflow(
-      readFileSync(resolve(root, '.github/workflows/ci.yml'), 'utf8'),
-    );
+    const workflow = readFileSync(resolve(root, '.github/workflows/ci.yml'), 'utf8');
+    const lock = JSON.parse(readFileSync(resolve(root, 'package-lock.json'), 'utf8'));
+    const playwrightVersion = lock.packages['node_modules/playwright'].version;
+    const result = evaluateCiWorkflow(workflow, playwrightVersion);
     expect(result.failures).toEqual([]);
     expect(result.ok).toBe(true);
+    expect(evaluateCiWorkflow(workflow, '0.0.0').failures).toContain(
+      'The e2e job must use an official digest-pinned Playwright image matching the npm lockfile without reinstalling browsers.',
+    );
   });
 
   it('proves the web build emits the configured SPA fallback', () => {

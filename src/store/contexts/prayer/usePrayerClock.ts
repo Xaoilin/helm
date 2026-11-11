@@ -36,8 +36,7 @@ export function usePrayerClock({ scheduleTimeZone, onDayChange, onResume }: Pray
     todayRef.current = today;
   }, [today]);
 
-  // One interval for the page's life: the tick reads the latest zone and callback from refs, so a
-  // new timetable or callback never restarts the interval and delays a rollover by a full tick.
+  // The tick uses the latest zone and callback without moving the clock's next boundary.
   const scheduleTimeZoneRef = useRef(scheduleTimeZone);
   const onDayChangeRef = useRef(onDayChange);
   useEffect(() => {
@@ -46,6 +45,9 @@ export function usePrayerClock({ scheduleTimeZone, onDayChange, onResume }: Pray
   }, [onDayChange, scheduleTimeZone]);
 
   useEffect(() => {
+    const interval = PRAYER_REMINDERS.RUNTIME_TICK_MS;
+    // Wall-clock alignment lets the challenge refresh when a minute-based prayer time opens.
+    const schedule = () => window.setTimeout(tick, interval - Date.now() % interval);
     const tick = () => {
       const nextNow = new Date();
       const nextToday = getPrayerDateAt(nextNow, scheduleTimeZoneRef.current);
@@ -54,9 +56,10 @@ export function usePrayerClock({ scheduleTimeZone, onDayChange, onResume }: Pray
         todayRef.current = nextToday;
         onDayChangeRef.current();
       }
+      timeout = schedule();
     };
-    const interval = window.setInterval(tick, PRAYER_REMINDERS.RUNTIME_TICK_MS);
-    return () => window.clearInterval(interval);
+    let timeout = schedule();
+    return () => window.clearTimeout(timeout);
   }, []);
 
   useEffect(() => {

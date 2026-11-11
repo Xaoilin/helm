@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { competitionSchema } from '../src/services/backend/competitionContracts';
 import { expect, openApp, test } from './support/helm-fixture';
 
 for (const theme of ['dark', 'light']) {
@@ -162,4 +164,81 @@ test('failed historical comparisons hide the whole record and can be refreshed',
   await card.getByRole('button', { name: 'Refresh comparison' }).click();
   await expect(record.getByLabel('Sabah 0, Lina 0', { exact: true })).toBeVisible();
   await expect(record).toContainText('6 tied');
+});
+
+
+test('earned points lead and both prayer windows join the total at Dhuhr', async ({ page, scenario }, info) => {
+  await page.setViewportSize({ width: 1440, height: 950 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await scenario({ now: '2026-11-18T11:59:30Z', settings: { prayerEnabled: true }, prayer: { timings: { Dhuhr: '12:00' } } });
+  await page.clock.pauseAt(new Date('2026-11-18T11:59:53Z'));
+  const fixture = JSON.parse(readFileSync(new URL('../contracts/prayer-service/competition-unlocked.json', import.meta.url), 'utf8'));
+  const { self, partner } = competitionSchema.parse(fixture.body);
+  if (!partner) throw new Error('The unlocked competition fixture must contain both participants.');
+  let atDhuhr = false;
+  let dayReads = 0;
+  await page.route('**/api/prayer/v1/competition?*', async route => {
+    const query = new URL(route.request().url()).searchParams;
+    const from = query.get('from');
+    const to = query.get('to');
+    if (from === self.from && to === self.to) dayReads++;
+    if (from === '2026-10-01' && to === '2026-10-31') {
+      await route.fulfill({ json: { status: 'ready',
+        self: { ...self, from, to, onTime: 155, missed: 0, pointsEarned: 1860, pointsAvailable: 1860 },
+        partner: { ...partner, from, to, pending: 0 },
+      } });
+      return;
+    }
+    await route.fulfill({ json: { status: 'ready', self: { ...self, from, to },
+      partner: { ...partner, from, to, pending: atDhuhr ? partner.pending : 0 } } });
+  });
+  await openApp(page);
+  const card = page.getByRole('region', { name: 'Prayer challenge' });
+  await card.getByRole('button', { name: 'Day', exact: true }).click();
+  const sabah = card.locator('.prayer-challenge-player.is-sabah');
+  const lina = card.locator('.prayer-challenge-player.is-lina');
+  await expect(sabah.locator('.prayer-challenge-score')).toHaveText('20 pts');
+  await expect(sabah.getByLabel('Leading', { exact: true })).toBeVisible();
+  await expect(lina.locator('.prayer-challenge-score')).toHaveText('12 pts');
+  await expect(lina).toContainText('1 of 1 prayed');
+  await expect(card).toContainText('Sabah is leading');
+  const currentReads = dayReads;
+  await lina.evaluate(node => { (node as HTMLElement).dataset.retained = 'true'; });
+
+  await page.clock.runFor(6_999);
+  await expect(lina).toContainText('1 of 1 prayed');
+  expect(dayReads).toBe(currentReads);
+
+  atDhuhr = true;
+  await page.clock.runFor(1);
+  await expect(lina).toContainText('1 of 3 prayed');
+  await expect(lina).toContainText('36 points available');
+  await expect(lina.locator('.prayer-challenge-score')).toHaveText('12 pts');
+  await expect(lina.getByRole('img', { name: 'Lina: 1 on time, 0 late, 0 missed, 2 pending' })).toBeVisible();
+  await expect(card).toContainText('Sabah is leading');
+  await expect(lina).toHaveAttribute('data-retained', 'true');
+  await card.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('unlocked-1440.png') });
+
+  await page.setViewportSize({ width: 320, height: 1_020 });
+  await card.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  expect(await card.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('unlocked-320.png') });
+
+  await card.getByRole('button', { name: 'Month', exact: true }).click();
+  await card.getByRole('button', { name: 'Previous month', exact: true }).click();
+  await expect(sabah.locator('.prayer-challenge-score')).toHaveText('1860 pts');
+  await card.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.screenshot({ path: info.outputPath('largest-score-320.png') });
+
+  await card.evaluate(node => {
+    const elements = [node, ...node.querySelectorAll('*')].filter(element => element instanceof HTMLElement);
+    const fontSizes = elements.map(element => parseFloat(getComputedStyle(element).fontSize));
+    elements.forEach((element, index) => { element.style.fontSize = `${fontSizes[index] * 1.25}px`; });
+  });
+  const score = sabah.locator('.prayer-challenge-score');
+  expect(await score.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.setViewportSize({ width: 320, height: 1_125 });
+  await card.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.screenshot({ path: info.outputPath('largest-score-320-large-text.png') });
 });
