@@ -129,6 +129,8 @@ jobs:
       (github.event_name != 'workflow_dispatch' ||
         (inputs.tested_tree == '' && inputs.source_run_id == '' && inputs.source_pr == ''))
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -136,8 +138,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Install Firefox
-        run: npx playwright install --with-deps firefox
       - name: Run blocking E2E portfolio
         run: npm run test:e2e -- --fully-parallel --workers=2 --reporter=line
 
