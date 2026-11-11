@@ -52,7 +52,8 @@ test('Quran reading keeps Arabic visible and can retry an unavailable English tr
   await scenario({ now: '2026-09-30T12:00:00Z' });
   let unavailable = true;
   let recoveredRequests = 0;
-  await page.route(/^https:\/\/api\.quran\.com\/api\/v4\/quran\/translations\/20\?/u, route => {
+  const translationUrl = /^https:\/\/api\.quran\.com\/api\/v4\/quran\/translations\/20\?/u;
+  await page.route(translationUrl, route => {
     const headers = { 'Access-Control-Allow-Origin': '*' };
     if (unavailable) return route.fulfill({ status: 503, headers, json: { error: 'Provider unavailable' } });
     // Keep the outage and recovery in one handler instead of falling through a second route.
@@ -62,6 +63,7 @@ test('Quran reading keeps Arabic visible and can retry an unavailable English tr
       translations: [{ resource_id: 20, verse_key: verseKey, text: quranVerseFixture(verseKey) }],
     } });
   });
+  const failedResponse = page.waitForResponse(response => translationUrl.test(response.url()) && response.status() === 503);
   await openApp(page);
   const card = page.getByRole('complementary', { name: 'Daily Quran reading' });
   const passage = getQuranMotivationForDate('2026-09-30');
@@ -69,6 +71,8 @@ test('Quran reading keeps Arabic visible and can retry an unavailable English tr
   await expect(card.getByRole('alert')).toContainText('English translation unavailable.');
   await expect(card.getByRole('link', { name: 'Translation source', exact: true }))
     .toHaveAttribute('href', `${passage.sourceUrl}?translations=20`);
+  // Let Firefox finish the intercepted 503 before retrying the same URL.
+  await (await failedResponse).finished();
   unavailable = false;
   await card.getByRole('button', { name: 'Retry Quran.com translation', exact: true }).click();
   await expect.poll(() => recoveredRequests).toBeGreaterThan(0);
