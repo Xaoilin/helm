@@ -16,20 +16,23 @@ function Player({ name, summary, leading, showPoints }: {
 }) {
   const completion = summary ? competitionScore(summary) : null;
   const points = summary && showPoints ? competitionPoints(summary) : null;
-  const score = points ?? completion;
+  const pending = summary?.pending ?? 0;
+  const completionPercentage = completion?.percentage;
   return <div className={`prayer-challenge-player ${name === 'Lina' ? 'is-lina' : 'is-sabah'}`}>
     <div className="prayer-challenge-name"><span className="prayer-challenge-avatar" aria-hidden="true">{name[0]}</span>
       <strong>{name}</strong>{leading && <span className="prayer-challenge-crown" aria-label="Leading">♛</span>}</div>
-    {points && <div className="prayer-challenge-score-caption">Challenge score</div>}
-    <div className="prayer-challenge-score">{score?.percentage == null ? '—' : <>{score.percentage}<span>%</span></>}</div>
-    <div className="prayer-challenge-count">{points ? `${points.earned} of ${points.available} points` : completion ? `${completion.completed} of ${completion.total} prayed` : 'Waiting for totals'}</div>
-    {points && completion && <div className="prayer-challenge-completion">{completion.percentage ?? '—'}% complete · {completion.completed} of {completion.total} prayed</div>}
+    <div className="prayer-challenge-score">{points
+      ? points.available > 0 ? <>{points.earned}<span className="prayer-challenge-point-unit"> pts</span></> : '—'
+      : completionPercentage == null ? '—' : <>{completionPercentage}<span>%</span></>}</div>
+    <div className="prayer-challenge-count">{points ? `${points.available} points available` : completion ? `${completion.completed} of ${completion.total} prayed` : 'Waiting for totals'}</div>
+    {points && completion && <div className="prayer-challenge-completion">{completion.completed} of {completion.total} prayed</div>}
     <div className="prayer-challenge-track" role="img"
-      aria-label={summary ? `${name}: ${summary.onTime} on time, ${summary.late} late, ${summary.missed} missed` : `${name}: totals unavailable`}>
+      aria-label={summary ? `${name}: ${summary.onTime} on time, ${summary.late} late, ${summary.missed} missed${pending ? `, ${pending} pending` : ''}` : `${name}: totals unavailable`}>
       {summary && completion && completion.total > 0 && <>
         <span className="challenge-on-time" style={{ width: `${summary.onTime / completion.total * 100}%` }} />
         <span className="challenge-late" style={{ width: `${summary.late / completion.total * 100}%` }} />
         <span className="challenge-missed" style={{ width: `${summary.missed / completion.total * 100}%` }} />
+        {pending > 0 && <span className="challenge-pending" style={{ width: `${pending / completion.total * 100}%` }} />}
       </>}
     </div>
   </div>;
@@ -62,6 +65,7 @@ export default function PrayerCompetitionCard() {
   const loading = current === null;
   const leader = data?.partner ? competitionLeader(data.self, data.partner) : null;
   const showPoints = Boolean(data && competitionPoints(data.self) && (!data.partner || competitionPoints(data.partner)));
+  const hasPending = Boolean(data?.self.pending || data?.partner?.pending);
   const pointsPending = Boolean(data?.partner && Boolean(competitionPoints(data.self)) !== Boolean(competitionPoints(data.partner)));
   const headline = !data?.partner ? 'A little friendly competition'
     : pointsPending ? 'Point totals are updating…'
@@ -87,12 +91,13 @@ export default function PrayerCompetitionCard() {
       <Player name={PARTNER} summary={data?.partner ?? null} leading={leader === 'partner'} showPoints={showPoints} />
     </div>
     <div className="prayer-challenge-key" aria-label="Chart key"><span><i className="challenge-on-time" />On time</span>
-      <span><i className="challenge-late" />Late</span><span><i className="challenge-missed" />Missed</span></div>
+      <span><i className="challenge-late" />Late</span><span><i className="challenge-missed" />Missed</span>
+      {hasPending && <span><i className="challenge-pending" />Pending</span>}</div>
     <PrayerCompetitionRecord today={today} period={selectedPeriod} selectedDate={range.from} sessionKey={sessionKey} attempt={attempt} comparison={data} />
     {current?.error && <p className="prayer-challenge-message" role="alert">{current.error}</p>}
     {data?.status === 'not_connected' && <p className="prayer-challenge-message">Your shared challenge isn’t connected yet. Your own totals are shown.</p>}
     {data?.status === 'unavailable' && <p className="prayer-challenge-message" role="status">{PARTNER}’s totals are temporarily unavailable. Try refreshing.</p>}
-    <div className="prayer-challenge-footer"><small>{showPoints ? `Challenge score · Prompt ${PRAYER_TIMING_POINTS.prompt} · Within ${PRAYER_TIMING_POINTS.within_window} · Outside ${PRAYER_TIMING_POINTS.outside_window}` : 'Completion rate · On time + late'}<br />{PRAYER_TIMING_POINTS.prompt} points only within 15 minutes of the adhan.<br />Pending and non-obligatory prayers don’t affect the score.</small>
+    <div className="prayer-challenge-footer"><small>{showPoints ? `Points · Prompt ${PRAYER_TIMING_POINTS.prompt} · Within ${PRAYER_TIMING_POINTS.within_window} · Outside ${PRAYER_TIMING_POINTS.outside_window}` : 'Completion rate · On time + late'}<br />{PRAYER_TIMING_POINTS.prompt} points only within 15 minutes of the adhan.<br />Prayer windows count as soon as they open.</small>
       <button type="button" className="btn btn-secondary btn-sm" disabled={loading} onClick={() => setAttempt(value => value + 1)}>
         Refresh<span className="sr-only"> comparison</span></button></div>
   </section>;

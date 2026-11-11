@@ -38,6 +38,17 @@ describe('usePrayerClock', () => {
     expect(onDayChange).not.toHaveBeenCalled();
   });
 
+  it('updates at the minute boundary when mounted partway through a minute', () => {
+    vi.setSystemTime(new Date('2026-11-18T11:59:53Z'));
+    const { result } = renderClock();
+
+    act(() => { vi.advanceTimersByTime(6_999); });
+    expect(result.current.now.toISOString()).toBe('2026-11-18T11:59:53.000Z');
+
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(result.current.now.toISOString()).toBe('2026-11-18T12:00:00.000Z');
+  });
+
   it('reports the prayer-date rollover once, at the schedule zone midnight', () => {
     // 23:59:50 in London (UTC+1) is 22:59:50Z.
     vi.setSystemTime(new Date('2026-09-26T22:59:50Z'));

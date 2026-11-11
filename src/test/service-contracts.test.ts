@@ -25,6 +25,8 @@ const CONTRACT_SCHEMAS = {
   'prayer-service/competition-summary': competitionSummarySchema,
   'prayer-service/competition-summary-weighted': competitionSummarySchema,
   'prayer-service/competition-weighted': competitionSchema,
+  'prayer-service/competition-unlocked': competitionSchema,
+  'prayer-service/competition-summary-unlocked': competitionSummarySchema,
   ...SERVICE_SCHEMAS, ...LIFE_CONTRACT_SCHEMAS, ...ACTIVITY_CONTRACT_SCHEMAS, ...KNOWLEDGE_CONTRACT_SCHEMAS,
   ...PLANNER_CONTRACT_SCHEMAS, ...LIVE_CONTRACT_SCHEMAS, ...FINANCE_CONTRACT_SCHEMAS,
 };

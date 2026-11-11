@@ -1,4 +1,5 @@
 import { PRAYER_BACKEND_URL } from '../config';
+import { PRAYER_TIMING_POINTS } from '../config/prayerCompetition';
 import type { PrayerCompetition, PrayerCompetitionSummary } from '../types/domain';
 import { callService } from './backend/serviceClient';
 import { competitionSchema } from './backend/competitionContracts';
@@ -44,24 +45,32 @@ export function competitionRange(today: string, period: CompetitionPeriod, offse
 
 export function competitionScore(summary: PrayerCompetitionSummary) {
   const completed = summary.onTime + summary.late;
-  const total = completed + summary.missed;
+  const total = completed + summary.missed + (summary.pending ?? 0);
   return { completed, total, percentage: total ? Math.round(completed / total * 100) : null };
 }
 
 export function competitionPoints(summary: PrayerCompetitionSummary) {
   if (summary.pointsEarned === undefined || summary.pointsAvailable === undefined) return null;
-  return { earned: summary.pointsEarned, available: summary.pointsAvailable,
-    percentage: summary.pointsAvailable ? Math.round(summary.pointsEarned / summary.pointsAvailable * 100) : null };
+  return {
+    earned: summary.pointsEarned,
+    available: summary.pointsAvailable + (summary.pending ?? 0) * PRAYER_TIMING_POINTS.prompt,
+  };
 }
 
 export function competitionLeader(self: PrayerCompetitionSummary, partner: PrayerCompetitionSummary): 'self' | 'partner' | 'tie' | null {
   const selfPoints = competitionPoints(self);
   const partnerPoints = competitionPoints(partner);
   if (Boolean(selfPoints) !== Boolean(partnerPoints)) return null;
-  const a = selfPoints && partnerPoints ? { completed: selfPoints.earned, total: selfPoints.available } : competitionScore(self);
-  const b = selfPoints && partnerPoints ? { completed: partnerPoints.earned, total: partnerPoints.available } : competitionScore(partner);
-  if (!a.total || !b.total) return null;
-  // Compare exact fractions; display rounding must never decide the winner.
-  const difference = a.completed * b.total - b.completed * a.total;
+  let difference: number;
+  if (selfPoints && partnerPoints) {
+    if (!selfPoints.available || !partnerPoints.available) return null;
+    difference = selfPoints.earned - partnerPoints.earned;
+  } else {
+    const a = competitionScore(self);
+    const b = competitionScore(partner);
+    if (!a.total || !b.total) return null;
+    // Legacy summaries have no earned points, so compare exact completion fractions.
+    difference = a.completed * b.total - b.completed * a.total;
+  }
   return difference === 0 ? 'tie' : difference > 0 ? 'self' : 'partner';
 }

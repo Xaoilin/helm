@@ -51,9 +51,9 @@ test('weighted competition shows points separately from complete prayers', async
   const card = page.getByRole('region', { name: 'Prayer challenge' });
   await expect(card).toContainText('Sabah is leading');
   await expect(card).toContainText('12 points only within 15 minutes of the adhan.');
-  await expect(card.getByText('12 of 12 points', { exact: true })).toBeVisible();
-  await expect(card.getByText('8 of 12 points', { exact: true })).toBeVisible();
-  await expect(card.getByText('100% complete · 1 of 1 prayed', { exact: true })).toHaveCount(2);
+  await expect(card.locator('.prayer-challenge-score')).toHaveText(['12 pts', '8 pts']);
+  await expect(card.getByText('12 points available', { exact: true })).toHaveCount(2);
+  await expect(card.getByText('1 of 1 prayed', { exact: true })).toHaveCount(2);
   await card.scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('weighted-competition.png') });
 });
@@ -104,7 +104,7 @@ test('refresh keeps confirmed values and card elements mounted until new values 
   });
   await openApp(page);
   const card = page.getByRole('region', { name: 'Prayer challenge' });
-  await expect(card).toContainText('12 of 12 points');
+  await expect(card.locator('.prayer-challenge-score')).toHaveText(['12 pts', '8 pts']);
   const record = card.getByRole('group', { name: 'Monthly record' });
   await expect(record).toHaveAttribute('aria-busy', 'false');
   await card.scrollIntoViewIfNeeded();
@@ -118,7 +118,7 @@ test('refresh keeps confirmed values and card elements mounted until new values 
   }));
   hold = new Promise(resolve => { release = resolve; });
   await card.getByRole('button', { name: 'Refresh comparison' }).click();
-  await expect(card).toContainText('12 of 12 points');
+  await expect(card.locator('.prayer-challenge-score')).toHaveText(['12 pts', '8 pts']);
   await expect(card).not.toContainText('Loading your comparison');
   await expect(record).not.toContainText('Loading record');
   await page.screenshot({ path: info.outputPath('refresh-held.png') });
@@ -132,10 +132,10 @@ test('refresh keeps confirmed values and card elements mounted until new values 
   points = 8;
   hold = null;
   release();
-  await expect(card.getByText('8 of 12 points', { exact: true })).toHaveCount(2);
+  await expect(card.locator('.prayer-challenge-score')).toHaveText(['8 pts', '8 pts']);
   expect(await anchors.evaluateAll(nodes => nodes.every((node, i) => (node as HTMLElement).dataset.retained === String(i)))).toBe(true);
   fail = true;
   await card.getByRole('button', { name: 'Refresh comparison' }).click();
   await expect(card.getByRole('alert')).toContainText('Refresh failed');
-  await expect(card.getByText('8 of 12 points', { exact: true })).toHaveCount(2);
+  await expect(card.locator('.prayer-challenge-score')).toHaveText(['8 pts', '8 pts']);
 });

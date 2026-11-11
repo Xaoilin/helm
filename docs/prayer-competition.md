@@ -2,9 +2,9 @@
 
 Requested by Sabah on 4 November 2026 for both Lina One and Sabah One.
 
-The dashboard compares prayer completion for a calendar month (default), Monday–Sunday week, or day. Previous periods are browsable. Challenge scores use 12 points for prayer within 15 minutes of the adhan, 8 within the time window, and 2 outside it, divided by 12 times eligible prayer opportunities. Completion percentages remain separate. Historical untimed completed prayers retain full 12-point credit. Pending, unclassified, pre-tracking and non-obligatory prayers are excluded by the existing prayer statistics service. Exact fractions decide the leader; rounded percentages are display only. An empty denominator has no score or winner.
+The dashboard compares earned prayer points for a calendar month (default), Monday–Sunday week, or day. Previous periods are browsable. Each prayer earns 12 points within 15 minutes of the adhan, 8 within the time window, or 2 outside it. Historical untimed completed prayers retain 12-point credit. Higher earned points lead and equal earned points tie when both participants have eligible prayers. The card separately shows available points and prayers completed.
 
-The card refreshes on confirmed prayer changes, once per minute while mounted, and through Refresh. Account/session changes and superseded requests cannot reuse another account or period’s response. No totals or credentials are persisted in the browser. A missing partner is shown as unavailable, never as a zero score.
+Each prayer joins the eligible total when its recording window opens. Dhuhr opens both Dhuhr and Asr; Maghrib opens both Maghrib and Isha. Open, unrecorded prayers are pending and earn zero points. Future, unclassified, pre-tracking and non-obligatory prayers are excluded. The card refreshes on confirmed prayer changes, at each wall-clock minute while mounted, on return from a later minute, and through Refresh. Account/session changes and superseded requests cannot reuse another account or period’s response. No totals or credentials are persisted in the browser. A missing partner is shown as unavailable, never as a zero score.
 
 ## Win record
 
@@ -14,11 +14,10 @@ days in the displayed month, with no results before the start. Week counts
 completed Monday–Sunday weeks beginning on or after the start; the partial week
 containing 1 November is excluded. Month counts completed calendar months from
 November onward. A current day can count immediately when both participants have completed every required prayer. A current week or month can count early only on its last date and only when both whole periods are complete; future dates never settle early.
-Ties and periods without eligible scores are shown separately.
+Ties and periods without eligible scores are shown separately. The tally uses the same earned-points rule as current progress, including when displaying past results.
 
 The browser derives this record from the existing authenticated totals-only
-comparisons, with at most three reads in flight. No new sharing fields,
-credentials, individual prayer records or browser-persisted results are added.
+comparisons, with at most three reads in flight.
 Completed results load on entering a record window, calendar-day rollover or
 explicit Refresh, not on each minute's progress update. Changing accounts or
 views discards superseded results and stops scheduling their remaining reads.
@@ -27,12 +26,16 @@ showing a partial result as complete. Refresh retries it.
 
 ## Narrow sharing boundary
 
-The two products keep separate Auth, databases, services and deployment identities. This requested comparison introduces only an explicitly configured, read-only exchange of period totals. The summary contains `from`, `to`, `asOf`, `onTime`, `late`, `missed`, paired optional `pointsEarned`/`pointsAvailable`, and optional `allPrayed`. It contains no account IDs, individual prayer records, cycle dates, exemption counts, notes, location or other account data. Totals can still reveal patterns; pairing requires explicit owner activation.
+The two products keep separate Auth, databases, services and deployment identities. This requested comparison introduces only an explicitly configured, read-only exchange of period totals. The summary contains `from`, `to`, `asOf`, `onTime`, `late`, `missed`, paired optional `pointsEarned`/`pointsAvailable`, optional `allPrayed`, and optional `pending`. The latter counts only open unrecorded prayer windows. The wire `pointsAvailable` field still covers classified outcomes. Each browser adds 12 points of capacity per pending prayer. It contains no account IDs, individual prayer records, cycle dates, exemption counts, notes, location or other account data. Totals can still reveal patterns; pairing requires explicit owner activation.
 
 - `GET /api/prayer/v1/competition?from=YYYY-MM-DD&to=YYYY-MM-DD` uses this product’s signed-in account. Only the configured owner receives the configured partner. Other accounts see their own totals and `not_connected`. OAuth client tokens are refused until a prayer agent contract is delivered.
 - `GET /api/prayer/v1/competition/summary` uses a separate server-only `X-Prayer-Competition-Key`, scoped to the configured owner and this one read-only route. It cannot authorize ordinary prayer reads or writes. Requests without the exact key are rejected before database access.
 - Both responses use `Cache-Control: no-store`. Ranges are bounded to 31 days. Peer reads have 2-second connection and 3-second response limits, refuse redirects, and validate matching dates, recent timestamps and bounded counts. Failures preserve the owner’s totals and show an unavailable partner.
-- Shared fixtures `competition.json`, `competition-summary.json` and `competition-not-connected.json` are checked by provider integration tests and consumer runtime schemas. Synthetic browser tests cover period navigation, keyboard operation, responsive designs, ties, empty scores and failures.
+- Shared fixtures, including `competition-unlocked.json` and `competition-summary-unlocked.json`, are checked by provider integration tests and consumer runtime schemas. Synthetic browser tests cover period navigation, keyboard operation, responsive designs, ties, empty scores and failures.
+
+## Sabah One and Lina One parity
+
+Changes to shared prayer challenge scoring, eligibility, win records or card behavior require matching changes and regression coverage in both products. Keep the unlocked competition and summary fixtures byte-identical across both browsers and the Sabah One provider. Test both participant orderings and exercise the prayer-opening update in Firefox. Run both products’ contract and release checks before shipping a shared change. Keep product credentials, locations, records and deployments independent.
 
 ## Activation and rollback
 
@@ -72,4 +75,4 @@ Existing fully legacy comparisons keep their completion meaning. The additive
 backend must be deployed before this consumer. All external-agent Prayer MCP
 limitations described above remain in force.
 
-Prompt means within 15 minutes of the adhan. This remains self-reported: the app does not infer the prayer time from when an entry is logged. Timing weights and backend rules are unchanged.
+Prompt means within 15 minutes of the adhan. This remains self-reported: the app does not infer the prayer time from when an entry is logged. The same timing weights apply in both products.

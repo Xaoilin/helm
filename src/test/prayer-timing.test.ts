@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import unlocked from '../../contracts/prayer-service/competition-unlocked.json';
 import { competitionLeader, competitionPoints } from '../services/prayerCompetition';
 import { competitionSummarySchema } from '../services/backend/competitionContracts';
 import { PRAYER_TIMING_CHOICES, prayerTimingPoints } from '../services/prayerTiming';
@@ -39,12 +40,26 @@ describe('weighted prayer competition', () => {
   it('distinguishes prompt, within and outside despite identical completion', () => {
     expect(competitionLeader(summary(12), summary(8))).toBe('self');
     expect(competitionLeader(summary(8), summary(2))).toBe('self');
-    expect(competitionPoints(summary(8))).toEqual({ earned: 8, available: 12, percentage: 67 });
+    expect(competitionPoints(summary(8))).toMatchObject({ earned: 8, available: 12 });
   });
-  it('normalises opportunities and compares exact fractions', () => {
-    expect(competitionLeader(summary(12, 24), summary(8))).toBe('partner');
-    expect(competitionLeader(summary(16, 24), summary(8))).toBe('tie');
+  it('ranks earned points even when the other participant has a higher percentage', () => {
+    const { self, partner } = unlocked.body;
+    const beforeDhuhr = { ...partner, pending: 0 };
+    expect(competitionLeader(self, beforeDhuhr)).toBe('self');
+    expect(competitionLeader(partner, self)).toBe('partner');
+    expect(competitionLeader(self, partner)).toBe('self');
+    expect(competitionLeader(summary(8, 24), summary(8))).toBe('tie');
     expect(competitionLeader(summary(0, 0), summary(8))).toBeNull();
+    expect(competitionLeader({ ...summary(0, 0), pending: 1 }, summary(8))).toBe('partner');
+  });
+
+  it('includes open pending windows in available points without changing earned points', () => {
+    const { partner } = unlocked.body;
+    expect(competitionPoints(partner)).toEqual({ earned: 12, available: 36 });
+    expect(competitionSummarySchema.parse(partner).pending).toBe(2);
+    for (const pending of [-1, 1.5, 5]) {
+      expect(competitionSummarySchema.safeParse({ ...partner, pending }).success).toBe(false);
+    }
   });
   it('keeps old summary responses usable and refuses inconsistent points', () => {
     const legacy = { ...summary(12) };

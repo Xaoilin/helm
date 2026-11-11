@@ -1183,6 +1183,8 @@ export type FinanceReviewDraft = Omit<FinanceReview, 'id' | 'createdAt' | 'updat
 /** Read-only prayer challenge totals. Non-obligatory, future and unclassified prayers are excluded. */
 export interface PrayerCompetitionSummary {
   allPrayed?: boolean;
+  /** Unrecorded required prayers whose recording window is open. */
+  pending?: number;
   pointsEarned?: number;
   pointsAvailable?: number;
   from: string;

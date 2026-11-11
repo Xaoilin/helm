@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/prayer/v1/competition/summary"
+  },
+  "status": 200,
+  "body": {
+    "from": "2026-11-18",
+    "to": "2026-11-18",
+    "asOf": "2026-11-18T12:00:00Z",
+    "onTime": 1,
+    "late": 0,
+    "missed": 0,
+    "pointsEarned": 12,
+    "pointsAvailable": 12,
+    "allPrayed": false,
+    "pending": 2
+  }
+}

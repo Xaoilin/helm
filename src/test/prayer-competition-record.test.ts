@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import unlocked from '../../contracts/prayer-service/competition-unlocked.json';
 import { competitionRecordWindow, includeFinishedCurrentPeriod, loadCompetitionRecord } from '../services/prayerCompetitionRecord';
 import type { PrayerCompetition, PrayerCompetitionSummary } from '../types/domain';
 
@@ -34,6 +35,16 @@ describe('prayer competition record', () => {
     const read = vi.fn(async () => results.shift()!);
     expect(await loadCompetitionRecord(competitionRecordWindow('2026-11-08', 'day', '2026-11-08').periods, () => true, read))
       .toEqual({ self: 1, partner: 4, ties: 1, unscored: 1 });
+  });
+
+  it('awards a historical win to the participant with more earned points', async () => {
+    const { self, partner } = unlocked.body;
+    const period = competitionRecordWindow('2026-11-19', 'day', self.from).periods.at(-1)!;
+    const read = async (): Promise<PrayerCompetition> => ({
+      status: 'ready', self, partner: { ...partner, pending: 0 },
+    });
+    expect(await loadCompetitionRecord([period], () => true, read))
+      .toEqual({ self: 1, partner: 0, ties: 0, unscored: 0 });
   });
 
   it('does not publish a partial tally when a partner is missing or a request fails', async () => {
