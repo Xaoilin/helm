@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-17T20:45:38Z",
+  "updatedAt": "2026-11-17T21:16:01Z",
   "stories": [
     {
       "id": "8f6af8c44a4a1bfb5de3",
@@ -124,6 +124,19 @@
       "featured": false
     },
     {
+      "id": "73687e4d2d12cc3c627a",
+      "title": "See what 5 builders are making with Gemini 4 Carbon",
+      "summary": "See what 5 builders are making with Gemini 4 Carbon.",
+      "publishedAt": "2026-11-17T21:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/products-and-platforms/products/gemini/gemini-4-carbon-builders/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "830da74434e8505c737e",
       "title": "Put Gemini to work for you",
       "summary": "Tasks in Gemini is now free of charge in six countries, with new features starting in the U.S. and deeper Google Workspace…",
@@ -176,9 +189,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50523459",
-          "points": 321,
+          "points": 322,
           "comments": 207,
-          "observedAt": "2026-11-17T20:17:01Z"
+          "observedAt": "2026-11-17T21:16:01Z"
         }
       ],
       "featured": false
@@ -330,19 +343,6 @@
       "featured": false
     },
     {
-      "id": "8ec21efa2c62273428cb",
-      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-16T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/openrouter"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
       "id": "c4c251e9251d06d7feff",
       "title": "Claude Platform: Self hosted managed agents",
       "summary": "We’ve launched self-hosted Claude Managed Agents. You run the whole Managed Agents service, not only self-hosted sandboxes, on your own infrastructure, and…",
@@ -377,6 +377,19 @@
       "source": {
         "label": "Codex",
         "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-12-app"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "8ec21efa2c62273428cb",
+      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-16T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/openrouter"
       },
       "discussions": [],
       "featured": false
@@ -450,19 +463,6 @@
       "source": {
         "label": "Claude Code",
         "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.322"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "fe0068430e3bdf2a7001",
-      "title": "Codex CLI Release: 0.167.1",
-      "summary": "Changelog Full Changelog: rust-v0.167.0...rust-v0.167.1",
-      "publishedAt": "2026-11-10T00:00:00Z",
-      "category": "coding",
-      "source": {
-        "label": "Codex",
-        "url": "https://developers.openai.com/codex/changelog/#github-release-440934118"
       },
       "discussions": [],
       "featured": false
