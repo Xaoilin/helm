@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-17T23:14:57Z",
+  "updatedAt": "2026-11-17T23:45:15Z",
   "stories": [
     {
       "id": "8f6af8c44a4a1bfb5de3",
@@ -121,6 +121,19 @@
           "observedAt": "2026-11-17T19:42:52Z"
         }
       ],
+      "featured": false
+    },
+    {
+      "id": "8f7a055a1b360233ad87",
+      "title": "Claude Code v2.1.327",
+      "summary": "Added a confirmation before /install-github-app changes a repository Added claude mcp add-json <name> - to read the server's JSON from stdin, so…",
+      "publishedAt": "2026-11-17T23:17:45Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Code",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.327"
+      },
+      "discussions": [],
       "featured": false
     },
     {
@@ -450,19 +463,6 @@
       "source": {
         "label": "Google Gemini",
         "url": "https://blog.google/products-and-platforms/platforms/android/gemini-intelligence-november-features-devices/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "dbc58eacee5d52ba9f93",
-      "title": "Claude Code v2.1.322",
-      "summary": "Added fast mode on Vertex in the global, us and eu regions, falling back to standard speed if Vertex refuses it",
-      "publishedAt": "2026-11-10T02:29:43Z",
-      "category": "coding",
-      "source": {
-        "label": "Claude Code",
-        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.322"
       },
       "discussions": [],
       "featured": false
