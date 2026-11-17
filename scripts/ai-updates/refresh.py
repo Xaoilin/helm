@@ -1,0 +1,523 @@
+"""Build Sabah One's public AI briefing from primary feeds and Hacker News."""
+
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
+from functools import partial
+import gzip
+import hashlib
+from html.parser import HTMLParser
+from http.client import HTTPException
+import io
+import json
+from pathlib import Path
+import re
+import sys
+from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.request import Request, urlopen
+import xml.etree.ElementTree as ET
+
+MAX_AGE = timedelta(days=14)
+FEATURE_AGE = timedelta(days=3)
+MAX_STORIES = 30
+MAX_BYTES = 8_000_000
+MAX_DISCUSSIONS = 2
+
+# Only these endpoints (and recent dated DeepSeek announcements) are fetched.
+FEEDS = (
+    ("OpenAI", "https://openai.com/news/rss.xml?lang=en", "news"),
+    ("Codex", "https://learn.chatgpt.com/docs/changelog/rss.xml", "codex"),
+    ("Claude Platform", "https://platform.claude.com/docs/en/release-notes/feed.xml", "claude"),
+    ("Claude Code", "https://github.com/anthropics/claude-code/releases.atom", "coding"),
+    ("Google DeepMind", "https://deepmind.google/blog/rss.xml", "news"),
+    ("Google Gemini", "https://blog.google/products-and-platforms/products/gemini/rss/", "news"),
+    ("Hugging Face", "https://huggingface.co/blog/feed.xml", "community"),
+)
+DEEPSEEK_SITEMAP = "https://api-docs.deepseek.com/sitemap.xml"
+HN_SEARCH = "https://hn.algolia.com/api/v1/search"
+CURATED_PATH = Path(__file__).with_name("curated.json")
+
+CODING = re.compile(
+    r"\b(?:codex|claude code|coding agent|coding tool|copilot|cursor|gemini cli|opencode|"
+    r"open[- ]?hands|windsurf|developer tool|agentic coding)\b", re.I
+)
+MODELS = re.compile(
+    r"\b(?:gpt[- ]?\d|claude|gemini|deepseek|qwen|mistral|llama|grok|kimi|glm[- ]?\d|"
+    r"gemma|open[- ]weight|open model|language model|reasoning model|foundation model|"
+    r"model release|new models?|model family|model weights|model pricing)\b", re.I
+)
+RESEARCH = re.compile(
+    r"\b(?:benchmark|evaluations?|research|inference|fine[- ]tun\w*|machine learning|"
+    r"neural network|arxiv|language models?|llms?|model training)\b", re.I
+)
+IMPACT = re.compile(
+    r"\b(?:introducing|announcing|launch(?:es|ed)?|releas(?:e[sd]?|ing)|now available|"
+    r"general(?:ly)? availab(?:le|ility)|open[- ]weight|new models?|new model family|"
+    r"pricing|price cut|usage limits?)\b", re.I
+)
+SOCIAL_HOSTS = {"reddit.com", "x.com", "twitter.com"}
+MODEL_VERSION = re.compile(
+    r"\b(gpt|gemini|claude|deepseek|qwen|mistral|gemma|glm)\s*[- ]?\s*"
+    r"(?:(astra|sol|opus|sonnet|haiku|fable|carbon|hydrogen|helium)[- ]+)?"
+    r"(v?\d+(?:\.\d+)*)(?![\w.])", re.I
+)
+
+
+class PageText(HTMLParser):
+    """Keep text and link targets only, without copying source markup."""
+
+    def __init__(self, markup):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.links = []
+        self.description = ""
+        self.title = ""
+        self.feed(markup)
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        if tag in {"p", "br", "li", "h1", "h2", "h3", "div"}:
+            self.parts.append(" ")
+        if tag == "a" and attributes.get("href"):
+            self.links.append(attributes["href"])
+        if tag == "meta" and attributes.get("name") == "description":
+            self.description = attributes.get("content", "")
+        if tag == "meta" and attributes.get("property") == "og:title":
+            self.title = attributes.get("content", "")
+
+    def handle_endtag(self, tag):
+        if tag in {"p", "li", "h1", "h2", "h3", "div"}:
+            self.parts.append(" ")
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+    @property
+    def text(self):
+        return " ".join("".join(self.parts).split())
+
+
+@dataclass
+class Candidate:
+    title: str
+    summary: str
+    date: datetime
+    category: str
+    label: str
+    url: str
+    official: bool = True
+    impact: bool = False
+    points: int = 0
+    discussions: list = field(default_factory=list)
+
+    def story(self, featured):
+        return {
+            "id": hashlib.sha256(canonical_url(self.url).encode()).hexdigest()[:20],
+            "title": self.title[:240],
+            "summary": self.summary[:650],
+            "publishedAt": iso_date(self.date),
+            "category": self.category,
+            "source": {"label": self.label, "url": self.url},
+            "discussions": self.discussions[:MAX_DISCUSSIONS],
+            "featured": featured,
+        }
+
+
+def fetch(url):
+    request = Request(url, headers={"User-Agent": "HELM AI Updates/1.0", "Accept-Encoding": "identity"})
+    with urlopen(request, timeout=12) as response:
+        data = response.read(MAX_BYTES + 1)
+    if data.startswith(b"\x1f\x8b"):
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as decoded:
+            data = decoded.read(MAX_BYTES + 1)
+    if len(data) > MAX_BYTES:
+        raise ValueError("source response exceeds size limit")
+    return data
+
+
+def read_date(value):
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        parsed = parsedate_to_datetime(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def optional_date(value):
+    try:
+        return read_date(value)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def iso_date(value):
+    return value.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def clean_url(value):
+    if not isinstance(value, str) or len(value) > 700 or re.search(r"[\s\\]", value):
+        return ""
+    try:
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.port:
+            return ""
+    except ValueError:
+        return ""
+    return parsed.geturl()
+
+
+def canonical_url(value):
+    parsed = urlsplit(value)
+    hostname = parsed.hostname.removeprefix("www.")
+    query = parsed.query if hostname in {"news.ycombinator.com", "youtube.com", "youtu.be"} else ""
+    return urlunsplit(("https", hostname, parsed.path.rstrip("/"), query, parsed.fragment))
+
+
+def discussion_url(url):
+    url = clean_url(url)
+    if not url:
+        return None
+    parsed = urlsplit(url)
+    hostname = parsed.hostname.removeprefix("www.")
+    if hostname == "reddit.com" and (subreddit := re.match(r"/r/([\w]+)/comments/([a-z0-9]+)", parsed.path, re.I)):
+        return {
+            "label": f"Reddit · r/{subreddit[1]}",
+            "url": f"https://www.reddit.com/r/{subreddit[1]}/comments/{subreddit[2]}/",
+        }
+    if hostname in {"x.com", "twitter.com"} and (post := re.fullmatch(r"/([\w]+)/status/(\d+)/?", parsed.path)):
+        return {"label": f"X · @{post[1]}", "url": f"https://x.com/{post[1]}/status/{post[2]}"}
+    return None
+
+
+def summary_text(text, label):
+    if not text:
+        return f"Details in the {label} release notes."
+    words = text.split()
+    return text if len(words) <= 22 else f"{' '.join(words[:22]).rstrip(',;:')}…"
+
+
+def category_for(title, text=""):
+    model_launch = IMPACT.search(title) or MODEL_VERSION.search(title) and "in Work and Codex" in title
+    if MODELS.search(title) and model_launch:
+        return "models"
+    if CODING.search(title):
+        return "coding"
+    if MODELS.search(title):
+        return "models"
+    if RESEARCH.search(title):
+        return "research"
+    # Some publisher release feeds use generic date-based titles.
+    if CODING.search(text):
+        return "coding"
+    if MODELS.search(text):
+        return "models"
+    if RESEARCH.search(text):
+        return "research"
+    return None
+
+
+def feed_entries(data):
+    root = ET.fromstring(data)
+    if root.tag == "rss":
+        entries = root.findall("./channel/item")
+        for entry in entries[:70]:
+            yield (
+                entry.findtext("title", ""), entry.findtext("link", ""),
+                entry.findtext("pubDate", ""),
+                entry.findtext("description", ""),
+                entry.findtext("{http://purl.org/rss/1.0/modules/content/}encoded", ""),
+            )
+    elif root.tag.endswith("}feed"):
+        entries = root.findall("{*}entry")
+        for entry in entries[:70]:
+            link = entry.find("{*}link")
+            yield (
+                entry.findtext("{*}title", ""), link.get("href", "") if link is not None else "",
+                entry.findtext("{*}updated", ""),
+                entry.findtext("{*}summary", ""), entry.findtext("{*}content", ""),
+            )
+    else:
+        raise ValueError("expected RSS or Atom")
+    if not entries:
+        raise ValueError("RSS or Atom feed has no entries")
+
+
+def feed_candidates(feed, cutoff, get=fetch):
+    label, endpoint, mode = feed
+    candidates = []
+    for title, url, raw_date, description, content in feed_entries(get(endpoint)):
+        url = clean_url(url)
+        if not url or not title.strip() or not raw_date:
+            continue
+        date = optional_date(raw_date)
+        if date is None or date < cutoff:
+            continue
+        title = PageText(title).text
+        if not title:
+            continue
+        page = PageText(description or content)
+        if mode == "codex" and "codex" not in title.lower():
+            continue
+        if mode == "codex" and content:
+            # The Codex RSS descriptions are usually just the release number.
+            content = re.sub(r"(?m)^#+ [^\n]+\n", "", content)
+            page = PageText(content)
+        if mode == "claude" and title.startswith("Claude Platform release notes"):
+            subject = urlsplit(url).fragment.replace("-", " ")
+            subject = re.sub(r"(?<=\d) (?=\d)", ".", subject)
+            for word in ("claude", "opus", "sonnet", "haiku", "fable", "mythos"):
+                subject = re.sub(rf"\b{word}\b", word.title(), subject)
+            if subject:
+                title = f"Claude Platform: {subject[0].upper()}{subject[1:]}"
+        if mode == "coding":
+            if re.search(r"(?:pre-release|-alpha|-beta|-rc)", title, re.I):
+                continue
+            if title[0].lower() == "v" and title[1:2].isdigit():
+                title = f"{label} {title}"
+        text = page.text
+        text = re.sub(r"^(?:New Features|What.s changed|Performance improvements and bug fixes)\s+", "", text, flags=re.I)
+        text = text.lstrip("- ")
+        category = category_for(title, text if mode in {"coding", "claude", "codex"} else "")
+        if mode == "claude" and re.search(r"billing|managed agents", title, re.I):
+            category = "coding"
+        if category is None:
+            continue
+        is_release_number = re.search(r"\b(?:cli release:|claude code v)\s*v?\d", title, re.I)
+        is_impact = bool(
+            IMPACT.search(title) and not is_release_number
+            or mode == "claude" and re.fullmatch(r"Claude Platform: Claude [A-Z][a-z]+ \d+(?:\.\d+)*", title)
+        )
+        if label == "OpenAI" and category == "coding" and not is_impact and not title.startswith("Codex"):
+            continue
+        candidates.append(Candidate(
+            title=title[:160], summary=summary_text(text, label), date=date, category=category,
+            label=label, url=url, official=mode != "community", impact=is_impact,
+            discussions=[link for url in page.links if (link := discussion_url(url))],
+        ))
+    return candidates
+
+
+def deepseek_candidates(cutoff, get=fetch):
+    root = ET.fromstring(get(DEEPSEEK_SITEMAP))
+    dated_links = []
+    for item in root.findall("{*}url"):
+        url = item.findtext("{*}loc", "")
+        match = re.fullmatch(r"https://api-docs\.deepseek\.com/news/news(\d{6})/?", url)
+        if match:
+            date = datetime.strptime(match[1], "%y%m%d").replace(tzinfo=timezone.utc)
+            if date >= cutoff:
+                dated_links.append((date, url))
+    if not root.findall("{*}url"):
+        raise ValueError("DeepSeek sitemap has no entries")
+    candidates = []
+    for date, url in sorted(dated_links, reverse=True)[:5]:
+        page = PageText(get(url).decode("utf-8"))
+        title = page.title.removesuffix(" | DeepSeek API Docs").strip()
+        if not title:
+            continue
+        candidates.append(Candidate(
+            title=title[:160], summary=summary_text(page.description, "DeepSeek"), date=date,
+            category=category_for(title, page.description) or "models", label="DeepSeek", url=url,
+            impact=bool(IMPACT.search(title) or re.search(r"\b(?:now via API|new API)\b", title, re.I)),
+            discussions=[link for url in page.links if (link := discussion_url(url))],
+        ))
+    return candidates
+
+
+def hn_candidates(cutoff, get=fetch):
+    # Algolia publishes a documented index of public Hacker News submissions.
+    params = urlencode({
+        "tags": "story",
+        "numericFilters": f"created_at_i>{int(cutoff.timestamp())},points>=35,num_comments>=5",
+        "hitsPerPage": 100,
+    })
+    hits = json.loads(get(f"{HN_SEARCH}?{params}"))["hits"]
+    candidates = []
+    for hit in hits:
+        title = PageText(hit.get("title") or "").text
+        date = optional_date(hit.get("created_at"))
+        if date is None or not title:
+            continue
+        category = category_for(title)
+        if category is None or title.lower().startswith(("elevated errors", "service outage")):
+            continue
+        object_id = hit["objectID"]
+        if not object_id.isdigit():
+            continue
+        thread = f"https://news.ycombinator.com/item?id={object_id}"
+        url = clean_url(hit.get("url")) or thread
+        comments = int(hit.get("num_comments") or 0)
+        candidates.append(Candidate(
+            title=title[:160], summary=f"{comments:,} comments on Hacker News.",
+            date=date, category=category, label="Hacker News", url=url,
+            official=False, points=int(hit["points"]),
+            discussions=[{"label": "Hacker News", "url": thread}],
+        ))
+    return candidates
+
+
+def append_discussion(candidate, link):
+    if not any(canonical_url(existing["url"]) == canonical_url(link["url"]) for existing in candidate.discussions):
+        candidate.discussions.append(link)
+
+
+def event_key(candidate):
+    title = candidate.title.lower()
+    if "codex" in title and (version := re.search(r"\b(?:cli release:\s*|(?:rust-)?v)(\d+\.\d+\.\d+)\b", title)):
+        return ("codex", version[1])
+    if candidate.category == "models" and (IMPACT.search(title) or "in work and codex" in title):
+        versions = {(family, variant, number) for family, variant, number in MODEL_VERSION.findall(title)}
+        # The release and the Codex changelog spell the two versions differently.
+        gpt_versions = tuple(sorted({number for family, _, number in versions if family == "gpt"}))
+        if gpt_versions and re.search(r"\bastra\b", title) and re.search(r"\bsol\b", title):
+            return ("gpt-dual-launch", gpt_versions)
+    if match := re.search(r"\bgemini (\d+(?:\.\d+)*) (hydrogen|carbon|helium|flash|pro)\b", title):
+        return ("gemini", *match.groups())
+    return None
+
+
+def title_words(title):
+    common = {"introducing", "announcing", "released", "release", "available", "now", "the", "and", "in", "at", "a", "to"}
+    return set(re.findall(r"[a-z]+|\d+(?:\.\d+)*", title.lower())) - common
+
+
+def same_event(left, right):
+    if canonical_url(left.url) == canonical_url(right.url):
+        return True
+    if abs(left.date - right.date) > timedelta(days=2):
+        return False
+    left_key = event_key(left)
+    if left_key and left_key == event_key(right) and (left.impact or right.impact or left_key[0] == "codex"):
+        return True
+    left_words, right_words = title_words(left.title), title_words(right.title)
+    shared = left_words & right_words
+    return len(shared) >= 3 and len(shared) / len(left_words | right_words) >= 0.8
+
+
+def rank(candidate, now):
+    age = (now - candidate.date).total_seconds() / 86400
+    # Fresh confirmed launches lead, while older stories gradually make room.
+    boost = max(0, 7.5 - age / 4) if candidate.impact and candidate.official else 0
+    boost += 2 if candidate.official else min(candidate.points, 300) / 150
+    return (boost - max(age, 0) / 2, candidate.date, candidate.url)
+
+
+def ordered_stories(candidates, curated, now):
+    articles = []
+    social = []
+    for candidate in sorted(candidates, key=lambda item: rank(item, now), reverse=True):
+        if not now - MAX_AGE <= candidate.date <= now:
+            continue
+        if urlsplit(candidate.url).hostname.removeprefix("www.") in SOCIAL_HOSTS:
+            social.append(candidate)
+            continue
+        match = next((article for article in articles if same_event(article, candidate)), None)
+        if match is None:
+            articles.append(candidate)
+            continue
+        if candidate.official and (not match.official or canonical_url(candidate.url) in curated):
+            preferred, duplicate = candidate, match
+            articles[articles.index(match)] = preferred
+        else:
+            preferred, duplicate = match, candidate
+        for discussion in duplicate.discussions:
+            append_discussion(preferred, discussion)
+    for candidate in social:
+        link = discussion_url(candidate.url)
+        if link is None:
+            continue
+        match = next((article for article in articles if same_event(article, candidate)), None)
+        if match is not None:
+            append_discussion(match, link)
+    result = []
+    seen = set()
+    for article in sorted(articles, key=lambda item: rank(item, now), reverse=True):
+        key = canonical_url(article.url)
+        if key in seen:
+            continue
+        seen.add(key)
+        if key in curated:
+            pinned = curated[key]
+            article.title = pinned.get("title", article.title)
+            article.summary = pinned.get("summary", article.summary)
+            discovered, article.discussions = article.discussions, []
+            for link in [*pinned["discussions"], *discovered]:
+                append_discussion(article, link)
+        # Preserve an official feed's explicit announcement over a matching thread.
+        featured = article.official and article.impact and now - article.date <= FEATURE_AGE
+        result.append(article.story(featured))
+    return result[:MAX_STORIES]
+
+
+def previous_candidates(snapshot):
+    for story in snapshot["stories"]:
+        source = story["source"]
+        label = source["label"]
+        yield Candidate(
+            title=story["title"], summary=story["summary"], date=read_date(story["publishedAt"]),
+            category=story["category"], label=label, url=source["url"],
+            official=label not in {"Hacker News", "Hugging Face"},
+            impact=story["featured"] or bool(IMPACT.search(story["title"])), discussions=story["discussions"].copy(),
+        )
+
+
+def build_snapshot(now, previous, curated, get=fetch, warn=print):
+    cutoff = now - MAX_AGE
+    collectors = [
+        (feed[0], partial(feed_candidates, feed, cutoff, get)) for feed in FEEDS
+    ] + [
+        ("DeepSeek", partial(deepseek_candidates, cutoff, get)),
+        ("Hacker News", partial(hn_candidates, now - timedelta(days=7), get)),
+    ]
+    candidates = []
+    successes = 0
+    with ThreadPoolExecutor(max_workers=len(collectors)) as pool:
+        futures = [(label, pool.submit(collect)) for label, collect in collectors]
+        for label, future in futures:
+            try:
+                candidates.extend(future.result())
+                successes += label != "Hacker News"
+            except (HTTPException, OSError, KeyError, TypeError, ValueError, ET.ParseError) as error:
+                warn(f"{label} unavailable: {error}")
+    if not successes:
+        raise RuntimeError("All publisher feeds failed. Keeping the previous briefing.")
+    # Refetched entries keep fresh metadata; retain bounded recent stories that
+    # rolled out of a publisher's feed or were unavailable on this run.
+    fresh = {canonical_url(candidate.url): candidate for candidate in candidates}
+    for candidate in previous_candidates(previous):
+        current = fresh.get(canonical_url(candidate.url))
+        if current is None:
+            candidates.append(candidate)
+        else:
+            for discussion in candidate.discussions:
+                append_discussion(current, discussion)
+    stories = ordered_stories(candidates, curated, now)
+    if not stories:
+        raise RuntimeError("No eligible stories. Keeping the previous briefing.")
+    return {"updatedAt": iso_date(now), "stories": stories}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--previous", type=Path)
+    args = parser.parse_args()
+    previous = json.loads(args.previous.read_text()) if args.previous else {"stories": []}
+    curated = json.loads(CURATED_PATH.read_text())
+    snapshot = build_snapshot(
+        datetime.now(timezone.utc), previous, curated, warn=lambda message: print(message, file=sys.stderr),
+    )
+    if args.previous and snapshot["stories"] == previous["stories"]:
+        age = read_date(snapshot["updatedAt"]) - read_date(previous["updatedAt"])
+        if age < timedelta(hours=12):
+            snapshot = previous
+    args.output.write_text(f"{json.dumps(snapshot, indent=2, ensure_ascii=False)}\n", encoding="utf-8")
+    print(f"Collected {len(snapshot['stories'])} stories.")
+
+
+if __name__ == "__main__":
+    main()

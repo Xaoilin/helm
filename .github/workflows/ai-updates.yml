@@ -1,0 +1,78 @@
+name: Refresh AI Updates
+
+on:
+  schedule:
+    - cron: '11,41 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: ai-updates-publication
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.repository == 'Xaoilin/helm' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      AI_UPDATES_DATA_BRANCH: ai-updates-data
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Read previous briefing and collect public stories
+        id: collect
+        shell: bash
+        run: |
+          data_ref="refs/heads/$AI_UPDATES_DATA_BRANCH"
+          previous="$RUNNER_TEMP/previous-ai-updates.json"
+          output="$RUNNER_TEMP/ai-updates.json"
+          if git ls-remote --exit-code origin "$data_ref" >/dev/null; then
+            git fetch --depth=1 origin "$data_ref"
+            git show FETCH_HEAD:ai-updates.json > "$previous"
+            echo "parent=$(git rev-parse FETCH_HEAD)" >> "$GITHUB_OUTPUT"
+          else
+            status=$?
+            if [[ "$status" != 2 ]]; then
+              exit "$status"
+            fi
+            cp public/ai-updates.json "$previous"
+          fi
+          python3 -B -m unittest discover -s scripts/ai-updates
+          python3 -B scripts/ai-updates/refresh.py --previous "$previous" --output "$output"
+
+      - name: Publish only the briefing snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PARENT: ${{ steps.collect.outputs.parent }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        shell: bash
+        run: |
+          output="$RUNNER_TEMP/ai-updates.json"
+          if [[ -n "$PARENT" ]] && cmp -s "$RUNNER_TEMP/previous-ai-updates.json" "$output"; then
+            echo "Briefing snapshot unchanged."
+            exit 0
+          fi
+
+          export GIT_INDEX_FILE="$RUNNER_TEMP/ai-updates.git-index"
+          blob="$(git hash-object -w "$output")"
+          git update-index --add --cacheinfo "100644,$blob,ai-updates.json"
+          tree="$(git write-tree)"
+          parents=()
+          if [[ -n "$PARENT" ]]; then
+            parents=(-p "$PARENT")
+          fi
+          commit="$(git commit-tree "$tree" "${parents[@]}" -m 'Refresh public AI Updates')"
+          git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin "$commit:refs/heads/$AI_UPDATES_DATA_BRANCH"

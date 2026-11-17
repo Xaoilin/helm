@@ -1,0 +1,42 @@
+{
+  "https://openai.com/index/introducing-gpt-6-2-astra-sol": {
+    "summary": "Astra and Sol are available in Codex, ChatGPT Work and the API. OpenAI cuts Astra's API price by 20%; Sol keeps GPT‑6.1 Sol pricing.",
+    "discussions": [
+      {
+        "label": "Reddit · r/codex",
+        "url": "https://www.reddit.com/r/codex/comments/1xyqxe7/gpt_62_sol_astra_just_appeared_in_codex/"
+      },
+      {
+        "label": "X · @OpenAI",
+        "url": "https://x.com/OpenAI/status/2122750124543926515"
+      }
+    ]
+  },
+  "https://deepmind.google/blog/introducing-gemini-4-hydrogen": {
+    "summary": "Google’s lower-cost Gemini 4 model is aimed at everyday coding and agentic workflows. It is available in AI Studio and via the Gemini API.",
+    "discussions": [
+      {
+        "label": "Reddit · r/GeminiAI",
+        "url": "https://www.reddit.com/r/GeminiAI/comments/1xuii88/gemini_4_hydrogen_just_released/"
+      }
+    ]
+  },
+  "https://platform.claude.com/docs/en/release-notes/overview#claude-fable-5-2": {
+    "title": "Anthropic releases Claude Fable 5.2 and Mythos 5.2",
+    "summary": "Fable 5.2 is available in Claude Code and the API. Anthropic says the models run up to 30% faster than 5.1 and cost less.",
+    "discussions": [
+      {
+        "label": "Reddit · r/ClaudeAI",
+        "url": "https://www.reddit.com/r/ClaudeAI/comments/1xs0dct/fable_52_just_landed/"
+      }
+    ]
+  },
+  "https://api-docs.deepseek.com/news/news261113": {
+    "discussions": [
+      {
+        "label": "Reddit · r/DeepSeek",
+        "url": "https://www.reddit.com/r/DeepSeek/comments/1xv9idh/releasing_the_full_suite_of_application_apis/"
+      }
+    ]
+  }
+}
