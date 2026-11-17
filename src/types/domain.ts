@@ -1200,3 +1200,26 @@ export interface PrayerCompetition {
   self: PrayerCompetitionSummary;
   partner: PrayerCompetitionSummary | null;
 }
+
+export type AiUpdateCategory = 'coding' | 'models' | 'research';
+
+export interface AiUpdateLink {
+  label: string;
+  url: string;
+}
+
+export interface AiUpdateStory {
+  id: string;
+  title: string;
+  summary: string;
+  publishedAt: string;
+  category: AiUpdateCategory;
+  source: AiUpdateLink;
+  discussions: AiUpdateLink[];
+  featured: boolean;
+}
+
+export interface AiUpdatesSnapshot {
+  updatedAt: string;
+  stories: AiUpdateStory[];
+}

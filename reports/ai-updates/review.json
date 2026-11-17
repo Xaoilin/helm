@@ -1,0 +1,124 @@
+{
+  "schema": 1,
+  "subjects": [
+    "ui-button",
+    "ui-spacing-layout",
+    "ui-overlap"
+  ],
+  "sourceFiles": [
+    {
+      "path": "src/surfaces/DashboardSurface.tsx",
+      "sha256": "4c0e62c7a045461e0e4da38da109910ecfa3f2badccb23fad9a6be57647fda47"
+    },
+    {
+      "path": "src/components/dashboard/AiUpdatesFeed.tsx",
+      "sha256": "f71c78b4a12d4d2866c40824e36786d6a5603876cb5493fbb1aaa6d1be449a2f"
+    },
+    {
+      "path": "src/components/dashboard/ai-updates.css",
+      "sha256": "b087c2483a4540d99ab73ad296f705bf12b7f9293df04075c7722727132b8894"
+    },
+    {
+      "path": "src/App.css",
+      "sha256": "b562e7d36ed379c71932b212f378a282594d4b39a8977e4df79331723c754053"
+    }
+  ],
+  "renders": [
+    {
+      "path": "reports/ai-updates/feed-1440.png",
+      "sha256": "fafecf8181c37be94472856150fd1d2c8748bfdae31a4066b5b5241a7a5cf46d",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/ai-updates/feed-320-large-text.png",
+      "sha256": "278b807fd2ef14ad44bce46c4d4e07340e7b1236541e9b06ef9fc5294aefb2e3",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/ai-updates/feed-320.png",
+      "sha256": "224e512483db79774a62196fd3a4b7c83d4e418f7f132781dc628ae83ff6920e",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/ai-updates/feed-saved-edition.png",
+      "sha256": "1f5fa25ac4756a1dfb10dfe293b4149794a808d15a0f4e3f0c00049a6eaaeaf4",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/ai-updates/home-1440.png",
+      "sha256": "543ef4d67f33fb42f07877aa0b5c67e5afb0e8cba664d3fbb50f0588acf74090",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/ai-updates/home-320.png",
+      "sha256": "3c609677a6a065b7d74b4299cd8316d7150f0d518ccf7f31576e7f2cc650d8d3",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    }
+  ],
+  "references": [
+    {
+      "path": "reports/prayer-15-minute-rule/timing-dark-1440.png",
+      "sha256": "43d5b0825167e14ff3b3ec4f4d33679d94e354a93df1c588d4aa68ad75435e4e",
+      "relationship": "reviewer-selected",
+      "qualities": "The current Night Compass dashboard establishes the dark navy surface, frame and green selected controls used by the neighbouring briefing."
+    }
+  ],
+  "implementer": "codex-ai-updates",
+  "reviewer": {
+    "id": "codex-visual-reviewer",
+    "kind": "independent-agent"
+  },
+  "criteria": {
+    "craft": {
+      "verdict": "pass",
+      "evidence": "Headline, metadata and source rows have consistent card insets. External links are underlined and wrap between links at 320px."
+    },
+    "coherence": {
+      "verdict": "pass",
+      "evidence": "The existing Night Compass navy canvas, framed cards and green active control treatment carry into the briefing. The gold New chip fits the homepage palette."
+    },
+    "hierarchy": {
+      "verdict": "pass",
+      "evidence": "Selected homepage tab leads directly to filters and stories. The first confirmed launch has a stronger frame. Headline, summary and links scan in that order."
+    },
+    "stateMotion": {
+      "verdict": "pass",
+      "evidence": "Keyboard focus has a visible outline outside the tab border. The selected filter remains clear. New and saved-edition states remain distinguishable."
+    },
+    "actualSize": {
+      "verdict": "pass",
+      "evidence": "Checked 1440px and 320px in Firefox, including 125% text at 320px. The long headline and community links wrap within their card."
+    },
+    "rejectionRegression": {
+      "verdict": "pass",
+      "evidence": "At 320px with 125% text, the single-line Retry label sits in a 70x40px control with measured glyph clearance of 14/15/13/10px on left/top/right/bottom. The notice clears the story by 16px."
+    }
+  },
+  "motionRequired": false,
+  "rejectionLedgerSha256": "2a2a4b44e4360cbc9bbae4600dfb58c39c034596efaabb35c1f495e232d23bc8",
+  "rejectionsAddressed": [
+    {
+      "id": "VA-003",
+      "evidence": "At 320px with 125% text, Retry stays single-line with glyph clearance 14/15/13/10px. Coding tools has measured 14/13/14/11px clearance."
+    },
+    {
+      "id": "VA-004",
+      "evidence": "At 320px with 125% text, message glyphs clear the Retry control by 29px and the full saved-edition notice clears the next card by 16px. Focus does not cross the adjacent homepage tab."
+    }
+  ],
+  "blockingIssues": [],
+  "verdict": "pass",
+  "ownerAcceptance": "pending"
+}
