@@ -15,6 +15,12 @@ const linkSchema = z.object({
     return !url.username && !url.password;
   }),
 });
+const discussionSchema = linkSchema.extend({
+  preview: z.string().trim().min(1).max(300).optional(),
+  points: z.int().nonnegative().optional(),
+  comments: z.int().nonnegative().optional(),
+  observedAt: z.iso.datetime().optional(),
+});
 const snapshotSchema: z.ZodType<AiUpdatesSnapshot> = z.object({
   updatedAt: z.iso.datetime(),
   stories: z.array(z.object({
@@ -24,7 +30,7 @@ const snapshotSchema: z.ZodType<AiUpdatesSnapshot> = z.object({
     publishedAt: z.iso.datetime(),
     category: z.enum(['coding', 'models', 'research']),
     source: linkSchema,
-    discussions: z.array(linkSchema).max(4),
+    discussions: z.array(discussionSchema).max(4),
     featured: z.boolean(),
   })).max(30).refine(stories => new Set(stories.map(story => story.id)).size === stories.length),
 });

@@ -1208,6 +1208,13 @@ export interface AiUpdateLink {
   url: string;
 }
 
+export interface AiUpdateDiscussion extends AiUpdateLink {
+  preview?: string;
+  points?: number;
+  comments?: number;
+  observedAt?: string;
+}
+
 export interface AiUpdateStory {
   id: string;
   title: string;
@@ -1215,7 +1222,7 @@ export interface AiUpdateStory {
   publishedAt: string;
   category: AiUpdateCategory;
   source: AiUpdateLink;
-  discussions: AiUpdateLink[];
+  discussions: AiUpdateDiscussion[];
   featured: boolean;
 }
 

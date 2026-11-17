@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-17T19:06:43Z",
+  "updatedAt": "2026-11-17T19:43:43Z",
   "stories": [
     {
       "id": "8f6af8c44a4a1bfb5de3",
@@ -14,11 +14,15 @@
       "discussions": [
         {
           "label": "Reddit · r/codex",
-          "url": "https://www.reddit.com/r/codex/comments/1xyqxe7/gpt_62_sol_astra_just_appeared_in_codex/"
+          "url": "https://www.reddit.com/r/codex/comments/1xyqxe7/gpt_62_sol_astra_just_appeared_in_codex/",
+          "preview": "One reader saw both GPT‑6.2 models after restarting Codex. Replies compare where Astra or Sol appeared first during the rollout.",
+          "points": 233,
+          "observedAt": "2026-11-17T19:42:52Z"
         },
         {
           "label": "X · @OpenAI",
-          "url": "https://x.com/OpenAI/status/2122750124543926515"
+          "url": "https://x.com/OpenAI/status/2122750124543926515",
+          "preview": "OpenAI frames the launch around efficiency and performance on real work, and shares a launch video."
         }
       ],
       "featured": true
@@ -36,7 +40,10 @@
       "discussions": [
         {
           "label": "Reddit · r/DeepSeek",
-          "url": "https://www.reddit.com/r/DeepSeek/comments/1xv9idh/releasing_the_full_suite_of_application_apis/"
+          "url": "https://www.reddit.com/r/DeepSeek/comments/1xv9idh/releasing_the_full_suite_of_application_apis/",
+          "preview": "A community post collects the new API capabilities, with links to web search, document input, URL reading and the demo chat client.",
+          "points": 44,
+          "observedAt": "2026-11-17T19:42:52Z"
         }
       ],
       "featured": false
@@ -54,11 +61,17 @@
       "discussions": [
         {
           "label": "Reddit · r/GeminiAI",
-          "url": "https://www.reddit.com/r/GeminiAI/comments/1xuii88/gemini_4_hydrogen_just_released/"
+          "url": "https://www.reddit.com/r/GeminiAI/comments/1xuii88/gemini_4_hydrogen_just_released/",
+          "preview": "A Pro subscriber saw Hydrogen in Gemini and Antigravity. Other users report it appearing on desktop or disappearing again.",
+          "points": 278,
+          "observedAt": "2026-11-17T19:42:52Z"
         },
         {
           "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50472260"
+          "url": "https://news.ycombinator.com/item?id=50472260",
+          "points": 507,
+          "comments": 165,
+          "observedAt": "2026-11-17T19:43:43Z"
         }
       ],
       "featured": false
@@ -102,7 +115,10 @@
       "discussions": [
         {
           "label": "Reddit · r/ClaudeAI",
-          "url": "https://www.reddit.com/r/ClaudeAI/comments/1xs0dct/fable_52_just_landed/"
+          "url": "https://www.reddit.com/r/ClaudeAI/comments/1xs0dct/fable_52_just_landed/",
+          "preview": "The rollout thread links Anthropic’s announcement and discusses Fable-only usage resets and when to choose Fable 5.2 over Opus 5.5.",
+          "points": 1576,
+          "observedAt": "2026-11-17T19:42:52Z"
         }
       ],
       "featured": false
@@ -149,7 +165,7 @@
     {
       "id": "8331a3aa13cbf4dc7e51",
       "title": "OpenCode Browse",
-      "summary": "204 comments on Hacker News.",
+      "summary": "205 comments on Hacker News.",
       "publishedAt": "2026-11-16T21:20:37Z",
       "category": "coding",
       "source": {
@@ -159,7 +175,10 @@
       "discussions": [
         {
           "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50523459"
+          "url": "https://news.ycombinator.com/item?id=50523459",
+          "points": 319,
+          "comments": 205,
+          "observedAt": "2026-11-17T19:43:43Z"
         }
       ],
       "featured": false
@@ -281,7 +300,10 @@
       "discussions": [
         {
           "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50468888"
+          "url": "https://news.ycombinator.com/item?id=50468888",
+          "points": 483,
+          "comments": 180,
+          "observedAt": "2026-11-17T19:43:43Z"
         }
       ],
       "featured": false
@@ -299,9 +321,25 @@
       "discussions": [
         {
           "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50463399"
+          "url": "https://news.ycombinator.com/item?id=50463399",
+          "points": 454,
+          "comments": 240,
+          "observedAt": "2026-11-17T19:43:43Z"
         }
       ],
+      "featured": false
+    },
+    {
+      "id": "8ec21efa2c62273428cb",
+      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-16T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/openrouter"
+      },
+      "discussions": [],
       "featured": false
     },
     {
@@ -344,19 +382,6 @@
       "featured": false
     },
     {
-      "id": "8ec21efa2c62273428cb",
-      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-16T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/openrouter"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
       "id": "02bfed5e7aa817ea9dcb",
       "title": "Gemini Decisions API",
       "summary": "161 comments on Hacker News.",
@@ -369,7 +394,10 @@
       "discussions": [
         {
           "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50456791"
+          "url": "https://news.ycombinator.com/item?id=50456791",
+          "points": 569,
+          "comments": 161,
+          "observedAt": "2026-11-17T19:43:43Z"
         }
       ],
       "featured": false

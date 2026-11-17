@@ -51,13 +51,11 @@ test('Quran reading uses the English translation returned by Quran.com', async (
 test('Quran reading keeps Arabic visible and can retry an unavailable English translation', async ({ page, scenario }) => {
   await scenario({ now: '2026-09-30T12:00:00Z' });
   let unavailable = true;
-  let recoveredRequests = 0;
   const translationUrl = /^https:\/\/api\.quran\.com\/api\/v4\/quran\/translations\/20\?/u;
   await page.route(translationUrl, route => {
     const headers = { 'Access-Control-Allow-Origin': '*' };
     if (unavailable) return route.fulfill({ status: 503, headers, json: { error: 'Provider unavailable' } });
     // Keep the outage and recovery in one handler instead of falling through a second route.
-    recoveredRequests += 1;
     const verseKey = new URL(route.request().url()).searchParams.get('verse_key')!;
     return route.fulfill({ headers, json: {
       translations: [{ resource_id: 20, verse_key: verseKey, text: quranVerseFixture(verseKey) }],
@@ -74,8 +72,11 @@ test('Quran reading keeps Arabic visible and can retry an unavailable English tr
   // Let Firefox finish the intercepted 503 before retrying the same URL.
   await (await failedResponse).finished();
   unavailable = false;
-  await card.getByRole('button', { name: 'Retry Quran.com translation', exact: true }).click();
-  await expect.poll(() => recoveredRequests).toBeGreaterThan(0);
+  const retry = card.getByRole('button', { name: 'Retry Quran.com translation', exact: true });
+  await Promise.all([
+    page.waitForResponse(response => translationUrl.test(response.url()) && response.ok(), { timeout: 5_000 }),
+    retry.press('Enter'),
+  ]);
   await expect(card.locator('blockquote[lang="en"]')).toHaveText(quranPassageFixture(passage.reference));
   await expect(card.getByRole('alert')).toHaveCount(0);
 });

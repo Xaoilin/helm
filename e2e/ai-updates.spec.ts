@@ -1,3 +1,4 @@
+import type { Locator } from '@playwright/test';
 import { AI_UPDATES_URL } from '../src/config/aiUpdates';
 import type { AiUpdatesSnapshot, AiUpdateStory } from '../src/types/domain';
 import { expect, openApp, test } from './support/helm-fixture';
@@ -11,8 +12,19 @@ const launch: AiUpdateStory = {
   category: 'models',
   source: { label: 'OpenAI announcement', url: 'https://openai.com/index/introducing-gpt-6-2-astra-sol/' },
   discussions: [
-    { label: 'r/codex discussion', url: 'https://www.reddit.com/r/codex/comments/1xyrc4m/gpt_astra_62_and_gpt_sol_62_released/' },
-    { label: 'OpenAI on X', url: 'https://x.com/OpenAI/status/2122750124543926515' },
+    {
+      label: 'r/codex discussion',
+      url: 'https://www.reddit.com/r/codex/comments/1xyrc4m/gpt_astra_62_and_gpt_sol_62_released/',
+      preview: 'Codex users compare which models appear in their picker and discuss availability across plans. Several replies describe seeing one model first and checking again after restarting the desktop app.',
+      points: 214,
+      comments: 74,
+      observedAt: now,
+    },
+    {
+      label: 'OpenAI on X',
+      url: 'https://x.com/OpenAI/status/2122750124543926515',
+      preview: 'OpenAI announces availability and highlights the efficiency of its two new models.',
+    },
   ],
   featured: true,
 };
@@ -39,6 +51,31 @@ const edition: AiUpdatesSnapshot = {
     })),
   ],
 };
+
+async function contrastRatio(locator: Locator): Promise<number> {
+  return locator.evaluate(element => {
+    function luminance(colour: string) {
+      const components = colour.match(/\d+(?:\.\d+)?/gu)?.slice(0, 3).map(Number);
+      if (!components || components.length !== 3) throw new Error(`Unsupported colour ${colour}`);
+      const [red, green, blue] = components.map(value => {
+        const channel = value / 255;
+        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
+    }
+
+    let surface: Element | null = element;
+    while (surface) {
+      const background = getComputedStyle(surface).backgroundColor;
+      if (background !== 'transparent' && background !== 'rgba(0, 0, 0, 0)') {
+        const colours = [luminance(getComputedStyle(element).color), luminance(background)];
+        return (Math.max(...colours) + 0.05) / (Math.min(...colours) + 0.05);
+      }
+      surface = surface.parentElement;
+    }
+    throw new Error('No rendered background for the contrast check');
+  });
+}
 
 for (const width of [320, 1440]) {
   test(`AI Updates highlights releases, filters stories and preserves the homepage at ${width}px`, async ({ page, scenario }, testInfo) => {
@@ -69,6 +106,31 @@ for (const width of [320, 1440]) {
     await expect(discussion).toHaveAttribute('target', '_blank');
     await expect(discussion).toHaveAttribute('rel', 'noopener noreferrer');
     await expect(panel.getByRole('link', { name: /OpenAI on X/u })).toHaveAttribute('href', launch.discussions[1].url);
+    const leadStory = panel.getByRole('article').first();
+    const related = leadStory.getByRole('list', { name: 'Related posts' });
+    const redditPost = related.getByRole('listitem').first();
+    await expect(redditPost).toContainText(launch.discussions[0].preview!);
+    await expect(redditPost).toContainText('214 points · 74 comments');
+    await expect(redditPost.locator('time')).toHaveAttribute('datetime', now);
+    const xPost = related.getByRole('listitem').nth(1);
+    await expect(xPost).toContainText(launch.discussions[1].preview!);
+    await expect(xPost.locator('.ai-update-activity')).toHaveCount(0);
+    if (width === 1440) {
+      for (const text of [
+        leadStory.getByRole('heading'),
+        leadStory.locator('.ai-update-summary'),
+        leadStory.locator('.ai-update-meta time'),
+        leadStory.getByRole('link', { name: /OpenAI announcement/u }),
+        redditPost.locator('.ai-update-preview'),
+        redditPost.locator('.ai-update-activity span'),
+        redditPost.locator('.ai-update-activity time'),
+        panel.locator('.ai-updates-edition'),
+        panel.getByRole('button', { name: 'All', exact: true }),
+        panel.getByRole('button', { name: 'Coding tools', exact: true }),
+      ]) {
+        expect(await contrastRatio(text), `Contrast of ${await text.innerText()}`).toBeGreaterThanOrEqual(7);
+      }
+    }
     await page.screenshot({ path: testInfo.outputPath(`feed-${width}.png`) });
 
     const scroller = width <= 760 ? page.getByRole('main', { name: 'dashboard surface' }) : panel;
@@ -77,12 +139,18 @@ for (const width of [320, 1440]) {
     await panel.getByRole('button', { name: 'Coding tools', exact: true }).click();
     await expect(panel.getByRole('article')).toHaveCount(1);
     await expect(panel.getByRole('heading', { name: coding.title })).toBeVisible();
+    await expect(panel.getByRole('link', { name: /Hacker News discussion/u })).toBeVisible();
+    await expect(panel.locator('.ai-update-preview')).toHaveCount(0);
 
     if (width === 320) {
       await page.locator('html').evaluate(element => { element.style.fontSize = '125%'; });
       await expect(panel.getByRole('heading', { name: coding.title })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       await page.screenshot({ path: testInfo.outputPath('feed-320-large-text.png') });
+      await panel.getByRole('button', { name: 'All', exact: true }).click();
+      await expect(related.getByText(launch.discussions[0].preview!, { exact: true })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('feed-320-large-previews.png') });
+      await panel.getByRole('button', { name: 'Coding tools', exact: true }).click();
     } else {
       await panel.getByRole('button', { name: 'All', exact: true }).click();
       const popupPromise = page.waitForEvent('popup');
