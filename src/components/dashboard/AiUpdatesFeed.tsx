@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { AiUpdateCategory, AiUpdateLink, AiUpdateStory, AiUpdatesSnapshot } from '../../types/domain';
+import type { AiUpdateCategory, AiUpdateDiscussion, AiUpdateLink, AiUpdateStory, AiUpdatesSnapshot } from '../../types/domain';
 
 const categories = [
   { id: 'all', label: 'All' },
@@ -14,13 +14,39 @@ const categoryLabels: Record<AiUpdateCategory, string> = {
 };
 const editionFormat = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 const publicationFormat = new Intl.DateTimeFormat('en-GB', { month: 'short', day: 'numeric' });
+const activityNumberFormat = new Intl.NumberFormat('en-GB');
 const STORY_LIMIT = 10;
 
 function StoryLink({ link }: { link: AiUpdateLink }) {
   return (
     <a href={link.url} target="_blank" rel="noopener noreferrer">
-      {link.label} <span aria-hidden="true">↗</span><span className="ai-updates-sr-only"> (opens in a new tab)</span>
+      {link.label}{'\u00a0'}<span aria-hidden="true">↗</span><span className="ai-updates-sr-only"> (opens in a new tab)</span>
     </a>
+  );
+}
+
+function DiscussionPreview({ discussion }: { discussion: AiUpdateDiscussion }) {
+  const { preview, points, comments, observedAt } = discussion;
+  const activity = [
+    points === undefined ? null : `${activityNumberFormat.format(points)} ${points === 1 ? 'point' : 'points'}`,
+    comments === undefined ? null : `${activityNumberFormat.format(comments)} ${comments === 1 ? 'comment' : 'comments'}`,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <li className="ai-update-discussion">
+      <StoryLink link={discussion} />
+      {preview && <p className="ai-update-preview">{preview}</p>}
+      {activity && (
+        <div className="ai-update-activity">
+          <span>{activity}</span>
+          {observedAt && (
+            <time dateTime={observedAt} title={editionFormat.format(new Date(observedAt))}>
+              as of {publicationFormat.format(new Date(observedAt))}
+            </time>
+          )}
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -32,11 +58,13 @@ function StoryCard({ story }: { story: AiUpdateStory }) {
         <time dateTime={story.publishedAt}>{publicationFormat.format(new Date(story.publishedAt))}</time>
       </div>
       <h2>{story.title}</h2>
-      <p>{story.summary}</p>
-      <div className="ai-update-links">
-        <StoryLink link={story.source} />
-        {story.discussions.map(link => <StoryLink key={link.url} link={link} />)}
-      </div>
+      <p className="ai-update-summary">{story.summary}</p>
+      <div className="ai-update-source"><StoryLink link={story.source} /></div>
+      {story.discussions.length > 0 && (
+        <ul className="ai-update-discussions" aria-label="Related posts">
+          {story.discussions.map(link => <DiscussionPreview key={link.url} discussion={link} />)}
+        </ul>
+      )}
     </article>
   );
 }

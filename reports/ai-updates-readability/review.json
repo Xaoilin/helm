@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "subjects": [
+    "ui-button",
+    "ui-spacing-layout",
+    "ui-overlap"
+  ],
+  "sourceFiles": [
+    {
+      "path": "src/App.css",
+      "sha256": "66bde0fa743f5386e5e5940bb24a8b4470cbdb902343aba482ab7681771bc29a"
+    },
+    {
+      "path": "src/components/dashboard/AiUpdatesFeed.tsx",
+      "sha256": "5e108f9b12d87ba993bab1a8c52fcecc713de5072647a4ac9d9a135d57d61027"
+    },
+    {
+      "path": "src/components/dashboard/ai-updates.css",
+      "sha256": "d400967708a448576dc6409ba0c93ca84bc81d4c46a410443a41b274b2ea86dd"
+    }
+  ],
+  "renders": [
+    {
+      "path": "reports/ai-updates-readability/feed-1440.png",
+      "sha256": "29f89ad259d56731a2f2c7fb991d22d6cd7a26abf445fbe53d2bd25db542f202",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/ai-updates-readability/feed-320-large-previews.png",
+      "sha256": "53fb732d4a8c516333c29c482f73b70354f273fcd13cfb374e9d13b54d05fa8f",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/ai-updates-readability/feed-320-large-text.png",
+      "sha256": "ad5a0bbc26cebb797c225cc1a5e21c84cb91c5549fa8b0b016466bb377d97829",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/ai-updates-readability/feed-320.png",
+      "sha256": "782c9a669951145a4962332017ae5516099cd1a75c27078be3407cce92330406",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/ai-updates-readability/feed-saved-edition.png",
+      "sha256": "d1bd775b223f748781f44c650367eb38f20d657382e34742a184ace59821f404",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/ai-updates-readability/home-1440.png",
+      "sha256": "d32af45bbc1b6e59e78aad26bb70a7f6aa84e977baf12a94f69f4741e78f4571",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    },
+    {
+      "path": "reports/ai-updates-readability/home-320.png",
+      "sha256": "b97898f12cbbfb02f76928da3c8da58963b0dfeed1ea7e17f702b2534ae9fcc7",
+      "inContext": true,
+      "actualSize": true,
+      "kind": "image"
+    }
+  ],
+  "references": [
+    {
+      "path": "reports/ai-updates/feed-1440.png",
+      "sha256": "fafecf8181c37be94472856150fd1d2c8748bfdae31a4066b5b5241a7a5cf46d",
+      "relationship": "rejected-before",
+      "qualities": "Owner reported that the dark feed was hard to read and colours lacked distinction. Capture shows its previous link and article hierarchy."
+    },
+    {
+      "path": "reports/prayer-15-minute-rule/timing-dark-1440.png",
+      "sha256": "43d5b0825167e14ff3b3ec4f4d33679d94e354a93df1c588d4aa68ad75435e4e",
+      "relationship": "reviewer-selected",
+      "qualities": "Sets the shared shell control spacing and hierarchy around the reading pane."
+    }
+  ],
+  "implementer": "codex-ai-updates",
+  "reviewer": {
+    "id": "codex-visual-reviewer",
+    "kind": "independent-agent"
+  },
+  "criteria": {
+    "craft": {
+      "verdict": "pass",
+      "evidence": "Solid story surfaces, a compact no-metadata link, and distinct preview panels give each group an even inset. The external-link arrow stays attached at 320px with 125% text."
+    },
+    "coherence": {
+      "verdict": "pass",
+      "evidence": "The shared dashboard tabs retain the size and spacing of adjacent controls. Muted light surfaces and ink distinguish the reading pane while links and selected controls use one blue accent."
+    },
+    "hierarchy": {
+      "verdict": "pass",
+      "evidence": "Headline, summary, then official source read first. Related posts sit below the source, with snippets and activity visually separated inside each post."
+    },
+    "stateMotion": {
+      "verdict": "pass",
+      "evidence": "Selected filters and the keyboard focus outline are distinct. Saved edition and Retry stay usable at 320px with 125% text."
+    },
+    "actualSize": {
+      "verdict": "pass",
+      "evidence": "Checked 1440px and 320px in Firefox and reviewed compact, normal, large-text, and saved-edition views. The widest text wraps across eight aligned lines at 320px with 125% text."
+    },
+    "rejectionRegression": {
+      "verdict": "pass",
+      "evidence": "HELM-AI-001: measured text contrast ranged from 8.00:1 for discussion links to 16.12:1 for headlines. Preview text measured 11.17:1 and activity 8.59:1. The 320px saved card clears the story by 16px."
+    }
+  },
+  "motionRequired": false,
+  "rejectionLedgerSha256": "2a2a4b44e4360cbc9bbae4600dfb58c39c034596efaabb35c1f495e232d23bc8",
+  "rejectionsAddressed": [
+    {
+      "id": "VA-003",
+      "evidence": "At 320px with 125% text, Retry has 15/15/13/11px glyph clearance on left/top/right/bottom. Coding tools has 15/13/14/11px clearance."
+    },
+    {
+      "id": "VA-004",
+      "evidence": "At 320px with 125% text, the saved notice clears the next story by 16px and the message glyphs clear Retry by 15px. Links stay in their own boxes."
+    }
+  ],
+  "blockingIssues": [],
+  "verdict": "pass",
+  "ownerAcceptance": "pending"
+}
