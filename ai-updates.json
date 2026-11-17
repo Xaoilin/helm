@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-17T21:45:19Z",
+  "updatedAt": "2026-11-17T22:16:10Z",
   "stories": [
     {
       "id": "8f6af8c44a4a1bfb5de3",
@@ -178,7 +178,7 @@
     {
       "id": "8331a3aa13cbf4dc7e51",
       "title": "OpenCode Browse",
-      "summary": "208 comments on Hacker News.",
+      "summary": "209 comments on Hacker News.",
       "publishedAt": "2026-11-16T21:20:37Z",
       "category": "coding",
       "source": {
@@ -190,8 +190,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50523459",
           "points": 323,
-          "comments": 208,
-          "observedAt": "2026-11-17T21:45:19Z"
+          "comments": 209,
+          "observedAt": "2026-11-17T22:16:10Z"
         }
       ],
       "featured": false
