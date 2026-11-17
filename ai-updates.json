@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-17T22:45:24Z",
+  "updatedAt": "2026-11-17T23:14:57Z",
   "stories": [
     {
       "id": "8f6af8c44a4a1bfb5de3",
@@ -178,7 +178,7 @@
     {
       "id": "8331a3aa13cbf4dc7e51",
       "title": "OpenCode Browse",
-      "summary": "209 comments on Hacker News.",
+      "summary": "210 comments on Hacker News.",
       "publishedAt": "2026-11-16T21:20:37Z",
       "category": "coding",
       "source": {
@@ -190,8 +190,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50523459",
           "points": 323,
-          "comments": 209,
-          "observedAt": "2026-11-17T22:16:10Z"
+          "comments": 210,
+          "observedAt": "2026-11-17T23:14:57Z"
         }
       ],
       "featured": false
@@ -314,9 +314,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50468888",
-          "points": 483,
+          "points": 484,
           "comments": 180,
-          "observedAt": "2026-11-17T19:56:53Z"
+          "observedAt": "2026-11-17T23:14:57Z"
         }
       ],
       "featured": false
@@ -340,6 +340,19 @@
           "observedAt": "2026-11-17T20:45:38Z"
         }
       ],
+      "featured": false
+    },
+    {
+      "id": "8ec21efa2c62273428cb",
+      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-16T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/openrouter"
+      },
+      "discussions": [],
       "featured": false
     },
     {
@@ -377,19 +390,6 @@
       "source": {
         "label": "Codex",
         "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-12-app"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "8ec21efa2c62273428cb",
-      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-16T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/openrouter"
       },
       "discussions": [],
       "featured": false
