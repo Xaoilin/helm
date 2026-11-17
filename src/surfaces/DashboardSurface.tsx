@@ -89,7 +89,7 @@ export default function DashboardSurface() {
         id="home-ai-updates"
         role="tabpanel"
         aria-labelledby="home-ai-updates-tab"
-        className="surface-body nc-dashboard-body"
+        className="surface-body ai-updates-body"
         tabIndex={0}
         hidden={tab !== 'ai-updates'}
       >

@@ -4981,7 +4981,8 @@ textarea.form-input {
 }
 
 /* ── Night Compass dashboard ── */
-.nc-dashboard-body {
+.nc-dashboard-body,
+.ai-updates-body {
   min-width: 0;
   background:
     radial-gradient(circle at 50% -20%, rgba(47, 203, 143, 0.08), transparent 38%),
@@ -5973,7 +5974,7 @@ textarea.form-input {
 }
 
 @media (max-width: 1024px) {
-  .nc-dashboard-body { padding-right: 20px; padding-left: 20px; }
+  .nc-dashboard-body, .ai-updates-body { padding-right: 20px; padding-left: 20px; }
   .nc-dashboard { gap: 12px; }
   .nc-prayer-card { min-height: 520px; padding: 20px; }
   .nc-next-prayer { min-height: 150px; }
@@ -5987,7 +5988,7 @@ textarea.form-input {
 }
 
 @media (max-width: 760px) {
-  .nc-dashboard-body { padding: 16px; }
+  .nc-dashboard-body, .ai-updates-body { padding: 16px; }
   .nc-prayer-card { min-height: 0; padding: 16px; }
   .nc-prayer-heading { align-items: flex-start; }
   .nc-prayer-location { max-width: 45%; text-align: right; overflow-wrap: anywhere; }

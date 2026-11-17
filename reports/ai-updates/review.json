@@ -8,7 +8,7 @@
   "sourceFiles": [
     {
       "path": "src/surfaces/DashboardSurface.tsx",
-      "sha256": "2375d20c805fddf100d5ce6715721cb21ce99ce9b58e695453849ba036e022ed"
+      "sha256": "4c0e62c7a045461e0e4da38da109910ecfa3f2badccb23fad9a6be57647fda47"
     },
     {
       "path": "src/components/dashboard/AiUpdatesFeed.tsx",
@@ -17,6 +17,10 @@
     {
       "path": "src/components/dashboard/ai-updates.css",
       "sha256": "b087c2483a4540d99ab73ad296f705bf12b7f9293df04075c7722727132b8894"
+    },
+    {
+      "path": "src/App.css",
+      "sha256": "b562e7d36ed379c71932b212f378a282594d4b39a8977e4df79331723c754053"
     }
   ],
   "renders": [
