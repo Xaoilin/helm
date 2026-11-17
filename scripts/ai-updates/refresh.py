@@ -24,6 +24,8 @@ FEATURE_AGE = timedelta(days=3)
 MAX_STORIES = 30
 MAX_BYTES = 8_000_000
 MAX_DISCUSSIONS = 2
+MAX_DISCUSSION_PREVIEW = 240
+ENGAGEMENT_FIELDS = ("points", "comments", "observedAt")
 
 # Only these endpoints (and recent dated DeepSeek announcements) are fetched.
 FEEDS = (
@@ -328,7 +330,22 @@ def deepseek_candidates(cutoff, get=fetch):
     return candidates
 
 
-def hn_candidates(cutoff, get=fetch):
+def hn_discussion(hit, url, title, observed_at):
+    discussion = {"label": "Hacker News", "url": url}
+    for field, source in (("points", "points"), ("comments", "num_comments")):
+        count = hit.get(source)
+        if type(count) is int and count >= 0:
+            discussion[field] = count
+    if any(field in discussion for field in ("points", "comments")):
+        discussion["observedAt"] = iso_date(observed_at)
+
+    body = PageText(hit.get("story_text") or "").text
+    if len(body) >= 35 and len(title_words(body) - title_words(title)) >= 3:
+        discussion["preview"] = summary_text(body, "Hacker News")[:MAX_DISCUSSION_PREVIEW]
+    return discussion
+
+
+def hn_candidates(cutoff, observed_at, get=fetch):
     # Algolia publishes a documented index of public Hacker News submissions.
     params = urlencode({
         "tags": "story",
@@ -350,19 +367,61 @@ def hn_candidates(cutoff, get=fetch):
             continue
         thread = f"https://news.ycombinator.com/item?id={object_id}"
         url = clean_url(hit.get("url")) or thread
-        comments = int(hit.get("num_comments") or 0)
+        discussion = hn_discussion(hit, thread, title, observed_at)
+        comments = discussion.get("comments")
+        summary = "Read the discussion on Hacker News."
+        if comments is not None:
+            summary = f"{comments:,} comments on Hacker News."
         candidates.append(Candidate(
-            title=title[:160], summary=f"{comments:,} comments on Hacker News.",
+            title=title[:160], summary=summary,
             date=date, category=category, label="Hacker News", url=url,
-            official=False, points=int(hit["points"]),
-            discussions=[{"label": "Hacker News", "url": thread}],
+            official=False, points=discussion.get("points", 0), discussions=[discussion],
         ))
     return candidates
 
 
+def discussion_key(url):
+    social = discussion_url(url)
+    return canonical_url(social["url"]).lower() if social else canonical_url(url)
+
+
 def append_discussion(candidate, link):
-    if not any(canonical_url(existing["url"]) == canonical_url(link["url"]) for existing in candidate.discussions):
-        candidate.discussions.append(link)
+    for index, existing in enumerate(candidate.discussions):
+        if discussion_key(existing["url"]) != discussion_key(link["url"]):
+            continue
+        merged = {**link, **existing}
+        # A points/comments pair is one observation. Preserve the latest pair
+        # for the same post without importing numbers from its other links.
+        current_time = existing.get("observedAt", "")
+        incoming_time = link.get("observedAt", "")
+        observed = link if incoming_time > current_time else existing
+        for field in ENGAGEMENT_FIELDS:
+            merged.pop(field, None)
+            if field in observed:
+                merged[field] = observed[field]
+        candidate.discussions[index] = merged
+        return
+    candidate.discussions.append(link.copy())
+
+
+def engagement_key(link):
+    return (discussion_key(link["url"]), link.get("points"), link.get("comments"))
+
+
+def preserve_unchanged_observations(candidates, previous):
+    observations = {
+        engagement_key(link): link["observedAt"]
+        for story in previous["stories"]
+        for link in story["discussions"]
+        if "observedAt" in link
+    }
+    for candidate in candidates:
+        for link in candidate.discussions:
+            previous_time = observations.get(engagement_key(link))
+            if previous_time and "observedAt" in link:
+                # The snapshot already has a 12-hour heartbeat. Moving this
+                # timestamp alone would publish a new commit every half hour.
+                link["observedAt"] = previous_time
 
 
 def event_key(candidate):
@@ -425,6 +484,14 @@ def ordered_stories(candidates, curated, now):
         else:
             preferred, duplicate = match, candidate
         for discussion in duplicate.discussions:
+            if (
+                duplicate.label == "Hacker News"
+                and discussion is duplicate.discussions[0]
+                and discussion["label"] == "Hacker News"
+                and "preview" not in discussion
+                and len(title_words(duplicate.title) - title_words(preferred.title)) >= 2
+            ):
+                discussion = {**discussion, "preview": duplicate.title[:MAX_DISCUSSION_PREVIEW]}
             append_discussion(preferred, discussion)
     for candidate in social:
         link = discussion_url(candidate.url)
@@ -457,11 +524,14 @@ def previous_candidates(snapshot):
     for story in snapshot["stories"]:
         source = story["source"]
         label = source["label"]
+        discussions = story["discussions"].copy()
+        hn_points = next((link.get("points", 0) for link in discussions if link["label"] == "Hacker News"), 0)
         yield Candidate(
             title=story["title"], summary=story["summary"], date=read_date(story["publishedAt"]),
             category=story["category"], label=label, url=source["url"],
             official=label not in {"Hacker News", "Hugging Face"},
-            impact=story["featured"] or bool(IMPACT.search(story["title"])), discussions=story["discussions"].copy(),
+            impact=story["featured"] or bool(IMPACT.search(story["title"])),
+            discussions=discussions, points=hn_points if label == "Hacker News" else 0,
         )
 
 
@@ -471,7 +541,7 @@ def build_snapshot(now, previous, curated, get=fetch, warn=print):
         (feed[0], partial(feed_candidates, feed, cutoff, get)) for feed in FEEDS
     ] + [
         ("DeepSeek", partial(deepseek_candidates, cutoff, get)),
-        ("Hacker News", partial(hn_candidates, now - timedelta(days=7), get)),
+        ("Hacker News", partial(hn_candidates, now - timedelta(days=7), now, get)),
     ]
     candidates = []
     successes = 0
@@ -487,6 +557,7 @@ def build_snapshot(now, previous, curated, get=fetch, warn=print):
         raise RuntimeError("All publisher feeds failed. Keeping the previous briefing.")
     # Refetched entries keep fresh metadata; retain bounded recent stories that
     # rolled out of a publisher's feed or were unavailable on this run.
+    preserve_unchanged_observations(candidates, previous)
     fresh = {canonical_url(candidate.url): candidate for candidate in candidates}
     for candidate in previous_candidates(previous):
         current = fresh.get(canonical_url(candidate.url))

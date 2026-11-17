@@ -65,6 +65,62 @@ class RefreshTest(unittest.TestCase):
             )
         self.assertEqual(["OpenAI", "Claude Code"], [item["source"]["label"] for item in snapshot["stories"]])
 
+    def test_hacker_news_counts_and_preview_survive_refresh_and_story_deduplication(self):
+        hit = {
+            "title": "GPT-6.2 Astra and Sol released",
+            "story_text": "<p>A CLI test compared latency across models.</p>",
+            "created_at": "2026-11-17T18:00:00Z",
+            "objectID": "1234",
+            "url": "https://openai.com/index/gpt-6-2",
+            "points": 58,
+            "num_comments": 13,
+        }
+
+        def get(url):
+            if url == PUBLISHER:
+                return RSS
+            if url.startswith(refresh.HN_SEARCH):
+                return json.dumps({"hits": [hit]})
+            raise OSError("unavailable")
+
+        def build(now, previous):
+            with patch.object(refresh, "FEEDS", (("OpenAI", PUBLISHER, "news"),)):
+                return refresh.build_snapshot(now, previous, {}, get, lambda _: None)
+
+        first = build(NOW, {"stories": []})
+        self.assertEqual(1, len(first["stories"]))
+        links = first["stories"][0]["discussions"]
+        self.assertNotIn("points", links[0])  # X has no observed count.
+        self.assertEqual({
+            "label": "Hacker News",
+            "url": "https://news.ycombinator.com/item?id=1234",
+            "preview": "A CLI test compared latency across models.",
+            "points": 58,
+            "comments": 13,
+            "observedAt": refresh.iso_date(NOW),
+        }, links[1])
+
+        later = NOW + timedelta(minutes=30)
+        self.assertEqual(first["stories"], build(later, first)["stories"])
+        hit["num_comments"] = 15
+        changed = build(later, first)["stories"][0]["discussions"][1]
+        self.assertEqual(15, changed["comments"])
+        self.assertEqual(refresh.iso_date(later), changed["observedAt"])
+
+    def test_curated_post_merges_only_with_the_same_link_and_latest_observation(self):
+        previous = {"label": "X", "url": "https://twitter.com/OpenAI/status/123", "points": 1, "comments": 2,
+                    "observedAt": "2026-11-17T18:00:00Z"}
+        pinned = {"label": "X · @OpenAI", "url": "https://x.com/OpenAI/status/123", "preview": "OpenAI shares a video."}
+        newer = {**pinned, "observedAt": "2026-11-17T19:00:00Z", "points": 10}
+        announcement = refresh.feed_candidates(("OpenAI", PUBLISHER, "news"), NOW - refresh.MAX_AGE, lambda _: RSS)[0]
+        announcement.discussions = [pinned]
+        for link in (previous, newer, {**previous, "url": "https://x.com/OpenAI/status/456"}):
+            refresh.append_discussion(announcement, link)
+        same, different = announcement.discussions
+        self.assertEqual(newer, same)
+        self.assertEqual(1, different["points"])
+        self.assertEqual(2, different["comments"])
+
     def test_total_publisher_failure_is_a_failed_refresh(self):
         def get(_):
             raise OSError("unavailable")
@@ -102,6 +158,14 @@ class RefreshTest(unittest.TestCase):
                 for link in [story["source"], *story["discussions"]]:
                     self.assertTrue(0 < len(link["label"]) <= 80)
                     self.assertTrue(refresh.clean_url(link["url"]))
+                    if "preview" in link:
+                        self.assertTrue(0 < len(link["preview"]) <= refresh.MAX_DISCUSSION_PREVIEW)
+                    if "points" in link or "comments" in link:
+                        self.assertIsNotNone(refresh.optional_date(link.get("observedAt")))
+                        for field in ("points", "comments"):
+                            if field in link:
+                                self.assertIs(type(link[field]), int)
+                                self.assertGreaterEqual(link[field], 0)
 
     def test_hosts_and_href_formats_are_validated(self):
         self.assertIsNone(refresh.discussion_url("https://x.com.evil.example/OpenAI/status/123"))
