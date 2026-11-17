@@ -1,4 +1,5 @@
 import { expect, test as base, type Page, type Response } from '@playwright/test';
+import { AI_UPDATES_URL } from '../../src/config/aiUpdates';
 import { STORAGE_KEYS } from '../../src/config/constants';
 import {
   createFakeServices,
@@ -155,6 +156,10 @@ export async function installScenario(page: Page, options: HelmScenarioOptions =
   await installPrayerRoute(page, options.prayer);
   await installAccessRoutes(page, { authenticated, userId, email: options.email || TEST_EMAIL });
   await installQuranRoute(page);
+  await page.route(AI_UPDATES_URL, route => route.fulfill({
+    headers: { 'Access-Control-Allow-Origin': '*' },
+    json: { updatedAt: options.now ? new Date(options.now).toISOString() : FIXTURE_TIME, stories: [] },
+  }));
   return { services };
 }
 

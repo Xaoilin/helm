@@ -103,6 +103,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test -- --config vite.config.ts
+      - name: Exercise the AI Updates collector
+        run: python3 -B -m unittest discover -s scripts/ai-updates
       - name: Exercise bounded availability monitor
         run: node --test scripts/test-availability-monitor.mjs
       - name: Exercise Finance MCP runtime contract
