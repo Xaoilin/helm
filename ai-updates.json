@@ -1,0 +1,443 @@
+{
+  "updatedAt": "2026-11-17T19:26:41Z",
+  "stories": [
+    {
+      "id": "8f6af8c44a4a1bfb5de3",
+      "title": "Introducing GPT-6.2 Astra and Sol",
+      "summary": "Astra and Sol are available in Codex, ChatGPT Work and the API. OpenAI cuts Astra's API price by 20%; Sol keeps GPT‑6.1 Sol pricing.",
+      "publishedAt": "2026-11-17T17:45:00Z",
+      "category": "models",
+      "source": {
+        "label": "OpenAI",
+        "url": "https://openai.com/index/introducing-gpt-6-2-astra-sol"
+      },
+      "discussions": [
+        {
+          "label": "Reddit · r/codex",
+          "url": "https://www.reddit.com/r/codex/comments/1xyqxe7/gpt_62_sol_astra_just_appeared_in_codex/"
+        },
+        {
+          "label": "X · @OpenAI",
+          "url": "https://x.com/OpenAI/status/2122750124543926515"
+        }
+      ],
+      "featured": true
+    },
+    {
+      "id": "cc8781df9c279647ef43",
+      "title": "The full DeepSeek App experience, now via API",
+      "summary": "Search, files, links, safety, and voice. The capabilities behind the DeepSeek App are now available through the DeepSeek API.",
+      "publishedAt": "2026-11-13T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "DeepSeek",
+        "url": "https://api-docs.deepseek.com/news/news261113"
+      },
+      "discussions": [
+        {
+          "label": "Reddit · r/DeepSeek",
+          "url": "https://www.reddit.com/r/DeepSeek/comments/1xv9idh/releasing_the_full_suite_of_application_apis/"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "5b69826eead48a963c75",
+      "title": "Introducing Gemini 4 Hydrogen",
+      "summary": "Google’s lower-cost Gemini 4 model is aimed at everyday coding and agentic workflows. It is available in AI Studio and via the Gemini API.",
+      "publishedAt": "2026-11-12T18:00:50Z",
+      "category": "models",
+      "source": {
+        "label": "Google DeepMind",
+        "url": "https://deepmind.google/blog/introducing-gemini-4-hydrogen/"
+      },
+      "discussions": [
+        {
+          "label": "Reddit · r/GeminiAI",
+          "url": "https://www.reddit.com/r/GeminiAI/comments/1xuii88/gemini_4_hydrogen_just_released/"
+        },
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50472260"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "55cb0588b3e8436e78b2",
+      "title": "Gemini 4 Carbon is now available",
+      "summary": "Details in the Google DeepMind release notes.",
+      "publishedAt": "2026-11-10T16:03:47Z",
+      "category": "models",
+      "source": {
+        "label": "Google DeepMind",
+        "url": "https://deepmind.google/blog/gemini-4-carbon-is-now-available/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "2ffd7e8cb1f550c679e6",
+      "title": "Introducing the Multimodal Knowledge Agent benchmark",
+      "summary": "We’re launching Multimodal Knowledge Agent, a new benchmark to evaluate how agents reason across visually-complex multimodal tasks.",
+      "publishedAt": "2026-11-10T16:00:00Z",
+      "category": "research",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "3cbf9c32d4a8b52a851a",
+      "title": "Anthropic releases Claude Fable 5.2 and Mythos 5.2",
+      "summary": "Fable 5.2 is available in Claude Code and the API. Anthropic says the models run up to 30% faster than 5.1 and cost less.",
+      "publishedAt": "2026-11-09T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#claude-fable-5-2"
+      },
+      "discussions": [
+        {
+          "label": "Reddit · r/ClaudeAI",
+          "url": "https://www.reddit.com/r/ClaudeAI/comments/1xs0dct/fable_52_just_landed/"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "830da74434e8505c737e",
+      "title": "Put Gemini to work for you",
+      "summary": "Tasks in Gemini is now free of charge in six countries, with new features starting in the U.S. and deeper Google Workspace…",
+      "publishedAt": "2026-11-17T17:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/products/gemini-app/tasks-in-gemini-free-new-features/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "9129b1bc7902641c3506",
+      "title": "Claude Platform: Linked billing",
+      "summary": "We’ve launched Linked billing in beta with the user-profiles-billing-2026-10-01 beta header. Your customers can now pay for the Claude usage in your…",
+      "publishedAt": "2026-11-17T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#linked-billing"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "4e2b4f1543d148003d9a",
+      "title": "Claude Code v2.1.326",
+      "summary": "Added support for turning on Code Mode while agent teams are enabled; if you already turned it on, sessions with teams on…",
+      "publishedAt": "2026-11-16T22:11:05Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Code",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.326"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "8331a3aa13cbf4dc7e51",
+      "title": "OpenCode Browse",
+      "summary": "204 comments on Hacker News.",
+      "publishedAt": "2026-11-16T21:20:37Z",
+      "category": "coding",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://opencode.ai/product/browse"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50523459"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "025d8baefe51f5051ea2",
+      "title": "Regional voices are rolling out in the Gemini app.",
+      "summary": "Gemini now offers 66 regional voices on Android and iOS. Choose a natural, local dialect for your app interactions. Pick your favorite…",
+      "publishedAt": "2026-11-16T18:45:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/products/gemini-app/regional-voices/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "680065894fb3b105c41a",
+      "title": "Claude Platform: Text watermark Claude Opus 4.6 and 4.5 models",
+      "summary": "Text generated by Claude Opus 4.6, Claude Opus 4.5, Claude Sonnet 4.5, and Claude Haiku 4.5 carries Anthropic’s text watermark on supported…",
+      "publishedAt": "2026-11-16T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#text-watermark-claude-opus-4-6-and-4-5-models"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "e58a3ce1f17ad846cacd",
+      "title": "Claude Code v2.1.325",
+      "summary": "Fixed a security issue in how zstd-compressed responses are decoded Added a spinner tip in VS Code and similar integrated terminals about…",
+      "publishedAt": "2026-11-13T20:40:01Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Code",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.325"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "d2a87e2f3ff3ae0e50e6",
+      "title": "Connect Google Wallet to Gemini for personal finance insights",
+      "summary": "All Gemini app users in the U.S. can connect Google Wallet to get responses informed by their spending habits.",
+      "publishedAt": "2026-11-13T17:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/products/gemini-app/google-wallet-gemini-app/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "3fa37c7aeb86d9664b75",
+      "title": "Codex CLI Release: 0.169.0",
+      "summary": "The opt-in terminal workspace supports multiple side-chat tabs. Switch between them with the keyboard or mouse, and reopen saved local side chats…",
+      "publishedAt": "2026-11-13T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#github-release-443990865"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "9b919bc011f1b578f34c",
+      "title": "Codex CLI Release: 0.168.0",
+      "summary": "Browse model providers under Sessions → Model providers and choose the default for new chats. (#59541, #59722) Enable features.tui_workspace to view a…",
+      "publishedAt": "2026-11-13T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#github-release-443793906"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "8427d4fee9a7d1b919f4",
+      "title": "Claude Code v2.1.323",
+      "summary": "Added Code Mode, an experimental opt-in in which Claude writes JavaScript to call its tools; see https://code.claude.com/docs/en/code-mode to turn it on, or…",
+      "publishedAt": "2026-11-12T22:12:13Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Code",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.323"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "948927f31dd46df37176",
+      "title": "Get quick answers from Gemini on any website.",
+      "summary": "Get quick answers with Gemini in Chrome. Summarize articles, compare products, and explain complex topics directly in your side panel. Try it…",
+      "publishedAt": "2026-11-12T17:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/products/gemini-app/research-with-gemini-in-chrome/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "2fb376d25394119438b8",
+      "title": "I'm making LLMs work on small and old devices",
+      "summary": "180 comments on Hacker News.",
+      "publishedAt": "2026-11-12T15:23:10Z",
+      "category": "research",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://github.com/hyperionaidev/smolmaxxing/"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50468888"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "a12cad2621895b8aae1f",
+      "title": "Claude Code and Codex reverse engineered my 1994 Jeep's ECU over a $3 Arduino [video]",
+      "summary": "240 comments on Hacker News.",
+      "publishedAt": "2026-11-12T05:29:24Z",
+      "category": "coding",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://www.youtube.com/watch?v=WPj3aQ-xxpI"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50463399"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "8ec21efa2c62273428cb",
+      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-16T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/openrouter"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "c4c251e9251d06d7feff",
+      "title": "Claude Platform: Self hosted managed agents",
+      "summary": "We’ve launched self-hosted Claude Managed Agents. You run the whole Managed Agents service, not only self-hosted sandboxes, on your own infrastructure, and…",
+      "publishedAt": "2026-11-12T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#self-hosted-managed-agents"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "d7c1da8cb7dc41da688b",
+      "title": "Supporting research on AI and children’s safety",
+      "summary": "OpenAI commits $2 million to research on AI and children’s safety. The work supports shared tools to measure risks and opportunities for…",
+      "publishedAt": "2026-11-12T00:00:00Z",
+      "category": "research",
+      "source": {
+        "label": "OpenAI",
+        "url": "https://openai.com/index/children-first-declaration"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "fc8aa303683f40422f64",
+      "title": "Codex app",
+      "summary": "Fixed a formatting issue where a price such as `$5/month` and part of a later link could appear as math if the…",
+      "publishedAt": "2026-11-12T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-12-app"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "02bfed5e7aa817ea9dcb",
+      "title": "Gemini Decisions API",
+      "summary": "161 comments on Hacker News.",
+      "publishedAt": "2026-11-11T18:32:42Z",
+      "category": "models",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://blog.google/innovation-and-ai/technology/developers-tools/gemini-decisions-api/"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50456791"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "b675b12cfc53ea49f00e",
+      "title": "Talk it through with Gemini, now on Apple CarPlay",
+      "summary": "Gemini is now available on Apple CarPlay.",
+      "publishedAt": "2026-11-11T17:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/products/gemini-app/gemini-on-apple-carplay/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "ae83e21ed5bf76addc07",
+      "title": "Codex CLI Release: 0.167.2",
+      "summary": "Codex now sends tool updates incrementally by default on Google Cloud Vertex AI. To opt out, set incremental_tools_legacy_gcp = false under [features]…",
+      "publishedAt": "2026-11-11T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#github-release-442267349"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "fafff4292c09fd9370c5",
+      "title": "Gemini Intelligence: New features, on more devices",
+      "summary": "Gemini Intelligence is rolling out to more devices. See how expanded capabilities across these devices help you do more.",
+      "publishedAt": "2026-11-10T19:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/products-and-platforms/platforms/android/gemini-intelligence-november-features-devices/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "dbc58eacee5d52ba9f93",
+      "title": "Claude Code v2.1.322",
+      "summary": "Added fast mode on Vertex in the global, us and eu regions, falling back to standard speed if Vertex refuses it",
+      "publishedAt": "2026-11-10T02:29:43Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Code",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.322"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "fe0068430e3bdf2a7001",
+      "title": "Codex CLI Release: 0.167.1",
+      "summary": "Changelog Full Changelog: rust-v0.167.0...rust-v0.167.1",
+      "publishedAt": "2026-11-10T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#github-release-440934118"
+      },
+      "discussions": [],
+      "featured": false
+    }
+  ]
+}
