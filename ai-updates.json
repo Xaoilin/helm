@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-18T02:45:47Z",
+  "updatedAt": "2026-11-18T04:18:22Z",
   "stories": [
     {
       "id": "8f6af8c44a4a1bfb5de3",
@@ -124,6 +124,19 @@
       "featured": false
     },
     {
+      "id": "9add1876343f392d7062",
+      "title": "Codex CLI Release: 0.170.0",
+      "summary": "Added WebRTC negotiation for realtime voice calls in the TUI. (#61172) Added automatically refreshed authentication headers for OpenTelemetry HTTP exporters. (#61028) Added…",
+      "publishedAt": "2026-11-18T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#github-release-449494076"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "8f7a055a1b360233ad87",
       "title": "Claude Code v2.1.327",
       "summary": "Added a confirmation before /install-github-app changes a repository Added claude mcp add-json <name> - to read the server's JSON from stdin, so…",
@@ -215,9 +228,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50523459",
-          "points": 324,
+          "points": 325,
           "comments": 210,
-          "observedAt": "2026-11-18T02:45:47Z"
+          "observedAt": "2026-11-18T04:18:22Z"
         }
       ],
       "featured": false
@@ -369,19 +382,6 @@
       "featured": false
     },
     {
-      "id": "8ec21efa2c62273428cb",
-      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-16T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/openrouter"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
       "id": "c4c251e9251d06d7feff",
       "title": "Claude Platform: Self hosted managed agents",
       "summary": "We’ve launched self-hosted Claude Managed Agents. You run the whole Managed Agents service, not only self-hosted sandboxes, on your own infrastructure, and…",
@@ -421,6 +421,19 @@
       "featured": false
     },
     {
+      "id": "8ec21efa2c62273428cb",
+      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-16T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/openrouter"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "02bfed5e7aa817ea9dcb",
       "title": "Gemini Decisions API",
       "summary": "161 comments on Hacker News.",
@@ -450,19 +463,6 @@
       "source": {
         "label": "Google Gemini",
         "url": "https://blog.google/innovation-and-ai/products/gemini-app/gemini-on-apple-carplay/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "ae83e21ed5bf76addc07",
-      "title": "Codex CLI Release: 0.167.2",
-      "summary": "Codex now sends tool updates incrementally by default on Google Cloud Vertex AI. To opt out, set incremental_tools_legacy_gcp = false under [features]…",
-      "publishedAt": "2026-11-11T00:00:00Z",
-      "category": "coding",
-      "source": {
-        "label": "Codex",
-        "url": "https://developers.openai.com/codex/changelog/#github-release-442267349"
       },
       "discussions": [],
       "featured": false
