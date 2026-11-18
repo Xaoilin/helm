@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-18T23:14:58Z",
+  "updatedAt": "2026-11-18T23:44:57Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -11,7 +11,15 @@
         "label": "Google DeepMind",
         "url": "https://deepmind.google/blog/introducing-gemini-4-neon/"
       },
-      "discussions": [],
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50552424",
+          "points": 326,
+          "comments": 310,
+          "observedAt": "2026-11-18T23:44:57Z"
+        }
+      ],
       "featured": true
     },
     {
@@ -152,7 +160,7 @@
     {
       "id": "f5b869b89561f8d7235c",
       "title": "Seven new models at scalable price-performance",
-      "summary": "270 comments on Hacker News.",
+      "summary": "282 comments on Hacker News.",
       "publishedAt": "2026-11-18T16:08:24Z",
       "category": "models",
       "source": {
@@ -163,11 +171,24 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50548021",
-          "points": 392,
-          "comments": 270,
-          "observedAt": "2026-11-18T23:14:58Z"
+          "points": 403,
+          "comments": 282,
+          "observedAt": "2026-11-18T23:44:57Z"
         }
       ],
+      "featured": false
+    },
+    {
+      "id": "58da586369f33999eb92",
+      "title": "Research acceleration: The jagged frontier",
+      "summary": "OpenAI measures how coding agents are accelerating AI research, where their performance remains uneven, and what this signals about recursive self-improvement.",
+      "publishedAt": "2026-11-18T08:00:00Z",
+      "category": "research",
+      "source": {
+        "label": "OpenAI",
+        "url": "https://openai.com/index/research-acceleration-jagged-frontier"
+      },
+      "discussions": [],
       "featured": false
     },
     {
@@ -452,19 +473,6 @@
           "observedAt": "2026-11-18T21:44:58Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "8ec21efa2c62273428cb",
-      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-16T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/openrouter"
-      },
-      "discussions": [],
       "featured": false
     }
   ]
