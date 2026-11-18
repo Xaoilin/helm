@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-18T18:45:39Z",
+  "updatedAt": "2026-11-18T19:15:10Z",
   "stories": [
     {
       "id": "0191a8cf5007a7e305ee",
@@ -275,6 +275,19 @@
       "featured": false
     },
     {
+      "id": "e55c8f2df06c07ffc92b",
+      "title": "Why your fine-tuning job takes longer than the FLOPs say",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-18T18:53:43Z",
+      "category": "research",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/Dharma-AI/predicting-fine-tuning-time"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "ec56b5eff9affb1c339e",
       "title": "180B Parameters, 32GB of RAM: Pushing MoE Inference to the Limit with Transformers",
       "summary": "Details in the Hugging Face release notes.",
@@ -442,19 +455,6 @@
       "source": {
         "label": "Codex",
         "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-12-app"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "8ec21efa2c62273428cb",
-      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-16T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/openrouter"
       },
       "discussions": [],
       "featured": false
