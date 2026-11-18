@@ -1,6 +1,19 @@
 {
-  "updatedAt": "2026-11-18T21:15:13Z",
+  "updatedAt": "2026-11-18T21:44:58Z",
   "stories": [
+    {
+      "id": "fd9bebbff7e692862dad",
+      "title": "Introducing Gemini 4 Neon",
+      "summary": "Details in the Google DeepMind release notes.",
+      "publishedAt": "2026-11-18T21:35:43Z",
+      "category": "models",
+      "source": {
+        "label": "Google DeepMind",
+        "url": "https://deepmind.google/blog/introducing-gemini-4-neon/"
+      },
+      "discussions": [],
+      "featured": true
+    },
     {
       "id": "0191a8cf5007a7e305ee",
       "title": "The Gemini app is now available on lower-memory Android devices.",
@@ -139,7 +152,7 @@
     {
       "id": "f5b869b89561f8d7235c",
       "title": "Seven new models at scalable price-performance",
-      "summary": "226 comments on Hacker News.",
+      "summary": "241 comments on Hacker News.",
       "publishedAt": "2026-11-18T16:08:24Z",
       "category": "models",
       "source": {
@@ -150,9 +163,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50548021",
-          "points": 339,
-          "comments": 226,
-          "observedAt": "2026-11-18T21:15:13Z"
+          "points": 362,
+          "comments": 241,
+          "observedAt": "2026-11-18T21:44:58Z"
         }
       ],
       "featured": false
@@ -434,24 +447,11 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50463399",
-          "points": 455,
+          "points": 456,
           "comments": 242,
-          "observedAt": "2026-11-18T14:18:24Z"
+          "observedAt": "2026-11-18T21:44:58Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "8ec21efa2c62273428cb",
-      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-16T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/openrouter"
-      },
-      "discussions": [],
       "featured": false
     },
     {
