@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-18T00:37:41Z",
+  "updatedAt": "2026-11-18T00:54:43Z",
   "stories": [
     {
       "id": "8f6af8c44a4a1bfb5de3",
@@ -171,6 +171,19 @@
       "source": {
         "label": "Claude Platform",
         "url": "https://platform.claude.com/docs/en/release-notes/overview#linked-billing"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "616cb124a1370128b835",
+      "title": "Codex CLI Release: 0.169.1",
+      "summary": "Chores No verified release highlights available. Changelog Full Changelog: rust-v0.169.0...rust-v0.169.1",
+      "publishedAt": "2026-11-17T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#github-release-449266447"
       },
       "discussions": [],
       "featured": false
@@ -450,19 +463,6 @@
       "source": {
         "label": "Codex",
         "url": "https://developers.openai.com/codex/changelog/#github-release-442267349"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "fafff4292c09fd9370c5",
-      "title": "Gemini Intelligence: New features, on more devices",
-      "summary": "Gemini Intelligence is rolling out to more devices. See how expanded capabilities across these devices help you do more.",
-      "publishedAt": "2026-11-10T19:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/products-and-platforms/platforms/android/gemini-intelligence-november-features-devices/"
       },
       "discussions": [],
       "featured": false
