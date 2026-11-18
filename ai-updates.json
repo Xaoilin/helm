@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-18T21:44:58Z",
+  "updatedAt": "2026-11-18T22:15:56Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -152,7 +152,7 @@
     {
       "id": "f5b869b89561f8d7235c",
       "title": "Seven new models at scalable price-performance",
-      "summary": "241 comments on Hacker News.",
+      "summary": "251 comments on Hacker News.",
       "publishedAt": "2026-11-18T16:08:24Z",
       "category": "models",
       "source": {
@@ -163,9 +163,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50548021",
-          "points": 362,
-          "comments": 241,
-          "observedAt": "2026-11-18T21:44:58Z"
+          "points": 371,
+          "comments": 251,
+          "observedAt": "2026-11-18T22:15:56Z"
         }
       ],
       "featured": false
@@ -455,14 +455,14 @@
       "featured": false
     },
     {
-      "id": "c4c251e9251d06d7feff",
-      "title": "Claude Platform: Self hosted managed agents",
-      "summary": "We’ve launched self-hosted Claude Managed Agents. You run the whole Managed Agents service, not only self-hosted sandboxes, on your own infrastructure, and…",
-      "publishedAt": "2026-11-12T00:00:00Z",
-      "category": "coding",
+      "id": "8ec21efa2c62273428cb",
+      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-16T00:00:00Z",
+      "category": "models",
       "source": {
-        "label": "Claude Platform",
-        "url": "https://platform.claude.com/docs/en/release-notes/overview#self-hosted-managed-agents"
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/openrouter"
       },
       "discussions": [],
       "featured": false
