@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-18T00:54:43Z",
+  "updatedAt": "2026-11-18T01:45:05Z",
   "stories": [
     {
       "id": "8f6af8c44a4a1bfb5de3",
@@ -369,19 +369,6 @@
       "featured": false
     },
     {
-      "id": "8ec21efa2c62273428cb",
-      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-16T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/openrouter"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
       "id": "c4c251e9251d06d7feff",
       "title": "Claude Platform: Self hosted managed agents",
       "summary": "We’ve launched self-hosted Claude Managed Agents. You run the whole Managed Agents service, not only self-hosted sandboxes, on your own infrastructure, and…",
@@ -416,6 +403,19 @@
       "source": {
         "label": "Codex",
         "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-12-app"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "8ec21efa2c62273428cb",
+      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-16T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/openrouter"
       },
       "discussions": [],
       "featured": false
