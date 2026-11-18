@@ -1,6 +1,19 @@
 {
-  "updatedAt": "2026-11-18T16:16:57Z",
+  "updatedAt": "2026-11-18T17:15:20Z",
   "stories": [
+    {
+      "id": "0191a8cf5007a7e305ee",
+      "title": "The Gemini app is now available on lower-memory Android devices.",
+      "summary": "The Google Gemini app now supports lower-memory Android devices. Access Gemini Live and custom image creation on your phone. Download the app…",
+      "publishedAt": "2026-11-18T17:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/products/gemini-app/gemini-lower-memory-devices/"
+      },
+      "discussions": [],
+      "featured": true
+    },
     {
       "id": "8f6af8c44a4a1bfb5de3",
       "title": "Introducing GPT-6.2 Astra and Sol",
@@ -262,6 +275,19 @@
       "featured": false
     },
     {
+      "id": "ec56b5eff9affb1c339e",
+      "title": "180B Parameters, 32GB of RAM: Pushing MoE Inference to the Limit with Transformers",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-18T00:00:00Z",
+      "category": "research",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/moe-expert-streaming"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "e58a3ce1f17ad846cacd",
       "title": "Claude Code v2.1.325",
       "summary": "Fixed a security issue in how zstd-compressed responses are decoded Added a spinner tip in VS Code and similar integrated terminals about…",
@@ -382,19 +408,6 @@
       "featured": false
     },
     {
-      "id": "8ec21efa2c62273428cb",
-      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-16T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/openrouter"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
       "id": "c4c251e9251d06d7feff",
       "title": "Claude Platform: Self hosted managed agents",
       "summary": "We’ve launched self-hosted Claude Managed Agents. You run the whole Managed Agents service, not only self-hosted sandboxes, on your own infrastructure, and…",
@@ -434,35 +447,14 @@
       "featured": false
     },
     {
-      "id": "02bfed5e7aa817ea9dcb",
-      "title": "Gemini Decisions API",
-      "summary": "161 comments on Hacker News.",
-      "publishedAt": "2026-11-11T18:32:42Z",
+      "id": "8ec21efa2c62273428cb",
+      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-16T00:00:00Z",
       "category": "models",
       "source": {
-        "label": "Hacker News",
-        "url": "https://blog.google/innovation-and-ai/technology/developers-tools/gemini-decisions-api/"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50456791",
-          "points": 570,
-          "comments": 161,
-          "observedAt": "2026-11-18T08:46:03Z"
-        }
-      ],
-      "featured": false
-    },
-    {
-      "id": "b675b12cfc53ea49f00e",
-      "title": "Talk it through with Gemini, now on Apple CarPlay",
-      "summary": "Gemini is now available on Apple CarPlay.",
-      "publishedAt": "2026-11-11T17:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/innovation-and-ai/products/gemini-app/gemini-on-apple-carplay/"
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/openrouter"
       },
       "discussions": [],
       "featured": false
