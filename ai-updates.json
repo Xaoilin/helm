@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-18T19:15:10Z",
+  "updatedAt": "2026-11-18T19:45:50Z",
   "stories": [
     {
       "id": "0191a8cf5007a7e305ee",
@@ -230,7 +230,7 @@
     {
       "id": "8331a3aa13cbf4dc7e51",
       "title": "OpenCode Browse",
-      "summary": "215 comments on Hacker News.",
+      "summary": "217 comments on Hacker News.",
       "publishedAt": "2026-11-16T21:20:37Z",
       "category": "coding",
       "source": {
@@ -241,9 +241,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50523459",
-          "points": 330,
-          "comments": 215,
-          "observedAt": "2026-11-18T17:45:10Z"
+          "points": 331,
+          "comments": 217,
+          "observedAt": "2026-11-18T19:45:50Z"
         }
       ],
       "featured": false
@@ -421,6 +421,19 @@
       "featured": false
     },
     {
+      "id": "8ec21efa2c62273428cb",
+      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-16T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/openrouter"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "c4c251e9251d06d7feff",
       "title": "Claude Platform: Self hosted managed agents",
       "summary": "We’ve launched self-hosted Claude Managed Agents. You run the whole Managed Agents service, not only self-hosted sandboxes, on your own infrastructure, and…",
@@ -442,19 +455,6 @@
       "source": {
         "label": "OpenAI",
         "url": "https://openai.com/index/children-first-declaration"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "fc8aa303683f40422f64",
-      "title": "Codex app",
-      "summary": "Fixed a formatting issue where a price such as `$5/month` and part of a later link could appear as math if the…",
-      "publishedAt": "2026-11-12T00:00:00Z",
-      "category": "coding",
-      "source": {
-        "label": "Codex",
-        "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-12-app"
       },
       "discussions": [],
       "featured": false
