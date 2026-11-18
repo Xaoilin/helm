@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-18T20:16:52Z",
+  "updatedAt": "2026-11-18T20:46:02Z",
   "stories": [
     {
       "id": "0191a8cf5007a7e305ee",
@@ -132,6 +132,27 @@
           "preview": "The rollout thread links Anthropic’s announcement and discusses Fable-only usage resets and when to choose Fable 5.2 over Opus 5.5.",
           "points": 1576,
           "observedAt": "2026-11-17T19:42:52Z"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "f5b869b89561f8d7235c",
+      "title": "Seven new models at scalable price-performance",
+      "summary": "210 comments on Hacker News.",
+      "publishedAt": "2026-11-18T16:08:24Z",
+      "category": "models",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://microsoft.ai/news/microsoft-ignite-2026/"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50548021",
+          "points": 323,
+          "comments": 210,
+          "observedAt": "2026-11-18T20:46:02Z"
         }
       ],
       "featured": false
@@ -392,9 +413,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50468888",
-          "points": 484,
+          "points": 485,
           "comments": 180,
-          "observedAt": "2026-11-17T23:14:57Z"
+          "observedAt": "2026-11-18T20:46:02Z"
         }
       ],
       "featured": false
@@ -421,6 +442,19 @@
       "featured": false
     },
     {
+      "id": "8ec21efa2c62273428cb",
+      "title": "Hugging Face and OpenRouter join forces to make open-weight models easy to run",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-16T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/openrouter"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "c4c251e9251d06d7feff",
       "title": "Claude Platform: Self hosted managed agents",
       "summary": "We’ve launched self-hosted Claude Managed Agents. You run the whole Managed Agents service, not only self-hosted sandboxes, on your own infrastructure, and…",
@@ -429,32 +463,6 @@
       "source": {
         "label": "Claude Platform",
         "url": "https://platform.claude.com/docs/en/release-notes/overview#self-hosted-managed-agents"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "d7c1da8cb7dc41da688b",
-      "title": "Supporting research on AI and children’s safety",
-      "summary": "OpenAI commits $2 million to research on AI and children’s safety. The work supports shared tools to measure risks and opportunities for…",
-      "publishedAt": "2026-11-12T00:00:00Z",
-      "category": "research",
-      "source": {
-        "label": "OpenAI",
-        "url": "https://openai.com/index/children-first-declaration"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "fc8aa303683f40422f64",
-      "title": "Codex app",
-      "summary": "Fixed a formatting issue where a price such as `$5/month` and part of a later link could appear as math if the…",
-      "publishedAt": "2026-11-12T00:00:00Z",
-      "category": "coding",
-      "source": {
-        "label": "Codex",
-        "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-12-app"
       },
       "discussions": [],
       "featured": false
