@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-19T21:44:59Z",
+  "updatedAt": "2026-11-19T22:16:01Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1002,
+          "points": 1003,
           "comments": 752,
-          "observedAt": "2026-11-19T21:44:59Z"
+          "observedAt": "2026-11-19T22:16:01Z"
         }
       ],
       "featured": true
@@ -132,6 +132,19 @@
       "source": {
         "label": "Google Gemini",
         "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "f3d370a5121afbf2b74a",
+      "title": "Claude Code v2.1.329",
+      "summary": "Added a trust dialog warning that says where a folder's hooks are declared Added a warning in the conversation, in Claude Desktop…",
+      "publishedAt": "2026-11-19T22:14:41Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Code",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.329"
       },
       "discussions": [],
       "featured": false
@@ -458,19 +471,6 @@
       "source": {
         "label": "Google Gemini",
         "url": "https://blog.google/innovation-and-ai/products/gemini-app/google-wallet-gemini-app/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "3fa37c7aeb86d9664b75",
-      "title": "Codex CLI Release: 0.169.0",
-      "summary": "The opt-in terminal workspace supports multiple side-chat tabs. Switch between them with the keyboard or mouse, and reopen saved local side chats…",
-      "publishedAt": "2026-11-13T00:00:00Z",
-      "category": "coding",
-      "source": {
-        "label": "Codex",
-        "url": "https://developers.openai.com/codex/changelog/#github-release-443990865"
       },
       "discussions": [],
       "featured": false
