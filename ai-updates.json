@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-19T12:22:36Z",
+  "updatedAt": "2026-11-19T12:44:55Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 870,
-          "comments": 690,
-          "observedAt": "2026-11-19T12:22:36Z"
+          "points": 878,
+          "comments": 697,
+          "observedAt": "2026-11-19T12:44:55Z"
         }
       ],
       "featured": true
@@ -184,9 +184,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50548021",
-          "points": 552,
+          "points": 559,
           "comments": 357,
-          "observedAt": "2026-11-19T12:22:36Z"
+          "observedAt": "2026-11-19T12:44:55Z"
         }
       ],
       "featured": false
@@ -319,7 +319,7 @@
     {
       "id": "8331a3aa13cbf4dc7e51",
       "title": "OpenCode Browse",
-      "summary": "217 comments on Hacker News.",
+      "summary": "218 comments on Hacker News.",
       "publishedAt": "2026-11-16T21:20:37Z",
       "category": "coding",
       "source": {
@@ -331,8 +331,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50523459",
           "points": 331,
-          "comments": 217,
-          "observedAt": "2026-11-18T19:45:50Z"
+          "comments": 218,
+          "observedAt": "2026-11-19T12:44:55Z"
         }
       ],
       "featured": false
