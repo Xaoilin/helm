@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-19T20:17:00Z",
+  "updatedAt": "2026-11-19T20:45:34Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 993,
+          "points": 999,
           "comments": 751,
-          "observedAt": "2026-11-19T20:17:00Z"
+          "observedAt": "2026-11-19T20:45:34Z"
         }
       ],
       "featured": true
@@ -132,6 +132,19 @@
       "source": {
         "label": "Google Gemini",
         "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "a89c20fefc5a11322a22",
+      "title": "ICYMI: Transfer your history from other AI apps into Gemini.",
+      "summary": "Transfer your chat history into Gemini. Import your ZIP files and AI summaries to continue conversations seamlessly. Get the details.",
+      "publishedAt": "2026-11-19T20:30:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/products/gemini-app/switch-ai-assistants-transfer-history/"
       },
       "discussions": [],
       "featured": false
@@ -364,9 +377,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50523459",
-          "points": 332,
+          "points": 333,
           "comments": 219,
-          "observedAt": "2026-11-19T17:14:58Z"
+          "observedAt": "2026-11-19T20:45:34Z"
         }
       ],
       "featured": false
@@ -458,19 +471,6 @@
       "source": {
         "label": "Codex",
         "url": "https://developers.openai.com/codex/changelog/#github-release-443990865"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "9b919bc011f1b578f34c",
-      "title": "Codex CLI Release: 0.168.0",
-      "summary": "Browse model providers under Sessions → Model providers and choose the default for new chats. (#59541, #59722) Enable features.tui_workspace to view a…",
-      "publishedAt": "2026-11-13T00:00:00Z",
-      "category": "coding",
-      "source": {
-        "label": "Codex",
-        "url": "https://developers.openai.com/codex/changelog/#github-release-443793906"
       },
       "discussions": [],
       "featured": false
