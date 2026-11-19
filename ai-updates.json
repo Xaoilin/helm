@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-19T22:16:01Z",
+  "updatedAt": "2026-11-19T22:45:20Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1003,
-          "comments": 752,
-          "observedAt": "2026-11-19T22:16:01Z"
+          "points": 1006,
+          "comments": 753,
+          "observedAt": "2026-11-19T22:45:20Z"
         }
       ],
       "featured": true
@@ -163,6 +163,27 @@
       "featured": false
     },
     {
+      "id": "3277cf52dcd23547d830",
+      "title": "Claude solves two open problems in the physics of black holes",
+      "summary": "140 comments on Hacker News.",
+      "publishedAt": "2026-11-19T17:30:44Z",
+      "category": "models",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://www.anthropic.com/research/claude-black-hole-physics"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50563148",
+          "points": 314,
+          "comments": 140,
+          "observedAt": "2026-11-19T22:45:20Z"
+        }
+      ],
+      "featured": false
+    },
+    {
       "id": "efdbd6c83627cffee94d",
       "title": "Let Gemini tackle repetitive chores on your Mac",
       "summary": "The Gemini app for Mac now has computer use to help you with repetitive tasks.",
@@ -191,7 +212,7 @@
     {
       "id": "f5b869b89561f8d7235c",
       "title": "Seven new models at scalable price-performance",
-      "summary": "374 comments on Hacker News.",
+      "summary": "375 comments on Hacker News.",
       "publishedAt": "2026-11-18T16:08:24Z",
       "category": "models",
       "source": {
@@ -203,8 +224,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50548021",
           "points": 590,
-          "comments": 374,
-          "observedAt": "2026-11-19T21:16:03Z"
+          "comments": 375,
+          "observedAt": "2026-11-19T22:45:20Z"
         }
       ],
       "featured": false
@@ -458,19 +479,6 @@
       "source": {
         "label": "Claude Code",
         "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.325"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "d2a87e2f3ff3ae0e50e6",
-      "title": "Connect Google Wallet to Gemini for personal finance insights",
-      "summary": "All Gemini app users in the U.S. can connect Google Wallet to get responses informed by their spending habits.",
-      "publishedAt": "2026-11-13T17:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/innovation-and-ai/products/gemini-app/google-wallet-gemini-app/"
       },
       "discussions": [],
       "featured": false
