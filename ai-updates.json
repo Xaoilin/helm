@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-19T20:45:34Z",
+  "updatedAt": "2026-11-19T21:16:03Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 999,
-          "comments": 751,
-          "observedAt": "2026-11-19T20:45:34Z"
+          "points": 1000,
+          "comments": 752,
+          "observedAt": "2026-11-19T21:16:03Z"
         }
       ],
       "featured": true
@@ -178,7 +178,7 @@
     {
       "id": "f5b869b89561f8d7235c",
       "title": "Seven new models at scalable price-performance",
-      "summary": "373 comments on Hacker News.",
+      "summary": "374 comments on Hacker News.",
       "publishedAt": "2026-11-18T16:08:24Z",
       "category": "models",
       "source": {
@@ -190,8 +190,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50548021",
           "points": 590,
-          "comments": 373,
-          "observedAt": "2026-11-19T20:17:00Z"
+          "comments": 374,
+          "observedAt": "2026-11-19T21:16:03Z"
         }
       ],
       "featured": false
@@ -366,7 +366,7 @@
     {
       "id": "8331a3aa13cbf4dc7e51",
       "title": "OpenCode Browse",
-      "summary": "219 comments on Hacker News.",
+      "summary": "220 comments on Hacker News.",
       "publishedAt": "2026-11-16T21:20:37Z",
       "category": "coding",
       "source": {
@@ -378,8 +378,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50523459",
           "points": 333,
-          "comments": 219,
-          "observedAt": "2026-11-19T20:45:34Z"
+          "comments": 220,
+          "observedAt": "2026-11-19T21:16:03Z"
         }
       ],
       "featured": false
