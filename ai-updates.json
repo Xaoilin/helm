@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-19T03:45:36Z",
+  "updatedAt": "2026-11-19T04:18:44Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 544,
-          "comments": 500,
-          "observedAt": "2026-11-19T03:45:36Z"
+          "points": 570,
+          "comments": 517,
+          "observedAt": "2026-11-19T04:18:44Z"
         }
       ],
       "featured": true
@@ -173,7 +173,7 @@
     {
       "id": "f5b869b89561f8d7235c",
       "title": "Seven new models at scalable price-performance",
-      "summary": "327 comments on Hacker News.",
+      "summary": "328 comments on Hacker News.",
       "publishedAt": "2026-11-18T16:08:24Z",
       "category": "models",
       "source": {
@@ -184,9 +184,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50548021",
-          "points": 470,
-          "comments": 327,
-          "observedAt": "2026-11-19T03:45:36Z"
+          "points": 479,
+          "comments": 328,
+          "observedAt": "2026-11-19T04:18:44Z"
         }
       ],
       "featured": false
