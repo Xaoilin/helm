@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-20T09:45:10Z",
+  "updatedAt": "2026-11-20T10:17:28Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1033,
+          "points": 1035,
           "comments": 768,
-          "observedAt": "2026-11-20T09:45:10Z"
+          "observedAt": "2026-11-20T10:17:28Z"
         }
       ],
       "featured": true
@@ -152,7 +152,7 @@
     {
       "id": "bda522de56a34a98c046",
       "title": "Gemini 4 Neon is the new #1 on the Models Engineering Index",
-      "summary": "219 comments on Hacker News.",
+      "summary": "220 comments on Hacker News.",
       "publishedAt": "2026-11-19T23:35:35Z",
       "category": "models",
       "source": {
@@ -163,9 +163,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50568130",
-          "points": 345,
-          "comments": 219,
-          "observedAt": "2026-11-20T09:45:10Z"
+          "points": 347,
+          "comments": 220,
+          "observedAt": "2026-11-20T10:17:28Z"
         }
       ],
       "featured": false
@@ -199,7 +199,7 @@
     {
       "id": "3277cf52dcd23547d830",
       "title": "Claude solves two open problems in the physics of black holes",
-      "summary": "230 comments on Hacker News.",
+      "summary": "231 comments on Hacker News.",
       "publishedAt": "2026-11-19T17:30:44Z",
       "category": "models",
       "source": {
@@ -210,9 +210,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 495,
-          "comments": 230,
-          "observedAt": "2026-11-20T09:45:10Z"
+          "points": 501,
+          "comments": 231,
+          "observedAt": "2026-11-20T10:17:28Z"
         }
       ],
       "featured": false
