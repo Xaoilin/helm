@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-20T07:45:46Z",
+  "updatedAt": "2026-11-20T08:20:49Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1030,
-          "comments": 765,
-          "observedAt": "2026-11-20T07:18:32Z"
+          "points": 1032,
+          "comments": 767,
+          "observedAt": "2026-11-20T08:20:49Z"
         }
       ],
       "featured": true
@@ -152,7 +152,7 @@
     {
       "id": "bda522de56a34a98c046",
       "title": "Gemini 4 Neon is the new #1 on the Models Engineering Index",
-      "summary": "210 comments on Hacker News.",
+      "summary": "212 comments on Hacker News.",
       "publishedAt": "2026-11-19T23:35:35Z",
       "category": "models",
       "source": {
@@ -163,9 +163,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50568130",
-          "points": 335,
-          "comments": 210,
-          "observedAt": "2026-11-20T07:45:46Z"
+          "points": 339,
+          "comments": 212,
+          "observedAt": "2026-11-20T08:20:49Z"
         }
       ],
       "featured": false
@@ -210,9 +210,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 471,
+          "points": 479,
           "comments": 222,
-          "observedAt": "2026-11-20T07:45:46Z"
+          "observedAt": "2026-11-20T08:20:49Z"
         }
       ],
       "featured": false
@@ -257,9 +257,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50553225",
-          "points": 302,
+          "points": 303,
           "comments": 77,
-          "observedAt": "2026-11-20T04:45:47Z"
+          "observedAt": "2026-11-20T08:20:49Z"
         }
       ],
       "featured": false
@@ -267,7 +267,7 @@
     {
       "id": "f5b869b89561f8d7235c",
       "title": "Seven new models at scalable price-performance",
-      "summary": "376 comments on Hacker News.",
+      "summary": "377 comments on Hacker News.",
       "publishedAt": "2026-11-18T16:08:24Z",
       "category": "models",
       "source": {
@@ -278,9 +278,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50548021",
-          "points": 596,
-          "comments": 376,
-          "observedAt": "2026-11-20T07:45:46Z"
+          "points": 597,
+          "comments": 377,
+          "observedAt": "2026-11-20T08:20:49Z"
         }
       ],
       "featured": false
@@ -307,6 +307,19 @@
       "featured": false
     },
     {
+      "id": "58da586369f33999eb92",
+      "title": "Research acceleration: The jagged frontier",
+      "summary": "OpenAI measures how coding agents are accelerating AI research, where their performance remains uneven, and what this signals about recursive self-improvement.",
+      "publishedAt": "2026-11-18T08:00:00Z",
+      "category": "research",
+      "source": {
+        "label": "OpenAI",
+        "url": "https://openai.com/index/research-acceleration-jagged-frontier"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "3cbf9c32d4a8b52a851a",
       "title": "Anthropic releases Claude Fable 5.2 and Mythos 5.2",
       "summary": "Fable 5.2 is available in Claude Code and the API. Anthropic says the models run up to 30% faster than 5.1 and cost less.",
@@ -325,19 +338,6 @@
           "observedAt": "2026-11-17T19:42:52Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "58da586369f33999eb92",
-      "title": "Research acceleration: The jagged frontier",
-      "summary": "OpenAI measures how coding agents are accelerating AI research, where their performance remains uneven, and what this signals about recursive self-improvement.",
-      "publishedAt": "2026-11-18T08:00:00Z",
-      "category": "research",
-      "source": {
-        "label": "OpenAI",
-        "url": "https://openai.com/index/research-acceleration-jagged-frontier"
-      },
-      "discussions": [],
       "featured": false
     },
     {
@@ -455,7 +455,7 @@
     {
       "id": "8331a3aa13cbf4dc7e51",
       "title": "OpenCode Browse",
-      "summary": "220 comments on Hacker News.",
+      "summary": "222 comments on Hacker News.",
       "publishedAt": "2026-11-16T21:20:37Z",
       "category": "coding",
       "source": {
@@ -467,8 +467,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50523459",
           "points": 333,
-          "comments": 220,
-          "observedAt": "2026-11-19T21:16:03Z"
+          "comments": 222,
+          "observedAt": "2026-11-20T08:20:49Z"
         }
       ],
       "featured": false
