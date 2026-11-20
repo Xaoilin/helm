@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-20T04:45:47Z",
+  "updatedAt": "2026-11-20T05:17:30Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1023,
+          "points": 1025,
           "comments": 763,
-          "observedAt": "2026-11-20T04:19:01Z"
+          "observedAt": "2026-11-20T05:17:30Z"
         }
       ],
       "featured": true
@@ -150,6 +150,27 @@
       "featured": false
     },
     {
+      "id": "bda522de56a34a98c046",
+      "title": "Gemini 4 Neon is the new #1 on the Models Engineering Index",
+      "summary": "179 comments on Hacker News.",
+      "publishedAt": "2026-11-19T23:35:35Z",
+      "category": "models",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://git-aarvin.github.io/mei/"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50568130",
+          "points": 312,
+          "comments": 179,
+          "observedAt": "2026-11-20T05:17:30Z"
+        }
+      ],
+      "featured": false
+    },
+    {
       "id": "f3d370a5121afbf2b74a",
       "title": "Claude Code v2.1.329",
       "summary": "Added a trust dialog warning that says where a folder's hooks are declared Added a warning in the conversation, in Claude Desktop…",
@@ -178,7 +199,7 @@
     {
       "id": "3277cf52dcd23547d830",
       "title": "Claude solves two open problems in the physics of black holes",
-      "summary": "198 comments on Hacker News.",
+      "summary": "203 comments on Hacker News.",
       "publishedAt": "2026-11-19T17:30:44Z",
       "category": "models",
       "source": {
@@ -189,9 +210,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 435,
-          "comments": 198,
-          "observedAt": "2026-11-20T04:45:47Z"
+          "points": 440,
+          "comments": 203,
+          "observedAt": "2026-11-20T05:17:30Z"
         }
       ],
       "featured": false
@@ -265,27 +286,6 @@
       "featured": false
     },
     {
-      "id": "3cbf9c32d4a8b52a851a",
-      "title": "Anthropic releases Claude Fable 5.2 and Mythos 5.2",
-      "summary": "Fable 5.2 is available in Claude Code and the API. Anthropic says the models run up to 30% faster than 5.1 and cost less.",
-      "publishedAt": "2026-11-09T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Claude Platform",
-        "url": "https://platform.claude.com/docs/en/release-notes/overview#claude-fable-5-2"
-      },
-      "discussions": [
-        {
-          "label": "Reddit · r/ClaudeAI",
-          "url": "https://www.reddit.com/r/ClaudeAI/comments/1xs0dct/fable_52_just_landed/",
-          "preview": "The rollout thread links Anthropic’s announcement and discusses Fable-only usage resets and when to choose Fable 5.2 over Opus 5.5.",
-          "points": 1576,
-          "observedAt": "2026-11-17T19:42:52Z"
-        }
-      ],
-      "featured": false
-    },
-    {
       "id": "948257091aad02b88a67",
       "title": "Energy-Based Reasoners: 385x more efficient inference",
       "summary": "57 comments on Hacker News.",
@@ -302,6 +302,27 @@
           "points": 315,
           "comments": 57,
           "observedAt": "2026-11-19T19:15:27Z"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "3cbf9c32d4a8b52a851a",
+      "title": "Anthropic releases Claude Fable 5.2 and Mythos 5.2",
+      "summary": "Fable 5.2 is available in Claude Code and the API. Anthropic says the models run up to 30% faster than 5.1 and cost less.",
+      "publishedAt": "2026-11-09T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#claude-fable-5-2"
+      },
+      "discussions": [
+        {
+          "label": "Reddit · r/ClaudeAI",
+          "url": "https://www.reddit.com/r/ClaudeAI/comments/1xs0dct/fable_52_just_landed/",
+          "preview": "The rollout thread links Anthropic’s announcement and discusses Fable-only usage resets and when to choose Fable 5.2 over Opus 5.5.",
+          "points": 1576,
+          "observedAt": "2026-11-17T19:42:52Z"
         }
       ],
       "featured": false
@@ -474,19 +495,6 @@
       "source": {
         "label": "Claude Platform",
         "url": "https://platform.claude.com/docs/en/release-notes/overview#text-watermark-claude-opus-4-6-and-4-5-models"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "e55c8f2df06c07ffc92b",
-      "title": "Why your fine-tuning job takes longer than the FLOPs say",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-18T18:53:43Z",
-      "category": "research",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/Dharma-AI/predicting-fine-tuning-time"
       },
       "discussions": [],
       "featured": false
