@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-20T11:45:06Z",
+  "updatedAt": "2026-11-20T12:22:27Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1035,
-          "comments": 769,
-          "observedAt": "2026-11-20T11:45:06Z"
+          "points": 1036,
+          "comments": 771,
+          "observedAt": "2026-11-20T12:22:27Z"
         }
       ],
       "featured": true
@@ -152,7 +152,7 @@
     {
       "id": "bda522de56a34a98c046",
       "title": "Gemini 4 Neon is the new #1 on the Models Engineering Index",
-      "summary": "223 comments on Hacker News.",
+      "summary": "224 comments on Hacker News.",
       "publishedAt": "2026-11-19T23:35:35Z",
       "category": "models",
       "source": {
@@ -163,9 +163,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50568130",
-          "points": 350,
-          "comments": 223,
-          "observedAt": "2026-11-20T11:15:58Z"
+          "points": 352,
+          "comments": 224,
+          "observedAt": "2026-11-20T12:22:27Z"
         }
       ],
       "featured": false
@@ -199,7 +199,7 @@
     {
       "id": "3277cf52dcd23547d830",
       "title": "Claude solves two open problems in the physics of black holes",
-      "summary": "238 comments on Hacker News.",
+      "summary": "242 comments on Hacker News.",
       "publishedAt": "2026-11-19T17:30:44Z",
       "category": "models",
       "source": {
@@ -210,9 +210,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 511,
-          "comments": 238,
-          "observedAt": "2026-11-20T11:45:06Z"
+          "points": 514,
+          "comments": 242,
+          "observedAt": "2026-11-20T12:22:27Z"
         }
       ],
       "featured": false
@@ -257,9 +257,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50553225",
-          "points": 305,
+          "points": 306,
           "comments": 79,
-          "observedAt": "2026-11-20T11:45:06Z"
+          "observedAt": "2026-11-20T12:22:27Z"
         }
       ],
       "featured": false
