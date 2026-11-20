@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-20T01:16:32Z",
+  "updatedAt": "2026-11-20T01:44:54Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1014,
+          "points": 1015,
           "comments": 761,
-          "observedAt": "2026-11-20T01:16:32Z"
+          "observedAt": "2026-11-20T01:44:54Z"
         }
       ],
       "featured": true
@@ -137,6 +137,19 @@
       "featured": false
     },
     {
+      "id": "278f6f667804c5dfaaf1",
+      "title": "Codex CLI Release: 0.171.0",
+      "summary": "Added GPT-6.2 Sol and Astra to model catalogs, with Sol as the default catalog selection. (#62106) Enabled the TUI workspace by default…",
+      "publishedAt": "2026-11-20T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#github-release-452122665"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "f3d370a5121afbf2b74a",
       "title": "Claude Code v2.1.329",
       "summary": "Added a trust dialog warning that says where a folder's hooks are declared Added a warning in the conversation, in Claude Desktop…",
@@ -165,7 +178,7 @@
     {
       "id": "3277cf52dcd23547d830",
       "title": "Claude solves two open problems in the physics of black holes",
-      "summary": "173 comments on Hacker News.",
+      "summary": "179 comments on Hacker News.",
       "publishedAt": "2026-11-19T17:30:44Z",
       "category": "models",
       "source": {
@@ -176,9 +189,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 373,
-          "comments": 173,
-          "observedAt": "2026-11-20T01:16:32Z"
+          "points": 379,
+          "comments": 179,
+          "observedAt": "2026-11-20T01:44:54Z"
         }
       ],
       "featured": false
@@ -223,9 +236,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50548021",
-          "points": 592,
+          "points": 593,
           "comments": 376,
-          "observedAt": "2026-11-20T00:51:43Z"
+          "observedAt": "2026-11-20T01:44:54Z"
         }
       ],
       "featured": false
@@ -466,19 +479,6 @@
       "source": {
         "label": "Hugging Face",
         "url": "https://huggingface.co/blog/moe-expert-streaming"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "e58a3ce1f17ad846cacd",
-      "title": "Claude Code v2.1.325",
-      "summary": "Fixed a security issue in how zstd-compressed responses are decoded Added a spinner tip in VS Code and similar integrated terminals about…",
-      "publishedAt": "2026-11-13T20:40:01Z",
-      "category": "coding",
-      "source": {
-        "label": "Claude Code",
-        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.325"
       },
       "discussions": [],
       "featured": false
