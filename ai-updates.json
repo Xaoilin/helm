@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-20T11:15:58Z",
+  "updatedAt": "2026-11-20T11:45:06Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -16,8 +16,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
           "points": 1035,
-          "comments": 768,
-          "observedAt": "2026-11-20T10:17:28Z"
+          "comments": 769,
+          "observedAt": "2026-11-20T11:45:06Z"
         }
       ],
       "featured": true
@@ -199,7 +199,7 @@
     {
       "id": "3277cf52dcd23547d830",
       "title": "Claude solves two open problems in the physics of black holes",
-      "summary": "237 comments on Hacker News.",
+      "summary": "238 comments on Hacker News.",
       "publishedAt": "2026-11-19T17:30:44Z",
       "category": "models",
       "source": {
@@ -210,9 +210,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 509,
-          "comments": 237,
-          "observedAt": "2026-11-20T11:15:58Z"
+          "points": 511,
+          "comments": 238,
+          "observedAt": "2026-11-20T11:45:06Z"
         }
       ],
       "featured": false
@@ -246,7 +246,7 @@
     {
       "id": "1db0eada305233be8b8a",
       "title": "LLM assisted reverse engineering",
-      "summary": "78 comments on Hacker News.",
+      "summary": "79 comments on Hacker News.",
       "publishedAt": "2026-11-18T22:29:13Z",
       "category": "research",
       "source": {
@@ -258,8 +258,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50553225",
           "points": 305,
-          "comments": 78,
-          "observedAt": "2026-11-20T11:15:58Z"
+          "comments": 79,
+          "observedAt": "2026-11-20T11:45:06Z"
         }
       ],
       "featured": false
@@ -278,9 +278,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50548021",
-          "points": 597,
+          "points": 598,
           "comments": 377,
-          "observedAt": "2026-11-20T08:20:49Z"
+          "observedAt": "2026-11-20T11:45:06Z"
         }
       ],
       "featured": false
