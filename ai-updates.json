@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-20T04:19:01Z",
+  "updatedAt": "2026-11-20T04:45:47Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -178,7 +178,7 @@
     {
       "id": "3277cf52dcd23547d830",
       "title": "Claude solves two open problems in the physics of black holes",
-      "summary": "195 comments on Hacker News.",
+      "summary": "198 comments on Hacker News.",
       "publishedAt": "2026-11-19T17:30:44Z",
       "category": "models",
       "source": {
@@ -189,9 +189,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 431,
-          "comments": 195,
-          "observedAt": "2026-11-20T04:19:01Z"
+          "points": 435,
+          "comments": 198,
+          "observedAt": "2026-11-20T04:45:47Z"
         }
       ],
       "featured": false
@@ -220,6 +220,27 @@
         "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.328"
       },
       "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "1db0eada305233be8b8a",
+      "title": "LLM assisted reverse engineering",
+      "summary": "77 comments on Hacker News.",
+      "publishedAt": "2026-11-18T22:29:13Z",
+      "category": "research",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://www.slowchronicle.com/posts/llm-assisted-reverse-engineering"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50553225",
+          "points": 302,
+          "comments": 77,
+          "observedAt": "2026-11-20T04:45:47Z"
+        }
+      ],
       "featured": false
     },
     {
@@ -466,19 +487,6 @@
       "source": {
         "label": "Hugging Face",
         "url": "https://huggingface.co/blog/Dharma-AI/predicting-fine-tuning-time"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "ec56b5eff9affb1c339e",
-      "title": "180B Parameters, 32GB of RAM: Pushing MoE Inference to the Limit with Transformers",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-18T00:00:00Z",
-      "category": "research",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/moe-expert-streaming"
       },
       "discussions": [],
       "featured": false
