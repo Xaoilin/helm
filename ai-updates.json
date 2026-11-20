@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-20T22:15:04Z",
+  "updatedAt": "2026-11-20T22:45:18Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -111,6 +111,19 @@
       "featured": false
     },
     {
+      "id": "fdc4cffb6fa79465efcb",
+      "title": "Claude Code v2.1.330",
+      "summary": "Added sign-in to organizations managed in Anthropic's Enterprise Admin Console: after claude auth login, Claude Code applies the organization's settings and uses…",
+      "publishedAt": "2026-11-20T22:32:56Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Code",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.330"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "55cb0588b3e8436e78b2",
       "title": "Gemini 4 Carbon is now available",
       "summary": "Details in the Google DeepMind release notes.",
@@ -176,9 +189,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50568130",
-          "points": 360,
+          "points": 362,
           "comments": 240,
-          "observedAt": "2026-11-20T22:15:04Z"
+          "observedAt": "2026-11-20T22:45:18Z"
         }
       ],
       "featured": false
@@ -212,7 +225,7 @@
     {
       "id": "3277cf52dcd23547d830",
       "title": "Claude solves two open problems in the physics of black holes",
-      "summary": "265 comments on Hacker News.",
+      "summary": "266 comments on Hacker News.",
       "publishedAt": "2026-11-19T17:30:44Z",
       "category": "models",
       "source": {
@@ -224,8 +237,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
           "points": 550,
-          "comments": 265,
-          "observedAt": "2026-11-20T22:15:04Z"
+          "comments": 266,
+          "observedAt": "2026-11-20T22:45:18Z"
         }
       ],
       "featured": false
@@ -484,19 +497,6 @@
           "observedAt": "2026-11-20T10:45:09Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "025d8baefe51f5051ea2",
-      "title": "Regional voices are rolling out in the Gemini app.",
-      "summary": "Gemini now offers 66 regional voices on Android and iOS. Choose a natural, local dialect for your app interactions. Pick your favorite…",
-      "publishedAt": "2026-11-16T18:45:00Z",
-      "category": "models",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/innovation-and-ai/products/gemini-app/regional-voices/"
-      },
-      "discussions": [],
       "featured": false
     }
   ]
