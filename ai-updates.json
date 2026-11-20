@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-20T17:44:55Z",
+  "updatedAt": "2026-11-20T18:19:58Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -59,7 +59,7 @@
           "preview": "OpenAI frames the launch around efficiency and performance on real work, and shares a launch video."
         }
       ],
-      "featured": true
+      "featured": false
     },
     {
       "id": "cc8781df9c279647ef43",
@@ -210,9 +210,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 537,
+          "points": 539,
           "comments": 260,
-          "observedAt": "2026-11-20T17:44:55Z"
+          "observedAt": "2026-11-20T18:19:58Z"
         }
       ],
       "featured": false
