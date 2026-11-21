@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-21T08:19:11Z",
+  "updatedAt": "2026-11-21T08:45:31Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -137,9 +137,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50577265",
-          "points": 393,
+          "points": 400,
           "comments": 117,
-          "observedAt": "2026-11-21T08:19:11Z"
+          "observedAt": "2026-11-21T08:45:31Z"
         }
       ],
       "featured": false
@@ -210,9 +210,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50568130",
-          "points": 369,
+          "points": 370,
           "comments": 243,
-          "observedAt": "2026-11-21T08:19:11Z"
+          "observedAt": "2026-11-21T08:45:31Z"
         }
       ],
       "featured": false
