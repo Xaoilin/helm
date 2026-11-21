@@ -36,4 +36,13 @@ describe('prayer challenge', () => {
     expect(competitionSchema.safeParse({ status: 'ready', self: summary(1, 0, 0), partner: summary(-1, 0, 0) }).success).toBe(false);
     expect(competitionSchema.safeParse({ status: 'ready', self: summary(1, 0, 0), partner: summary(156, 0, 0) }).success).toBe(false);
   });
+
+  it('allows a paused day only for paired, pause-adjusted totals within the requested range', () => {
+    const day = { ...summary(0, 0, 0), to: '2026-11-01' };
+    const paused = { status: 'ready', self: day, partner: day, periodDaysExcluded: 1 };
+    expect(competitionSchema.parse(paused)).toEqual(paused);
+    expect(competitionSchema.safeParse({ ...paused, periodDaysExcluded: 2 }).success).toBe(false);
+    expect(competitionSchema.safeParse({ ...paused, self: { ...day, pending: 1 } }).success).toBe(false);
+    expect(competitionSchema.safeParse({ ...paused, status: 'not_connected', partner: null }).success).toBe(false);
+  });
 });

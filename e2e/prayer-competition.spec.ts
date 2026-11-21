@@ -166,6 +166,72 @@ test('failed historical comparisons hide the whole record and can be refreshed',
   await expect(record).toContainText('6 tied');
 });
 
+test('paused days remove both scores but leave eligible weekly, monthly and past daily results', async ({ page, scenario }, info) => {
+  await page.setViewportSize({ width: 1440, height: 950 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await scenario({ now: '2026-11-07T12:00:00Z', settings: { prayerEnabled: true } });
+  await page.route('**/api/prayer/v1/competition?*', async route => {
+    const query = new URL(route.request().url()).searchParams;
+    const from = query.get('from')!;
+    const to = query.get('to')!;
+    const excluded = ['2026-11-06', '2026-11-07'].filter(date => date >= from && date <= to).length;
+    const paused = from === to && excluded === 1;
+    const summary = { from, to, asOf: '2026-11-07T12:00:00Z', onTime: paused ? 0 : 1, late: 0, missed: 0,
+      pending: 0, allPrayed: !paused, pointsEarned: paused ? 0 : 12, pointsAvailable: paused ? 0 : 12 };
+    await route.fulfill({ json: { status: 'ready', self: summary,
+      partner: { ...summary, pointsEarned: paused ? 0 : 8 }, periodDaysExcluded: excluded || undefined } });
+  });
+  await openApp(page);
+  const card = page.getByRole('region', { name: 'Prayer challenge' });
+  const sabah = card.locator('.prayer-challenge-player.is-sabah .prayer-challenge-score');
+  const lina = card.locator('.prayer-challenge-player.is-lina .prayer-challenge-score');
+  const mixed = card.getByText('2 days not counted because of Lina’s period', { exact: true });
+  const pause = card.getByText('Not counted because of Lina’s period', { exact: true });
+  const record = card.getByRole('group', { name: 'Daily record' });
+  await expect(mixed).toBeVisible();
+  await expect(sabah).toHaveText('12 pts');
+  await expect(lina).toHaveText('8 pts');
+  await card.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.screenshot({ path: info.outputPath('period-excluded-month-1440.png') });
+  await card.getByRole('button', { name: 'Week', exact: true }).click();
+  await expect(mixed).toBeVisible();
+  await expect(sabah).toHaveText('12 pts');
+
+  await card.getByRole('button', { name: 'Day', exact: true }).click();
+  await expect(pause).toBeVisible();
+  await expect(sabah).toHaveCount(0);
+  await expect(lina).toHaveCount(0);
+  await expect(card.getByLabel('Leading', { exact: true })).toHaveCount(0);
+  await expect(record.getByLabel('Sabah 5, Lina 0', { exact: true })).toBeVisible();
+  await expect(record).toContainText('0 without scores');
+  await expect(record).toContainText('1 day not counted because of Lina’s period');
+  await expect(card.getByRole('button', { name: 'Refresh comparison' })).toBeEnabled();
+  await card.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.screenshot({ path: info.outputPath('period-paused-day-1440.png') });
+
+  await page.setViewportSize({ width: 320, height: 950 });
+  await card.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  expect(await card.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('period-paused-day-320.png') });
+  await card.evaluate(node => {
+    const elements = [node, ...node.querySelectorAll('*')].filter(element => element instanceof HTMLElement);
+    const fontSizes = elements.map(element => parseFloat(getComputedStyle(element).fontSize));
+    elements.forEach((element, index) => { element.style.fontSize = `${fontSizes[index] * 1.25}px`; });
+  });
+  expect(await card.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.setViewportSize({ width: 320, height: 1_100 });
+  await card.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.screenshot({ path: info.outputPath('period-paused-day-320-large-text.png') });
+
+  await card.getByRole('button', { name: 'Previous day', exact: true }).click();
+  await expect(card).toContainText('6 Nov 2026');
+  await expect(pause).toBeVisible();
+  await card.getByRole('button', { name: 'Previous day', exact: true }).click();
+  await expect(card).toContainText('5 Nov 2026');
+  await expect(pause).toHaveCount(0);
+  await expect(sabah).toHaveText('12 pts');
+});
+
 
 test('earned points lead and both prayer windows join the total at Dhuhr', async ({ page, scenario }, info) => {
   await page.setViewportSize({ width: 1440, height: 950 });

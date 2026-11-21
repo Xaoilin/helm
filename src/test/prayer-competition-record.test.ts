@@ -31,10 +31,11 @@ describe('prayer competition record', () => {
       ...Array.from({ length: 4 }, (): PrayerCompetition => ({ status: 'ready', self: summary(4, 1), partner: summary(5, 0) })),
       { status: 'ready', self: summary(3, 2), partner: summary(3, 2) },
       { status: 'ready', self: summary(0, 0), partner: summary(5, 0) },
+      { status: 'ready', self: summary(0, 0), partner: summary(0, 0), periodDaysExcluded: 1 },
     ];
     const read = vi.fn(async () => results.shift()!);
-    expect(await loadCompetitionRecord(competitionRecordWindow('2026-11-08', 'day', '2026-11-08').periods, () => true, read))
-      .toEqual({ self: 1, partner: 4, ties: 1, unscored: 1 });
+    expect(await loadCompetitionRecord(competitionRecordWindow('2026-11-09', 'day', '2026-11-09').periods, () => true, read))
+      .toEqual({ self: 1, partner: 4, ties: 1, unscored: 1, paused: 1 });
   });
 
   it('awards a historical win to the participant with more earned points', async () => {
@@ -44,7 +45,7 @@ describe('prayer competition record', () => {
       status: 'ready', self, partner: { ...partner, pending: 0 },
     });
     expect(await loadCompetitionRecord([period], () => true, read))
-      .toEqual({ self: 1, partner: 0, ties: 0, unscored: 0 });
+      .toEqual({ self: 1, partner: 0, ties: 0, unscored: 0, paused: 0 });
   });
 
   it('does not publish a partial tally when a partner is missing or a request fails', async () => {
@@ -74,7 +75,7 @@ describe('prayer competition record', () => {
 
 
 describe('early completed-period records', () => {
-  const record = { self: 1, partner: 4, ties: 0, unscored: 0 };
+  const record = { self: 1, partner: 4, ties: 0, unscored: 0, paused: 0 };
   const side = { from: '2026-11-05', to: '2026-11-05', asOf: '2026-11-05T22:00:00Z', onTime: 5, late: 0, missed: 0, allPrayed: true, pointsEarned: 60, pointsAvailable: 60 };
   it('counts a finished day before midnight only when both participants finish', () => {
     expect(includeFinishedCurrentPeriod(record, { status: 'ready', self: side, partner: { ...side, pointsEarned: 40 } }, '2026-11-05').self).toBe(2);
@@ -86,5 +87,14 @@ describe('early completed-period records', () => {
       expect(includeFinishedCurrentPeriod(record, { status: 'ready', self: period, partner: period }, '2026-11-08').ties).toBe(1);
       expect(includeFinishedCurrentPeriod(record, { status: 'ready', self: period, partner: period }, '2026-11-05')).toBe(record);
     }
+  });
+
+  it('skips a paused current day and scores a finished week that has an excluded day', () => {
+    const paused = { ...side, onTime: 0, pointsEarned: 0, pointsAvailable: 0 };
+    expect(includeFinishedCurrentPeriod(record,
+      { status: 'ready', self: paused, partner: paused, periodDaysExcluded: 1 }, paused.to)).toBe(record);
+    const week = { ...side, from: '2026-11-02', to: '2026-11-08' };
+    expect(includeFinishedCurrentPeriod(record,
+      { status: 'ready', self: week, partner: week, periodDaysExcluded: 1 }, week.to).ties).toBe(1);
   });
 });

@@ -2,7 +2,7 @@ import { useViewPreference } from '../../store/ViewPreferencesContext';
 import { useEffect, useState } from 'react';
 import { useAuthSession } from '../../store/AuthSessionContext';
 import { usePrayerContext } from '../../store/contexts/PrayerContext';
-import { competitionLeader, competitionPoints, competitionRange, competitionScore, getPrayerCompetition, type CompetitionPeriod } from '../../services/prayerCompetition';
+import { competitionIsPaused, competitionLeader, competitionPoints, competitionRange, competitionScore, getPrayerCompetition, type CompetitionPeriod } from '../../services/prayerCompetition';
 import type { PrayerCompetition, PrayerCompetitionSummary } from '../../types/domain';
 import './prayer-competition.css';
 import PrayerCompetitionRecord from './PrayerCompetitionRecord';
@@ -63,7 +63,9 @@ export default function PrayerCompetitionCard() {
   const current = result?.key === key ? result : null;
   const data = current?.data;
   const loading = current === null;
-  const leader = data?.partner ? competitionLeader(data.self, data.partner) : null;
+  const paused = data ? competitionIsPaused(data) : false;
+  const excludedDays = data?.periodDaysExcluded ?? 0;
+  const leader = data?.partner && !paused ? competitionLeader(data.self, data.partner) : null;
   const showPoints = Boolean(data && competitionPoints(data.self) && (!data.partner || competitionPoints(data.partner)));
   const hasPending = Boolean(data?.self.pending || data?.partner?.pending);
   const pointsPending = Boolean(data?.partner && Boolean(competitionPoints(data.self)) !== Boolean(competitionPoints(data.partner)));
@@ -85,19 +87,26 @@ export default function PrayerCompetitionCard() {
       onClick={() => setOffset(current => current - 1)}>‹</button>
       <strong>{range.label}</strong><button type="button" aria-label={`Next ${selectedPeriod}`} disabled={offset >= 0}
         onClick={() => setOffset(current => current + 1)}>›</button></div>
-    <p className="prayer-challenge-verdict" aria-live="polite">{loading ? 'Loading your comparison…' : headline}</p>
-    <div className="prayer-challenge-players">
-      <Player name={SELF} summary={data?.self ?? null} leading={leader === 'self'} showPoints={showPoints} />
-      <Player name={PARTNER} summary={data?.partner ?? null} leading={leader === 'partner'} showPoints={showPoints} />
-    </div>
-    <div className="prayer-challenge-key" aria-label="Chart key"><span><i className="challenge-on-time" />On time</span>
-      <span><i className="challenge-late" />Late</span><span><i className="challenge-missed" />Missed</span>
-      {hasPending && <span><i className="challenge-pending" />Pending</span>}</div>
+    <p className={`prayer-challenge-verdict${paused ? ' is-paused' : ''}`} aria-live="polite">
+      {paused ? 'Not counted because of Lina’s period' : loading ? 'Loading your comparison…' : headline}
+      {!paused && excludedDays > 0 && <span className="prayer-challenge-excluded">
+        {excludedDays} {excludedDays === 1 ? 'day' : 'days'} not counted because of Lina’s period
+      </span>}
+    </p>
+    {!paused && <>
+      <div className="prayer-challenge-players">
+        <Player name={SELF} summary={data?.self ?? null} leading={leader === 'self'} showPoints={showPoints} />
+        <Player name={PARTNER} summary={data?.partner ?? null} leading={leader === 'partner'} showPoints={showPoints} />
+      </div>
+      <div className="prayer-challenge-key" aria-label="Chart key"><span><i className="challenge-on-time" />On time</span>
+        <span><i className="challenge-late" />Late</span><span><i className="challenge-missed" />Missed</span>
+        {hasPending && <span><i className="challenge-pending" />Pending</span>}</div>
+    </>}
     <PrayerCompetitionRecord today={today} period={selectedPeriod} selectedDate={range.from} sessionKey={sessionKey} attempt={attempt} comparison={data} />
     {current?.error && <p className="prayer-challenge-message" role="alert">{current.error}</p>}
     {data?.status === 'not_connected' && <p className="prayer-challenge-message">Your shared challenge isn’t connected yet. Your own totals are shown.</p>}
     {data?.status === 'unavailable' && <p className="prayer-challenge-message" role="status">{PARTNER}’s totals are temporarily unavailable. Try refreshing.</p>}
-    <div className="prayer-challenge-footer"><small>{showPoints ? `Points · Prompt ${PRAYER_TIMING_POINTS.prompt} · Within ${PRAYER_TIMING_POINTS.within_window} · Outside ${PRAYER_TIMING_POINTS.outside_window}` : 'Completion rate · On time + late'}<br />{PRAYER_TIMING_POINTS.prompt} points only within 15 minutes of the adhan.<br />Prayer windows count as soon as they open.</small>
+    <div className={`prayer-challenge-footer${paused ? ' is-paused' : ''}`}>{!paused && <small>{showPoints ? `Points · Prompt ${PRAYER_TIMING_POINTS.prompt} · Within ${PRAYER_TIMING_POINTS.within_window} · Outside ${PRAYER_TIMING_POINTS.outside_window}` : 'Completion rate · On time + late'}<br />{PRAYER_TIMING_POINTS.prompt} points only within 15 minutes of the adhan.<br />Prayer windows count as soon as they open.</small>}
       <button type="button" className="btn btn-secondary btn-sm" disabled={loading} onClick={() => setAttempt(value => value + 1)}>
         Refresh<span className="sr-only"> comparison</span></button></div>
   </section>;

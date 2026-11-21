@@ -6,6 +6,8 @@ The dashboard compares earned prayer points for a calendar month (default), Mond
 
 Each prayer joins the eligible total when its recording window opens. Dhuhr opens both Dhuhr and Asr; Maghrib opens both Maghrib and Isha. Open, unrecorded prayers are pending and earn zero points. Future, unclassified, pre-tracking and non-obligatory prayers are excluded. The card refreshes on confirmed prayer changes, at each wall-clock minute while mounted, on return from a later minute, and through Refresh. Account/session changes and superseded requests cannot reuse another account or period’s response. No totals or credentials are persisted in the browser. A missing partner is shown as unavailable, never as a zero score.
 
+Confirmed period dates in Lina One pause the prayer challenge for both participants. The day view marks those dates as not counted. The week and month views score only the eligible days and show the number of days excluded. Fully paused ranges are listed separately in the win record.
+
 ## Win record
 
 Requested on 5 November 2026, starting **1 November 2026**. The current period's
@@ -26,10 +28,11 @@ showing a partial result as complete. Refresh retries it.
 
 ## Narrow sharing boundary
 
-The two products keep separate Auth, databases, services and deployment identities. This requested comparison introduces only an explicitly configured, read-only exchange of period totals. The summary contains `from`, `to`, `asOf`, `onTime`, `late`, `missed`, paired optional `pointsEarned`/`pointsAvailable`, optional `allPrayed`, and optional `pending`. The latter counts only open unrecorded prayer windows. The wire `pointsAvailable` field still covers classified outcomes. Each browser adds 12 points of capacity per pending prayer. It contains no account IDs, individual prayer records, cycle dates, exemption counts, notes, location or other account data. Totals can still reveal patterns; pairing requires explicit owner activation.
+The two products keep separate Auth, databases, services and deployment identities. The approved read-only comparison exchanges aggregate challenge data. Each participant’s summary contains `from`, `to`, `asOf`, `onTime`, `late`, `missed`, paired optional `pointsEarned`/`pointsAvailable`, optional `allPrayed`, and optional `pending`. The latter counts only open unrecorded prayer windows. The wire `pointsAvailable` field still covers classified outcomes. Each browser adds 12 points of capacity per pending prayer. The cycle journal, individual prayer records, account identifiers and locations remain private to their owning services. Pairing requires explicit owner activation.
 
 - `GET /api/prayer/v1/competition?from=YYYY-MM-DD&to=YYYY-MM-DD` uses this product’s signed-in account. Only the configured owner receives the configured partner. Other accounts see their own totals and `not_connected`. OAuth client tokens are refused until a prayer agent contract is delivered.
 - `GET /api/prayer/v1/competition/summary` uses a separate server-only `X-Prayer-Competition-Key`, scoped to the configured owner and this one read-only route. It cannot authorize ordinary prayer reads or writes. Requests without the exact key are rejected before database access.
+- Lina’s summary route accepts `paired=true` over the same server-only link. It returns both participants’ totals for eligible dates and, when applicable, the aggregate count of paused challenge days in the requested range. Sabah One reads the paired result for its configured owner and presents Sabah first.
 - Both responses use `Cache-Control: no-store`. Ranges are bounded to 31 days. Peer reads have 2-second connection and 3-second response limits, refuse redirects, and validate matching dates, recent timestamps and bounded counts. Failures preserve the owner’s totals and show an unavailable partner.
 - Shared fixtures, including `competition-unlocked.json` and `competition-summary-unlocked.json`, are checked by provider integration tests and consumer runtime schemas. Synthetic browser tests cover period navigation, keyboard operation, responsive designs, ties, empty scores and failures.
 

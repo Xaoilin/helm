@@ -1,6 +1,6 @@
 import { PRAYER_COMPETITION_RECORD } from '../config/prayerCompetition';
 import type { PrayerCompetition } from '../types/domain';
-import { competitionLeader, competitionRange, getPrayerCompetition, type CompetitionPeriod } from './prayerCompetition';
+import { competitionIsPaused, competitionLeader, competitionRange, getPrayerCompetition, type CompetitionPeriod } from './prayerCompetition';
 import { shiftPrayerDate } from './prayerTimeZone';
 
 export interface CompetitionRecord {
@@ -8,6 +8,7 @@ export interface CompetitionRecord {
   partner: number;
   ties: number;
   unscored: number;
+  paused: number;
 }
 
 export function competitionRecordWindow(today: string, period: CompetitionPeriod, selectedDate: string) {
@@ -33,7 +34,7 @@ export async function loadCompetitionRecord(
   isCurrent: () => boolean,
   read: (from: string, to: string) => Promise<PrayerCompetition> = getPrayerCompetition,
 ): Promise<CompetitionRecord | null> {
-  const record: CompetitionRecord = { self: 0, partner: 0, ties: 0, unscored: 0 };
+  const record: CompetitionRecord = { self: 0, partner: 0, ties: 0, unscored: 0, paused: 0 };
   let next = 0;
   let unavailable = false;
   async function worker() {
@@ -51,6 +52,10 @@ export async function loadCompetitionRecord(
         unavailable = true;
         return;
       }
+      if (competitionIsPaused(data)) {
+        record.paused++;
+        continue;
+      }
       const winner = competitionLeader(data.self, data.partner);
       if (winner === 'self') record.self++;
       else if (winner === 'partner') record.partner++;
@@ -65,9 +70,10 @@ export async function loadCompetitionRecord(
 /** A period may enter the record before midnight once both participants have finished it. */
 export function includeFinishedCurrentPeriod(record: CompetitionRecord, comparison: PrayerCompetition | undefined, today: string): CompetitionRecord {
   if (!comparison?.partner || !comparison.self.allPrayed || !comparison.partner.allPrayed
-    || comparison.self.from > today || comparison.self.to !== today) return record;
+    || comparison.self.from > today || comparison.self.to !== today || competitionIsPaused(comparison)) return record;
   const winner = competitionLeader(comparison.self, comparison.partner);
   return {
+    ...record,
     self: record.self + (winner === 'self' ? 1 : 0),
     partner: record.partner + (winner === 'partner' ? 1 : 0),
     ties: record.ties + (winner === 'tie' ? 1 : 0),
