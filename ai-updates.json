@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-21T03:45:33Z",
+  "updatedAt": "2026-11-21T04:18:01Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1050,
+          "points": 1051,
           "comments": 776,
-          "observedAt": "2026-11-21T01:17:27Z"
+          "observedAt": "2026-11-21T04:18:01Z"
         }
       ],
       "featured": true
@@ -126,7 +126,7 @@
     {
       "id": "03b179946dd0e551984b",
       "title": "Language Models Can Rewrite Their Own Weights",
-      "summary": "113 comments on Hacker News.",
+      "summary": "114 comments on Hacker News.",
       "publishedAt": "2026-11-20T16:29:06Z",
       "category": "research",
       "source": {
@@ -137,9 +137,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50577265",
-          "points": 356,
-          "comments": 113,
-          "observedAt": "2026-11-21T03:45:33Z"
+          "points": 361,
+          "comments": 114,
+          "observedAt": "2026-11-21T04:18:01Z"
         }
       ],
       "featured": false
@@ -199,7 +199,7 @@
     {
       "id": "bda522de56a34a98c046",
       "title": "Gemini 4 Neon is the new #1 on the Models Engineering Index",
-      "summary": "241 comments on Hacker News.",
+      "summary": "242 comments on Hacker News.",
       "publishedAt": "2026-11-19T23:35:35Z",
       "category": "models",
       "source": {
@@ -210,9 +210,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50568130",
-          "points": 367,
-          "comments": 241,
-          "observedAt": "2026-11-21T02:20:45Z"
+          "points": 368,
+          "comments": 242,
+          "observedAt": "2026-11-21T04:18:01Z"
         }
       ],
       "featured": false
