@@ -1197,6 +1197,8 @@ export interface PrayerCompetitionSummary {
 
 export interface PrayerCompetition {
   status: 'ready' | 'not_connected' | 'unavailable';
+  /** Confirmed period days excluded for both participants in this range. */
+  periodDaysExcluded?: number;
   self: PrayerCompetitionSummary;
   partner: PrayerCompetitionSummary | null;
 }

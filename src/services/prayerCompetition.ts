@@ -2,10 +2,14 @@ import { PRAYER_BACKEND_URL } from '../config';
 import { PRAYER_TIMING_POINTS } from '../config/prayerCompetition';
 import type { PrayerCompetition, PrayerCompetitionSummary } from '../types/domain';
 import { callService } from './backend/serviceClient';
-import { competitionSchema } from './backend/competitionContracts';
+import { competitionCalendarDays, competitionSchema } from './backend/competitionContracts';
 import { shiftPrayerDate } from './prayerTimeZone';
 
 export type CompetitionPeriod = 'day' | 'week' | 'month';
+
+export function competitionIsPaused(comparison: PrayerCompetition) {
+  return comparison.periodDaysExcluded === competitionCalendarDays(comparison.self.from, comparison.self.to);
+}
 
 export function getPrayerCompetition(from: string, to: string): Promise<PrayerCompetition> {
   return callService(PRAYER_BACKEND_URL, 'GET', `/api/prayer/v1/competition?${new URLSearchParams({ from, to })}`,

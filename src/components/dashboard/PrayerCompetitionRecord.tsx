@@ -37,6 +37,10 @@ export default function PrayerCompetitionRecord({ today, period, selectedDate, s
       : !record ? 'Record unavailable. Refresh to try again.'
         : current.error ? 'Could not refresh. Showing the last confirmed record.'
         : !window.periods.length && !record.self && !record.partner && !record.ties && !record.unscored ? `No completed ${unit} yet`
-          : `${record.ties} tied · ${record.unscored} without scores · Completed ${unit} only`}</p>
+          : `${record.ties} tied · ${record.unscored} without scores · Completed ${unit} only`}
+      {record && record.paused > 0 && <span className="prayer-challenge-excluded">
+        {record.paused} {record.paused === 1 ? period : unit} not counted because of Lina’s period
+      </span>}
+    </p>
   </div>;
 }
