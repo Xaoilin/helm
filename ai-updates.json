@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-20T23:45:30Z",
+  "updatedAt": "2026-11-21T00:36:12Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -124,6 +124,27 @@
       "featured": false
     },
     {
+      "id": "03b179946dd0e551984b",
+      "title": "Language Models Can Rewrite Their Own Weights",
+      "summary": "106 comments on Hacker News.",
+      "publishedAt": "2026-11-20T16:29:06Z",
+      "category": "research",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://arxiv.org/abs/2611.21885"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50577265",
+          "points": 326,
+          "comments": 106,
+          "observedAt": "2026-11-21T00:36:12Z"
+        }
+      ],
+      "featured": false
+    },
+    {
       "id": "55cb0588b3e8436e78b2",
       "title": "Gemini 4 Carbon is now available",
       "summary": "Details in the Google DeepMind release notes.",
@@ -178,7 +199,7 @@
     {
       "id": "bda522de56a34a98c046",
       "title": "Gemini 4 Neon is the new #1 on the Models Engineering Index",
-      "summary": "240 comments on Hacker News.",
+      "summary": "241 comments on Hacker News.",
       "publishedAt": "2026-11-19T23:35:35Z",
       "category": "models",
       "source": {
@@ -189,9 +210,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50568130",
-          "points": 364,
-          "comments": 240,
-          "observedAt": "2026-11-20T23:45:30Z"
+          "points": 365,
+          "comments": 241,
+          "observedAt": "2026-11-21T00:36:12Z"
         }
       ],
       "featured": false
@@ -236,9 +257,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 551,
+          "points": 552,
           "comments": 270,
-          "observedAt": "2026-11-20T23:15:26Z"
+          "observedAt": "2026-11-21T00:36:12Z"
         }
       ],
       "featured": false
@@ -346,6 +367,19 @@
       "featured": false
     },
     {
+      "id": "9add1876343f392d7062",
+      "title": "Codex CLI Release: 0.170.0",
+      "summary": "Added WebRTC negotiation for realtime voice calls in the TUI. (#61172) Added automatically refreshed authentication headers for OpenTelemetry HTTP exporters. (#61028) Added…",
+      "publishedAt": "2026-11-18T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#github-release-449494076"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "3cbf9c32d4a8b52a851a",
       "title": "Anthropic releases Claude Fable 5.2 and Mythos 5.2",
       "summary": "Fable 5.2 is available in Claude Code and the API. Anthropic says the models run up to 30% faster than 5.1 and cost less.",
@@ -364,19 +398,6 @@
           "observedAt": "2026-11-17T19:42:52Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "9add1876343f392d7062",
-      "title": "Codex CLI Release: 0.170.0",
-      "summary": "Added WebRTC negotiation for realtime voice calls in the TUI. (#61172) Added automatically refreshed authentication headers for OpenTelemetry HTTP exporters. (#61028) Added…",
-      "publishedAt": "2026-11-18T00:00:00Z",
-      "category": "coding",
-      "source": {
-        "label": "Codex",
-        "url": "https://developers.openai.com/codex/changelog/#github-release-449494076"
-      },
-      "discussions": [],
       "featured": false
     },
     {
@@ -476,27 +497,6 @@
         "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.326"
       },
       "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "8331a3aa13cbf4dc7e51",
-      "title": "OpenCode Browse",
-      "summary": "222 comments on Hacker News.",
-      "publishedAt": "2026-11-16T21:20:37Z",
-      "category": "coding",
-      "source": {
-        "label": "Hacker News",
-        "url": "https://opencode.ai/product/browse"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50523459",
-          "points": 334,
-          "comments": 222,
-          "observedAt": "2026-11-20T10:45:09Z"
-        }
-      ],
       "featured": false
     }
   ]
