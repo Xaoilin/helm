@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-21T16:16:07Z",
+  "updatedAt": "2026-11-21T16:45:11Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -126,7 +126,7 @@
     {
       "id": "03b179946dd0e551984b",
       "title": "Language Models Can Rewrite Their Own Weights",
-      "summary": "133 comments on Hacker News.",
+      "summary": "138 comments on Hacker News.",
       "publishedAt": "2026-11-20T16:29:06Z",
       "category": "research",
       "source": {
@@ -137,9 +137,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50577265",
-          "points": 451,
-          "comments": 133,
-          "observedAt": "2026-11-21T16:16:07Z"
+          "points": 454,
+          "comments": 138,
+          "observedAt": "2026-11-21T16:45:11Z"
         }
       ],
       "featured": false
