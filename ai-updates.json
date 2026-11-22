@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T16:45:06Z",
+  "updatedAt": "2026-11-22T17:15:24Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -137,9 +137,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50577265",
-          "points": 488,
+          "points": 489,
           "comments": 143,
-          "observedAt": "2026-11-22T13:45:13Z"
+          "observedAt": "2026-11-22T17:15:24Z"
         }
       ],
       "featured": false
@@ -173,7 +173,7 @@
     {
       "id": "bda522de56a34a98c046",
       "title": "Gemini 4 Neon is the new #1 on the Models Engineering Index",
-      "summary": "247 comments on Hacker News.",
+      "summary": "248 comments on Hacker News.",
       "publishedAt": "2026-11-19T23:35:35Z",
       "category": "models",
       "source": {
@@ -185,8 +185,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50568130",
           "points": 375,
-          "comments": 247,
-          "observedAt": "2026-11-22T16:16:13Z"
+          "comments": 248,
+          "observedAt": "2026-11-22T17:15:24Z"
         }
       ],
       "featured": false
