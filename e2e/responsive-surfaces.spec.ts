@@ -152,6 +152,10 @@ for (const surface of Object.keys(views) as (keyof typeof views)[]) {
       await checkLayout(page, main, 'Project catalogue');
       await main.getByRole('button', { name: 'View details' }).first().click();
       const details = page.getByRole('dialog');
+      // The entering drawer slides in from beyond the viewport.
+      await details.evaluate(async panel => {
+        await Promise.all(panel.getAnimations().map(animation => animation.finished));
+      });
       await checkLayout(page, details, 'Project details');
       await details.getByRole('button', { name: 'Manage project' }).click();
     }
