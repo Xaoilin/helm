@@ -1,0 +1,41 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/prayer/v1/competition"
+  },
+  "status": 200,
+  "body": {
+    "status": "ready",
+    "self": {
+      "from": "2026-11-19",
+      "to": "2026-11-19",
+      "asOf": "2026-11-19T12:00:00Z",
+      "onTime": 0,
+      "late": 0,
+      "missed": 0,
+      "pointsEarned": 0,
+      "pointsAvailable": 0,
+      "allPrayed": false,
+      "pending": 0
+    },
+    "partner": {
+      "from": "2026-11-19",
+      "to": "2026-11-19",
+      "asOf": "2026-11-19T12:00:00Z",
+      "onTime": 0,
+      "late": 0,
+      "missed": 0,
+      "pointsEarned": 0,
+      "pointsAvailable": 0,
+      "allPrayed": false,
+      "pending": 0
+    },
+    "periodDaysExcluded": 1,
+    "pausedPrayerProgress": {
+      "onTime": 2,
+      "late": 1,
+      "missed": 1,
+      "pending": 1
+    }
+  }
+}

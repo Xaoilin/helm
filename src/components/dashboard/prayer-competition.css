@@ -24,6 +24,7 @@
 .prayer-challenge-crown { color: #ba9254; margin-left: auto; font-size: 22px; }
 .prayer-challenge-score { font-size: clamp(34px, 4vw, 54px); line-height: 1.15; font-weight: 600; letter-spacing: -.055em; margin-top: 18px; font-variant-numeric: tabular-nums; }
 .prayer-challenge-score > span { font-size: .48em; color: var(--challenge-muted); margin-left: 3px; }
+.prayer-challenge-score.is-prayer-progress > span { font-size: .6em; margin-left: 0; letter-spacing: 0; }
 .prayer-challenge-count { font-size: 12px; color: var(--challenge-muted); margin: 5px 0 16px; }
 .prayer-challenge-track { display: flex; margin-top: auto; height: 8px; overflow: hidden; border-radius: 10px; background: color-mix(in srgb, currentColor 10%, transparent); }
 .prayer-challenge-track > span { height: 100%; }
@@ -55,7 +56,7 @@
 
 
 @media (max-width: 420px) {
-  .prayer-challenge-score:has(.prayer-challenge-point-unit) { font-size: 30px; }
+  .prayer-challenge-score:has(.prayer-challenge-point-unit), .prayer-challenge-score.is-prayer-progress { font-size: 30px; }
   .prayer-challenge-crown { font-size: 18px; }
 }
 
