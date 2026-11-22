@@ -469,7 +469,7 @@ export default function CalendarSurface() {
         {actionError && !showAddAccount && (
           <div className="info-box warning" role="alert" style={{ marginBottom: 8 }}>{actionError}</div>
         )}
-        <div className="tabs">
+        <div className="tabs calendar-view-tabs">
           <button className={`tab ${tab === 'month' ? 'active' : ''}`} onClick={() => setTab('month')}>Month</button>
           <button className={`tab ${tab === 'week' ? 'active' : ''}`} onClick={() => setTab('week')}>Week</button>
           <button className={`tab ${tab === 'agenda' ? 'active' : ''}`} onClick={() => setTab('agenda')}>Agenda</button>
