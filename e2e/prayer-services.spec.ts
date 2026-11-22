@@ -86,6 +86,8 @@ test.describe('prayer and profile services', () => {
         await testInfo.attach('combined-prayer-dialog', { path: dialogScreenshot, contentType: 'image/png' });
         await dialog.getByRole('button', { name: /Prayed within the time window/u }).click();
         await expect.poll(() => control.services.outcomes.get(`2026-08-29::${later}`)?.status).toBe('on_time');
+        await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+        await expect(page.getByRole('button', { name: new RegExp(`${later} Prayer — confirmed`, 'u') })).toBeVisible();
         expect(control.services.outcomes.has(`2026-08-29::${earlier}`)).toBe(false);
 
         await page.reload();
@@ -93,6 +95,8 @@ test.describe('prayer and profile services', () => {
         await page.getByRole('button', { name: new RegExp(`Complete ${earlier} Prayer`, 'u') }).click();
         await page.getByRole('button', { name: /Prayed within the time window/u }).click();
         await expect.poll(() => control.services.outcomes.get(`2026-08-29::${earlier}`)?.status).toBe('on_time');
+        await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');
+        await expect(page.getByRole('button', { name: new RegExp(`${earlier} Prayer — confirmed`, 'u') })).toBeVisible();
 
         await page.reload();
         await expect(page.getByRole('status', { name: 'Prayer data sync' })).toHaveText('Prayer data: Synced');

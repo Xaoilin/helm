@@ -1793,6 +1793,17 @@ textarea.form-input {
   min-width: 180px;
 }
 
+.calendar-date-range {
+  min-width: 0;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.calendar-date-range time,
+.calendar-date-range > span {
+  white-space: nowrap;
+}
+
 .calendar-sidebar-panel {
   display: flex;
   gap: 20px;
@@ -1893,6 +1904,11 @@ textarea.form-input {
 }
 
 /* ── Agenda ── */
+.agenda-item,
+.calendar-mobile-event {
+  overflow-wrap: anywhere;
+}
+
 .agenda-item {
   border: 0;
   display: flex;
