@@ -83,6 +83,8 @@ Account data belongs to the Spring services, whose contracts (`contracts/*`) bot
 
 User-facing flows should have Playwright coverage when they change visible behavior. Existing specs should be extended instead of duplicated. Responsive shell or surface work covers the repository's supported mobile, tablet, and wider browser widths, with no horizontal overflow and no clipped content at increased text zoom.
 
+Before reloading to test a confirmed save, wait for the rendered synced status. The service fixture commits before the browser receives its response. Exercise interrupted acknowledgements separately with the idempotent replay checks.
+
 ### Browser review
 
 Direct browser review is required for visible user flows and especially for OAuth, browser notification permission, page-open prayer reminders, and live integrations. Review loading, empty, success, disabled, and error states relevant to the change. Screenshot evidence is useful for layout claims but is not a substitute for behavior or hosted verification.
