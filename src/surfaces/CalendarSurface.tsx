@@ -374,19 +374,19 @@ export default function CalendarSurface() {
   };
 
   // ── Agenda ──
+  const { from: agendaFrom, to: agendaTo } = calendarWindow(viewMarker, 'agenda');
   const agendaEvents = useMemo(() => {
     const now = new Date().toISOString();
-    const window = calendarWindow(viewMarker, 'agenda');
     return [...visibleEvents].filter(event => {
       if (!event.allDay) {
         const start = getAppDate(new Date(event.start), appTimeZone);
         const end = getAppDate(new Date(event.end), appTimeZone);
-        return event.end >= now && Boolean(start && end && start <= window.to && end >= window.from);
+        return event.end >= now && Boolean(start && end && start <= agendaTo && end >= agendaFrom);
       }
       const range = getAllDayCalendarDateRange(event, appTimeZone);
-      return Boolean(range && range.endDate >= currentAppDate && range.startDate <= window.to && range.endDate >= window.from);
+      return Boolean(range && range.endDate >= currentAppDate && range.startDate <= agendaTo && range.endDate >= agendaFrom);
     }).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 30);
-  }, [appTimeZone, currentAppDate, viewMarker, visibleEvents]);
+  }, [agendaFrom, agendaTo, appTimeZone, currentAppDate, visibleEvents]);
 
   // ── Sync status ──
   const syncStatusText = () => {
@@ -717,9 +717,9 @@ export default function CalendarSurface() {
         {/* ── Agenda View ── */}
         {tab === 'agenda' && (
           <>
-            <div className="calendar-nav">
+            <div className="calendar-controls">
               <button className="btn-icon" onClick={() => shiftAgenda(-1)} aria-label="Previous 30 days">&lsaquo;</button>
-              <span>{calendarWindow(viewMarker, 'agenda').from} – {calendarWindow(viewMarker, 'agenda').to}</span>
+              <span className="calendar-date-range"><time>{agendaFrom}</time>{' '}<span>– <time>{agendaTo}</time></span></span>
               <button className="btn-icon" onClick={() => shiftAgenda(1)} aria-label="Next 30 days">&rsaquo;</button>
               <button className="btn btn-secondary btn-sm" onClick={goToday}>Today</button>
             </div>
