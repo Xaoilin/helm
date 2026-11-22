@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T06:45:49Z",
+  "updatedAt": "2026-11-22T07:16:56Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -126,7 +126,7 @@
     {
       "id": "03b179946dd0e551984b",
       "title": "Language Models Can Rewrite Their Own Weights",
-      "summary": "142 comments on Hacker News.",
+      "summary": "143 comments on Hacker News.",
       "publishedAt": "2026-11-20T16:29:06Z",
       "category": "research",
       "source": {
@@ -138,8 +138,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50577265",
           "points": 484,
-          "comments": 142,
-          "observedAt": "2026-11-22T06:24:03Z"
+          "comments": 143,
+          "observedAt": "2026-11-22T07:16:56Z"
         }
       ],
       "featured": false
@@ -205,6 +205,19 @@
       "featured": false
     },
     {
+      "id": "a89c20fefc5a11322a22",
+      "title": "ICYMI: Transfer your history from other AI apps into Gemini.",
+      "summary": "Transfer your chat history into Gemini. Import your ZIP files and AI summaries to continue conversations seamlessly. Get the details.",
+      "publishedAt": "2026-11-19T20:30:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/products/gemini-app/switch-ai-assistants-transfer-history/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "55cb0588b3e8436e78b2",
       "title": "Gemini 4 Carbon is now available",
       "summary": "Details in the Google DeepMind release notes.",
@@ -231,19 +244,6 @@
       "featured": false
     },
     {
-      "id": "a89c20fefc5a11322a22",
-      "title": "ICYMI: Transfer your history from other AI apps into Gemini.",
-      "summary": "Transfer your chat history into Gemini. Import your ZIP files and AI summaries to continue conversations seamlessly. Get the details.",
-      "publishedAt": "2026-11-19T20:30:00Z",
-      "category": "models",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/innovation-and-ai/products/gemini-app/switch-ai-assistants-transfer-history/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
       "id": "3277cf52dcd23547d830",
       "title": "Claude solves two open problems in the physics of black holes",
       "summary": "273 comments on Hacker News.",
@@ -257,9 +257,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 569,
+          "points": 571,
           "comments": 273,
-          "observedAt": "2026-11-22T06:24:03Z"
+          "observedAt": "2026-11-22T07:16:56Z"
         }
       ],
       "featured": false
