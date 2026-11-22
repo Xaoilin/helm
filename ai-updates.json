@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T03:45:33Z",
+  "updatedAt": "2026-11-22T06:24:03Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -137,9 +137,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50577265",
-          "points": 483,
+          "points": 484,
           "comments": 142,
-          "observedAt": "2026-11-22T03:45:33Z"
+          "observedAt": "2026-11-22T06:24:03Z"
         }
       ],
       "featured": false
@@ -246,7 +246,7 @@
     {
       "id": "3277cf52dcd23547d830",
       "title": "Claude solves two open problems in the physics of black holes",
-      "summary": "274 comments on Hacker News.",
+      "summary": "273 comments on Hacker News.",
       "publishedAt": "2026-11-19T17:30:44Z",
       "category": "models",
       "source": {
@@ -258,8 +258,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
           "points": 569,
-          "comments": 274,
-          "observedAt": "2026-11-22T03:45:33Z"
+          "comments": 273,
+          "observedAt": "2026-11-22T06:24:03Z"
         }
       ],
       "featured": false
