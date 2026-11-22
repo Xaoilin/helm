@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T06:24:03Z",
+  "updatedAt": "2026-11-22T06:45:49Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -419,27 +419,6 @@
       "featured": false
     },
     {
-      "id": "3cbf9c32d4a8b52a851a",
-      "title": "Anthropic releases Claude Fable 5.2 and Mythos 5.2",
-      "summary": "Fable 5.2 is available in Claude Code and the API. Anthropic says the models run up to 30% faster than 5.1 and cost less.",
-      "publishedAt": "2026-11-09T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Claude Platform",
-        "url": "https://platform.claude.com/docs/en/release-notes/overview#claude-fable-5-2"
-      },
-      "discussions": [
-        {
-          "label": "Reddit · r/ClaudeAI",
-          "url": "https://www.reddit.com/r/ClaudeAI/comments/1xs0dct/fable_52_just_landed/",
-          "preview": "The rollout thread links Anthropic’s announcement and discusses Fable-only usage resets and when to choose Fable 5.2 over Opus 5.5.",
-          "points": 1576,
-          "observedAt": "2026-11-17T19:42:52Z"
-        }
-      ],
-      "featured": false
-    },
-    {
       "id": "9a0aa0e71b450c03e243",
       "title": "How the Claude Code team thinks about verification",
       "summary": "233 comments on Hacker News.",
@@ -456,6 +435,27 @@
           "points": 295,
           "comments": 233,
           "observedAt": "2026-11-19T20:17:00Z"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "3cbf9c32d4a8b52a851a",
+      "title": "Anthropic releases Claude Fable 5.2 and Mythos 5.2",
+      "summary": "Fable 5.2 is available in Claude Code and the API. Anthropic says the models run up to 30% faster than 5.1 and cost less.",
+      "publishedAt": "2026-11-09T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#claude-fable-5-2"
+      },
+      "discussions": [
+        {
+          "label": "Reddit · r/ClaudeAI",
+          "url": "https://www.reddit.com/r/ClaudeAI/comments/1xs0dct/fable_52_just_landed/",
+          "preview": "The rollout thread links Anthropic’s announcement and discusses Fable-only usage resets and when to choose Fable 5.2 over Opus 5.5.",
+          "points": 1576,
+          "observedAt": "2026-11-17T19:42:52Z"
         }
       ],
       "featured": false
