@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T13:45:13Z",
+  "updatedAt": "2026-11-22T14:15:25Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -239,6 +239,19 @@
       "featured": false
     },
     {
+      "id": "efdbd6c83627cffee94d",
+      "title": "Let Gemini tackle repetitive chores on your Mac",
+      "summary": "The Gemini app for Mac now has computer use to help you with repetitive tasks.",
+      "publishedAt": "2026-11-19T17:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/products/gemini-app/computer-use-mac/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "55cb0588b3e8436e78b2",
       "title": "Gemini 4 Carbon is now available",
       "summary": "Details in the Google DeepMind release notes.",
@@ -260,19 +273,6 @@
       "source": {
         "label": "Google Gemini",
         "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "efdbd6c83627cffee94d",
-      "title": "Let Gemini tackle repetitive chores on your Mac",
-      "summary": "The Gemini app for Mac now has computer use to help you with repetitive tasks.",
-      "publishedAt": "2026-11-19T17:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/innovation-and-ai/products/gemini-app/computer-use-mac/"
       },
       "discussions": [],
       "featured": false
