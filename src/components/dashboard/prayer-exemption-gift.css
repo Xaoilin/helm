@@ -1,0 +1,157 @@
+.prayer-challenge-player.is-prayer-exempt {
+  --prayer-exemption-tint: color-mix(in srgb, var(--lina-rose, #a96387) 54%, #e4abd0);
+  container-type: inline-size;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Noto Naskh Arabic', 'Geeza Pro', 'Noto Sans Arabic', Arial, serif;
+  text-align: start;
+  background:
+    radial-gradient(ellipse at 25% 56%, #f8b8b52e, transparent 64%),
+    linear-gradient(225deg, color-mix(in srgb, var(--prayer-exemption-tint) 22%, transparent), color-mix(in srgb, var(--prayer-exemption-tint) 7%, transparent));
+  border-color: color-mix(in srgb, var(--prayer-exemption-tint) 54%, transparent);
+  box-shadow: inset 0 1px #fff3, inset 0 0 28px #f2abc923;
+}
+.prayer-challenge-player.is-prayer-exempt .prayer-challenge-avatar { background: color-mix(in srgb, var(--prayer-exemption-tint) 28%, transparent); }
+.prayer-challenge-player.is-prayer-exempt .prayer-challenge-avatar svg { width: 17px; height: 17px; }
+.prayer-challenge-gift {
+  --prayer-gift-play-state: running;
+  display: grid;
+  grid-template: "copy art" auto / minmax(0, 1fr) clamp(128px, 14vw, 184px);
+  align-items: center;
+  gap: 8px clamp(12px, 2vw, 24px);
+  margin-block: auto;
+  padding-block-start: 8px;
+  text-align: center;
+}
+.prayer-challenge-gift[data-motion-paused='true'] { --prayer-gift-play-state: paused; }
+.prayer-challenge .prayer-gift-motion-toggle {
+  position: absolute;
+  inset-block-start: clamp(12px, 2vw, 22px);
+  inset-inline-end: clamp(12px, 2vw, 22px);
+  display: grid;
+  place-items: center;
+  inline-size: 28px;
+  block-size: 28px;
+  padding: 0;
+  color: var(--challenge-text);
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 17%, transparent);
+  border-radius: 50%;
+}
+.prayer-challenge .prayer-gift-motion-toggle:hover {
+  background: color-mix(in srgb, currentColor 13%, transparent);
+}
+.prayer-gift-motion-icon {
+  inline-size: 8px;
+  block-size: 10px;
+  border-inline: 2px solid currentColor;
+}
+[data-motion-paused='true'] .prayer-gift-motion-icon {
+  inline-size: 0;
+  block-size: 0;
+  border: 0;
+  border-block: 5px solid transparent;
+  border-left: 8px solid currentColor;
+  margin-left: 2px;
+}
+.prayer-challenge-gift-copy {
+  grid-area: copy;
+  justify-self: center;
+  max-inline-size: 34ch;
+}
+.prayer-challenge-gift-art {
+  --prayer-gift-duration: 6.4s;
+  grid-area: art;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  min-inline-size: 0;
+  min-block-size: 144px;
+}
+.prayer-challenge-gift-art::before,
+.prayer-challenge-gift-art::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+.prayer-challenge-gift-art::before {
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 62% at 56% 44%, #ffe9b9ed 4%, #ffc38cca 26%, #f99ab052 52%, transparent 72%),
+    radial-gradient(ellipse 65% 61% at 44% 58%, #ffc7dfee 12%, #ed7daca5 36%, transparent 65%);
+  filter: blur(7px);
+  opacity: .73;
+  animation: prayer-challenge-gift-bloom var(--prayer-gift-duration) ease-in-out infinite var(--prayer-gift-play-state);
+}
+.prayer-challenge-gift-art::after {
+  inset-inline: 12%;
+  inset-block-end: 7%;
+  block-size: 16%;
+  background: radial-gradient(ellipse, #ffd0a3b3 0%, #f8a3c66e 35%, transparent 73%);
+  filter: blur(3px);
+  opacity: .66;
+  animation: prayer-challenge-gift-reflection var(--prayer-gift-duration) ease-in-out infinite var(--prayer-gift-play-state);
+}
+.prayer-challenge-gift-art img {
+  display: block;
+  inline-size: min(100%, 144px);
+  block-size: auto;
+  filter: drop-shadow(0 3px 9px #e984ac55);
+  animation: prayer-challenge-gift-float var(--prayer-gift-duration) ease-in-out infinite var(--prayer-gift-play-state);
+}
+.prayer-challenge-gift-hearts,
+.prayer-challenge-gift-sparkles {
+  position: absolute;
+  z-index: 1;
+  font: clamp(21px, 2.1vw, 27px)/1 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+  animation: prayer-challenge-gift-twinkle var(--prayer-gift-duration) ease-in-out infinite var(--prayer-gift-play-state);
+}
+.prayer-challenge-gift-hearts { inset-block-end: 12%; inset-inline-end: 3%; }
+.prayer-challenge-gift-sparkles { inset-block-start: 11%; inset-inline-start: 1%; }
+
+@keyframes prayer-challenge-gift-bloom {
+  0%, 60%, 100% { transform: scale(1); opacity: .73; }
+  25% { transform: scale(1.13); opacity: 1; }
+}
+
+@keyframes prayer-challenge-gift-reflection {
+  0%, 60%, 100% { transform: scale(1); opacity: .66; }
+  25% { transform: scale(1.16, .82); opacity: .94; }
+}
+
+@keyframes prayer-challenge-gift-float {
+  0%, 60%, 100% { transform: none; }
+  25% { transform: translateY(-7px) rotate(-2deg); }
+  44% { transform: translateY(-2px) rotate(2deg); }
+}
+
+@keyframes prayer-challenge-gift-twinkle {
+  0%, 60%, 100% { transform: none; }
+  25% { transform: translateY(-3px) rotate(10deg) scale(1.2); }
+}
+
+@container (max-width: 345px) {
+  .prayer-challenge-gift { grid-template: "art" auto "copy" auto / minmax(0, 1fr); gap: 5px; }
+  .prayer-challenge-gift-art { inline-size: min(100%, 158px); min-block-size: 120px; justify-self: center; }
+  .prayer-challenge-gift-art img { inline-size: min(100%, 120px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prayer-challenge .prayer-gift-motion-toggle { display: none; }
+  .prayer-challenge-gift-art::before,
+  .prayer-challenge-gift-art::after,
+  .prayer-challenge-gift-art img,
+  .prayer-challenge-gift-hearts,
+  .prayer-challenge-gift-sparkles { animation: none; }
+}
+.prayer-challenge-gift h3 {
+  margin: 0 0 4px;
+  font-size: clamp(19px, 2.25vw, 32px);
+  font-weight: 600;
+  line-height: 1.45;
+  text-wrap: balance;
+}
+.prayer-challenge-gift p { margin: 0; color: var(--challenge-muted); font-size: clamp(13px, 1.2vw, 16px); line-height: 1.7; }

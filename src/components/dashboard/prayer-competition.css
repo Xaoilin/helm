@@ -18,6 +18,7 @@
 .prayer-challenge-players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(10px, 2vw, 22px); }
 .prayer-challenge-player { display: flex; flex-direction: column; min-width: 0; padding: clamp(14px, 2vw, 22px); border-radius: 17px; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); background: color-mix(in srgb, currentColor 3%, transparent); }
 .prayer-challenge-player.is-lina { --player-color: #b190e0; }
+.prayer-challenge-player.is-prayer-exempt .prayer-challenge-gift p { color: color-mix(in srgb, var(--challenge-text) 85%, var(--prayer-exemption-tint)); }
 .prayer-challenge-player.is-sabah { --player-color: #72b8b6; }
 .prayer-challenge-name { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .prayer-challenge-avatar { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; color: var(--challenge-text); background: color-mix(in srgb, var(--player-color) 25%, transparent); font-size: 12px; }
@@ -56,6 +57,9 @@
 
 
 @media (max-width: 420px) {
+  .prayer-challenge-players.is-paused { grid-template-columns: minmax(0, 1fr); }
+  .prayer-challenge-players.is-paused .prayer-challenge-score { margin-top: 10px; }
+  .prayer-challenge-players.is-paused .prayer-challenge-count { margin-bottom: 10px; }
   .prayer-challenge-score:has(.prayer-challenge-point-unit), .prayer-challenge-score.is-prayer-progress { font-size: 30px; }
   .prayer-challenge-crown { font-size: 18px; }
 }
