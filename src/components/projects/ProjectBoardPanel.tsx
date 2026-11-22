@@ -59,7 +59,7 @@ export function ProjectBoardPanel({ project, boardTasks }: { project: Project; b
           <div
             key={column.key}
             className="card"
-            style={{ padding: 16, display: 'grid', gap: 12, alignContent: 'start', minHeight: 420 }}
+            style={{ padding: 16, display: 'grid', gap: 12, alignContent: 'start' }}
             onDragOver={event => event.preventDefault()}
             onDrop={event => {
               event.preventDefault();
@@ -81,7 +81,7 @@ export function ProjectBoardPanel({ project, boardTasks }: { project: Project; b
                   onChange={event => setDraft(current => ({ ...current, title: event.target.value }))}
                   placeholder="Quick add task"
                 />
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8 }}>
+                <div className="project-board-add-controls">
                   <input className="form-input" type="date" value={draft.dueDate} onChange={event => setDraft(current => ({ ...current, dueDate: event.target.value }))} />
                   <select className="form-select" value={draft.priority} onChange={event => setDraft(current => ({ ...current, priority: event.target.value as TaskPriority }))}>
                     <option value="high">High</option>

@@ -77,7 +77,7 @@ export default function PrayerStatsCard({
             Open and future prayers stay locked here; record them from Prayer Times or Tasks after praying.
           </p>
           <div className="prayer-history-scroll">
-            <table>
+            <table aria-label="Prayer correction history">
               <thead>
                 <tr>
                   <th>Day</th>
@@ -96,6 +96,7 @@ export default function PrayerStatsCard({
                       const isLocked = status === 'pending' || status === 'not_tracked';
                       return (
                         <td key={prayerName}>
+                          <span className="prayer-history-name" aria-hidden="true">{prayerName}</span>
                           <select
                             value={prayer.getOutcome(dateStr, prayerName)?.timing ?? status}
                             className={`prayer-history-status ${status}`}

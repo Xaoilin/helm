@@ -1807,6 +1807,18 @@ textarea.form-input {
   min-width: 260px;
 }
 
+@media (max-width: 1024px) {
+  .calendar-sidebar-panel {
+    display: block;
+  }
+
+  .calendar-right-panel {
+    width: auto;
+    min-width: 0;
+    margin-top: 14px;
+  }
+}
+
 .source-toggle {
   display: flex;
   align-items: center;
@@ -2786,12 +2798,14 @@ textarea.form-input {
 }
 
 .prayer-history-scroll {
+  container: prayer-history / inline-size;
   overflow-x: auto;
 }
 
 .prayer-history-editor table {
   width: 100%;
   min-width: 660px;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
@@ -2825,8 +2839,69 @@ textarea.form-input {
   font-size: 9px;
 }
 
+.prayer-history-name {
+  display: none;
+}
+
+@container prayer-history (max-width: 799px) {
+  .prayer-history-editor table {
+    min-width: 0;
+  }
+
+  .prayer-history-editor thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .prayer-history-editor tbody,
+  .prayer-history-editor tbody tr {
+    display: grid;
+    gap: 6px;
+  }
+
+  .prayer-history-editor tbody {
+    gap: 14px;
+  }
+
+  .prayer-history-editor tbody td {
+    display: grid;
+    grid-template-columns: minmax(52px, 1fr) minmax(0, 2.6fr);
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    text-align: start;
+  }
+
+  .prayer-history-editor td:first-child {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #373b4e;
+    font-size: 13px;
+  }
+
+  .prayer-history-editor td:first-child span,
+  .prayer-history-name {
+    display: block;
+    font-size: 12px;
+    color: #aeb5c8;
+  }
+
+  .prayer-history-editor .prayer-history-status {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    font-size: 13px;
+  }
+}
+
 .prayer-history-status {
-  width: 94px;
+  width: 100%;
   padding: 5px 6px;
   border: 1px solid #373b4e;
   border-radius: 6px;
@@ -4760,6 +4835,7 @@ textarea.form-input {
 
 /* Entry cards */
 .kb-entry-card {
+  overflow-wrap: anywhere;
   background: #181b27;
   border: 1px solid #242740;
   border-radius: 8px;
@@ -4773,12 +4849,14 @@ textarea.form-input {
 
 .kb-entry-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
   gap: 8px;
 }
-.kb-entry-title { font-size: 14px; font-weight: 600; color: #e1e4ea; flex: 1; }
-.kb-entry-sources { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 3px; }
+.kb-entry-title { font-size: 14px; font-weight: 600; color: #e1e4ea; flex: 1 1 12rem; }
+.kb-entry-sources { max-width: 100%; display: flex; flex-wrap: wrap; gap: 3px; }
+.kb-entry-sources .kb-src-badge { max-width: 100%; white-space: normal; }
 .kb-entry-preview { font-size: 12px; color: #6b6f85; margin-top: 6px; line-height: 1.4; }
 .kb-entry-topic-crumb { font-size: 11px; color: #4f5bff; margin-top: 4px; }
 
@@ -5010,6 +5088,7 @@ textarea.form-input {
   --nc-prayer-isha: #8e9df5;
   display: grid;
   gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
   width: min(100%, 1240px);
   min-width: 0;
   margin: 0 auto;
@@ -8211,9 +8290,39 @@ textarea.form-input {
 
 .project-board {
   display: grid;
+  overflow-wrap: anywhere;
   gap: 16px;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   align-items: start;
+}
+
+.project-board > .card { min-height: 420px; }
+
+.project-board-add-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.project-board-add-controls .form-input {
+  flex: 1 1 154px;
+  min-width: 0;
+}
+
+.project-board-add-controls .form-select {
+  flex: 1 1 80px;
+  min-width: 0;
+}
+
+.project-board-add-controls .btn {
+  flex: 1 0 auto;
+}
+
+.lifestyle-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+  gap: 10px;
+  overflow-wrap: anywhere;
 }
 
 .project-wiki-layout {
@@ -9382,6 +9491,13 @@ button {
     padding: 42px 16px;
   }
 
+  .project-board > .card { min-height: 0; }
+
+  .lifestyle-column-add {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   .calendar-view-tabs {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.9fr);
@@ -9394,15 +9510,6 @@ button {
     overflow-wrap: anywhere;
   }
 
-  .calendar-sidebar-panel {
-    display: block;
-  }
-
-  .calendar-right-panel {
-    width: auto;
-    min-width: 0;
-    margin-top: 14px;
-  }
 
   .calendar-controls {
     display: grid;

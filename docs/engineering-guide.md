@@ -18,6 +18,8 @@ A branch-only change is not deployed or live. The deployed DigitalOcean bundle, 
 
 Reproduce a defect from the user-visible failure, then trace its causes to the deepest validated layer before choosing a fix. Record contributing causes when they matter to future maintenance. Add a regression check for every logic defect.
 
+For a portrait layout change, restore saved view preferences and populate the signed-in state, including expanded panels below the fold. Check each panel’s border and its controls against the available content width. The shell clips horizontal overflow, so a document-width check alone can pass while a card extends beyond the screen. The [dashboard regression](../e2e/portrait-dashboard.spec.ts) covers the expanded correction history.
+
 ## Definition Of Done
 
 A feature or documentation change is ready for integration when:

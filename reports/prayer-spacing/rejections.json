@@ -10,6 +10,25 @@
       "rejectedArtifacts": [{"path": "reports/prayer-spacing/owner-before.png"}],
       "source": "Explicit owner feedback and attached dashboard screenshot on 5 November 2026.",
       "status": "active"
+    },
+    {
+      "id": "HELM-PORTRAIT-DASHBOARD-001",
+      "date": "2026-11-22",
+      "subjects": [
+        "portrait-dashboard",
+        "prayer-history",
+        "responsive-surfaces"
+      ],
+      "reason": "On the owner’s phone the navigation and header fit, but Night Compass prayer and challenge cards run off the right edge. The first portrait check missed the saved, expanded view.",
+      "requiredCheck": "Restore the expanded correction history with populated account fixtures. Measure the borders of all six dashboard sections against the available column before and after opening history. Exercise all five corrections and page-level controls at phone widths. Inspect populated and expanded layouts on the other pages.",
+      "rejectedArtifacts": [
+        {
+          "path": "src/App.css",
+          "revision": "4274073844734be1899f47812b38413866623c5a"
+        }
+      ],
+      "source": "Owner screenshot and Firefox reproduction on the shipped 0.2.256 build. At a 393px viewport every dashboard card was 716px wide inside a 361px content area.",
+      "status": "active"
     }
   ]
 }

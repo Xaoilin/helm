@@ -698,7 +698,7 @@ export default function KnowledgeSurface() {
         {/* ══ Lifestyle Tab ══ */}
         {tab === 'lifestyle' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+            <div className="lifestyle-columns">
               {LIFESTYLE_COLUMNS.map(col => {
                 const items = itemsByType[col.type];
                 const isPractice = PRACTICE_TYPES.includes(col.type);
@@ -707,7 +707,7 @@ export default function KnowledgeSurface() {
                   <div key={col.type} onDragOver={handleDragOver} onDrop={e => handleColumnDrop(col.type, e)} style={{ minHeight: 100 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <h3 style={{ margin: 0, fontSize: 13, color: col.color }}>{col.emoji} {col.title}</h3>
-                      <button className="btn btn-secondary btn-sm" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => openAddLifestyle(col.type)}>+</button>
+                      <button className="btn btn-secondary btn-sm lifestyle-column-add" aria-label={`Add item to ${col.title}`} onClick={() => openAddLifestyle(col.type)}>+</button>
                     </div>
                     {items.length === 0 ? (
                       <div className="empty-state" role="status" style={{ padding: '20px 8px' }}>
