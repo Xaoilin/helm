@@ -1,6 +1,6 @@
 import { PRAYER_BACKEND_URL } from '../config';
 import { PRAYER_TIMING_POINTS } from '../config/prayerCompetition';
-import type { PrayerCompetition, PrayerCompetitionSummary } from '../types/domain';
+import type { PrayerCompetition, PrayerCompetitionProgress, PrayerCompetitionSummary } from '../types/domain';
 import { callService } from './backend/serviceClient';
 import { competitionCalendarDays, competitionSchema } from './backend/competitionContracts';
 import { shiftPrayerDate } from './prayerTimeZone';
@@ -47,7 +47,7 @@ export function competitionRange(today: string, period: CompetitionPeriod, offse
   return { from, to, label };
 }
 
-export function competitionScore(summary: PrayerCompetitionSummary) {
+export function competitionScore(summary: PrayerCompetitionProgress) {
   const completed = summary.onTime + summary.late;
   const total = completed + summary.missed + (summary.pending ?? 0);
   return { completed, total, percentage: total ? Math.round(completed / total * 100) : null };

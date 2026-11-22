@@ -166,10 +166,14 @@ test('failed historical comparisons hide the whole record and can be refreshed',
   await expect(record).toContainText('6 tied');
 });
 
-test('paused days remove both scores but leave eligible weekly, monthly and past daily results', async ({ page, scenario }, info) => {
+test('paused days show prayer completion without changing challenge scores or wins', async ({ page, scenario }, info) => {
   await page.setViewportSize({ width: 1440, height: 950 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await scenario({ now: '2026-11-07T12:00:00Z', settings: { prayerEnabled: true } });
+  const fixture = JSON.parse(readFileSync(new URL('../contracts/prayer-service/competition-paused-prayer-progress.json', import.meta.url), 'utf8'));
+  const { pausedPrayerProgress } = competitionSchema.parse(fixture.body);
+  if (!pausedPrayerProgress) throw new Error('The paused fixture must contain Sabah’s prayer progress.');
+  let todayProgress: typeof pausedPrayerProgress | undefined = pausedPrayerProgress;
   await page.route('**/api/prayer/v1/competition?*', async route => {
     const query = new URL(route.request().url()).searchParams;
     const from = query.get('from')!;
@@ -179,12 +183,16 @@ test('paused days remove both scores but leave eligible weekly, monthly and past
     const summary = { from, to, asOf: '2026-11-07T12:00:00Z', onTime: paused ? 0 : 1, late: 0, missed: 0,
       pending: 0, allPrayed: !paused, pointsEarned: paused ? 0 : 12, pointsAvailable: paused ? 0 : 12 };
     await route.fulfill({ json: { status: 'ready', self: summary,
-      partner: { ...summary, pointsEarned: paused ? 0 : 8 }, periodDaysExcluded: excluded || undefined } });
+      partner: { ...summary, pointsEarned: paused ? 0 : 8 }, periodDaysExcluded: excluded || undefined,
+      pausedPrayerProgress: paused ? from === '2026-11-07' ? todayProgress : { onTime: 4, late: 1, missed: 0 } : undefined,
+    } });
   });
   await openApp(page);
   const card = page.getByRole('region', { name: 'Prayer challenge' });
-  const sabah = card.locator('.prayer-challenge-player.is-sabah .prayer-challenge-score');
-  const lina = card.locator('.prayer-challenge-player.is-lina .prayer-challenge-score');
+  const sabahPlayer = card.locator('.prayer-challenge-player.is-sabah');
+  const linaPlayer = card.locator('.prayer-challenge-player.is-lina');
+  const sabah = sabahPlayer.locator('.prayer-challenge-score');
+  const lina = linaPlayer.locator('.prayer-challenge-score');
   const mixed = card.getByText('2 days not counted because of Lina’s period', { exact: true });
   const pause = card.getByText('Not counted because of Lina’s period', { exact: true });
   const record = card.getByRole('group', { name: 'Daily record' });
@@ -199,8 +207,14 @@ test('paused days remove both scores but leave eligible weekly, monthly and past
 
   await card.getByRole('button', { name: 'Day', exact: true }).click();
   await expect(pause).toBeVisible();
-  await expect(sabah).toHaveCount(0);
-  await expect(lina).toHaveCount(0);
+  await expect(sabah).toHaveText('3/5');
+  await expect(lina).toHaveText('0/0');
+  await expect(linaPlayer).toContainText('Non-obligatory');
+  await expect(sabahPlayer).toContainText('Prayed');
+  await expect(card.getByRole('img', { name: 'Sabah: 2 on time, 1 late, 1 missed, 1 pending', exact: true })).toBeVisible();
+  await expect(card.locator('.prayer-challenge-point-unit')).toHaveCount(0);
+  await expect(card).not.toContainText('points available');
+  await expect(card).not.toContainText('is leading');
   await expect(card.getByLabel('Leading', { exact: true })).toHaveCount(0);
   await expect(record.getByLabel('Sabah 5, Lina 0', { exact: true })).toBeVisible();
   await expect(record).toContainText('0 without scores');
@@ -209,6 +223,20 @@ test('paused days remove both scores but leave eligible weekly, monthly and past
   await card.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
   await page.screenshot({ path: info.outputPath('period-paused-day-1440.png') });
 
+  todayProgress = undefined;
+  const refresh = card.getByRole('button', { name: 'Refresh comparison' });
+  await refresh.focus();
+  await page.keyboard.press('Enter');
+  await expect(sabah).toHaveText('—');
+  await expect(card).toContainText('Prayer totals unavailable');
+  await expect(pause).toBeVisible();
+  await expect(lina).toHaveText('0/0');
+  await expect(record.getByLabel('Sabah 5, Lina 0', { exact: true })).toBeVisible();
+
+  todayProgress = pausedPrayerProgress;
+  await refresh.click();
+  await expect(sabah).toHaveText('3/5');
+  await expect(card).not.toContainText('Prayer totals unavailable');
   await page.setViewportSize({ width: 320, height: 950 });
   await card.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
   expect(await card.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
@@ -226,6 +254,8 @@ test('paused days remove both scores but leave eligible weekly, monthly and past
   await card.getByRole('button', { name: 'Previous day', exact: true }).click();
   await expect(card).toContainText('6 Nov 2026');
   await expect(pause).toBeVisible();
+  await expect(sabah).toHaveText('5/5');
+  await expect(lina).toHaveText('0/0');
   await card.getByRole('button', { name: 'Previous day', exact: true }).click();
   await expect(card).toContainText('5 Nov 2026');
   await expect(pause).toHaveCount(0);

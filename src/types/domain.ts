@@ -1180,25 +1180,30 @@ export interface FinanceReview {
 }
 export type FinanceReviewDraft = Omit<FinanceReview, 'id' | 'createdAt' | 'updatedAt'>;
 
-/** Read-only prayer challenge totals. Non-obligatory, future and unclassified prayers are excluded. */
-export interface PrayerCompetitionSummary {
-  allPrayed?: boolean;
+export interface PrayerCompetitionProgress {
+  onTime: number;
+  late: number;
+  missed: number;
   /** Unrecorded required prayers whose recording window is open. */
   pending?: number;
+}
+
+/** Read-only prayer challenge totals. Non-obligatory, future and unclassified prayers are excluded. */
+export interface PrayerCompetitionSummary extends PrayerCompetitionProgress {
+  allPrayed?: boolean;
   pointsEarned?: number;
   pointsAvailable?: number;
   from: string;
   to: string;
   asOf: string;
-  onTime: number;
-  late: number;
-  missed: number;
 }
 
 export interface PrayerCompetition {
   status: 'ready' | 'not_connected' | 'unavailable';
   /** Confirmed period days excluded for both participants in this range. */
   periodDaysExcluded?: number;
+  /** Sabah’s prayer completion for the fully paused range, outside the challenge score. */
+  pausedPrayerProgress?: PrayerCompetitionProgress;
   self: PrayerCompetitionSummary;
   partner: PrayerCompetitionSummary | null;
 }

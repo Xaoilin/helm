@@ -45,4 +45,17 @@ describe('prayer challenge', () => {
     expect(competitionSchema.safeParse({ ...paused, self: { ...day, pending: 1 } }).success).toBe(false);
     expect(competitionSchema.safeParse({ ...paused, status: 'not_connected', partner: null }).success).toBe(false);
   });
+
+  it('accepts Sabah’s separate progress only on fully paused ranges and only within their capacity', () => {
+    const day = { ...summary(0, 0, 0), to: '2026-11-01' };
+    const pausedPrayerProgress = { onTime: 2, late: 1, missed: 1, pending: 1 };
+    const paused = { status: 'ready', self: day, partner: day, periodDaysExcluded: 1, pausedPrayerProgress };
+    expect(competitionSchema.parse(paused)).toEqual(paused);
+    expect(competitionScore(pausedPrayerProgress)).toEqual({ completed: 3, total: 5, percentage: 60 });
+    expect(competitionSchema.safeParse({ ...paused, periodDaysExcluded: undefined }).success).toBe(false);
+    expect(competitionSchema.safeParse({ ...paused, self: summary(0, 0, 0) }).success).toBe(false);
+    expect(competitionSchema.safeParse({ ...paused, status: 'unavailable', partner: null }).success).toBe(false);
+    expect(competitionSchema.safeParse({ ...paused, pausedPrayerProgress: { ...pausedPrayerProgress, pending: 2 } }).success).toBe(false);
+    expect(competitionSchema.safeParse({ ...paused, pausedPrayerProgress: { ...pausedPrayerProgress, pending: -1 } }).success).toBe(false);
+  });
 });
