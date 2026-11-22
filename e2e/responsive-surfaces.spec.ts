@@ -68,6 +68,7 @@ async function checkLayout(page: Page, container: Locator, name: string) {
       const left = Math.max(0, bounds.left);
       const right = Math.min(viewport, bounds.right);
       const problems: string[] = [];
+      if (bounds.left < -1 || bounds.right > viewport + 1) problems.push('Panel exceeds the viewport');
       const scrollers = new Set<HTMLElement>();
       const candidates = root.querySelectorAll<HTMLElement>(
         'section,article,form,.card,.surface-header,.surface-body,[role="dialog"],h1,h2,h3,h4,p,button,a[href],input,textarea,select,table',
@@ -136,6 +137,13 @@ for (const surface of Object.keys(views) as (keyof typeof views)[]) {
     await page.goto('/');
     const main = page.getByRole('main', { name: `${surface} surface` });
     await expect(main.locator('h1').first()).toBeVisible();
+    if (surface === 'dashboard') {
+      const published = await page.getByRole('navigation', { name: 'Main navigation' })
+        .getByRole('button', { name: /^Navigate to / }).evaluateAll(buttons =>
+          buttons.map(button => button.getAttribute('aria-label')!.slice('Navigate to '.length).toLowerCase()).sort(),
+        );
+      expect(published).toEqual(Object.keys(views).sort());
+    }
     if (surface === 'employment') {
       await main.getByRole('button', { name: 'Filters' }).click();
       await main.locator('.employment-role-button').first().click();
