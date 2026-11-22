@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T12:45:54Z",
+  "updatedAt": "2026-11-22T13:15:01Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1061,
+          "points": 1062,
           "comments": 775,
-          "observedAt": "2026-11-22T12:45:54Z"
+          "observedAt": "2026-11-22T13:15:01Z"
         }
       ],
       "featured": false
@@ -218,6 +218,27 @@
       "featured": false
     },
     {
+      "id": "3277cf52dcd23547d830",
+      "title": "Claude solves two open problems in the physics of black holes",
+      "summary": "274 comments on Hacker News.",
+      "publishedAt": "2026-11-19T17:30:44Z",
+      "category": "models",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://www.anthropic.com/research/claude-black-hole-physics"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50563148",
+          "points": 572,
+          "comments": 274,
+          "observedAt": "2026-11-22T11:15:02Z"
+        }
+      ],
+      "featured": false
+    },
+    {
       "id": "55cb0588b3e8436e78b2",
       "title": "Gemini 4 Carbon is now available",
       "summary": "Details in the Google DeepMind release notes.",
@@ -241,27 +262,6 @@
         "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
       },
       "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "3277cf52dcd23547d830",
-      "title": "Claude solves two open problems in the physics of black holes",
-      "summary": "274 comments on Hacker News.",
-      "publishedAt": "2026-11-19T17:30:44Z",
-      "category": "models",
-      "source": {
-        "label": "Hacker News",
-        "url": "https://www.anthropic.com/research/claude-black-hole-physics"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 572,
-          "comments": 274,
-          "observedAt": "2026-11-22T11:15:02Z"
-        }
-      ],
       "featured": false
     },
     {
