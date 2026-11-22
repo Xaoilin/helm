@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-21T23:45:42Z",
+  "updatedAt": "2026-11-22T00:39:25Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -137,37 +137,11 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50577265",
-          "points": 477,
+          "points": 478,
           "comments": 141,
-          "observedAt": "2026-11-21T23:45:42Z"
+          "observedAt": "2026-11-22T00:39:25Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "55cb0588b3e8436e78b2",
-      "title": "Gemini 4 Carbon is now available",
-      "summary": "Details in the Google DeepMind release notes.",
-      "publishedAt": "2026-11-10T16:03:47Z",
-      "category": "models",
-      "source": {
-        "label": "Google DeepMind",
-        "url": "https://deepmind.google/blog/gemini-4-carbon-is-now-available/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "2ffd7e8cb1f550c679e6",
-      "title": "Introducing the Multimodal Knowledge Agent benchmark",
-      "summary": "We’re launching Multimodal Knowledge Agent, a new benchmark to evaluate how agents reason across visually-complex multimodal tasks.",
-      "publishedAt": "2026-11-10T16:00:00Z",
-      "category": "research",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
-      },
-      "discussions": [],
       "featured": false
     },
     {
@@ -192,6 +166,32 @@
       "source": {
         "label": "Codex",
         "url": "https://developers.openai.com/codex/changelog/#github-release-452122665"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "55cb0588b3e8436e78b2",
+      "title": "Gemini 4 Carbon is now available",
+      "summary": "Details in the Google DeepMind release notes.",
+      "publishedAt": "2026-11-10T16:03:47Z",
+      "category": "models",
+      "source": {
+        "label": "Google DeepMind",
+        "url": "https://deepmind.google/blog/gemini-4-carbon-is-now-available/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "2ffd7e8cb1f550c679e6",
+      "title": "Introducing the Multimodal Knowledge Agent benchmark",
+      "summary": "We’re launching Multimodal Knowledge Agent, a new benchmark to evaluate how agents reason across visually-complex multimodal tasks.",
+      "publishedAt": "2026-11-10T16:00:00Z",
+      "category": "research",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
       },
       "discussions": [],
       "featured": false
@@ -257,9 +257,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 567,
+          "points": 568,
           "comments": 274,
-          "observedAt": "2026-11-21T23:15:08Z"
+          "observedAt": "2026-11-22T00:39:25Z"
         }
       ],
       "featured": false
