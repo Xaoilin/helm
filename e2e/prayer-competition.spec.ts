@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { competitionSchema } from '../src/services/backend/competitionContracts';
 import { expect, openApp, test } from './support/helm-fixture';
+import { verifyPrayerGiftMotion } from './support/prayer-exemption-gift';
 
 for (const theme of ['dark', 'light']) {
   for (const width of [1440, 390, 320]) {
@@ -166,8 +167,8 @@ test('failed historical comparisons hide the whole record and can be refreshed',
   await expect(record).toContainText('6 tied');
 });
 
-test('paused days show prayer completion without changing challenge scores or wins', async ({ page, scenario }, info) => {
-  await page.setViewportSize({ width: 1440, height: 950 });
+test('paused days keep Sabah’s prayer progress beside Lina’s softly looping gift', async ({ page, scenario }, info) => {
+  await page.setViewportSize({ width: 1440, height: 1080 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await scenario({ now: '2026-11-07T12:00:00Z', settings: { prayerEnabled: true } });
   const fixture = JSON.parse(readFileSync(new URL('../contracts/prayer-service/competition-paused-prayer-progress.json', import.meta.url), 'utf8'));
@@ -193,6 +194,7 @@ test('paused days show prayer completion without changing challenge scores or wi
   const linaPlayer = card.locator('.prayer-challenge-player.is-lina');
   const sabah = sabahPlayer.locator('.prayer-challenge-score');
   const lina = linaPlayer.locator('.prayer-challenge-score');
+  const gift = linaPlayer.getByRole('heading', { name: 'هدية من الله', exact: true });
   const mixed = card.getByText('2 days not counted because of Lina’s period', { exact: true });
   const pause = card.getByText('Not counted because of Lina’s period', { exact: true });
   const record = card.getByRole('group', { name: 'Daily record' });
@@ -208,8 +210,9 @@ test('paused days show prayer completion without changing challenge scores or wi
   await card.getByRole('button', { name: 'Day', exact: true }).click();
   await expect(pause).toBeVisible();
   await expect(sabah).toHaveText('3/5');
-  await expect(lina).toHaveText('0/0');
-  await expect(linaPlayer).toContainText('Non-obligatory');
+  await expect(lina).toHaveCount(0);
+  await expect(gift).toBeVisible();
+  await expect(linaPlayer).toContainText('الصلاة غير واجبة عليكِ في هذه الأيام. ارتاحي يا لينا، واطمئنّي.');
   await expect(sabahPlayer).toContainText('Prayed');
   await expect(card.getByRole('img', { name: 'Sabah: 2 on time, 1 late, 1 missed, 1 pending', exact: true })).toBeVisible();
   await expect(card.locator('.prayer-challenge-point-unit')).toHaveCount(0);
@@ -221,7 +224,8 @@ test('paused days show prayer completion without changing challenge scores or wi
   await expect(record).toContainText('1 day not counted because of Lina’s period');
   await expect(card.getByRole('button', { name: 'Refresh comparison' })).toBeEnabled();
   await card.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
-  await page.screenshot({ path: info.outputPath('period-paused-day-1440.png') });
+  await page.screenshot({ path: info.outputPath('period-paused-day-1440-reduced.png') });
+  await verifyPrayerGiftMotion(page, linaPlayer, info.outputPath('period-paused-day-1440'));
 
   todayProgress = undefined;
   const refresh = card.getByRole('button', { name: 'Refresh comparison' });
@@ -230,7 +234,7 @@ test('paused days show prayer completion without changing challenge scores or wi
   await expect(sabah).toHaveText('—');
   await expect(card).toContainText('Prayer totals unavailable');
   await expect(pause).toBeVisible();
-  await expect(lina).toHaveText('0/0');
+  await expect(gift).toBeVisible();
   await expect(record.getByLabel('Sabah 5, Lina 0', { exact: true })).toBeVisible();
 
   todayProgress = pausedPrayerProgress;
@@ -249,16 +253,23 @@ test('paused days show prayer completion without changing challenge scores or wi
   expect(await card.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
   await page.setViewportSize({ width: 320, height: 1_100 });
   await card.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
-  await page.screenshot({ path: info.outputPath('period-paused-day-320-large-text.png') });
+  const sabahBounds = await sabahPlayer.boundingBox();
+  const linaBounds = await linaPlayer.boundingBox();
+  expect(linaBounds!.y - (sabahBounds!.y + sabahBounds!.height)).toBeGreaterThanOrEqual(10);
+  expect(linaBounds!.width).toBeCloseTo(sabahBounds!.width);
+  await page.screenshot({ path: info.outputPath('period-paused-day-320-large-text-reduced.png') });
+  await verifyPrayerGiftMotion(page, linaPlayer, info.outputPath('period-paused-day-320-large-text'));
+  await refresh.click({ trial: true });
 
   await card.getByRole('button', { name: 'Previous day', exact: true }).click();
   await expect(card).toContainText('6 Nov 2026');
   await expect(pause).toBeVisible();
   await expect(sabah).toHaveText('5/5');
-  await expect(lina).toHaveText('0/0');
+  await expect(gift).toBeVisible();
   await card.getByRole('button', { name: 'Previous day', exact: true }).click();
   await expect(card).toContainText('5 Nov 2026');
   await expect(pause).toHaveCount(0);
+  await expect(gift).toHaveCount(0);
   await expect(sabah).toHaveText('12 pts');
 });
 

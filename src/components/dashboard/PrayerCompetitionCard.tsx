@@ -6,6 +6,7 @@ import { competitionIsPaused, competitionLeader, competitionPoints, competitionR
 import type { PrayerCompetition, PrayerCompetitionProgress, PrayerCompetitionSummary } from '../../types/domain';
 import './prayer-competition.css';
 import PrayerCompetitionRecord from './PrayerCompetitionRecord';
+import PrayerExemptionGift from './PrayerExemptionGift';
 import { PRAYER_TIMING_POINTS } from '../../config/prayerCompetition';
 
 const SELF = 'Sabah';
@@ -19,18 +20,16 @@ function Player({ name, summary, leading, showPoints, pausedProgress }: {
   pausedProgress?: PrayerCompetitionProgress | null;
 }) {
   const paused = pausedProgress !== undefined;
-  const nonObligatory = paused && name === 'Lina';
   const progress = paused ? pausedProgress : summary;
   const completion = progress ? competitionScore(progress) : null;
   const points = summary && showPoints ? competitionPoints(summary) : null;
   const pending = progress?.pending ?? 0;
   const completionPercentage = completion?.percentage;
 
-  const pausedCount = nonObligatory ? 'Non-obligatory' : completion ? 'Prayed' : 'Prayer totals unavailable';
+  const pausedCount = completion ? 'Prayed' : 'Prayer totals unavailable';
   const count = paused ? pausedCount : points ? `${points.available} points available`
     : completion ? `${completion.completed} of ${completion.total} prayed` : 'Waiting for totals';
-  const fraction = nonObligatory ? <>0<span>/0</span></>
-    : completion ? <>{completion.completed}<span>/{completion.total}</span></> : '—';
+  const fraction = completion ? <>{completion.completed}<span>/{completion.total}</span></> : '—';
   return <div className={`prayer-challenge-player ${name === 'Lina' ? 'is-lina' : 'is-sabah'}`}>
     <div className="prayer-challenge-name"><span className="prayer-challenge-avatar" aria-hidden="true">{name[0]}</span>
       <strong>{name}</strong>{leading && <span className="prayer-challenge-crown" aria-label="Leading">♛</span>}</div>
@@ -107,10 +106,21 @@ export default function PrayerCompetitionCard() {
         {excludedDays} {excludedDays === 1 ? 'day' : 'days'} not counted because of Lina’s period
       </span>}
     </p>
-    <div className="prayer-challenge-players">
+    <div className={`prayer-challenge-players${paused ? ' is-paused' : ''}`}>
       {paused ? <>
         <Player name={SELF} pausedProgress={pausedProgress} />
-        <Player name={PARTNER} pausedProgress={null} />
+        <div className="prayer-challenge-player is-lina is-prayer-exempt" lang="ar" dir="rtl">
+          <div className="prayer-challenge-name">
+            <span className="prayer-challenge-avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 9c-6-9-12 1-4 4-7 6 3 12 5 4 7 5 12-5 4-7 3-8-8-10-5-1Z" />
+                <circle cx="12" cy="12" r="2.2" />
+              </svg>
+            </span>
+            <strong>لينا</strong>
+          </div>
+          <PrayerExemptionGift />
+        </div>
       </> : <>
         <Player name={SELF} summary={data?.self ?? null} leading={leader === 'self'} showPoints={showPoints} />
         <Player name={PARTNER} summary={data?.partner ?? null} leading={leader === 'partner'} showPoints={showPoints} />
