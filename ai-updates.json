@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T00:55:37Z",
+  "updatedAt": "2026-11-22T01:17:07Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -137,9 +137,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50577265",
-          "points": 478,
+          "points": 479,
           "comments": 141,
-          "observedAt": "2026-11-22T00:39:25Z"
+          "observedAt": "2026-11-22T01:17:07Z"
         }
       ],
       "featured": false
@@ -171,19 +171,6 @@
       "featured": false
     },
     {
-      "id": "55cb0588b3e8436e78b2",
-      "title": "Gemini 4 Carbon is now available",
-      "summary": "Details in the Google DeepMind release notes.",
-      "publishedAt": "2026-11-10T16:03:47Z",
-      "category": "models",
-      "source": {
-        "label": "Google DeepMind",
-        "url": "https://deepmind.google/blog/gemini-4-carbon-is-now-available/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
       "id": "bda522de56a34a98c046",
       "title": "Gemini 4 Neon is the new #1 on the Models Engineering Index",
       "summary": "244 comments on Hacker News.",
@@ -202,6 +189,19 @@
           "observedAt": "2026-11-21T22:45:12Z"
         }
       ],
+      "featured": false
+    },
+    {
+      "id": "55cb0588b3e8436e78b2",
+      "title": "Gemini 4 Carbon is now available",
+      "summary": "Details in the Google DeepMind release notes.",
+      "publishedAt": "2026-11-10T16:03:47Z",
+      "category": "models",
+      "source": {
+        "label": "Google DeepMind",
+        "url": "https://deepmind.google/blog/gemini-4-carbon-is-now-available/"
+      },
+      "discussions": [],
       "featured": false
     },
     {
