@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T00:39:25Z",
+  "updatedAt": "2026-11-22T00:55:37Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -184,19 +184,6 @@
       "featured": false
     },
     {
-      "id": "2ffd7e8cb1f550c679e6",
-      "title": "Introducing the Multimodal Knowledge Agent benchmark",
-      "summary": "We’re launching Multimodal Knowledge Agent, a new benchmark to evaluate how agents reason across visually-complex multimodal tasks.",
-      "publishedAt": "2026-11-10T16:00:00Z",
-      "category": "research",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
       "id": "bda522de56a34a98c046",
       "title": "Gemini 4 Neon is the new #1 on the Models Engineering Index",
       "summary": "244 comments on Hacker News.",
@@ -215,6 +202,19 @@
           "observedAt": "2026-11-21T22:45:12Z"
         }
       ],
+      "featured": false
+    },
+    {
+      "id": "2ffd7e8cb1f550c679e6",
+      "title": "Introducing the Multimodal Knowledge Agent benchmark",
+      "summary": "We’re launching Multimodal Knowledge Agent, a new benchmark to evaluate how agents reason across visually-complex multimodal tasks.",
+      "publishedAt": "2026-11-10T16:00:00Z",
+      "category": "research",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
+      },
+      "discussions": [],
       "featured": false
     },
     {
