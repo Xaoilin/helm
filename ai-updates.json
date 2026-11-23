@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T19:45:47Z",
+  "updatedAt": "2026-11-23T20:16:21Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -77,7 +77,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "308 comments on Hacker News.",
+      "summary": "313 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -88,9 +88,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 893,
-          "comments": 308,
-          "observedAt": "2026-11-23T19:45:47Z"
+          "points": 916,
+          "comments": 313,
+          "observedAt": "2026-11-23T20:16:21Z"
         }
       ],
       "featured": false
@@ -137,7 +137,7 @@
     {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "282 comments on Hacker News.",
+      "summary": "287 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -148,30 +148,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 707,
-          "comments": 282,
-          "observedAt": "2026-11-23T19:45:47Z"
-        }
-      ],
-      "featured": false
-    },
-    {
-      "id": "cc8781df9c279647ef43",
-      "title": "The full DeepSeek App experience, now via API",
-      "summary": "Search, files, links, safety, and voice. The capabilities behind the DeepSeek App are now available through the DeepSeek API.",
-      "publishedAt": "2026-11-13T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "DeepSeek",
-        "url": "https://api-docs.deepseek.com/news/news261113/"
-      },
-      "discussions": [
-        {
-          "label": "Reddit · r/DeepSeek",
-          "url": "https://www.reddit.com/r/DeepSeek/comments/1xv9idh/releasing_the_full_suite_of_application_apis/",
-          "preview": "A community post collects the new API capabilities, with links to web search, document input, URL reading and the demo chat client.",
-          "points": 44,
-          "observedAt": "2026-11-17T19:42:52Z"
+          "points": 712,
+          "comments": 287,
+          "observedAt": "2026-11-23T20:16:21Z"
         }
       ],
       "featured": false
@@ -193,6 +172,27 @@
           "points": 356,
           "comments": 86,
           "observedAt": "2026-11-23T19:15:03Z"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "cc8781df9c279647ef43",
+      "title": "The full DeepSeek App experience, now via API",
+      "summary": "Search, files, links, safety, and voice. The capabilities behind the DeepSeek App are now available through the DeepSeek API.",
+      "publishedAt": "2026-11-13T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "DeepSeek",
+        "url": "https://api-docs.deepseek.com/news/news261113/"
+      },
+      "discussions": [
+        {
+          "label": "Reddit · r/DeepSeek",
+          "url": "https://www.reddit.com/r/DeepSeek/comments/1xv9idh/releasing_the_full_suite_of_application_apis/",
+          "preview": "A community post collects the new API capabilities, with links to web search, document input, URL reading and the demo chat client.",
+          "points": 44,
+          "observedAt": "2026-11-17T19:42:52Z"
         }
       ],
       "featured": false
