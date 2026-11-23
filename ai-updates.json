@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T13:18:44Z",
+  "updatedAt": "2026-11-23T13:45:13Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -62,9 +62,30 @@
       "featured": false
     },
     {
+      "id": "f1db7ce98881d8901597",
+      "title": "GLM-5.4: Toward Generalized Coding with Our First Loop Transformer",
+      "summary": "160 comments on Hacker News.",
+      "publishedAt": "2026-11-23T10:06:43Z",
+      "category": "models",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://z.ai/blog/glm-5.4"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50609685",
+          "points": 370,
+          "comments": 160,
+          "observedAt": "2026-11-23T13:45:13Z"
+        }
+      ],
+      "featured": false
+    },
+    {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "242 comments on Hacker News.",
+      "summary": "249 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -75,9 +96,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 585,
-          "comments": 242,
-          "observedAt": "2026-11-23T13:18:44Z"
+          "points": 597,
+          "comments": 249,
+          "observedAt": "2026-11-23T13:45:13Z"
         }
       ],
       "featured": false
@@ -106,7 +127,7 @@
     {
       "id": "9e90f9c0947157e7e7e9",
       "title": "Show HN: I built a game where you are an LLM's subagent",
-      "summary": "79 comments on Hacker News.",
+      "summary": "80 comments on Hacker News.",
       "publishedAt": "2026-11-22T13:56:58Z",
       "category": "research",
       "source": {
@@ -117,9 +138,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50599762",
-          "points": 338,
-          "comments": 79,
-          "observedAt": "2026-11-23T13:18:44Z"
+          "points": 340,
+          "comments": 80,
+          "observedAt": "2026-11-23T13:45:13Z"
         }
       ],
       "featured": false
@@ -490,19 +511,6 @@
       "source": {
         "label": "Claude Platform",
         "url": "https://platform.claude.com/docs/en/release-notes/overview#linked-billing"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "616cb124a1370128b835",
-      "title": "Codex CLI Release: 0.169.1",
-      "summary": "Chores No verified release highlights available. Changelog Full Changelog: rust-v0.169.0...rust-v0.169.1",
-      "publishedAt": "2026-11-17T00:00:00Z",
-      "category": "coding",
-      "source": {
-        "label": "Codex",
-        "url": "https://developers.openai.com/codex/changelog/#github-release-449266447"
       },
       "discussions": [],
       "featured": false
