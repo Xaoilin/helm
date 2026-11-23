@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T17:45:11Z",
+  "updatedAt": "2026-11-23T18:18:58Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1069,
+          "points": 1070,
           "comments": 775,
-          "observedAt": "2026-11-23T15:17:51Z"
+          "observedAt": "2026-11-23T18:18:58Z"
         }
       ],
       "featured": false
@@ -64,7 +64,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward Generalized Coding with Our First Loop Transformer",
-      "summary": "272 comments on Hacker News.",
+      "summary": "296 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -75,11 +75,37 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 783,
-          "comments": 272,
-          "observedAt": "2026-11-23T17:45:11Z"
+          "points": 816,
+          "comments": 296,
+          "observedAt": "2026-11-23T18:18:58Z"
         }
       ],
+      "featured": false
+    },
+    {
+      "id": "ec5d17dea0efd7a7a171",
+      "title": "Claude Platform: Storage webhook events",
+      "summary": "We’ve added two event types to organization webhooks, which are in beta. We send external_storage.failed when a bucket that you use as…",
+      "publishedAt": "2026-11-23T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#storage-webhook-events"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "79d083b08ba4f892dce9",
+      "title": "Claude Platform: Enterprise frontier safeguards",
+      "summary": "We’ve launched Enterprise Frontier Safeguards (EFS) in beta on Claude Platform, Claude Platform on AWS, and Claude Models on Google Cloud (Anthropic…",
+      "publishedAt": "2026-11-23T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#enterprise-frontier-safeguards"
+      },
+      "discussions": [],
       "featured": false
     },
     {
@@ -96,9 +122,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 679,
+          "points": 687,
           "comments": 278,
-          "observedAt": "2026-11-23T17:45:11Z"
+          "observedAt": "2026-11-23T18:18:58Z"
         }
       ],
       "featured": false
@@ -138,9 +164,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50599762",
-          "points": 353,
+          "points": 355,
           "comments": 86,
-          "observedAt": "2026-11-23T17:45:11Z"
+          "observedAt": "2026-11-23T18:18:58Z"
         }
       ],
       "featured": false
@@ -411,7 +437,7 @@
     {
       "id": "948257091aad02b88a67",
       "title": "Energy-Based Reasoners: 385x more efficient inference",
-      "summary": "57 comments on Hacker News.",
+      "summary": "60 comments on Hacker News.",
       "publishedAt": "2026-11-18T09:29:32Z",
       "category": "research",
       "source": {
@@ -422,9 +448,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50543989",
-          "points": 315,
-          "comments": 57,
-          "observedAt": "2026-11-19T19:15:27Z"
+          "points": 317,
+          "comments": 60,
+          "observedAt": "2026-11-23T18:18:58Z"
         }
       ],
       "featured": false
@@ -479,40 +505,6 @@
         "url": "https://blog.google/products-and-platforms/products/gemini/gemini-4-carbon-builders/"
       },
       "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "830da74434e8505c737e",
-      "title": "Put Gemini to work for you",
-      "summary": "Tasks in Gemini is now free of charge in six countries, with new features starting in the U.S. and deeper Google Workspace…",
-      "publishedAt": "2026-11-17T17:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/innovation-and-ai/products/gemini-app/tasks-in-gemini-free-new-features/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "9a0aa0e71b450c03e243",
-      "title": "How the Claude Code team thinks about verification",
-      "summary": "233 comments on Hacker News.",
-      "publishedAt": "2026-11-17T10:20:40Z",
-      "category": "coding",
-      "source": {
-        "label": "Hacker News",
-        "url": "https://claude.dev/blog/how-the-claude-code-team-thinks-about-verification/"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50529612",
-          "points": 295,
-          "comments": 233,
-          "observedAt": "2026-11-19T20:17:00Z"
-        }
-      ],
       "featured": false
     }
   ]
