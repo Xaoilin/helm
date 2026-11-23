@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T11:15:32Z",
+  "updatedAt": "2026-11-23T11:45:02Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -64,7 +64,7 @@
     {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "227 comments on Hacker News.",
+      "summary": "228 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -75,9 +75,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 539,
-          "comments": 227,
-          "observedAt": "2026-11-23T11:15:32Z"
+          "points": 552,
+          "comments": 228,
+          "observedAt": "2026-11-23T11:45:02Z"
         }
       ],
       "featured": false
@@ -99,6 +99,27 @@
           "preview": "A community post collects the new API capabilities, with links to web search, document input, URL reading and the demo chat client.",
           "points": 44,
           "observedAt": "2026-11-17T19:42:52Z"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "9e90f9c0947157e7e7e9",
+      "title": "Show HN: I built a game where you are an LLM's subagent",
+      "summary": "79 comments on Hacker News.",
+      "publishedAt": "2026-11-22T13:56:58Z",
+      "category": "research",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://github.com/gulivan/worker755"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50599762",
+          "points": 327,
+          "comments": 79,
+          "observedAt": "2026-11-23T11:45:02Z"
         }
       ],
       "featured": false
@@ -482,19 +503,6 @@
       "source": {
         "label": "Codex",
         "url": "https://developers.openai.com/codex/changelog/#github-release-449266447"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "4e2b4f1543d148003d9a",
-      "title": "Claude Code v2.1.326",
-      "summary": "Added support for turning on Code Mode while agent teams are enabled; if you already turned it on, sessions with teams on…",
-      "publishedAt": "2026-11-16T22:11:05Z",
-      "category": "coding",
-      "source": {
-        "label": "Claude Code",
-        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.326"
       },
       "discussions": [],
       "featured": false
