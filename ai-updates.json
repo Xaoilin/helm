@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T18:18:58Z",
+  "updatedAt": "2026-11-23T18:45:08Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -62,9 +62,22 @@
       "featured": false
     },
     {
+      "id": "930259be17ccb09d7c21",
+      "title": "Here are 4 things you didn’t know you could do with Gemini Canvas.",
+      "summary": "Boost productivity with Google Gemini Canvas. Build web apps, create custom study tools, and refine writing side-by-side. Try it in your next…",
+      "publishedAt": "2026-11-23T18:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/products/gemini-app/gemini-canvas-tasks/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "f1db7ce98881d8901597",
-      "title": "GLM-5.4: Toward Generalized Coding with Our First Loop Transformer",
-      "summary": "296 comments on Hacker News.",
+      "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
+      "summary": "300 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -75,9 +88,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 816,
-          "comments": 296,
-          "observedAt": "2026-11-23T18:18:58Z"
+          "points": 849,
+          "comments": 300,
+          "observedAt": "2026-11-23T18:45:08Z"
         }
       ],
       "featured": false
@@ -109,9 +122,22 @@
       "featured": false
     },
     {
+      "id": "bba8bcaba0db07610d5b",
+      "title": "Claude Platform: Claude Opus 4.5 deprecation",
+      "summary": "We announced the deprecation of the Claude Opus 4.5 model (claude-opus-4-5-20251101 and claude-opus-4-5), with retirement on the Claude API scheduled for January…",
+      "publishedAt": "2026-11-23T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#claude-opus-4-5-deprecation"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "278 comments on Hacker News.",
+      "summary": "280 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -122,9 +148,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 687,
-          "comments": 278,
-          "observedAt": "2026-11-23T18:18:58Z"
+          "points": 697,
+          "comments": 280,
+          "observedAt": "2026-11-23T18:45:08Z"
         }
       ],
       "featured": false
@@ -435,6 +461,27 @@
       "featured": false
     },
     {
+      "id": "afb244eb4a2fb9fd5637",
+      "title": "LLMs can read and write executables byte by byte from a hex dump",
+      "summary": "184 comments on Hacker News.",
+      "publishedAt": "2026-11-18T14:15:58Z",
+      "category": "research",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://sgiannopoulos.github.io/blog/machine-code-programming/"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50546587",
+          "points": 316,
+          "comments": 184,
+          "observedAt": "2026-11-23T18:45:08Z"
+        }
+      ],
+      "featured": false
+    },
+    {
       "id": "948257091aad02b88a67",
       "title": "Energy-Based Reasoners: 385x more efficient inference",
       "summary": "60 comments on Hacker News.",
@@ -464,45 +511,6 @@
       "source": {
         "label": "OpenAI",
         "url": "https://openai.com/index/research-acceleration-jagged-frontier"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "9add1876343f392d7062",
-      "title": "Codex CLI Release: 0.170.0",
-      "summary": "Added WebRTC negotiation for realtime voice calls in the TUI. (#61172) Added automatically refreshed authentication headers for OpenTelemetry HTTP exporters. (#61028) Added…",
-      "publishedAt": "2026-11-18T00:00:00Z",
-      "category": "coding",
-      "source": {
-        "label": "Codex",
-        "url": "https://developers.openai.com/codex/changelog/#github-release-449494076"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "8f7a055a1b360233ad87",
-      "title": "Claude Code v2.1.327",
-      "summary": "Added a confirmation before /install-github-app changes a repository Added claude mcp add-json <name> - to read the server's JSON from stdin, so…",
-      "publishedAt": "2026-11-17T23:17:45Z",
-      "category": "coding",
-      "source": {
-        "label": "Claude Code",
-        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.327"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "73687e4d2d12cc3c627a",
-      "title": "See what 5 builders are making with Gemini 4 Carbon",
-      "summary": "See what 5 builders are making with Gemini 4 Carbon.",
-      "publishedAt": "2026-11-17T21:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/products-and-platforms/products/gemini/gemini-4-carbon-builders/"
       },
       "discussions": [],
       "featured": false
