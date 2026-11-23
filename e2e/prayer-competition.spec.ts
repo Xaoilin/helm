@@ -212,7 +212,8 @@ test('paused days keep Sabah’s prayer progress beside Lina’s softly looping 
   await expect(sabah).toHaveText('3/5');
   await expect(lina).toHaveCount(0);
   await expect(gift).toBeVisible();
-  await expect(linaPlayer).toContainText('الصلاة غير واجبة عليكِ في هذه الأيام. ارتاحي يا لينا، واطمئنّي.');
+  await expect(linaPlayer.getByText('لينه', { exact: true })).toBeVisible();
+  await expect(linaPlayer).toContainText('الصلاة غير واجبة عليكِ في هذه الأيام. ارتاحي يا لينه، واطمئنّي.');
   await expect(sabahPlayer).toContainText('Prayed');
   await expect(card.getByRole('img', { name: 'Sabah: 2 on time, 1 late, 1 missed, 1 pending', exact: true })).toBeVisible();
   await expect(card.locator('.prayer-challenge-point-unit')).toHaveCount(0);

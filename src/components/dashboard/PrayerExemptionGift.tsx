@@ -9,7 +9,7 @@ export default function PrayerExemptionGift() {
   return <div className="prayer-challenge-gift" data-motion-paused={motionPaused}>
     <div className="prayer-challenge-gift-copy">
       <h3>هدية من الله</h3>
-      <p>الصلاة غير واجبة عليكِ في هذه الأيام. ارتاحي يا لينا، واطمئنّي.</p>
+      <p>الصلاة غير واجبة عليكِ في هذه الأيام. ارتاحي يا لينه، واطمئنّي.</p>
     </div>
     <div className="prayer-challenge-gift-art" aria-hidden="true">
       <span className="prayer-challenge-gift-hearts">💕</span>
