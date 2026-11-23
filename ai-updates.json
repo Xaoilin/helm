@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T05:45:25Z",
+  "updatedAt": "2026-11-23T06:34:31Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -62,6 +62,27 @@
       "featured": false
     },
     {
+      "id": "c75d02646488f49475fa",
+      "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
+      "summary": "157 comments on Hacker News.",
+      "publishedAt": "2026-11-22T21:01:16Z",
+      "category": "models",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://www.gpupartner.com/blog/beginners-guide-local-ai-inkling-qwen-unsloth"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50603845",
+          "points": 396,
+          "comments": 157,
+          "observedAt": "2026-11-23T06:34:31Z"
+        }
+      ],
+      "featured": false
+    },
+    {
       "id": "cc8781df9c279647ef43",
       "title": "The full DeepSeek App experience, now via API",
       "summary": "Search, files, links, safety, and voice. The capabilities behind the DeepSeek App are now available through the DeepSeek API.",
@@ -78,27 +99,6 @@
           "preview": "A community post collects the new API capabilities, with links to web search, document input, URL reading and the demo chat client.",
           "points": 44,
           "observedAt": "2026-11-17T19:42:52Z"
-        }
-      ],
-      "featured": false
-    },
-    {
-      "id": "c75d02646488f49475fa",
-      "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "149 comments on Hacker News.",
-      "publishedAt": "2026-11-22T21:01:16Z",
-      "category": "models",
-      "source": {
-        "label": "Hacker News",
-        "url": "https://www.gpupartner.com/blog/beginners-guide-local-ai-inkling-qwen-unsloth"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 370,
-          "comments": 149,
-          "observedAt": "2026-11-23T05:45:25Z"
         }
       ],
       "featured": false
