@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T23:45:01Z",
+  "updatedAt": "2026-11-23T00:40:13Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -126,7 +126,7 @@
     {
       "id": "03b179946dd0e551984b",
       "title": "Language Models Can Rewrite Their Own Weights",
-      "summary": "144 comments on Hacker News.",
+      "summary": "145 comments on Hacker News.",
       "publishedAt": "2026-11-20T16:29:06Z",
       "category": "research",
       "source": {
@@ -138,8 +138,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50577265",
           "points": 491,
-          "comments": 144,
-          "observedAt": "2026-11-22T23:45:01Z"
+          "comments": 145,
+          "observedAt": "2026-11-23T00:40:13Z"
         }
       ],
       "featured": false
@@ -440,27 +440,6 @@
       "featured": false
     },
     {
-      "id": "3cbf9c32d4a8b52a851a",
-      "title": "Anthropic releases Claude Fable 5.2 and Mythos 5.2",
-      "summary": "Fable 5.2 is available in Claude Code and the API. Anthropic says the models run up to 30% faster than 5.1 and cost less.",
-      "publishedAt": "2026-11-09T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Claude Platform",
-        "url": "https://platform.claude.com/docs/en/release-notes/overview#claude-fable-5-2"
-      },
-      "discussions": [
-        {
-          "label": "Reddit · r/ClaudeAI",
-          "url": "https://www.reddit.com/r/ClaudeAI/comments/1xs0dct/fable_52_just_landed/",
-          "preview": "The rollout thread links Anthropic’s announcement and discusses Fable-only usage resets and when to choose Fable 5.2 over Opus 5.5.",
-          "points": 1576,
-          "observedAt": "2026-11-17T19:42:52Z"
-        }
-      ],
-      "featured": false
-    },
-    {
       "id": "9129b1bc7902641c3506",
       "title": "Claude Platform: Linked billing",
       "summary": "We’ve launched Linked billing in beta with the user-profiles-billing-2026-10-01 beta header. Your customers can now pay for the Claude usage in your…",
@@ -497,6 +476,27 @@
         "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.326"
       },
       "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "8331a3aa13cbf4dc7e51",
+      "title": "OpenCode Browse",
+      "summary": "223 comments on Hacker News.",
+      "publishedAt": "2026-11-16T21:20:37Z",
+      "category": "coding",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://opencode.ai/product/browse"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50523459",
+          "points": 336,
+          "comments": 223,
+          "observedAt": "2026-11-23T00:40:13Z"
+        }
+      ],
       "featured": false
     }
   ]
