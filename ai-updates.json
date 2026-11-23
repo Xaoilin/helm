@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T22:15:12Z",
+  "updatedAt": "2026-11-23T22:45:12Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -103,7 +103,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "325 comments on Hacker News.",
+      "summary": "328 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -114,9 +114,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 984,
-          "comments": 325,
-          "observedAt": "2026-11-23T22:15:12Z"
+          "points": 996,
+          "comments": 328,
+          "observedAt": "2026-11-23T22:45:12Z"
         }
       ],
       "featured": false
@@ -163,7 +163,7 @@
     {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "292 comments on Hacker News.",
+      "summary": "295 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -174,9 +174,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 733,
-          "comments": 292,
-          "observedAt": "2026-11-23T22:15:12Z"
+          "points": 736,
+          "comments": 295,
+          "observedAt": "2026-11-23T22:45:12Z"
         }
       ],
       "featured": false
@@ -184,7 +184,7 @@
     {
       "id": "9e90f9c0947157e7e7e9",
       "title": "Show HN: I built a game where you are an LLM's subagent",
-      "summary": "86 comments on Hacker News.",
+      "summary": "87 comments on Hacker News.",
       "publishedAt": "2026-11-22T13:56:58Z",
       "category": "research",
       "source": {
@@ -196,8 +196,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50599762",
           "points": 356,
-          "comments": 86,
-          "observedAt": "2026-11-23T19:15:03Z"
+          "comments": 87,
+          "observedAt": "2026-11-23T22:45:12Z"
         }
       ],
       "featured": false
