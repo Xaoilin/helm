@@ -117,7 +117,7 @@ export default function PrayerCompetitionCard() {
                 <circle cx="12" cy="12" r="2.2" />
               </svg>
             </span>
-            <strong>لينا</strong>
+            <strong>لينه</strong>
           </div>
           <PrayerExemptionGift />
         </div>
