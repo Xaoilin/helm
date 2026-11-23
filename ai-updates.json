@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T13:45:13Z",
+  "updatedAt": "2026-11-23T14:18:45Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1067,
+          "points": 1068,
           "comments": 775,
-          "observedAt": "2026-11-23T12:23:40Z"
+          "observedAt": "2026-11-23T14:18:45Z"
         }
       ],
       "featured": false
@@ -64,7 +64,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward Generalized Coding with Our First Loop Transformer",
-      "summary": "160 comments on Hacker News.",
+      "summary": "176 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -75,9 +75,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 370,
-          "comments": 160,
-          "observedAt": "2026-11-23T13:45:13Z"
+          "points": 436,
+          "comments": 176,
+          "observedAt": "2026-11-23T14:18:45Z"
         }
       ],
       "featured": false
@@ -85,7 +85,7 @@
     {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "249 comments on Hacker News.",
+      "summary": "251 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -96,9 +96,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 597,
-          "comments": 249,
-          "observedAt": "2026-11-23T13:45:13Z"
+          "points": 613,
+          "comments": 251,
+          "observedAt": "2026-11-23T14:18:45Z"
         }
       ],
       "featured": false
@@ -127,7 +127,7 @@
     {
       "id": "9e90f9c0947157e7e7e9",
       "title": "Show HN: I built a game where you are an LLM's subagent",
-      "summary": "80 comments on Hacker News.",
+      "summary": "82 comments on Hacker News.",
       "publishedAt": "2026-11-22T13:56:58Z",
       "category": "research",
       "source": {
@@ -138,9 +138,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50599762",
-          "points": 340,
-          "comments": 80,
-          "observedAt": "2026-11-23T13:45:13Z"
+          "points": 342,
+          "comments": 82,
+          "observedAt": "2026-11-23T14:18:45Z"
         }
       ],
       "featured": false
@@ -200,9 +200,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50577265",
-          "points": 492,
+          "points": 493,
           "comments": 145,
-          "observedAt": "2026-11-23T10:45:10Z"
+          "observedAt": "2026-11-23T14:18:45Z"
         }
       ],
       "featured": false
@@ -354,6 +354,19 @@
       "featured": false
     },
     {
+      "id": "00d52199bef25f9eda98",
+      "title": "How to build and maintain an agentic evaluation",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-23T00:00:00Z",
+      "category": "research",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/agentic-evals"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "1db0eada305233be8b8a",
       "title": "LLM assisted reverse engineering",
       "summary": "79 comments on Hacker News.",
@@ -500,19 +513,6 @@
           "observedAt": "2026-11-19T20:17:00Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "9129b1bc7902641c3506",
-      "title": "Claude Platform: Linked billing",
-      "summary": "We’ve launched Linked billing in beta with the user-profiles-billing-2026-10-01 beta header. Your customers can now pay for the Claude usage in your…",
-      "publishedAt": "2026-11-17T00:00:00Z",
-      "category": "coding",
-      "source": {
-        "label": "Claude Platform",
-        "url": "https://platform.claude.com/docs/en/release-notes/overview#linked-billing"
-      },
-      "discussions": [],
       "featured": false
     }
   ]
