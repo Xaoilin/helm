@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T20:45:00Z",
+  "updatedAt": "2026-11-23T21:15:00Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -75,9 +75,22 @@
       "featured": false
     },
     {
+      "id": "17a4c12938fd3e486763",
+      "title": "See what 6 builders are making with Gemini 4 Hydrogen",
+      "summary": "See six projects builders created with Gemini 4 Hydrogen, from rainy sci-fi skies and pixelated koi ponds to an interactive moth.",
+      "publishedAt": "2026-11-23T18:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-hydrogen-builders/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "315 comments on Hacker News.",
+      "summary": "319 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -88,9 +101,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 934,
-          "comments": 315,
-          "observedAt": "2026-11-23T20:45:00Z"
+          "points": 947,
+          "comments": 319,
+          "observedAt": "2026-11-23T21:15:00Z"
         }
       ],
       "featured": false
@@ -137,7 +150,7 @@
     {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "289 comments on Hacker News.",
+      "summary": "291 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -148,9 +161,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 715,
-          "comments": 289,
-          "observedAt": "2026-11-23T20:45:00Z"
+          "points": 722,
+          "comments": 291,
+          "observedAt": "2026-11-23T21:15:00Z"
         }
       ],
       "featured": false
@@ -500,19 +513,6 @@
           "observedAt": "2026-11-23T18:18:58Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "58da586369f33999eb92",
-      "title": "Research acceleration: The jagged frontier",
-      "summary": "OpenAI measures how coding agents are accelerating AI research, where their performance remains uneven, and what this signals about recursive self-improvement.",
-      "publishedAt": "2026-11-18T08:00:00Z",
-      "category": "research",
-      "source": {
-        "label": "OpenAI",
-        "url": "https://openai.com/index/research-acceleration-jagged-frontier"
-      },
-      "discussions": [],
       "featured": false
     }
   ]
