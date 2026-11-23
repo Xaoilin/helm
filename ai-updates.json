@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T14:45:13Z",
+  "updatedAt": "2026-11-23T15:17:51Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1068,
+          "points": 1069,
           "comments": 775,
-          "observedAt": "2026-11-23T14:18:45Z"
+          "observedAt": "2026-11-23T15:17:51Z"
         }
       ],
       "featured": false
@@ -64,7 +64,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward Generalized Coding with Our First Loop Transformer",
-      "summary": "195 comments on Hacker News.",
+      "summary": "216 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -75,9 +75,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 492,
-          "comments": 195,
-          "observedAt": "2026-11-23T14:45:13Z"
+          "points": 552,
+          "comments": 216,
+          "observedAt": "2026-11-23T15:17:51Z"
         }
       ],
       "featured": false
@@ -85,7 +85,7 @@
     {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "259 comments on Hacker News.",
+      "summary": "262 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -96,9 +96,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 622,
-          "comments": 259,
-          "observedAt": "2026-11-23T14:45:13Z"
+          "points": 635,
+          "comments": 262,
+          "observedAt": "2026-11-23T15:17:51Z"
         }
       ],
       "featured": false
@@ -138,9 +138,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50599762",
-          "points": 345,
+          "points": 346,
           "comments": 83,
-          "observedAt": "2026-11-23T14:45:13Z"
+          "observedAt": "2026-11-23T15:17:51Z"
         }
       ],
       "featured": false
