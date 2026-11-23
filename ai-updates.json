@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T21:15:00Z",
+  "updatedAt": "2026-11-23T21:45:42Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -62,6 +62,19 @@
       "featured": false
     },
     {
+      "id": "a9972b90c90a6092227e",
+      "title": "Claude Code v2.1.331",
+      "summary": "Added Code Mode support in terminal sessions on Amazon Bedrock, Google Cloud's Agent Platform, Microsoft Foundry and Claude Platform on AWS Added…",
+      "publishedAt": "2026-11-23T21:34:41Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Code",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.331"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "930259be17ccb09d7c21",
       "title": "Here are 4 things you didn’t know you could do with Gemini Canvas.",
       "summary": "Boost productivity with Google Gemini Canvas. Build web apps, create custom study tools, and refine writing side-by-side. Try it in your next…",
@@ -90,7 +103,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "319 comments on Hacker News.",
+      "summary": "322 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -101,9 +114,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 947,
-          "comments": 319,
-          "observedAt": "2026-11-23T21:15:00Z"
+          "points": 965,
+          "comments": 322,
+          "observedAt": "2026-11-23T21:45:42Z"
         }
       ],
       "featured": false
@@ -161,9 +174,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 722,
+          "points": 729,
           "comments": 291,
-          "observedAt": "2026-11-23T21:15:00Z"
+          "observedAt": "2026-11-23T21:45:42Z"
         }
       ],
       "featured": false
@@ -380,6 +393,19 @@
       "featured": false
     },
     {
+      "id": "1590e3f6387642d1f8fc",
+      "title": "Claude Code v2.1.328",
+      "summary": "Added auto mode for Claude Opus 4.6 and Sonnet 4.6 on Amazon Bedrock, Google Cloud's Agent Platform, Microsoft Foundry and Claude apps…",
+      "publishedAt": "2026-11-19T01:14:04Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Code",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.328"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "55cb0588b3e8436e78b2",
       "title": "Gemini 4 Carbon is now available",
       "summary": "Details in the Google DeepMind release notes.",
@@ -406,19 +432,6 @@
       "featured": false
     },
     {
-      "id": "1590e3f6387642d1f8fc",
-      "title": "Claude Code v2.1.328",
-      "summary": "Added auto mode for Claude Opus 4.6 and Sonnet 4.6 on Amazon Bedrock, Google Cloud's Agent Platform, Microsoft Foundry and Claude apps…",
-      "publishedAt": "2026-11-19T01:14:04Z",
-      "category": "coding",
-      "source": {
-        "label": "Claude Code",
-        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.328"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
       "id": "00d52199bef25f9eda98",
       "title": "How to build and maintain an agentic evaluation",
       "summary": "Details in the Hugging Face release notes.",
@@ -434,7 +447,7 @@
     {
       "id": "1db0eada305233be8b8a",
       "title": "LLM assisted reverse engineering",
-      "summary": "79 comments on Hacker News.",
+      "summary": "82 comments on Hacker News.",
       "publishedAt": "2026-11-18T22:29:13Z",
       "category": "research",
       "source": {
@@ -445,9 +458,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50553225",
-          "points": 307,
-          "comments": 79,
-          "observedAt": "2026-11-20T13:16:24Z"
+          "points": 316,
+          "comments": 82,
+          "observedAt": "2026-11-23T21:45:42Z"
         }
       ],
       "featured": false
@@ -490,27 +503,6 @@
           "points": 316,
           "comments": 184,
           "observedAt": "2026-11-23T18:45:08Z"
-        }
-      ],
-      "featured": false
-    },
-    {
-      "id": "948257091aad02b88a67",
-      "title": "Energy-Based Reasoners: 385x more efficient inference",
-      "summary": "60 comments on Hacker News.",
-      "publishedAt": "2026-11-18T09:29:32Z",
-      "category": "research",
-      "source": {
-        "label": "Hacker News",
-        "url": "https://energy-based-reasoners.github.io/"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50543989",
-          "points": 317,
-          "comments": 60,
-          "observedAt": "2026-11-23T18:18:58Z"
         }
       ],
       "featured": false
