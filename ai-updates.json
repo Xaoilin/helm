@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T23:45:45Z",
+  "updatedAt": "2026-11-24T00:34:16Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -62,6 +62,19 @@
       "featured": false
     },
     {
+      "id": "054010575625ba9de47e",
+      "title": "Codex CLI Release: 0.172.0",
+      "summary": "Follow thread links from search results and transcripts to open saved conversations and nested agents in the terminal. (#62332) Press Tab to…",
+      "publishedAt": "2026-11-24T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#github-release-456141969"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "a9972b90c90a6092227e",
       "title": "Claude Code v2.1.331",
       "summary": "Added Code Mode support in terminal sessions on Amazon Bedrock, Google Cloud's Agent Platform, Microsoft Foundry and Claude Platform on AWS Added…",
@@ -103,7 +116,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "332 comments on Hacker News.",
+      "summary": "338 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -114,9 +127,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1023,
-          "comments": 332,
-          "observedAt": "2026-11-23T23:45:45Z"
+          "points": 1033,
+          "comments": 338,
+          "observedAt": "2026-11-24T00:34:16Z"
         }
       ],
       "featured": false
@@ -163,7 +176,7 @@
     {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "296 comments on Hacker News.",
+      "summary": "297 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -174,9 +187,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 741,
-          "comments": 296,
-          "observedAt": "2026-11-23T23:16:35Z"
+          "points": 743,
+          "comments": 297,
+          "observedAt": "2026-11-24T00:34:16Z"
         }
       ],
       "featured": false
@@ -195,9 +208,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50599762",
-          "points": 356,
+          "points": 357,
           "comments": 89,
-          "observedAt": "2026-11-23T23:45:45Z"
+          "observedAt": "2026-11-24T00:34:16Z"
         }
       ],
       "featured": false
@@ -406,6 +419,19 @@
       "featured": false
     },
     {
+      "id": "00d52199bef25f9eda98",
+      "title": "How to build and maintain an agentic evaluation",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-23T00:00:00Z",
+      "category": "research",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/agentic-evals"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "55cb0588b3e8436e78b2",
       "title": "Gemini 4 Carbon is now available",
       "summary": "Details in the Google DeepMind release notes.",
@@ -427,19 +453,6 @@
       "source": {
         "label": "Google Gemini",
         "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "00d52199bef25f9eda98",
-      "title": "How to build and maintain an agentic evaluation",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-23T00:00:00Z",
-      "category": "research",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/agentic-evals"
       },
       "discussions": [],
       "featured": false
@@ -482,27 +495,6 @@
           "points": 606,
           "comments": 377,
           "observedAt": "2026-11-23T11:15:32Z"
-        }
-      ],
-      "featured": false
-    },
-    {
-      "id": "afb244eb4a2fb9fd5637",
-      "title": "LLMs can read and write executables byte by byte from a hex dump",
-      "summary": "184 comments on Hacker News.",
-      "publishedAt": "2026-11-18T14:15:58Z",
-      "category": "research",
-      "source": {
-        "label": "Hacker News",
-        "url": "https://sgiannopoulos.github.io/blog/machine-code-programming/"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50546587",
-          "points": 316,
-          "comments": 184,
-          "observedAt": "2026-11-23T18:45:08Z"
         }
       ],
       "featured": false
