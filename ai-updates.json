@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24T20:16:13Z",
+  "updatedAt": "2026-11-24T20:45:36Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -90,7 +90,7 @@
     {
       "id": "02e27935986cfcf8fbc2",
       "title": "LLM agents work for their parent companies, not for you",
-      "summary": "323 comments on Hacker News.",
+      "summary": "333 comments on Hacker News.",
       "publishedAt": "2026-11-24T12:40:15Z",
       "category": "research",
       "source": {
@@ -101,9 +101,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 764,
-          "comments": 323,
-          "observedAt": "2026-11-24T20:16:13Z"
+          "points": 778,
+          "comments": 333,
+          "observedAt": "2026-11-24T20:45:36Z"
         }
       ],
       "featured": false
@@ -479,14 +479,14 @@
       "featured": false
     },
     {
-      "id": "00d52199bef25f9eda98",
-      "title": "How to build and maintain an agentic evaluation",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-23T00:00:00Z",
-      "category": "research",
+      "id": "d4f9edebab94f3c5f554",
+      "title": "Codex app",
+      "summary": "Open a ZIP file in the file viewer to browse its folders and preview files such as PDFs and images without extracting…",
+      "publishedAt": "2026-11-19T00:00:00Z",
+      "category": "coding",
       "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/agentic-evals"
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-19-app"
       },
       "discussions": [],
       "featured": false
