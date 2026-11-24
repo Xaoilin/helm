@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24T12:44:58Z",
+  "updatedAt": "2026-11-24T13:17:29Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -116,7 +116,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "373 comments on Hacker News.",
+      "summary": "374 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -127,9 +127,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1140,
-          "comments": 373,
-          "observedAt": "2026-11-24T12:44:58Z"
+          "points": 1141,
+          "comments": 374,
+          "observedAt": "2026-11-24T13:17:29Z"
         }
       ],
       "featured": false
@@ -169,6 +169,19 @@
       "source": {
         "label": "Claude Platform",
         "url": "https://platform.claude.com/docs/en/release-notes/overview#claude-opus-4-5-deprecation"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "fe1b8e03ed397524edf4",
+      "title": "Codex app",
+      "summary": "Open a CSV file to preview it as a table. Select **View source** to edit it in the same tab. - When…",
+      "publishedAt": "2026-11-23T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-23-app"
       },
       "discussions": [],
       "featured": false
@@ -432,6 +445,19 @@
       "featured": false
     },
     {
+      "id": "d4f9edebab94f3c5f554",
+      "title": "Codex app",
+      "summary": "Open a ZIP file in the file viewer to browse its folders and preview files such as PDFs and images without extracting…",
+      "publishedAt": "2026-11-19T00:00:00Z",
+      "category": "coding",
+      "source": {
+        "label": "Codex",
+        "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-19-app"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "1db0eada305233be8b8a",
       "title": "LLM assisted reverse engineering",
       "summary": "83 comments on Hacker News.",
@@ -463,40 +489,6 @@
         "url": "https://deepmind.google/blog/gemini-4-carbon-is-now-available/"
       },
       "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "2ffd7e8cb1f550c679e6",
-      "title": "Introducing the Multimodal Knowledge Agent benchmark",
-      "summary": "We’re launching Multimodal Knowledge Agent, a new benchmark to evaluate how agents reason across visually-complex multimodal tasks.",
-      "publishedAt": "2026-11-10T16:00:00Z",
-      "category": "research",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "f5b869b89561f8d7235c",
-      "title": "Seven new models at scalable price-performance",
-      "summary": "377 comments on Hacker News.",
-      "publishedAt": "2026-11-18T16:08:24Z",
-      "category": "models",
-      "source": {
-        "label": "Hacker News",
-        "url": "https://microsoft.ai/news/microsoft-ignite-2026/"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50548021",
-          "points": 606,
-          "comments": 377,
-          "observedAt": "2026-11-23T11:15:32Z"
-        }
-      ],
       "featured": false
     }
   ]
