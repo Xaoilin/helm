@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24T02:45:38Z",
+  "updatedAt": "2026-11-24T03:20:09Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -116,7 +116,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "348 comments on Hacker News.",
+      "summary": "350 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -127,9 +127,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1072,
-          "comments": 348,
-          "observedAt": "2026-11-24T02:45:38Z"
+          "points": 1077,
+          "comments": 350,
+          "observedAt": "2026-11-24T03:20:09Z"
         }
       ],
       "featured": false
@@ -176,7 +176,7 @@
     {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "297 comments on Hacker News.",
+      "summary": "298 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -187,9 +187,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 744,
-          "comments": 297,
-          "observedAt": "2026-11-24T02:22:34Z"
+          "points": 745,
+          "comments": 298,
+          "observedAt": "2026-11-24T03:20:09Z"
         }
       ],
       "featured": false
@@ -432,6 +432,27 @@
       "featured": false
     },
     {
+      "id": "1db0eada305233be8b8a",
+      "title": "LLM assisted reverse engineering",
+      "summary": "83 comments on Hacker News.",
+      "publishedAt": "2026-11-18T22:29:13Z",
+      "category": "research",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://www.slowchronicle.com/posts/llm-assisted-reverse-engineering"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50553225",
+          "points": 316,
+          "comments": 83,
+          "observedAt": "2026-11-24T00:50:22Z"
+        }
+      ],
+      "featured": false
+    },
+    {
       "id": "55cb0588b3e8436e78b2",
       "title": "Gemini 4 Carbon is now available",
       "summary": "Details in the Google DeepMind release notes.",
@@ -455,27 +476,6 @@
         "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/"
       },
       "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "1db0eada305233be8b8a",
-      "title": "LLM assisted reverse engineering",
-      "summary": "83 comments on Hacker News.",
-      "publishedAt": "2026-11-18T22:29:13Z",
-      "category": "research",
-      "source": {
-        "label": "Hacker News",
-        "url": "https://www.slowchronicle.com/posts/llm-assisted-reverse-engineering"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50553225",
-          "points": 316,
-          "comments": 83,
-          "observedAt": "2026-11-24T00:50:22Z"
-        }
-      ],
       "featured": false
     },
     {
