@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24T15:46:00Z",
+  "updatedAt": "2026-11-24T16:19:18Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -62,9 +62,22 @@
       "featured": false
     },
     {
+      "id": "a7a0adf7d6c734e350c9",
+      "title": "How Gemini is changing the game for Golden State's organization and fans.",
+      "summary": "Google Gemini partners with Golden State to power fan experiences and business operations for the Warriors, Valkyries, and Chase Center. See the…",
+      "publishedAt": "2026-11-24T16:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/products-and-platforms/products/gemini/gemini-golden-state/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "02e27935986cfcf8fbc2",
       "title": "LLM agents work for their parent companies, not for you",
-      "summary": "197 comments on Hacker News.",
+      "summary": "223 comments on Hacker News.",
       "publishedAt": "2026-11-24T12:40:15Z",
       "category": "research",
       "source": {
@@ -75,9 +88,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 457,
-          "comments": 197,
-          "observedAt": "2026-11-24T15:46:00Z"
+          "points": 516,
+          "comments": 223,
+          "observedAt": "2026-11-24T16:19:18Z"
         }
       ],
       "featured": false
@@ -137,7 +150,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "377 comments on Hacker News.",
+      "summary": "378 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -148,9 +161,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1146,
-          "comments": 377,
-          "observedAt": "2026-11-24T15:46:00Z"
+          "points": 1149,
+          "comments": 378,
+          "observedAt": "2026-11-24T16:19:18Z"
         }
       ],
       "featured": false
@@ -476,27 +489,6 @@
         "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-19-app"
       },
       "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "1db0eada305233be8b8a",
-      "title": "LLM assisted reverse engineering",
-      "summary": "83 comments on Hacker News.",
-      "publishedAt": "2026-11-18T22:29:13Z",
-      "category": "research",
-      "source": {
-        "label": "Hacker News",
-        "url": "https://www.slowchronicle.com/posts/llm-assisted-reverse-engineering"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50553225",
-          "points": 316,
-          "comments": 83,
-          "observedAt": "2026-11-24T00:50:22Z"
-        }
-      ],
       "featured": false
     }
   ]
