@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24T16:19:18Z",
+  "updatedAt": "2026-11-24T16:46:05Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -77,7 +77,7 @@
     {
       "id": "02e27935986cfcf8fbc2",
       "title": "LLM agents work for their parent companies, not for you",
-      "summary": "223 comments on Hacker News.",
+      "summary": "236 comments on Hacker News.",
       "publishedAt": "2026-11-24T12:40:15Z",
       "category": "research",
       "source": {
@@ -88,9 +88,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 516,
-          "comments": 223,
-          "observedAt": "2026-11-24T16:19:18Z"
+          "points": 563,
+          "comments": 236,
+          "observedAt": "2026-11-24T16:46:05Z"
         }
       ],
       "featured": false
@@ -161,9 +161,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1149,
+          "points": 1150,
           "comments": 378,
-          "observedAt": "2026-11-24T16:19:18Z"
+          "observedAt": "2026-11-24T16:46:05Z"
         }
       ],
       "featured": false
@@ -466,19 +466,6 @@
       "featured": false
     },
     {
-      "id": "00d52199bef25f9eda98",
-      "title": "How to build and maintain an agentic evaluation",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-23T00:00:00Z",
-      "category": "research",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/agentic-evals"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
       "id": "d4f9edebab94f3c5f554",
       "title": "Codex app",
       "summary": "Open a ZIP file in the file viewer to browse its folders and preview files such as PDFs and images without extracting…",
@@ -487,6 +474,19 @@
       "source": {
         "label": "Codex",
         "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-19-app"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "00d52199bef25f9eda98",
+      "title": "How to build and maintain an agentic evaluation",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-23T00:00:00Z",
+      "category": "research",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/agentic-evals"
       },
       "discussions": [],
       "featured": false
