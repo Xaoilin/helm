@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24T06:48:29Z",
+  "updatedAt": "2026-11-24T07:18:21Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -116,7 +116,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "359 comments on Hacker News.",
+      "summary": "360 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -127,9 +127,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1099,
-          "comments": 359,
-          "observedAt": "2026-11-24T06:48:29Z"
+          "points": 1102,
+          "comments": 360,
+          "observedAt": "2026-11-24T07:18:21Z"
         }
       ],
       "featured": false
@@ -176,7 +176,7 @@
     {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "304 comments on Hacker News.",
+      "summary": "306 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -187,9 +187,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 752,
-          "comments": 304,
-          "observedAt": "2026-11-24T06:48:29Z"
+          "points": 753,
+          "comments": 306,
+          "observedAt": "2026-11-24T07:18:21Z"
         }
       ],
       "featured": false
