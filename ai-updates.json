@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24T00:34:16Z",
+  "updatedAt": "2026-11-24T00:50:22Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -116,7 +116,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "338 comments on Hacker News.",
+      "summary": "339 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -127,9 +127,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1033,
-          "comments": 338,
-          "observedAt": "2026-11-24T00:34:16Z"
+          "points": 1039,
+          "comments": 339,
+          "observedAt": "2026-11-24T00:50:22Z"
         }
       ],
       "featured": false
@@ -460,7 +460,7 @@
     {
       "id": "1db0eada305233be8b8a",
       "title": "LLM assisted reverse engineering",
-      "summary": "82 comments on Hacker News.",
+      "summary": "83 comments on Hacker News.",
       "publishedAt": "2026-11-18T22:29:13Z",
       "category": "research",
       "source": {
@@ -472,8 +472,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50553225",
           "points": 316,
-          "comments": 82,
-          "observedAt": "2026-11-23T21:45:42Z"
+          "comments": 83,
+          "observedAt": "2026-11-24T00:50:22Z"
         }
       ],
       "featured": false
