@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24T09:18:49Z",
+  "updatedAt": "2026-11-24T09:45:03Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -116,7 +116,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "363 comments on Hacker News.",
+      "summary": "366 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -127,9 +127,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1119,
-          "comments": 363,
-          "observedAt": "2026-11-24T09:18:49Z"
+          "points": 1121,
+          "comments": 366,
+          "observedAt": "2026-11-24T09:45:03Z"
         }
       ],
       "featured": false
@@ -187,9 +187,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 756,
+          "points": 758,
           "comments": 306,
-          "observedAt": "2026-11-24T09:18:49Z"
+          "observedAt": "2026-11-24T09:45:03Z"
         }
       ],
       "featured": false
