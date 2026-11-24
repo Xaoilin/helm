@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24T17:45:39Z",
+  "updatedAt": "2026-11-24T18:19:13Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -15,9 +15,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50552424",
-          "points": 1070,
+          "points": 1071,
           "comments": 775,
-          "observedAt": "2026-11-23T18:18:58Z"
+          "observedAt": "2026-11-24T18:19:13Z"
         }
       ],
       "featured": false
@@ -90,7 +90,7 @@
     {
       "id": "02e27935986cfcf8fbc2",
       "title": "LLM agents work for their parent companies, not for you",
-      "summary": "262 comments on Hacker News.",
+      "summary": "283 comments on Hacker News.",
       "publishedAt": "2026-11-24T12:40:15Z",
       "category": "research",
       "source": {
@@ -101,9 +101,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 636,
-          "comments": 262,
-          "observedAt": "2026-11-24T17:45:39Z"
+          "points": 671,
+          "comments": 283,
+          "observedAt": "2026-11-24T18:19:13Z"
         }
       ],
       "featured": false
@@ -163,7 +163,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "378 comments on Hacker News.",
+      "summary": "379 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -174,9 +174,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1150,
-          "comments": 378,
-          "observedAt": "2026-11-24T16:46:05Z"
+          "points": 1152,
+          "comments": 379,
+          "observedAt": "2026-11-24T18:19:13Z"
         }
       ],
       "featured": false
@@ -351,9 +351,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50577265",
-          "points": 493,
+          "points": 494,
           "comments": 146,
-          "observedAt": "2026-11-24T07:45:50Z"
+          "observedAt": "2026-11-24T18:19:13Z"
         }
       ],
       "featured": false
