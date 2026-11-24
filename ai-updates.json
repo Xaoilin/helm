@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24T17:16:37Z",
+  "updatedAt": "2026-11-24T17:45:39Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -75,9 +75,22 @@
       "featured": false
     },
     {
+      "id": "141c148d6874e34e1405",
+      "title": "See what 5 builders are making with Gemini 4 Neon",
+      "summary": "See five projects builders created with Gemini 4 Neon, from a glowing 3D Earth and Three.js butterflies to an interactive black hole.",
+      "publishedAt": "2026-11-24T16:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Google Gemini",
+        "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-neon-builders/"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "02e27935986cfcf8fbc2",
       "title": "LLM agents work for their parent companies, not for you",
-      "summary": "249 comments on Hacker News.",
+      "summary": "262 comments on Hacker News.",
       "publishedAt": "2026-11-24T12:40:15Z",
       "category": "research",
       "source": {
@@ -88,9 +101,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 599,
-          "comments": 249,
-          "observedAt": "2026-11-24T17:16:37Z"
+          "points": 636,
+          "comments": 262,
+          "observedAt": "2026-11-24T17:45:39Z"
         }
       ],
       "featured": false
@@ -234,9 +247,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 766,
+          "points": 767,
           "comments": 312,
-          "observedAt": "2026-11-24T14:45:52Z"
+          "observedAt": "2026-11-24T17:45:39Z"
         }
       ],
       "featured": false
@@ -474,19 +487,6 @@
       "source": {
         "label": "Hugging Face",
         "url": "https://huggingface.co/blog/agentic-evals"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "d4f9edebab94f3c5f554",
-      "title": "Codex app",
-      "summary": "Open a ZIP file in the file viewer to browse its folders and preview files such as PDFs and images without extracting…",
-      "publishedAt": "2026-11-19T00:00:00Z",
-      "category": "coding",
-      "source": {
-        "label": "Codex",
-        "url": "https://developers.openai.com/codex/changelog/#codex-2026-11-19-app"
       },
       "discussions": [],
       "featured": false
