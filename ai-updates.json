@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-25T02:45:37Z",
+  "updatedAt": "2026-11-25T03:19:54Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -116,7 +116,7 @@
     {
       "id": "02e27935986cfcf8fbc2",
       "title": "LLM agents work for their parent companies, not for you",
-      "summary": "389 comments on Hacker News.",
+      "summary": "392 comments on Hacker News.",
       "publishedAt": "2026-11-24T12:40:15Z",
       "category": "research",
       "source": {
@@ -127,9 +127,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 921,
-          "comments": 389,
-          "observedAt": "2026-11-25T02:45:37Z"
+          "points": 933,
+          "comments": 392,
+          "observedAt": "2026-11-25T03:19:54Z"
         }
       ],
       "featured": false
@@ -200,9 +200,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1167,
+          "points": 1169,
           "comments": 380,
-          "observedAt": "2026-11-25T02:22:44Z"
+          "observedAt": "2026-11-25T03:19:54Z"
         }
       ],
       "featured": false
