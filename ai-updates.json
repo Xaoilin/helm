@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-25T07:45:48Z",
+  "updatedAt": "2026-11-25T08:21:49Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -116,7 +116,7 @@
     {
       "id": "02e27935986cfcf8fbc2",
       "title": "LLM agents work for their parent companies, not for you",
-      "summary": "396 comments on Hacker News.",
+      "summary": "400 comments on Hacker News.",
       "publishedAt": "2026-11-24T12:40:15Z",
       "category": "research",
       "source": {
@@ -127,9 +127,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 962,
-          "comments": 396,
-          "observedAt": "2026-11-25T07:45:48Z"
+          "points": 964,
+          "comments": 400,
+          "observedAt": "2026-11-25T08:21:49Z"
         }
       ],
       "featured": false
@@ -189,7 +189,7 @@
     {
       "id": "f1db7ce98881d8901597",
       "title": "GLM-5.4: Toward generalized coding with our first loop transformer",
-      "summary": "381 comments on Hacker News.",
+      "summary": "382 comments on Hacker News.",
       "publishedAt": "2026-11-23T10:06:43Z",
       "category": "models",
       "source": {
@@ -201,8 +201,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
           "points": 1173,
-          "comments": 381,
-          "observedAt": "2026-11-25T07:45:48Z"
+          "comments": 382,
+          "observedAt": "2026-11-25T08:21:49Z"
         }
       ],
       "featured": false
