@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24T23:45:07Z",
+  "updatedAt": "2026-11-25T00:37:58Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -103,7 +103,7 @@
     {
       "id": "02e27935986cfcf8fbc2",
       "title": "LLM agents work for their parent companies, not for you",
-      "summary": "366 comments on Hacker News.",
+      "summary": "374 comments on Hacker News.",
       "publishedAt": "2026-11-24T12:40:15Z",
       "category": "research",
       "source": {
@@ -114,9 +114,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 869,
-          "comments": 366,
-          "observedAt": "2026-11-24T23:45:07Z"
+          "points": 886,
+          "comments": 374,
+          "observedAt": "2026-11-25T00:37:58Z"
         }
       ],
       "featured": false
@@ -187,9 +187,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1161,
+          "points": 1162,
           "comments": 380,
-          "observedAt": "2026-11-24T21:16:14Z"
+          "observedAt": "2026-11-25T00:37:58Z"
         }
       ],
       "featured": false
@@ -234,6 +234,45 @@
       "featured": false
     },
     {
+      "id": "1f2e2ab9518bf59b4d0c",
+      "title": "Claude Platform: Analytics api web search counts",
+      "summary": "A fix is live for an undercount of web searches in the List User Activity endpoint of the Claude Enterprise Analytics API.…",
+      "publishedAt": "2026-11-23T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#analytics-api-web-search-counts"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "158906c988cc4f4848e1",
+      "title": "Claude Platform: Analytics api project message counts",
+      "summary": "On November 24, 2026, a fix for an undercount of project activity in the Claude Enterprise Analytics API will go live. The…",
+      "publishedAt": "2026-11-23T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#analytics-api-project-message-counts"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
+      "id": "e04a244a67f6c41440ef",
+      "title": "Claude Platform: Analytics api connector sign in counts",
+      "summary": "A fix is live for an undercount in the Get Connector Usage endpoint of the Claude Enterprise Analytics API. In chats that…",
+      "publishedAt": "2026-11-23T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#analytics-api-connector-sign-in-counts"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "fe1b8e03ed397524edf4",
       "title": "Codex app",
       "summary": "Open a CSV file to preview it as a table. Select **View source** to edit it in the same tab. - When…",
@@ -260,9 +299,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 770,
+          "points": 771,
           "comments": 313,
-          "observedAt": "2026-11-24T23:14:52Z"
+          "observedAt": "2026-11-25T00:37:58Z"
         }
       ],
       "featured": false
@@ -372,6 +411,19 @@
       "featured": false
     },
     {
+      "id": "1c8fd89ef6c6acabf093",
+      "title": "Claude Platform: Analytics api chat session counting",
+      "summary": "The Claude Enterprise Analytics API has a new rule for when a chat in Chat and Cowork unified counts as a session.…",
+      "publishedAt": "2026-11-20T00:00:00Z",
+      "category": "models",
+      "source": {
+        "label": "Claude Platform",
+        "url": "https://platform.claude.com/docs/en/release-notes/overview#analytics-api-chat-session-counting"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "8145fefb47ff1ca9fa55",
       "title": "Hebbia sees improvements in financial research with GPT-6 Astra",
       "summary": "Hebbia tested GPT-6 Astra for financial research. Its prerelease evaluations found gains in source coverage, citation relevance, and presentation quality.",
@@ -427,66 +479,6 @@
       "source": {
         "label": "Claude Code",
         "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.329"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "a89c20fefc5a11322a22",
-      "title": "ICYMI: Transfer your history from other AI apps into Gemini.",
-      "summary": "Transfer your chat history into Gemini. Import your ZIP files and AI summaries to continue conversations seamlessly. Get the details.",
-      "publishedAt": "2026-11-19T20:30:00Z",
-      "category": "models",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/innovation-and-ai/products/gemini-app/switch-ai-assistants-transfer-history/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "3277cf52dcd23547d830",
-      "title": "Claude solves two open problems in the physics of black holes",
-      "summary": "274 comments on Hacker News.",
-      "publishedAt": "2026-11-19T17:30:44Z",
-      "category": "models",
-      "source": {
-        "label": "Hacker News",
-        "url": "https://www.anthropic.com/research/claude-black-hole-physics"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50563148",
-          "points": 579,
-          "comments": 274,
-          "observedAt": "2026-11-23T14:45:13Z"
-        }
-      ],
-      "featured": false
-    },
-    {
-      "id": "efdbd6c83627cffee94d",
-      "title": "Let Gemini tackle repetitive chores on your Mac",
-      "summary": "The Gemini app for Mac now has computer use to help you with repetitive tasks.",
-      "publishedAt": "2026-11-19T17:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Google Gemini",
-        "url": "https://blog.google/innovation-and-ai/products/gemini-app/computer-use-mac/"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "1590e3f6387642d1f8fc",
-      "title": "Claude Code v2.1.328",
-      "summary": "Added auto mode for Claude Opus 4.6 and Sonnet 4.6 on Amazon Bedrock, Google Cloud's Agent Platform, Microsoft Foundry and Claude apps…",
-      "publishedAt": "2026-11-19T01:14:04Z",
-      "category": "coding",
-      "source": {
-        "label": "Claude Code",
-        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.328"
       },
       "discussions": [],
       "featured": false
