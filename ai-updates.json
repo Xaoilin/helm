@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-25T09:19:01Z",
+  "updatedAt": "2026-11-25T10:18:21Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -127,9 +127,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 972,
+          "points": 975,
           "comments": 403,
-          "observedAt": "2026-11-25T09:19:01Z"
+          "observedAt": "2026-11-25T10:18:21Z"
         }
       ],
       "featured": false
@@ -301,7 +301,7 @@
     {
       "id": "c75d02646488f49475fa",
       "title": "A Beginner's Guide to Local AI with Inkling, Qwen, and Unsloth",
-      "summary": "313 comments on Hacker News.",
+      "summary": "315 comments on Hacker News.",
       "publishedAt": "2026-11-22T21:01:16Z",
       "category": "models",
       "source": {
@@ -313,8 +313,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
           "points": 773,
-          "comments": 313,
-          "observedAt": "2026-11-25T03:45:49Z"
+          "comments": 315,
+          "observedAt": "2026-11-25T10:18:21Z"
         }
       ],
       "featured": false
