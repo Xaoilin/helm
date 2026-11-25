@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-25T15:17:18Z",
+  "updatedAt": "2026-11-25T16:21:45Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -64,7 +64,7 @@
     {
       "id": "c682fcb11d8ea9105110",
       "title": "Models Can Communicate via Inference Servers Despite Being Sandboxed",
-      "summary": "144 comments on Hacker News.",
+      "summary": "154 comments on Hacker News.",
       "publishedAt": "2026-11-25T02:34:21Z",
       "category": "research",
       "source": {
@@ -75,9 +75,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50637686",
-          "points": 346,
-          "comments": 144,
-          "observedAt": "2026-11-25T15:17:18Z"
+          "points": 368,
+          "comments": 154,
+          "observedAt": "2026-11-25T16:21:45Z"
         }
       ],
       "featured": false
@@ -131,7 +131,15 @@
         "label": "OpenAI",
         "url": "https://openai.com/index/gpt-6-models-demonstrate-intrinsic-protein-design-capabilities"
       },
-      "discussions": [],
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50634658",
+          "points": 324,
+          "comments": 92,
+          "observedAt": "2026-11-25T16:21:45Z"
+        }
+      ],
       "featured": false
     },
     {
@@ -148,9 +156,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 986,
+          "points": 990,
           "comments": 406,
-          "observedAt": "2026-11-25T15:17:18Z"
+          "observedAt": "2026-11-25T16:21:45Z"
         }
       ],
       "featured": false
@@ -221,9 +229,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1174,
+          "points": 1175,
           "comments": 384,
-          "observedAt": "2026-11-25T14:45:45Z"
+          "observedAt": "2026-11-25T16:21:45Z"
         }
       ],
       "featured": false
@@ -333,9 +341,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50603845",
-          "points": 773,
+          "points": 774,
           "comments": 315,
-          "observedAt": "2026-11-25T10:18:21Z"
+          "observedAt": "2026-11-25T16:21:45Z"
         }
       ],
       "featured": false
