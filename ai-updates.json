@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-25T01:17:52Z",
+  "updatedAt": "2026-11-25T01:45:00Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -62,6 +62,19 @@
       "featured": false
     },
     {
+      "id": "d1a8a8c302ae6a4a1fbc",
+      "title": "Claude Code v2.1.332",
+      "summary": "Added skills from MCP servers (beta). They show as server:skill in the / menu; other skills keep their names Added a PreSkillShellCommand…",
+      "publishedAt": "2026-11-25T01:32:14Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Code",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.332"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "a7a0adf7d6c734e350c9",
       "title": "How Gemini is changing the game for Golden State's organization and fans.",
       "summary": "Google Gemini partners with Golden State to power fan experiences and business operations for the Warriors, Valkyries, and Chase Center. See the…",
@@ -103,7 +116,7 @@
     {
       "id": "02e27935986cfcf8fbc2",
       "title": "LLM agents work for their parent companies, not for you",
-      "summary": "378 comments on Hacker News.",
+      "summary": "383 comments on Hacker News.",
       "publishedAt": "2026-11-24T12:40:15Z",
       "category": "research",
       "source": {
@@ -114,9 +127,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 900,
-          "comments": 378,
-          "observedAt": "2026-11-25T01:17:52Z"
+          "points": 909,
+          "comments": 383,
+          "observedAt": "2026-11-25T01:45:00Z"
         }
       ],
       "featured": false
@@ -187,9 +200,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1163,
+          "points": 1165,
           "comments": 380,
-          "observedAt": "2026-11-25T00:55:51Z"
+          "observedAt": "2026-11-25T01:45:00Z"
         }
       ],
       "featured": false
@@ -468,19 +481,6 @@
           "observedAt": "2026-11-24T10:45:08Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "f3d370a5121afbf2b74a",
-      "title": "Claude Code v2.1.329",
-      "summary": "Added a trust dialog warning that says where a folder's hooks are declared Added a warning in the conversation, in Claude Desktop…",
-      "publishedAt": "2026-11-19T22:14:41Z",
-      "category": "coding",
-      "source": {
-        "label": "Claude Code",
-        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.329"
-      },
-      "discussions": [],
       "featured": false
     }
   ]
