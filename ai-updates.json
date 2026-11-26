@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-26T08:45:45Z",
+  "updatedAt": "2026-11-26T09:18:27Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -75,9 +75,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50637686",
-          "points": 457,
+          "points": 458,
           "comments": 198,
-          "observedAt": "2026-11-26T08:21:31Z"
+          "observedAt": "2026-11-26T09:18:27Z"
         }
       ],
       "featured": false
@@ -156,9 +156,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 1013,
+          "points": 1014,
           "comments": 410,
-          "observedAt": "2026-11-26T07:45:01Z"
+          "observedAt": "2026-11-26T09:18:27Z"
         }
       ],
       "featured": false
@@ -351,7 +351,7 @@
     {
       "id": "5d39a5319d5a389bad6e",
       "title": "GPT-6.2 Astra is the first model to beat Googlers' code golf records",
-      "summary": "102 comments on Hacker News.",
+      "summary": "104 comments on Hacker News.",
       "publishedAt": "2026-11-22T16:44:48Z",
       "category": "models",
       "source": {
@@ -363,9 +363,9 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50601280",
           "preview": "Back in 2015, when I was still at Google, there was a small group of code-golf enthusiasts spending hours trying to save…",
-          "points": 362,
-          "comments": 102,
-          "observedAt": "2026-11-26T08:45:45Z"
+          "points": 365,
+          "comments": 104,
+          "observedAt": "2026-11-26T09:18:27Z"
         }
       ],
       "featured": false
@@ -384,9 +384,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50599762",
-          "points": 360,
+          "points": 361,
           "comments": 90,
-          "observedAt": "2026-11-25T12:24:06Z"
+          "observedAt": "2026-11-26T09:18:27Z"
         }
       ],
       "featured": false
@@ -439,6 +439,19 @@
       "featured": false
     },
     {
+      "id": "fdc4cffb6fa79465efcb",
+      "title": "Claude Code v2.1.330",
+      "summary": "Added sign-in to organizations managed in Anthropic's Enterprise Admin Console: after claude auth login, Claude Code applies the organization's settings and uses…",
+      "publishedAt": "2026-11-20T22:32:56Z",
+      "category": "coding",
+      "source": {
+        "label": "Claude Code",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.330"
+      },
+      "discussions": [],
+      "featured": false
+    },
+    {
       "id": "5b69826eead48a963c75",
       "title": "Introducing Gemini 4 Hydrogen",
       "summary": "Google’s lower-cost Gemini 4 model is aimed at everyday coding and agentic workflows. It is available in AI Studio and via the Gemini API.",
@@ -464,19 +477,6 @@
           "observedAt": "2026-11-19T01:45:00Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "fdc4cffb6fa79465efcb",
-      "title": "Claude Code v2.1.330",
-      "summary": "Added sign-in to organizations managed in Anthropic's Enterprise Admin Console: after claude auth login, Claude Code applies the organization's settings and uses…",
-      "publishedAt": "2026-11-20T22:32:56Z",
-      "category": "coding",
-      "source": {
-        "label": "Claude Code",
-        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.330"
-      },
-      "discussions": [],
       "featured": false
     },
     {
