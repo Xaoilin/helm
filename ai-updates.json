@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-26T10:17:55Z",
+  "updatedAt": "2026-11-26T10:45:38Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -64,7 +64,7 @@
     {
       "id": "c682fcb11d8ea9105110",
       "title": "Models Can Communicate via Inference Servers Despite Being Sandboxed",
-      "summary": "201 comments on Hacker News.",
+      "summary": "203 comments on Hacker News.",
       "publishedAt": "2026-11-25T02:34:21Z",
       "category": "research",
       "source": {
@@ -76,8 +76,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50637686",
           "points": 458,
-          "comments": 201,
-          "observedAt": "2026-11-26T09:45:43Z"
+          "comments": 203,
+          "observedAt": "2026-11-26T10:45:38Z"
         }
       ],
       "featured": false
@@ -145,7 +145,7 @@
     {
       "id": "02e27935986cfcf8fbc2",
       "title": "LLM agents work for their parent companies, not for you",
-      "summary": "410 comments on Hacker News.",
+      "summary": "411 comments on Hacker News.",
       "publishedAt": "2026-11-24T12:40:15Z",
       "category": "research",
       "source": {
@@ -156,9 +156,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 1015,
-          "comments": 410,
-          "observedAt": "2026-11-26T10:17:55Z"
+          "points": 1016,
+          "comments": 411,
+          "observedAt": "2026-11-26T10:45:38Z"
         }
       ],
       "featured": false
@@ -351,7 +351,7 @@
     {
       "id": "5d39a5319d5a389bad6e",
       "title": "GPT-6.2 Astra is the first model to beat Googlers' code golf records",
-      "summary": "108 comments on Hacker News.",
+      "summary": "111 comments on Hacker News.",
       "publishedAt": "2026-11-22T16:44:48Z",
       "category": "models",
       "source": {
@@ -363,9 +363,9 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50601280",
           "preview": "Back in 2015, when I was still at Google, there was a small group of code-golf enthusiasts spending hours trying to save…",
-          "points": 377,
-          "comments": 108,
-          "observedAt": "2026-11-26T10:17:55Z"
+          "points": 382,
+          "comments": 111,
+          "observedAt": "2026-11-26T10:45:38Z"
         }
       ],
       "featured": false
