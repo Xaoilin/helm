@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-26T05:17:44Z",
+  "updatedAt": "2026-11-26T05:45:01Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -362,10 +362,10 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50601280",
-          "points": 316,
+          "preview": "Back in 2015, when I was still at Google, there was a small group of code-golf enthusiasts spending hours trying to save…",
+          "points": 321,
           "comments": 89,
-          "observedAt": "2026-11-26T05:17:44Z",
-          "preview": "Back in 2015, when I was still at Google, there was a small group of code-golf enthusiasts spending hours trying to save…"
+          "observedAt": "2026-11-26T05:45:01Z"
         }
       ],
       "featured": false
