@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-26T07:18:54Z",
+  "updatedAt": "2026-11-26T07:45:01Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -64,7 +64,7 @@
     {
       "id": "c682fcb11d8ea9105110",
       "title": "Models Can Communicate via Inference Servers Despite Being Sandboxed",
-      "summary": "199 comments on Hacker News.",
+      "summary": "198 comments on Hacker News.",
       "publishedAt": "2026-11-25T02:34:21Z",
       "category": "research",
       "source": {
@@ -76,8 +76,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50637686",
           "points": 456,
-          "comments": 199,
-          "observedAt": "2026-11-26T07:18:54Z"
+          "comments": 198,
+          "observedAt": "2026-11-26T07:45:01Z"
         }
       ],
       "featured": false
@@ -156,9 +156,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 1011,
+          "points": 1013,
           "comments": 410,
-          "observedAt": "2026-11-26T07:18:54Z"
+          "observedAt": "2026-11-26T07:45:01Z"
         }
       ],
       "featured": false
@@ -351,7 +351,7 @@
     {
       "id": "5d39a5319d5a389bad6e",
       "title": "GPT-6.2 Astra is the first model to beat Googlers' code golf records",
-      "summary": "92 comments on Hacker News.",
+      "summary": "97 comments on Hacker News.",
       "publishedAt": "2026-11-22T16:44:48Z",
       "category": "models",
       "source": {
@@ -363,9 +363,9 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50601280",
           "preview": "Back in 2015, when I was still at Google, there was a small group of code-golf enthusiasts spending hours trying to save…",
-          "points": 349,
-          "comments": 92,
-          "observedAt": "2026-11-26T07:18:54Z"
+          "points": 355,
+          "comments": 97,
+          "observedAt": "2026-11-26T07:45:01Z"
         }
       ],
       "featured": false
