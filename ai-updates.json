@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-26T04:44:58Z",
+  "updatedAt": "2026-11-26T05:17:44Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -349,6 +349,28 @@
       "featured": false
     },
     {
+      "id": "5d39a5319d5a389bad6e",
+      "title": "GPT-6.2 Astra is the first model to beat Googlers' code golf records",
+      "summary": "89 comments on Hacker News.",
+      "publishedAt": "2026-11-22T16:44:48Z",
+      "category": "models",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://bjin.github.io/go-codegolf-benchmark/#leaderboard"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50601280",
+          "points": 316,
+          "comments": 89,
+          "observedAt": "2026-11-26T05:17:44Z",
+          "preview": "Back in 2015, when I was still at Google, there was a small group of code-golf enthusiasts spending hours trying to save…"
+        }
+      ],
+      "featured": false
+    },
+    {
       "id": "9e90f9c0947157e7e7e9",
       "title": "Show HN: I built a game where you are an LLM's subagent",
       "summary": "90 comments on Hacker News.",
@@ -367,6 +389,19 @@
           "observedAt": "2026-11-25T12:24:06Z"
         }
       ],
+      "featured": false
+    },
+    {
+      "id": "3d2697b636d74b834fc0",
+      "title": "Building on Nemotron 3.5 Parse: Open Data, Fine-Tuning, and Faster Inference",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-26T05:05:36Z",
+      "category": "research",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/nvidia/building-on-nemotron-35-parse-open-data-fine-tunin"
+      },
+      "discussions": [],
       "featured": false
     },
     {
@@ -463,32 +498,6 @@
           "observedAt": "2026-11-24T18:19:13Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "1c8fd89ef6c6acabf093",
-      "title": "Claude Platform: Analytics api chat session counting",
-      "summary": "The Claude Enterprise Analytics API has a new rule for when a chat in Chat and Cowork unified counts as a session.…",
-      "publishedAt": "2026-11-20T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "Claude Platform",
-        "url": "https://platform.claude.com/docs/en/release-notes/overview#analytics-api-chat-session-counting"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "8145fefb47ff1ca9fa55",
-      "title": "Hebbia sees improvements in financial research with GPT-6 Astra",
-      "summary": "Hebbia tested GPT-6 Astra for financial research. Its prerelease evaluations found gains in source coverage, citation relevance, and presentation quality.",
-      "publishedAt": "2026-11-20T00:00:00Z",
-      "category": "models",
-      "source": {
-        "label": "OpenAI",
-        "url": "https://openai.com/business/customer-stories/hebbia"
-      },
-      "discussions": [],
       "featured": false
     }
   ]
