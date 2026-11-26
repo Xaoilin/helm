@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-26T16:45:30Z",
+  "updatedAt": "2026-11-26T17:15:17Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -75,9 +75,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50637686",
-          "points": 460,
+          "points": 462,
           "comments": 216,
-          "observedAt": "2026-11-26T16:45:30Z"
+          "observedAt": "2026-11-26T17:15:17Z"
         }
       ],
       "featured": false
@@ -156,9 +156,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 1021,
+          "points": 1022,
           "comments": 412,
-          "observedAt": "2026-11-26T16:45:30Z"
+          "observedAt": "2026-11-26T17:15:17Z"
         }
       ],
       "featured": false
@@ -351,7 +351,7 @@
     {
       "id": "5d39a5319d5a389bad6e",
       "title": "GPT-6.2 Astra is the first model to beat Googlers' code golf records",
-      "summary": "124 comments on Hacker News.",
+      "summary": "125 comments on Hacker News.",
       "publishedAt": "2026-11-22T16:44:48Z",
       "category": "models",
       "source": {
@@ -363,9 +363,9 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50601280",
           "preview": "Back in 2015, when I was still at Google, there was a small group of code-golf enthusiasts spending hours trying to save…",
-          "points": 437,
-          "comments": 124,
-          "observedAt": "2026-11-26T16:45:30Z"
+          "points": 439,
+          "comments": 125,
+          "observedAt": "2026-11-26T17:15:17Z"
         }
       ],
       "featured": false
