@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-26T11:16:09Z",
+  "updatedAt": "2026-11-26T11:45:27Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -64,7 +64,7 @@
     {
       "id": "c682fcb11d8ea9105110",
       "title": "Models Can Communicate via Inference Servers Despite Being Sandboxed",
-      "summary": "206 comments on Hacker News.",
+      "summary": "207 comments on Hacker News.",
       "publishedAt": "2026-11-25T02:34:21Z",
       "category": "research",
       "source": {
@@ -76,8 +76,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50637686",
           "points": 458,
-          "comments": 206,
-          "observedAt": "2026-11-26T11:16:09Z"
+          "comments": 207,
+          "observedAt": "2026-11-26T11:45:27Z"
         }
       ],
       "featured": false
@@ -156,9 +156,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 1016,
+          "points": 1017,
           "comments": 411,
-          "observedAt": "2026-11-26T10:45:38Z"
+          "observedAt": "2026-11-26T11:45:27Z"
         }
       ],
       "featured": false
@@ -351,7 +351,7 @@
     {
       "id": "5d39a5319d5a389bad6e",
       "title": "GPT-6.2 Astra is the first model to beat Googlers' code golf records",
-      "summary": "111 comments on Hacker News.",
+      "summary": "113 comments on Hacker News.",
       "publishedAt": "2026-11-22T16:44:48Z",
       "category": "models",
       "source": {
@@ -363,9 +363,9 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50601280",
           "preview": "Back in 2015, when I was still at Google, there was a small group of code-golf enthusiasts spending hours trying to save…",
-          "points": 388,
-          "comments": 111,
-          "observedAt": "2026-11-26T11:16:09Z"
+          "points": 395,
+          "comments": 113,
+          "observedAt": "2026-11-26T11:45:27Z"
         }
       ],
       "featured": false
@@ -389,6 +389,19 @@
           "observedAt": "2026-11-26T09:18:27Z"
         }
       ],
+      "featured": false
+    },
+    {
+      "id": "a734da9d3a1d876054f8",
+      "title": "Introducing the llama.cpp benchmark dashboard for AMD Ryzen and Radeon",
+      "summary": "Details in the Hugging Face release notes.",
+      "publishedAt": "2026-11-26T11:37:17Z",
+      "category": "models",
+      "source": {
+        "label": "Hugging Face",
+        "url": "https://huggingface.co/blog/ggml-org/llamacpp-amd-bench"
+      },
+      "discussions": [],
       "featured": false
     },
     {
@@ -475,27 +488,6 @@
           "points": 508,
           "comments": 165,
           "observedAt": "2026-11-19T01:45:00Z"
-        }
-      ],
-      "featured": false
-    },
-    {
-      "id": "03b179946dd0e551984b",
-      "title": "Language Models Can Rewrite Their Own Weights",
-      "summary": "146 comments on Hacker News.",
-      "publishedAt": "2026-11-20T16:29:06Z",
-      "category": "research",
-      "source": {
-        "label": "Hacker News",
-        "url": "https://arxiv.org/abs/2611.21885"
-      },
-      "discussions": [
-        {
-          "label": "Hacker News",
-          "url": "https://news.ycombinator.com/item?id=50577265",
-          "points": 494,
-          "comments": 146,
-          "observedAt": "2026-11-24T18:19:13Z"
         }
       ],
       "featured": false
