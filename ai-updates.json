@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-27T13:45:43Z",
+  "updatedAt": "2026-11-27T14:17:40Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -64,7 +64,7 @@
     {
       "id": "40cb249974695259a745",
       "title": "AMD-specific fork of llama.cpp",
-      "summary": "96 comments on Hacker News.",
+      "summary": "97 comments on Hacker News.",
       "publishedAt": "2026-11-26T17:11:29Z",
       "category": "models",
       "source": {
@@ -75,9 +75,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50657265",
-          "points": 395,
-          "comments": 96,
-          "observedAt": "2026-11-27T13:45:43Z"
+          "points": 400,
+          "comments": 97,
+          "observedAt": "2026-11-27T14:17:40Z"
         }
       ],
       "featured": false
@@ -250,9 +250,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50609685",
-          "points": 1181,
+          "points": 1182,
           "comments": 388,
-          "observedAt": "2026-11-27T05:44:57Z"
+          "observedAt": "2026-11-27T14:17:40Z"
         }
       ],
       "featured": false
