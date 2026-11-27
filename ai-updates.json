@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-27T18:45:15Z",
+  "updatedAt": "2026-11-27T19:15:10Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -64,7 +64,7 @@
     {
       "id": "40cb249974695259a745",
       "title": "AMD-specific fork of llama.cpp",
-      "summary": "102 comments on Hacker News.",
+      "summary": "103 comments on Hacker News.",
       "publishedAt": "2026-11-26T17:11:29Z",
       "category": "models",
       "source": {
@@ -75,9 +75,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50657265",
-          "points": 424,
-          "comments": 102,
-          "observedAt": "2026-11-27T18:45:15Z"
+          "points": 426,
+          "comments": 103,
+          "observedAt": "2026-11-27T19:15:10Z"
         }
       ],
       "featured": false
@@ -187,7 +187,7 @@
     {
       "id": "247664f7b48ac8a87d27",
       "title": "Porting Rockbox to an undocumented $9 Aliexpress 'YP3' MP3 Player with LLMs",
-      "summary": "108 comments on Hacker News.",
+      "summary": "109 comments on Hacker News.",
       "publishedAt": "2026-11-24T06:22:36Z",
       "category": "research",
       "source": {
@@ -198,9 +198,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50624446",
-          "points": 291,
-          "comments": 108,
-          "observedAt": "2026-11-27T17:45:01Z"
+          "points": 293,
+          "comments": 109,
+          "observedAt": "2026-11-27T19:15:10Z"
         }
       ],
       "featured": false
