@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-27T16:45:14Z",
+  "updatedAt": "2026-11-27T17:15:15Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -75,9 +75,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50657265",
-          "points": 415,
+          "points": 416,
           "comments": 101,
-          "observedAt": "2026-11-27T16:45:14Z"
+          "observedAt": "2026-11-27T17:15:15Z"
         }
       ],
       "featured": false
@@ -180,6 +180,27 @@
           "points": 1032,
           "comments": 415,
           "observedAt": "2026-11-27T09:45:27Z"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "247664f7b48ac8a87d27",
+      "title": "Porting Rockbox to an undocumented $9 Aliexpress 'YP3' MP3 Player with LLMs",
+      "summary": "107 comments on Hacker News.",
+      "publishedAt": "2026-11-24T06:22:36Z",
+      "category": "research",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://jayd.ml/2026/11/14/rockbox-on-yp3.html"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50624446",
+          "points": 291,
+          "comments": 107,
+          "observedAt": "2026-11-27T17:15:15Z"
         }
       ],
       "featured": false
@@ -384,9 +405,9 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50601280",
           "preview": "Back in 2015, when I was still at Google, there was a small group of code-golf enthusiasts spending hours trying to save…",
-          "points": 467,
+          "points": 468,
           "comments": 134,
-          "observedAt": "2026-11-27T16:45:14Z"
+          "observedAt": "2026-11-27T17:15:15Z"
         }
       ],
       "featured": false
@@ -468,19 +489,6 @@
       "source": {
         "label": "Hugging Face",
         "url": "https://huggingface.co/blog/inkling-2-mini-inference-hillclimb"
-      },
-      "discussions": [],
-      "featured": false
-    },
-    {
-      "id": "fdc4cffb6fa79465efcb",
-      "title": "Claude Code v2.1.330",
-      "summary": "Added sign-in to organizations managed in Anthropic's Enterprise Admin Console: after claude auth login, Claude Code applies the organization's settings and uses…",
-      "publishedAt": "2026-11-20T22:32:56Z",
-      "category": "coding",
-      "source": {
-        "label": "Claude Code",
-        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.330"
       },
       "discussions": [],
       "featured": false
