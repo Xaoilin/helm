@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-27T09:18:28Z",
+  "updatedAt": "2026-11-27T09:45:27Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -64,7 +64,7 @@
     {
       "id": "40cb249974695259a745",
       "title": "AMD-specific fork of llama.cpp",
-      "summary": "84 comments on Hacker News.",
+      "summary": "85 comments on Hacker News.",
       "publishedAt": "2026-11-26T17:11:29Z",
       "category": "models",
       "source": {
@@ -75,9 +75,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50657265",
-          "points": 353,
-          "comments": 84,
-          "observedAt": "2026-11-27T09:18:28Z"
+          "points": 356,
+          "comments": 85,
+          "observedAt": "2026-11-27T09:45:27Z"
         }
       ],
       "featured": false
@@ -166,7 +166,7 @@
     {
       "id": "02e27935986cfcf8fbc2",
       "title": "LLM agents work for their parent companies, not for you",
-      "summary": "414 comments on Hacker News.",
+      "summary": "415 comments on Hacker News.",
       "publishedAt": "2026-11-24T12:40:15Z",
       "category": "research",
       "source": {
@@ -178,8 +178,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
           "points": 1032,
-          "comments": 414,
-          "observedAt": "2026-11-27T07:45:48Z"
+          "comments": 415,
+          "observedAt": "2026-11-27T09:45:27Z"
         }
       ],
       "featured": false
