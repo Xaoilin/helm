@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-28T08:19:35Z",
+  "updatedAt": "2026-11-28T08:45:01Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -38,7 +38,7 @@
     {
       "id": "3eb502a85ddbf097c69e",
       "title": "States sue SpaceX to stop Grok from generating child sex images, revenge porn",
-      "summary": "217 comments on Hacker News.",
+      "summary": "222 comments on Hacker News.",
       "publishedAt": "2026-11-27T19:42:25Z",
       "category": "models",
       "source": {
@@ -49,9 +49,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50670855",
-          "points": 369,
-          "comments": 217,
-          "observedAt": "2026-11-28T08:19:35Z"
+          "points": 373,
+          "comments": 222,
+          "observedAt": "2026-11-28T08:45:01Z"
         }
       ],
       "featured": false
@@ -96,9 +96,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50657265",
-          "points": 442,
+          "points": 443,
           "comments": 108,
-          "observedAt": "2026-11-28T07:16:59Z"
+          "observedAt": "2026-11-28T08:45:01Z"
         }
       ],
       "featured": false
@@ -106,7 +106,7 @@
     {
       "id": "fb8bde07edc4fdf07d67",
       "title": "GPT 6.2 Astra Solves a Historical Mystery",
-      "summary": "268 comments on Hacker News.",
+      "summary": "276 comments on Hacker News.",
       "publishedAt": "2026-11-25T15:16:53Z",
       "category": "models",
       "source": {
@@ -117,9 +117,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50643158",
-          "points": 428,
-          "comments": 268,
-          "observedAt": "2026-11-28T08:19:35Z"
+          "points": 432,
+          "comments": 276,
+          "observedAt": "2026-11-28T08:45:01Z"
         }
       ],
       "featured": false
@@ -219,9 +219,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50627340",
-          "points": 1032,
+          "points": 1033,
           "comments": 415,
-          "observedAt": "2026-11-27T09:45:27Z"
+          "observedAt": "2026-11-28T08:45:01Z"
         }
       ],
       "featured": false
@@ -240,9 +240,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50624446",
-          "points": 296,
+          "points": 297,
           "comments": 112,
-          "observedAt": "2026-11-28T07:16:59Z"
+          "observedAt": "2026-11-28T08:45:01Z"
         }
       ],
       "featured": false
