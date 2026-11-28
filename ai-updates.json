@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-28T04:17:55Z",
+  "updatedAt": "2026-11-28T04:45:16Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -38,7 +38,7 @@
     {
       "id": "3eb502a85ddbf097c69e",
       "title": "States sue SpaceX to stop Grok from generating child sex images, revenge porn",
-      "summary": "171 comments on Hacker News.",
+      "summary": "176 comments on Hacker News.",
       "publishedAt": "2026-11-27T19:42:25Z",
       "category": "models",
       "source": {
@@ -49,9 +49,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50670855",
-          "points": 312,
-          "comments": 171,
-          "observedAt": "2026-11-28T04:17:55Z"
+          "points": 318,
+          "comments": 176,
+          "observedAt": "2026-11-28T04:45:16Z"
         }
       ],
       "featured": false
@@ -106,7 +106,7 @@
     {
       "id": "fb8bde07edc4fdf07d67",
       "title": "GPT 6.2 Astra Solves a Historical Mystery",
-      "summary": "234 comments on Hacker News.",
+      "summary": "236 comments on Hacker News.",
       "publishedAt": "2026-11-25T15:16:53Z",
       "category": "models",
       "source": {
@@ -117,9 +117,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50643158",
-          "points": 369,
-          "comments": 234,
-          "observedAt": "2026-11-28T04:17:55Z"
+          "points": 375,
+          "comments": 236,
+          "observedAt": "2026-11-28T04:45:16Z"
         }
       ],
       "featured": false
@@ -229,7 +229,7 @@
     {
       "id": "247664f7b48ac8a87d27",
       "title": "Porting Rockbox to an undocumented $9 Aliexpress 'YP3' MP3 Player with LLMs",
-      "summary": "110 comments on Hacker News.",
+      "summary": "111 comments on Hacker News.",
       "publishedAt": "2026-11-24T06:22:36Z",
       "category": "research",
       "source": {
@@ -240,9 +240,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50624446",
-          "points": 295,
-          "comments": 110,
-          "observedAt": "2026-11-27T22:16:20Z"
+          "points": 296,
+          "comments": 111,
+          "observedAt": "2026-11-28T04:45:16Z"
         }
       ],
       "featured": false
