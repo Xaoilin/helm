@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-28T00:35:10Z",
+  "updatedAt": "2026-11-28T01:18:12Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -78,6 +78,27 @@
           "points": 438,
           "comments": 106,
           "observedAt": "2026-11-28T00:35:10Z"
+        }
+      ],
+      "featured": false
+    },
+    {
+      "id": "fb8bde07edc4fdf07d67",
+      "title": "GPT 6.2 Astra Solves a Historical Mystery",
+      "summary": "178 comments on Hacker News.",
+      "publishedAt": "2026-11-25T15:16:53Z",
+      "category": "models",
+      "source": {
+        "label": "Hacker News",
+        "url": "https://generativehistory.substack.com/p/gpt-62-astra-solves-a-historical"
+      },
+      "discussions": [
+        {
+          "label": "Hacker News",
+          "url": "https://news.ycombinator.com/item?id=50643158",
+          "points": 300,
+          "comments": 178,
+          "observedAt": "2026-11-28T01:18:12Z"
         }
       ],
       "featured": false
@@ -478,19 +499,6 @@
           "observedAt": "2026-11-27T15:45:28Z"
         }
       ],
-      "featured": false
-    },
-    {
-      "id": "df3be113c8aed13fbadf",
-      "title": "Hill-climbing Inkling 2 Mini inference on one RTX PRO 6000",
-      "summary": "Details in the Hugging Face release notes.",
-      "publishedAt": "2026-11-25T00:00:00Z",
-      "category": "research",
-      "source": {
-        "label": "Hugging Face",
-        "url": "https://huggingface.co/blog/inkling-2-mini-inference-hillclimb"
-      },
-      "discussions": [],
       "featured": false
     }
   ]
