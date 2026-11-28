@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-28T06:46:53Z",
+  "updatedAt": "2026-11-28T07:16:59Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -38,7 +38,7 @@
     {
       "id": "3eb502a85ddbf097c69e",
       "title": "States sue SpaceX to stop Grok from generating child sex images, revenge porn",
-      "summary": "199 comments on Hacker News.",
+      "summary": "204 comments on Hacker News.",
       "publishedAt": "2026-11-27T19:42:25Z",
       "category": "models",
       "source": {
@@ -49,9 +49,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50670855",
-          "points": 351,
-          "comments": 199,
-          "observedAt": "2026-11-28T06:46:53Z"
+          "points": 358,
+          "comments": 204,
+          "observedAt": "2026-11-28T07:16:59Z"
         }
       ],
       "featured": false
@@ -85,7 +85,7 @@
     {
       "id": "40cb249974695259a745",
       "title": "AMD-specific fork of llama.cpp",
-      "summary": "107 comments on Hacker News.",
+      "summary": "108 comments on Hacker News.",
       "publishedAt": "2026-11-26T17:11:29Z",
       "category": "models",
       "source": {
@@ -96,9 +96,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50657265",
-          "points": 441,
-          "comments": 107,
-          "observedAt": "2026-11-28T05:45:47Z"
+          "points": 442,
+          "comments": 108,
+          "observedAt": "2026-11-28T07:16:59Z"
         }
       ],
       "featured": false
@@ -106,7 +106,7 @@
     {
       "id": "fb8bde07edc4fdf07d67",
       "title": "GPT 6.2 Astra Solves a Historical Mystery",
-      "summary": "255 comments on Hacker News.",
+      "summary": "256 comments on Hacker News.",
       "publishedAt": "2026-11-25T15:16:53Z",
       "category": "models",
       "source": {
@@ -117,9 +117,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50643158",
-          "points": 403,
-          "comments": 255,
-          "observedAt": "2026-11-28T06:46:53Z"
+          "points": 410,
+          "comments": 256,
+          "observedAt": "2026-11-28T07:16:59Z"
         }
       ],
       "featured": false
@@ -229,7 +229,7 @@
     {
       "id": "247664f7b48ac8a87d27",
       "title": "Porting Rockbox to an undocumented $9 Aliexpress 'YP3' MP3 Player with LLMs",
-      "summary": "111 comments on Hacker News.",
+      "summary": "112 comments on Hacker News.",
       "publishedAt": "2026-11-24T06:22:36Z",
       "category": "research",
       "source": {
@@ -241,8 +241,8 @@
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50624446",
           "points": 296,
-          "comments": 111,
-          "observedAt": "2026-11-28T04:45:16Z"
+          "comments": 112,
+          "observedAt": "2026-11-28T07:16:59Z"
         }
       ],
       "featured": false
