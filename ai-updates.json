@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-28T09:17:07Z",
+  "updatedAt": "2026-11-28T09:45:54Z",
   "stories": [
     {
       "id": "fd9bebbff7e692862dad",
@@ -38,7 +38,7 @@
     {
       "id": "3eb502a85ddbf097c69e",
       "title": "States sue SpaceX to stop Grok from generating child sex images, revenge porn",
-      "summary": "227 comments on Hacker News.",
+      "summary": "230 comments on Hacker News.",
       "publishedAt": "2026-11-27T19:42:25Z",
       "category": "models",
       "source": {
@@ -49,9 +49,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50670855",
-          "points": 378,
-          "comments": 227,
-          "observedAt": "2026-11-28T09:17:07Z"
+          "points": 381,
+          "comments": 230,
+          "observedAt": "2026-11-28T09:45:54Z"
         }
       ],
       "featured": false
@@ -106,7 +106,7 @@
     {
       "id": "fb8bde07edc4fdf07d67",
       "title": "GPT 6.2 Astra Solves a Historical Mystery",
-      "summary": "278 comments on Hacker News.",
+      "summary": "279 comments on Hacker News.",
       "publishedAt": "2026-11-25T15:16:53Z",
       "category": "models",
       "source": {
@@ -117,9 +117,9 @@
         {
           "label": "Hacker News",
           "url": "https://news.ycombinator.com/item?id=50643158",
-          "points": 437,
-          "comments": 278,
-          "observedAt": "2026-11-28T09:17:07Z"
+          "points": 441,
+          "comments": 279,
+          "observedAt": "2026-11-28T09:45:54Z"
         }
       ],
       "featured": false
